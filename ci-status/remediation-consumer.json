@@ -1,12 +1,77 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@65eee407586d",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@dbf3f69df6cd",
+ "due": 8,
+ "pass": 3,
+ "fail": 5,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-1543",
+   "issue_id": 1543,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "3",
+   "written": true
+  },
+  {
+   "class": "issue-1619",
+   "issue_id": 1619,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "7",
+   "written": true
+  },
+  {
+   "class": "issue-1628",
+   "issue_id": 1628,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1629",
+   "issue_id": 1629,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "36",
+   "written": true
+  },
+  {
+   "class": "issue-1639",
+   "issue_id": 1639,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1640",
+   "issue_id": 1640,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1654",
+   "issue_id": 1654,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "110",
+   "written": true
+  },
+  {
+   "class": "issue-1664",
+   "issue_id": 1664,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "25",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -22,7 +87,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 2396,
- "head": "65eee407586d4cb41387d71487df50aba8b9ec2e",
+ "spent_ms": 22665,
+ "head": "dbf3f69df6cd91010b234302dad16c2c038f9f04",
  "job_status": "success"
 }

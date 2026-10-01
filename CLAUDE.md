@@ -40,6 +40,10 @@ because each one was broken at least once; the linked issue holds the evidence.
 - The section between the `CHARTER-LIVE` markers is generated daily by qnfo-fleet-control (CHARTER-LOOP-1) and committed
   to main; never edit it by hand. Hand-written sections change by PR with a version bump. `CHARTER_PILLARS` and
   `CHARTER_MVP` in the kernel and the tables in the charter change together (the guard enforces parity).
+- `docs/PORTFOLIO.md` is the portfolio of every QNFO GitHub repository (tiers, pillars, WBS links, hygiene). Its live
+  block, `QNFO/.github/PORTFOLIO.md` and the index in the organisation profile README are regenerated daily by
+  qnfo-fleet-control (PORTFOLIO-LOOP-1); never edit them by hand. A new repository names its tier and, for research, a
+  WBS code in `portfolio-state.program_registry`; private repositories are counted and never named.
 
 ## No Claude dependency at runtime (NO-CLAUDE-RUNTIME-DEPENDENCY-1)
 - Owner directive 2026-10-01: the fleet and its dashboard must not depend on continued Claude usage, and all data is hosted

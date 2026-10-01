@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.2.3";
+var VERSION = "0.2.4";
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -387,9 +387,38 @@ async function stepTask(env, task) {
     return await fail("step threw: " + String((e && e.message) || e), false);
   }
 }
+// ISSUE-INTAKE-1: the Quniverse equivalent of the Stop-hook re-prompt. An open agent_issues row that carries an explicit opt-in line
+//   code-task: repo=<repo> path=<relative file>
+// becomes ONE queued code task (deduped by the "[issue #N]" goal prefix). No marker, no task: nothing is inferred from prose.
+// The usual guards still apply (enqueue() validates repo/path, DENY_PATH, queue cap) and the PR is never merged by this worker.
+const INTAKE_MARK = /^[ \t]*code-task:[ \t]*repo=([A-Za-z0-9._-]{1,100})[ \t]+path=(\S{1,300})[ \t]*$/m;
+const _intakeRefused = new Set();
+async function intakeIssues(env, maxNew) {
+  let rows;
+  try { rows = await env.AUDIT_DB.prepare("SELECT id, title, description FROM agent_issues WHERE status='open' AND description LIKE '%code-task:%' ORDER BY id LIMIT 20").all(); }
+  catch (e) { return { ok: true, created: [], note: "no agent_issues table" }; }
+  const created = [];
+  for (const r of (rows.results || [])) {
+    if (created.length >= (maxNew || 2)) break;
+    const m = INTAKE_MARK.exec(String(r.description || ""));
+    if (!m) continue;
+    const tag = "[issue #" + r.id + "]";
+    const seen = await env.AUDIT_DB.prepare("SELECT id FROM code_tasks WHERE goal LIKE ? LIMIT 1").bind(tag + "%").first();
+    if (seen) continue;
+    const body = String(r.description || "").replace(INTAKE_MARK, "").trim().slice(0, 1500);
+    const goal = tag + " " + String(r.title || "").slice(0, 200) + (body ? "\n" + body : "");
+    const res = await enqueue(env, { repo: m[1], path: m[2], goal: goal });
+    if (!res.ok && _intakeRefused.has(r.id)) continue; // a refused marker is logged once per isolate, not every cron tick
+    if (!res.ok) _intakeRefused.add(r.id);
+    await audit(env, "code-task.intake", tag + " -> " + (res.ok ? res.id : res.error), { issue: r.id }, res.ok ? "ok" : "refused");
+    if (res.ok) created.push(res.id);
+  }
+  return { ok: true, created: created };
+}
 // Runs steps until the budget or step cap is hit. Called by cron and by POST /v1/tick.
 async function tick(env, opts) {
   await ensureSchema(env);
+  if (!opts || opts.intake !== false) { try { await intakeIssues(env, 2); } catch (e) { await audit(env, "code-task.intake-error", String((e && e.message) || e).slice(0, 200), null, "error"); } }
   const budget = Math.min(Number(opts && opts.budgetMs) || 20000, 25000);
   const maxSteps = Math.min(Number(opts && opts.maxSteps) || 8, 12);
   const t0 = Date.now();

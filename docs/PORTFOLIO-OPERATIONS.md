@@ -2,15 +2,18 @@
 
 How docs/STRATEGY.md is run, every day, as an ongoing project. Owner directive 2026-10-01: manage the entire fleet and
 portfolio (programmes, projects, products) and its performance, reach, reputation and ROI, on the system's own authority.
-The daily Routine **"QNFO portfolio management"** (`trig_01KNd7qpeeLwKdWAoKCmDSTt`, 07:51 Europe/Amsterdam, a fresh session
-each day, push notification on finish) executes this file.
+**Runs on Cloudflare, not on claude.ai** (owner directive 2026-10-01: the dashboard and its data must not depend on
+continued Claude usage). The deterministic duties below (owner-voice guard, kill switches, scorecard snapshot, run log,
+owner action list) run as a daily cron in qnfo-fleet-dashboard (`portfolioDailyRun`). The claude.ai Routines that used to
+run this procedure (`trig_01KNd7qpeeLwKdWAoKCmDSTt`, `trig_01QXd2AG8oTevkuVRsfZyHG4`) are disabled. Judgement work
+(shipping code) is done by whichever agent session the owner starts, or by the fleet's own Cloudflare agents.
 Any run may improve this file through a pull request; the improvement is part of the job.
 
 ## 1. The system of record
 | What | Where | Who changes it |
 |---|---|---|
 | Strategy, identity rules, channels, scorecard, portfolio, targets | `docs/STRATEGY.md` | this procedure (PR) |
-| Profile copy, CV, opportunities, the owner's approvals and to-dos | [Identity doc](https://claude.ai/code/artifact/553e4316-5725-4601-bf41-e5fd7102c96b) | the owner; the Monday identity review; this procedure comments only |
+| Profile copy, CV, opportunities, the owner's approvals and to-dos | D1 `qnfo-audit.owner_docs` (key `identity`, private) and `owner_actions`, served behind the owner's login | the owner; the Monday identity review; this procedure comments only |
 | Open work | D1 `qnfo-audit.agent_issues` (+ `issue_triage`) | everyone; close only with evidence |
 | Gates and metrics | D1 `impact_thresholds`, `metric_registry`, `objectives`, `shutdown_manifest` | this procedure, with a STRATEGY reference |
 | Run log | D1 `qnfo-audit.portfolio_runs` (row 1 = the 2026-10-01 baseline) | each run appends one row |
@@ -80,10 +83,7 @@ Other routines on the account, and the split of work so nothing runs twice:
 2. Connect LinkedIn (and optionally Mastodon, Threads, X) in Buffer; then approve each LinkedIn draft with one tap.
 3. Google Analytics 4: add the fleet's service account as Viewer; share the property ID. Search Console: verify qnfo.org
    and add the same account as a Full user.
-4. In claude.ai Routines, add the **Cloudflare Developer Platform** and **Claude Docs** connectors to both "QNFO portfolio
-   management" (trigger `trig_01KNd7qpeeLwKdWAoKCmDSTt`) and "Identity and brand weekly review" (Identity doc tracker
-   item 3). Routines created from a session store no connectors in this organisation; without them a run falls back to
-   the repo's workflows and the dashboard API, and cannot read D1 or the Identity doc directly.
+4. (Retired 2026-10-01: no claude.ai connectors are needed; everything runs on Cloudflare.)
 5. Ask one established arXiv author in the field for a personal endorsement (not a mass request).
 6. Add the selected works (STRATEGY 2.4) to ORCID with "Search & link".
 

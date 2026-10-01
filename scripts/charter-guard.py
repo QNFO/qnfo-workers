@@ -21,6 +21,8 @@ WHAT IT CHECKS (fail closed; exit 1 on any violation)
                             declares `# charter-pillar: <key>` in its wrangler.toml, with a key
                             from C2, unless it carries a RETIRED or FOLDED marker. A worker that
                             cannot name the pillar it serves is parked, not built.
+  C4 PORTFOLIO-DOC-SHAPE-1 docs/PORTFOLIO.md exists and carries exactly one PORTFOLIO-LIVE:BEGIN and one
+                            PORTFOLIO-LIVE:END marker in that order (PORTFOLIO-LOOP-1 splices between them).
   A1 (advisory, never fails) count of existing deployable directories still missing the line.
 
 USAGE
@@ -173,6 +175,17 @@ def main(argv: list[str]) -> int:
                 errs.append(f"C3 new worker directory {d}/ declares no '# charter-pillar: <key>' in wrangler.toml (keys: {sorted(keys)})")
             elif key not in keys:
                 errs.append(f"C3 new worker directory {d}/ names unknown pillar '{key}' (keys: {sorted(keys)})")
+
+    pdoc = os.path.join(ROOT, "docs", "PORTFOLIO.md")
+    if not os.path.isfile(pdoc):
+        errs.append("C4 docs/PORTFOLIO.md is missing")
+    else:
+        ptxt = read(pdoc)
+        pb, pe = "<!-- PORTFOLIO-LIVE:BEGIN -->", "<!-- PORTFOLIO-LIVE:END -->"
+        if ptxt.count(pb) != 1 or ptxt.count(pe) != 1:
+            errs.append(f"C4 docs/PORTFOLIO.md needs exactly one {pb} and one {pe} marker (found {ptxt.count(pb)}/{ptxt.count(pe)})")
+        elif ptxt.index(pb) > ptxt.index(pe):
+            errs.append("C4 PORTFOLIO-LIVE:END precedes PORTFOLIO-LIVE:BEGIN")
 
     missing = [d for d in deployable_dirs() if pillar_line(os.path.join(ROOT, d, "wrangler.toml")) is None]
     print(f"charter-guard: pillars={wp} deployable_dirs={len(deployable_dirs())} missing_pillar_line={len(missing)} (advisory)")

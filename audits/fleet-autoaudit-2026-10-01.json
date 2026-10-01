@@ -1,11 +1,11 @@
 {
-  "audited_at": "2026-10-01 11:38:22",
+  "audited_at": "2026-10-01 11:52:31",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-research-exec"
+        "qnfo-gateway"
       ],
       "refreshed": true,
       "second_pass": []
@@ -494,17 +494,17 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.69-charter-loop",
+        "version": "0.4.70-portfolio-loop",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.9.0-invest-decision",
+        "version": "1.9.1-invest-spend-basis",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.7.18-org-label",
+        "version": "3.7.20-scholar-pdf-ua",
         "worker": "qnfo-gateway"
       },
       {
@@ -1151,17 +1151,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.69-charter-loop",
+      "before": "0.4.70-portfolio-loop",
       "http": 200,
-      "live": "0.4.69-charter-loop",
+      "live": "0.4.70-portfolio-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.9.0-invest-decision",
+      "before": "1.9.1-invest-spend-basis",
       "http": 200,
-      "live": "1.9.0-invest-decision",
+      "live": "1.9.1-invest-spend-basis",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1183,9 +1183,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.18-org-label",
+      "before": "3.7.20-scholar-pdf-ua",
       "http": 200,
-      "live": "3.7.18-org-label",
+      "live": "3.7.20-scholar-pdf-ua",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"

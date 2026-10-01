@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { EmailMessage } from "cloudflare:email";
-var VERSION = "0.3.4-shared-cap";
+var VERSION = "0.3.5-shared-cap-notes";
 var ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 var WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 var GLOBAL_DAILY_CAP = 8;
@@ -246,9 +246,10 @@ async function sendGated(env) {
     try {
       shared = await sharedOutreachCount(env, day, to);
     } catch (e) {
-      break;
+      // OUTREACH-SHARED-CAP-1 (2026-10-01, #1718): fail closed AND say so; a silent break left no trace of the skip.
+      return { sent, skipped: "shared-cap-read-failed", error: String(e && e.message || e) };
     }
-    if (shared.n >= GLOBAL_DAILY_CAP) break;
+    if (shared.n >= GLOBAL_DAILY_CAP) return { sent, skipped: "shared-cap", shared_today: shared.n };
     if (shared.d >= PER_DOMAIN_DAILY_CAP) continue;
     const finalBody = await compliant(row.body, to);
     const res = await sendRaw(env, FROM_ACADEMIC, to, row.subject, finalBody);
@@ -350,7 +351,10 @@ var worker_default = {
     await scanReplies(env).catch(() => ({ scanned: 0 }));
     const mined = await mineGitHub(env).catch(() => ({ mined: 0 }));
     const drafted = await draftCampaigns(env).catch(() => 0);
-    const sent = await sendGated(env).catch(() => ({ sent: 0 }));
+    const sent = await sendGated(env).catch((e) => ({ sent: 0, skipped: "send-error", error: String(e && e.message || e) }));
+    // OUTREACH-SHARED-CAP-1 (2026-10-01, #1718): keep the last send run's outcome (incl. a fail-closed skip) readable.
+    await env.OUTREACH_D1.prepare("INSERT INTO pipeline_state (key,value,updated_at) VALUES ('last_send_run',?1,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')").bind(JSON.stringify(sent).slice(0, 1000)).run().catch(() => {
+    });
     await bumpFunnel(env, mined.mined || 0, drafted, sent.sent || 0).catch(() => {
     });
   }
