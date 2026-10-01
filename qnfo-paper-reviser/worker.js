@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.3"; // FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
+var VERSION = "1.2.4"; // FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -381,6 +381,11 @@ async function processPaper(env, paper, mode) {
     }
     return { slug: paper.slug, skipped: true, reason: isStub ? "stub/fragment body" : "audit found no genuine issues (needs substantive revision)", issues: auditSummary, body_len: bodyLen, doi };
   }
+  // REVISED-TDZ-1 (2026-10-01): the garbage check below read `revised` before its declaration (ReferenceError on
+  // every paper that reached it), so nothing was ever queued. The revision is now computed first.
+  const versionTo = bumpVersion(paper.version);
+  const edits = applyEdits(paper.body_md || "", low);
+  let revised = applyVersionMarkers(edits.md, versionTo);
   // FIX-REVISER-GARBAGE (2026-09-14): reject non-paper AI output (reasoning preamble / outline fragment).
   // Root cause of the 20-row gate-blocked backlog: for long essay inputs the auditor's surgical
   // edits produced reasoning text / outline fragments that were queued as corrected_md.
@@ -399,9 +404,6 @@ async function processPaper(env, paper, mode) {
     }
     return { slug: paper.slug, rejected: true, reason: _reason, issues: auditSummary, doi: doi };
   }
-  const versionTo = bumpVersion(paper.version);
-  const edits = applyEdits(paper.body_md || "", low);
-  let revised = applyVersionMarkers(edits.md, versionTo);
   const appliedCats = edits.applied.map(function(a) {
     return a.category;
   }).join(", ") || "no substantive corrections required";

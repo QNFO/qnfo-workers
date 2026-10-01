@@ -2,7 +2,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // HUB-VERSION-SCOPE-1 (2026-09-23): radar-hub's OWN version, at MODULE scope so the hub's
 // `export default` can read it. Each embedded sub-worker IIFE declares its own `VERSION`
 // inside its own scope; a bare reference from module scope throws ReferenceError.
-var VERSION = "1.1.1";
+var VERSION = "1.1.2";
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1545,6 +1545,17 @@ export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
     if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: VERSION, radars: 7, capabilities: ["mention-radar", "events-radar", "arxiv-radar", "research-radar", "citation-radar", "jobs-radar", "personal-radar"], limitations: ["each radar runs on its own cron; only the arXiv radar can be forced (POST /arxiv/run, one run per 10 minutes)", "arXiv classification is keyword-based, with no model call", "the arXiv radar reads the 20 newest matching submissions per run"] }), { headers: { "content-type": "application/json" } });
+    // HUB-AUTH-1 (2026-10-01): every member route can run a scan, write the personal calendar or
+    // return the personal report, so all of them need Bearer RADAR_TOKEN. Fails closed when unset.
+    // Crons do not pass through fetch and are unaffected.
+    {
+      const exp = env.RADAR_TOKEN;
+      if (!exp) return new Response(JSON.stringify({ error: "RADAR_TOKEN not configured" }), { status: 503, headers: { "content-type": "application/json" } });
+      const got = String(request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      let d = got.length === exp.length ? 0 : 1;
+      for (let i = 0; i < exp.length; i++) d |= (got.charCodeAt(i) || 0) ^ exp.charCodeAt(i);
+      if (d !== 0) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
+    }
     function sub(prefix) { const u = new URL(request.url); u.pathname = p.slice(prefix.length) || "/"; return new Request(u.toString(), request); }
     if (p === "/events" || p.startsWith("/events/")) return eventsMod.default.fetch(sub("/events"), env, ctx);
     if (p === "/citation" || p.startsWith("/citation/")) return citationMod.fetch(sub("/citation"), env, ctx);

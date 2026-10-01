@@ -1,4 +1,4 @@
-var VERSION="3.7.23-home-identity";
+var VERSION="3.7.24-query-auth";
 // ORG-LABEL-1 (2026-10-01, docs/STRATEGY.md s2.1): there is no legal entity and the work is one researcher with an
 // AI-assisted pipeline, so "Research Foundation" and "research collective" overclaim. Labels only; the positioning copy
 // waits for the owner's approval in the Identity doc. ABOUT-GA-1: /about was the one gateway page without the GA4 tag.
@@ -1624,7 +1624,20 @@ __name2222222(handleImpact, "handleImpact");
 __name22222222(handleImpact, "handleImpact");
 __name222222222(handleImpact, "handleImpact");
 __name2222222222(handleImpact, "handleImpact");
+// QUERY-AUTH-1 (2026-10-01): /query executes caller-supplied SQL on the graph D1, so it takes the
+// same X-Sync-Token as /sync. Fails closed when SYNC_TOKEN is unset; constant-time compare.
+function syncTokenOk(request, env) {
+  const exp = env.SYNC_TOKEN;
+  const got = request.headers.get("X-Sync-Token");
+  if (!exp || !got || got.length !== exp.length) return false;
+  let d = 0;
+  for (let i = 0; i < exp.length; i++) d |= got.charCodeAt(i) ^ exp.charCodeAt(i);
+  return d === 0;
+}
 async function handleQuery(request, env) {
+  if (!syncTokenOk(request, env)) {
+    return json({ error: "Unauthorized: missing or invalid X-Sync-Token" }, 401);
+  }
   const body = await request.json().catch(() => ({}));
   const { query, params: qParams } = body;
   if (!query) return json({ error: "Missing query" }, 400);
