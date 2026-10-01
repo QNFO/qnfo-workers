@@ -1,33 +1,17 @@
 {
-  "audited_at": "2026-10-01 09:48:26",
+  "audited_at": "2026-10-01 09:57:36",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [],
-      "waited_for": [
-        "qnfo-fleet-control"
-      ]
-    },
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-ai"
+        "qnfo-fleet-control"
       ],
       "refreshed": true,
-      "second_pass": [
-        "qnfo-fleet-control"
-      ]
+      "second_pass": []
     },
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-fleet-control/deployed-current.worker.js",
-        "dir": "qnfo-fleet-control",
-        "live": "0.4.61-budget-billing-split-ai-attrib",
-        "repo": "0.4.62-usage-snapshot-hourly",
-        "worker": "qnfo-fleet-control"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -65,24 +49,12 @@
       }
     ],
     "cron_only_count": 4,
-    "drift": [
-      {
-        "dir": "qnfo-fleet-control",
-        "live": "0.4.61-budget-billing-split-ai-attrib",
-        "repo": "0.4.62-usage-snapshot-hourly",
-        "worker": "qnfo-fleet-control"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
-    "no_health_route": [
-      {
-        "dir": "qnfo-agent-ws",
-        "worker": "qnfo-agent-ws"
-      }
-    ],
+    "no_health_route": [],
     "no_live_version": [],
     "no_repo_version": [],
     "not_a_worker": [
@@ -145,6 +117,7 @@
       "personal-life-indexer",
       "personal-life-maintain",
       "personal-life-search",
+      "qnfo-agent-ws",
       "qnfo-analytics",
       "qnfo-artifact-agent",
       "qnfo-artifacts",
@@ -184,7 +157,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 58,
+    "not_deployed_notdrift": 59,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -265,6 +238,10 @@
       {
         "dir": "personal-life-search",
         "worker": "personal-life-search"
+      },
+      {
+        "dir": "qnfo-agent-ws",
+        "worker": "qnfo-agent-ws"
       },
       {
         "dir": "qnfo-analytics",
@@ -420,7 +397,7 @@
       }
     ],
     "scope": "all",
-    "sync": 40,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -464,7 +441,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.29.8-roster-ctx-catalog",
+        "version": "5.29.9-ensemble-stage-share",
         "worker": "qnfo-ai"
       },
       {
@@ -518,6 +495,11 @@
         "worker": "qnfo-email"
       },
       {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.64-resurrection-signal",
+        "worker": "qnfo-fleet-control"
+      },
+      {
         "dir": "qnfo-fleet-dashboard",
         "version": "1.7.46-obs-lastobserved",
         "worker": "qnfo-fleet-dashboard"
@@ -564,7 +546,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.27-resurrection-guard",
+        "version": "2.38.28-intake-idempotent",
         "worker": "qnfo-ops"
       },
       {
@@ -589,7 +571,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.29-gw-auth-drift",
+        "version": "0.9.31-cron-15m",
         "worker": "qnfo-research-exec"
       },
       {
@@ -903,13 +885,13 @@
       "http": 404,
       "live": null,
       "match": 0,
-      "note": "NO_HEALTH_ROUTE",
+      "note": "NOT_DEPLOYED",
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.29.8-roster-ctx-catalog",
+      "before": "5.29.9-ensemble-stage-share",
       "http": 200,
-      "live": "5.29.8-roster-ctx-catalog",
+      "live": "5.29.9-ensemble-stage-share",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1171,11 +1153,11 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.62-usage-snapshot-hourly",
+      "before": "0.4.64-resurrection-signal",
       "http": 200,
-      "live": "0.4.61-budget-billing-split-ai-attrib",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "0.4.64-resurrection-signal",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
@@ -1307,9 +1289,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.27-resurrection-guard",
+      "before": "2.38.28-intake-idempotent",
       "http": 200,
-      "live": "2.38.27-resurrection-guard",
+      "live": "2.38.28-intake-idempotent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1387,9 +1369,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.29-gw-auth-drift",
+      "before": "0.9.31-cron-15m",
       "http": 200,
-      "live": "0.9.29-gw-auth-drift",
+      "live": "0.9.31-cron-15m",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
