@@ -40,6 +40,7 @@ on:
       - mirror-sync
       - deploy-drift
       - indexnow-submit
+      - adversarial-workers-guard
     types: [completed]
   workflow_dispatch:
   repository_dispatch:
