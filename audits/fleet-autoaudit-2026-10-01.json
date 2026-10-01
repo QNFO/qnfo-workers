@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 04:39:29",
+  "audited_at": "2026-10-01 05:59:12",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -84,7 +84,6 @@
       "agent-orchestrator",
       "audit-hub",
       "companion-hub",
-      "errata-hub",
       "errata-orchestrator",
       "events-radar",
       "jnl-pipeline",
@@ -147,7 +146,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 65,
+    "not_deployed_notdrift": 64,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -160,10 +159,6 @@
       {
         "dir": "companion-hub",
         "worker": "companion-hub"
-      },
-      {
-        "dir": "errata-hub",
-        "worker": "errata-hub"
       },
       {
         "dir": "errata-orchestrator",
@@ -411,12 +406,17 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
         "version": "0.4.0-notes-intake",
         "worker": "calendar-api"
+      },
+      {
+        "dir": "errata-hub",
+        "version": "1.1.2",
+        "worker": "errata-hub"
       },
       {
         "dir": "fleet-exec",
@@ -654,11 +654,11 @@
       "worker": "docs"
     },
     "errata-hub": {
-      "before": null,
-      "http": 404,
-      "live": null,
-      "match": 0,
-      "note": "NOT_DEPLOYED",
+      "before": "1.1.2",
+      "http": 200,
+      "live": "1.1.2",
+      "match": 1,
+      "note": "SYNC",
       "worker": "errata-hub"
     },
     "events-radar": {
