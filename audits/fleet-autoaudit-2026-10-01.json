@@ -1,10 +1,35 @@
 {
-  "audited_at": "2026-10-01 14:46:10",
+  "audited_at": "2026-10-01 14:57:10",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_deploy_settle": {
+      "settled": [],
+      "waited_for": [
+        "qnfo-ipatent"
+      ]
+    },
+    "_drift_confirm": {
+      "first_pass": [
+        "idea-hub",
+        "qnfo-fleet-control",
+        "qnfo-social"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "qnfo-ipatent"
+      ]
+    },
     "_guard_rc": 0,
-    "ahead": [],
+    "ahead": [
+      {
+        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-ipatent/deployed-current.worker.js",
+        "dir": "qnfo-ipatent",
+        "live": "3.4.2",
+        "repo": "3.4.3",
+        "worker": "qnfo-ipatent"
+      }
+    ],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -33,7 +58,14 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-ipatent",
+        "live": "3.4.2",
+        "repo": "3.4.3",
+        "worker": "qnfo-ipatent"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -388,7 +420,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 41,
+    "sync": 40,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -407,7 +439,7 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.3.1-reentry-rescore",
+        "version": "1.3.2-identity-lexicon",
         "worker": "idea-hub"
       },
       {
@@ -472,7 +504,7 @@
       },
       {
         "dir": "qnfo-containers-pilot",
-        "version": "1.0.8-public-exec-closed",
+        "version": "1.0.9-rate-limit",
         "worker": "qnfo-containers-pilot"
       },
       {
@@ -487,12 +519,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.77-deploy-sync",
+        "version": "0.4.79-profile-scrub",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.13.1-owner-requests",
+        "version": "1.14.0-watchmaker",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -509,11 +541,6 @@
         "dir": "qnfo-intent-orchestrator",
         "version": "1.3.7-intake-bounded-classify",
         "worker": "qnfo-intent-orchestrator"
-      },
-      {
-        "dir": "qnfo-ipatent",
-        "version": "3.4.2",
-        "worker": "qnfo-ipatent"
       },
       {
         "dir": "qnfo-kaizen",
@@ -572,7 +599,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.20-linkedin-draft",
+        "version": "0.7.21-profile-sync",
         "worker": "qnfo-social"
       },
       {
@@ -688,9 +715,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.3.1-reentry-rescore",
+      "before": "1.3.2-identity-lexicon",
       "http": 200,
-      "live": "1.3.1-reentry-rescore",
+      "live": "1.3.2-identity-lexicon",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1040,9 +1067,9 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.8-public-exec-closed",
+      "before": "1.0.9-rate-limit",
       "http": 200,
-      "live": "1.0.8-public-exec-closed",
+      "live": "1.0.9-rate-limit",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-containers-pilot"
@@ -1144,17 +1171,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.77-deploy-sync",
+      "before": "0.4.79-profile-scrub",
       "http": 200,
-      "live": "0.4.77-deploy-sync",
+      "live": "0.4.79-profile-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.13.1-owner-requests",
+      "before": "1.14.0-watchmaker",
       "http": 200,
-      "live": "1.13.1-owner-requests",
+      "live": "1.14.0-watchmaker",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1232,11 +1259,11 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.4.2",
+      "before": "3.4.3",
       "http": 200,
       "live": "3.4.2",
-      "match": 1,
-      "note": "SYNC",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ipatent"
     },
     "qnfo-kaizen": {
@@ -1416,9 +1443,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.20-linkedin-draft",
+      "before": "0.7.21-profile-sync",
       "http": 200,
-      "live": "0.7.20-linkedin-draft",
+      "live": "0.7.21-profile-sync",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
