@@ -2207,7 +2207,7 @@ function idwSection(md, heading) {
 }
 __name(idwSection, "idwSection");
 function idwNorm(s) {
-  return String(s || "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim().toLowerCase();
+  return String(s || "").replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ").replace(/&amp;/g, "&").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim().toLowerCase();
 }
 __name(idwNorm, "idwNorm");
 function idwDeadline(text, now) {

@@ -29,20 +29,22 @@ const DOC = [
 ].join("\n");
 
 const NOW = Date.UTC(2026, 9, 1, 12);
+// Keyed by exact host + path (no substring matching).
 const API = {
-  "public.api.bsky.app": { displayName: "Rowan Brad Quni-Gudzinas", description: "I build open, auditable AI-assisted research (QNFO). qnfo.org", followersCount: 50, postsCount: 1410 },
-  "api.github.com/users": { name: "Rowan Brad Quni-Gudzinas", bio: "Quantum Computing Architect; 649+ Publications; Patent Portfolio" },
-  "api.github.com/orgs": { description: "Open, auditable research infrastructure" },
-  "pub.orcid.org": { name: { "given-names": { value: "Rowan Brad" }, "family-name": { value: "Quni-Gudzinas" } }, biography: { content: "Builder." }, "other-names": { "other-name": [{ content: "Brad Gudzinas" }] } },
-  "zenodo.org/api/records?": { hits: { total: 940 } },
+  "public.api.bsky.app/xrpc/app.bsky.actor.getProfile": { displayName: "Rowan Brad Quni-Gudzinas", description: "I build open, auditable AI-assisted research (QNFO). qnfo.org", followersCount: 50, postsCount: 1410 },
+  "api.github.com/users/rwnq8": { name: "Rowan Brad Quni-Gudzinas", bio: "Quantum Computing Architect; 649+ Publications; Patent Portfolio" },
+  "api.github.com/orgs/QNFO": { description: "Open, auditable research infrastructure" },
+  "pub.orcid.org/v3.0/0009-0002-4317-5604/person": { name: { "given-names": { value: "Rowan Brad" }, "family-name": { value: "Quni-Gudzinas" } }, biography: { content: "Builder." }, "other-names": { "other-name": [{ content: "Brad Gudzinas" }] } },
+  "zenodo.org/api/records": { hits: { total: 940 } },
   "zenodo.org/api/records/21806274": { metadata: { version: "v3.12" }, stats: { views: 100, unique_views: 90, downloads: 7 } },
-  "mstdn.science": null
+  "mstdn.science/api/v1/accounts/lookup": null
 };
 const fetchStub = async (url) => {
-  if (String(url).includes("example.org/gone")) return { ok: false, status: 404 };
-  if (String(url).includes("example.org")) return { ok: true, status: 200 };
-  for (const [k, body] of Object.entries(API)) if (String(url).includes(k)) return body ? { ok: true, status: 200, json: async () => body } : { ok: false, status: 503 };
-  return { ok: false, status: 599 };
+  const u = new URL(String(url));
+  if (u.hostname === "example.org") return u.pathname === "/gone" ? { ok: false, status: 404 } : { ok: true, status: 200 };
+  const k = u.hostname + u.pathname;
+  if (!(k in API)) return { ok: false, status: 599 };
+  return API[k] ? { ok: true, status: 200, json: async () => API[k] } : { ok: false, status: 503 };
 };
 const writes = [];
 const mails = [];
