@@ -1,5 +1,5 @@
 const QNFO_VERSION = "qnfo-archive/fabric-20260910";
-const VERSION = "1.2.1-internal-search";
+var VERSION = "1.2.2-internal-search";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
