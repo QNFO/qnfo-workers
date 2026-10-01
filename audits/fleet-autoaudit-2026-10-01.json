@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 08:43:43",
+  "audited_at": "2026-10-01 08:47:21",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -485,7 +485,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.59-census-uncontracted",
+        "version": "0.4.60-budget-units",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1142,9 +1142,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.59-census-uncontracted",
+      "before": "0.4.60-budget-units",
       "http": 200,
-      "live": "0.4.59-census-uncontracted",
+      "live": "0.4.60-budget-units",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
