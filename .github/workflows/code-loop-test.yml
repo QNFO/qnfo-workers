@@ -1,0 +1,38 @@
+name: code-loop-test
+
+# CODE-TASK-LOOP-1: the qnfo-code-orchestrator v0.2.0 loop is not deployed, so nothing at runtime would notice it
+# regressing. This runs its offline acceptance test (real SQL via node:sqlite, real python3 as the container, scripted
+# model and code-agent; Dynamic Workers errors replayed from the real workerd) on every PR/push that touches it.
+# A red run on main is filed by ci-watchdog (it is on that workflow's watch list).
+
+on:
+  pull_request:
+    paths:
+      - "qnfo-code-orchestrator/**"
+      - ".github/workflows/code-loop-test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "qnfo-code-orchestrator/**"
+      - ".github/workflows/code-loop-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Syntax check
+        run: node --check qnfo-code-orchestrator/worker.js
+      - name: Loop acceptance test
+        run: node --no-warnings qnfo-code-orchestrator/test-loop.mjs
