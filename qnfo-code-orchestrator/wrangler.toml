@@ -10,6 +10,10 @@ workers_dev = true
 # v0.1.1 = red-team remediation: read-error propagation, honest capabilities, output caps,
 #          AUDIT_DB cloud_ops_events logging. v0.2 adds the LLM plan loop + edit/PR.
 [[containers]]
+# CONTAINER-NAME-COLLISION-1 (#255, run 36842850801): wrangler refused "There is already an application with the
+# name qnfo-code-orchestrator-pycontainer ... associated with a different durable object namespace". An explicit,
+# new name creates a fresh application; the old one is left untouched (nothing is deleted).
+name = "qnfo-code-orchestrator-pycontainer-v2"
 class_name = "PyContainer"
 image = "docker.io/library/python:3.12-slim"
 instance_type = "lite"
