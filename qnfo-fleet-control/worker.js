@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.55-publication-preflight";
+var VERSION = "0.4.56-worker-census";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2904,6 +2904,12 @@ var worker_default2 = {
       if (!mok) return json({ error: "unauthorized" }, 401);
       return json(await refreshOwnedMetrics(env));
     }
+    if (p === "/census/run" && request.method === "POST") {
+      var cah = request.headers.get("Authorization") || "";
+      var cat = cah.indexOf("Bearer ") === 0 ? cah.slice(7) : cah;
+      if (!(cat && ((env.DEPLOY_ADMIN_TOKEN && cat === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && cat === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
+      return json(await workerCensus(env));
+    }
     if (p === "/publication/preflight" && request.method === "GET") {
       return json(await publicationPreflight(env));
     }
@@ -2943,6 +2949,7 @@ var worker_default2 = {
       ctx.waitUntil(disposeRetired(env));
       ctx.waitUntil(costImpactGuard(env).catch((e) => console.error("costImpactGuard error:", e && e.message || e)));
       ctx.waitUntil(activitySnapshotDaily(env).catch((e) => console.error("activitySnapshotDaily error:", e && e.message || e)));
+      ctx.waitUntil(workerCensus(env).catch((e) => console.error("workerCensus error:", e && e.message || e)));
       return calibratorMod.default.scheduled(event, env, ctx);
     }
     if (cron === "0 4 1 * *" || cron === "30 3 * * 1") return calibratorMod.default.scheduled(event, env, ctx);
@@ -3465,6 +3472,57 @@ async function publicationPreflight(env) {
   return out;
 }
 __name(publicationPreflight, "publicationPreflight");
+// WORKER-CENSUS-DISCRIMINATING-1 (2026-10-01, #1618 WORKER-CENSUS-VERDICT-SATURATED-1): fleet_worker_census and
+// worker_dod read "live" for all 36 workers (written once, 2026-09-27), so all-green carried no information. The design
+// names five verdicts. Request volume cannot discriminate (health probes reach every worker), so verdicts come from
+// each worker's OUTPUT: worker_output_contracts.output_sql is run for the last 24h and 7d. Rules:
+//   DEGRADED          live /health non-200 (HTTP workers) or the latest fresh heartbeat reports ok=0
+//   PRODUCTIVE        output rows in the last 24h
+//   DAILY-ONLY        none in 24h but some in 7d, and every cron is daily or slower
+//   LOW-YIELD         none in 24h but some in 7d (sub-daily crons or on-demand)
+//   FIRING-NO-OUTPUT  scheduled, no output rows in 7d
+//   UNMEASURED        no executable output probe declared (honest, never defaulted to a pass)
+async function workerCensus(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+  if (!db) return { ok: false, error: "no AUDIT binding" };
+  var now = Date.now(), out = { ok: true, workers: 0, verdicts: {} };
+  var since = function (ms) { var d = new Date(now - ms), iso = d.toISOString(); return { iso: iso, sql: iso.slice(0, 19).replace("T", " "), date: iso.slice(0, 10), ms: String(d.getTime()) }; };
+  var w24 = since(864e5), w7 = since(7 * 864e5);
+  var fill = function (q, w) { return q.split(":since_iso").join("'" + w.iso + "'").split(":since_sql").join("'" + w.sql + "'").split(":since_date").join("'" + w.date + "'").split(":since_ms").join(w.ms); };
+  var all = async function (q) { try { return (await db.prepare(q).all()).results || []; } catch (e) { return null; } };
+  var rows = async function (q) { return (await all(q)) || []; };
+  var live = {}; (await rows("SELECT worker, http FROM worker_live_audit")).forEach(function (r) { live[r.worker] = r.http; });
+  var crons = {}; (await rows("SELECT name, crons_json FROM worker_schedules")).forEach(function (r) { try { crons[r.name] = JSON.parse(r.crons_json || "[]"); } catch (e) { crons[r.name] = []; } });
+  var hb = {}; (await rows("SELECT worker, ok FROM fleet_heartbeat WHERE ts >= '" + since(26 * 36e5).iso + "'")).forEach(function (r) { hb[r.worker] = Number(r.ok); });
+  var req = {}; (await rows("SELECT worker, requests FROM analytics_dash_workers")).forEach(function (r) { req[r.worker] = Number(r.requests) || 0; });
+  var contracts = await rows("SELECT worker, output_sql, state FROM worker_output_contracts WHERE COALESCE(state,'ACTIVE') = 'ACTIVE'");
+  var dailyOrSlower = function (list) { return list.length > 0 && list.every(function (c) { var f = String(c).trim().split(/\s+/); return f.length === 5 && /^\d+$/.test(f[0]) && /^\d+$/.test(f[1]); }); };
+  for (var i = 0; i < contracts.length; i++) {
+    var c = contracts[i], w = c.worker, cl = crons[w] || [], verdict, reason;
+    var httpBad = live[w] != null && Number(live[w]) !== 200 && cl.length === 0;
+    if (httpBad || hb[w] === 0) { verdict = "DEGRADED"; reason = httpBad ? "live /health http " + live[w] : "latest heartbeat ok=0"; }
+    else if (!c.output_sql) { verdict = "UNMEASURED"; reason = "no executable output probe (worker_output_contracts.output_sql)"; }
+    else {
+      var r24 = await all(fill(c.output_sql, w24)), r7 = await all(fill(c.output_sql, w7));
+      var n24 = r24 && r24.length ? Number(r24[0].n) || 0 : null, n7 = r7 && r7.length ? Number(r7[0].n) || 0 : null;
+      if (n24 == null || n7 == null) { verdict = "UNMEASURED"; reason = "output probe failed to run"; }
+      else if (n24 > 0) { verdict = "PRODUCTIVE"; reason = n24 + " output rows in 24h"; }
+      else if (n7 > 0) { verdict = dailyOrSlower(cl) ? "DAILY-ONLY" : "LOW-YIELD"; reason = "0 output rows in 24h, " + n7 + " in 7d"; }
+      else if (cl.length) { verdict = "FIRING-NO-OUTPUT"; reason = "scheduled (" + cl.join(" | ") + ") but 0 output rows in 7d"; }
+      else { verdict = "LOW-YIELD"; reason = "on-demand, 0 output rows in 7d"; }
+    }
+    out.workers++; out.verdicts[verdict] = (out.verdicts[verdict] || 0) + 1;
+    var reasonFull = reason + (req[w] != null ? "; 24h events " + req[w] : "");
+    var nowIso = new Date(now).toISOString();
+    try {
+      await db.prepare("INSERT INTO fleet_worker_census (worker, req24, measured, last_seen, verdict, reason, ts) VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6) ON CONFLICT(worker) DO UPDATE SET req24=excluded.req24, measured=1, last_seen=excluded.last_seen, verdict=excluded.verdict, reason=excluded.reason, ts=excluded.ts").bind(w, req[w] != null ? req[w] : null, nowIso, verdict, reasonFull.slice(0, 400), nowIso).run();
+      await db.prepare("UPDATE worker_dod SET verdict=?1, req24=?2, evidence=?3, updated_at=?4 WHERE worker=?5").bind(verdict, req[w] != null ? req[w] : null, ("WORKER-CENSUS-DISCRIMINATING-1: " + reasonFull).slice(0, 400), nowIso, w).run();
+    } catch (e) {}
+  }
+  try { await db.prepare("DELETE FROM fleet_worker_census WHERE worker NOT IN (SELECT worker FROM worker_output_contracts WHERE COALESCE(state,'ACTIVE') = 'ACTIVE')").run(); } catch (e) {}
+  return out;
+}
+__name(workerCensus, "workerCensus");
 async function reassertObservability(env) {
   try {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
