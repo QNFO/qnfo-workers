@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.7-intake-bounded-classify";
+var VERSION = "1.3.8-capability-contract";
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -569,7 +569,7 @@ var worker_default = {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
         ctx.waitUntil(selfRegister(env).catch((e) => console.log("self-register err", e && e.message || e)));
       }
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-intent-orchestrator", version: VERSION }), { headers: { "Content-Type": "application/json", ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-intent-orchestrator", version: VERSION, capabilities: ["intent-intake", "intent-triage", "research-dispatch", "daily-digest"], limitations: ["every route except /health needs a bearer token", "AI classification at intake is bounded at 8 s (INTAKE-PERSIST-BUDGET-1)", "the digest is sent at 06:00 and triage plus research dispatch run at 06:30 daily"] }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     if (!auth(token, env)) return new Response("unauthorized", { status: 401, headers: cors });

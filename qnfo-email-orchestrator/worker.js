@@ -2,7 +2,9 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.2-heartbeat";
+var VERSION = "0.4.3-capability-self-report";
+var CAPS = ["reply-drafts", "cadence-log", "email-filters"];
+var LIMS = ["cron-only: no public route; the reply-draft pass runs on its */15 and 3-hourly crons", "drafts and logs only: it never sends follow-up mail itself (no-self-mail)", "publishes this capability row from the cron"];
 var NAMESPACE = "email-orchestrator";
 var DAY_ACTIONS = ["wednesday-response-check"];
 var DOC = {
@@ -29,6 +31,15 @@ var DOC = {
   safety: ["never send to human contacts from this service automatically", "cadence runs are read-heavy + DB writes only", "results logged to cadence_runs (D1)"],
   version_history: ["0.3.2: first orchestration-visible version", "0.3.3: RED-TEAM blockers added (same email filter whitelist; timezones; SMS; no actual follow-up sends)", "0.3.4-glm53: calendar-api bind + saturday weekly summary; receipt emailed to alerts@ (D1 sink)", "0.3.5: NO SELF-MAIL (policy 2026-09-09) \u2014 removed cadence receipt email to alerts@qnfo.org (unprovisioned -> NDR bounce into spam, 108+ bounces); cadence_runs D1 remains the record"]
 };
+// CAPABILITY-SELF-REPORT-1 (2026-10-01, #1735): this worker has no public route (CRON_ONLY, #1402), so the deploy-guard
+// capability snapshot cannot probe its /health. Each cron run upserts its own capability_audit_snapshot row instead.
+async function capSelfReport(db, name) {
+  if (!db) return;
+  try {
+    await db.prepare("INSERT INTO capability_audit_snapshot (service, version, capabilities, limitations, ts) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(service) DO UPDATE SET version=excluded.version, capabilities=excluded.capabilities, limitations=excluded.limitations, ts=excluded.ts").bind(name, VERSION, JSON.stringify(CAPS), JSON.stringify(LIMS), new Date().toISOString()).run();
+  } catch (e) {
+  }
+}
 var worker_default = {
   async fetch(request, env) {
     var url = new URL(request.url);
@@ -63,7 +74,7 @@ var worker_default = {
     return h === env.OUTREACH_SECRET ? { ok: true } : { ok: false, reason: "bad secret" };
   },
   async health(env) {
-    var out = { ok: true, service: NAMESPACE, version: VERSION, time: (/* @__PURE__ */ new Date()).toISOString(), uptime: Date.now() - (globalThis.__start || Date.now()) };
+    var out = { ok: true, service: NAMESPACE, version: VERSION, capabilities: CAPS, limitations: LIMS, time: (/* @__PURE__ */ new Date()).toISOString(), uptime: Date.now() - (globalThis.__start || Date.now()) };
     if (!globalThis.__start) globalThis.__start = Date.now();
     try {
       var r = await env.OUTREACH_DB.prepare("SELECT COUNT(*) c FROM cadence_runs").first();
@@ -107,6 +118,7 @@ var worker_default = {
     // read by qnfo-fleet-control /state; without it the fleet could not tell this worker from a dead one.
     try { await env.AUDIT_DB.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind("qnfo-email-orchestrator", VERSION, new Date().toISOString(), hbOk).run(); }
     catch (e) { console.error("heartbeat failed:", String(e && e.message || e)); }
+    await capSelfReport(env.AUDIT_DB, "qnfo-email-orchestrator");
   },
   async runRepliesInternal(env, dry) {
     // EMAIL-PIPELINE-ESCALATE-DEADEND-1 (#1251): also scan escalated rows that a

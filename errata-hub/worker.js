@@ -1,6 +1,6 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.1.4-republish-verify"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.1.5-capability-contract"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
@@ -21651,7 +21651,7 @@ async function internalErrataIntake(request, env) {
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake"], limitations: ["no cron is declared in wrangler.toml, so the hourly watch/respond/publish members do not run on their own (ERRATA-HUB-CRONS-UNDECLARED-1)", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published"] }), { headers: { "content-type": "application/json" } });
     if (p === "/internal-errata" && request.method === "POST") return internalErrataIntake(request, env);
     if (p === "/errata-watch" || p.startsWith("/errata-watch/")) { const u = new URL(request.url); u.pathname = p.slice(13) || "/"; return erratawatchMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/errata-respond" || p.startsWith("/errata-respond/")) { const u = new URL(request.url); u.pathname = p.slice(15) || "/"; return erratarespondMod.default.fetch(new Request(u.toString(), request), env, ctx); }

@@ -6,7 +6,7 @@ var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var PL_SEARCH = "https://personal-life-search.q08.workers.dev";
 var EMAIL_BASE = "https://qnfo-email.internal";
 var NL = String.fromCharCode(10);
-var VERSION = "1.1.5"; // MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
+var VERSION = "1.1.6-capability-contract"; // MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
 var TOOLS = [
   { name: "web_search", description: "Search the web via DuckDuckGo (QNFO router). Returns title/url/snippet.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "result count (1-10)" } }, required: ["q"] } },
   { name: "web_fetch", description: "Fetch a URL and extract readable text (SSRF-guarded).", inputSchema: { type: "object", properties: { url: { type: "string" }, max: { type: "number", description: "max chars (500-20000)" } }, required: ["url"] } },
@@ -252,7 +252,7 @@ var worker_default = {
       if (ctx && ctx.waitUntil && env.QNFO_OPS && env.REGISTRY_TOKEN) {
         ctx.waitUntil(selfRegister(env).catch((e) => console.log("self-register err", e && e.message || e)));
       }
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-tools-mcp", version: VERSION, tools: TOOLS.map((t) => t.name), sessions: sessions.size, bindings: { email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY } }), { headers: { "Content-Type": "application/json", ...cors } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-tools-mcp", version: VERSION, capabilities: TOOLS.map((t) => t.name), limitations: ["MCP routes need a token (bearer or ?token=)", "write tools need a token with write scope", "email tools work only through the qnfo-email binding"], tools: TOOLS.map((t) => t.name), sessions: sessions.size, bindings: { email: !!env.EMAIL, email_key: !!env.EMAIL_API_KEY } }), { headers: { "Content-Type": "application/json", ...cors } });
     }
     const tokenFrom = /* @__PURE__ */ __name((u, req) => u.searchParams.get("token") || (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, ""), "tokenFrom");
     if (path === "/mcp/sse" && method === "GET") {

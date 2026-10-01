@@ -2,7 +2,9 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.2";
+var VERSION = "1.1.3-capability-self-report";
+var CAPS = ["signal-reentry", "signal-consume"];
+var LIMS = ["cron-only: no public route; re-entry runs on the hourly cron", "consume writes only with commit=1", "publishes this capability row from the cron"];
 var WORKER = "qnfo-signal-loop";
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -148,8 +150,18 @@ async function runConsume(env, commit) {
   return out;
 }
 __name(runConsume, "runConsume");
+// CAPABILITY-SELF-REPORT-1 (2026-10-01, #1735): this worker has no public route (CRON_ONLY, #1402), so the deploy-guard
+// capability snapshot cannot probe its /health. Each cron run upserts its own capability_audit_snapshot row instead.
+async function capSelfReport(db, name) {
+  if (!db) return;
+  try {
+    await db.prepare("INSERT INTO capability_audit_snapshot (service, version, capabilities, limitations, ts) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(service) DO UPDATE SET version=excluded.version, capabilities=excluded.capabilities, limitations=excluded.limitations, ts=excluded.ts").bind(name, VERSION, JSON.stringify(CAPS), JSON.stringify(LIMS), new Date().toISOString()).run();
+  } catch (e) {
+  }
+}
 var worker_default = {
   async scheduled(event, env) {
+    await capSelfReport(env.QNFO_AUDIT, WORKER);
     if (event.cron === "0 * * * *") {
       try {
         const r = await runReentry(env);
@@ -172,7 +184,7 @@ var worker_default = {
     try {
       if (p === "/health") {
         await ensureSchema(env);
-        return json({ ok: true, worker: WORKER, version: VERSION, bindings: { audit: !!env.QNFO_AUDIT, living_paper: !!env.LIVING_PAPER } });
+        return json({ ok: true, worker: WORKER, version: VERSION, capabilities: CAPS, limitations: LIMS, bindings: { audit: !!env.QNFO_AUDIT, living_paper: !!env.LIVING_PAPER } });
       }
       if (p === "/run/reentry") {
         const r = await runReentry(env);

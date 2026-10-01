@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.16.3-identity-moved"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.16.4-capability-contract"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2534,7 +2534,7 @@ var worker_default = {
       // gate below, so it used to disclose binding/secret presence and the
       // full cron map to anonymous callers. Serve a minimal public body; the
       // detailed body requires a valid bearer token.
-      const publicBody = { ok: true, worker: WORKER_NAME, version: VERSION };
+      const publicBody = { ok: true, worker: WORKER_NAME, version: VERSION, capabilities: ["weekly-digest", "scorecard", "outreach-send-gate", "ai-endpoint-health", "seo-health", "research-scan"], limitations: ["every route except this minimal /health needs a bearer token; the job and cron map is served only to authenticated callers", "jobs run only on its crons (Amsterdam-time aware)", "outreach sends are held inside the fleet-wide shared daily and per-domain caps"] };
       const healthToken = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
       if (!auth(healthToken, env)) {
         return new Response(JSON.stringify(publicBody), { headers: { "Content-Type": "application/json", ...CORS } });

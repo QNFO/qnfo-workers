@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { EmailMessage } from "cloudflare:email";
-var VERSION = "0.3.6-api-auth";
+var VERSION = "0.3.7-capability-contract";
 var ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 var WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 var GLOBAL_DAILY_CAP = 8;
@@ -286,6 +286,8 @@ var worker_default = {
         activation_at: "2026-09-13T00:00:00Z",
         warmup_from: "2026-09-08T00:00:00Z",
         cron: "0 11 * * 1-5",
+        capabilities: ["contact-mining", "campaign-sends", "warmup-self-check", "rfc-comments"],
+        limitations: ["/api/* needs Bearer OUTREACH_TOKEN and fails closed (503) while that secret is unset", "sends only on the weekday 11:00 cron, inside the fleet-wide shared daily and per-domain caps (fail closed)", "never mails a suppressed address (email_suppression or contacts.suppress)", "warm-up mail goes only to the own-mailbox allowlist"],
         mode: Date.now() >= ACTIVATION_AT_MS ? "external-enabled" : "draft+warmup",
         day: utcDay()
       });

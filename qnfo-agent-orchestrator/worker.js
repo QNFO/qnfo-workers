@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "1.1.0"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "1.1.1-capability-contract"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -737,8 +737,10 @@ var agent_orchestrator_default = {
     if (url.pathname === "/health") {
       return Response.json({
         worker: "qnfo-agent-orchestrator",
-        version: "1.1.0",
+        version: VERSION,
         status: "ok",
+        capabilities: ["agent-tasks", "paper-search", "graph-query", "arxiv-and-web-research", "notes", "publish-tools"],
+        limitations: ["every POST and PATCH needs X-Sync-Token (sync, dispatch or test token)", "a task runs at most 10 steps with an output budget of at most 16384 tokens", "publish tools act with this worker's own Zenodo and GitHub credentials"],
         bindings: {
           d1_living_paper: !!env.LIVING_PAPER,
           d1_graph: !!env.QNFO_GRAPH,

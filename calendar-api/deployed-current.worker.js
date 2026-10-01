@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.1-personal-ics-auth";
+var VERSION = "0.4.3-feed-rotation";
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
 // recreated as a separate worker. Its EXECUTE leg already wrote this worker's `calendar` table, and both share the
@@ -334,6 +334,16 @@ async function publishICS(env) {
     const ics = await buildICS(env, plane, fromIso);
     const key = "calendar/" + plane + "-" + token + ".ics";
     await env.ICS_R2.put(key, ics, { httpMetadata: { contentType: "text/calendar; charset=utf-8" } });
+    // CAL-FEED-ROTATE-1 (2026-10-01): a feed is revoked by renaming its calendar_meta token row to ics_token_<plane>_prev.
+    // getIcsToken then mints a new token, and this publish deletes the old object so the old URL stops serving at once.
+    try {
+      const prev = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + plane + "_prev").first();
+      if (prev && prev.v && prev.v !== token) {
+        await env.ICS_R2.delete("calendar/" + plane + "-" + prev.v + ".ics");
+        await env.CAL_DB.prepare("DELETE FROM calendar_meta WHERE k=?").bind("ics_token_" + plane + "_prev").run();
+      }
+    } catch (eRot) {
+    }
     out.push({ plane, key, url: R2_PUBLIC + "/" + key, bytes: ics.length });
   }
   return out;
@@ -363,7 +373,7 @@ var worker_default = {
         const tok = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + p).first();
         urls.push({ plane: p, url: tok && tok.v ? R2_PUBLIC + "/calendar/" + p + "-" + tok.v + ".ics" : null });
       }
-      return json({ ok: true, worker: WORKER, version: VERSION, planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN), and /health lists feed URLs only to a CAL_TOKEN caller", "ICS feeds are republished to R2 by the hourly :17 cron", "two planes only: qnfo and personal"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
     }
     if (path === "/publish") {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);

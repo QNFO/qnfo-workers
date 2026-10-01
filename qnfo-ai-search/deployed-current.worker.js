@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.0.2";
+var VERSION = "1.0.3-capability-contract";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 var worker_default = {
   async fetch(request, env, ctx) {
@@ -28,6 +28,8 @@ var worker_default = {
         status: "ok",
         worker: "qnfo-ai-search",
         version: VERSION,
+        capabilities: ["ai-search-query", "ai-search-ingest", "instance-list"],
+        limitations: ["POST /ingest needs X-Sync-Token", "POST /search and GET /instances are public reads over the indexed corpus", "answers come from the Cloudflare AI Search binding only"],
         bindings: {
           ai_search: !!env.AI_SEARCH,
           sync_token: !!env.SYNC_TOKEN

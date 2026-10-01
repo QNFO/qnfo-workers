@@ -14981,7 +14981,7 @@ function renderFullHTML(md, opts) {
 __name(renderFullHTML, "renderFullHTML");
 
 // worker.js
-var VERSION = "1.0.0";
+var VERSION = "1.0.1-render-internal";
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -15050,6 +15050,8 @@ var worker_default = {
         ok: true,
         worker: "qnfo-pdf",
         version: VERSION,
+        capabilities: ["markdown-to-pdf", "markdown-to-html", "corpus-paper-render"],
+        limitations: ["POST /pdf and /html (arbitrary Markdown) answer only service-binding callers; public callers get 403", "GET /pdf/<slug> and /html/<slug> render corpus papers only", "each render opens a Cloudflare Browser Rendering session"],
         browser: !!env.BROWSER,
         living: !!env.LIVING,
         releases: !!env.RELEASES
@@ -15075,6 +15077,10 @@ var worker_default = {
       }
     }
     if (path2 === "/pdf" || path2 === "/html") {
+      // PDF-RENDER-INTERNAL-1 (2026-10-01, #1735 sweep): rendering an arbitrary posted body opens a Browser Rendering session
+      // per call and was open to anyone. The only caller is qnfo-research-exec through its PDF_SVC binding (https://qnfo-pdf/...),
+      // a hostname a public request cannot carry.
+      if (/\.workers\.dev$|(^|\.)qnfo\.org$/i.test(new URL(request.url).hostname)) return Response.json({ ok: false, error: "forbidden: POST /pdf and /html are internal only (PDF-RENDER-INTERNAL-1)" }, { status: 403 });
       const format = path2.slice(1);
       try {
         const bodyText = await request.text();

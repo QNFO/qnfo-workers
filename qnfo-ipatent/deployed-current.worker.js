@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.4.5"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.4.6-capability-contract"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -1160,6 +1160,8 @@ var qnfo_ipatent_default = {
           status: "ok",
           worker: "qnfo-ipatent",
           version: VERSION,
+          capabilities: ["disclosure-drafting", "prior-art-search", "disclosures-list", "submission-view"],
+          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents"],
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
             r2: !!env.IPATENT_R2 ? "ipatent" : null,

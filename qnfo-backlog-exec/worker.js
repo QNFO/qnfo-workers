@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.1-health-probe-budget";
+var VERSION = "2.0.2-capability-contract";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -511,7 +511,7 @@ var worker_default = {
       // and fleet_status both reported this worker as "timeout" while it was in fact
       // healthy (curl http=200 in 1.6s). That false negative auto-filed agent_issues 1368.
       // The full inventory is served by the separate /inventory route.
-      return json({ ok: true, worker: WORKER, version: VERSION, openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1, strandedOpsJobs: stranded ? stranded.c : -1, openIssuesTotal: open ? open.c : -1 });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["backlog-inventory", "issue-drain", "stranded-job-recovery"], limitations: ["POST /run needs RUN_TOKEN or the qnfo-ops service binding (backlog.internal)", "the drain runs on the daily 01:10 cron", "/health reports counts only; the full inventory is GET /inventory"], openBacklog: open ? open.c : -1, openLedger: led ? led.c : -1, strandedOpsJobs: stranded ? stranded.c : -1, openIssuesTotal: open ? open.c : -1 });
     }
     if (url.pathname === "/inventory") {
       return json({ ok: true, worker: WORKER, version: VERSION, inventory: await openInventory(env) });

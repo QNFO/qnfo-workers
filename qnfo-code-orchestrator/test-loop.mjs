@@ -285,7 +285,7 @@ function fakeLoader(spinMs) {
   const { env } = envWith([]);
   const r = await worker.fetch(new Request("https://x/health"), env);
   const h = await r.json();
-  check("/health reports 0.3.0 + task-loop + the ladder + js_verify off by default", h.version === "0.3.0" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
+  check("/health reports the VERSION constant + task-loop + limitations[] + the ladder + js_verify off by default", /^0\.3\.\d+/.test(h.version) && h.capabilities.includes("task-loop") && Array.isArray(h.limitations) && h.limitations.length > 0 && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
 }
 
 // ===== 12. scheduled() drives the loop with no HTTP request =====
