@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.44-gw-props-auth";
+var VERSION = "0.9.46-gates-bib-aware";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2213,9 +2213,15 @@ async function stageRevise(env, row) {
     // REVISE-WALL-1 (2026-10-01): a full rewrite of a paper this long cannot fit the 8192-token budget next to the reasoning
     // (0 chars on every attempt, 09:07Z-12:24Z) and its four 240 s calls pushed the stage past the 15-minute scheduled wall
     // limit (internalError, 12:00Z hour). Fail fast with the patch outcome instead; the recover loop re-arms the row.
+    // REVISE-NOOP-ADVANCE-1 (2026-10-01, #1728; from the wave-4 session's PR 358): revise improves, it does not gate. When
+    // no patch edit applies (5435c847: 0 edits proposed, raw "[]"), re-queueing from ground discarded a 23k-char paper and
+    // re-ran the ensemble on unchanged inputs until the row parked. Keep the paper and advance; review is bounded by
+    // MAX_REVIEW_CYCLES and verify's deterministic gates decide (bounded by verifyPass).
     if (paper.length >= 1.2e4) {
-      await markError(env, row, "revise: no applicable patch edit (proposed=" + _p.proposed + ", applied=" + _p.applied + ", raw=" + String(_praw || "").length + " chars)");
-      return { ok: false, stage: "revise", patch: 0 };
+      const _c3 = (ctx.cycles || 0) + 1;
+      await logEvent(env, "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars); advancing with the unchanged paper", "warn");
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: _c3, patch: 0, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
+      return { ok: true, stage: "revise->review", cycle: _c3, patch: 0, noop: true };
     }
   }
   let revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
@@ -2245,14 +2251,75 @@ __name2(stageRevise, "stageRevise");
 __name22(stageRevise, "stageRevise");
 __name222(stageRevise, "stageRevise");
 __name2222(stageRevise, "stageRevise");
-function finalGates(paper) {
+// REFS-RENDER-1 (2026-10-01): the References section was left to the writer and the revise model, and the gate accepted
+// only an unnumbered or "7." heading, so a paper whose list sat under "## 8. References", or used "1." instead of "[1]",
+// failed gate-refs/gate-refcount and went terminal after one revision (row 5099abb8, 15:21Z). The list is mechanical:
+// the grounding bibliography is numbered and the body cites [n]. Render it from the entries the body actually cites,
+// in bibliography numbering; anything not in the bibliography is dropped (the writers may cite only these).
+var REFS_HEAD_RE = /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?(?:References|Bibliography)\b.*$/im;
+function renderReferences(paper, grounding) {
+  const bibTxt = String(grounding || "").split("## Bibliography")[1] || "";
+  const entries = {};
+  for (const line of bibTxt.split("\n")) {
+    const m = line.match(/^\[(\d+)\]\s+(.+)$/);
+    if (m) entries[m[1]] = m[2].trim();
+  }
+  // Keep any section that follows the old list (appendices): only the list itself is replaced.
+  const src = String(paper);
+  const hm = REFS_HEAD_RE.exec(src);
+  let body = src, tail = "";
+  if (hm) {
+    body = src.slice(0, hm.index);
+    const after = src.slice(hm.index + hm[0].length);
+    const nx = after.search(/^#{1,2}\s/m);
+    tail = nx >= 0 ? after.slice(nx).replace(/^\s+/, "") : "";
+  }
+  body = body.replace(/\s+$/, "");
+  const cited = new Set();
+  const re = /\[(\d+(?:\s*[,\u2013-]\s*\d+)*)\]/g;
+  const scan = body + "\n" + tail;
+  let m;
+  while ((m = re.exec(scan)) !== null) {
+    for (const part of m[1].split(",")) {
+      const rg = part.trim().split(/\s*[\u2013-]\s*/);
+      const a = parseInt(rg[0], 10), b = rg.length > 1 ? parseInt(rg[1], 10) : a;
+      if (Number.isFinite(a) && Number.isFinite(b) && b >= a && b - a < 50) for (let k = a; k <= b; k++) cited.add(String(k));
+    }
+  }
+  const nums = Array.from(cited).filter(function(n) { return entries[n]; }).sort(function(x, y) { return x - y; });
+  if (!nums.length) return { paper: String(paper), cited: 0 };
+  const lines = nums.map(function(n) {
+    const e = entries[n], bar = e.indexOf(" | ");
+    const id = bar > 0 ? e.slice(0, bar).trim() : "", title = bar > 0 ? e.slice(bar + 3).trim() : e;
+    const link = /^arXiv:/i.test(id) ? " https://arxiv.org/abs/" + id.slice(6) : /^doi:/i.test(id) ? " https://doi.org/" + id.slice(4) : "";
+    return "[" + n + "] " + title + (id ? ". " + id + "." : "") + link;
+  });
+  return { paper: body + "\n\n## References\n\n" + lines.join("\n") + "\n" + (tail ? "\n" + tail : ""), cited: nums.length };
+}
+// REFCOUNT-BIB-AWARE-1 + publish floor (2026-10-01, #1620; from the wave-4 session's PR 358): the reference floor is
+// MIN_REFS capped at what the grounding bibliography can supply (writers may cite only bibliography works) and never below
+// MIN_GROUND_REFS. A new paper's length floor is the living-paper publish floor (status=published needs >= 20000 chars,
+// trg_papers_pub_floor_*), so a paper D1 would refuse AFTER its public Zenodo deposit goes back to revise here instead.
+var PUBLISH_FLOOR_CHARS = 2e4;
+var MIN_GROUND_REFS = 5;
+function bibCountFromGrounding(grounding) {
+  var tail = String(grounding || "").split("## Bibliography")[1] || "";
+  return (tail.match(/^\[\d+\] /gm) || []).length;
+}
+function finalGates(paper, opts) {
+  const o = opts || {};
+  const minChars = Number(o.minChars || MIN_PAPER_CHARS);
+  const minRefs = typeof o.bibCount === "number" ? Math.max(MIN_GROUND_REFS, Math.min(MIN_REFS, o.bibCount)) : MIN_REFS;
   const fixes = [];
-  if (String(paper).length < MIN_PAPER_CHARS) fixes.push({ id: "gate-length", severity: "HARD", claim: "paper too short", reason: "body length " + String(paper).length + " < " + MIN_PAPER_CHARS, fix: "Expand with literature review, explicit derivations, and discussion to 15000+ characters." });
-  if (!/##\s*(7\.\s*)?References/i.test(paper)) fixes.push({ id: "gate-refs", severity: "HARD", claim: "no References section", reason: "missing References heading", fix: "Add a References section listing only bibliography entries." });
+  if (String(paper).length < minChars) fixes.push({ id: "gate-length", severity: "HARD", claim: "paper too short", reason: "body length " + String(paper).length + " < " + minChars, fix: "Expand with literature review, explicit derivations, and discussion to " + minChars + "+ characters." });
+  if (!REFS_HEAD_RE.test(paper)) fixes.push({ id: "gate-refs", severity: "HARD", claim: "no References section", reason: "missing References heading", fix: "Add a References section listing only bibliography entries." });
   if (/\[to verify\]/i.test(paper)) fixes.push({ id: "gate-toverify", severity: "HARD", claim: "[to verify] markers present", reason: "unverified quantitative claim markers in body", fix: "Replace every marked claim with a computed value or move it to Discussion as an explicitly-labeled hypothesis." });
-  const refsPart = String(paper).split(/##\s*(7\.\s*)?References/i)[1] || "";
-  const refCount = (refsPart.match(/\[\d+\]/g) || []).length;
-  if (refCount < MIN_REFS) fixes.push({ id: "gate-refcount", severity: "HARD", claim: "too few references", reason: "rendered references " + refCount + " < " + MIN_REFS, fix: "Ground claims in at least 8 cited works from the bibliography with substantive context." });
+  // REFCOUNT-SPLIT-1 (PR 358's finding): the old split(/##\s*(7\.\s*)?References/i)[1] returned the CAPTURE GROUP, so
+  // refCount was 0 for every paper. Count entry lines after the last References heading, up to the next top-level heading.
+  const _refsParts = String(paper).split(REFS_HEAD_RE);
+  const refsPart = _refsParts.length > 1 ? _refsParts[_refsParts.length - 1].split(/^#{1,2}\s/m)[0] : "";
+  const refCount = (refsPart.match(/^[ \t]*(?:[-*][ \t]*)?(?:\[\d+\]|\d+\.)[ \t]+\S/gm) || []).length;
+  if (refCount < minRefs) fixes.push({ id: "gate-refcount", severity: "HARD", claim: "too few references", reason: "rendered references " + refCount + " < " + minRefs, fix: "List at least " + minRefs + " works from the provided bibliography in the References section, numbered [1]..[n], and cite each in the text with substantive context." });
   if (/(Let me|The user|I'll|I need to|Okay,|Alright,|Here's what)/i.test(String(paper).slice(0, 500))) fixes.push({ id: "gate-preamble", severity: "HARD", claim: "reasoning preamble", reason: "meta text at body start", fix: "Remove all thinking/planning text; output only the paper." });
   return { ok: fixes.length === 0, fixes, reason: fixes.map(function(f) {
     return f.id;
@@ -2264,7 +2331,17 @@ __name22(finalGates, "finalGates");
 __name222(finalGates, "finalGates");
 __name2222(finalGates, "finalGates");
 async function stageVerify(env, row) {
-  const paper = await r2Get(env, String(row.id) + "/reconciled.md");
+  let paper = await r2Get(env, String(row.id) + "/reconciled.md");
+  try {
+    const _rr = renderReferences(paper, await r2Get(env, String(row.id) + "/grounding.md"));
+    if (_rr.cited && _rr.paper !== paper) {
+      paper = _rr.paper;
+      await r2Put(env, String(row.id) + "/reconciled.md", paper);
+      await logEvent(env, "refs-render", "row=" + row.id + " cited=" + _rr.cited, "ok");
+    }
+  } catch (eRR) {
+  }
+  const gateOpts = { bibCount: bibCountFromGrounding(await r2Get(env, String(row.id) + "/grounding.md")), minChars: row.source === "remediation" ? MIN_PAPER_CHARS : PUBLISH_FLOOR_CHARS };
   let ctx = {};
   try {
     ctx = JSON.parse(row.context || "{}");
@@ -2282,7 +2359,7 @@ async function stageVerify(env, row) {
   }).slice(0, 8);
   if (!claims.length) {
     await r2Put(env, String(row.id) + "/verification.md", "# Verification\n\nNo quantitative claims were found; the paper is qualitative. Results are framed as qualitative analysis with explicit limitations.\n\nExtraction output:\n" + String(exRaw).slice(0, 3e3));
-    const gates2 = finalGates(paper);
+    const gates2 = finalGates(paper, gateOpts);
     // VERIFY-LOOP-BOUND-1 (2026-10-01): this qualitative branch sent the row back to revise on every failing gate with no
     // verifyPass check, and review/revise dropped verifyPass from the context, so row 567 cycled verify -> revise ->
     // review -> verify every 15 minutes (13:21Z to 14:07Z) on gate-refcount. A second failing pass is terminal here, as
@@ -2310,16 +2387,26 @@ async function stageVerify(env, row) {
   await r2Put(env, String(row.id) + "/verification.py", code);
   let out = "";
   try {
-    const r = await fetch(PILOT + "/exec", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.PILOT_TOKEN }, body: JSON.stringify({ code }) });
-    const j = await r.json();
-    out = String(j && (j.stdout || j.output || j.error) || "no output").slice(0, 2e4);
+    // PILOT-PROPS-CALLER-1 (2026-10-01): the public pilot hostname answers 403 to every command path since
+    // PILOT-PUBLIC-EXEC-CLOSED-1, so the verification script never ran. Call the pilot through its service binding
+    // (props-authenticated); send a bearer only if this worker holds one. The pilot answers
+    // {ok, result: {exitCode, stdout, stderr}}; reading only j.stdout recorded "no output" for every run.
+    const _ph = { "Content-Type": "application/json" };
+    if (env.PILOT_TOKEN) _ph["Authorization"] = "Bearer " + env.PILOT_TOKEN;
+    const _pinit = { method: "POST", headers: _ph, body: JSON.stringify({ code }) };
+    const r = env.CONTAINERS_PILOT && typeof env.CONTAINERS_PILOT.fetch === "function" ? await env.CONTAINERS_PILOT.fetch("https://containers-pilot.internal/exec", _pinit) : await fetch(PILOT + "/exec", _pinit);
+    const j = await r.json().catch(function() { return {}; });
+    const res = j && j.result && typeof j.result === "object" ? j.result : null;
+    out = res ? String(res.stdout || "") + (res.stderr ? "\n[stderr]\n" + String(res.stderr) : "") + "\n[exit " + res.exitCode + "]" : String(j && (j.stdout || j.output || j.error) || "no output (HTTP " + r.status + ")");
+    out = out.slice(0, 2e4);
+    if (!r.ok) await logEvent(env, "verify-exec-error", "pilot HTTP " + r.status + ": " + String(j && j.error || "").slice(0, 200), "warn");
   } catch (e) {
     out = "EXEC ERROR: " + String(e && e.message || e).slice(0, 200);
   }
   const verifMd = "# Verification report\n\n## Extracted claims\n" + JSON.stringify(claims, null, 2) + "\n\n## Script\n```python\n" + code + "\n```\n\n## Execution output\n```\n" + out + "\n```\n";
   await r2Put(env, String(row.id) + "/verification.md", verifMd);
   const mismatch = /match\s*=\s*no/i.test(out) || /VERIFICATION SUMMARY[^\n]*mismatch\s*[1-9]/i.test(out);
-  const gates = finalGates(paper);
+  const gates = finalGates(paper, gateOpts);
   if ((mismatch || !gates.ok) && !ctx.verifyPass) {
     const fixes = gates.fixes.slice();
     if (mismatch) fixes.push({ id: "verify-mismatch", severity: "HARD", claim: "computed values do not match paper claims", reason: out.slice(0, 2e3), fix: "Correct each quantitative claim to match the independently computed value, or move the claim to the Discussion as an explicitly-labeled hypothesis with stated assumptions." });

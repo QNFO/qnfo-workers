@@ -16,7 +16,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // LIMITATION (stated, not hidden): the tarball fallback produces NO .git directory,
 // so it is returned with method:"tarball", git:false and is only usable for
 // read/build workloads, not for git_op on that checkout.
-var VERSION = "1.0.9-rate-limit";
+var VERSION = "1.0.10-props-caller";
 var RATE_PER_MINUTE = 60;
 var RATE_PER_HOUR = 600;
 var MAX_INFLIGHT = 8;
@@ -387,15 +387,30 @@ class ShellContainer {
   }
 };
 var worker_default = {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // PILOT-PROPS-CALLER-1 (2026-10-01): internal workers authenticate by their service binding's ctx.props.caller,
+    // which only someone with deploy rights on the CALLER can set (the qnfo-ai INTERNAL-CALLER-PROPS-1 model). Such a
+    // caller on the internal hostname gets the bearer injected here, so it needs no copy of PILOT_TOKEN. Before this,
+    // qnfo-research-exec called the public hostname with a token it may not hold; since PILOT-PUBLIC-EXEC-CLOSED-1
+    // every one of its verification runs got 403. Public requests never carry props.
+    try {
+      const caller = ctx && ctx.props && typeof ctx.props.caller === "string" ? ctx.props.caller : "";
+      if (/^qnfo-[a-z0-9-]{1,60}$/.test(caller) && url.hostname === "containers-pilot.internal" && env.PILOT_TOKEN) {
+        const h = new Headers(request.headers);
+        h.set("Authorization", "Bearer " + env.PILOT_TOKEN);
+        h.set("x-pilot-caller", caller);
+        request = new Request(request, { headers: h });
+      }
+    } catch (e) {
+    }
     if (url.pathname === "/health") {
       return json({
         ok: true,
         worker: "qnfo-containers-pilot",
         version: VERSION,
         capabilities: ["bash", "python3.12", "node22", "npm", "pip", "git", "ripgrep", "workspace-fs", "git-clone", "full-shell"],
-        limitations: ["command paths only via the qnfo-ops service binding", "PILOT-RATE-LIMIT-1: 429 above the limits below", "one shared container instance", "stdout/stderr capped at " + MAX_OUT + " bytes"],
+        limitations: ["command paths only via an internal service binding (qnfo-ops bearer, or a qnfo-* caller authenticated by binding props)", "PILOT-RATE-LIMIT-1: 429 above the limits below", "one shared container instance", "stdout/stderr capped at " + MAX_OUT + " bytes"],
         limits: { per_minute: RATE_PER_MINUTE, per_hour: RATE_PER_HOUR, inflight: MAX_INFLIGHT },
         public_exec: false
       });

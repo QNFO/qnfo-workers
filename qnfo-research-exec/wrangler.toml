@@ -58,6 +58,14 @@ service = "qnfo-ai"
 # rotation no longer strands this worker. Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
 props = { caller = "qnfo-research-exec" }
 
+# Service: qnfo-containers-pilot (Python execution for the verify stage) - PILOT-PROPS-CALLER-1 (2026-10-01).
+# The pilot refuses command paths on its public hostname (PILOT-PUBLIC-EXEC-CLOSED-1), so the verify stage calls
+# https://containers-pilot.internal/exec through this binding; the pilot authenticates the caller by these props.
+[[services]]
+binding = "CONTAINERS_PILOT"
+service = "qnfo-containers-pilot"
+props = { caller = "qnfo-research-exec" }
+
 # Cron: research pipeline drain. RESEARCH-THROUGHPUT-1 (2026-10-01, issues 1700/1620): a paper needs ~8-10 stages
 # (ground, ensemble, reconcile, review, revise x cycles, verify) and each hourly tick completed only 1-2 of them (the
 # 4-min loop budget ends after the first slow stage), so one paper took ~10h and 25 queued rows would have taken >1 week.
