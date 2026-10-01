@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.79-profile-scrub";
+var VERSION = "0.4.80-description-quality";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3716,6 +3716,8 @@ async function portfolioSync(env, force) {
   }
   var status = writes.every(function(w) { return w.status === "committed" || w.status === "unchanged"; }) ? "ok" : "partial";
   var done = actions.filter(function(a) { return a.status === "committed"; }).length;
+  actions = actions.filter(function(a) { return a.status !== "unchanged"; });
+  ev.actions = actions;
   try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "kernel " + VERSION + "; wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length + "; actions " + actions.length + " (" + done + " committed)", JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) {}
   return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, wbs: wbs.note, writes: writes, actions: actions, ms: Date.now() - t0 };
 }
@@ -3727,7 +3729,9 @@ async function portfolioSync(env, force) {
 function pfNeedsSync(last, version, nowMs) {
   if (!last || !last.ts) return "no successful run yet";
   if (String(last.note || "").indexOf("kernel " + version + ";") < 0) return "kernel " + version + " has not synced yet";
-  var holdMs = last.status === "ok" ? PF_STALE_H * 3600000 : 50 * 60000;
+  // a run that took hygiene actions probably left more for the next one (PF_HYGIENE_MAX per run): retry in 50 minutes
+  var took = /actions (\d+) \(/.exec(String(last.note || ""));
+  var holdMs = last.status === "ok" && !(took && Number(took[1]) > 0) ? PF_STALE_H * 3600000 : 50 * 60000;
   var age = nowMs - Date.parse(last.ts);
   if (isNaN(age) || age >= holdMs) return "last " + last.status + " run is " + Math.round(age / 3600000) + "h old";
   return null;
@@ -3785,6 +3789,14 @@ function pfTopicsFor(row, wbsRows) {
   });
   return base.filter(function(t) { return /^[a-z0-9][a-z0-9-]{0,49}$/.test(t); }).slice(0, 20);
 }
+var PF_META_LABELS = /\b(Status|Phase|Started|Updated|Author|Authors|Date|Version|License|Licence|DOI|ORCID|Last updated|Created|Owner|Maintainer|Tags|Keywords)\s*:/gi;
+function pfIsMetadata(p) {
+  var s = String(p || "");
+  var labels = (s.match(PF_META_LABELS) || []).length;
+  if (/^(Status|Phase|Author|Authors|Date|Version|License|Licence|DOI|Last updated|Created|Owner|Maintainer)\s*:/i.test(s)) return true;
+  if (labels >= 2 && (s.indexOf(" | ") >= 0 || s.indexOf(" · ") >= 0 || s.indexOf(" - ") >= 0)) return true;
+  return labels >= 3;
+}
 // Pure: README markdown -> the first real paragraph as a one-line description, or null when there is none.
 function pfDescriptionFromReadme(md) {
   var text = String(md || "").replace(/\r/g, "");
@@ -3802,17 +3814,25 @@ function pfDescriptionFromReadme(md) {
     var p = usable.join(" ");
     p = p.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[`*_~<>]/g, "").replace(/\s+/g, " ").trim();
     if (p.length < 20) continue;
+    // DESCRIPTION-QUALITY-1: a metadata line ("Status: drafted | Phase: P3 | Updated: ...", "Author: ... | Date: ...")
+    // is not a description; the first run wrote two of these. A paragraph made of labelled fields is skipped.
+    if (pfIsMetadata(p)) continue;
     if (p.length > 240) { p = p.slice(0, 240); var cut = p.lastIndexOf(" "); if (cut > 120) p = p.slice(0, cut); p = p.replace(/[,;:\-]+$/, "") + "..."; }
     return p;
   }
   return null;
 }
-// Pure: the evaluated register + registry rows -> the bounded, ordered list of actions for this sync.
-function pfHygienePlan(ev, wbsRows) {
+// Pure: the evaluated register + registry rows (+ the descriptions the loop itself wrote, repo -> text) -> the bounded,
+// ordered list of actions for this sync. A description the loop wrote is re-derived every sync (description-revise):
+// when the README's first paragraph changes, or no longer yields one, the loop corrects or clears its own text. A
+// description a person wrote is never touched.
+function pfHygienePlan(ev, wbsRows, written) {
   var acts = [], bySlug = {}, byCode = {};
+  written = written || {};
   (wbsRows || []).forEach(function(w) { if (!w) return; byCode[w.wbs_code] = w; if (w.slug) bySlug[String(w.slug).toLowerCase()] = w; });
   (ev.rows || []).forEach(function(r) {
     if (r.visibility !== "public" || r.archived || r.fork || r.tier === "client-config") return;
+    if (r.description && written[r.name] && String(r.description).slice(0, 120) === String(written[r.name]).slice(0, 120)) acts.push({ repo: r.name, action: "description-revise", current: r.description });
     if (r.tier === "research") {
       var cand = null, s = bySlug[String(r.name).toLowerCase()];
       if (s && !s.github_repo) cand = s;
@@ -3824,7 +3844,7 @@ function pfHygienePlan(ev, wbsRows) {
     if (r.flags.indexOf("no-topics") >= 0) acts.push({ repo: r.name, action: "topics", topics: pfTopicsFor(r, wbsRows) });
   });
   // registry links first (one D1 write each), then the cheapest GitHub writes; the rest waits for the next sync
-  var order = { "wbs-link": 0, topics: 1, description: 2, license: 3 };
+  var order = { "wbs-link": 0, "description-revise": 1, topics: 2, description: 3, license: 4 };
   acts.sort(function(a, b) { return order[a.action] - order[b.action] || String(a.repo).localeCompare(String(b.repo)); });
   return acts.slice(0, PF_HYGIENE_MAX);
 }
@@ -3851,8 +3871,16 @@ async function pfCreateIfAbsent(env, repo, path, content, message) {
   if (!(pr.json && pr.json.commit && pr.json.commit.sha)) return { status: "write-failed", note: "PUT HTTP " + pr.status + " on " + branch };
   return { status: "committed", note: pr.json.commit.sha + " on " + branch };
 }
+async function pfWrittenDescriptions(env) {
+  var rows = await charterRows(env, "SELECT repo, detail FROM portfolio_actions WHERE action IN ('description','description-revise') AND status='committed' ORDER BY id DESC LIMIT 400");
+  var m = {};
+  rows.forEach(function(r) { if (!(r.repo in m)) m[r.repo] = r.detail === "cleared" ? "" : String(r.detail || ""); });
+  return m;
+}
 async function pfHygieneApply(env, ev, wbsRows) {
-  var plan = pfHygienePlan(ev, wbsRows), out = [], lic = null;
+  var written = {};
+  try { written = await pfWrittenDescriptions(env); } catch (e) { written = {}; }
+  var plan = pfHygienePlan(ev, wbsRows, written), out = [], lic = null;
   var msg = "chore(portfolio): PORTFOLIO-HYGIENE-1 " + ev.ts.slice(0, 10) + " [skip ci]";
   for (var i = 0; i < plan.length; i++) {
     var a = plan[i], full = PF_ORG + "/" + a.repo, res;
@@ -3860,10 +3888,14 @@ async function pfHygieneApply(env, ev, wbsRows) {
       if (a.action === "license") {
         if (lic === null) lic = (await pfLicenseText(env)) || false;
         res = lic ? await pfCreateIfAbsent(env, full, PF_LICENSE_PATH, lic, msg + "\n\nThe QNFO Unified License Agreement v2.0 (SPDX LicenseRef-QNFO-ULA-2.0) applies by its own scope to every repository of the organisation; this file makes it visible here. Source of truth: https://github.com/" + PF_LICENSE_REPO) : { status: "skipped", note: "licence text unavailable from " + PF_LICENSE_REPO };
-      } else if (a.action === "description") {
+      } else if (a.action === "description" || a.action === "description-revise") {
         var rd = await timedFetch("https://api.github.com/repos/" + full + "/readme", { headers: Object.assign({}, pfGh(env), { Accept: "application/vnd.github.raw+json" }) }, 12e3);
         var desc = rd.status === 200 ? pfDescriptionFromReadme(await rd.text()) : null;
-        if (!desc) res = { status: "skipped", note: rd.status === 200 ? "README has no usable first paragraph" : "README HTTP " + rd.status };
+        if (a.action === "description-revise") {
+          if (rd.status !== 200 && rd.status !== 404) res = { status: "skipped", note: "README HTTP " + rd.status };
+          else if ((desc || "") === String(a.current || "")) res = { status: "unchanged", note: "still the README's first paragraph" };
+          else { var pr2 = await pfGhJson(env, "PATCH", "https://api.github.com/repos/" + full, { description: desc || "" }); res = pr2.status === 200 ? { status: "committed", note: desc ? desc.slice(0, 120) : "cleared" } : { status: "write-failed", note: "PATCH HTTP " + pr2.status }; }
+        } else if (!desc) res = { status: "skipped", note: rd.status === 200 ? "README has no usable first paragraph" : "README HTTP " + rd.status };
         else { var pd = await pfGhJson(env, "PATCH", "https://api.github.com/repos/" + full, { description: desc }); res = pd.status === 200 ? { status: "committed", note: desc.slice(0, 120) } : { status: "write-failed", note: "PATCH HTTP " + pd.status }; }
       } else if (a.action === "topics") {
         var pt = await pfGhJson(env, "PUT", "https://api.github.com/repos/" + full + "/topics", { names: a.topics });
@@ -3877,6 +3909,7 @@ async function pfHygieneApply(env, ev, wbsRows) {
       } else res = { status: "skipped", note: "unknown action" };
     } catch (e) { res = { status: "write-failed", note: String(e && e.message || e).slice(0, 100) }; }
     out.push({ repo: a.repo, action: a.action, status: res.status, note: res.note || "" });
+    if (res.status === "unchanged") continue;
     try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ev.ts, a.repo, a.action, res.status, String(res.note || "").slice(0, 300)).run(); } catch (e2) {}
   }
   return out;
