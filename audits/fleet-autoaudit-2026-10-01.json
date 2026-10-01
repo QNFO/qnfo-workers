@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 06:53:32",
+  "audited_at": "2026-10-01 07:22:16",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -29,7 +29,7 @@
     "drift": [
       {
         "dir": "qnfo-fleet-control",
-        "live": "0.4.51-unified-ai-spend",
+        "live": "0.4.53-signal-observe",
         "repo": "\\d+\\.\\d+\\.\\d+[^",
         "worker": "qnfo-fleet-control"
       }
@@ -1144,7 +1144,7 @@
     "qnfo-fleet-control": {
       "before": "\\d+\\.\\d+\\.\\d+[^",
       "http": 200,
-      "live": "0.4.51-unified-ai-spend",
+      "live": "0.4.53-signal-observe",
       "match": 0,
       "note": "DRIFT",
       "worker": "qnfo-fleet-control"
