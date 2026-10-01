@@ -46,6 +46,14 @@ binding = "DB_AUDIT"
 database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
+# PORTFOLIO-LOOP-1 (QNFO-PORTFOLIO-1, 2026-10-01): program_registry (WBS codes -> github_repo) lives in portfolio-state;
+# the portfolio loop joins every QNFO repository to its WBS codes through this binding. The canonical deploy installs
+# declared bindings; the loop degrades to "wbs: no PORTFOLIO binding" if it is absent.
+[[d1_databases]]
+binding = "PORTFOLIO"
+database_name = "portfolio-state"
+database_id = "d80fdf2a-0a60-45a3-968b-2907ce806dcd"
+
 [[r2_buckets]]
 binding = "R2_AUDIT"
 bucket_name = "qnfo-audit"

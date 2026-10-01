@@ -1,4 +1,4 @@
-var VERSION="3.7.19-scholar-pdf";
+var VERSION="3.7.20-author-of-record";
 // ORG-LABEL-1 (2026-10-01, docs/STRATEGY.md s2.1): there is no legal entity and the work is one researcher with an
 // AI-assisted pipeline, so "Research Foundation" and "research collective" overclaim. Labels only; the positioning copy
 // waits for the owner's approval in the Identity doc. ABOUT-GA-1: /about was the one gateway page without the GA4 tag.
@@ -832,9 +832,7 @@ function subscribeBlock(source) {
 }
 __name(subscribeBlock, "subscribeBlock");
 
-function renderPaperHTML(paper, pdfUrl) {
-  // SCHOLAR-PDF-URL-1 (2026-10-01, #1714): pdfUrl is "" unless the paper has full text (see paperPdfLinkFor).
-  pdfUrl = pdfUrl || "";
+function renderPaperHTML(paper) {
   const rawBody = paper.body_md || "";
   // NO-BLANK-PAPER-1 (2026-09-26): a legacy `body_md.length >= 5000` gate
   // blanked every short paper (canonical: the 3792-char poster
@@ -851,7 +849,7 @@ function renderPaperHTML(paper, pdfUrl) {
   const dateStr = paper.created_at ? paper.created_at.slice(0, 10) : "Unknown";
   // PAPER-PAGE-SEO-1 (2026-10-01): the paper page was the one gateway page without a viewport
   // (desktop-width render on phones, mobile-usability flag); twitter:* mirror the og:* values.
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' + buildPaperJsonLd(paper) + "<title>" + esc(displayTitle(paper.title)) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(mathPlain(abstract)) + '"><meta property="og:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta property="og:type" content="article"><meta property="og:url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><meta property="og:description" content="' + escAttr(mathPlain(abstract)) + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta name="twitter:description" content="' + escAttr(mathPlain(abstract)) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(displayTitle(paper.title)) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr) + '">' + (pdfUrl ? '<meta name="citation_pdf_url" content="' + escAttr(pdfUrl) + '">' : "") + '<meta name="citation_publisher" content="QNFO"><link rel="canonical" href="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><style>' + COMMON_CSS + '.rendered-md{font-family:"STIX Two Text",Cambria,Georgia,"Times New Roman",serif;font-size:15.5px;line-height:1.6;color:#111;text-align:justify;hyphens:auto;-webkit-hyphens:auto;max-width:100%;overflow-wrap:break-word}.rendered-md h1{font-size:22px;font-weight:700;line-height:1.3;margin:0 0 10px 0;text-align:left;hyphens:none}.rendered-md h2{font-size:18px;font-weight:700;margin:28px 0 10px 0;border-bottom:.6px solid #aaa;padding-bottom:4px}.rendered-md h3{font-size:16px;font-weight:700;margin:22px 0 8px 0}.rendered-md h4{font-size:15px;font-weight:700;font-style:italic;margin:18px 0 6px 0}.rendered-md h5{font-size:13.5px;font-weight:700;margin:16px 0 6px 0}.rendered-md h6{font-size:13px;font-weight:700;font-style:italic;margin:14px 0 6px 0}.rendered-md p{margin:0 0 10px 0}.rendered-md ul,.rendered-md ol{margin:0 0 10px 0;padding-left:26px}.rendered-md li{margin-bottom:3px}.rendered-md mjx-container{font-size:1.02em;max-width:100%;overflow-x:auto}.rendered-md mjx-container[display="true"]{margin:14px 0 !important;text-align:center !important}.rendered-md table{width:100%;border-collapse:collapse;margin:12px 0 14px 0;font-size:13.5px;line-height:1.45}.rendered-md thead{display:table-header-group}.rendered-md th{font-weight:700;text-align:left;border-top:2px solid #000;border-bottom:1px solid #000;padding:5px 8px}.rendered-md td{border-bottom:.5px solid #bbb;padding:4px 8px;vertical-align:top}.rendered-md tr:last-child td{border-bottom:2px solid #000}.rendered-md pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px;line-height:1.45;background:#f8f8f8;border:.5px solid #ddd;border-radius:4px;padding:10px;margin:12px 0;white-space:pre-wrap;word-wrap:break-word;overflow-x:auto}.rendered-md code{font-family:Consolas,"Courier New",monospace;font-size:.9em;background:#f2f2f2;padding:0 3px;border-radius:3px}.rendered-md blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid #777;background:#fafafa;color:#222}.rendered-md a{color:var(--accent);text-decoration:none}.rendered-md a:hover{text-decoration:underline}.rendered-md hr{border:none;border-top:1px solid #999;margin:16px 0}.rendered-md .math-display{text-align:center;margin:14px 0;overflow-x:auto}</style><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a></nav><div class="paper-body"><a class="back-link" href="/papers">\u2190 All papers</a><article><h1>' + titleHTML(paper.title) + '</h1><div class="paper-meta">' + (paper.doi ? '<strong>DOI:</strong> <a href="https://doi.org/' + escAttr(paper.doi) + '">' + esc(paper.doi) + "</a><br>" : "") + "<strong>Published:</strong> " + dateStr + (pdfUrl ? ' &middot; <a href="' + escAttr(pdfUrl) + '" type="application/pdf">PDF</a>' : "") + '</div><div class="rendered-md">' + renderMarkdown(md) + "</div></article>" + subscribeBlock("papers") + "</div></body></html>";
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' + buildPaperJsonLd(paper) + "<title>" + esc(displayTitle(paper.title)) + ' \u2014 QNFO Papers</title><meta name="description" content="' + escAttr(mathPlain(abstract)) + '"><meta property="og:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta property="og:type" content="article"><meta property="og:url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><meta property="og:description" content="' + escAttr(mathPlain(abstract)) + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + escAttr(displayTitle(paper.title)) + '"><meta name="twitter:description" content="' + escAttr(mathPlain(abstract)) + '">' + (paper.doi ? '<meta name="citation_doi" content="' + escAttr(paper.doi) + '">' : "") + '<meta name="citation_title" content="' + escAttr(displayTitle(paper.title)) + '">' + citationAuthorsMeta(paper) + '<meta name="citation_publication_date" content="' + escAttr(dateStr) + '">' + (paper._pdf ? '<meta name="citation_pdf_url" content="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '.pdf">' : "") + '<meta name="citation_publisher" content="QNFO"><link rel="canonical" href="https://papers.qnfo.org/papers/' + escAttr(paper.slug) + '"><style>' + COMMON_CSS + '.rendered-md{font-family:"STIX Two Text",Cambria,Georgia,"Times New Roman",serif;font-size:15.5px;line-height:1.6;color:#111;text-align:justify;hyphens:auto;-webkit-hyphens:auto;max-width:100%;overflow-wrap:break-word}.rendered-md h1{font-size:22px;font-weight:700;line-height:1.3;margin:0 0 10px 0;text-align:left;hyphens:none}.rendered-md h2{font-size:18px;font-weight:700;margin:28px 0 10px 0;border-bottom:.6px solid #aaa;padding-bottom:4px}.rendered-md h3{font-size:16px;font-weight:700;margin:22px 0 8px 0}.rendered-md h4{font-size:15px;font-weight:700;font-style:italic;margin:18px 0 6px 0}.rendered-md h5{font-size:13.5px;font-weight:700;margin:16px 0 6px 0}.rendered-md h6{font-size:13px;font-weight:700;font-style:italic;margin:14px 0 6px 0}.rendered-md p{margin:0 0 10px 0}.rendered-md ul,.rendered-md ol{margin:0 0 10px 0;padding-left:26px}.rendered-md li{margin-bottom:3px}.rendered-md mjx-container{font-size:1.02em;max-width:100%;overflow-x:auto}.rendered-md mjx-container[display="true"]{margin:14px 0 !important;text-align:center !important}.rendered-md table{width:100%;border-collapse:collapse;margin:12px 0 14px 0;font-size:13.5px;line-height:1.45}.rendered-md thead{display:table-header-group}.rendered-md th{font-weight:700;text-align:left;border-top:2px solid #000;border-bottom:1px solid #000;padding:5px 8px}.rendered-md td{border-bottom:.5px solid #bbb;padding:4px 8px;vertical-align:top}.rendered-md tr:last-child td{border-bottom:2px solid #000}.rendered-md pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px;line-height:1.45;background:#f8f8f8;border:.5px solid #ddd;border-radius:4px;padding:10px;margin:12px 0;white-space:pre-wrap;word-wrap:break-word;overflow-x:auto}.rendered-md code{font-family:Consolas,"Courier New",monospace;font-size:.9em;background:#f2f2f2;padding:0 3px;border-radius:3px}.rendered-md blockquote{margin:12px 0;padding:6px 14px;border-left:3px solid #777;background:#fafafa;color:#222}.rendered-md a{color:var(--accent);text-decoration:none}.rendered-md a:hover{text-decoration:underline}.rendered-md hr{border:none;border-top:1px solid #999;margin:16px 0}.rendered-md .math-display{text-align:center;margin:14px 0;overflow-x:auto}</style><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><nav class="top-nav"><a class="brand" href="https://qnfo.org"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://qwav.org" class="qwav-badge">QWAV</a></nav><div class="paper-body"><a class="back-link" href="/papers">\u2190 All papers</a><article><h1>' + titleHTML(paper.title) + '</h1><div class="paper-meta">' + (paper.doi ? '<strong>DOI:</strong> <a href="https://doi.org/' + escAttr(paper.doi) + '">' + esc(paper.doi) + "</a><br>" : "") + "<strong>Published:</strong> " + dateStr + '</div><div class="rendered-md">' + renderMarkdown(md) + "</div></article>" + subscribeBlock("papers") + "</div></body></html>";
 }
 __name(renderPaperHTML, "renderPaperHTML");
 __name2(renderPaperHTML, "renderPaperHTML");
@@ -944,143 +942,66 @@ async function handleBlankPapers(env) {
   }
 }
 __name(handleBlankPapers, "handleBlankPapers");
-// SCHOLAR-PDF-URL-1 (2026-10-01, agent_issues #1714): Google Scholar indexes a self-hosted paper only when
-// its page carries an absolute citation_pdf_url that points at a searchable PDF of 5 MB or less in the SAME
-// subdirectory as the HTML abstract (scholar.google.com/intl/en/scholar/inclusion.html). Zenodo is not indexed
-// by Scholar, so papers.qnfo.org is the way in. The canonical page is /papers/<slug> (no trailing slash, so its
-// directory is /papers/); the linked PDF is therefore /papers/<slug>.pdf, which is in that exact directory.
-// /papers/<slug>/<slug>.pdf is served too as an alias (Link rel=canonical points at the flat form).
-// The PDF is rendered once by qnfo-pdf (Browser Run, slow and metered) and stored durably in the gateway's
-// R2 bucket under pdf/<slug>/v<version>-<content hash>.pdf, so an edit to body or title gets a new object.
-// Fail-soft: an upstream error, an HTML error page or a non-PDF body is answered 502/503 text, never served as
-// a PDF and never cached; a PDF above 5 MB is still served to readers but is not linked in citation_pdf_url.
-var SCHOLAR_PDF_MAX_BYTES = 5 * 1024 * 1024;
-var PDF_RENDER_PUBLIC_BASE = "https://qnfo-pdf.q08.workers.dev";
-function paperHasFullText(paper) {
-  // Same threshold as renderPaperHTML (NO-BLANK-PAPER-1): below 40 chars the page shows the abstract or the
-  // "Full text is being prepared" placeholder, and qnfo-pdf has no body to render.
-  return stripFrontmatter(String(paper && paper.body_md || "")).trim().length >= 40;
-}
-function paperPdfPublicUrl(slug) {
-  return "https://papers.qnfo.org/papers/" + encodeURIComponent(slug) + ".pdf";
-}
-async function paperPdfCacheKey(paper) {
-  const src = String(paper.title || "") + "\n" + String(paper.body_md || "");
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(src));
-  const hex = Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("").slice(0, 16);
-  const ver = String(paper.version == null ? "0" : paper.version).replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 32) || "0";
-  return "pdf/" + paper.slug + "/v" + ver + "-" + hex + ".pdf";
-}
-// Returns null when the path is not a paper PDF path, "" when it is one with an unusable slug, else the slug.
-function matchPaperPdfPath(p) {
-  let m = /^\/papers\/([^/]+)\.pdf$/.exec(p);
-  let raw = m ? m[1] : null;
-  if (!m) {
-    m = /^\/papers\/([^/]+)\/([^/]+)\.pdf$/.exec(p);
-    if (!m) return null;
-    if (m[1] !== m[2]) return "";
-    raw = m[1];
-  }
+// SCHOLAR-PDF-URL-1 (2026-10-01, agent_issues 1714): Google Scholar indexes a paper only with an absolute citation_pdf_url
+// in the same directory as the abstract page, resolving to a searchable PDF of at most 5 MB. Every Zenodo deposit of a paper
+// carries its PDF, so /papers/<slug>.pdf streams that file from the paper's own record and the page emits citation_pdf_url
+// only when the record has a PDF within the limit. The record lookup is cached for a day (an hour when no PDF is found).
+var SCHOLAR_PDF_MAX = 5 * 1024 * 1024;
+async function zenodoPdfInfo(recId) {
+  const ck = new Request("https://papers.qnfo.org/__zenodo-pdf-info/" + recId);
   try {
-    const s = decodeURIComponent(raw);
-    return /^[A-Za-z0-9._-]{1,200}$/.test(s) ? s : "";
+    const hit = await caches.default.match(ck);
+    if (hit) return await hit.json();
   } catch (e) {
-    return "";
   }
-}
-function isPdfMagic(bytes) {
-  if (!bytes || bytes.byteLength < 5) return false;
-  const h = new Uint8Array(bytes, 0, 5);
-  return h[0] === 0x25 && h[1] === 0x50 && h[2] === 0x44 && h[3] === 0x46 && h[4] === 0x2d;
-}
-function pdfTextError(status, msg) {
-  return new Response(msg + "\n", { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
-}
-// qnfo-pdf is reached through the PDF_RENDERER service binding (wrangler.toml). A same-account fetch to
-// *.workers.dev can die as CF error 1042, so the public hostname is only a fallback and a 1042 answer counts
-// as a failure, never as content.
-async function fetchPdfFromRenderer(env, slug) {
-  const path = "/pdf/" + encodeURIComponent(slug);
-  const tries = [];
-  if (env.PDF_RENDERER && typeof env.PDF_RENDERER.fetch === "function") tries.push(function () { return env.PDF_RENDERER.fetch("https://qnfo-pdf" + path); });
-  tries.push(function () { return fetch(PDF_RENDER_PUBLIC_BASE + path); });
-  const errs = [];
-  for (const t of tries) {
-    try {
-      const res = await t();
-      const bytes = await res.arrayBuffer();
-      if (res.status !== 200) {
-        const peek = new TextDecoder().decode(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 200)));
-        errs.push("renderer http " + res.status + (/error code:?\s*1042/i.test(peek) ? " (cf-1042)" : ""));
-        if (res.status === 404 && !/1042/.test(peek)) return { ok: false, status: 404, error: errs.join("; ") };
-        continue;
-      }
-      if (!isPdfMagic(bytes)) { errs.push("renderer answered 200 without a %PDF- header"); continue; }
-      return { ok: true, bytes };
-    } catch (e) {
-      errs.push("renderer fetch failed: " + String(e && e.message || e).slice(0, 120));
-    }
-  }
-  return { ok: false, status: 503, error: errs.join("; ") || "no renderer reachable" };
-}
-function pdfResponse(method, slug, body, size, cacheState) {
-  const headers = {
-    "Content-Type": "application/pdf",
-    "Content-Disposition": 'inline; filename="' + slug + '.pdf"',
-    "Cache-Control": "public, max-age=86400",
-    "Link": "<" + paperPdfPublicUrl(slug) + '>; rel="canonical"',
-    "X-QNFO-PDF-Cache": cacheState
-  };
-  if (typeof size === "number" && size >= 0) headers["Content-Length"] = String(size);
-  return new Response(method === "HEAD" ? null : body, { status: 200, headers });
-}
-async function handlePaperPdf(request, env, slug) {
-  const method = request.method.toUpperCase();
-  if (method !== "GET" && method !== "HEAD") return new Response(null, { status: 405, headers: { Allow: "GET, HEAD" } });
-  if (!slug) return pdfTextError(404, "Not found");
+  let info = { url: null, key: null, size: 0 };
   try {
-    const paper = await env.LIVING_PAPER.prepare(
-      "SELECT slug,title,body_md,version FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
-    ).bind(slug).first();
-    if (!paper || !paperHasFullText(paper)) return pdfTextError(404, "No PDF for this paper");
-    const key = await paperPdfCacheKey(paper);
-    if (env.QNFO_BUCKET) {
-      try {
-        const obj = method === "HEAD" ? await env.QNFO_BUCKET.head(key) : await env.QNFO_BUCKET.get(key);
-        if (obj) return pdfResponse(method, paper.slug, obj.body || null, obj.size, "hit");
-      } catch (e) { /* fail-soft: an R2 read error falls through to a render */ }
+    const r = await fetch("https://zenodo.org/api/records/" + recId, { headers: { Accept: "application/json" } });
+    if (r.ok) {
+      const d = await r.json();
+      const f = (d.files || []).find(function(x) {
+        return /\.pdf$/i.test(String(x && x.key || "")) && Number(x.size || 0) > 0 && Number(x.size) <= SCHOLAR_PDF_MAX;
+      });
+      if (f) info = { url: f.links && f.links.self || "https://zenodo.org/api/records/" + recId + "/files/" + encodeURIComponent(f.key) + "/content", key: f.key, size: Number(f.size) };
     }
-    const up = await fetchPdfFromRenderer(env, paper.slug);
-    if (!up.ok) return pdfTextError(up.status === 404 ? 404 : 503, "PDF not available: " + up.error);
-    const size = up.bytes.byteLength;
-    if (env.QNFO_BUCKET) {
-      try {
-        await env.QNFO_BUCKET.put(key, up.bytes, {
-          httpMetadata: { contentType: "application/pdf" },
-          customMetadata: { slug: paper.slug, version: String(paper.version == null ? "" : paper.version), bytes: String(size), oversize: size > SCHOLAR_PDF_MAX_BYTES ? "1" : "0", rendered_at: new Date().toISOString() }
-        });
-      } catch (e) { /* fail-soft: still serve the bytes; the next request renders again */ }
-    }
-    return pdfResponse(method, paper.slug, up.bytes, size, "miss");
   } catch (e) {
-    return pdfTextError(500, "PDF error: " + String(e && e.message || e).slice(0, 200));
   }
-}
-// The page links the PDF only for a full-text paper, and not when the stored PDF is known to exceed 5 MB.
-// Unknown size (not rendered yet, or an R2 error) still links: the first crawler fetch renders and stores it.
-async function paperPdfLinkFor(env, paper) {
-  if (!paperHasFullText(paper)) return "";
   try {
-    if (env.QNFO_BUCKET) {
-      const h = await env.QNFO_BUCKET.head(await paperPdfCacheKey(paper));
-      if (h && typeof h.size === "number" && h.size > SCHOLAR_PDF_MAX_BYTES) return "";
-    }
-  } catch (e) { /* fail-soft */ }
-  return paperPdfPublicUrl(paper.slug);
+    await caches.default.put(ck, new Response(JSON.stringify(info), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + (info.url ? 86400 : 3600) } }));
+  } catch (e) {
+  }
+  return info;
 }
+__name(zenodoPdfInfo, "zenodoPdfInfo");
+function zenodoRecId(doi) {
+  const m = String(doi || "").match(/zenodo\.(\d+)\s*$/i);
+  return m ? m[1] : null;
+}
+__name(zenodoRecId, "zenodoRecId");
+async function handlePaperPdf(env, slug) {
+  const nf = new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  const paper = await env.LIVING_PAPER.prepare(
+    "SELECT slug,doi FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
+  ).bind(slug).first();
+  const rec = paper && zenodoRecId(paper.doi);
+  if (!rec) return nf;
+  const info = await zenodoPdfInfo(rec);
+  if (!info.url) return nf;
+  const r = await fetch(info.url, { cf: { cacheEverything: true, cacheTtl: 86400 } });
+  if (!r.ok || !r.body) return new Response("PDF temporarily unavailable", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  return new Response(r.body, { headers: { "Content-Type": "application/pdf", "Content-Disposition": 'inline; filename="' + slug + '.pdf"', "Cache-Control": "public, max-age=86400" } });
+}
+__name(handlePaperPdf, "handlePaperPdf");
 async function handlePaperDetail(request, env, path) {
   const slug = path.split("/")[2];
   if (!slug) return json({ error: "Missing paper slug" }, 400);
+  if (/\.pdf$/i.test(slug)) {
+    try {
+      return await handlePaperPdf(env, slug.replace(/\.pdf$/i, ""));
+    } catch (e) {
+      return new Response("PDF temporarily unavailable", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
+  }
   try {
     const paper = await env.LIVING_PAPER.prepare(
       "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
@@ -1088,8 +1009,14 @@ async function handlePaperDetail(request, env, path) {
     if (!paper) return json({ error: "Paper not found", slug }, 404);
     const accept = request.headers.get("Accept") || "";
     if (accept.includes("text/html") || !accept.includes("application/json")) {
-      const pdfUrl = await paperPdfLinkFor(env, paper);
-      return new Response(renderPaperHTML(paper, pdfUrl), {
+      const _rec = zenodoRecId(paper.doi);
+      if (_rec) {
+        try {
+          paper._pdf = !!(await zenodoPdfInfo(_rec)).url;
+        } catch (e) {
+        }
+      }
+      return new Response(renderPaperHTML(paper), {
         headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" }
       });
     }
@@ -1818,7 +1745,6 @@ var gateway_worker_default = {
       if (p === "/api/indexnow" && (method === "GET" || method === "POST")) return handleIndexNow(env, u.searchParams.get("full") === "1");
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
-      if (p.startsWith("/papers/") && /\.pdf$/i.test(p)) { const _pdfSlug = matchPaperPdfPath(p); if (_pdfSlug !== null) return handlePaperPdf(request, env, _pdfSlug); }
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
       if (p === "/papers" || p === "/") return handlePapers(request, env);
@@ -1848,7 +1774,6 @@ var gateway_worker_default = {
       if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
       if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
-      if (p.startsWith("/papers/") && /\.pdf$/i.test(p)) { const _pdfSlug = matchPaperPdfPath(p); if (_pdfSlug !== null) return handlePaperPdf(request, env, _pdfSlug); }
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env, host);
@@ -1873,8 +1798,7 @@ var gateway_worker_default = {
     if (p === "/legal" || p === "/license") return handleLegal(p, env);
     if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
     if (p === "/_audit/blank-papers") return handleBlankPapers(env);
-    if (p.startsWith("/papers/") && /\.pdf$/i.test(p)) { const _pdfSlug = matchPaperPdfPath(p); if (_pdfSlug !== null) return handlePaperPdf(request, env, _pdfSlug); }
-      if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
+    if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
     if (p.startsWith("/papers") || p === "/") return handlePapers(request, env);
     if (p === "/sitemap.xml") return handleSitemap(env, host);
     if (p === "/robots.txt") return handlePapersRobots();
