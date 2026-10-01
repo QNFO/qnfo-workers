@@ -95,7 +95,13 @@ jobs:
           elif [ -n "${IN_WORKERS:-}" ]; then
             echo "mode=explicit"
             # WORKER-RESURRECTION-GUARD-1: an explicitly named worker is a stated intent, so it may be created.
-            for w in $IN_WORKERS; do echo "$w $w/worker.js create" >> /tmp/targets.txt; done
+            # FOLDED-RETIRED-EXPLICIT-GUARD-1 (#254): the FOLDED/RETIRED markers were honoured only in push-diff mode,
+            # so an explicit dispatch for qnfo-fleet-calibrator (folded into qnfo-fleet-control) recreated the retired
+            # worker with its crons (run 36844766144). A marked directory is never deployed, named explicitly or not.
+            for w in $IN_WORKERS; do
+              if [ -f "$w/FOLDED" ] || [ -f "$w/RETIRED" ]; then echo "refuse $w (FOLDED/RETIRED marker: $(head -1 "$w/FOLDED" "$w/RETIRED" 2>/dev/null | head -1))"; continue; fi
+              echo "$w $w/worker.js create" >> /tmp/targets.txt
+            done
           else
             echo "mode=push-diff"
             if [ -z "${EV_BEFORE:-}" ] || [ "$EV_BEFORE" = "0000000000000000000000000000000000000000" ]; then
