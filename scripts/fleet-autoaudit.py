@@ -137,6 +137,11 @@ SETTLE_RECENT_S = 900     # only a commit this young can plausibly still be depl
 def _commit_age_s(directory):
     """Seconds since the newest commit touching <directory>; None if unknown."""
     try:
+        # A SHALLOW clone reports the single root commit for every path (measured: every directory showed HEAD's age), so
+        # the age would be meaningless; unknown is safe (no waiting), a wrong "recent" is not.
+        sh = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], capture_output=True, text=True, cwd=ROOT)
+        if (sh.stdout or "").strip() != "false":
+            return None
         p = subprocess.run(["git", "log", "-1", "--format=%ct", "--", directory],
                            capture_output=True, text=True, cwd=ROOT)
         ts = (p.stdout or "").strip()

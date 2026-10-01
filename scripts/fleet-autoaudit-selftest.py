@@ -126,5 +126,27 @@ finally:
 check("run_guard end to end: in-flight deploy reported SYNC, state persisted without drift",
       not d["drift"] and not d["ahead"] and d.get("_deploy_settle", {}).get("settled") == ["errata-hub"], d.get("_deploy_settle"))
 
+
+# _commit_age_s against REAL git: full clone answers per-path, a shallow clone must answer None (never a misleading HEAD age)
+import subprocess as _sp
+_tmp = tempfile.mkdtemp()
+_o = os.path.join(_tmp, "o"); os.makedirs(_o)
+def _g(cwd, *a): return _sp.run(["git", *a], cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+_g(_o, "init", "-q", "-b", "main"); _g(_o, "config", "user.email", "a@b"); _g(_o, "config", "user.name", "t")
+os.makedirs(os.path.join(_o, "old")); os.makedirs(os.path.join(_o, "new"))
+open(os.path.join(_o, "old", "f"), "w").write("1"); _g(_o, "add", "."); _sp.run(["git", "commit", "-qm", "old", "--date", "2020-01-01T00:00:00"], cwd=_o, env=dict(os.environ, GIT_COMMITTER_DATE="2020-01-01T00:00:00"), check=True)
+open(os.path.join(_o, "new", "f"), "w").write("2"); _g(_o, "add", "."); _g(_o, "commit", "-qm", "new")
+_full = os.path.join(_tmp, "full"); _sh = os.path.join(_tmp, "shallow")
+_sp.run(["git", "clone", "-q", _o, _full], check=True); _sp.run(["git", "clone", "-q", "--depth", "1", "file://" + _o, _sh], check=True)
+_real_root = fa.ROOT
+try:
+    fa.ROOT = _full
+    a_old, a_new = fa._commit_age_s("old"), fa._commit_age_s("new")
+    check("full clone: per-directory age (old dir is old, new dir is fresh)", a_old is not None and a_new is not None and a_old > 86400 * 365 and a_new < 120, (a_old, a_new))
+    fa.ROOT = _sh
+    check("shallow clone: age is UNKNOWN (None) for every directory, never HEAD's age", fa._commit_age_s("old") is None and fa._commit_age_s("new") is None, (fa._commit_age_s("old"), fa._commit_age_s("new")))
+finally:
+    fa.ROOT = _real_root
+
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
