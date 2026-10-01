@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.51-unified-ai-spend";
+var VERSION = "0.4.52-metric-trigger-loop";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2886,6 +2886,12 @@ var worker_default2 = {
       if (!mok) return json({ error: "unauthorized" }, 401);
       return json(await refreshOwnedMetrics(env));
     }
+    if (p === "/metrics/triggers" && request.method === "POST") {
+      var tah = request.headers.get("Authorization") || "";
+      var tat = tah.indexOf("Bearer ") === 0 ? tah.slice(7) : tah;
+      if (!(tat && ((env.DEPLOY_ADMIN_TOKEN && tat === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && tat === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
+      return json(await evaluateMetricTriggers(env));
+    }
     if (p === "/evolve/status" && request.method === "GET") {
       try { await evSchema(env); } catch (e) {}
       var evr = await env.AUDIT.prepare("SELECT id, worker, kind, status, issue_id, pr_number, version_from, version_to, note, ts, updated_at FROM evolve_candidates WHERE kind IS NOT NULL ORDER BY id DESC LIMIT 20").all().catch(function() { return { results: [] }; });
@@ -2924,6 +2930,7 @@ var worker_default2 = {
     ctx.waitUntil(refreshOwnedMetrics(env).catch((e) => console.error("refreshOwnedMetrics error:", e && e.message || e)));
     ctx.waitUntil(evolveTick(env, false).catch((e) => console.error("evolveTick error:", e && e.message || e)));
     ctx.waitUntil(slaEscalate(env).catch((e) => console.error("slaEscalate error:", e && e.message || e)));
+    ctx.waitUntil(evaluateMetricTriggers(env).catch((e) => console.error("evaluateMetricTriggers error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -3238,7 +3245,7 @@ async function refreshOwnedMetrics(env) {
   // workersInvocationsAdaptive.neurons, a field that does not exist, and the row carried a hand-set 15.6.
   // Workers AI usage lives in aiInferenceAdaptiveGroups.sum.totalNeurons; cost at the published rate
   // ($0.011 per 1k neurons after 10k/day free). Measured 2026-09-30: 5.57M neurons/30d (~$58 list).
-  var waiUsd = null;
+  var waiUsd = null, waiNeurons = null;
   try {
     var since = new Date(Date.now() - 30 * 864e5).toISOString();
     var q = 'query { viewer { accounts(filter: { accountTag: "' + acct + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + since + '", datetime_leq: "' + nowIso + '" }) { sum { totalNeurons } } } } }';
@@ -3249,6 +3256,7 @@ async function refreshOwnedMetrics(env) {
       var neurons = rows.reduce(function (a, x) { return a + (x && x.sum && Number(x.sum.totalNeurons) || 0); }, 0);
       var usd = Math.max(0, neurons - 1e4 * 30) / 1e3 * 0.011;
       waiUsd = usd;
+      waiNeurons = neurons;
       await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='workers_ai_cost_30d_usd'").bind(usd.toFixed(2), nowIso, "max(0, SUM(aiInferenceAdaptiveGroups.sum.totalNeurons over 30d) - 10k/day free) / 1000 * $0.011 (published Workers AI rate); refreshed hourly by qnfo-fleet-control", "CF GraphQL aiInferenceAdaptiveGroups (" + Math.round(neurons) + " neurons at refresh)").run();
       out.written.push("workers_ai_cost_30d_usd=" + usd.toFixed(2));
     } else {
@@ -3279,6 +3287,14 @@ async function refreshOwnedMetrics(env) {
       await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='cost_usd_30d'").bind(total.toFixed(2), nowIso, "unified 30d AI spend, all providers incl. BYOK = SUM(aiGatewayRequestsAdaptiveGroups.sum.cost, provider<>workers-ai) + workers_ai_cost_30d_usd (UNIFIED-AI-SPEND-1, qnfo-fleet-control hourly)", "CF GraphQL aiGatewayRequestsAdaptiveGroups + aiInferenceAdaptiveGroups: " + parts.slice(0, 400)).run();
       out.written.push("cost_usd_30d=" + total.toFixed(2) + " (" + parts.slice(0, 160) + ")");
       out.aiSpend = { total: Number(total.toFixed(2)), byProvider: byProv, alerts: await aiSpendCaps(db, byProv, total) };
+      // METRIC-TRIGGER-LOOP-1 (#1634): the analytics trigger inputs had no writer since a one-off audit on
+      // 2026-09-26. Keep the cost keys fresh from the same measurement.
+      var gwOnly = Object.keys(byProv).filter(function (k) { return k !== "workers-ai"; }).reduce(function (a, k) { return a + byProv[k]; }, 0);
+      var metaKv = [["ai_est_cost_30d", total.toFixed(2)], ["gateway_cost_usd_30d", gwOnly.toFixed(2)], ["last_refresh", nowIso]];
+      if (waiNeurons != null) metaKv.push(["neurons_30d", String(waiNeurons)]);
+      for (var mk = 0; mk < metaKv.length; mk++) {
+        await db.prepare("INSERT INTO analytics_dash_meta (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(metaKv[mk][0], metaKv[mk][1]).run().catch(function () {});
+      }
     } else {
       out.skipped.cost_usd_30d_unified = "aiGatewayRequestsAdaptiveGroups unreadable" + (gqj && gqj.errors ? ": " + JSON.stringify(gqj.errors).slice(0, 120) : "");
     }
@@ -3325,6 +3341,64 @@ async function aiSpendCaps(db, byProv, total) {
   return raised;
 }
 __name(aiSpendCaps, "aiSpendCaps");
+// METRIC-TRIGGER-LOOP-1 (2026-10-01, #1634 METRIC-TRIGGER-ACTION-LOOP-INERT-1): analytics_metric_triggers held 7
+// enabled threshold->action rules but nothing evaluated them (3 firings ever, the last on 2026-09-05; the worker
+// that did was retired). This evaluator runs hourly: it reads each trigger's value (source_table 'meta' ->
+// analytics_dash_meta, 'records' -> analytics_dash_records, otherwise analytics_dash_meta then metric_registry),
+// compares it with the threshold, and fires at most once per cooldown_hours. A firing is written to
+// analytics_action_log and dispatched: queue_target 'agent_issues' files a deduped open issue; every other target
+// raises a digest alert naming the target and the action. A trigger whose value cannot be read is reported, never fired.
+async function evaluateMetricTriggers(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+  var out = { ok: true, evaluated: 0, fired: [], unreadable: [] };
+  if (!db) return { ok: false, error: "no AUDIT binding" };
+  var rs = await db.prepare("SELECT id, metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours FROM analytics_metric_triggers WHERE enabled = 1").all().catch(function () { return { results: [] }; });
+  var trig = rs.results || [];
+  for (var i = 0; i < trig.length; i++) {
+    var t = trig[i];
+    var v = await metricTriggerValue(db, t);
+    if (v == null || !isFinite(v)) { out.unreadable.push(t.metric_key); continue; }
+    out.evaluated++;
+    var thr = Number(t.threshold), op = String(t.operator || "gte");
+    var hit = op === "gt" ? v > thr : op === "lte" ? v <= thr : op === "lt" ? v < thr : op === "eq" ? v === thr : v >= thr;
+    if (!hit) continue;
+    var cd = Math.max(1, Number(t.cooldown_hours) || 24);
+    var recent = await db.prepare("SELECT id FROM analytics_action_log WHERE trigger_id = ?1 AND fired_at > datetime('now', ?2) LIMIT 1").bind(t.id, "-" + cd + " hours").first().catch(function () { return null; });
+    if (recent) continue;
+    var target = String(t.queue_target || "none");
+    var summary = "METRIC-TRIGGER #" + t.id + " " + t.metric_key + "=" + v + " " + op + " " + thr + " -> " + String(t.action || "").slice(0, 300) + " (owner " + (t.owner || "-") + ", target " + target + ")";
+    var status = "dispatched", note = null;
+    try {
+      if (target === "agent_issues") {
+        var title = "METRIC-TRIGGER-" + t.id + "-" + String(t.metric_key).toUpperCase().replace(/[^A-Z0-9]+/g, "-") + ": " + String(t.title || t.action || "").slice(0, 80);
+        var open = await db.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' LIMIT 1").bind(title).first().catch(function () { return null; });
+        if (open) { status = "deduped"; note = "open issue " + open.id; }
+        else {
+          var nowMs = Date.now();
+          await db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', ?3, 'open', ?4, ?4)").bind(title, summary, String(t.priority || "medium"), nowMs).run();
+          note = "agent_issues filed";
+        }
+      } else {
+        await db.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('qnfo-fleet-control', 'warning', ?1, NULL)").bind(summary.slice(0, 500)).run();
+        note = "digest alert";
+      }
+    } catch (e) { status = "dispatch-failed"; note = String(e && e.message || e).slice(0, 200); }
+    await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6)").bind(t.id, v, String(t.action || "").slice(0, 500), target, status, note).run().catch(function () {});
+    out.fired.push({ id: t.id, metric: t.metric_key, value: v, status: status });
+  }
+  return out;
+}
+__name(evaluateMetricTriggers, "evaluateMetricTriggers");
+async function metricTriggerValue(db, t) {
+  var key = String(t.metric_key || ""), src = String(t.source_table || "meta");
+  var num = function (r, f) { if (!r || r[f] == null || r[f] === "") return null; var n = Number(String(r[f]).replace(/[^0-9.+-eE]/g, "")); return isFinite(n) ? n : null; };
+  var v = null;
+  if (src === "records") v = num(await db.prepare("SELECT value FROM analytics_dash_records WHERE metric = ?1").bind(key).first().catch(function () { return null; }), "value");
+  if (v == null) v = num(await db.prepare("SELECT value FROM analytics_dash_meta WHERE key = ?1").bind(key).first().catch(function () { return null; }), "value");
+  if (v == null) v = num(await db.prepare("SELECT last_value FROM metric_registry WHERE metric = ?1").bind(key).first().catch(function () { return null; }), "last_value");
+  return v;
+}
+__name(metricTriggerValue, "metricTriggerValue");
 async function reassertObservability(env) {
   try {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
