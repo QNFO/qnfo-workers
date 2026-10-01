@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.5-degradereconcile";
+var VERSION = "1.2.6-authblind";
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -530,11 +530,19 @@ async function calibration(env, trigger) {
     return s.trim();
   }).filter(Boolean);
   var roster = null;
+  var authBlind = false;
   try {
     var h = await jfetch(env, "https://qnfo-ai.internal/health", null, null, 2e4, "QNFO_AI");
     results.push({ probe: "health", target: "qnfo-ai", status: h.status === 200 && h.data && h.data.status === "ok" ? "pass" : "fail", latency_ms: 0, detail: "version=" + (h.data && h.data.version) });
     var r = await jfetch(env, "https://qnfo-ai.internal/v1/models", { Authorization: "Bearer " + env.QNFO_ROUTER_KEY }, null, 3e4, "QNFO_AI");
-    if (r.status === 200 && r.data && Array.isArray(r.data.data)) {
+    var authorized = r.status === 200 && r.data && Array.isArray(r.data.data) && r.data.data.some(function(x) { return x && x._router; });
+    if (r.status === 200 && r.data && Array.isArray(r.data.data) && !authorized) {
+      authBlind = true;
+      results.push({ probe: "roster", target: "qnfo-ai", status: "fail", latency_ms: 0, detail: "public listing only (no _router): QNFO_ROUTER_KEY rejected" });
+    } else if (r.status === 401 || r.status === 403) {
+      authBlind = true;
+      results.push({ probe: "roster", target: "qnfo-ai", status: "fail", latency_ms: 0, detail: "http=" + r.status + " QNFO_ROUTER_KEY rejected" });
+    } else if (authorized) {
       roster = r.data.data;
       results.push({ probe: "roster", target: "qnfo-ai", status: "pass", latency_ms: 0, detail: r.data.data.length + " models" });
     } else {
@@ -542,6 +550,11 @@ async function calibration(env, trigger) {
     }
   } catch (e) {
     results.push({ probe: "health", target: "qnfo-ai", status: "fail", latency_ms: 0, detail: "err " + String(e && e.message || e).slice(0, 100) });
+  }
+  if (authBlind) {
+    await fileIssue(env, "[ai-cal] router key rejected by qnfo-ai (calibration blind)", "qnfo-ai refused QNFO_ROUTER_KEY (401/403 or public single-model listing). Roster audit and model probes are inconclusive and will not mark models failing. Fix: set QNFO_ROUTER_KEY on qnfo-ai-calibration to the current qnfo-ai router key.", "high");
+  } else if (roster) {
+    await closeIssue(env, "[ai-cal] router key rejected by qnfo-ai (calibration blind)", "authorized roster fetch succeeded");
   }
   if (roster) {
     var drifts = await auditRoster(env, roster);
@@ -584,6 +597,7 @@ async function calibration(env, trigger) {
   await runPool(ALL_MODELS, 4, async function(m) {
     var res = await probeCompletion(env, m);
     results.push(Object.assign({ probe: "model", target: m }, res));
+    if (res.status !== "pass" && /http=40[13]\b/.test(String(res.detail || ""))) return res;
     try {
       var prev = await env.QNFO_AUDIT.prepare("SELECT consecutive_failures FROM ai_model_health WHERE model_id = ?1").bind(m).first();
       var cf = prev ? prev.consecutive_failures || 0 : 0;
