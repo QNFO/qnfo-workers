@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 09:26:26",
+  "audited_at": "2026-10-01 09:34:36",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -38,7 +38,16 @@
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
-    "no_health_route": [],
+    "no_health_route": [
+      {
+        "dir": "qnfo-agent-ws",
+        "worker": "qnfo-agent-ws"
+      },
+      {
+        "dir": "qnfo-code-orchestrator",
+        "worker": "qnfo-code-orchestrator"
+      }
+    ],
     "no_live_version": [],
     "no_repo_version": [],
     "not_a_worker": [
@@ -101,7 +110,6 @@
       "personal-life-indexer",
       "personal-life-maintain",
       "personal-life-search",
-      "qnfo-agent-ws",
       "qnfo-analytics",
       "qnfo-artifact-agent",
       "qnfo-artifacts",
@@ -114,7 +122,6 @@
       "qnfo-chat-canary",
       "qnfo-citation-watch",
       "qnfo-code-agent",
-      "qnfo-code-orchestrator",
       "qnfo-ddocs-indexer",
       "qnfo-errata-publish",
       "qnfo-errata-respond",
@@ -143,7 +150,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 61,
+    "not_deployed_notdrift": 59,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -226,10 +233,6 @@
         "worker": "personal-life-search"
       },
       {
-        "dir": "qnfo-agent-ws",
-        "worker": "qnfo-agent-ws"
-      },
-      {
         "dir": "qnfo-analytics",
         "worker": "qnfo-analytics"
       },
@@ -276,10 +279,6 @@
       {
         "dir": "qnfo-code-agent",
         "worker": "qnfo-code-agent"
-      },
-      {
-        "dir": "qnfo-code-orchestrator",
-        "worker": "qnfo-code-orchestrator"
       },
       {
         "dir": "qnfo-ddocs-indexer",
@@ -874,7 +873,7 @@
       "http": 404,
       "live": null,
       "match": 0,
-      "note": "NOT_DEPLOYED",
+      "note": "NO_HEALTH_ROUTE",
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
@@ -1034,7 +1033,7 @@
       "http": 404,
       "live": null,
       "match": 0,
-      "note": "NOT_DEPLOYED",
+      "note": "NO_HEALTH_ROUTE",
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
