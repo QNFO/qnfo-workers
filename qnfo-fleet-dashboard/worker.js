@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.47-noindex-review-gate";
+var VERSION = "1.7.48-reach-signals-prior-window";
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2385,6 +2385,16 @@ async function handleRequest(request, env, ctx) {
       return new Response("RED inventory error: " + String(e && e.message || e), { status: 500 });
     }
   }
+  // REACH-SIGNALS-INGEST-1 (2026-10-01, #1711): the scorecard as JSON for the daily portfolio run, and a token-gated
+  // ingest of one complete UTC day (backfill, or a re-run of yesterday) that bypasses the daily throttle.
+  if (path === "/api/reach") {
+    return json(await reachScorecardData(env));
+  }
+  if (path === "/api/reach/ingest" && request.method === "POST") {
+    const tok = request.headers.get("x-loop-token") || "";
+    if (!env.LOOP_TOKEN || tok !== env.LOOP_TOKEN) return json({ error: "unauthorized" }, 401);
+    return json(await ingestReachSignals(env, { day: url.searchParams.get("day") || reachYesterday(Date.now()) }));
+  }
   if (path === "/roi" || path === "/api/roi") {
     try {
       return new Response(await roiHtml(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
@@ -2634,6 +2644,10 @@ var worker_default = {
       })));
       ctx.waitUntil(within(refreshRegistryMetrics(env).catch(function() {
       })));
+      // REACH-SIGNALS-INGEST-1 (2026-10-01, #1711): once per UTC day after 02:00Z; throttled inside on the
+      // cloud_ops_events row reach-ingest-<day> (ok = done; partial retried up to 3 attempts).
+      ctx.waitUntil(within(ingestReachSignals(env).catch(function() {
+      })));
       try {
         await within(loopExecute(env, deadline - 12e4), 6e4);
       } catch (e3) {
@@ -2658,6 +2672,14 @@ var worker_default = {
 // Each value is computed from its source here; a source that cannot be read leaves the row
 // untouched (never a fabricated zero). Throttled to one pass per ~55 min.
 var REGISTRY_GUARD_WORKFLOWS = ["mirror-guard.yml", "version-bump-guard.yml", "workflow-lint.yml", "deploy-gate.yml", "dup-worker-name-gate.yml"];
+// IMPRESSIONS-METRIC-PRIOR-WINDOW-1 (2026-10-01): distinct days with RUM rows in a window; a 30-day comparison needs
+// at least RUM_MIN_PRIOR_DAYS of them.
+var RUM_MIN_PRIOR_DAYS = 28;
+function rumDaysCovered(rows) {
+  const d = {};
+  for (const r of rows || []) { const k = r && r.dimensions && r.dimensions.date; if (k && (r.count || 0) > 0) d[k] = 1; }
+  return Object.keys(d).length;
+}
 async function refreshRegistryMetrics(env) {
   const out = { refreshed: [], skipped: [] };
   const nowIso = new Date().toISOString();
@@ -2679,19 +2701,25 @@ async function refreshRegistryMetrics(env) {
   const win = function(fromH, toH) {
     return 'filter: { datetime_geq: "' + new Date(Date.now() - fromH * 36e5).toISOString() + '", datetime_leq: "' + new Date(Date.now() - toH * 36e5).toISOString() + '" }';
   };
-  let pv30 = null, pvPrior = null;
+  let pv30 = null, pvPrior = null, priorDays = null;
   try {
     const a = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(720, 0) + ") { count } } } }");
-    const b = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(1440, 720) + ") { count } } } }");
+    const b = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(1440, 720) + ") { count dimensions { date } } } } }");
     const ra = a && (((a.viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups);
     const rb = b && (((b.viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups);
     if (Array.isArray(ra)) pv30 = ra.reduce(function(x, r) { return x + (r.count || 0); }, 0);
     if (Array.isArray(rb)) pvPrior = rb.reduce(function(x, r) { return x + (r.count || 0); }, 0);
+    if (Array.isArray(rb)) priorDays = rumDaysCovered(rb);
   } catch (e) {
   }
   if (pv30 != null) await put("pageviews_30d", pv30, "MEASURED");
   else out.skipped.push("pageviews_30d: RUM unreadable");
-  if (pv30 != null && pvPrior > 0) {
+  if (pv30 != null && pvPrior > 0 && priorDays != null && priorDays < RUM_MIN_PRIOR_DAYS) {
+    // IMPRESSIONS-METRIC-PRIOR-WINDOW-1 (2026-10-01, agent_issues #1715): the prior window held about a fifth of the
+    // traffic the 2026-08-27..09-25 baseline measured, so growth read +394% against +5.7% vs baseline. A window with
+    // missing days is reported as such, never turned into a growth figure.
+    await put("impressions_growth_30d", "n/a: prior window has " + priorDays + " of 30 days of RUM data", "RATIFIED");
+  } else if (pv30 != null && pvPrior > 0) {
     const g = Math.round(1e4 * (pv30 - pvPrior) / pvPrior) / 100;
     await put("impressions_growth_30d", (g >= 0 ? "+" : "") + g.toFixed(2) + "%", "RATIFIED");
   } else out.skipped.push("impressions_growth_30d: prior window unreadable");
@@ -2801,6 +2829,484 @@ async function roiGf(env, query) {
 }
 __name(roiGf, "roiGf");
 __name2(roiGf, "roiGf");
+// REACH-SIGNALS-INGEST-1 (2026-10-01, agent_issues #1711; docs/STRATEGY.md 6.1-6.3): phase 1 of the one-schema signal
+// loop, from sources that need no new credential. Once per UTC day, after 02:00Z, the cron copies the previous complete
+// UTC day into qnfo-audit.reach_signals: RUM pageviews by page and by referrer (CF GraphQL), Zenodo views/downloads and
+// OpenAlex citations (latest citation_stats per DOI), Bluesky engagement (social_engagements), confirmed QNFO
+// subscribers and research-outreach sends/replies; entity_map gets slug/doi/page_url from living-paper. A source that
+// cannot be read writes nothing and is listed as skipped in the run's cloud_ops_events row (id reach-ingest-<day>);
+// no value is ever a fabricated zero. GA4, Search Console and LinkedIn need owner credentials (phase 2) and print
+// "not connected" on /roi. Same DDL as migrations/2026-10-01-reach-signals.sql.
+var REACH_DDL = [
+  "CREATE TABLE IF NOT EXISTS reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT CHECK (quality IN ('human','bot','unknown')), collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric))",
+  "CREATE TABLE IF NOT EXISTS entity_map (slug TEXT PRIMARY KEY, doi TEXT, page_url TEXT, utm_campaign TEXT, post_uri TEXT, buffer_id TEXT, updated_at TEXT)"
+];
+var REACH_INGEST_AFTER_UTC_HOUR = 2;
+var REACH_INGEST_MAX_ATTEMPTS = 3;
+var REACH_RUNNING_STALE_MS = 10 * 60 * 1e3;
+var REACH_OUTREACH_LOOKBACK_DAYS = 14;
+var REACH_CITATION_FRESH_DAYS = 3;
+var REACH_RUM_LIMIT = 1e4;
+var REACH_PAGE_ROW_CAP = 300;
+var REACH_REFERRER_ROW_CAP = 100;
+var REACH_PAPER_URL = "https://papers.qnfo.org/papers/";
+function reachErr(e) {
+  return String(e && e.message || e).slice(0, 160);
+}
+function reachShiftDay(day, n) {
+  return new Date(Date.parse(day + "T00:00:00Z") + n * DAY_MS).toISOString().slice(0, 10);
+}
+function reachYesterday(nowMs) {
+  return reachShiftDay(new Date(nowMs).toISOString().slice(0, 10), -1);
+}
+function reachRow(day, source, channel, type, id, metric, value, quality) {
+  return { date: day, source, channel, entity_type: type, entity_id: String(id), metric, value: Number(value), quality };
+}
+// /papers/<slug> or /papers/<slug>/ on any host is the paper <slug>; every other path is the page <host><path>.
+function reachClassifyPath(host, path) {
+  const h = String(host || "").trim().toLowerCase() || "(unknown-host)";
+  const p = String(path || "").trim() || "/";
+  const m = /^\/papers\/([^\/?#]+)\/?$/.exec(p);
+  if (m) return { entity_type: "paper", entity_id: m[1] };
+  return { entity_type: "page", entity_id: h + p };
+}
+// Keeps the `cap` largest entries and folds the rest into "(other)", so a day's total stays whole while the row count
+// (and the D1 writes) stay bounded.
+function reachCapRows(map, cap, mk) {
+  const ents = Array.from(map.entries()).sort(function(a, b) {
+    return b[1] - a[1];
+  });
+  const rows = ents.slice(0, cap).map(function(e) {
+    return mk(e[0], e[1]);
+  });
+  const rest = ents.slice(cap).reduce(function(s, e) {
+    return s + e[1];
+  }, 0);
+  if (rest > 0) rows.push(mk("(other)", rest));
+  return rows;
+}
+// One 'site' "(all)" row carries the day's measured total (0 included), so a read day with no traffic is told apart
+// from a day that was never read (no row).
+function reachRumPageRows(groups, day) {
+  const papers = /* @__PURE__ */ new Map(), pages = /* @__PURE__ */ new Map();
+  let total = 0;
+  for (const g of groups || []) {
+    const n = Number(g && g.count) || 0;
+    if (n <= 0) continue;
+    const d = g.dimensions || {};
+    const c = reachClassifyPath(d.requestHost, d.requestPath);
+    const m = c.entity_type === "paper" ? papers : pages;
+    m.set(c.entity_id, (m.get(c.entity_id) || 0) + n);
+    total += n;
+  }
+  const mk = function(type) {
+    return function(id, v) {
+      return reachRow(day, "cf-rum", "web", type, id, "pageviews", v, "unknown");
+    };
+  };
+  const rows = [mk("site")("(all)", total)];
+  for (const e of papers) rows.push(mk("paper")(e[0], e[1]));
+  return rows.concat(reachCapRows(pages, REACH_PAGE_ROW_CAP, mk("page")));
+}
+function reachRumReferrerRows(groups, day) {
+  const refs = /* @__PURE__ */ new Map();
+  for (const g of groups || []) {
+    const n = Number(g && g.count) || 0;
+    if (n <= 0) continue;
+    const h = String((g.dimensions || {}).refererHost || "").trim().toLowerCase() || "(direct)";
+    refs.set(h, (refs.get(h) || 0) + n);
+  }
+  return reachCapRows(refs, REACH_REFERRER_ROW_CAP, function(id, v) {
+    return reachRow(day, "cf-rum", "web", "referrer", id, "pageviews", v, "unknown");
+  });
+}
+function reachRumQuery(dims, geq, leq) {
+  return 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: ' + REACH_RUM_LIMIT + ', filter: { datetime_geq: "' + geq + '", datetime_leq: "' + leq + '" }) { count dimensions { ' + dims + " } } } } }";
+}
+// roiGf drops the GraphQL error text; the ingest needs it to log a rejected dimension name and skip that query.
+async function reachGf(env, query) {
+  if (!env.CF_TOKEN) return { data: null, err: "CF_TOKEN unset" };
+  try {
+    const resp = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + env.CF_TOKEN },
+      body: JSON.stringify({ query }),
+      signal: AbortSignal.timeout(2e4)
+    });
+    let g = null;
+    try {
+      g = await resp.json();
+    } catch (e) {
+    }
+    if (!resp.ok || !g || g.errors) {
+      const msg = g && Array.isArray(g.errors) ? g.errors.map(function(x) {
+        return x && x.message || String(x);
+      }).join("; ") : "no JSON body";
+      return { data: null, err: "graphql http " + resp.status + ": " + msg.slice(0, 300) };
+    }
+    return g.data ? { data: g.data, err: null } : { data: null, err: "graphql: empty data" };
+  } catch (e) {
+    return { data: null, err: "graphql: " + reachErr(e) };
+  }
+}
+function reachRumGroups(data) {
+  const a = data && data.viewer && data.viewer.accounts;
+  const g = a && a[0] && a[0].rumPageloadEventsAdaptiveGroups;
+  return Array.isArray(g) ? g : null;
+}
+// Multi-row INSERT OR REPLACE: 12 rows x 8 bound values = 96, under D1's 100 bound parameters per statement.
+async function reachWrite(env, rows) {
+  const ok = (rows || []).filter(function(r) {
+    return r && isFinite(r.value);
+  });
+  const stmts = [];
+  for (let i = 0; i < ok.length; i += 12) {
+    const chunk = ok.slice(i, i + 12);
+    const binds = [];
+    const vals = chunk.map(function(r) {
+      binds.push(r.date, r.source, r.channel, r.entity_type, r.entity_id, r.metric, r.value, r.quality);
+      return "(?,?,?,?,?,?,?,?)";
+    });
+    stmts.push(env.AUDIT.prepare("INSERT OR REPLACE INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES " + vals.join(",")).bind(...binds));
+  }
+  for (let i = 0; i < stmts.length; i += 50) await env.AUDIT.batch(stmts.slice(i, i + 50));
+  return ok.length;
+}
+// Latest citation_stats row per (doi, metric) collected in [fromDay, nextDay): qnfo-paper-indexer appends a row per
+// DOI per run, and covers only its newest DOIs, so the freshness window keeps a stale value from being re-dated.
+async function reachLatestCitations(env, source, metrics, fromDay, nextDay) {
+  const ph = metrics.map(function() {
+    return "?";
+  }).join(",");
+  return d1all(env.AUDIT, "SELECT lower(c.doi) AS doi, c.metric AS metric, MAX(c.value) AS value FROM citation_stats c JOIN (SELECT doi, metric, MAX(collected_at) AS mx FROM citation_stats WHERE source = ? AND metric IN (" + ph + ") AND doi IS NOT NULL AND collected_at >= ? AND collected_at < ? GROUP BY doi, metric) m ON c.doi = m.doi AND c.metric = m.metric AND c.collected_at = m.mx WHERE c.source = ? AND c.value IS NOT NULL GROUP BY lower(c.doi), c.metric", [source].concat(metrics, [fromDay, nextDay, source]));
+}
+// Zenodo downloads are bot-skewed (STRATEGY 6.1): a downloads/views ratio over 3 marks the downloads row 'bot'.
+function reachZenodoRows(rows, day) {
+  const by = /* @__PURE__ */ new Map();
+  for (const r of rows || []) {
+    if (!r || !r.doi || r.value == null || !isFinite(Number(r.value))) continue;
+    const e = by.get(r.doi) || {};
+    e[r.metric] = Number(r.value);
+    by.set(r.doi, e);
+  }
+  const out = [];
+  for (const [doi, e] of by) {
+    const hasV = typeof e.views === "number";
+    if (hasV) out.push(reachRow(day, "zenodo", "zenodo", "doi", doi, "views", e.views, "unknown"));
+    if (typeof e.downloads === "number") {
+      const bot = hasV && (e.views > 0 ? e.downloads / e.views > 3 : e.downloads > 0);
+      out.push(reachRow(day, "zenodo", "zenodo", "doi", doi, "downloads", e.downloads, bot ? "bot" : "unknown"));
+    }
+  }
+  return out;
+}
+// Every (day, status) in the window is written, 0 included: outreach_log was read, so a 0 is measured, and a row that
+// later flips sent -> replied lowers that day's 'sent' instead of leaving a stale count.
+function reachOutreachRows(rows, fromDay, toDay) {
+  const by = {};
+  for (const r of rows || []) by[r.d + "|" + r.status] = Number(r.n) || 0;
+  const out = [];
+  for (let d = fromDay; d <= toDay; d = reachShiftDay(d, 1)) {
+    for (const s of ["sent", "followup", "replied"]) out.push(reachRow(d, "email", "email", "campaign", "research-outreach", s, by[d + "|" + s] || 0, "unknown"));
+  }
+  return out;
+}
+async function ingestReachSignals(env, opts) {
+  opts = opts || {};
+  const nowMs = opts.nowMs || Date.now();
+  const yesterday = reachYesterday(nowMs);
+  let day = yesterday;
+  if (opts.day) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(opts.day)) || opts.day > yesterday || opts.day < reachShiftDay(yesterday, -89)) return { error: "day must be a complete UTC day (YYYY-MM-DD) within the last 90 days" };
+    day = opts.day;
+  } else if (new Date(nowMs).getUTCHours() < REACH_INGEST_AFTER_UTC_HOUR) {
+    return { not_yet: "runs after 02:00Z" };
+  }
+  const evId = "reach-ingest-" + day;
+  const out = { day, version: VERSION, attempts: 1, written: {}, skipped: [], notes: [] };
+  if (!opts.day) {
+    try {
+      const prev = await d1all(env.AUDIT, "SELECT ts, status, meta FROM cloud_ops_events WHERE id = ?", [evId]);
+      if (prev.length) {
+        let pm = {};
+        try {
+          pm = JSON.parse(prev[0].meta || "{}") || {};
+        } catch (e) {
+        }
+        const att = Number(pm.attempts) || 1;
+        if (prev[0].status === "ok") return { throttled: day };
+        if (prev[0].status === "running" && nowMs - Date.parse(prev[0].ts) < REACH_RUNNING_STALE_MS) return { in_progress: day };
+        if (att >= REACH_INGEST_MAX_ATTEMPTS) return { gave_up: day, attempts: att };
+        out.attempts = att + 1;
+      }
+    } catch (e) {
+    }
+  }
+  const record = async function(status, text) {
+    try {
+      await env.AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, 'reach-ingest', ?, ?, ?, ?)").bind(evId, new Date(opts.nowMs || Date.now()).toISOString(), text, JSON.stringify(out).slice(0, 4e3), NAME, status).run();
+    } catch (e) {
+    }
+  };
+  await record("running", "reach ingest " + day + " started");
+  try {
+    for (const s of REACH_DDL) await env.AUDIT.prepare(s).run();
+  } catch (e) {
+    out.skipped.push("ddl: " + reachErr(e));
+    await record("error", "reach ingest " + day + ": tables unavailable");
+    return out;
+  }
+  const put = async function(key, rows) {
+    try {
+      out.written[key] = await reachWrite(env, rows);
+    } catch (e) {
+      out.skipped.push(key + ": write " + reachErr(e));
+    }
+  };
+  const geq = day + "T00:00:00Z", leq = day + "T23:59:59Z", next = reachShiftDay(day, 1);
+  // a. RUM pageviews by page, then by referrer. A rejected dimension is logged and that query skipped (no retry loop
+  // over guessed names).
+  const rumQ = [["cf-rum:pages", "requestHost requestPath", reachRumPageRows], ["cf-rum:referrers", "refererHost", reachRumReferrerRows]];
+  for (const q of rumQ) {
+    const r = await reachGf(env, reachRumQuery(q[1], geq, leq));
+    const groups = r.err ? null : reachRumGroups(r.data);
+    if (!groups) {
+      const why = r.err || "rumPageloadEventsAdaptiveGroups missing from response";
+      console.log("REACH-SIGNALS-INGEST-1 " + q[0] + " { " + q[1] + " } skipped: " + why);
+      out.skipped.push(q[0] + ": " + why);
+      continue;
+    }
+    if (groups.length >= REACH_RUM_LIMIT) out.notes.push(q[0] + ": hit limit " + REACH_RUM_LIMIT + ", totals are a lower bound");
+    await put(q[0], q[2](groups, day));
+  }
+  // b, c. Zenodo views/downloads and OpenAlex citations: latest citation_stats per DOI within the freshness window.
+  const citFrom = reachShiftDay(day, -(REACH_CITATION_FRESH_DAYS - 1));
+  try {
+    const z = await reachLatestCitations(env, "zenodo", ["views", "downloads"], citFrom, next);
+    if (z.length) await put("zenodo", reachZenodoRows(z, day));
+    else out.skipped.push("zenodo: no citation_stats views/downloads collected " + citFrom + ".." + day);
+  } catch (e) {
+    out.skipped.push("zenodo: " + reachErr(e));
+  }
+  try {
+    const oa = await reachLatestCitations(env, "openalex", ["cited_by_count"], citFrom, next);
+    if (oa.length) {
+      await put("openalex", oa.map(function(r) {
+        return reachRow(day, "openalex", "openalex", "doi", r.doi, "citations", r.value, "human");
+      }));
+    } else out.skipped.push("openalex: no citation_stats cited_by_count collected " + citFrom + ".." + day);
+  } catch (e) {
+    out.skipped.push("openalex: " + reachErr(e));
+  }
+  // d. Bluesky: the per-post snapshot qnfo-cloud-ops collected that day (cumulative counts, not daily deltas).
+  try {
+    const b = await d1all(env.AUDIT, "SELECT post_id, metric, MAX(value) AS value FROM social_engagements WHERE platform = 'bluesky' AND substr(collected_at, 1, 10) = ? AND post_id IS NOT NULL AND value IS NOT NULL AND metric != 'auth_status' GROUP BY post_id, metric", [day]);
+    if (b.length) {
+      await put("bluesky", b.map(function(r) {
+        return reachRow(day, "bluesky", "bluesky", "post", r.post_id, r.metric, r.value, "human");
+      }));
+    } else out.skipped.push("bluesky: no social_engagements rows collected on " + day);
+  } catch (e) {
+    out.skipped.push("bluesky: " + reachErr(e));
+  }
+  // e. Confirmed subscribers: a count as of now, so it is written only for the live previous-day run (a backfill of an
+  // older day cannot reconstruct it).
+  if (day === yesterday) {
+    try {
+      const s = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM subscribers WHERE status = 'subscribed'");
+      if (s.length && s[0].n != null) await put("qnfo-subscribers", [reachRow(day, "qnfo-subscribers", "email", "list", "qnfo", "confirmed_subscribers", s[0].n, "human")]);
+      else out.skipped.push("qnfo-subscribers: no count");
+    } catch (e) {
+      out.skipped.push("qnfo-subscribers: " + reachErr(e));
+    }
+  } else out.notes.push("qnfo-subscribers: not backfilled (point-in-time count)");
+  // f. Research outreach by status. Replies land days after the send and flip the row's status in place, so the
+  // trailing window is rewritten each run.
+  try {
+    const oFrom = reachShiftDay(day, -(REACH_OUTREACH_LOOKBACK_DAYS - 1));
+    const o = await d1all(env.AUDIT, "SELECT substr(sent_at, 1, 10) AS d, status, COUNT(*) AS n FROM outreach_log WHERE sent_at >= ? AND sent_at < ? AND status IN ('sent','followup','replied') GROUP BY d, status", [oFrom, next]);
+    await put("email", reachOutreachRows(o, oFrom, day));
+  } catch (e) {
+    out.skipped.push("email: " + reachErr(e));
+  }
+  // entity_map from living-paper (binding LIVING). The DOI is zenodo_doi || doi, the key qnfo-paper-indexer writes
+  // to citation_stats, lowercased like the reach_signals 'doi' rows. utm_campaign/post_uri/buffer_id are left to
+  // POST-ID-UTM-1.
+  if (env.LIVING) {
+    try {
+      const ps = await d1all(env.LIVING, "SELECT slug, doi, zenodo_doi FROM papers WHERE status = 'published' AND slug IS NOT NULL AND slug != ''");
+      const at = new Date().toISOString();
+      const stmts = [];
+      for (let i = 0; i < ps.length; i += 24) {
+        const binds = [];
+        const vals = ps.slice(i, i + 24).map(function(p) {
+          const doi = p.zenodo_doi || p.doi;
+          binds.push(p.slug, doi ? String(doi).toLowerCase() : null, REACH_PAPER_URL + encodeURIComponent(p.slug), at);
+          return "(?,?,?,?)";
+        });
+        stmts.push(env.AUDIT.prepare("INSERT INTO entity_map (slug, doi, page_url, updated_at) VALUES " + vals.join(",") + " ON CONFLICT(slug) DO UPDATE SET doi = excluded.doi, page_url = excluded.page_url, updated_at = excluded.updated_at WHERE entity_map.doi IS NOT excluded.doi OR entity_map.page_url IS NOT excluded.page_url").bind(...binds));
+      }
+      for (let i = 0; i < stmts.length; i += 50) await env.AUDIT.batch(stmts.slice(i, i + 50));
+      out.written.entity_map = ps.length;
+    } catch (e) {
+      out.skipped.push("entity_map: " + reachErr(e));
+    }
+  } else out.notes.push("entity_map: LIVING binding absent, skipped");
+  const summary = Object.keys(out.written).map(function(k) {
+    return k + "=" + out.written[k];
+  }).join(", ");
+  await record(out.skipped.length ? "partial" : "ok", "reach ingest " + day + ": " + (summary || "nothing written") + (out.skipped.length ? "; skipped " + out.skipped.length : ""));
+  return out;
+}
+// Scorecard (STRATEGY 6.3) over reach_signals. Flows (pageviews, outreach) are summed over the window; stocks
+// (Bluesky counts per post, citations and Zenodo counts per DOI, subscribers) take each entity's latest row in it.
+async function reachLatestAgg(env, source, from, to) {
+  return d1all(env.AUDIT, "SELECT r.metric AS metric, r.quality AS quality, COUNT(*) AS n, SUM(r.value) AS v FROM reach_signals r JOIN (SELECT channel, entity_type, entity_id, metric, MAX(date) AS md FROM reach_signals WHERE source = ? AND date >= ? AND date <= ? GROUP BY channel, entity_type, entity_id, metric) m ON r.channel = m.channel AND r.entity_type = m.entity_type AND r.entity_id = m.entity_id AND r.metric = m.metric AND r.date = m.md WHERE r.source = ? GROUP BY r.metric, r.quality", [source, from, to, source]);
+}
+async function reachWindow(env, from, to) {
+  const w = { from, to };
+  const q = async function(fn) {
+    try {
+      return await fn();
+    } catch (e) {
+      w.errors = (w.errors || []).concat(reachErr(e));
+      return null;
+    }
+  };
+  const pv = await q(function() {
+    return d1all(env.AUDIT, "SELECT COUNT(DISTINCT date) AS days, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum' AND entity_type = 'site' AND metric = 'pageviews' AND date >= ? AND date <= ?", [from, to]);
+  });
+  w.pageviews = pv && pv[0] && pv[0].days ? { value: pv[0].v, days: pv[0].days } : null;
+  w.top_pages = await q(function() {
+    return d1all(env.AUDIT, "SELECT entity_type AS t, entity_id AS id, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum' AND entity_type IN ('paper','page') AND metric = 'pageviews' AND entity_id != '(other)' AND date >= ? AND date <= ? GROUP BY entity_type, entity_id ORDER BY v DESC LIMIT 5", [from, to]);
+  });
+  w.top_referrers = await q(function() {
+    // Own hosts (internal navigation) are left out, the same set refreshRegistryMetrics excludes from referral_30d.
+    return d1all(env.AUDIT, "SELECT entity_id AS id, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum' AND entity_type = 'referrer' AND metric = 'pageviews' AND entity_id != '(other)' AND entity_id NOT IN ('qnfo.org','q08.org','q08.workers.dev') AND entity_id NOT LIKE '%.qnfo.org' AND entity_id NOT LIKE '%.q08.org' AND entity_id NOT LIKE '%.q08.workers.dev' AND date >= ? AND date <= ? GROUP BY entity_id ORDER BY v DESC LIMIT 5", [from, to]);
+  });
+  w.bluesky = await q(function() {
+    return reachLatestAgg(env, "bluesky", from, to);
+  });
+  w.openalex = await q(function() {
+    return reachLatestAgg(env, "openalex", from, to);
+  });
+  w.zenodo = await q(function() {
+    return reachLatestAgg(env, "zenodo", from, to);
+  });
+  w.subscribers = await q(function() {
+    return d1all(env.AUDIT, "SELECT date, value FROM reach_signals WHERE source = 'qnfo-subscribers' AND entity_type = 'list' AND entity_id = 'qnfo' AND metric = 'confirmed_subscribers' AND date >= ? AND date <= ? ORDER BY date ASC", [from, to]);
+  });
+  w.outreach = await q(function() {
+    return d1all(env.AUDIT, "SELECT metric, SUM(value) AS v, COUNT(DISTINCT date) AS days FROM reach_signals WHERE source = 'email' AND entity_type = 'campaign' AND date >= ? AND date <= ? GROUP BY metric", [from, to]);
+  });
+  return w;
+}
+async function reachScorecardData(env, nowMs) {
+  const end = reachYesterday(nowMs || Date.now());
+  const sc = { end, last_ingest: null, windows: {} };
+  try {
+    const ev = await d1all(env.AUDIT, "SELECT id, ts, status, text, meta FROM cloud_ops_events WHERE id IN (?, ?, ?) ORDER BY id DESC LIMIT 1", ["reach-ingest-" + end, "reach-ingest-" + reachShiftDay(end, -1), "reach-ingest-" + reachShiftDay(end, -2)]);
+    if (ev.length) {
+      let m = {};
+      try {
+        m = JSON.parse(ev[0].meta || "{}") || {};
+      } catch (e) {
+      }
+      sc.last_ingest = { day: m.day || String(ev[0].id).replace("reach-ingest-", ""), ts: ev[0].ts, status: ev[0].status, attempts: m.attempts || null, skipped: m.skipped || [], notes: m.notes || [] };
+    }
+  } catch (e) {
+  }
+  sc.windows.d7 = await reachWindow(env, reachShiftDay(end, -6), end);
+  sc.windows.d28 = await reachWindow(env, reachShiftDay(end, -27), end);
+  return sc;
+}
+function reachScorecardHtml(sc) {
+  const H = [];
+  const nd = '<span class="sub">no data</span>';
+  const nc = '<span class="warn">not connected</span>';
+  const num = function(v) {
+    return Math.round(Number(v) || 0).toLocaleString();
+  };
+  const pick = function(rows, metric) {
+    return (rows || []).filter(function(r) {
+      return r.metric === metric;
+    });
+  };
+  const sum = function(rows, key) {
+    return rows.reduce(function(s, r) {
+      return s + (Number(r[key]) || 0);
+    }, 0);
+  };
+  const w7 = sc.windows.d7 || {}, w28 = sc.windows.d28 || {};
+  H.push('<div class="panel"><h2>Reach scorecard (STRATEGY 6.3)</h2><table><tr><th>signal</th><th>7d to ' + esc(sc.end) + "</th><th>28d to " + esc(sc.end) + "</th></tr>");
+  const row = function(label, f) {
+    H.push("<tr><td>" + esc(label) + "</td><td>" + f(w7) + "</td><td>" + f(w28) + "</td></tr>");
+  };
+  row("Pageviews (Web Analytics RUM, quality unknown)", function(w) {
+    return w.pageviews ? num(w.pageviews.value) + ' <span class="sub">(' + esc(w.pageviews.days) + " d ingested)</span>" : nd;
+  });
+  row("Top 5 pages", function(w) {
+    return w.top_pages && w.top_pages.length ? w.top_pages.map(function(r) {
+      return esc((r.t === "paper" ? "paper " : "") + r.id) + " " + num(r.v);
+    }).join("<br>") : nd;
+  });
+  row("Top 5 referrers (own hosts excluded)", function(w) {
+    return w.top_referrers && w.top_referrers.length ? w.top_referrers.map(function(r) {
+      return esc(r.id) + " " + num(r.v);
+    }).join("<br>") : nd;
+  });
+  row("Bluesky likes + reposts + replies (latest per post)", function(w) {
+    const l = pick(w.bluesky, "likes"), rp = pick(w.bluesky, "reposts"), rl = pick(w.bluesky, "replies");
+    if (!l.length && !rp.length && !rl.length) return nd;
+    const posts = Math.max(sum(l, "n"), sum(rp, "n"), sum(rl, "n"));
+    return num(sum(l, "v") + sum(rp, "v") + sum(rl, "v")) + ' <span class="sub">(' + num(sum(l, "v")) + " / " + num(sum(rp, "v")) + " / " + num(sum(rl, "v")) + ", " + num(posts) + " posts)</span>";
+  });
+  row("Confirmed subscribers, QNFO list (latest)", function(w) {
+    const s = w.subscribers || [];
+    if (!s.length) return nd;
+    const a = s[0], b = s[s.length - 1];
+    const dd = Number(b.value) - Number(a.value);
+    return num(b.value) + ' <span class="sub">(' + esc(b.date) + (a.date !== b.date ? ", " + (dd >= 0 ? "+" : "") + num(dd) + " since " + esc(a.date) : "") + ")</span>";
+  });
+  row("Research outreach sent / replied", function(w) {
+    const o = w.outreach || [];
+    if (!o.length) return nd;
+    const sent = sum(pick(o, "sent"), "v") + sum(pick(o, "followup"), "v") + sum(pick(o, "replied"), "v");
+    return num(sent) + " / " + num(sum(pick(o, "replied"), "v"));
+  });
+  row("OpenAlex citations (latest per DOI, sum)", function(w) {
+    const c = pick(w.openalex, "citations");
+    return c.length ? num(sum(c, "v")) + ' <span class="sub">(' + num(sum(c, "n")) + " DOIs)</span>" : nd;
+  });
+  row("Zenodo views (latest per DOI, sum)", function(w) {
+    const v = pick(w.zenodo, "views");
+    return v.length ? num(sum(v, "v")) + ' <span class="sub">(' + num(sum(v, "n")) + " DOIs)</span>" : nd;
+  });
+  row("Zenodo downloads flagged bot-suspect (downloads/views > 3)", function(w) {
+    const d = pick(w.zenodo, "downloads");
+    if (!d.length) return nd;
+    const bot = d.filter(function(r) {
+      return r.quality === "bot";
+    });
+    return num(sum(bot, "v")) + " of " + num(sum(d, "v")) + ' <span class="sub">(' + num(sum(bot, "n")) + " of " + num(sum(d, "n")) + " DOIs)</span>";
+  });
+  row("GA4 engaged human sessions", function() {
+    return nc;
+  });
+  row("Search Console impressions", function() {
+    return nc;
+  });
+  row("LinkedIn reach and engagement", function() {
+    return nc;
+  });
+  H.push("</table>");
+  const li = sc.last_ingest;
+  const errs = (w7.errors || []).concat(w28.errors || []);
+  H.push('<div class="sub">' + (li ? "last ingest " + esc(li.day) + ": " + esc(li.status) + (li.attempts ? " (attempt " + esc(li.attempts) + ")" : "") + " at " + esc(li.ts) + (li.skipped && li.skipped.length ? "; skipped: " + esc(li.skipped.join(" | ")) : "") : "no reach-ingest run recorded for " + esc(sc.end) + " yet (daily, after 02:00Z)") + "</div>");
+  if (errs.length) H.push('<div class="warn">reach_signals unreadable: ' + esc(errs[0]) + "</div>");
+  H.push('<div class="sub">source qnfo-audit.reach_signals (REACH-SIGNALS-INGEST-1, #1711). Flows are summed over the window, stocks take each entity\'s latest row; "no data" means no row was ingested, never a zero.</div></div>');
+  return H.join("");
+}
 async function redHtml(env) {
   const H = [];
   const now = Date.now();
@@ -2870,12 +3376,13 @@ async function redHtml(env) {
   }
   let rumPrior = null, trueMoM = null;
   try {
-    const dp = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(now - 1440 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now - 720 * 36e5).toISOString() + '" }) { count } } } }');
+    const dp = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(now - 1440 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now - 720 * 36e5).toISOString() + '" }) { count dimensions { date } } } } }');
     const rp = (((dp || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || [];
     rumPrior = rp.reduce(function(s, x) {
       return s + x.count;
     }, 0);
-    trueMoM = rumPrior > 0 ? Math.round(1e4 * (rumTotal - rumPrior) / rumPrior) / 100 : null;
+    // IMPRESSIONS-METRIC-PRIOR-WINDOW-1: no growth figure from a prior window with missing days.
+    trueMoM = rumPrior > 0 && rumDaysCovered(rp) >= RUM_MIN_PRIOR_DAYS ? Math.round(1e4 * (rumTotal - rumPrior) / rumPrior) / 100 : null;
   } catch (e) {
   }
   try {
@@ -3515,6 +4022,12 @@ async function roiHtml(env) {
   H.push("<tr><td>Reply rate</td><td>" + (em && em.sent ? Math.round(1e4 * (em.replied || 0) / em.sent) / 100 + "%" : "?") + "</td></tr>");
   H.push("<tr><td>Subscribers</td><td>" + (subs ? subs.s : "?") + "</td></tr>");
   H.push("</table></div>");
+  // REACH-SIGNALS-INGEST-1 (2026-10-01, #1711): 7d/28d scorecard from reach_signals; unread sources say so.
+  try {
+    H.push(reachScorecardHtml(await reachScorecardData(env)));
+  } catch (e) {
+    H.push('<div class="panel"><h2>Reach scorecard (STRATEGY 6.3)</h2><div class="warn">' + esc("unavailable: " + reachErr(e)) + "</div></div>");
+  }
   let th = [];
   try {
     th = await d1all(env.AUDIT, "SELECT metric, target, state FROM impact_thresholds ORDER BY metric");
