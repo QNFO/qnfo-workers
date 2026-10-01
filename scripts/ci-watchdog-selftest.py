@@ -115,6 +115,23 @@ def main() -> int:
     k4, _ = cw.classify_structural("version-compare", {"head_branch": "main"})
     check("version-compare reaches the comparator branch", k4 in ("missing-module", "comparator-regression"), k4)
 
+    # DEPLOY-AUTH-CLASS-1 (#212): lines taken from run 36831942233. The deploy 401 must outrank a push that was
+    # rejected once and then recovered; a recovered push is not a push-race; a real unrecovered one still is.
+    real = (
+        "canonical deploy: 1 target(s) -> https://ops.qnfo.org/ops/deploy (ref=main)\n"
+        "failed workers: qnfo-ops\n    FAIL in 0.3s  status=401\n"
+        "# ARTIFACT-PUSH-CONFLICT-1: snapshot re-apply, never a rebase conflict\n"
+        "error: failed to push some refs to 'https://github.com/QNFO/qnfo-workers'\n"
+        "push rejected on attempt 1; re-applying the snapshot onto origin/main\n"
+        "artifact pushed on attempt 2\n"
+    )
+    k5, _ = cw.classify(real, "canonical-deploy")
+    check("deploy 401 + recovered push -> deploy-auth (not push-race)", k5 == "deploy-auth", k5)
+    k6, _ = cw.classify("error: failed to push some refs\nCONFLICT (content): Merge conflict in x\n", "mirror-sync")
+    check("unrecovered push conflict still -> push-race", k6 == "push-race", k6)
+    k7, _ = cw.classify("error: failed to push some refs ... rebase\nartifact pushed on attempt 2\n", "x")
+    check("recovered push alone is not a push-race", k7 != "push-race", k7)
+
     print("\n%d failure(s)" % len(fails))
     return 1 if fails else 0
 

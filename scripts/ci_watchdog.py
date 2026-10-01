@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -218,7 +219,19 @@ def classify(log: str, wf_name: str) -> tuple[str, str]:
             "matches; key idempotency on the feature's markers, not the exact VERSION literal "
             "(APPLIER-LANDED-MARKERS-1), or retire the applier"
         )
-    if "CONFLICT (content)" in L or ("failed to push some refs" in L and "rebase" in L):
+    # DEPLOY-AUTH-CLASS-1 (2026-10-01, issue #212): a canonical-deploy run failed on `status=401` from
+    # ops.qnfo.org/ops/deploy (repo secret OPS_ROUTER_AUTH_KEY != the key the worker accepts) and was filed as
+    # `push-race` because an artifact push earlier in the SAME log was rejected once and then succeeded. The
+    # real failure must outrank a recovered retry, and it is not a code fix: a secret needs the owner.
+    if "canonical deploy" in L and re.search(r"status=40[13]\b|Unauthorized", L):
+        return "deploy-auth", (
+            "the canonical deploy route rejected the repo secret (401/403): OPS_ROUTER_AUTH_KEY must match the key "
+            "the worker accepts (check for an early rotation, runbook window 2026-10-03). Owner action; do not "
+            "work around the route"
+        )
+    # A push that was rejected and then SUCCEEDED on retry ("pushed on attempt N") is a handled race, not a failure.
+    push_recovered = bool(re.search(r"pushed on attempt \d+", L))
+    if not push_recovered and ("CONFLICT (content)" in L or ("failed to push some refs" in L and "rebase" in L)):
         return "push-race", (
             "a concurrent writer moved main; an artifact commit must re-apply its snapshot onto "
             "origin/main instead of merging (ARTIFACT-PUSH-CONFLICT-1)"
