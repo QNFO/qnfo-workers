@@ -41,6 +41,7 @@ on:
       - deploy-drift
       - indexnow-submit
       - adversarial-workers-guard
+      - code-loop-test
     types: [completed]
   workflow_dispatch:
   repository_dispatch:
