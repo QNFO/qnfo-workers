@@ -473,7 +473,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 406890 (unchanged)",
+    "bytes: 408278 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -495,7 +495,7 @@
    "script": "scripts/github409-variant-reread-patch.py",
    "tail": [
     "already applied (idempotent no-op): qnfo-ops/deployed-current.worker.js",
-    "mirror pair byte-identical (406892 bytes)",
+    "mirror pair byte-identical (408280 bytes)",
     "changed=false"
    ],
    "verdict": "already-applied"
@@ -538,8 +538,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=406892 marker=1",
-    "  deployed-current.worker.js bytes=406892 marker=1"
+    "  worker.js bytes=408280 marker=1",
+    "  deployed-current.worker.js bytes=408280 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -889,7 +889,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-body-patch.py",
    "tail": [
-    "already patched (marker '_lastRouterHost' present); no write. sha256=4f6196b934bee795"
+    "already patched (marker '_lastRouterHost' present); no write. sha256=1743ec6c3271ca11"
    ],
    "verdict": "already-applied"
   },
@@ -898,7 +898,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-correction-patch.py",
    "tail": [
-    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=4f6196b934bee795"
+    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=1743ec6c3271ca11"
    ],
    "verdict": "already-applied"
   },
@@ -1125,7 +1125,7 @@
  ],
  "superseded": [],
  "total": 105,
- "ts": "2026-10-01T00:04:32.482Z",
+ "ts": "2026-10-01T05:57:34.620Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",
