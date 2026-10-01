@@ -30,6 +30,17 @@ because each one was broken at least once; the linked issue holds the evidence.
   report, delete-worker (marker-guarded), gateway-logs, gateway-cost, ai-neurons, access-probe, r2-get. Extend
   `scripts/cf_ops_actions.py` rather than parking an issue as "needs the credential holder".
 
+## The charter (QUNIVERSE-CHARTER-1)
+- `docs/QUNIVERSE-CHARTER.md` is the system's charter: what the Quniverse is, what it should be, objectives, SWOT, MVP,
+  blue-sky footprint, roadmap order and decision rules. Read it, and `GET https://qnfo-fleet-control.q08.workers.dev/charter`,
+  before any change that adds, retires or redirects a worker, cron, binding, table family or spend.
+- Every PR, issue and roadmap item names the charter pillar it serves (`core`, `autonomy`, `research`, `reach`, `cost`,
+  `security`, `personal`). A new worker directory declares `# charter-pillar: <key>` in its wrangler.toml and names the
+  same-class retirement it funds (net-zero rule); `charter-guard` fails CI otherwise. Work that serves no pillar is parked.
+- The section between the `CHARTER-LIVE` markers is generated daily by qnfo-fleet-control (CHARTER-LOOP-1) and committed
+  to main; never edit it by hand. Hand-written sections change by PR with a version bump. `CHARTER_PILLARS` and
+  `CHARTER_MVP` in the kernel and the tables in the charter change together (the guard enforces parity).
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
