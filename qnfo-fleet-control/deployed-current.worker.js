@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.45-wai-cost-writer";
+var VERSION = "0.4.46-crons-quoted-parse";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -1923,9 +1923,22 @@ function tomlCrons(t) {
   if (ob < 0) return [];
   var cb = body.indexOf("]", ob);
   if (cb < 0) return [];
-  return body.slice(ob + 1, cb).split(",").map(function(x) {
-    return x.trim().replace(/^["']|["']$/g, "");
-  }).filter(Boolean).sort();
+  // CRON-TOML-PARSE-COMMA-1 (2026-10-01): a naive split(",") decomposes MERGED cron expressions
+  // whose hour field is a list (e.g. "0 6,12 * * 2-6" -> "0 6" + "12 * * 2-6"), inflating the
+  // declared list (24) above the live list (21) and manufacturing a permanent false cronDrift for
+  // qnfo-cloud-ops. ROOT CAUSE of the recurring cronDrift=1 (earlier CDN hypothesis was WRONG).
+  // Parse QUOTED entries instead; a comma inside quotes is a cron field list, not an array separator.
+  var inner = body.slice(ob + 1, cb);
+  var out = [];
+  var re = /"([^"]*)"|'([^']*)'/g;
+  var m;
+  while ((m = re.exec(inner)) !== null) out.push((m[1] != null ? m[1] : m[2]).trim());
+  if (!out.length) {
+    out = inner.split(",").map(function(x) {
+      return x.trim().replace(/^["']|["']$/g, "");
+    });
+  }
+  return out.filter(Boolean).sort();
 }
 __name(tomlCrons, "tomlCrons");
 async function declaredCrons(env, worker) {
