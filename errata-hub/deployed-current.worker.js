@@ -1,11 +1,11 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.1.2"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.1.3"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
-var WATCH_VERSION = "0.2.1";
+var WATCH_VERSION = "0.2.2";
 var RESPOND_VERSION = "0.4.1";
 var PUBLISH_VERSION = "0.7.1-relid-fix";
 var erratawatchMod = (function(){
@@ -59,7 +59,7 @@ async function runCheck(env, mode) {
   const db = env.WATCH_DB;
   const w = await db.prepare("SELECT value FROM errata_watch WHERE key = 'last_email_id'").first();
   const lastId = w ? parseInt(w.value || "0", 10) : 0;
-  const emails = await db.prepare("SELECT id, sender, recipient, subject, body_text, received_at FROM emails WHERE id > ? AND classification = 'personal' ORDER BY id ASC LIMIT 12").bind(lastId).all();
+  const emails = await db.prepare("SELECT id, sender, recipient, subject, body_text, received_at FROM emails WHERE id > ? AND classification IN ('personal', 'personal-unverified') ORDER BY id ASC LIMIT 12").bind(lastId).all();
   const rows = emails && emails.results || [];
   let maxId = lastId, classified = 0;
   const detected = [];
