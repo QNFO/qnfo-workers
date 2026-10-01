@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.71-charter-mirror";
+var VERSION = "0.4.74-loop-watch";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2924,7 +2924,7 @@ __name(activitySnapshotDaily, "activitySnapshotDaily");
 //              GitHub Contents API (the same GITHUB_TOKEN write path LAND-CODE-FIX-1 proved), at most once per UTC day
 //              and only when the block changed. A doc without both markers is never written (nothing to anchor to).
 // The pure functions take no env and touch no I/O, so qnfo-fleet-control/charter.test.mjs exercises them offline.
-var CHARTER_VERSION = "1.0.2";
+var CHARTER_VERSION = "1.0.3";
 // CHARTER-ON-CLOUDFLARE-1 (#1727, owner directive 2026-10-01: all data on Cloudflare): every tick also writes the
 // whole charter (hand-written sections + the live block) to R2 qnfo-canonical under this key, so the document is
 // readable from Cloudflare storage (GET /charter/full.md) when GitHub or any agent session is not.
@@ -3576,10 +3576,24 @@ async function pfUpsert(env, ev) {
   for (var i = 0; i < stmts.length; i += 40) await env.AUDIT.batch(stmts.slice(i, i + 40));
   await env.AUDIT.prepare("UPDATE portfolio_repos SET seen=0 WHERE synced_at IS NULL OR synced_at <> ?1").bind(now).run();
 }
+// DEFAULT-BRANCH-1 (first live sync, 2026-10-01 12:00Z): QNFO/.github's default branch is `master`, not `main`. Writing
+// to a hard-coded `main` landed the mirror on a stale side branch and read a profile README without the anchor
+// ("anchor-missing"), so the organisation landing page never changed. Resolve each repository's default branch once
+// per sync and write there; the organisation profile is rendered from the default branch only.
+var pfBranchCache = {};
+async function pfDefaultBranch(env, repo) {
+  if (pfBranchCache[repo]) return pfBranchCache[repo];
+  var r = await timedFetch("https://api.github.com/repos/" + repo, { headers: pfGh(env) }, 12e3);
+  var j = r.status === 200 ? await r.json().catch(function() { return null; }) : null;
+  var b = j && j.default_branch ? String(j.default_branch) : "main";
+  pfBranchCache[repo] = b;
+  return b;
+}
 async function pfCommit(env, repo, path, content, message, mode) {
   var hdr = pfGh(env);
   var enc = path.split("/").map(encodeURIComponent).join("/");
-  var gr = await timedFetch("https://api.github.com/repos/" + repo + "/contents/" + enc + "?ref=main", { headers: hdr }, 12e3);
+  var branch = await pfDefaultBranch(env, repo);
+  var gr = await timedFetch("https://api.github.com/repos/" + repo + "/contents/" + enc + "?ref=" + encodeURIComponent(branch), { headers: hdr }, 12e3);
   var sha = null, cur = "";
   if (gr.status === 200) {
     var gj = await gr.json().catch(function() { return null; });
@@ -3591,17 +3605,18 @@ async function pfCommit(env, repo, path, content, message, mode) {
   else if (mode === "bootstrap") { next = pfSpliceOrBootstrap(cur, content); if (next === null) return { path: repo + "/" + path, status: "anchor-missing" }; }
   else next = content;
   if (next === cur) return { path: repo + "/" + path, status: "unchanged" };
-  var body = { message: message, content: b64encode(next), branch: "main" };
+  var body = { message: message, content: b64encode(next), branch: branch };
   if (sha) body.sha = sha;
   var pr = await timedFetch("https://api.github.com/repos/" + repo + "/contents/" + enc, { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify(body) }, 15e3);
   var pj = pr.status === 200 || pr.status === 201 ? await pr.json().catch(function() { return null; }) : null;
-  if (!pj || !pj.commit || !pj.commit.sha) return { path: repo + "/" + path, status: "write-failed", note: "PUT HTTP " + pr.status };
-  return { path: repo + "/" + path, status: "committed", sha: pj.commit.sha };
+  if (!pj || !pj.commit || !pj.commit.sha) return { path: repo + "/" + path, status: "write-failed", note: "PUT HTTP " + pr.status + " on " + branch };
+  return { path: repo + "/" + path, status: "committed", sha: pj.commit.sha, branch: branch };
 }
 async function portfolioSync(env, force) {
   var t0 = Date.now();
   await pfSchema(env);
   if (!env.GITHUB_TOKEN) return { ok: false, status: "no-token" };
+  pfBranchCache = {};
   var org = await pfFetchOrg(env);
   if (!org.ok) {
     try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, NULL, 'fetch-failed', ?3, '[]')").bind(new Date().toISOString(), org.repos.length, org.note).run(); } catch (e) {}
@@ -3625,10 +3640,14 @@ async function portfolioSync(env, force) {
   try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length, JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) {}
   return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, wbs: wbs.note, writes: writes, ms: Date.now() - t0 };
 }
+// PARTIAL-RETRY-1: a run that left a surface unwritten (partial) is retried on the next hourly tick, not after 20h;
+// a fully written run (ok) holds for PF_STALE_H. The writes are idempotent (unchanged content is a no-op), so an
+// hourly retry of a persistent failure costs a handful of GitHub reads and files LOOP-WATCH-1's issue meanwhile.
 async function portfolioSyncIfStale(env) {
   await pfSchema(env);
-  var last = await charterOne(env, "SELECT ts FROM portfolio_sync_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1");
-  if (last && last.ts && Date.now() - Date.parse(last.ts) < PF_STALE_H * 3600000) return { ok: true, status: "fresh", last: last.ts };
+  var last = await charterOne(env, "SELECT ts, status FROM portfolio_sync_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1");
+  var holdMs = last && last.status === "ok" ? PF_STALE_H * 3600000 : 50 * 60000;
+  if (last && last.ts && Date.now() - Date.parse(last.ts) < holdMs) return { ok: true, status: "fresh", last: last.ts, last_status: last.status };
   return portfolioSync(env, false);
 }
 async function portfolioLatest(env) {
@@ -3640,6 +3659,92 @@ async function portfolioLatest(env) {
   return { last_run: run, repos: rows.length, tiers: tiers, rows: rows.map(function(r) { if (r.visibility === "private") return { name: "(private)", tier: r.tier, pillar: r.pillar, visibility: "private" }; r.topics = JSON.parse(r.topics || "[]"); r.wbs = r.wbs ? r.wbs.split(",") : []; r.flags = r.flags ? r.flags.split(",") : []; return r; }) };
 }
 // ---- PORTFOLIO-LOOP-1:END ----
+// ---- LOOP-WATCH-1:BEGIN (2026-10-01, CLOUD-ONLY-VERIFICATION-1) ----
+// Owner directive (2026-10-01): the fleet must never depend on continued Claude usage; every datum and every
+// recurring check lives on Cloudflare. CHARTER-LOOP-1 and PORTFOLIO-LOOP-1 already run on crons and write to D1 and
+// GitHub, but their first live runs were verified by a session with a scheduled check-in, which is exactly the
+// dependency to remove. This block is the fleet-side verifier: every hour it reads the two loops' own ledgers
+// (charter_snapshots, portfolio_sync_runs) and files one deduped agent_issue per failure class, closing it with
+// close_evidence as soon as the loop is healthy again. A loop that silently stops, or a GitHub write that keeps
+// failing, becomes a row in the fleet's own issue ledger, where qnfo-backlog-exec, remediation contracts and the
+// dashboard already look. No session, routine or person is on the path. GET /loops serves the same verdict.
+var LW_STALE_H = 26;
+var LW_GRACE_H = 26;
+var LW_BAD_WRITE = { "write-failed": 1, "read-failed": 1, "markers-missing": 1, "anchor-missing": 1, "no-token": 1 };
+// Pure: the two ledgers -> findings. Each finding is one deduped issue title; an empty list means healthy.
+function loopWatchEvaluate(f, nowMs) {
+  f = f || {};
+  var out = [];
+  var ageH = function(ts) { var t = Date.parse(ts || ""); return isNaN(t) ? null : (nowMs - t) / 3600000; };
+  var deployAge = ageH(f.first_seen);
+  var graceOver = deployAge !== null && deployAge > LW_GRACE_H;
+  // charter: a snapshot every day, a commit that lands
+  var cs = f.charter_last;
+  if (!cs) { if (graceOver) out.push({ key: "CHARTER-TICK-STALE-1", severity: "high", text: "charter_snapshots holds no row although the kernel has been live for " + Math.round(deployAge) + "h; the daily 03:00Z tick is not running." }); }
+  else {
+    var ca = ageH(cs.ts);
+    if (ca !== null && ca > LW_STALE_H) out.push({ key: "CHARTER-TICK-STALE-1", severity: "high", text: "latest charter snapshot is " + Math.round(ca) + "h old (" + cs.ts + "); the daily tick stopped." });
+    var notes = f.charter_notes || [];
+    var bad = notes.filter(function(n) { return /^(write-failed|read-failed|markers-missing)/.test(String(n || "")); });
+    if (notes.length >= 3 && bad.length === notes.length) out.push({ key: "CHARTER-COMMIT-FAILED-1", severity: "medium", text: "the last " + notes.length + " charter ticks could not commit docs/QUNIVERSE-CHARTER.md: " + notes.join(" | ").slice(0, 200) });
+  }
+  // portfolio: a sync every day, three surfaces written
+  var ps = f.portfolio_last;
+  var pok = f.portfolio_last_ok;
+  if (!pok) { if (graceOver) out.push({ key: "PORTFOLIO-SYNC-STALE-1", severity: "high", text: "portfolio_sync_runs has no successful run although the kernel has been live for " + Math.round(deployAge) + "h" + (ps ? "; latest run " + ps.status + " (" + String(ps.note || "").slice(0, 120) + ")" : "") + "." }); }
+  else {
+    var pa = ageH(pok.ts);
+    if (pa !== null && pa > LW_STALE_H) out.push({ key: "PORTFOLIO-SYNC-STALE-1", severity: "high", text: "last successful portfolio sync is " + Math.round(pa) + "h old (" + pok.ts + ")." });
+  }
+  if (ps && ps.writes) {
+    var w = [];
+    try { w = JSON.parse(ps.writes) || []; } catch (e) { w = []; }
+    w.forEach(function(x) { if (x && LW_BAD_WRITE[x.status]) out.push({ key: "PORTFOLIO-WRITE-FAILED-1: " + x.path, severity: "medium", text: "portfolio surface " + x.path + " could not be written on " + ps.ts + ": " + x.status + (x.note ? " (" + x.note + ")" : "") + "." }); });
+  }
+  return out;
+}
+async function loopWatchFacts(env) {
+  var f = {};
+  await charterSchema(env);
+  await pfSchema(env);
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS loop_watch_state (key TEXT PRIMARY KEY, value TEXT)").run();
+  var fs = await charterOne(env, "SELECT value FROM loop_watch_state WHERE key='first_seen'");
+  if (!fs) { var now = new Date().toISOString(); try { await env.AUDIT.prepare("INSERT OR IGNORE INTO loop_watch_state (key, value) VALUES ('first_seen', ?1)").bind(now).run(); } catch (e) {} f.first_seen = now; } else f.first_seen = fs.value;
+  f.charter_last = await charterOne(env, "SELECT ts, commit_note FROM charter_snapshots ORDER BY id DESC LIMIT 1");
+  f.charter_notes = (await charterRows(env, "SELECT commit_note FROM charter_snapshots ORDER BY id DESC LIMIT 3")).map(function(r) { return r.commit_note; });
+  f.portfolio_last = await charterOne(env, "SELECT ts, status, note, writes FROM portfolio_sync_runs ORDER BY id DESC LIMIT 1");
+  f.portfolio_last_ok = await charterOne(env, "SELECT ts, status FROM portfolio_sync_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1");
+  return f;
+}
+async function loopWatch(env) {
+  var f = await loopWatchFacts(env);
+  var findings = loopWatchEvaluate(f, Date.now());
+  var want = {};
+  findings.forEach(function(x) { want[x.key] = x; });
+  var open = await charterRows(env, "SELECT id, title FROM agent_issues WHERE status='open' AND (title LIKE 'CHARTER-TICK-STALE-1%' OR title LIKE 'CHARTER-COMMIT-FAILED-1%' OR title LIKE 'PORTFOLIO-SYNC-STALE-1%' OR title LIKE 'PORTFOLIO-WRITE-FAILED-1:%')");
+  var openByTitle = {};
+  open.forEach(function(r) { openByTitle[r.title] = r.id; });
+  var filed = 0, closed = 0, nowMs = Date.now(), nowIso = new Date().toISOString();
+  for (var k in want) {
+    if (openByTitle[k]) continue;
+    try {
+      await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'loop-watch', 'reliability', ?3, 'open', ?4, ?4)")
+        .bind(k, "AUTO-FILED by qnfo-fleet-control LOOP-WATCH-1 (CLOUD-ONLY-VERIFICATION-1). " + want[k].text + " DoD: the loop's own ledger (charter_snapshots / portfolio_sync_runs) shows a fresh successful run; LOOP-WATCH-1 closes this issue itself with close_evidence on the next healthy hour.", want[k].severity, nowMs).run();
+      filed++;
+    } catch (e) {}
+  }
+  for (var t in openByTitle) {
+    if (want[t]) continue;
+    try {
+      await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'LOOP-WATCH-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'")
+        .bind(openByTitle[t], "LOOP-WATCH-1 " + nowIso + ": healthy; charter_last=" + (f.charter_last ? f.charter_last.ts : "none") + " portfolio_last_ok=" + (f.portfolio_last_ok ? f.portfolio_last_ok.ts : "none")).run();
+      await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1").bind(openByTitle[t], nowMs).run();
+      closed++;
+    } catch (e) {}
+  }
+  return { ok: true, ts: nowIso, healthy: findings.length === 0, findings: findings, filed: filed, closed: closed, charter_last: f.charter_last, portfolio_last: f.portfolio_last ? { ts: f.portfolio_last.ts, status: f.portfolio_last.status, note: f.portfolio_last.note } : null, first_seen: f.first_seen };
+}
+// ---- LOOP-WATCH-1:END ----
 var worker_default2 = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -3647,6 +3752,12 @@ var worker_default2 = {
     // CHARTER-LOOP-1 (QUNIVERSE-CHARTER-1): the fleet's own account of itself. GET is public (it is what the charter
     // document publishes anyway); the tick is admin-gated like every other mutating route here.
     // PORTFOLIO-LOOP-1 (QNFO-PORTFOLIO-1): the organisation's repositories as one register.
+    // LOOP-WATCH-1 (CLOUD-ONLY-VERIFICATION-1): the fleet verifies its own charter and portfolio loops; no session needed.
+    if (p === "/loops" && request.method === "GET") {
+      var lwf = await loopWatchFacts(env);
+      var lwx = loopWatchEvaluate(lwf, Date.now());
+      return json({ ok: true, worker_version: VERSION, healthy: lwx.length === 0, findings: lwx, charter_last: lwf.charter_last, portfolio_last: lwf.portfolio_last ? { ts: lwf.portfolio_last.ts, status: lwf.portfolio_last.status, note: lwf.portfolio_last.note } : null, first_seen: lwf.first_seen });
+    }
     if (p === "/portfolio" && request.method === "GET") {
       return json({ ok: true, worker_version: VERSION, portfolio: await portfolioLatest(env) });
     }
@@ -3757,6 +3868,7 @@ var worker_default2 = {
     ctx.waitUntil(opsAgentWatchMetrics(env).catch((e) => console.error("opsAgentWatch error:", e && e.message || e)));
     ctx.waitUntil(aiAttributionCoverage(env).catch((e) => console.error("aiAttributionCoverage error:", e && e.message || e)));
     ctx.waitUntil(portfolioSyncIfStale(env).catch((e) => console.error("portfolioSync error:", e && e.message || e)));
+    ctx.waitUntil(loopWatch(env).catch((e) => console.error("loopWatch error:", e && e.message || e)));
     ctx.waitUntil(remediationContractsTick(env).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }

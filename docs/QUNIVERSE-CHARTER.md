@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.2, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror, same day). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.3, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification, same day). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -343,6 +343,11 @@ close-evidence trigger) and stated here for the rest.
   same register: tier, charter pillar, WBS codes, hygiene. It runs from the kernel's hourly cron when its last sync is
   older than 20 hours, writes `portfolio_repos`, and regenerates `docs/PORTFOLIO.md`, `QNFO/.github/PORTFOLIO.md` and
   the index on the organisation profile README. The charter's live block carries its summary line.
+- **No Claude on the path (CLOUD-ONLY-VERIFICATION-1).** Every datum this charter and the portfolio rest on is in D1,
+  R2 or GitHub, and every recurring check is a Cloudflare cron. The kernel's hourly LOOP-WATCH-1 reads the two loops'
+  own ledgers (`charter_snapshots`, `portfolio_sync_runs`) and files `CHARTER-TICK-STALE-1`, `CHARTER-COMMIT-FAILED-1`,
+  `PORTFOLIO-SYNC-STALE-1` or `PORTFOLIO-WRITE-FAILED-1` as deduped issues, closing them with evidence when the loop
+  recovers; `GET /loops` serves the verdict. Agent sessions may read these surfaces; nothing waits for one.
 - **Failure modes it accepts.** If GitHub is unreachable the snapshot still lands in D1 and the next day retries. If a
   register is missing the loop reports the fact as unmeasured rather than failing. If the kernel itself is down, the
   staleness of the timestamp below is the alarm (`RM-MONITOR-THE-MONITORS-1` is the roadmap item that makes it one).

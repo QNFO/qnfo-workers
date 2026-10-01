@@ -45,18 +45,25 @@ because each one was broken at least once; the linked issue holds the evidence.
   qnfo-fleet-control (PORTFOLIO-LOOP-1); never edit them by hand. A new repository names its tier and, for research, a
   WBS code in `portfolio-state.program_registry`; private repositories are counted and never named.
 
-## No Claude dependency at runtime (NO-CLAUDE-RUNTIME-DEPENDENCY-1)
+## No Claude dependency at runtime (NO-CLAUDE-RUNTIME-DEPENDENCY-1, CLOUD-ONLY-VERIFICATION-1)
 - Owner directive 2026-10-01: the fleet and its dashboard must not depend on continued Claude usage, and all data is hosted
   on Cloudflare (D1, R2, KV, Workers), never on claude.ai (Claude Docs, artifacts, Routines). A session builds the fleet; it
-  is never part of it.
+  is never part of it. A session that needs a durable record writes a D1 row or a repository file.
 - Do not make claude.ai a system of record, a link target in a worker or doc, or a recurring runner. Recurring work is a
   worker cron (using qnfo-ai and D1). A decision the owner must make is made in https://fleet.qnfo.org (queue cards,
   objective decisions, the prompt panel), never by "telling a session". The dashboard refuses claude.ai and anthropic.com
-  links in queue items.
-- Sensitive personal data does not go into the shared `qnfo-audit` D1 that many workers and sessions can read; it needs a
-  dedicated private store bound only to the worker that serves it (open decision: agent_issues NO-CLAUDE-RUNTIME-DEPENDENCY-1).
-- Known violations being retired: the Identity doc on Claude Docs and the two claude.ai Routines
-  (NO-CLAUDE-RUNTIME-DEPENDENCY-1, ROUTINES-ON-CLAUDE-1, OBJECTIVE-REVISION-APPLY-1).
+  links in queue items, and `cloudflare-only-host-guard.py` (deploy-gate) fails CI on a claude.ai link in any tracked file.
+- Recurring verification belongs to worker crons (LOOP-WATCH-1 in qnfo-fleet-control, `GET /loops`, files and self-closes
+  `CHARTER-TICK-STALE-1`, `PORTFOLIO-SYNC-STALE-1` and friends), not to session check-ins or routines. A session may arm a
+  short-lived reminder for its own in-flight PR, and deletes it when done.
+- Owner documents (identity, brand, CV, opportunities): the row cloud-ops IDENTITY-WEEKLY-1 reads and the dashboard edits is
+  `qnfo-audit.owner_docs` key `identity`; the final verbatim export of the retired Claude Doc (rev 46, with its five comment
+  threads) is `personal-life.owner_documents` key `identity-brand-opportunities` (private plane). Never recreate one on
+  claude.ai. Sensitive personal data does not belong in the shared `qnfo-audit` D1 that many workers and sessions can read;
+  moving the canonical row to a dedicated private store bound only to the workers that serve it is the open decision
+  NO-CLAUDE-RUNTIME-DEPENDENCY-1 in agent_issues.
+- Known violations retired on 2026-10-01: the Identity doc on Claude Docs (exported, deleted) and this session's routines;
+  the remaining claude.ai Routines are tracked by ROUTINES-ON-CLAUDE-1 and OBJECTIVE-REVISION-APPLY-1.
 
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
