@@ -1,10 +1,18 @@
 {
-  "audited_at": "2026-10-01 07:41:53",
+  "audited_at": "2026-10-01 07:47:24",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_guard_rc": 0,
-    "ahead": [],
+    "ahead": [
+      {
+        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-ops/deployed-current.worker.js",
+        "dir": "qnfo-ops",
+        "live": "2.38.21-research-intake-truth",
+        "repo": "2.38.22-unified-open-work",
+        "worker": "qnfo-ops"
+      }
+    ],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -39,6 +47,12 @@
         "live": "1.7.2-vault-indexer-fold",
         "repo": "0.1.21-folded",
         "worker": "personal-companion"
+      },
+      {
+        "dir": "qnfo-ops",
+        "live": "2.38.21-research-intake-truth",
+        "repo": "2.38.22-unified-open-work",
+        "worker": "qnfo-ops"
       }
     ],
     "live_err": [],
@@ -408,7 +422,7 @@
       }
     ],
     "scope": "all",
-    "sync": 37,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -544,11 +558,6 @@
         "dir": "qnfo-observability",
         "version": "1.2.12-chain-draining",
         "worker": "qnfo-observability"
-      },
-      {
-        "dir": "qnfo-ops",
-        "version": "2.38.21-research-intake-truth",
-        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -1280,11 +1289,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.21-research-intake-truth",
+      "before": "2.38.22-unified-open-work",
       "http": 200,
       "live": "2.38.21-research-intake-truth",
-      "match": 1,
-      "note": "SYNC",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
