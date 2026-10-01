@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.30-secret-lock-budget-checkpoint-intake";
+var VERSION = "2.38.31-phase-a-frontier-routing";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -118,9 +118,15 @@ var WAI_PASSTHROUGH = { "pareto": "unbiased/pareto", "qwen3.8-max": "alibaba/qwe
 var OPS_PUBLIC_MODEL = "ops";
 var OPS_PUBLIC_ALIAS = { "ops": 1, "ops-exec": 1, "ops-frontier": 1, "ops-frontier-mini": 1, "ops-frontier-reason": 1 };
 var OPS_EXEC_MODELS = {
-  "ops-frontier": "openai/gpt-5.5",
-  "ops-frontier-mini": "openai/gpt-5.5",
-  "ops-frontier-reason": "openai/gpt-5.5",
+  // BUSINESS-PLAN-PHASE-A-1 (2026-10-01, #1683): the legacy frontier aliases ran the agent loop on openai/gpt-5.5,
+  // the single largest gateway line ($82.49/7d over 878 requests, 15% of them 429-throttled; GraphQL
+  // aiGatewayRequestsAdaptiveGroups via cf-ops-actions). docs/BUSINESS-PLAN.md Phase A step 1 routes ops-exec /
+  // ops-frontier agent traffic off gpt-5.5 onto deepseek-class models. deepseek-v4-pro is the T2 rung that passed
+  // the ops tool-schema canary (see the COST-ROUTING-STACK-1 ladder above) and is already UPSTREAM_MODEL_FB.
+  // An explicitly named OpenAI model (gpt-5.6-*, gpt-5-codex, ...) still routes as asked.
+  "ops-frontier": "deepseek/deepseek-v4-pro",
+  "ops-frontier-mini": "deepseek/deepseek-v4-pro",
+  "ops-frontier-reason": "deepseek/deepseek-v4-pro",
   "gpt-5.1-codex": "openai/gpt-5.1-codex",
   "gpt-5.3-codex": "openai/gpt-5.3-codex",
   "gpt-5-codex": "openai/gpt-5-codex",
@@ -277,7 +283,7 @@ var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:the
 var CONTINUE_DIRECTIVE = "You ended your turn with a PROGRESS REPORT and a promise of future work instead of a finished deliverable. That is a contract violation. Do the promised work NOW in this same turn: call the next tool(s) immediately and keep going until the task is fully complete. Do NOT narrate what you are about to do. Only end your turn when you are delivering the final completed result (or an explicit 'INCOMPLETE: <what remains and why>' line when genuinely blocked).";
 var OPS_EXEC_LOOP_LIMITS = ["pure server-side execution: client-supplied tools are NOT dispatched back to the caller", "execution scope is the Cloudflare Workers runtime only (no real subprocess/VM/firecracker)", "no vision/image input"];
 var OPS_RELAY_LIMITS = ["pass-through relay only: does NOT execute code or tools server-side", "no ops agent tool loop (no shell_exec/ops_d1_query/etc.)", "client-supplied tools are relayed back to the caller, not executed here"];
-var OPS_ALIAS_LIMITATIONS = ["alias of ops-frontier: identical agent loop AND identical upstream (openai/gpt-5.5)", "the ops-frontier / ops-frontier-mini / ops-frontier-reason ids are NOT behaviourally distinct today"];
+var OPS_ALIAS_LIMITATIONS = ["alias of ops-frontier: identical agent loop AND identical upstream (deepseek/deepseek-v4-pro)", "the ops-frontier / ops-frontier-mini / ops-frontier-reason ids are NOT behaviourally distinct today"];
 var OPS_ALIAS_LIMITS = OPS_ALIAS_LIMITATIONS;
 var OPS_ENDPOINT_LIMITATIONS = ["single model, server-side agentic tool loop - client-supplied tools are not dispatched back to the caller", "code/tool execution is confined to the Cloudflare Workers/Containers runtime; no arbitrary host shell or host filesystem", "no vision/image input", "model routing (provider/upstream/tier) is a back-end concern and is never exposed", "logs only to qnfo-audit (ops_ai_log/cloud_ops_events); never writes research or personal stores"];
 function opsModelIds() {
