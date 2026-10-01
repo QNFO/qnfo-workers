@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.14.1-intent-intake"; /* TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.14.2-metric-feed-publications"; /* METRIC-FEED-PUBLICATIONS-1 (1742); 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -4047,6 +4047,22 @@ async function publishFeeds(env, v) {
     });
   } catch (e) {
     out.registry = false;
+  }
+  // METRIC-FEED-PUBLICATIONS-1 (#1742): full_reports_live_30d and publications_30d name living-paper.papers as their
+  // source of truth, but nothing wrote them after 2026-09-29, so they read 3100 min stale against a 1440 min cadence
+  // while papers were publishing. This feed already holds the LIVING binding, so it measures both with the exact
+  // formulas the registry rows declare. A query that fails leaves the row untouched and is reported, never invented.
+  if (env.LIVING) {
+    try {
+      const pm = await env.LIVING.prepare("SELECT COUNT(*) AS pubs, SUM(CASE WHEN length(body_md) >= 5000 THEN 1 ELSE 0 END) AS reports FROM papers WHERE status='published' AND created_at >= date('now','-30 day')").first();
+      if (pm && pm.pubs != null) {
+        const okPub = await upd("publications_30d", pm.pubs);
+        const okRep = await upd("full_reports_live_30d", pm.reports || 0);
+        out.publication_metrics = { publications_30d: Number(pm.pubs), full_reports_live_30d: Number(pm.reports || 0), written: okPub && okRep };
+      }
+    } catch (e) {
+      out.publication_metrics_error = String(e && e.message || e).slice(0, 120);
+    }
   }
   const d = v.decision;
   const key = d.verdict + "/" + (d.risk || "-") + "/" + d.basis;
