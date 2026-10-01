@@ -248,6 +248,46 @@ RETIRED_APPLIERS = [
         "script": "container-start-race-patch.py",
         "evidence": ("qnfo-containers-pilot/worker.js", "this._starting = this._doStart()"),
         "reason": "superseded: ensureStarted() carries the in-flight start promise (the START-RACE-1 fix) without its marker",
+    },    # APPLIER-RETIRE-4 (2026-10-01, issues 1533-1542): each verified against its target file.
+    {
+        "script": "applier-classify-signature-and-retire-patch.py",
+        "evidence": ("scripts/apply-pending-patches.py", "APPLIER-CLASSIFY-SIGNATURE-2"),
+        "reason": "superseded: classify() carries APPLIER-CLASSIFY-SIGNATURE-2 and the retire lifecycle landed as APPLIER-RETIRE-2 (issue 1533)",
+    },
+    {
+        "script": "applier-doctor-outcome-all-clean-patch.py",
+        "evidence": ("scripts/applier-doctor.py", "OUTCOME-ALL-1: markers, when declared, are the authoritative outcome signal"),
+        "reason": "superseded: both OUTCOME-ALL-2 edits (assigned marker authoritative in declared_markers; ALL-of semantics in outcome_present) are in applier-doctor.py as OUTCOME-ALL-1 (issue 1534)",
+    },
+    {
+        "script": "cf-worker-deploy-preserve-meta-patch.py",
+        "evidence": ("qnfo-ops/worker.js", "PRESERVE-WORKER-METADATA-2"),
+        "reason": "superseded: opsDeploy preserves worker-level metadata (compat date/flags, containers) as PRESERVE-WORKER-METADATA-2 (issue 1536)",
+    },
+    {
+        "script": "patch-container-binding-guard-1.py",
+        "evidence": ("qnfo-containers-pilot/worker.js", "CONTAINER-CONFIG-MISSING-1"),
+        "reason": "superseded: ensureStarted() and _doStart() both guard a missing ctx.container as CONTAINER-CONFIG-MISSING-1 (issue 1538)",
+    },
+    {
+        "script": "dashboard-drift-failclosed-patch.py",
+        "evidence": ("qnfo-fleet-dashboard/worker.js", "DRIFT-FAILCLOSED-1"),
+        "reason": "landed: DRIFT-FAILCLOSED-1 is in the dashboard; only the applier's own self-postcondition marker is absent (issue 1539)",
+    },
+    {
+        "script": "patch-container-binding-repair-1.py",
+        "evidence": ("scripts/restore_container_config.py", "keep_bindings"),
+        "reason": "superseded: RESTORE-5 sends every binding explicitly with keep_bindings for the secret, which is the repair this applier made (issue 1540)",
+    },
+    {
+        "script": "patch-container-exports-map-1.py",
+        "evidence": ("scripts/restore_container_config.py", "S1-exports-dict-sqlite"),
+        "reason": "superseded: exports is sent as the dict-keyed shape (strategy S1-exports-dict-sqlite, accepted live 2026-10-01) (issue 1541)",
+    },
+    {
+        "script": "patch-cron-only-class.py",
+        "evidence": ("scripts/deploy-drift-guard.py", "CRON_ONLY"),
+        "reason": "superseded: deploy-drift-guard.py classifies cron-only workers as CRON_ONLY instead of NO_HEALTH_ROUTE (issue 1542)",
     },
 ]
 

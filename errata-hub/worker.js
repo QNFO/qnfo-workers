@@ -1,6 +1,13 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.1.1"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.1.2"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+// MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
+// so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
+// 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
+// is now a named constant referenced by its /health and run reports.
+var WATCH_VERSION = "0.2.1";
+var RESPOND_VERSION = "0.4.1";
+var PUBLISH_VERSION = "0.7.1-relid-fix";
 var erratawatchMod = (function(){
 const QNFO_VERSION = "qnfo-errata-watch/fabric-20260910";
 var __defProp = Object.defineProperty;
@@ -81,7 +88,7 @@ async function runCheck(env, mode) {
   if (!dry && maxId > lastId) {
     await db.prepare("INSERT INTO errata_watch (key, value) VALUES ('last_email_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(maxId)).run();
   }
-  return { ok: true, worker: "qnfo-errata-watch", version: "0.2.1", dry, model: MODEL, lastEmailId: lastId, advancedTo: maxId, scanned: rows.length, classified, detectedCount: detected.length, detected };
+  return { ok: true, worker: "qnfo-errata-watch", version: WATCH_VERSION, dry, model: MODEL, lastEmailId: lastId, advancedTo: maxId, scanned: rows.length, classified, detectedCount: detected.length, detected };
 }
 __name(runCheck, "runCheck");
 var worker_default = {
@@ -91,7 +98,7 @@ var worker_default = {
       return json({ error: "unauthorized" }, 401);
     }
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: "qnfo-errata-watch", version: "0.2.1", bindings: { ai: !!env.AI, d1: !!env.WATCH_DB, auth: !!env.ERRATA_TOKEN }, model: MODEL });
+      return json({ ok: true, worker: "qnfo-errata-watch", version: WATCH_VERSION, bindings: { ai: !!env.AI, d1: !!env.WATCH_DB, auth: !!env.ERRATA_TOKEN }, model: MODEL });
     }
     if (url.pathname === "/run/check") {
       const mode = url.searchParams.get("mode") || "dry";
@@ -306,7 +313,7 @@ async function runRespond(env, mode) {
       results.push({ item_id: it.id, error: e.message });
     }
   }
-  return { ok: true, worker: "qnfo-errata-respond", version: "0.4.1", dry, processed: rows.length, results };
+  return { ok: true, worker: "qnfo-errata-respond", version: RESPOND_VERSION, dry, processed: rows.length, results };
 }
 __name(runRespond, "runRespond");
 var worker_default = {
@@ -316,7 +323,7 @@ var worker_default = {
       return json({ error: "unauthorized" }, 401);
     }
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: "qnfo-errata-respond", version: "0.4.1", bindings: { ai: !!env.AI, watch: !!env.WATCH_DB, papers: !!env.PAPERS_DB, send_email: !!env.SEND_EMAIL, auth: !!env.ERRATA_TOKEN }, model: MODEL });
+      return json({ ok: true, worker: "qnfo-errata-respond", version: RESPOND_VERSION, bindings: { ai: !!env.AI, watch: !!env.WATCH_DB, papers: !!env.PAPERS_DB, send_email: !!env.SEND_EMAIL, auth: !!env.ERRATA_TOKEN }, model: MODEL });
     }
     if (url.pathname === "/debug/zenodo") {
       const doi = url.searchParams.get("doi") || "";
@@ -21523,7 +21530,7 @@ async function runPublish(env, mode) {
       results.push({ action_id: a.id, error: e.message });
     }
   }
-  return { ok: true, worker: "qnfo-errata-publish", version: "0.7.1-relid-fix", dry, processed: rows.length, results };
+  return { ok: true, worker: "qnfo-errata-publish", version: PUBLISH_VERSION, dry, processed: rows.length, results };
 }
 __name(runPublish, "runPublish");
 __name2(runPublish, "runPublish");
@@ -21535,7 +21542,7 @@ var publish_worker_src_default = {
       return json({ error: "unauthorized" }, 401);
     }
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: "qnfo-errata-publish", version: "0.7.1-relid-fix", bindings: { zenodo: !!env.ZENODO_TOKEN, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
+      return json({ ok: true, worker: "qnfo-errata-publish", version: PUBLISH_VERSION, bindings: { zenodo: !!env.ZENODO_TOKEN, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
     }
     if (url.pathname === "/debug/pdf") {
       try {
