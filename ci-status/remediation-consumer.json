@@ -1,34 +1,34 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@e073273dada0",
+ "verifier": "remediation-consumer@452318fbc96e",
  "due": 4,
- "pass": 4,
- "fail": 0,
+ "pass": 2,
+ "fail": 2,
  "skipped": 0,
  "contracts": [
   {
-   "class": "EVID-1699-BUDGET",
-   "issue_id": 1699,
-   "verdict": "pass",
-   "expected": "unified-measured",
-   "observed": "unified-measured",
+   "class": "EVID-1620-PUBLISH",
+   "issue_id": 1620,
+   "verdict": "fail",
+   "expected": "published",
+   "observed": "pending",
    "written": true
   },
   {
-   "class": "EVID-1680-WATCH",
-   "issue_id": 1680,
-   "verdict": "pass",
-   "expected": "within-band",
-   "observed": "within-band",
+   "class": "EVID-1504-REVISE",
+   "issue_id": 1504,
+   "verdict": "fail",
+   "expected": "revise-ok",
+   "observed": "pending",
    "written": true
   },
   {
-   "class": "EVID-1696-WATCH",
-   "issue_id": 1696,
+   "class": "EVID-1681-ATTR",
+   "issue_id": 1681,
    "verdict": "pass",
-   "expected": "within-band",
-   "observed": "within-band",
+   "expected": "attributed",
+   "observed": "attributed",
    "written": true
   },
   {
@@ -55,7 +55,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 11681,
- "head": "e073273dada0b453535aa40db6a0f32dd68a5de2",
+ "spent_ms": 11273,
+ "head": "452318fbc96e525f9f21e06caf0ece13e97101f8",
  "job_status": "success"
 }
