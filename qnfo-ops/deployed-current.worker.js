@@ -1564,6 +1564,15 @@ async function researchQueue(env, args) {
     expressed = { ok: true, skipped: true, reason: "express=false" };
   } else if (!env.QNFO_INTENT || !env.INTENT_TOKEN) {
     expressed = { ok: false, skipped: true, reason: "INTENT_TOKEN / QNFO_INTENT not configured on qnfo-ops (set INTENT_TOKEN secret to enable pipeline feed)" };
+  } else if (await (async function() {
+    // RESEARCH-INTAKE-IDEMPOTENT-1 (#1189): idempotency key = identical desire text. A caller retry after an
+    // aborted attempt must not create a second row, so an existing intent from the last 24h short-circuits.
+    try {
+      if (!env.QNFO_AUDIT) return null;
+      return await env.QNFO_AUDIT.prepare("SELECT id, status, created_at FROM intents WHERE desire = ?1 AND created_at > datetime('now','-1 day') ORDER BY created_at DESC LIMIT 1").bind(idea.slice(0, 4e3)).first();
+    } catch (e) { return null; }
+  })().then(function(r) { if (r) expressed = { ok: true, persisted: true, deduped: true, intent_id: r.id, intent_status: r.status }; return !!r; })) {
+    // deduped: nothing more to send
   } else {
     try {
       const ctrl = new AbortController();

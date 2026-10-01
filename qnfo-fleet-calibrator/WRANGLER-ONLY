@@ -1,1 +1,0 @@
-never deployed; declares D1/R2/KV/Vectorize bindings that the canonical binding-preserving PUT cannot create (CF API 400 in canonical-deploy run 36842708566, issue 254); first deploy needs wrangler and the RUN_SECRET secret. Remove this file after that first deploy.
