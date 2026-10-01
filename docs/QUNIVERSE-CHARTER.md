@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.3, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification, same day). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.4, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -107,12 +107,12 @@ roadmap item names one. The keys are the contract: `scripts/charter-guard.py` fa
 | Pillar | Name | Objective | Graded by | Serves (roadmap artifact types) |
 |---|---|---|---|---|
 | `core` | Smallest verified core | mission | worker_count, drift_total, probe_coverage_pct, deploy_freshness_h, cron_compliance, guard_rcs | core, gate |
-| `autonomy` | Human as override, never dependency | objective-function | open_agent_issues, fleet_context_tokens, autonomy composite | autonomy, governance, observability |
+| `autonomy` | Human as override, never dependency | objective-function | open_agent_issues, fleet_context_tokens, portfolio_hygiene (synthetic: last portfolio sync, target >= 0.9), autonomy composite | autonomy, governance, observability |
 | `research` | Research that is read and cited | return-on-spend | publications_30d, full_reports_live_30d, zenodo_versions_per_flagship, indexed_surface | research-product |
 | `reach` | Credible reach | return-on-spend | distribution_posts_30d, subscribers_growth_monthly, pageviews_30d, referral_30d, external_impact_per_dollar, zenodo_views_total | impact, web |
 | `cost` | Cost that returns | cost-ceiling | cost_usd_30d, workers_ai_cost_30d_usd, gateway_cap_30d_usd, cost_per_successful_task_by_class, workers_ai_attribution_coverage_pct | cost |
-| `security` | A trust boundary that holds | mission | open SEC-* issues (no registry metric yet; see roadmap H1) | security |
-| `personal` | Personal utility layer | mission | none (owner infrastructure, outside the research P&L) | personal |
+| `security` | A trust boundary that holds | mission | security_open_issues (synthetic: open SEC-* or category `security` issues, target 0) | security |
+| `personal` | Personal utility layer | mission | personal_mvp_serving (synthetic: qnfo-email, personal-api, calendar-api serving, target 3 of 3; outside the research P&L) | personal |
 <!-- CHARTER-PILLARS:END -->
 
 ### 3.3 Value-add, by whom it is for
@@ -343,6 +343,13 @@ close-evidence trigger) and stated here for the rest.
   same register: tier, charter pillar, WBS codes, hygiene. It runs from the kernel's hourly cron when its last sync is
   older than 20 hours, writes `portfolio_repos`, and regenerates `docs/PORTFOLIO.md`, `QNFO/.github/PORTFOLIO.md` and
   the index on the organisation profile README. The charter's live block carries its summary line.
+- **The portfolio repairs itself (PORTFOLIO-HYGIENE-1, 1.0.4).** Each sync fixes, on at most 12 repositories, what is
+  deterministic and reversible: a missing LICENSE file (the QNFO Unified License Agreement from `QNFO/license`), an
+  empty description (the README's first paragraph), missing topics (the tier baseline plus the slugs of the programs
+  served) and an empty `program_registry.github_repo` whose slug or code the repository names. Every action is a
+  `portfolio_actions` row, `GET /portfolio` lists the last forty, and `portfolio_hygiene` is graded under the autonomy
+  pillar. Nothing is archived or deleted. Pillars without a registry metric (security, personal) are graded from the
+  same facts the tick reads (CHARTER-GRADE-ALL-PILLARS-1), so no pillar reads "n/a".
 - **No Claude on the path (CLOUD-ONLY-VERIFICATION-1).** Every datum this charter and the portfolio rest on is in D1,
   R2 or GitHub, and every recurring check is a Cloudflare cron. The kernel's hourly LOOP-WATCH-1 reads the two loops'
   own ledgers (`charter_snapshots`, `portfolio_sync_runs`) and files `CHARTER-TICK-STALE-1`, `CHARTER-COMMIT-FAILED-1`,
