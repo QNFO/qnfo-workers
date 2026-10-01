@@ -27,7 +27,7 @@ if (a < 0 || b < 0 || b < a) {
 }
 const sandbox = { VERSION: "0.0.0-test", timedFetch: null, b64encode: null, charterOne: null, charterRows: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, TextDecoder, atob, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER, pfWbsHint, pfTopicsFor, pfDescriptionFromReadme, pfHygienePlan, PF_HYGIENE_MAX, pfNeedsSync, PF_STALE_H, pfScrubProfile, PF_PROFILE_SCRUB };", sandbox, { filename: "portfolio-block.js" });
+vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER, pfWbsHint, pfTopicsFor, pfDescriptionFromReadme, pfHygienePlan, PF_HYGIENE_MAX, pfNeedsSync, PF_STALE_H, pfScrubProfile, PF_PROFILE_SCRUB, pfIsMetadata };", sandbox, { filename: "portfolio-block.js" });
 const P = sandbox.__export;
 const fx = JSON.parse(readFileSync(join(here, "portfolio.fixture.json"), "utf8"));
 const NOW = "2026-10-01T12:00:00.000Z";
@@ -181,6 +181,24 @@ eq(evL.rows.find((r) => r.name === "paper-artifacts").wbs.join(","), "QNFO.TST.0
 eq(evL.rows.find((r) => r.name === "unknown-code").wbs.length, 0, "an unknown code does not link");
 eq(evL.unlinked_research.join(","), "unknown-code", "only the repository with no known code is unlinked");
 eq(P.pfHygienePlan(evL, hintRows).filter((a) => a.action === "wbs-link").length, 0, "a code already linked elsewhere is not re-linked");
+
+
+// --- DESCRIPTION-QUALITY-1 --------------------------------------------------
+eq(P.pfIsMetadata("Status: 20-chapter guide drafted | Phase: P3 (Review) | Started: 2026-05-26 | Updated: 2026-05-26"), true, "a labelled metadata line is not a description");
+eq(P.pfIsMetadata("Author: QNFO Research | Date: 2026-07-29 | Status: Phase 0 — Active"), true, "author/date/status line is metadata");
+eq(P.pfIsMetadata("A Unified Treatise on the Loop, the Tree, and the Constants of Self-Reference"), false, "a sentence is not metadata");
+eq(P.pfIsMetadata("Implements P0 (foundation) of QNFO.CODEPARSE.SCOPE.v1: every instruction, chat, prompt, skill"), false, "a colon inside prose is not a label");
+eq(P.pfDescriptionFromReadme("# Guide\n\n**Status:** drafted | **Phase:** P3 | **Updated:** 2026-05-26\n\n## Identity\n\nA revolutionary beginner's guide to quantum computing that starts with the why."), "A revolutionary beginner's guide to quantum computing that starts with the why.", "the metadata paragraph is skipped and the next real one taken");
+const evR = P.pfEvaluate([
+  { name: "loop-wrote", description: "Status: drafted | Phase: P3 | Updated: 2026-05-26", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" },
+  { name: "person-wrote", description: "Status: drafted | Phase: P3 | Updated: 2026-05-26", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" }
+], [], NOW);
+const planR = P.pfHygienePlan(evR, [], { "loop-wrote": "Status: drafted | Phase: P3 | Updated: 2026-05-26" });
+eq(planR.filter((a) => a.action === "description-revise").map((a) => a.repo).join(","), "loop-wrote", "only a description the loop wrote is revised");
+eq(P.pfHygienePlan(evR, [], { "loop-wrote": "something else the loop wrote earlier" }).filter((a) => a.action === "description-revise").length, 0, "a description changed by a person since is not touched");
+eq(P.pfNeedsSync({ ts: h(1), status: "ok", note: "kernel 1.0.0; wbs:ok; dormant 1; unlinked 0; actions 12 (11 committed)" }, "1.0.0", T0), "last ok run is 1h old", "a run that took actions retries within the hour");
+eq(P.pfNeedsSync({ ts: h(0.5), status: "ok", note: "kernel 1.0.0; actions 12 (11 committed)" }, "1.0.0", T0), null, "but not within 50 minutes");
+eq(P.pfNeedsSync({ ts: h(1), status: "ok", note: "kernel 1.0.0; actions 0 (0 committed)" }, "1.0.0", T0), null, "a run with nothing left to do holds for the day");
 
 console.log(`portfolio.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
