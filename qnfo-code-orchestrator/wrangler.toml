@@ -54,7 +54,9 @@ binding = "AI"
 binding = "LOADER"
 
 [vars]
-JS_VERIFY = "off"
+# JS-VERIFY-AUTO-1: "auto" = the worker probes limits.cpuMs enforcement itself once a day (ops_config key
+# code_orchestrator_dynamic_cpu) and verifies JavaScript only while that measurement says enforced. "off" disables it.
+JS_VERIFY = "auto"
 # PULL-BASED PR PUBLISHING: no GitHub PR-write credential here; verified patches park as status ready_to_publish and
 # .github/workflows/code-task-publish.yml turns them into PRs with the Actions GITHUB_TOKEN.
 PR_PUBLISH_MODE = "pull"

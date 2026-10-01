@@ -1,4 +1,4 @@
-# qnfo-code-orchestrator v0.2.0
+# qnfo-code-orchestrator v0.3.0
 
 ## Self-doc (FLEET-SELF-DOC-1)
 - **Purpose**: orchestrates the QNFO 100%-cloud autonomous code agent. v0.1.1 is the
@@ -54,6 +54,27 @@ existing PR for the branch is adopted). Offline selftest (no network, real git +
 `PR_PUBLISH_MODE=pull` the original code-agent path (`pr_open`) is unchanged. Statuses: `queued | ready_to_publish | publishing | published | publish_failed | pr_open | needs_human | failed`.
 Only a real run verifies: D1 REST access from Actions, `gh pr create` with `GITHUB_TOKEN` (repo setting "Allow GitHub Actions to create pull requests" must be on), and that PRs from `GITHUB_TOKEN` do not auto-start CI.
 
+### v0.3.0: patch mode for large files (PATCH-MODE-1) and self-gated JS verification (JS-VERIFY-AUTO-1)
+Every deployed `worker.js` is larger than the 60,000-char whole-file cap, so until 0.3.0 the loop could not edit any worker.
+- **Patch mode.** The model sees a window of the file and answers with exact `<<<<<<< SEARCH / ======= / >>>>>>> REPLACE` blocks;
+  the worker applies them to the full file. Each SEARCH must occur exactly once in the window, edits may not overlap, at most 8.
+  A wrong SEARCH is a failed attempt whose error is fed back to the next rung of the ladder.
+- **Which mode.** With an `anchor` (a verbatim string near the edit, at most 300 chars, exactly one occurrence): patch mode, window =
+  about 24,000 chars of whole lines around the anchor, files up to 900,000 chars. Without one: up to 12,000 chars whole-file,
+  12,000 to 24,000 patch mode over the whole file, 24,000 to 60,000 whole-file as before, above 60,000 refused (`needs an anchor`).
+- **Anchor intake.** `POST /v1/tasks {repo, path, goal, anchor}`, or a second opt-in line in the issue: `code-anchor: <text>`.
+- **Worker hygiene done by the loop.** For `.js`/`.mjs` the single `VERSION = "x.y.z..."` declaration is bumped to
+  `x.y.(z+1)-codeagent` when the edit left it alone; when `<dir>/deployed-current.worker.js` equals `<dir>/worker.js`, the same
+  hunks are emitted for the mirror. `scripts/code-task-publish.py` accepts exactly the task path plus that mirror, nothing else.
+- **Patch shape.** A minimal unified diff (Myers over lines, 3 context lines), so it still applies after unrelated lines of the file
+  moved on main; a file without a final newline or a change over 600 lines falls back to the whole-file patch.
+- **`JS_VERIFY=auto`** (the shipped setting). Once a day the cron runs the CPU-limit probe and stores the result in
+  `ops_config.code_orchestrator_dynamic_cpu`. The JS syntax verifier is on only while that row says `enforced: true` and is younger
+  than 8 days; otherwise `.js` tasks end `needs_human` as before. `/health` reports `js_verify: auto-on | auto-off`.
+  It proves SYNTAX only; CI on the pull request is the behaviour gate, and nothing here merges.
+- **Limits that remain.** One file (plus its mirror) per task; no verifier that runs tests; the window must contain everything the
+  model needs; no self-merge.
+
 ### Status (what is and is not true)
 - **Verified offline** (`node --no-warnings qnfo-code-orchestrator/test-loop.mjs`, 35 assertions, also run in CI as `code-loop-test`):
   the whole state machine against real SQL and real `python3`, model escalation with error feedback, lease resume + FIFO, policy
@@ -63,7 +84,11 @@ Only a real run verifies: D1 REST access from Actions, `gh pr create` with `GITH
   `globalOutbound:null` blocks fetch. **Local workerd did NOT enforce `limits.cpuMs`** (a top-level `while(true){}` hung), so the
   verifier races a 4 s wall clock and ships OFF. The test's fake `LOADER` replays those real error strings; it is not workerd.
 - **Verified live (2026-10-01)**: this worker is deployed (`GET /health` reports version 0.2.4 with the AI, AUDIT_DB and container bindings) and one task, `ct_smoke20261001a`, ran read -> propose -> verify -> ready_to_publish -> published on live Cloudflare and was delivered as pull request 297 through `code-task-publish.yml`.
-- **NOT verified**: real LLM output quality beyond that one-line smoke edit, CPU-limit enforcement on the real platform (so `JS_VERIFY` stays off), and any JavaScript file or any file over 60,000 characters (no deterministic verifier is enabled for them, so no deployed worker source can be edited by this loop yet).
+- **Verified live (2026-10-01)**: this worker is deployed (`GET /health`) and tasks `ct_smoke20261001a` and `ct_ge5mddlm9z6915` ran
+  read -> propose -> verify -> ready_to_publish -> published on live Cloudflare and were delivered as pull requests 297 and 368
+  through `code-task-publish.yml`. `ct_readme20261001b` failed live and exposed FENCE-IN-FILE-1 (fixed in 0.2.6).
+- **NOT verified live**: patch mode and `JS_VERIFY=auto` (0.3.0, offline tests only), real LLM output quality beyond one-line edits,
+  and CPU-limit enforcement on the real platform (the worker now measures it itself; see below).
 - **Not built**: GitHub webhook wake-up (CI/review events resuming a task), multi-file edits, a verifier that RUNS tests, the
   `qnfo-code-agent` deploy. Deploy must use a wrangler workflow (this worker has `[[containers]]` + a Durable Object; the canonical `/content` PUT destroys those bindings, see `qnfo-containers-pilot/RETRIGGER-4-DO-BINDING-LOST.md`), and `qnfo-code-agent` needs a GitHub credential with PR-write.
 
