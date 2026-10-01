@@ -366,15 +366,14 @@ var worker_default = {
     const plane = url.searchParams.get("plane") || "qnfo";
     if (!PLANES.includes(plane)) return json({ error: "plane must be qnfo|personal" }, 400);
     if (path === "/health") {
+      // PERSONAL-ICS-AUTH-1 (2026-10-01): the tokenised feed URLs are capability links, so /health
+      // only returns them to a caller holding CAL_TOKEN.
       const urls = [];
-      for (const p of PLANES) {
+      for (const p of authorized(request, env) ? PLANES : []) {
         const tok = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + p).first();
         urls.push({ plane: p, url: tok && tok.v ? R2_PUBLIC + "/calendar/" + p + "-" + tok.v + ".ics" : null });
       }
-      // CAL-PERSONAL-FEED-1 (2026-10-01, PERSONAL-QNFO-SEPARATION-1): the public /health printed the personal plane's
-      // tokenised R2 feed URL, which made that "unguessable" calendar public. Only the qnfo feed URL is shown now.
-      for (const _u of urls) if (_u.plane !== "qnfo") _u.url = _u.url ? "(token-gated; not shown on the public health route)" : null;
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN or its feed token)", "ICS feeds are republished to R2 by the hourly :17 cron", "two planes only: qnfo and personal"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN), and /health lists feed URLs only to a CAL_TOKEN caller", "ICS feeds are republished to R2 by the hourly :17 cron", "two planes only: qnfo and personal"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
     }
     if (path === "/publish") {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
@@ -396,12 +395,8 @@ var worker_default = {
       return json({ ok: true, version: VERSION, vault: !!env.VAULT, notes: t && t.c || 0, triage: tt && tt.c || 0, publish_pending: q && q.c || 0, recent_runs: runs.results || [] });
     }
     if (path === "/events.ics") {
-      // CAL-PERSONAL-FEED-1: anonymous /events.ics?plane=personal returned the owner's personal calendar (50 events on
-      // 2026-10-01). The personal plane now needs the CAL_TOKEN bearer or its own feed token (?token=), as the R2 feed does.
-      if (plane !== "qnfo" && !authorized(request, env)) {
-        const _ft = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + plane).first();
-        if (!_ft || !_ft.v || !tokenEq(url.searchParams.get("token") || "", String(_ft.v))) return json({ error: "unauthorized: the " + plane + " plane feed needs CAL_TOKEN or its feed token" }, 401);
-      }
+      // PERSONAL-ICS-AUTH-1: the personal plane needs CAL_TOKEN; subscribe to it via the tokenised R2 URL.
+      if (plane === "personal" && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
       const fromIso = toIso(url.searchParams.get("from")) || new Date(Date.now() - 864e5).toISOString();
       const ics = await buildICS(env, plane, fromIso);
       return new Response(ics, { headers: { "content-type": "text/calendar; charset=utf-8" } });

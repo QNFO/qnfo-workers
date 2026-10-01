@@ -2,7 +2,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // HUB-VERSION-SCOPE-1 (2026-09-23): radar-hub's OWN version, at MODULE scope so the hub's
 // `export default` can read it. Each embedded sub-worker IIFE declares its own `VERSION`
 // inside its own scope; a bare reference from module scope throws ReferenceError.
-var VERSION = "1.0.11";
+var VERSION = "1.1.2";
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1326,6 +1326,211 @@ return { default: worker_default };
 //# sourceMappingURL=worker.js.map
 
 
+// MENTION-RADAR-1 begin
+// MENTION-RADAR-1 (2026-10-01, #1641 EXTERNAL-MENTION-MONITOR-EMPTY-1; charter pillar: reach; STRATEGY 6.1 "Mentions").
+// Daily discovery of third-party references to the owner's work from free, keyless public APIs:
+//   openalex  works that cite an OpenAlex work of ORCID 0009-0002-4317-5604 (cites: filter)
+//   datacite  DataCite records whose relatedIdentifiers cite/reference one of the owner's Zenodo DOIs (10.5281/zenodo.*)
+//   bluesky   app.bsky.feed.searchPosts for qnfo.org / papers.qnfo.org links and the name "Quni-Gudzinas"
+//   hn        Hacker News Algolia search for qnfo (whole word), qnfo.org urls and "Quni-Gudzinas"
+// Crossref Event Data is not used: the service was retired, and Zenodo DOIs are DataCite DOIs anyway.
+// Self-references are excluded (owner ORCID, owner names, the QNFO label, the owner's Bluesky DIDs).
+// Dedupe: the stable key is the canonical url (https://doi.org/<lowercased doi>, https://bsky.app/profile/<did>/post/<rkey>,
+// https://news.ycombinator.com/item?id=<id> for comments, the same url rule qnfo-cloud-ops jobRadar uses for hn). A url
+// already present in external_mentions under any source is not written again (UNIQUE(source, url) plus NOT EXISTS on url).
+// reach_signals: one row per channel per UTC day, source 'mention-radar', entity site/qnfo, metric 'mentions' (rows of that
+// source first seen that day, recomputed from D1 so a rerun is idempotent) and 'mentions_visible' (distinct external mentions
+// the API returned). A source whose API failed writes NO reach_signals row: a failure is a gap, never a zero.
+var mentionMod = (function(){
+  var ORCID = "0009-0002-4317-5604";
+  var SELECTED_DOIS = ["10.5281/zenodo.21637028", "10.5281/zenodo.22261547", "10.5281/zenodo.21821767", "10.5281/zenodo.21945415", "10.5281/zenodo.21901984", "10.5281/zenodo.22026592", "10.5281/zenodo.23079905"];
+  // qnfo.bsky.social, its Mastodon bridge, and the owner's personal account (qvers.bsky.social).
+  var SELF_DIDS = ["did:plc:vad2yeqflg5uznmp557zge5c", "did:plc:veqmjot4gx3e7vz644mjtgyv", "did:plc:t57gdiqaqydoacnyjptth64f"];
+  var SELF_NAME = /quni|gudzinas|\bqnfo\b/i;
+  var CITE_REL = /^(cites|references|reviews|isderivedfrom|issupplementto|continues|compiles)$/i;
+  var REQ = { headers: { "User-Agent": "QNFO-mention-radar/1.0 (+https://qnfo.org; mailto:qnfo@qnfo.org)", "Accept": "application/json" } };
+  var OA = "https://api.openalex.org/works";
+  var MAILTO = "&mailto=qnfo%40qnfo.org";
+
+  function day(d) { return (d || new Date()).toISOString().slice(0, 10); }
+  function normDoi(s) { return String(s || "").trim().toLowerCase().replace(/^https?:\/\/(dx\.)?doi\.org\//, "").replace(/^doi:/, ""); }
+  function errStr(e) { return "error:" + String((e && e.message) || e).slice(0, 80); }
+  function clip(s, n) { return String(s == null ? "" : s).replace(/\s+/g, " ").trim().slice(0, n); }
+  async function getJson(f, url) {
+    var r = await f(url, REQ);
+    if (!r || !r.ok) throw new Error("http " + (r ? r.status : "none"));
+    return r.json();
+  }
+  function chunk(a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; }
+
+  async function ownerDois(env) {
+    var set = new Set(SELECTED_DOIS);
+    try {
+      var r = await env.AUDIT.prepare("SELECT DISTINCT lower(doi) AS doi FROM citation_stats WHERE lower(doi) LIKE '10.5281/zenodo.%' LIMIT 400").all();
+      for (var x of (r.results || [])) if (x.doi) set.add(normDoi(x.doi));
+    } catch (e) {}
+    return Array.from(set);
+  }
+
+  // ---- openalex
+  async function srcOpenAlex(f) {
+    var ids = new Map(), cursor = "*";
+    for (var p = 0; p < 5 && cursor; p++) {
+      var j = await getJson(f, OA + "?filter=author.orcid:" + ORCID + "&select=id,doi&per-page=200&cursor=" + encodeURIComponent(cursor) + MAILTO);
+      for (var w of (j.results || [])) if (w.id) ids.set(String(w.id).replace("https://openalex.org/", ""), normDoi(w.doi));
+      cursor = j.meta && j.meta.next_cursor;
+      if (!(j.results || []).length) break;
+    }
+    var out = [];
+    for (var group of chunk(Array.from(ids.keys()), 50)) {
+      var cur = "*";
+      for (var q = 0; q < 3 && cur; q++) {
+        var jj = await getJson(f, OA + "?filter=cites:" + group.join("|") + "&select=id,doi,display_name,authorships,referenced_works,publication_date,cited_by_count&per-page=200&cursor=" + encodeURIComponent(cur) + MAILTO);
+        for (var c of (jj.results || [])) {
+          var auths = c.authorships || [];
+          var self = auths.some(function(a) { var au = a.author || {}; return String(au.orcid || "").indexOf(ORCID) >= 0 || SELF_NAME.test(au.display_name || "") || SELF_NAME.test(a.raw_author_name || ""); });
+          if (self) continue;
+          var cited = (c.referenced_works || []).map(function(r) { return String(r).replace("https://openalex.org/", ""); }).filter(function(r) { return ids.has(r); }).map(function(r) { return ids.get(r) || r; });
+          var doi = normDoi(c.doi);
+          out.push({ source: "openalex-cites", url: doi ? "https://doi.org/" + doi : String(c.id || ""), title: clip("cites " + (cited.join(", ") || "owner work") + ": " + (c.display_name || ""), 180), author: clip(auths.slice(0, 3).map(function(a) { return (a.author && a.author.display_name) || a.raw_author_name || ""; }).join("; "), 180), score: Number(c.cited_by_count) || 0, created: c.publication_date || "" });
+        }
+        cur = jj.meta && jj.meta.next_cursor;
+        if (!(jj.results || []).length) break;
+      }
+    }
+    return out;
+  }
+
+  // ---- datacite
+  async function srcDataCite(f, dois) {
+    var own = new Set(dois), out = [];
+    for (var group of chunk(dois, 15)) {
+      var gset = new Set(group);
+      var q = "relatedIdentifiers.relatedIdentifier:(" + group.map(function(d) { return "\"" + d + "\""; }).join(" OR ") + ")";
+      var url = "https://api.datacite.org/dois?query=" + encodeURIComponent(q) + "&" + encodeURIComponent("page[size]") + "=100&" + encodeURIComponent("fields[dois]") + "=doi,creators,titles,relatedIdentifiers,published,created";
+      for (var p = 0; p < 3 && url; p++) {
+        var j = await getJson(f, url);
+        for (var d of (j.data || [])) {
+          var a = d.attributes || {}, doi = normDoi(a.doi || d.id);
+          if (!doi || own.has(doi)) continue;
+          var creators = a.creators || [];
+          var self = creators.some(function(c) { return SELF_NAME.test(c.name || "") || SELF_NAME.test(c.familyName || "") || (c.nameIdentifiers || []).some(function(n) { return String(n.nameIdentifier || "").indexOf(ORCID) >= 0; }); });
+          if (self) continue;
+          var cited = (a.relatedIdentifiers || []).filter(function(r) { return CITE_REL.test(r.relationType || "") && gset.has(normDoi(r.relatedIdentifier)); }).map(function(r) { return normDoi(r.relatedIdentifier); });
+          if (!cited.length) continue;
+          var t = (a.titles && a.titles[0] && a.titles[0].title) || "";
+          out.push({ source: "datacite-cites", url: "https://doi.org/" + doi, title: clip("cites " + cited.join(", ") + ": " + t, 180), author: clip(creators.slice(0, 3).map(function(c) { return c.name || ""; }).join("; "), 180), score: 0, created: String(a.published || a.created || "") });
+        }
+        url = j.links && j.links.next;
+      }
+    }
+    return out;
+  }
+
+  // ---- bluesky
+  var BSKY_QUERIES = ["qnfo.org", "papers.qnfo.org", "\"Quni-Gudzinas\""];
+  async function srcBluesky(f) {
+    var out = [];
+    for (var q of BSKY_QUERIES) {
+      var j = await getJson(f, "https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=" + encodeURIComponent(q) + "&limit=100&sort=latest");
+      for (var p of (j.posts || [])) {
+        var a = p.author || {}, rec = p.record || {};
+        if (SELF_DIDS.indexOf(a.did) >= 0 || /qnfo/i.test(a.handle || "") || SELF_NAME.test(a.displayName || "")) continue;
+        var blob = String(rec.text || "") + " " + JSON.stringify(rec.facets || []) + " " + JSON.stringify(rec.embed || p.embed || {});
+        if (!/qnfo\.org/i.test(blob) && !/quni-gudzinas/i.test(blob)) continue;
+        var rkey = String(p.uri || "").split("/").pop();
+        if (!a.did || !rkey) continue;
+        out.push({ source: "bluesky", url: "https://bsky.app/profile/" + a.did + "/post/" + rkey, title: clip(rec.text || "(post)", 180), author: clip(a.handle || a.did, 180), score: (p.likeCount || 0) + (p.repostCount || 0) + (p.replyCount || 0) + (p.quoteCount || 0), created: rec.createdAt || p.indexedAt || "" });
+      }
+    }
+    return out;
+  }
+
+  // ---- hacker news (same url rule as qnfo-cloud-ops jobRadar, so the two writers dedupe on (hn, url))
+  var HN_QUERIES = [
+    "https://hn.algolia.com/api/v1/search?query=qnfo&tags=(story,comment)&hitsPerPage=50&typoTolerance=false",
+    "https://hn.algolia.com/api/v1/search?query=qnfo.org&restrictSearchableAttributes=url&hitsPerPage=50&typoTolerance=false",
+    "https://hn.algolia.com/api/v1/search?query=%22Quni-Gudzinas%22&tags=(story,comment)&hitsPerPage=50&typoTolerance=false"
+  ];
+  async function srcHn(f) {
+    var out = [];
+    var hit = function(s) { return /\bqnfo\b/i.test(String(s || "")) || /quni-gudzinas/i.test(String(s || "")); };
+    for (var q of HN_QUERIES) {
+      var j = await getJson(f, q);
+      for (var h of (j.hits || [])) {
+        var u = h.story_url || h.url || "https://news.ycombinator.com/item?id=" + h.objectID;
+        if (!hit(h.title) && !hit(h.story_title) && !hit(u) && !hit(h.comment_text) && !hit(h.story_text)) continue;
+        out.push({ source: "hn", url: h.comment_text ? "https://news.ycombinator.com/item?id=" + h.objectID : u, title: clip(h.title || h.story_title || "comment", 180), author: clip(h.author || "", 180), score: h.points || 0, created: h.created_at || "" });
+      }
+    }
+    return out;
+  }
+
+  var CHANNELS = [
+    { channel: "openalex", source: "openalex-cites", quality: "human", run: function(f, dois) { return srcOpenAlex(f); } },
+    { channel: "datacite", source: "datacite-cites", quality: "human", run: function(f, dois) { return srcDataCite(f, dois); } },
+    { channel: "bluesky", source: "bluesky", quality: "unknown", run: function(f) { return srcBluesky(f); } },
+    { channel: "hn", source: "hn", quality: "unknown", run: function(f) { return srcHn(f); } }
+  ];
+
+  async function run(env, opts) {
+    opts = opts || {};
+    var f = opts.fetch || ((u, i) => fetch(u, i));
+    var now = opts.now || new Date(), today = day(now), iso = now.toISOString();
+    var db = env.AUDIT || env.RADAR_DB || env.AUDIT_DB;
+    if (!db) return { status: "error", error: "no AUDIT binding" };
+    var dois = await ownerDois({ AUDIT: db });
+    var sources = {}, written = {}, signals = 0;
+    for (var ch of CHANNELS) {
+      var list;
+      try { list = await ch.run(f, dois); }
+      catch (e) { sources[ch.channel] = errStr(e); continue; }
+      var seen = new Map();
+      for (var m of list) if (m.url && !seen.has(m.url)) seen.set(m.url, m);
+      sources[ch.channel] = "ok:" + seen.size;
+      var added = 0;
+      for (var mm of seen.values()) {
+        try {
+          var r = await db.prepare("INSERT OR IGNORE INTO external_mentions (ts, source, title, url, author, score, created, first_seen) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM external_mentions WHERE url = ?)").bind(iso, mm.source, mm.title, mm.url, mm.author, mm.score, mm.created, iso, mm.url).run();
+          if (r && r.meta && r.meta.changes) added += r.meta.changes;
+        } catch (e) {}
+      }
+      written[ch.channel] = added;
+      try {
+        var cnt = await db.prepare("SELECT COUNT(*) AS n FROM external_mentions WHERE source = ? AND substr(first_seen, 1, 10) = ?").bind(ch.source, today).first();
+        var n = Number(cnt && cnt.n) || 0;
+        var ins = "INSERT OR REPLACE INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES (?, 'mention-radar', ?, 'site', 'qnfo', ?, ?, ?)";
+        await db.prepare(ins).bind(today, ch.channel, "mentions", n, ch.quality).run();
+        await db.prepare(ins).bind(today, ch.channel, "mentions_visible", seen.size, ch.quality).run();
+        signals += 2;
+      } catch (e) { sources[ch.channel] += " signals-" + errStr(e); }
+    }
+    var vals = Object.values(sources), healthy = vals.filter(function(v) { return v.indexOf("ok:") === 0; }).length;
+    return { status: healthy === 0 ? "error" : healthy < vals.length ? "degraded" : "ok", date: today, owner_dois: dois.length, sources: sources, new_mentions: written, reach_signals_rows: signals };
+  }
+
+  async function recent(env) {
+    var db = env.AUDIT || env.RADAR_DB || env.AUDIT_DB;
+    var by = await db.prepare("SELECT source, COUNT(*) AS n, MAX(first_seen) AS last FROM external_mentions GROUP BY source ORDER BY n DESC").all();
+    var rows = await db.prepare("SELECT source, title, url, author, created, first_seen FROM external_mentions ORDER BY first_seen DESC LIMIT 50").all();
+    return { by_source: by.results || [], recent: rows.results || [] };
+  }
+
+  async function fetchHandler(request, env) {
+    var p = new URL(request.url).pathname;
+    var J = function(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json" } }); };
+    if (p === "/run") {
+      if (request.method !== "POST") return J({ error: "POST /mentions/run" }, 405);
+      return J(await run(env));
+    }
+    if (p === "/" || p === "") return J(await recent(env));
+    return J({ error: "not found" }, 404);
+  }
+
+  return { run: run, recent: recent, fetch: fetchHandler, CHANNELS: CHANNELS, SELECTED_DOIS: SELECTED_DOIS };
+})();
+// MENTION-RADAR-1 end
+
 const JobMarketWatchWorkflow = jmwMod.JobMarketWatchWorkflow;
 export { JobMarketWatchWorkflow };
 
@@ -1339,12 +1544,24 @@ export { JobMarketWatchWorkflow };
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: VERSION, radars: 6, capabilities: ["events-radar", "arxiv-radar", "research-radar", "citation-radar", "jobs-radar", "personal-radar"], limitations: ["each radar runs on its own cron; only the arXiv radar can be forced (POST /arxiv/run, one run per 10 minutes)", "arXiv classification is keyword-based, with no model call", "the arXiv radar reads the 20 newest matching submissions per run"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: VERSION, radars: 7, capabilities: ["mention-radar", "events-radar", "arxiv-radar", "research-radar", "citation-radar", "jobs-radar", "personal-radar"], limitations: ["each radar runs on its own cron; only the arXiv radar can be forced (POST /arxiv/run, one run per 10 minutes)", "arXiv classification is keyword-based, with no model call", "the arXiv radar reads the 20 newest matching submissions per run"] }), { headers: { "content-type": "application/json" } });
+    // HUB-AUTH-1 (2026-10-01): every member route can run a scan, write the personal calendar or
+    // return the personal report, so all of them need Bearer RADAR_TOKEN. Fails closed when unset.
+    // Crons do not pass through fetch and are unaffected.
+    {
+      const exp = env.RADAR_TOKEN;
+      if (!exp) return new Response(JSON.stringify({ error: "RADAR_TOKEN not configured" }), { status: 503, headers: { "content-type": "application/json" } });
+      const got = String(request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      let d = got.length === exp.length ? 0 : 1;
+      for (let i = 0; i < exp.length; i++) d |= (got.charCodeAt(i) || 0) ^ exp.charCodeAt(i);
+      if (d !== 0) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
+    }
     function sub(prefix) { const u = new URL(request.url); u.pathname = p.slice(prefix.length) || "/"; return new Request(u.toString(), request); }
     if (p === "/events" || p.startsWith("/events/")) return eventsMod.default.fetch(sub("/events"), env, ctx);
     if (p === "/citation" || p.startsWith("/citation/")) return citationMod.fetch(sub("/citation"), env, ctx);
     if (p === "/jobs" || p.startsWith("/jobs/")) return jmwMod.default.fetch(sub("/jobs"), env, ctx);
     if (p === "/personal" || p.startsWith("/personal/")) return perMod.default.fetch(sub("/personal"), env, ctx);
+    if (p === "/mentions" || p.startsWith("/mentions/")) return mentionMod.fetch(sub("/mentions"), env, ctx);
     if (p === "/arxiv/health") return arxivMod.fetch(sub("/arxiv"), env, ctx);
     if (p === "/arxiv/last") {
       const row = env.AUDIT ? await env.AUDIT.prepare("SELECT ts, payload FROM research_scan_log WHERE job='arxiv-radar' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; }) : null;
@@ -1361,7 +1578,14 @@ export default {
   async scheduled(event, env, ctx) {
     const c = event.cron;
     if (c === "0 5 * * 1") return eventsMod.default.scheduled(event, env, ctx);
-    if (c === "30 8 * * *") return arxivMod.scheduled(event, env, ctx);
+    // MENTION-RADAR-1: the daily 08:30Z slot also runs the external-mention discovery; each job is isolated.
+    if (c === "30 8 * * *") {
+      await Promise.allSettled([
+        arxivMod.scheduled(event, env, ctx),
+        mentionMod.run(env).then((o) => console.log("mention-radar", JSON.stringify(o)), (e) => console.error("mention-radar", String((e && e.message) || e)))
+      ]);
+      return;
+    }
     if (c === "0 6 1 * *" || c === "0 8 * * 7" || c === "0 9 * * 7") return researchMod.scheduled(event, env, ctx);
     if (c === "0 11 1,15 * *") return citationMod.scheduled(event, env, ctx);
     if (c === "0 7 * * 2") return jmwMod.default.scheduled(event, env, ctx);

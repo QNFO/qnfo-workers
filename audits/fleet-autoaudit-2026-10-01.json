@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-01 17:10:21",
+  "audited_at": "2026-10-01 21:21:26",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-dashboard"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -392,7 +399,7 @@
     "sync_workers": [
       {
         "dir": "calendar-api",
-        "version": "0.4.0-notes-intake",
+        "version": "0.4.1-personal-ics-auth",
         "worker": "calendar-api"
       },
       {
@@ -432,7 +439,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.29.11-ai-attr",
+        "version": "5.30.0-spend-gov",
         "worker": "qnfo-ai"
       },
       {
@@ -467,7 +474,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.2.4",
+        "version": "0.2.6",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -482,22 +489,22 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.2.1-email-id-returning",
+        "version": "2.2.2-options-auth",
         "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.81-revise-outside-cap",
+        "version": "0.4.82-hygiene-scope",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.14.1-intent-intake",
+        "version": "1.15.0-open-access",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.7.22-scholar-pdf-rendered",
+        "version": "3.7.24-query-auth",
         "worker": "qnfo-gateway"
       },
       {
@@ -512,7 +519,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.4.4",
+        "version": "3.4.5",
         "worker": "qnfo-ipatent"
       },
       {
@@ -522,7 +529,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.6.5-metric-undefined-class",
+        "version": "1.6.6-research-metrics-writer",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -542,7 +549,7 @@
       },
       {
         "dir": "qnfo-outreach",
-        "version": "0.3.5-shared-cap-notes",
+        "version": "0.3.6-api-auth",
         "worker": "qnfo-outreach"
       },
       {
@@ -552,7 +559,7 @@
       },
       {
         "dir": "qnfo-paper-reviser",
-        "version": "1.2.3",
+        "version": "1.2.4",
         "worker": "qnfo-paper-reviser"
       },
       {
@@ -572,7 +579,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.23-owner-delegation",
+        "version": "0.7.24-social-gates",
         "worker": "qnfo-social"
       },
       {
@@ -592,7 +599,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.0.11",
+        "version": "1.1.2",
         "worker": "radar-hub"
       }
     ]
@@ -624,9 +631,9 @@
       "worker": "audits"
     },
     "calendar-api": {
-      "before": "0.4.0-notes-intake",
+      "before": "0.4.1-personal-ics-auth",
       "http": 200,
-      "live": "0.4.0-notes-intake",
+      "live": "0.4.1-personal-ics-auth",
       "match": 1,
       "note": "SYNC",
       "worker": "calendar-api"
@@ -880,9 +887,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.29.11-ai-attr",
+      "before": "5.30.0-spend-gov",
       "http": 200,
-      "live": "5.29.11-ai-attr",
+      "live": "5.30.0-spend-gov",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1032,9 +1039,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.2.4",
+      "before": "0.2.6",
       "http": 200,
-      "live": "0.2.4",
+      "live": "0.2.6",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1064,9 +1071,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.2.1-email-id-returning",
+      "before": "2.2.2-options-auth",
       "http": 200,
-      "live": "2.2.1-email-id-returning",
+      "live": "2.2.2-options-auth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1144,17 +1151,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.81-revise-outside-cap",
+      "before": "0.4.82-hygiene-scope",
       "http": 200,
-      "live": "0.4.81-revise-outside-cap",
+      "live": "0.4.82-hygiene-scope",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.14.1-intent-intake",
+      "before": "1.15.0-open-access",
       "http": 200,
-      "live": "1.14.1-intent-intake",
+      "live": "1.15.0-open-access",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1176,9 +1183,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.22-scholar-pdf-rendered",
+      "before": "3.7.24-query-auth",
       "http": 200,
-      "live": "3.7.22-scholar-pdf-rendered",
+      "live": "3.7.24-query-auth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1232,9 +1239,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.4.4",
+      "before": "3.4.5",
       "http": 200,
-      "live": "3.4.4",
+      "live": "3.4.5",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1248,9 +1255,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.6.5-metric-undefined-class",
+      "before": "1.6.6-research-metrics-writer",
       "http": 200,
-      "live": "1.6.5-metric-undefined-class",
+      "live": "1.6.6-research-metrics-writer",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1288,9 +1295,9 @@
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
-      "before": "0.3.5-shared-cap-notes",
+      "before": "0.3.6-api-auth",
       "http": 200,
-      "live": "0.3.5-shared-cap-notes",
+      "live": "0.3.6-api-auth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-outreach"
@@ -1312,9 +1319,9 @@
       "worker": "qnfo-paper-indexer"
     },
     "qnfo-paper-reviser": {
-      "before": "1.2.3",
+      "before": "1.2.4",
       "http": 200,
-      "live": "1.2.3",
+      "live": "1.2.4",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-paper-reviser"
@@ -1416,9 +1423,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.23-owner-delegation",
+      "before": "0.7.24-social-gates",
       "http": 200,
-      "live": "0.7.23-owner-delegation",
+      "live": "0.7.24-social-gates",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
@@ -1472,9 +1479,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.0.11",
+      "before": "1.1.2",
       "http": 200,
-      "live": "1.0.11",
+      "live": "1.1.2",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"

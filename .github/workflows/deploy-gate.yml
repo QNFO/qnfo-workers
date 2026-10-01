@@ -122,3 +122,5 @@ jobs:
       # WATCHMAKER-INDEX-1: the fleet's own daily count of recurring operations that still need a person or a session.
       - name: WATCHMAKER-INDEX-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/watchmaker.test.mjs
+      - name: OPEN-ACCESS-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/open-access.test.mjs
