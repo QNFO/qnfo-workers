@@ -1,58 +1,42 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@5e11350bd195",
- "due": 6,
- "pass": 1,
- "fail": 5,
+ "verifier": "remediation-consumer@bc70f9e11f8e",
+ "due": 4,
+ "pass": 0,
+ "fail": 4,
  "skipped": 0,
  "contracts": [
   {
-   "class": "EVID-1620-PUBLISH",
-   "issue_id": 1620,
-   "verdict": "pass",
-   "expected": "published",
-   "observed": "published",
-   "written": true
-  },
-  {
-   "class": "EVID-1647-ENGAGEMENT",
-   "issue_id": 1647,
+   "class": "EVID-1649-BRIEF",
+   "issue_id": 1649,
    "verdict": "fail",
-   "expected": "collected",
-   "observed": "none",
-   "written": true
-  },
-  {
-   "class": "EVID-1710-RESUME",
-   "issue_id": 1710,
-   "verdict": "fail",
-   "expected": "sent-after-resume",
+   "expected": "recorded",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
+   "class": "issue-1730",
+   "issue_id": 1730,
    "verdict": "fail",
-   "expected": "all-sources-ok",
-   "observed": "pending",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
+   "class": "issue-1726",
+   "issue_id": 1726,
    "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "pending",
+   "expected": "0",
+   "observed": "2",
    "written": true
   },
   {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
+   "class": "issue-1727",
+   "issue_id": 1727,
    "verdict": "fail",
-   "expected": "seven-days",
-   "observed": "pending",
+   "expected": "1",
+   "observed": "0",
    "written": true
   }
  ],
@@ -72,7 +56,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 18692,
- "head": "5e11350bd19501881f18bb829fc3b44110215c3f",
+ "spent_ms": 31082,
+ "head": "bc70f9e11f8e69d683f3c712ccafaff58f147f1d",
  "job_status": "success"
 }
