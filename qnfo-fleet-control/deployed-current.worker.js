@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.48-evolve-guardrails";
+var VERSION = "0.4.49-graphql-usage";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2107,7 +2107,8 @@ async function budgetAudit(env, names) {
           var cn = cr[ci].worker;
           if (!cn) continue;
           if (Array.isArray(names) && names.indexOf(cn) < 0) continue; // F1b: only LIVE workers are dischargeable
-          var inv = await env.AUDIT.prepare("SELECT COUNT(*) n FROM worker_invocations WHERE worker_name=?1 AND created_at > datetime('now','-1 day')").bind(cn).first();
+          var _cu = await scriptUsage7d(env, cn);
+          var inv = _cu ? { n: _cu.requests_7d } : await env.AUDIT.prepare("SELECT COUNT(*) n FROM worker_invocations WHERE worker_name=?1 AND created_at > datetime('now','-1 day')").bind(cn).first();
           if (inv && Number(inv.n || 0) > 0) continue;
           var di = "delete-worker:" + cn;
           var dex = await env.AUDIT.prepare("SELECT id FROM reorg_work_queue WHERE item=?1 AND state='OPEN'").bind(di).first();
@@ -2985,11 +2986,60 @@ async function costImpactGuard(env) {
 __name(costImpactGuard, "costImpactGuard");
 
 
+// SCRIPT-USAGE-GRAPHQL-1 (2026-10-01, issue 1688): worker_invocations holds ~1 row fleet-wide, so the consolidation
+// guard and disposeRetired correctly fail closed (DEGENERATE-DETECTION-SOURCE-1) and the fleet can never retire a
+// worker. The real per-script usage is in Cloudflare analytics (workersInvocationsAdaptive, the dataset
+// fleet-telemetry-probe already reads from CI). refreshScriptUsage() snapshots requests/errors per script for the last
+// 24h and 7d into worker_usage_daily once a day; scriptUsage7d() serves it ONLY when the snapshot is under 36h old and
+// covers >= 10 scripts, otherwise null, so a failed or partial read keeps the old fail-closed behaviour. Deletion is
+// blocked by ANY request in 7 days (crons count), which is stricter than the old 24h invocation rule.
+async function refreshScriptUsage(env) {
+  var token = env.CF_API_TOKEN, acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
+  if (!token) return { ok: false, why: "no CF_API_TOKEN" };
+  var db = env.AUDIT_DB || env.AUDIT;
+  await db.prepare("CREATE TABLE IF NOT EXISTS worker_usage_daily (day TEXT NOT NULL, script TEXT NOT NULL, requests_24h INTEGER, errors_24h INTEGER, requests_7d INTEGER, errors_7d INTEGER, source TEXT, ts TEXT, PRIMARY KEY (day, script))").run();
+  var now = new Date(), end = now.toISOString().replace(/\.\d+Z$/, "Z");
+  async function window(ms) {
+    var q = 'query { viewer { accounts(filter:{accountTag:"' + acct + '"}) { workersInvocationsAdaptive(limit:10000, filter:{datetime_geq:"' + new Date(now.getTime() - ms).toISOString().replace(/\.\d+Z$/, "Z") + '", datetime_leq:"' + end + '"}) { sum { requests errors } dimensions { scriptName } } } } }';
+    var r = await timedFetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) }, 3e4);
+    var j = await r.json().catch(function() { return null; });
+    if (!j || j.errors || !j.data) throw new Error("graphql " + r.status + " " + JSON.stringify(j && j.errors || "").slice(0, 160));
+    var out = {};
+    ((j.data.viewer.accounts[0] || {}).workersInvocationsAdaptive || []).forEach(function(x) {
+      var n = x.dimensions.scriptName, o = out[n] || (out[n] = { requests: 0, errors: 0 });
+      o.requests += Number(x.sum.requests || 0); o.errors += Number(x.sum.errors || 0);
+    });
+    return out;
+  }
+  var d1 = await window(864e5), d7 = await window(7 * 864e5);
+  var day = now.toISOString().slice(0, 10), ts = now.toISOString(), names = Object.keys(d7), stmts = [];
+  names.forEach(function(n) {
+    var a = d1[n] || { requests: 0, errors: 0 }, b = d7[n];
+    stmts.push(db.prepare("INSERT OR REPLACE INTO worker_usage_daily (day, script, requests_24h, errors_24h, requests_7d, errors_7d, source, ts) VALUES (?1,?2,?3,?4,?5,?6,'cf-graphql-workersInvocationsAdaptive',?7)").bind(day, n, a.requests, a.errors, b.requests, b.errors, ts));
+  });
+  for (var i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
+  return { ok: true, scripts: names.length, day: day };
+}
+__name(refreshScriptUsage, "refreshScriptUsage");
+async function scriptUsage7d(env, name) {
+  var db = env.AUDIT_DB || env.AUDIT;
+  try {
+    var snap = await db.prepare("SELECT day, COUNT(*) n, MAX(ts) ts FROM worker_usage_daily WHERE day = (SELECT MAX(day) FROM worker_usage_daily) GROUP BY day").first();
+    if (!snap || Number(snap.n) < 10 || Date.now() - Date.parse(snap.ts) > 36 * 36e5) return null;
+    var row = await db.prepare("SELECT requests_7d FROM worker_usage_daily WHERE day=?1 AND script=?2").bind(snap.day, name).first();
+    return { requests_7d: row ? Number(row.requests_7d || 0) : 0, day: snap.day, scripts: Number(snap.n) };
+  } catch (e) {
+    return null;
+  }
+}
+__name(scriptUsage7d, "scriptUsage7d");
 async function disposeRetired(env) {
   try {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
     var token = env.CF_API_TOKEN;
     if (!token) return;
+    try { await refreshScriptUsage(env); } catch (e) { console.error("refreshScriptUsage error:", e && e.message || e); }
+    var _usageProbe = await scriptUsage7d(env, "qnfo-fleet-control");
     // DEGENERATE-DETECTION-SOURCE-1 (2026-09-30, handoff 29754 P4): worker_invocations is the ONLY
     // usage signal used to justify a destructive retire, and it has held ~1 row fleet-wide, so an
     // "0 invocations/24h" read is VACUOUS (it would make every worker look unused). Prove the source
@@ -2997,7 +3047,7 @@ async function disposeRetired(env) {
     // Fail closed: skip disposal this cycle and log once per day.
     var srcHealth = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN created_at > datetime('now','-2 day') THEN 1 ELSE 0 END) AS recent FROM worker_invocations").first();
     var srcRecent = srcHealth ? Number(srcHealth.recent || 0) : 0;
-    if (srcRecent < 10) {
+    if (srcRecent < 10 && !_usageProbe) {
       try {
         var sdup = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='dispose-blocked' AND text LIKE 'DEGENERATE-DETECTION-SOURCE-1:%' AND ts > datetime('now','-1 day')").first();
         if (!sdup || Number(sdup.n || 0) === 0) {
@@ -3016,9 +3066,10 @@ async function disposeRetired(env) {
     }
     for (var name in targets) {
       if (protectedNames[name]) continue;
-      var inv = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM worker_invocations WHERE worker_name = ? AND created_at > datetime('now','-1 day')").bind(name).first();
+      var _u = await scriptUsage7d(env, name);
+      var inv = _u ? { n: _u.requests_7d } : await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM worker_invocations WHERE worker_name = ? AND created_at > datetime('now','-1 day')").bind(name).first();
       if (inv && inv.n > 0) {
-        await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind(name + " :: OUTPUT-CONTRACT: producing worker (" + inv.n + " invocations/24h); delete blocked").run();
+        await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind(name + " :: OUTPUT-CONTRACT: producing worker (" + inv.n + (_u ? " requests/7d, cf-graphql " + _u.day : " invocations/24h") + "); delete blocked").run();
         continue;
       }
       var recent = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='dispose-blocked' AND text LIKE ? AND ts > datetime('now','-1 day')").bind(name + "%").first();
@@ -3031,6 +3082,7 @@ async function disposeRetired(env) {
         await env.AUDIT_DB.prepare("UPDATE service_registry SET state='deleted', updated_at=datetime('now') WHERE service = ?").bind(name).run();
         await env.AUDIT_DB.prepare("UPDATE reorg_work_queue SET state='EXECUTED' WHERE item LIKE 'delete-worker:" + name + "%' AND state='OPEN'").run();
         await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'disposed-worker', 'qnfo-fleet-control', ?)").bind(name).run();
+        try { await env.AUDIT_DB.prepare("INSERT INTO worker_removals (worker, removed_at, action, rationale, evidence, source) VALUES (?1, datetime('now'), 'DISPOSED', 'worker_consolidation RETIRE + reorg_work_queue delete-worker item', ?2, 'qnfo-fleet-control disposeRetired')").bind(name, _usageProbe ? "0 requests/7d (cf-graphql " + _usageProbe.day + ")" : "0 invocations/24h (worker_invocations)").run(); } catch (eR) {}
       } else {
         var msg = j && j.errors && j.errors[0] && j.errors[0].message || "unknown";
         await env.AUDIT_DB.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'dispose-blocked', 'qnfo-fleet-control', ?)").bind(name + " :: " + String(msg).slice(0, 280)).run();
