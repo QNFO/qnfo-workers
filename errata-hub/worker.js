@@ -1,6 +1,6 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.0.0"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.1.0"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 var erratawatchMod = (function(){
 const QNFO_VERSION = "qnfo-errata-watch/fabric-20260910";
 var __defProp = Object.defineProperty;
@@ -21569,10 +21569,36 @@ return { default: publish_worker_src_default };
 })();
 
 // ===== MERGE errata-hub =====
+
+// CONTENT-INTEGRITY-NO-INTERNAL-ERRATA-PATH-1 (#1164): intake for errors detected inside QNFO's own output.
+// Writes internal_errata (source of truth, read by idea-hub's public gate) and a errata_queue row with
+// source in (internal_audit, red_team), email_id NULL and status 'internal-open' so the email-driven
+// respond/publish crons (which select status='detected') never auto-act on it.
+async function internalErrataIntake(request, env) {
+  const j = (d, st) => new Response(JSON.stringify(d), { status: st || 200, headers: { "content-type": "application/json" } });
+  if (!env.ERRATA_TOKEN || (request.headers.get("X-Erratta-Token") || "") !== env.ERRATA_TOKEN) return j({ error: "unauthorized" }, 401);
+  let b; try { b = await request.json(); } catch (e) { return j({ error: "invalid json" }, 400); }
+  const source = b.source;
+  if (source !== "internal_audit" && source !== "red_team") return j({ error: "source must be internal_audit|red_team" }, 400);
+  const str = (v, n) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
+  const claim = str(b.claim_text, 4000), kind = str(b.target_kind, 64), ref = str(b.target_ref, 512);
+  if (!claim || !kind || !ref) return j({ error: "claim_text, target_kind, target_ref required" }, 400);
+  const sev = ["low", "medium", "high"].includes(b.severity) ? b.severity : "high";
+  const id = str(b.id, 64) || ("err-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + crypto.randomUUID().slice(0, 8));
+  const now = new Date().toISOString();
+  try {
+    await env.WATCH_DB.prepare("INSERT OR IGNORE INTO internal_errata (id, target_kind, target_ref, detected_at, detected_by, severity, claim_text, falsification, evidence, remediation, status, owner, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,'open',?11,?4)")
+      .bind(id, kind, ref, now, str(b.detected_by, 128) || source, sev, claim, str(b.falsification, 8000), str(b.evidence, 8000), str(b.remediation, 4000), str(b.owner, 128)).run();
+    await env.WATCH_DB.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status) VALUES (NULL, ?1, ?2, ?3, NULL, ?4, 1.0, 'internal-open')")
+      .bind(source, str(b.detected_by, 128) || source, id, claim).run();
+  } catch (e) { return j({ ok: false, error: String(e && e.message || e) }, 500); }
+  return j({ ok: true, id, source });
+}
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: "1.0.0", members: 3 }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true }), { headers: { "content-type": "application/json" } });
+    if (p === "/internal-errata" && request.method === "POST") return internalErrataIntake(request, env);
     if (p === "/errata-watch" || p.startsWith("/errata-watch/")) { const u = new URL(request.url); u.pathname = p.slice(13) || "/"; return erratawatchMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/errata-respond" || p.startsWith("/errata-respond/")) { const u = new URL(request.url); u.pathname = p.slice(15) || "/"; return erratarespondMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/errata-publish" || p.startsWith("/errata-publish/")) { const u = new URL(request.url); u.pathname = p.slice(15) || "/"; return erratapublishMod.default.fetch(new Request(u.toString(), request), env, ctx); }
