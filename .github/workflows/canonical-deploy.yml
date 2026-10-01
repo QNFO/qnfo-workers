@@ -94,13 +94,17 @@ jobs:
             awk 'NF && $1 !~ /^#/ {print $1" "$2}' deploy-targets.txt >> /tmp/targets.txt
           elif [ -n "${IN_WORKERS:-}" ]; then
             echo "mode=explicit"
-            for w in $IN_WORKERS; do echo "$w $w/worker.js" >> /tmp/targets.txt; done
+            # WORKER-RESURRECTION-GUARD-1: an explicitly named worker is a stated intent, so it may be created.
+            for w in $IN_WORKERS; do echo "$w $w/worker.js create" >> /tmp/targets.txt; done
           else
             echo "mode=push-diff"
             if [ -z "${EV_BEFORE:-}" ] || [ "$EV_BEFORE" = "0000000000000000000000000000000000000000" ]; then
               echo "no usable push base commit, nothing to resolve"
             else
               git diff --name-only "$EV_BEFORE" "$EV_AFTER" > /tmp/changed.txt || true
+              # WORKER-RESURRECTION-GUARD-1 (2026-10-01): only a worker.js ADDED in this push may CREATE a worker. Touching an
+              # existing directory must never resurrect a retired worker (qnfo-agent-ws was recreated by a wrangler-only push).
+              git diff --name-only --diff-filter=A "$EV_BEFORE" "$EV_AFTER" > /tmp/added.txt || true
               awk -F/ '/\/worker\.js$/ || /\/wrangler\.toml$/ {print $1}' /tmp/changed.txt | sort -u > /tmp/dirs.txt
               while read -r d; do
                 [ -z "$d" ] && continue
@@ -120,7 +124,7 @@ jobs:
                 if [ -f "$d/FOLDED" ]; then echo "skip $d (FOLDED: $(head -1 "$d/FOLDED"))"; continue; fi
                 if [ -f "$d/RETIRED" ]; then echo "skip $d (RETIRED: $(head -1 "$d/RETIRED"))"; continue; fi
                 if grep -q '^\[\[containers\]\]' "$d/wrangler.toml"; then echo "skip $d (container worker: canonical /content deploy refuses it by design; deployed by deploy-containers-pilot / restore-container-config-1485)"; continue; fi
-                echo "$n $d/worker.js" >> /tmp/targets.txt
+                if grep -qx "$d/worker.js" /tmp/added.txt; then echo "$n $d/worker.js create" >> /tmp/targets.txt; else echo "$n $d/worker.js" >> /tmp/targets.txt; fi
               done < /tmp/dirs.txt
             fi
           fi
@@ -147,10 +151,12 @@ jobs:
           DRY=""
           if [ "${IN_DRY:-false}" = "true" ]; then DRY="--dry-run"; fi
           fail=0
-          while read -r name path; do
+          while read -r name path create; do
             [ -z "$name" ] && continue
-            echo "=== canonical deploy $name from $path $DRY"
-            if python3 scripts/canonical_deploy.py --worker "$name" --path "$path" $DRY; then
+            CR=""
+            if [ "${create:-}" = "create" ]; then CR="--allow-create"; fi
+            echo "=== canonical deploy $name from $path $DRY $CR"
+            if python3 scripts/canonical_deploy.py --worker "$name" --path "$path" $DRY $CR; then
               echo "OK $name"
             else
               echo "::error::canonical deploy failed for $name"

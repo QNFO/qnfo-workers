@@ -76,12 +76,16 @@ def die(code: int, msg: str) -> "NoReturn":  # type: ignore[valid-type]
     sys.exit(code)
 
 
-def post_deploy(worker: str, path: str, ref: str, token: str, timeout: int) -> dict:
+def post_deploy(worker: str, path: str, ref: str, token: str, timeout: int, allow_create: bool = False) -> dict:
     """POST one deploy request to the canonical route. Returns parsed JSON.
 
     Fails closed: a non-2xx status is surfaced verbatim, never swallowed.
     """
-    payload = json.dumps({"worker": worker, "path": path, "ref": ref}).encode()
+    body = {"worker": worker, "path": path, "ref": ref}
+    # WORKER-RESURRECTION-GUARD-1: the route refuses to CREATE an absent worker unless this is set.
+    if allow_create:
+        body["allow_create"] = True
+    payload = json.dumps(body).encode()
     req = urllib.request.Request(
         OPS_DEPLOY_URL,
         data=payload,
@@ -142,7 +146,7 @@ def lock_contended(res: dict) -> bool:
     return "lock not acquired" in json.dumps(res)[:4000]
 
 
-def deploy_with_contention(worker: str, path: str, ref: str, token: str, timeout: int) -> dict:
+def deploy_with_contention(worker: str, path: str, ref: str, token: str, timeout: int, allow_create: bool = False) -> dict:
     """DEPLOY-LOCK-CONTENTION-1 (2026-09-30). One push to main can start TWO deployers for the same worker
     (deploy-qnfo-ops.yml -> raw_put.py and this workflow -> /ops/deploy; or a fleet-control heal), and the
     deploy-guard lock correctly lets only one through. Measured: canonical-deploy runs 36758875374 and
@@ -152,7 +156,7 @@ def deploy_with_contention(worker: str, path: str, ref: str, token: str, timeout
     want = repo_version(path)
     deadline = time.time() + LOCK_WAIT_S
     while True:
-        res = post_deploy(worker, path, ref, token, timeout)
+        res = post_deploy(worker, path, ref, token, timeout, allow_create)
         if res.get("ok") or not lock_contended(res):
             return res
         lv = live_version(worker)
@@ -203,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ref", default=DEFAULT_REF, help=f"git ref to deploy from (default {DEFAULT_REF})")
     ap.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="per-deploy timeout seconds")
     ap.add_argument("--dry-run", action="store_true", help="print the plan, call nothing")
+    ap.add_argument("--allow-create", action="store_true", help="allow creating a worker that does not exist on the account (WORKER-RESURRECTION-GUARD-1)")
     args = ap.parse_args(argv)
 
     if args.worker and args.manifest:
@@ -230,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     for worker, path in targets:
         t0 = time.time()
         print(f"\n==> {worker} ({path})", flush=True)
-        res = deploy_with_contention(worker, path, args.ref, token, args.timeout)
+        res = deploy_with_contention(worker, path, args.ref, token, args.timeout, args.allow_create)
         dt = time.time() - t0
         ok = bool(res.get("ok"))
         results.append((worker, ok, res))
