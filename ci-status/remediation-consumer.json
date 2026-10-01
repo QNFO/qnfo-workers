@@ -1,7 +1,7 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@57fa5cebcbef",
+ "verifier": "remediation-consumer@1c459cb36134",
  "due": 0,
  "pass": 0,
  "fail": 0,
@@ -22,7 +22,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 1951,
- "head": "57fa5cebcbef7c2ea7ef420c758beaaa9ed5291b",
+ "spent_ms": 1498,
+ "head": "1c459cb36134374fc7696f342229cb87992fb34f",
  "job_status": "success"
 }
