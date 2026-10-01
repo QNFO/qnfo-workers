@@ -1,25 +1,15 @@
 {
-  "audited_at": "2026-10-01 12:41:54",
+  "audited_at": "2026-10-01 12:54:55",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [
-        "qnfo-fleet-control"
-      ],
-      "waited_for": [
-        "qnfo-fleet-control"
-      ]
-    },
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-fleet-control",
-        "qnfo-research-exec"
+        "qnfo-cloud-ops",
+        "qnfo-social"
       ],
       "refreshed": true,
-      "second_pass": [
-        "qnfo-fleet-control"
-      ]
+      "second_pass": []
     },
     "_guard_rc": 0,
     "ahead": [],
@@ -406,7 +396,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 40,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -480,7 +470,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.16.0-identity-weekly",
+        "version": "1.16.1-sent-as-you",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -502,6 +492,11 @@
         "dir": "qnfo-email",
         "version": "2.2.1-email-id-returning",
         "worker": "qnfo-email"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.74-loop-watch",
+        "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -585,7 +580,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.19-post-id-utm",
+        "version": "0.7.20-linkedin-draft",
         "worker": "qnfo-social"
       },
       {
@@ -607,10 +602,6 @@
         "dir": "radar-hub",
         "version": "1.0.9",
         "worker": "radar-hub"
-      },
-      {
-        "version": "0.4.74-loop-watch",
-        "worker": "qnfo-fleet-control"
       }
     ]
   },
@@ -1033,9 +1024,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.16.0-identity-weekly",
+      "before": "1.16.1-sent-as-you",
       "http": 200,
-      "live": "1.16.0-identity-weekly",
+      "live": "1.16.1-sent-as-you",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1433,9 +1424,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.19-post-id-utm",
+      "before": "0.7.20-linkedin-draft",
       "http": 200,
-      "live": "0.7.19-post-id-utm",
+      "live": "0.7.20-linkedin-draft",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
