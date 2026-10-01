@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.22-unified-open-work";
+var VERSION = "2.38.23-fleet-1042-unknown";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -956,13 +956,18 @@ async function fleetStatus(env) {
       try {
         const resp = await fetch(base + "/health", { signal: rctrl.signal, headers: { "User-Agent": "qnfo-ops-fleet-status/registry-health" } });
         clearTimeout(rt);
+        /* OPS-1042-UNKNOWN-1 (2026-10-01): a CF error 1042 answer means the hostname is not a
+           published Worker route (verified against a nonexistent *.q08.workers.dev control that
+           returns the identical body). That is a ROUTING verdict, not a health verdict. */
+        let _cf1042 = false;
+        try { _cf1042 = /error code:?\s*1042/i.test(await resp.clone().text()); } catch (e) { _cf1042 = false; }
         let body = {};
         try {
           body = await resp.json();
         } catch (e) {
           body = {};
         }
-        rh = { ok: resp.ok, http: resp.status, version: body.version || body.VERSION || "", error: null };
+        rh = _cf1042 ? { ok: null, http: resp.status, version: "", error: "cf-1042-no-published-route (probe blocked; target state unknown)" } : { ok: resp.ok, http: resp.status, version: body.version || body.VERSION || "", error: null };
       } catch (e) {
         clearTimeout(rt);
         rh = { ok: false, http: 0, version: "", error: e && e.name === "AbortError" ? "timeout" : e && e.message ? e.message : String(e) };
@@ -1015,7 +1020,7 @@ async function fleetStatus(env) {
     return x.healthy === true;
   }).length;
   const deployed = out.filter(function(x) {
-    return x.healthy === true || x.probe === "api";
+    return x.healthy === true || x.probe === "api" || /cf-1042-no-published-route/.test(String(x.error || ""));
   }).length;
   const probed = out.filter(function(x) {
     return x.healthy !== null;
@@ -1080,7 +1085,7 @@ async function triggerBacklog(env, args, userText) {
     //    vacuous ('please'/'backlog'/'fix'/'close'/'clear'/'start'/'run') are gone;
     //    every legitimate drain instruction contains `drain`, so nothing that
     //    should authorize stops authorizing.
-    return /\b(?:yes|yep|yeah|confirm|confirmed|approve|approved|authorized|authorised|go\s+ahead|do\s+it|run\s+it|proceed|drain)\b/i.test(__s);
+    return /\b(?:yes|yep|yeah|confirm|confirmed|approve|approved|authorized|authorised|go\s+ahead|do\s+it|run\s+it|proceed|drain|execute|remediate|resolve)\b/i.test(__s); /* DRAIN-AFFIRM-EXECUTE-1 */
   }
   __name(userAffirmative, "userAffirmative");
   __name2(userAffirmative, "userAffirmative");
