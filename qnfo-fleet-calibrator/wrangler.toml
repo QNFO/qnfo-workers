@@ -24,9 +24,14 @@ bucket_name = "qnfo-audit"
 binding = "KV_CAL"
 id = "d3768b93a76640be83151b00a8b42717"
 
-[[vectorize]]
-binding = "VEC_CAL"
-index_name = "qnfo-calibration"
+# VECTORIZE-INDEX-DELETED-1 (#254): canonical deploys of this worker failed with Cloudflare error 10160,
+# "Vectorize binding 'VEC_CAL' references index 'qnfo-calibration' which has been deleted" (run 36843898636).
+# The binding is removed so the worker can deploy. worker.js already handles a missing VEC_CAL (the vectorize-cal
+# probe reports ok:0 detail 'binding-missing'), so that one probe will show failing until the index is recreated;
+# restore this block only after the index exists.
+# [[vectorize]]
+# binding = "VEC_CAL"
+# index_name = "qnfo-calibration"
 
 # Service bindings for sibling probes (CF error 1042 blocks worker->workers.dev fetches).
 [[services]]
