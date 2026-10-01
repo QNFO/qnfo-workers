@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.11.1-owner-edit"; /* 1.10.3-feed-integrity (#339) + OWNER-EDIT-1 */
+var VERSION = "1.12.0-identity-store"; /* IDENTITY-STORE-1 + IDENTITY-WEEKLY-1 (moved from qnfo-cloud-ops); 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2465,6 +2465,14 @@ var worker_default = {
       // inside on the cloud_ops_events row portfolio-daily-<day>.
       ctx.waitUntil(within(portfolioDailyRun(env).catch(function() {
       })));
+      // IDENTITY-STORE-1: complete the one-time, byte-checked move of owner_docs into the private store within one tick of a
+      // deploy (after that this is one store_meta read per isolate).
+      ctx.waitUntil(within(identityStoreMigrate(env).catch(function() {
+      })));
+      // IDENTITY-WEEKLY-1 (moved from qnfo-cloud-ops with IDENTITY-STORE-1): Mondays after 06:00Z, throttled inside on the
+      // cloud_ops_events row identity-weekly-<day>.
+      ctx.waitUntil(within(identityWeeklyRun(env).catch(function() {
+      })));
       try {
         await within(loopExecute(env, deadline - 12e4), 6e4);
       } catch (e3) {
@@ -4561,8 +4569,327 @@ function ownerLogin(path, bad) {
   r.headers.set("WWW-Authenticate", 'Bearer realm="owner"');
   return r;
 }
+// IDENTITY-STORE-1 (2026-10-01, NO-CLAUDE-RUNTIME-DEPENDENCY-1 / agent_issues 1723): the owner's documents (identity, CV,
+// opportunities, archives, edit history) live in their own D1, qnfo-identity, bound ONLY to this worker (binding IDENTITY),
+// not in the shared qnfo-audit that many workers and sessions read. On first use the worker copies any qnfo-audit.owner_docs
+// rows across (INSERT OR IGNORE), checks every body byte for byte, and records the move in qnfo-identity.store_meta; it
+// never copies again after that. Without the binding it falls back to qnfo-audit so nothing breaks mid-deploy.
+var IDENTITY_STORE_READY = false;
+async function identityStoreMigrate(env) {
+  if (!env || !env.IDENTITY) return { store: "qnfo-audit (IDENTITY binding absent)" };
+  const db = env.IDENTITY;
+  if (IDENTITY_STORE_READY) {
+    const m = await db.prepare("SELECT value, updated_at FROM store_meta WHERE key = 'migrated_from_audit'").first().catch(function() {
+      return null;
+    });
+    if (m) return { store: "qnfo-identity", migrated: m.value, at: m.updated_at };
+  }
+  await db.prepare("CREATE TABLE IF NOT EXISTS owner_docs (key TEXT PRIMARY KEY, title TEXT NOT NULL, body_md TEXT NOT NULL, source TEXT, visibility TEXT NOT NULL DEFAULT 'private', updated_at TEXT DEFAULT (datetime('now')))").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS store_meta (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT DEFAULT (datetime('now')))").run();
+  const done = await db.prepare("SELECT value, updated_at FROM store_meta WHERE key = 'migrated_from_audit'").first();
+  if (done) {
+    IDENTITY_STORE_READY = true;
+    return { store: "qnfo-identity", migrated: done.value, at: done.updated_at };
+  }
+  let rows = [];
+  try {
+    rows = (await env.AUDIT.prepare("SELECT key, title, body_md, source, visibility, updated_at FROM owner_docs").all()).results || [];
+  } catch (e) {
+    rows = [];
+  }
+  for (const r of rows) {
+    await db.prepare("INSERT OR IGNORE INTO owner_docs (key, title, body_md, source, visibility, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(r.key, r.title, r.body_md, r.source, r.visibility || "private", r.updated_at).run();
+  }
+  const bad = [];
+  for (const r of rows) {
+    const c = await db.prepare("SELECT body_md FROM owner_docs WHERE key = ?1").bind(r.key).first();
+    if (!c || c.body_md !== r.body_md) bad.push(r.key);
+  }
+  if (bad.length) return { store: "qnfo-identity", error: "copy differs for " + bad.join(", ") + "; retried on next use" };
+  const summary = JSON.stringify({ rows: rows.length, keys: rows.map(function(r) {
+    return r.key;
+  }), bytes: rows.reduce(function(n, r) {
+    return n + new TextEncoder().encode(r.body_md || "").length;
+  }, 0), version: VERSION });
+  await db.prepare("INSERT OR REPLACE INTO store_meta (key, value, updated_at) VALUES ('migrated_from_audit', ?1, datetime('now'))").bind(summary).run();
+  IDENTITY_STORE_READY = true;
+  return { store: "qnfo-identity", migrated: summary };
+}
+__name(identityStoreMigrate, "identityStoreMigrate");
+// The D1 that holds owner_docs: qnfo-identity once its one-time copy is verified, qnfo-audit before that or without the binding.
+async function ownerStore(env) {
+  if (!env.IDENTITY) return env.AUDIT;
+  if (!IDENTITY_STORE_READY) {
+    const m = await identityStoreMigrate(env);
+    if (m.error) return env.AUDIT;
+  }
+  return env.IDENTITY;
+}
+__name(ownerStore, "ownerStore");
+// IDENTITY-WEEKLY-1 (2026-10-01; moved here from qnfo-cloud-ops 1.16.0 by IDENTITY-STORE-1, because only this worker may
+// read the private store). The weekly identity review: the Identity doc from qnfo-identity.owner_docs['identity'], public
+// metrics (Bluesky, Mastodon, Zenodo, ORCID, GitHub) and OpenAlex citations, live bios against the canonical copy and the
+// STRATEGY 2.2 never-claim list, deadline and page checks for every opportunity, funder/employer replies by sender domain
+// and subject only. Deterministic; a failed source is a gap, never a number. Writes one qnfo-audit.portfolio_runs row
+// (kind 'identity-weekly'); urgent items become one owner queue card. Never edits the doc or a profile.
+var IDW_NL = "\n";
+var IDW_AFTER_UTC_HOUR = 6;
+var IDW_ORCID = "0009-0002-4317-5604";
+var IDW_PORTFOLIO_RECORD = "21806274";
+var IDW_NAME = "Rowan Brad Quni-Gudzinas";
+var IDW_MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+// docs/STRATEGY.md 2.2 "Claims we never make": a background check fails on these.
+var IDW_BANNED = [
+  [/patent portfolio|foundational (?:us )?patents|patents developed/i, "patent claim without application numbers"],
+  [/clearance[- ]eligible/i, "clearance-eligible"],
+  [/featured in national media/i, "unlinked media feature"],
+  [/\b\d{2,}\+\s*(?:publications|papers)\b/i, "inflated publication count"],
+  [/thermodynamic dead end/i, "physics headline claim"],
+  [/research foundation|research collective/i, "organisation label that overclaims"]
+];
+async function idwJson(url, headers, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms || 8e3);
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": NAME + "/" + VERSION + " (+https://qnfo.org)", Accept: "application/json", ...headers || {} }, signal: ctl.signal });
+    if (!r.ok) return { error: "HTTP " + r.status };
+    return { body: await r.json() };
+  } catch (e) {
+    return { error: String(e && e.message || e).slice(0, 120) };
+  } finally {
+    clearTimeout(t);
+  }
+}
+__name(idwJson, "idwJson");
+function idwGh(env) {
+  return env.GITHUB_TOKEN ? { Authorization: "Bearer " + env.GITHUB_TOKEN, Accept: "application/vnd.github+json" } : { Accept: "application/vnd.github+json" };
+}
+__name(idwGh, "idwGh");
+function idwSection(md, heading) {
+  const i = md.indexOf("## " + heading);
+  if (i < 0) return "";
+  const j = md.indexOf(IDW_NL + "## ", i + 3);
+  return j < 0 ? md.slice(i) : md.slice(i, j);
+}
+__name(idwSection, "idwSection");
+function idwNorm(s) {
+  return String(s || "").replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ").replace(/&amp;/g, "&").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim().toLowerCase();
+}
+__name(idwNorm, "idwNorm");
+function idwDeadline(text, now) {
+  const s = String(text || "");
+  let d = null;
+  let m = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(s);
+  if (m) d = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  if (d == null && (m = /\b([A-Z][a-z]{2})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/.exec(s)) && IDW_MONTHS[m[1].toLowerCase()] != null) d = Date.UTC(+m[3], IDW_MONTHS[m[1].toLowerCase()], +m[2]);
+  if (d == null && (m = /\b(\d{1,2})\s+([A-Z][a-z]{2})[a-z]*\.?\s+(\d{4})\b/.exec(s)) && IDW_MONTHS[m[2].toLowerCase()] != null) d = Date.UTC(+m[3], IDW_MONTHS[m[2].toLowerCase()], +m[1]);
+  if (d == null) return { text: s, date: null, days_left: null };
+  return { text: s, date: new Date(d).toISOString().slice(0, 10), days_left: Math.floor((d - now) / 864e5) };
+}
+__name(idwDeadline, "idwDeadline");
+function idwOpportunities(md, now) {
+  const rows = [];
+  for (const line of idwSection(md, "Opportunities").split(IDW_NL)) {
+    if (!/^\|\s*\d+\s*\|/.test(line)) continue;
+    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    const link = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/.exec(cells[1] || "");
+    rows.push({ n: +cells[0], lead: link ? link[1] : (cells[1] || "").slice(0, 80), url: link ? link[2] : null, deadline: idwDeadline(cells[3], now) });
+  }
+  return rows;
+}
+__name(idwOpportunities, "idwOpportunities");
+function idwCanonical(md) {
+  const sb = /\*\*Short bio\*\*[^\n]*\n+>\s*([^\n]+)/.exec(md);
+  const cell = (label) => {
+    const m = new RegExp("^\\|\\s*" + label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\|[^|]*\\|([^|]+)\\|", "m").exec(md);
+    return m ? m[1].trim() : null;
+  };
+  const ghUser = cell("GitHub user rwnq8");
+  return {
+    short_bio: sb ? sb[1].trim() : null,
+    gh_org_description: cell("GitHub org QNFO"),
+    gh_user_bio: ghUser && ghUser.indexOf(";") >= 0 ? ghUser.slice(ghUser.indexOf(";") + 1).trim() : null
+  };
+}
+__name(idwCanonical, "idwCanonical");
+function idwProfileCheck(platform, live, canonicalBio) {
+  const text = [live.name || "", live.bio || ""].join(" | ");
+  const claims = IDW_BANNED.filter(([rx]) => rx.test(text)).map(([, label]) => label);
+  const out = { platform, name: live.name || null, bio: (live.bio || "").slice(0, 300) || null, name_ok: live.name == null ? null : idwNorm(live.name).indexOf(idwNorm(IDW_NAME)) >= 0, banned_claims: claims };
+  if (canonicalBio) out.bio_matches_canonical = idwNorm(live.bio) === idwNorm(canonicalBio);
+  return out;
+}
+__name(idwProfileCheck, "idwProfileCheck");
+async function jobIdentityWeekly(env) {
+  const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+  const gaps = [];
+  const doc = await ownerStore(env).then((db) => db.prepare("SELECT body_md, updated_at FROM owner_docs WHERE key='identity'").first()).catch(() => null);
+  const md = doc && doc.body_md || "";
+  if (!md) gaps.push("owner_docs 'identity' missing");
+  const canon = idwCanonical(md);
+  const [bsky, ghUser, ghOrg, orcid, zCount, zRec, masto] = await Promise.all([
+    idwJson("https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=qnfo.bsky.social"),
+    idwJson("https://api.github.com/users/rwnq8", idwGh(env)),
+    idwJson("https://api.github.com/orgs/QNFO", idwGh(env)),
+    idwJson("https://pub.orcid.org/v3.0/" + IDW_ORCID + "/person"),
+    idwJson("https://zenodo.org/api/records?q=" + encodeURIComponent("creators.orcid:" + IDW_ORCID) + "&size=1"),
+    idwJson("https://zenodo.org/api/records/" + IDW_PORTFOLIO_RECORD),
+    idwJson("https://mstdn.science/api/v1/accounts/lookup?acct=QNFO")
+  ]);
+  const metrics = { as_of: today };
+  const profiles = [];
+  if (bsky.body) {
+    metrics.bluesky_followers = bsky.body.followersCount ?? null;
+    metrics.bluesky_posts = bsky.body.postsCount ?? null;
+    profiles.push(idwProfileCheck("bluesky qnfo.bsky.social", { name: bsky.body.displayName, bio: bsky.body.description }, canon.short_bio));
+  } else gaps.push("bluesky: " + bsky.error);
+  if (ghUser.body) profiles.push(idwProfileCheck("github rwnq8", { name: ghUser.body.name, bio: ghUser.body.bio }, canon.gh_user_bio));
+  else gaps.push("github user: " + ghUser.error);
+  if (ghOrg.body) profiles.push(idwProfileCheck("github org QNFO", { name: null, bio: ghOrg.body.description }, canon.gh_org_description));
+  else gaps.push("github org: " + ghOrg.error);
+  if (orcid.body) {
+    const nm = orcid.body.name || {};
+    const full = [nm["given-names"] && nm["given-names"].value, nm["family-name"] && nm["family-name"].value].filter(Boolean).join(" ");
+    const bio = orcid.body.biography && orcid.body.biography.content || "";
+    const aka = (orcid.body["other-names"] && orcid.body["other-names"]["other-name"] || []).map((o) => o.content).filter(Boolean);
+    const p = idwProfileCheck("orcid " + IDW_ORCID, { name: full || null, bio }, null);
+    p.also_known_as = aka.slice(0, 8);
+    profiles.push(p);
+  } else gaps.push("orcid: " + orcid.error);
+  if (masto.body) {
+    metrics.mastodon_followers = masto.body.followers_count ?? null;
+    metrics.mastodon_posts = masto.body.statuses_count ?? null;
+    profiles.push(idwProfileCheck("mastodon @QNFO@mstdn.science", { name: masto.body.display_name, bio: masto.body.note }, canon.short_bio));
+  } else gaps.push("mastodon: " + masto.error);
+  if (zCount.body && zCount.body.hits) metrics.zenodo_records_orcid = typeof zCount.body.hits.total === "object" ? zCount.body.hits.total.value : zCount.body.hits.total;
+  else gaps.push("zenodo count: " + (zCount.error || "no hits"));
+  if (zRec.body && zRec.body.stats) {
+    metrics.portfolio_record = { id: IDW_PORTFOLIO_RECORD, version: zRec.body.metadata && zRec.body.metadata.version || null, views: zRec.body.stats.views ?? null, unique_views: zRec.body.stats.unique_views ?? null, downloads: zRec.body.stats.downloads ?? null };
+  } else gaps.push("zenodo record " + IDW_PORTFOLIO_RECORD + ": " + (zRec.error || "no stats"));
+  try {
+    const c = await env.AUDIT.prepare("SELECT COUNT(*) dois, COALESCE(SUM(value),0) cites, COALESCE(SUM(CASE WHEN value>0 THEN 1 ELSE 0 END),0) cited FROM (SELECT doi, value, ROW_NUMBER() OVER (PARTITION BY doi ORDER BY collected_at DESC) rn FROM citation_stats WHERE source='openalex' AND metric='cited_by_count') WHERE rn=1").first();
+    metrics.openalex = { dois: c.dois, citations: c.cites, cited_dois: c.cited };
+  } catch (e) {
+    gaps.push("citation_stats: " + String(e && e.message || e).slice(0, 80));
+  }
+  // Replies from funders, employers and programmes: outcome only (sender domain + subject), never the body.
+  let replies = [];
+  try {
+    const since = new Date(now - 8 * 864e5).toISOString().slice(0, 19).replace("T", " ");
+    const rs = await env.AUDIT.prepare("SELECT sender, subject, received_at FROM emails WHERE received_at >= ?1 AND lower(sender) NOT LIKE '%qnfo.org%' AND lower(sender) NOT LIKE '%qwav.tech%' AND lower(sender) NOT LIKE '%noreply%' AND lower(sender) NOT LIKE '%no-reply%' AND lower(sender) NOT LIKE '%alert%' AND lower(sender) NOT LIKE '%notification%' AND lower(sender) NOT LIKE '%mailer-daemon%' AND (lower(subject) LIKE '%application%' OR lower(subject) LIKE '%grant%' OR lower(subject) LIKE '%proposal%' OR lower(subject) LIKE '%position%' OR lower(subject) LIKE '%interview%' OR lower(subject) LIKE '%fellow%' OR lower(subject) LIKE '%funding%' OR lower(subject) LIKE '%offer%') ORDER BY received_at DESC LIMIT 15").bind(since).all();
+    replies = (rs.results || []).map((r) => ({ from_domain: String(r.sender || "").replace(/^.*@/, "").replace(/[>\s].*$/, "").toLowerCase(), subject: String(r.subject || "").slice(0, 120), received_at: r.received_at }));
+  } catch (e) {
+    gaps.push("emails: " + String(e && e.message || e).slice(0, 80));
+  }
+  // Opportunities: deadline arithmetic from the doc, then each lead's own page (HTTP status only).
+  const opps = idwOpportunities(md, now);
+  await Promise.all(opps.filter((o) => o.url).slice(0, 20).map(async (o) => {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8e3);
+    try {
+      const r = await fetch(o.url, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops identity review)" }, redirect: "follow", signal: ctl.signal });
+      o.page_status = r.status;
+    } catch (e) {
+      o.page_status = "fetch-error";
+    } finally {
+      clearTimeout(t);
+    }
+  }));
+  const prev = await env.AUDIT.prepare("SELECT scorecard_json FROM portfolio_runs WHERE kind='identity-weekly' ORDER BY id DESC LIMIT 1").first().catch(() => null);
+  const deltas = {};
+  try {
+    const p = prev && JSON.parse(prev.scorecard_json || "{}") || {};
+    for (const k of ["bluesky_followers", "bluesky_posts", "mastodon_followers", "zenodo_records_orcid"]) if (typeof metrics[k] === "number" && typeof p[k] === "number") deltas[k] = metrics[k] - p[k];
+    if (metrics.openalex && p.openalex) deltas.openalex_citations = metrics.openalex.citations - p.openalex.citations;
+    if (metrics.portfolio_record && p.portfolio_record) deltas.portfolio_views = (metrics.portfolio_record.views || 0) - (p.portfolio_record.views || 0);
+  } catch (e) {}
+  metrics.deltas = deltas;
+  const needs = [];
+  const urgent = [];
+  for (const p of profiles) {
+    if (p.banned_claims.length) {
+      needs.push(p.platform + ": remove " + p.banned_claims.join(", "));
+      urgent.push(p.platform + " shows " + p.banned_claims.join(", "));
+    }
+    if (p.name_ok === false) needs.push(p.platform + ": name reads \"" + p.name + "\", canonical is \"" + IDW_NAME + "\"");
+    if (p.bio_matches_canonical === false) needs.push(p.platform + ": bio differs from the canonical copy in the Identity doc");
+  }
+  for (const o of opps) {
+    const dl = o.deadline.days_left;
+    if (dl != null && dl < 0) needs.push("lead " + o.n + " (" + o.lead + "): deadline " + o.deadline.date + " has passed; close or update it");
+    else if (dl != null && dl <= 14) needs.push("lead " + o.n + " (" + o.lead + "): deadline " + o.deadline.date + " in " + dl + " days");
+    if (dl != null && dl >= 0 && dl <= 7) urgent.push("lead " + o.n + " due " + o.deadline.date);
+    if (o.page_status === 404 || o.page_status === 410) {
+      needs.push("lead " + o.n + " (" + o.lead + "): its page returns " + o.page_status);
+      urgent.push("lead " + o.n + " page " + o.page_status);
+    }
+  }
+  if (replies.length) needs.push(replies.length + " possible funder/employer replies in the last 8 days (see actions_json.replies)");
+  const fmt = (v) => v == null ? "gap" : String(v);
+  const summary = ["Identity weekly " + today + ":", "Bluesky " + fmt(metrics.bluesky_followers) + " followers" + (deltas.bluesky_followers != null ? " (" + (deltas.bluesky_followers >= 0 ? "+" : "") + deltas.bluesky_followers + ")" : "") + ";", "Zenodo " + fmt(metrics.zenodo_records_orcid) + " records;", "OpenAlex " + fmt(metrics.openalex && metrics.openalex.citations) + " citations;", profiles.length + " profiles checked, " + needs.length + " owner items, " + gaps.length + " gaps."].join(" ");
+  const actions = { profiles, opportunities: opps, replies, gaps, canonical_found: { short_bio: !!canon.short_bio, gh_org: !!canon.gh_org_description, gh_user: !!canon.gh_user_bio }, doc_updated_at: doc && doc.updated_at || null };
+  await env.AUDIT.prepare("INSERT INTO portfolio_runs (run_date, kind, session, summary, scorecard_json, actions_json, needs_owner) VALUES (?1,'identity-weekly',?2,?3,?4,?5,?6)").bind(today, NAME + "/" + VERSION, summary, JSON.stringify(metrics), JSON.stringify(actions).slice(0, 6e4), needs.join(IDW_NL)).run();
+  // Urgent items become ONE owner queue card per run (fleet.qnfo.org is where the owner decides; never an email to a session).
+  let card = null;
+  if (urgent.length) {
+    try {
+      await env.AUDIT.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1,?2,?3,?4,?5,'/owner','urgent',?6,'identity-weekly') ON CONFLICT(slug) DO UPDATE SET title=excluded.title, why=excluded.why, updated_at=datetime('now')").bind("identity-weekly-" + today, "Identity review: " + urgent.length + " urgent item(s)", urgent.join("; ").slice(0, 400), "Nothing changes on any profile until you act.", "Open the owner page, read this week's identity review and act on each item.", today).run();
+      card = "identity-weekly-" + today;
+    } catch (e) {
+      card = "error: " + reachErr(e);
+    }
+  }
+  return { status: gaps.length > 4 ? "degraded" : "ok", notes: { metrics: Object.keys(metrics).length, profiles: profiles.length, opportunities: opps.length, owner_items: needs.length, urgent: urgent.length, gaps: gaps.length, card } };
+}
+__name(jobIdentityWeekly, "jobIdentityWeekly");
+// Mondays after 06:00Z (07:00/08:00 Amsterdam), once: throttled on cloud_ops_events 'identity-weekly-<day>' like
+// PORTFOLIO-DAILY-1 (ok/degraded = done, running = in progress for 10 min, up to 3 attempts).
+async function identityWeeklyRun(env, opts) {
+  opts = opts || {};
+  const nowMs = opts.nowMs || Date.now();
+  const now = new Date(nowMs);
+  if (!env || !env.AUDIT) return { skipped: "AUDIT binding absent" };
+  if (!opts.force && (now.getUTCDay() !== 1 || now.getUTCHours() < IDW_AFTER_UTC_HOUR)) return { not_now: true };
+  const day = now.toISOString().slice(0, 10);
+  const evId = "identity-weekly-" + day;
+  let attempts = 1;
+  try {
+    const prev = await d1all(env.AUDIT, "SELECT ts, status, meta FROM cloud_ops_events WHERE id = ?", [evId]);
+    if (prev.length) {
+      let pm = {};
+      try {
+        pm = JSON.parse(prev[0].meta || "{}") || {};
+      } catch (e) {
+      }
+      const att = Number(pm.attempts) || 1;
+      if (prev[0].status === "ok" || prev[0].status === "degraded") return { throttled: day };
+      if (prev[0].status === "running" && nowMs - Date.parse(prev[0].ts) < PORTFOLIO_RUNNING_STALE_MS) return { in_progress: day };
+      if (att >= PORTFOLIO_MAX_ATTEMPTS) return { gave_up: day, attempts: att };
+      attempts = att + 1;
+    }
+  } catch (e) {
+    return { error: "throttle unreadable: " + reachErr(e) };
+  }
+  const record = async function(status, text, notes) {
+    try {
+      await env.AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, 'identity-weekly', ?, ?, ?, ?)").bind(evId, new Date().toISOString(), text, JSON.stringify(Object.assign({ attempts, version: VERSION }, notes || {})).slice(0, 4e3), NAME, status).run();
+    } catch (e) {
+    }
+  };
+  await record("running", "identity weekly " + day + " started");
+  let out;
+  try {
+    out = await jobIdentityWeekly(env);
+  } catch (e) {
+    out = { status: "error", notes: { error: reachErr(e) } };
+  }
+  await record(out.status, "identity weekly " + day + " " + out.status, out.notes);
+  return out;
+}
+__name(identityWeeklyRun, "identityWeeklyRun");
 async function ownerDocSection(env, key) {
-  const r = await d1all(env.AUDIT, "SELECT key, title, body_md, source, visibility, updated_at FROM owner_docs WHERE key = ?", [key]);
+  const r = await d1all(await ownerStore(env), "SELECT key, title, body_md, source, visibility, updated_at FROM owner_docs WHERE key = ?", [key]);
   if (!r.length) return null;
   const d = r[0];
   return "<article><h1>" + ownerEsc(d.title || d.key) + '</h1><p class="mut">owner_docs.' + ownerEsc(d.key) + " - updated " + ownerEsc(d.updated_at || "?") + (d.source ? " - source " + ownerEsc(d.source) : "") + "</p>" + ownerMarkdown(d.body_md || "") + "</article>";
@@ -4586,15 +4913,16 @@ async function ownerDocSave(env, key, body, ifUpdated) {
   body = String(body == null ? "" : body).replace(/\r\n?/g, "\n");
   if (!body.trim()) return { error: "An empty document was not saved." };
   if (body.length > OWNER_DOC_MAX) return { error: "The document is over " + OWNER_DOC_MAX + " characters and was not saved." };
-  const cur = (await d1all(env.AUDIT, "SELECT key, title, body_md, updated_at FROM owner_docs WHERE key = ?", [key]))[0];
+  const db = await ownerStore(env);
+  const cur = (await d1all(db, "SELECT key, title, body_md, updated_at FROM owner_docs WHERE key = ?", [key]))[0];
   if (!cur) return { error: "No document " + key + "." };
   if (String(ifUpdated || "") !== String(cur.updated_at || "")) return { conflict: true, current: cur };
   if (cur.body_md === body) return { ok: true, unchanged: true };
   const hkey = key.slice(0, 40) + "--v" + String(cur.updated_at || "").replace(/[^0-9]/g, "").slice(0, 14);
   const now = new Date().toISOString();
-  const r = await env.AUDIT.batch([
-    env.AUDIT.prepare("INSERT OR IGNORE INTO owner_docs (key, title, body_md, source, visibility, updated_at) VALUES (?1, ?2, ?3, ?4, 'history', ?5)").bind(hkey, "Earlier version: " + (cur.title || key), cur.body_md, "owner_docs." + key + " as of " + cur.updated_at + ", replaced by the owner via the dashboard at " + now, cur.updated_at),
-    env.AUDIT.prepare("UPDATE owner_docs SET body_md = ?1, updated_at = datetime('now') WHERE key = ?2 AND updated_at = ?3").bind(body, key, cur.updated_at)
+  const r = await db.batch([
+    db.prepare("INSERT OR IGNORE INTO owner_docs (key, title, body_md, source, visibility, updated_at) VALUES (?1, ?2, ?3, ?4, 'history', ?5)").bind(hkey, "Earlier version: " + (cur.title || key), cur.body_md, "owner_docs." + key + " as of " + cur.updated_at + ", replaced by the owner via the dashboard at " + now, cur.updated_at),
+    db.prepare("UPDATE owner_docs SET body_md = ?1, updated_at = datetime('now') WHERE key = ?2 AND updated_at = ?3").bind(body, key, cur.updated_at)
   ]);
   if (!(r && r[1] && r[1].meta && r[1].meta.changes)) return { conflict: true, current: cur };
   try {
@@ -4645,7 +4973,7 @@ async function ownerRoute(request, env, path, ownerCk) {
     if (!ownerDocEditable(key)) return ownerHtml("Read-only", "<p>This document is read-only: archives and earlier versions are never edited.</p>", 403);
     let d = null;
     try {
-      d = (await d1all(env.AUDIT, "SELECT key, title, body_md, updated_at FROM owner_docs WHERE key = ?", [key]))[0];
+      d = (await d1all(await ownerStore(env), "SELECT key, title, body_md, updated_at FROM owner_docs WHERE key = ?", [key]))[0];
     } catch (e) {
       return ownerHtml("Owner document", fail("owner_docs." + key, e), 503);
     }
@@ -4677,7 +5005,7 @@ async function ownerRoute(request, env, path, ownerCk) {
     if (!sec) return ownerHtml("Not found", "<p>No document " + ownerEsc(key) + ".</p>", 404);
     return ownerHtml("Owner - " + key, '<p class="mut"><a href="/owner">Owner page</a>' + (ownerDocEditable(key) ? ' - <a href="/owner/edit/' + ownerEsc(key) + '">Edit</a>' : " - read-only") + "</p>" + sec);
   }
-  const parts = ["<h1>Owner</h1><p class=\"mut\">Private page (" + ownerEsc(NAME) + " v" + ownerEsc(VERSION) + "). Data: qnfo-audit human_actions, portfolio_runs, owner_docs.</p>"];
+  const parts = ["<h1>Owner</h1><p class=\"mut\">Private page (" + ownerEsc(NAME) + " v" + ownerEsc(VERSION) + "). Data: qnfo-audit human_actions and portfolio_runs; owner documents in the private qnfo-identity store.</p>"];
   try {
     const a = await d1all(env.AUDIT, "SELECT id, title AS action, due, status, updated_at FROM human_actions ORDER BY CASE WHEN status = 'open' THEN 0 ELSE 1 END, id");
     parts.push("<h2>Owner-only actions</h2>" + (a.length ? "<div class=tw><table><thead><tr><th>#</th><th>Action</th><th>Due</th><th>Status</th></tr></thead><tbody>" + a.map(function(r) {
@@ -4704,7 +5032,7 @@ async function ownerRoute(request, env, path, ownerCk) {
     parts.push("<h2>Identity review (weekly)</h2>" + fail("portfolio_runs", e));
   }
   try {
-    const docs = await d1all(env.AUDIT, "SELECT key, title, updated_at, visibility FROM owner_docs ORDER BY key");
+    const docs = await d1all(await ownerStore(env), "SELECT key, title, updated_at, visibility FROM owner_docs ORDER BY key");
     const cur = docs.filter(function(d) {
       return d.visibility !== "history";
     });
@@ -4712,6 +5040,10 @@ async function ownerRoute(request, env, path, ownerCk) {
     parts.push("<h2>Documents</h2><ul>" + cur.map(function(d) {
       return '<li><a href="/owner/doc/' + ownerEsc(d.key) + '">' + ownerEsc(d.title || d.key) + "</a> (" + ownerEsc(d.updated_at || "?") + ")" + (ownerDocEditable(d.key) ? ' - <a href="/owner/edit/' + ownerEsc(d.key) + '">edit</a>' : " - read-only") + "</li>";
     }).join("") + "</ul>" + (hist ? '<p class="mut">' + hist + " earlier version(s) kept (owner_docs visibility 'history').</p>" : ""));
+    const sm = await identityStoreMigrate(env).catch(function(e) {
+      return { error: reachErr(e) };
+    });
+    parts.push('<p class="mut">Store: ' + ownerEsc(sm.store || "?") + (sm.at ? ", moved from qnfo-audit " + ownerEsc(sm.at) : "") + (sm.error ? " - " + ownerEsc(sm.error) : "") + "</p>");
   } catch (e) {
     parts.push("<h2>Documents</h2>" + fail("owner_docs", e));
   }

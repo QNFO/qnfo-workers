@@ -42,7 +42,8 @@ measurement loop**.
 
 ### 2.2 Positioning
 **Canonical profile copy lives in the owner's Identity doc**, not here. Since 2026-10-01 it is stored in Cloudflare D1
-(`qnfo-audit.owner_docs`, key `identity`, private) and served behind the owner's login; it holds personal data, so it is
+(the private `qnfo-identity` D1, table `owner_docs`, key `identity`, bound only to the dashboard) and served and edited
+behind the owner's login at fleet.qnfo.org/owner; it holds personal data, so it is
 never committed to this public repo. Owner directive 2026-10-01: all data on Cloudflare, nothing dependent on claude.ai
 (sections "Your brand", "Profile copy, ready to paste", "Updated CV"). It is the owner's approval surface (tracker item 1,
 due 2026-10-07) and the owner's edits win. This file keeps only what the fleet needs, and must not drift from it.

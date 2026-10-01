@@ -56,12 +56,12 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Recurring verification belongs to worker crons (LOOP-WATCH-1 in qnfo-fleet-control, `GET /loops`, files and self-closes
   `CHARTER-TICK-STALE-1`, `PORTFOLIO-SYNC-STALE-1` and friends), not to session check-ins or routines. A session may arm a
   short-lived reminder for its own in-flight PR, and deletes it when done.
-- Owner documents (identity, brand, CV, opportunities): the row cloud-ops IDENTITY-WEEKLY-1 reads and the dashboard edits is
-  `qnfo-audit.owner_docs` key `identity`; the final verbatim export of the retired Claude Doc (rev 46, with its five comment
-  threads) is `personal-life.owner_documents` key `identity-brand-opportunities` (private plane). Never recreate one on
-  claude.ai. Sensitive personal data does not belong in the shared `qnfo-audit` D1 that many workers and sessions can read;
-  moving the canonical row to a dedicated private store bound only to the workers that serve it is the open decision
-  NO-CLAUDE-RUNTIME-DEPENDENCY-1 in agent_issues.
+- Owner documents (identity, brand, CV, opportunities, their archives and edit history) live in the private D1
+  `qnfo-identity`, table `owner_docs` (canonical key `identity`), bound ONLY to qnfo-fleet-dashboard (IDENTITY-STORE-1). The
+  dashboard serves and edits them at fleet.qnfo.org/owner and runs IDENTITY-WEEKLY-1 from them; never bind `qnfo-identity`
+  to another worker and never copy its rows into the shared `qnfo-audit` D1. The final verbatim export of the retired Claude
+  Doc (rev 46, with its five comment threads) is `personal-life.owner_documents` key `identity-brand-opportunities` (private
+  plane). Never recreate an owner document on claude.ai.
 - Known violations retired on 2026-10-01: the Identity doc on Claude Docs (exported, deleted) and this session's routines;
   the remaining claude.ai Routines are tracked by ROUTINES-ON-CLAUDE-1 and OBJECTIVE-REVISION-APPLY-1.
 
