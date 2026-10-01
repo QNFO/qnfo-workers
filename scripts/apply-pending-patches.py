@@ -289,6 +289,28 @@ RETIRED_APPLIERS = [
         "evidence": ("scripts/deploy-drift-guard.py", "CRON_ONLY"),
         "reason": "superseded: deploy-drift-guard.py classifies cron-only workers as CRON_ONLY instead of NO_HEALTH_ROUTE (issue 1542)",
     },
+    # APPLIER-RETIRE-5 (2026-10-01, issue 1673): each entry below was verified by reading the applier's own MARK
+    # or outcome and finding it in the file the applier targets (or, for d1guard, the blocking battery).
+    {
+        "script": "schedules-live-1-patch.py",
+        "evidence": ("qnfo-email/worker.js", "SCHEDULES-LIVE-1"),
+        "reason": "landed: the applier's own MARK (SCHEDULES-LIVE-1) is present in its target qnfo-email/worker.js; it errors only on a moved anchor",
+    },
+    {
+        "script": "deploy-guard-wrap-patch.py",
+        "evidence": ("scripts/raw_put.py", "def guard_unlock"),
+        "reason": "landed: raw_put.py acquires the deploy-guard lock and releases it via atexit guard_unlock (the applier's outcome); it fails only because its 'imports' anchor moved",
+    },
+    {
+        "script": "d1guard-literal-aware-patch.py",
+        "evidence": ("scripts/d1guard-battery.mjs", "D1-GUARD-FN-AWARE-1"),
+        "reason": "superseded: the literal- and function-aware guard (replace() accepted as a scalar function) is covered by D1-GUARD-FN-AWARE-1 cases in the blocking D1-GUARD-BATTERY-1 (31/31 against qnfo-ops/worker.js); the applier pins a pre-patch VERSION that no longer exists",
+    },
+    {
+        "script": "telemetry-truth-patch.py",
+        "evidence": ("qnfo-ops/worker.js", "timeoutMs: 15e3"),
+        "reason": "superseded: its three root causes were fixed directly in qnfo-ops (backlog probe gets its own 15 s budget and keeps its error; telemetryReport scopes calls/fails/top to job = 'qnfo-ops'); the applier pins the TELEMETRY-TRUTH-1 marker that fix never carried",
+    },
 ]
 
 
