@@ -90,7 +90,10 @@ function mkFetch(down) {
   const f = async (u, init) => {
     calls.push(u);
     if (!init || !init.headers || !/QNFO-mention-radar/.test(init.headers["User-Agent"])) throw new Error("missing UA");
-    const k = u.includes("openalex.org") ? "openalex" : u.includes("datacite.org") ? "datacite" : u.includes("bsky.app") ? "bluesky" : u.includes("algolia.com") ? "hn" : null;
+    // Route on the parsed hostname, not a substring of the URL (CodeQL js/incomplete-url-substring-sanitization).
+    const host = new URL(u).hostname;
+    const under = (d) => host === d || host.endsWith("." + d);
+    const k = under("openalex.org") ? "openalex" : under("datacite.org") ? "datacite" : under("bsky.app") ? "bluesky" : under("algolia.com") ? "hn" : null;
     if (!k) throw new Error("unexpected host " + u);
     if (down.includes(k)) return { ok: false, status: 429, json: async () => ({}) };
     return fixtures[k](u);
@@ -114,7 +117,7 @@ ok(urls.includes("https://doi.org/10.1000/ext.2") && !urls.includes("https://doi
 ok(urls.includes("https://bsky.app/profile/did:plc:ext1/post/3abc"), "external bluesky post recorded with a stable url");
 ok(!urls.some((u) => u.includes("vad2yeq") || u.includes("3fuzzy")), "own bluesky posts and irrelevant fuzzy hits excluded");
 ok(db.mentions.filter((m) => m.source === "bluesky").length === 1, "three bluesky queries returning the same post -> one row");
-ok(urls.includes("https://qnfo.org/x") && urls.includes("https://news.ycombinator.com/item?id=43") && !urls.some((u) => u.includes("youtube")), "hn: story url, comment item url, whole-word filter");
+ok(urls.some((x) => x === "https://qnfo.org/x") && urls.some((x) => x === "https://news.ycombinator.com/item?id=43") && !urls.some((u) => u.includes("youtube")), "hn: story url, comment item url, whole-word filter");
 const sig = (ch, m) => db.signals.get(["2026-10-01", "mention-radar", ch, "site", "qnfo", m].join("|"));
 ok(sig("openalex", "mentions").value === 1 && sig("datacite", "mentions").value === 1 && sig("bluesky", "mentions").value === 1 && sig("hn", "mentions").value === 2, "reach_signals mentions per channel/day");
 ok(sig("datacite", "mentions_visible").value === 2, "mentions_visible counts what the API returned (deduped), got " + (sig("datacite", "mentions_visible") || {}).value);
