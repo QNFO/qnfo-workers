@@ -70,9 +70,13 @@ check("class + arrow + object bodies", V('class A { m() { return () => { return 
 def real(path):
     with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
         return V(fh.read())
-for path, want in [("radar-hub/worker.js", "1.0.9"), ("fleet-exec/worker.js", "1.0.2"), ("personal-companion/worker.js", "1.7.2")]:
+import re
+# Real files are checked for shape, not a pinned number: a routine version bump must never fail this offline
+# test (a hardcoded version broke deploy-drift when personal-companion went 1.7.2 to 1.7.3).
+for path in ["radar-hub/worker.js", "fleet-exec/worker.js", "personal-companion/worker.js"]:
     if os.path.exists(os.path.join(ROOT, path)):
-        check("real file " + path, real(path).split("-")[0], want.split("-")[0])
+        got = real(path)
+        check("real file " + path + " yields a semver-shaped VERSION", bool(got and re.match(r"^\d+\.\d+\.\d+", got)), True)
 
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
