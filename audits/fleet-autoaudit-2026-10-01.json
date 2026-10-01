@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-01 14:27:13",
+  "audited_at": "2026-10-01 14:32:11",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-dashboard"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -492,7 +499,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.12.0-identity-store",
+        "version": "1.12.1-identity-sync",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1152,9 +1159,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.12.0-identity-store",
+      "before": "1.12.1-identity-sync",
       "http": 200,
-      "live": "1.12.0-identity-store",
+      "live": "1.12.1-identity-sync",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
