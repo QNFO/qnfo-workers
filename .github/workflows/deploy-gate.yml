@@ -98,16 +98,18 @@ jobs:
       - name: CLOUDFLARE-ONLY-HOST-1 (no fleet data or UI on claude.ai)
         run: python3 scripts/cloudflare-only-host-guard.py
 
-      # IDENTITY-WEEKLY-1: the weekly identity review that replaced a claude.ai Routine runs in qnfo-cloud-ops;
-      # its offline suite (synthetic doc, stubbed APIs, recording D1) must stay green.
-      - name: IDENTITY-WEEKLY-1 offline suite (qnfo-cloud-ops)
-        run: node qnfo-cloud-ops/identity-weekly.test.mjs
+      # IDENTITY-WEEKLY-1: the weekly identity review that replaced a claude.ai Routine runs in qnfo-fleet-dashboard,
+      # the only worker bound to the private qnfo-identity store; its offline suite (synthetic doc, stubbed APIs,
+      # recording D1, Monday-once throttle) must stay green.
+      - name: IDENTITY-WEEKLY-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/identity-weekly.test.mjs
 
-      # OWNER-EDIT-1: the owner edits owner_docs (the Identity doc) on fleet.qnfo.org. The suite drives the real fetch
-      # handler against an in-memory SQLite D1 (node:sqlite needs Node 22, so this last step switches runtime).
+      # OWNER-EDIT-1 + IDENTITY-STORE-1: the owner edits owner_docs (the Identity doc) on fleet.qnfo.org, stored in the
+      # private qnfo-identity D1. The suite drives the real fetch handler against in-memory SQLite D1s (node:sqlite needs
+      # Node 22, so this last step switches runtime).
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: OWNER-EDIT-1 offline suite (qnfo-fleet-dashboard)
+      - name: OWNER-EDIT-1 and IDENTITY-STORE-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/owner-edit.test.mjs

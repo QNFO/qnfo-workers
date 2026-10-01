@@ -1,7 +1,8 @@
 // IDENTITY-WEEKLY-1 offline suite: replays jobIdentityWeekly against a synthetic Identity doc, stubbed public APIs and
-// a recording D1, so CI proves the parser, the drift and claim checks, the deadline arithmetic and the run-row write
-// without network or the owner's private data (the real doc lives only in D1 qnfo-audit.owner_docs).
-// Run: node qnfo-cloud-ops/identity-weekly.test.mjs   -> prints "N passed, 0 failed"
+// a recording D1, so CI proves the parser, the drift and claim checks, the deadline arithmetic, the run-row write, the
+// owner queue card and the Monday-once throttle, without network or the owner's private data (the real doc lives only in
+// the private D1 qnfo-identity). Moved with the job from qnfo-cloud-ops (IDENTITY-STORE-1).
+// Run: node qnfo-fleet-dashboard/identity-weekly.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,10 +10,10 @@ import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
-const start = src.indexOf("var IDW_ORCID");
-const end = src.indexOf('__name(jobVisibilityAndIdentity, "jobVisibilityAndIdentity");');
+const start = src.indexOf("var IDW_NL");
+const end = src.indexOf('__name(identityWeeklyRun, "identityWeeklyRun");');
 if (start < 0 || end < 0) throw new Error("IDENTITY-WEEKLY-1 block not found in worker.js");
-const block = src.slice(start, end) + "\n;({ jobIdentityWeekly, jobVisibilityAndIdentity, idwOpportunities, idwCanonical, idwDeadline });";
+const block = src.slice(start, end) + "\n;({ jobIdentityWeekly, identityWeeklyRun, idwOpportunities, idwCanonical, idwDeadline });";
 
 const DOC = [
   "# Identity", "", "## Your brand", "", "**Short bio** (Bluesky, X, Mastodon)", "",
@@ -47,23 +48,25 @@ const fetchStub = async (url) => {
   return API[k] ? { ok: true, status: 200, json: async () => API[k] } : { ok: false, status: 503 };
 };
 const writes = [];
-const mails = [];
+const events = new Map();
 const prevScore = JSON.stringify({ bluesky_followers: 42, zenodo_records_orcid: 939, openalex: { citations: 2 }, portfolio_record: { views: 90 } });
 const D1 = { prepare(sql) { return { args: [], bind(...a) { this.args = a; return this; },
   async first() { if (/FROM owner_docs/.test(sql)) return { body_md: DOC, updated_at: "2026-10-01" };
     if (/FROM citation_stats/.test(sql)) return { dois: 63, cites: 3, cited: 2 };
     if (/FROM portfolio_runs/.test(sql)) return { scorecard_json: prevScore }; return null; },
   async all() { return { results: /FROM emails/.test(sql) ? [{ sender: "Grants Team <grants@fund.example>", subject: "Your application", received_at: "2026-09-30 10:00:00" }] : [] }; },
-  async run() { writes.push({ sql, args: this.args }); return { success: true }; } }; } };
+  async run() { writes.push({ sql, args: this.args });
+    if (/INTO cloud_ops_events/.test(sql)) events.set(this.args[0], { ts: this.args[1], status: this.args[5], meta: this.args[3] });
+    return { success: true }; } }; } };
+const d1allStub = async (db, sql, params) => /FROM cloud_ops_events/.test(sql) ? (events.has(params[0]) ? [events.get(params[0])] : []) : [];
 class FixedDate extends Date { constructor(...a) { super(...(a.length ? a : [NOW])); } static now() { return NOW; } }
 const ctx = vm.createContext({
   Date: FixedDate, JSON, Math, String, Number, Object, Array, RegExp, Promise, encodeURIComponent, setTimeout, clearTimeout,
-  AbortController, console, NL: "\n", VERSION: "test", fetch: fetchStub, __name: (f) => f,
-  storeDigest: async (env, job, subject, text) => { writes.push({ sql: "digest", args: [job, subject, text] }); },
-  sendDigest: async (env, subject, text) => { mails.push({ subject, text }); return { ok: true }; },
-  jobVisibility: async () => ({ status: "ok", notes: {} })
+  AbortController, console, TextEncoder, NAME: "qnfo-fleet-dashboard", VERSION: "test", fetch: fetchStub, __name: (f) => f,
+  ownerStore: async (env) => env.IDENTITY || env.AUDIT, d1all: d1allStub, reachErr: (e) => String(e && e.message || e),
+  PORTFOLIO_RUNNING_STALE_MS: 600000, PORTFOLIO_MAX_ATTEMPTS: 3
 });
-const m = vm.runInContext(block, ctx, { filename: "qnfo-cloud-ops/worker.js#IDENTITY-WEEKLY-1" });
+const m = vm.runInContext(block, ctx, { filename: "qnfo-fleet-dashboard/worker.js#IDENTITY-WEEKLY-1" });
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log("FAIL " + msg); } };
@@ -79,13 +82,13 @@ ok(canon.short_bio === "I build open, auditable AI-assisted research (QNFO). qnf
 ok(canon.gh_org_description === "Open, auditable research infrastructure", "gh org canonical cell");
 ok(canon.gh_user_bio === "Founder of QNFO, research systems builder", "gh user canonical after the name");
 
-const out = await m.jobIdentityWeekly({ AUDIT: D1, GH_TOKEN: "" });
+const out = await m.jobIdentityWeekly({ AUDIT: D1, IDENTITY: D1, GITHUB_TOKEN: "" });
 const row = writes.find((w) => /INSERT INTO portfolio_runs/.test(w.sql));
 ok(!!row, "one portfolio_runs row");
 const [runDate, session, summary, scJson, actJson, needs] = row ? row.args : [];
 const sc = JSON.parse(scJson || "{}");
 const act = JSON.parse(actJson || "{}");
-ok(runDate === "2026-10-01" && session === "qnfo-cloud-ops/test", "run date and session stamp");
+ok(runDate === "2026-10-01" && session === "qnfo-fleet-dashboard/test", "run date and session stamp");
 ok(/kind='identity-weekly'|'identity-weekly'/.test(row ? row.sql : ""), "kind identity-weekly");
 ok(sc.bluesky_followers === 50 && sc.zenodo_records_orcid === 940 && sc.openalex.citations === 3, "metrics from the APIs and D1");
 ok(sc.deltas.bluesky_followers === 8 && sc.deltas.zenodo_records_orcid === 1 && sc.deltas.openalex_citations === 1 && sc.deltas.portfolio_views === 10, "deltas against the previous run");
@@ -99,15 +102,23 @@ ok(/github rwnq8: remove/.test(needs) && /bio differs/.test(needs), "owner items
 ok(/lead 2 .*in 3 days/.test(needs) && /lead 4 .*has passed/.test(needs) && /lead 3 .*returns 404/.test(needs), "deadline and page checks");
 ok(/possible funder\/employer replies/.test(needs) && act.replies[0].from_domain === "fund.example" && !("body" in act.replies[0]), "replies carry domain and subject only");
 ok(act.opportunities.every((o) => o.page_status != null), "every lead page probed");
-ok(mails.length === 1 && /urgent/.test(mails[0].subject), "urgent items email the owner once");
+const card = writes.find((w) => /INSERT INTO human_actions/.test(w.sql));
+ok(card && card.args[0] === "identity-weekly-2026-10-01" && /urgent/.test(card.sql) && /lead 2 due 2026-10-05/.test(card.args[2]) && out.notes.card === "identity-weekly-2026-10-01", "urgent items open one owner queue card");
+ok(writes.filter((w) => /INSERT INTO human_actions/.test(w.sql)).length === 1, "exactly one card per run");
 ok(out.status === "ok" && out.notes.owner_items >= 5, "job status ok");
 ok(!writes.some((w) => /owner_docs/.test(w.sql) && /UPDATE|INSERT|DELETE/i.test(w.sql)), "never writes the owner's doc");
 
-const both = await m.jobVisibilityAndIdentity({ AUDIT: D1, GH_TOKEN: "x" });
-ok(both.notes.visibility === "ok" && both.notes.identity === "ok", "visibility tick runs both");
-ctx.jobVisibility = async () => { throw new Error("boom"); };
-const half = await m.jobVisibilityAndIdentity({ AUDIT: D1, GH_TOKEN: "x" });
-ok(half.status === "degraded" && half.notes.identity === "ok", "a visibility failure does not block the identity review");
+// Scheduling: Mondays after 06:00Z, once per day (cloud_ops_events throttle), never on other days.
+const thu = await m.identityWeeklyRun({ AUDIT: D1, IDENTITY: D1 }, { nowMs: Date.UTC(2026, 9, 1, 12) });
+ok(thu.not_now === true, "does not run on a Thursday");
+const early = await m.identityWeeklyRun({ AUDIT: D1, IDENTITY: D1 }, { nowMs: Date.UTC(2026, 9, 5, 5, 45) });
+ok(early.not_now === true, "does not run on Monday before 06:00Z");
+const runsBefore = writes.filter((w) => /INSERT INTO portfolio_runs/.test(w.sql)).length;
+const mon = await m.identityWeeklyRun({ AUDIT: D1, IDENTITY: D1 }, { nowMs: Date.UTC(2026, 9, 5, 6, 15) });
+ok(mon.status === "ok" && writes.filter((w) => /INSERT INTO portfolio_runs/.test(w.sql)).length === runsBefore + 1, "runs on Monday after 06:00Z and writes one row");
+ok(events.get("identity-weekly-2026-10-05") && events.get("identity-weekly-2026-10-05").status === "ok", "records the run on cloud_ops_events");
+const again = await m.identityWeeklyRun({ AUDIT: D1, IDENTITY: D1 }, { nowMs: Date.UTC(2026, 9, 5, 6, 30) });
+ok(again.throttled === "2026-10-05" && writes.filter((w) => /INSERT INTO portfolio_runs/.test(w.sql)).length === runsBefore + 1, "a second tick the same Monday is throttled");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

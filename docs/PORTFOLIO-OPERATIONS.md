@@ -14,7 +14,7 @@ Any run may improve this file through a pull request; the improvement is part of
 | What | Where | Who changes it |
 |---|---|---|
 | Strategy, identity rules, channels, scorecard, portfolio, targets | `docs/STRATEGY.md` | this procedure (PR) |
-| Profile copy, CV, opportunities, the owner's approvals and to-dos | D1 `qnfo-audit.owner_docs` (key `identity`, private) and `owner_actions`, read at fleet.qnfo.org/owner and edited at /owner/edit/identity behind the owner's login (each save keeps the replaced version) | the owner; the Monday identity review reports, never edits |
+| Profile copy, CV, opportunities, the owner's approvals and to-dos | the private D1 `qnfo-identity` (table `owner_docs`, key `identity`; bound only to qnfo-fleet-dashboard) and `owner_actions`, read at fleet.qnfo.org/owner and edited at /owner/edit/identity behind the owner's login (each save keeps the replaced version) | the owner; the Monday identity review reports, never edits |
 | Open work | D1 `qnfo-audit.agent_issues` (+ `issue_triage`) | everyone; close only with evidence |
 | Gates and metrics | D1 `impact_thresholds`, `metric_registry`, `objectives`, `shutdown_manifest` | this procedure, with a STRATEGY reference |
 | Run log | D1 `qnfo-audit.portfolio_runs` (row 1 = the 2026-10-01 baseline) | each run appends one row |
@@ -25,11 +25,12 @@ Other recurring work, and the split so nothing runs twice (all of it on Cloudfla
 - **Fleet defects** (hourly): qnfo-fleet-control `evolveTick` turns open `agent_issues` into anchored PRs, and
   qnfo-backlog-exec (01:10 UTC) closes or reopens them with evidence. This procedure does not sweep general defects; it
   takes only STRATEGY-tagged issues (source `claude-code-session:STRATEGY-1`) and reach/ROI work.
-- **Identity weekly review** (IDENTITY-WEEKLY-1, Mondays 07:30 Europe/Amsterdam, qnfo-cloud-ops on the `visibility`
-  tick; on demand `POST /run?job=identity-weekly`): Bluesky, Mastodon, Zenodo, ORCID, GitHub and OpenAlex metrics; live
-  bios against the canonical copy and the STRATEGY 2.2 never-claim list; deadline and page checks for every opportunity;
-  funder and employer replies by domain and subject. It writes one `portfolio_runs` row (kind `identity-weekly`), emails
-  the owner only on urgent items, and never edits the Identity doc or a public profile.
+- **Identity weekly review** (IDENTITY-WEEKLY-1, Mondays after 06:00 UTC, qnfo-fleet-dashboard on its existing `*/15` cron,
+  once a day via the `cloud_ops_events` row `identity-weekly-<day>`): Bluesky, Mastodon, Zenodo, ORCID, GitHub and
+  OpenAlex metrics; live bios against the canonical copy and the STRATEGY 2.2 never-claim list; deadline and page checks
+  for every opportunity; funder and employer replies by domain and subject. It writes one `portfolio_runs` row (kind
+  `identity-weekly`), opens one urgent owner queue card when something is urgent, and never edits the Identity doc or a
+  public profile.
 - Agent sessions are optional contributors and nothing on this list waits for one. Nothing is scheduled on claude.ai
   (no Routines, no check-ins); a session that wants to follow its PR relies on GitHub events while it is open.
 

@@ -34,6 +34,13 @@ binding = "GRAPH"
 database_name = "qnfo-graph"
 database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
 
+# IDENTITY-STORE-1 (2026-10-01, NO-CLAUDE-RUNTIME-DEPENDENCY-1, agent_issues 1723): the owner's private documents (identity,
+# CV, opportunities, archives, edit history) live in their own D1, bound ONLY to this worker. Never bind it anywhere else.
+[[d1_databases]]
+binding = "IDENTITY"
+database_name = "qnfo-identity"
+database_id = "6c26125a-908a-4774-9812-f1f0e60afc5f"
+
 [triggers]
 crons = ["*/15 * * * *"]
 
