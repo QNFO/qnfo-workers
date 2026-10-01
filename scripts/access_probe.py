@@ -18,6 +18,7 @@ Usage:
 import json
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 UA = "qnfo-access-probe/1 (read-only)"
@@ -28,10 +29,21 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _is_access_redirect(location):
+    """True only when the Location HOST is cloudflareaccess.com or a subdomain of it, or the PATH
+    starts with /cdn-cgi/access/. A substring match would accept e.g. https://evil.example/?x=cloudflareaccess.com."""
+    if not location:
+        return False
+    u = urllib.parse.urlsplit(location)
+    host = (u.hostname or "").lower()
+    if host == "cloudflareaccess.com" or host.endswith(".cloudflareaccess.com"):
+        return True
+    return u.path.lower().startswith("/cdn-cgi/access/")
+
+
 def classify(status, headers, location):
-    loc = (location or "").lower()
     hdr = {k.lower(): v for k, v in headers.items()}
-    if "cloudflareaccess.com" in loc or "/cdn-cgi/access/" in loc:
+    if _is_access_redirect(location):
         return "ACCESS"
     if status in (401, 403) and any(k.startswith("cf-access") for k in hdr):
         return "ACCESS"
