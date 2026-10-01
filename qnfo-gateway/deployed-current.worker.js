@@ -1,4 +1,4 @@
-var VERSION="3.7.24-query-auth";
+var VERSION="3.7.25-capability-contract";
 // ORG-LABEL-1 (2026-10-01, docs/STRATEGY.md s2.1): there is no legal entity and the work is one researcher with an
 // AI-assisted pipeline, so "Research Foundation" and "research collective" overclaim. Labels only; the positioning copy
 // waits for the owner's approval in the Identity doc. ABOUT-GA-1: /about was the one gateway page without the GA4 tag.
@@ -1343,7 +1343,7 @@ __name22222222(handleRss, "handleRss");
 __name222222222(handleRss, "handleRss");
 __name2222222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION });
+  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "graph-api", "ask-a-paper", "legal-pages"], limitations: ["Ask-a-paper uses one model (glm-5.3-flash) with a 2048-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -1381,11 +1381,51 @@ __name2222222(handleLegal, "handleLegal");
 __name22222222(handleLegal, "handleLegal");
 __name222222222(handleLegal, "handleLegal");
 __name2222222222(handleLegal, "handleLegal");
+/* GATEWAY-ASK-RATE-LIMIT-1 (2026-10-01): POST /api/ask is public and each call is a Workers AI completion.
+   Counters live in this worker's own D1 (qnfo-graph, table ask_rate): ASK_PER_IP_HOUR per hashed client IP
+   per UTC hour, ASK_PER_DAY across all callers per UTC day. Raw IPs are never stored. The daily cron
+   prunes rows older than two days. A counter failure lets the call through (the AI cost stays bounded by
+   the question cap below); a limit hit returns 429 before any model call. */
+var ASK_PER_IP_HOUR = 10;
+var ASK_PER_DAY = 300;
+var ASK_QUESTION_MAX = 1000;
+var askRateReady = false;
+async function askRateHit(env, key) {
+  if (!askRateReady) {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS ask_rate (k TEXT PRIMARY KEY, n INTEGER NOT NULL, ts TEXT NOT NULL)").run();
+    askRateReady = true;
+  }
+  const r = await env.DB.prepare("INSERT INTO ask_rate (k, n, ts) VALUES (?1, 1, ?2) ON CONFLICT(k) DO UPDATE SET n = n + 1 RETURNING n").bind(key, new Date().toISOString()).first();
+  return r && r.n || 0;
+}
+async function askRateCheck(request, env) {
+  if (!env.DB) return null;
+  try {
+    const now = new Date().toISOString();
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("ask-rate:" + (env.SYNC_TOKEN || "") + ":" + ip));
+    const h = Array.from(new Uint8Array(digest).slice(0, 8)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    if (await askRateHit(env, "ip:" + h + ":" + now.slice(0, 13)) > ASK_PER_IP_HOUR) return json({ error: "Too many questions from this address; try again next hour." }, 429);
+    if (await askRateHit(env, "day:" + now.slice(0, 10)) > ASK_PER_DAY) return json({ error: "The daily question budget is spent; try again tomorrow (UTC)." }, 429);
+  } catch (e) {
+  }
+  return null;
+}
+async function askRatePrune(env) {
+  if (!env.DB) return;
+  try {
+    await env.DB.prepare("DELETE FROM ask_rate WHERE ts < ?1").bind(new Date(Date.now() - 2 * 864e5).toISOString()).run();
+  } catch (e) {
+  }
+}
 async function handleAskAI(request, env) {
   if (!env.AI) return json({ error: "AI binding not configured" }, 503);
   const body = await request.json().catch(() => ({}));
   const { slug, question } = body;
-  if (!question || !question.trim()) return json({ error: "Missing question" }, 400);
+  if (!question || typeof question !== "string" || !question.trim()) return json({ error: "Missing question" }, 400);
+  if (question.length > ASK_QUESTION_MAX) return json({ error: "Question too long (max " + ASK_QUESTION_MAX + " characters)" }, 413);
+  const limited = await askRateCheck(request, env);
+  if (limited) return limited;
   try {
     let paperTitle = "", paperBody = "";
     if (slug) {
@@ -1404,7 +1444,7 @@ async function handleAskAI(request, env) {
     });
     return json({ answer: result?.response || "No response generated.", slug: slug || null });
   } catch (e) {
-    return json({ error: e.message }, 500);
+    return json({ error: "The model call failed; try again later." }, 502);
   }
 }
 __name(handleAskAI, "handleAskAI");
@@ -1889,6 +1929,7 @@ var gateway_worker_default = {
       await indexNowSubmit(await collectPaperUrls(env, 7));
     } catch (e) {
     }
+    await askRatePrune(env);
   }
 };
 export {
