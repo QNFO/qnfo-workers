@@ -17,6 +17,11 @@ ACTIONS
 -------
   delete-worker NAME     DELETE a script. Refused unless the repo directory NAME carries a RETIRED or
                          FOLDED marker (the repo's own retirement record) and NAME is not protected.
+  delete-vectorize-index NAME
+                         DELETE a Vectorize index. Refused unless NAME is in VECTORIZE_RETIRED (an explicit allowlist
+                         mapping the index to the repo directory of the retired worker that owned it) and that
+                         directory carries a RETIRED or FOLDED marker. Added for #272, where the index
+                         qnfo-calibration was recreated for the folded qnfo-fleet-calibrator.
   gateway-logs           Summarise recent AI Gateway logs (optionally --model) by model, provider,
                          status, metadata and user agent, for caller attribution.
   ai-neurons             Workers AI neurons by model for the last 24h and 7d (GraphQL).
@@ -41,6 +46,8 @@ import urllib.error
 import urllib.request
 
 API = "https://api.cloudflare.com/client/v4"
+# VECTORIZE-RETIRED-ALLOWLIST-1: index name -> repo directory of the retired worker that owned it.
+VECTORIZE_RETIRED = {"qnfo-calibration": "qnfo-fleet-calibrator"}
 PROTECTED = {
     "qnfo-ops", "qnfo-ai", "qnfo-fleet-control", "qnfo-deploy-guard", "qnfo-email", "personal-api",
     "personal-companion", "qnfo-cloud-ops", "qnfo-fleet-dashboard", "qnfo-research-exec",
@@ -206,9 +213,32 @@ def r2_get(acct: str, token: str, path: str) -> int:
     return 0
 
 
+def delete_vectorize_index(name: str, acct: str, token: str) -> int:
+    owner = VECTORIZE_RETIRED.get(name)
+    if not owner:
+        emit({"action": "delete-vectorize-index", "index": name, "ok": False, "refused": "not in VECTORIZE_RETIRED"})
+        return 3
+    marker = next((m for m in ("RETIRED", "FOLDED") if os.path.isfile(os.path.join(owner, m))), None)
+    if not marker:
+        emit({"action": "delete-vectorize-index", "index": name, "ok": False,
+              "refused": "no RETIRED/FOLDED marker in the repo directory " + owner})
+        return 3
+    path = f"/accounts/{acct}/vectorize/v2/indexes/{name}"
+    st0, _ = call("GET", path, token)
+    if st0 in (404, 410):
+        emit({"action": "delete-vectorize-index", "index": name, "ok": True, "already_absent": True, "marker": marker})
+        return 0
+    st, j = call("DELETE", path, token)
+    st2, _ = call("GET", path, token)
+    ok = bool(j.get("success")) and st2 in (404, 410)
+    emit({"action": "delete-vectorize-index", "index": name, "marker": marker, "http": st, "ok": ok,
+          "verify_http": st2, "errors": j.get("errors")})
+    return 0 if ok else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["report", "r2-get", "delete-worker", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe"])
+    ap.add_argument("action", choices=["report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -220,6 +250,11 @@ def main() -> int:
             print("::error::delete-worker needs --target")
             return 2
         return delete_worker(a.target, acct, token)
+    if a.action == "delete-vectorize-index":
+        if not a.target:
+            print("::error::delete-vectorize-index needs --target")
+            return 2
+        return delete_vectorize_index(a.target, acct, token)
     if a.action == "r2-get":
         return r2_get(acct, token, a.target)
     if a.action == "report":
