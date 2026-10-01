@@ -1,8 +1,8 @@
 {
  "counts": {
-  "already-applied": 75,
+  "already-applied": 77,
   "error": 8,
-  "stale-anchor": 12,
+  "stale-anchor": 11,
   "undetermined": 9
  },
  "errored": [
@@ -447,12 +447,14 @@
   },
   {
    "changed_files": [],
-   "rc": 3,
+   "rc": 0,
    "script": "scripts/fleetfix-1299-1193-patch.py",
    "tail": [
-    "FAIL-CLOSED: [1299:qnfo-social/worker.js] pre-version anchor occurs 0 times (want 1): \"var VERSION = '0.7.15-no-retire-on-redirect';\""
+    "node --check OK: fleet-exec/worker.js",
+    "node --check OK: fleet-exec/deployed-current.worker.js",
+    "CHANGED=0"
    ],
-   "verdict": "stale-anchor"
+   "verdict": "already-applied"
   },
   {
    "changed_files": [],
@@ -471,7 +473,7 @@
    "script": "scripts/github-write-409-retry-patch.py",
    "tail": [
     "ALREADY REPAIRED (marker(s) GITHUB-409-RETRY-1); no change",
-    "bytes: 415328 (unchanged)",
+    "bytes: 406890 (unchanged)",
     "parity: source==mirror"
    ],
    "verdict": "already-applied"
@@ -493,7 +495,7 @@
    "script": "scripts/github409-variant-reread-patch.py",
    "tail": [
     "already applied (idempotent no-op): qnfo-ops/deployed-current.worker.js",
-    "mirror pair byte-identical (415330 bytes)",
+    "mirror pair byte-identical (406892 bytes)",
     "changed=false"
    ],
    "verdict": "already-applied"
@@ -536,8 +538,8 @@
    "script": "scripts/ops-deploy-ledger-patch.py",
    "tail": [
     "already patched (marker present) - no-op",
-    "  worker.js bytes=415330 marker=1",
-    "  deployed-current.worker.js bytes=415330 marker=1"
+    "  worker.js bytes=406892 marker=1",
+    "  deployed-current.worker.js bytes=406892 marker=1"
    ],
    "verdict": "already-applied"
   },
@@ -779,6 +781,15 @@
   {
    "changed_files": [],
    "rc": 0,
+   "script": "scripts/patch-version-precedence-2.py",
+   "tail": [
+    "ALREADY APPLIED: VERSION-PRECEDENCE-2 present; idempotent no-op"
+   ],
+   "verdict": "already-applied"
+  },
+  {
+   "changed_files": [],
+   "rc": 0,
    "script": "scripts/patch-version-quote-1.py",
    "tail": [
     "VERSION-QUOTE-1 already applied - no-op"
@@ -878,7 +889,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-body-patch.py",
    "tail": [
-    "already patched (marker '_lastRouterHost' present); no write. sha256=6b206fc160726aef"
+    "already patched (marker '_lastRouterHost' present); no write. sha256=4f6196b934bee795"
    ],
    "verdict": "already-applied"
   },
@@ -887,7 +898,7 @@
    "rc": 0,
    "script": "scripts/routerfetch-host-order-correction-patch.py",
    "tail": [
-    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=6b206fc160726aef"
+    "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=4f6196b934bee795"
    ],
    "verdict": "already-applied"
   },
@@ -1108,14 +1119,13 @@
   "scripts/d1guard-literal-aware-patch.py",
   "scripts/deploy-guard-wrap-patch.py",
   "scripts/fleet-autoaudit-v4-envelope-patch.py",
-  "scripts/fleetfix-1299-1193-patch.py",
   "scripts/patch-container-binding-guard-1.py",
   "scripts/raw-put-schedules-patch.py",
   "scripts/run-gate-internal-patch.py"
  ],
  "superseded": [],
- "total": 104,
- "ts": "2026-10-01T07:32:06.036Z",
+ "total": 105,
+ "ts": "2026-10-01T00:04:32.482Z",
  "undetermined": [
   "scripts/affirm-veto-sentence-scope-patch.py",
   "scripts/apply-pending-patches.py",

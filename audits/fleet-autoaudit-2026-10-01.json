@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 07:27:01",
+  "audited_at": "2026-10-01 07:30:58",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -23,14 +23,21 @@
         ],
         "dir": "qnfo-email-orchestrator",
         "worker": "qnfo-email-orchestrator"
+      },
+      {
+        "crons": [
+          "0 * * * *"
+        ],
+        "dir": "qnfo-signal-loop",
+        "worker": "qnfo-signal-loop"
       }
     ],
-    "cron_only_count": 2,
+    "cron_only_count": 3,
     "drift": [
       {
         "dir": "qnfo-fleet-control",
-        "live": "0.4.53-signal-observe",
-        "repo": "\\d+\\.\\d+\\.\\d+[^",
+        "live": "0.4.54-version-regex-safe",
+        "repo": "0.4.53-signal-observe",
         "worker": "qnfo-fleet-control"
       }
     ],
@@ -38,12 +45,7 @@
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
-    "no_health_route": [
-      {
-        "dir": "qnfo-signal-loop",
-        "worker": "qnfo-signal-loop"
-      }
-    ],
+    "no_health_route": [],
     "no_live_version": [],
     "no_repo_version": [],
     "not_a_worker": [
@@ -1142,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "\\d+\\.\\d+\\.\\d+[^",
+      "before": "0.4.53-signal-observe",
       "http": 200,
-      "live": "0.4.53-signal-observe",
+      "live": "0.4.54-version-regex-safe",
       "match": 0,
       "note": "DRIFT",
       "worker": "qnfo-fleet-control"
@@ -1391,10 +1393,10 @@
     },
     "qnfo-signal-loop": {
       "before": null,
-      "http": 404,
+      "http": null,
       "live": null,
       "match": 0,
-      "note": "NO_HEALTH_ROUTE",
+      "note": "CRON_ONLY",
       "worker": "qnfo-signal-loop"
     },
     "qnfo-skill-sync": {
