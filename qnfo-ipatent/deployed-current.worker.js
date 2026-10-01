@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.4.4"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.4.5"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -448,7 +448,7 @@ __name2(handleDisclosures, "handleDisclosures");
 __name22(handleDisclosures, "handleDisclosures");
 __name222(handleDisclosures, "handleDisclosures");
 async function handleSubmission(env, id) {
-  const row = await env.IPATENT_DB.prepare("SELECT * FROM submissions WHERE submission_id = ?1").bind(id).first();
+  const row = await env.IPATENT_DB.prepare("SELECT submission_id, inventor_name, title, disclosure_text, document_html, status, technical_field, abstract, claims, summary, background, created_at FROM submissions WHERE submission_id = ?1" /* SUBMISSION-PII-1 (2026-10-01): no email, IP, user agent, country or session id on a public route */).bind(id).first();
   if (!row) return json({ error: "Submission not found: " + id }, 404);
   return json(row);
 }

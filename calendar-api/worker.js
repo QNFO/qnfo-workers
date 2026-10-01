@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.0-notes-intake";
+var VERSION = "0.4.1-personal-ics-auth";
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
 // recreated as a separate worker. Its EXECUTE leg already wrote this worker's `calendar` table, and both share the
@@ -356,8 +356,10 @@ var worker_default = {
     const plane = url.searchParams.get("plane") || "qnfo";
     if (!PLANES.includes(plane)) return json({ error: "plane must be qnfo|personal" }, 400);
     if (path === "/health") {
+      // PERSONAL-ICS-AUTH-1 (2026-10-01): the tokenised feed URLs are capability links, so /health
+      // only returns them to a caller holding CAL_TOKEN.
       const urls = [];
-      for (const p of PLANES) {
+      for (const p of authorized(request, env) ? PLANES : []) {
         const tok = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + p).first();
         urls.push({ plane: p, url: tok && tok.v ? R2_PUBLIC + "/calendar/" + p + "-" + tok.v + ".ics" : null });
       }
@@ -383,6 +385,8 @@ var worker_default = {
       return json({ ok: true, version: VERSION, vault: !!env.VAULT, notes: t && t.c || 0, triage: tt && tt.c || 0, publish_pending: q && q.c || 0, recent_runs: runs.results || [] });
     }
     if (path === "/events.ics") {
+      // PERSONAL-ICS-AUTH-1: the personal plane needs CAL_TOKEN; subscribe to it via the tokenised R2 URL.
+      if (plane === "personal" && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
       const fromIso = toIso(url.searchParams.get("from")) || new Date(Date.now() - 864e5).toISOString();
       const ics = await buildICS(env, plane, fromIso);
       return new Response(ics, { headers: { "content-type": "text/calendar; charset=utf-8" } });
