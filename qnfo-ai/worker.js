@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.7-internal-caller-props";
+var VERSION = "5.29.8-roster-ctx-catalog";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -55,17 +55,17 @@ var MODELS = {
   // capable models for lowest cost Ã¢ÂÂ paid OK if best value". All postpaid; $/M input noted.
   // $0.06/M Ã¢ÂÂ cheap general default (131k ctx, reasoning)
   // $0.10/M
-  "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: true },
+  "glm-5.3-flash": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3-flash", reasoning: true, maxOut: 32768, ctx: 1048576, temp: 0.6, topP: 0.9, tools: true, vision: true },
   // $0.15/M 1M-ctx natively multimodal (non-Llama vision)
   "gpt-oss-120b": { tier: 0, family: "openai", wa: "@cf/openai/gpt-oss-120b", reasoning: true, maxOut: 32768, ctx: 128e3, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $0.35/M reasoning/agentic
-  "deepseek-v4-flash-wa": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.7, topP: 0.9, tools: true, vision: false },
+  "deepseek-v4-flash-wa": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", reasoning: true, maxOut: 32768, ctx: 1048576, temp: 0.7, topP: 0.9, tools: true, vision: false },
   // $0.44/M official DeepSeek V4 Flash (1M ctx, reasoning)
   "deepseek-v4-pro-wa": { tier: 0, family: "deepseek", wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", reasoning: true, maxOut: 32768, ctx: 1048576, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $1.32/M 1M-ctx reasoning
   "kimi-k2.7-code": { tier: 0, family: "moonshot", wa: "@cf/moonshotai/kimi-k2.7-code", reasoning: true, maxOut: 32768, ctx: 262144, temp: 0.2, topP: 0.95, tools: true, vision: true },
   // $0.95/M 262k-ctx frontier coding (reasoning + vision)
-  "glm-5.3": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3", reasoning: true, maxOut: 32768, ctx: 1310720, temp: 0.6, topP: 0.9, tools: true, vision: false },
+  "glm-5.3": { tier: 0, family: "zai", wa: "@cf/zai-org/glm-5.3", reasoning: true, maxOut: 32768, ctx: 1048576, temp: 0.6, topP: 0.9, tools: true, vision: false },
   // $1.40/M 1M-ctx agentic coding
   // v5.0.0: vision (image-to-text + OCR) Ã¢ÂÂ free tier-0. Routed automatically when any
   // message carries an image_url part; selectable explicitly. License: Workers AI gates
