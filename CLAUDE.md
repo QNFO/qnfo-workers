@@ -74,7 +74,7 @@ because each one was broken at least once; the linked issue holds the evidence.
   Doc (rev 46, with its five comment threads) is `personal-life.owner_documents` key `identity-brand-opportunities` (private
   plane). Never recreate an owner document on claude.ai.
 - Known violations retired on 2026-10-01: the Identity doc on Claude Docs (exported, deleted); every claude.ai Routine and
-  check-in (disabled; ROUTINES-ON-CLAUDE-1 tracks the owner deleting them); owner-ratified objective revisions with no
+  check-in (all 82 exported to `qnfo-audit.retired_claude_routines` and deleted on the owner's directive; none may be recreated); owner-ratified objective revisions with no
   Cloudflare consumer (OBJECTIVE-REVISION-APPLY-1, applied by qnfo-fleet-dashboard 1.13.0); card notes only sessions read
   and queued tasks no Cloudflare loop read (now `agent_issues` rows, OWNER-NOTES-ROUTE-1); the qnfo-ops `claude-sonnet-4.5` route (2.38.34: no Anthropic upstream anywhere in
   the fleet; a `claude-*` model id routes to the ops model).
