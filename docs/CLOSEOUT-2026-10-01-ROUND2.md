@@ -206,3 +206,68 @@ decides it; **[superseded]** another session landed the same fix first and the d
   qnfo-gateway 3.7.23-home-identity (all carrying this round's changes).
 - metric_registry: 31/31 fresh; publications_30d 12, full_reports_live_30d 12, indexed_surface 450.
 - Open from this round: #1713 (contract), #1739 (design decision), #1725 (other session's applier; DoD measured by its contract).
+
+## Round 6 (20:30Z to 22:20Z): capability contract fleet-wide (#1735), public exposures found in the sweep
+
+Evidence labels as in round 5.
+
+### Merged and live [verified]
+
+PR 385 (squash e15c6c9) was deployed by canonical-deploy run 36929766356, which succeeded at 21:42:44Z. It is the
+only PR of this round. Two merges of main kept it current with #384, #388, #389, #390, #391 and #392. Where #388 had
+already gated a route (the calendar-api personal `.ics` and outreach `/api/*`), its gate was kept and this PR's
+duplicate was dropped.
+
+| Change | Live evidence (21:43Z to 21:47Z) |
+|---|---|
+| Capability contract (gate C6): `/health` advertises non-empty `capabilities[]` and `limitations[]` on 24 more workers, each limitation a fact checked in the code (an auth gate, a cron, a numeric cap) | All 24 serve the new version with the contract. The forced snapshot at 21:43:50Z read live 44, probed 44, conforming 41, non_conforming none |
+| CAPABILITY-SELF-REPORT-1: ai-health-prober, qnfo-email-orchestrator and qnfo-signal-loop have no public route, so each upserts its own `capability_audit_snapshot` row from its cron | ai-health-prober row 21:40:20Z, qnfo-email-orchestrator row 21:45:10Z, qnfo-signal-loop on its hourly tick |
+| LIFECYCLE-RUN-INTERNAL-1 (qnfo-lifecycle 1.6.7). `/run/*` was anonymous: secret names of every worker, full D1 exports to R2, memory mutation | Anonymous `/run/secrets-audit` returns 403 |
+| OBS-PUBLIC-READONLY-1 (qnfo-observability 1.2.14). `evOkAuth` failed open, so every worker's trace logs, personal-plane logs included, were public | Anonymous `/workers/logs` returns 403 |
+| The personal calendar feed URL was hard-coded in this public repository from 2026-09-21. personal-companion 1.7.4 reads the token at send time; calendar-api 0.4.3 CAL-FEED-ROTATE-1 revokes a renamed token on the next publish | Anonymous `?plane=personal` returns 401. Rotation: below |
+| PDF-RENDER-INTERNAL-1 (qnfo-pdf 1.0.1): public `POST /pdf` rendered arbitrary bodies, which spends browser compute | Returns 403; `/pdf/<slug>` is unchanged |
+| SECRET-LENGTH-LEAK-1 (qnfo-fleet-control 0.4.83): the 401 from `/optimize` reported the length of `OPTIMIZER_TRIGGER_SECRET` | Bare 401 with no length fields |
+| GATEWAY-ASK-RATE-LIMIT-1 (qnfo-gateway 3.7.25, #1748): public `/api/ask` ran one Workers AI completion per call with no cap | A 1001-character question returns 413. With the day counter at its cap of 300 the next ask returns 429 before any model call (counter restored to 11). `ask_rate` stores hashed addresses only |
+| INFRA-CRON-MATCH-1 (qnfo-infra 1.2.10): the declared `0 18 * * *` cron matched no branch | Code path covered by the harness; first evening run 18:00Z on 2026-10-02 |
+
+OPEN-ACCESS-1 (#390) keeps fleet reads open. None of the closures above is a fleet-data read: each is a fleet-changing
+write, spend, secret metadata, third-party PII or personal-plane data. That is the rule's stated exception.
+
+### Personal calendar feed rotation [verified]
+
+- **Why rotate:** git history keeps the leaked URL, so only a rotation revokes it.
+- **Before:** at 21:43Z the leaked URL answered 200 (probed by status only; the URL is not printed anywhere).
+- **Rotation:** under the calendar-api secret lease (acquired, then released), `calendar_meta.ics_token_personal` was
+  renamed to `ics_token_personal_prev`.
+- **Publish:** the 22:17Z hourly run mints a new token, writes the new object and deletes the old one.
+- **Owner:** the new URL reaches the owner privately in the next morning brief. personal-companion reads it at send time.
+- **After:** at 22:19Z the leaked URL answers 404. `calendar_meta` holds a new 24-character `ics_token_personal`, and
+  `ics_token_personal_prev` is gone. The publish deletes `_prev` only after writing a different token, so the old
+  token is revoked.
+
+### Closed with evidence this round
+
+- **#1748 GATEWAY-ASK-RATE-LIMIT-1:** see the table.
+  - The per-address 429 is covered by the node:sqlite stub test (10 × 200, then 429).
+  - A live same-address probe was impossible: this session egresses through a rotating proxy pool (8 addresses over 11 calls).
+- **#1735 CAPABILITY-CONTRACT-CONFORMANCE-1:** closed by its own contract, not by hand.
+  - EVID-C6-CONFORMANCE passed at 21:45:45Z (remediation_verifications #404), and the runner closed the issue.
+  - Re-measured at 22:01Z: 44 of 44 live workers conform, with fresh rows. Before this round it was 17 of 44, and 5 of
+    44 at 15:11Z.
+
+### Corrections
+
+- **EVID-C6-CONFORMANCE probe.** It compared ISO timestamps (`...T...Z`) with SQLite `datetime()` text. On the cutoff
+  date `T` sorts after a space, so rows up to about 48 hours old counted as fresh. Both counts now use `julianday()`.
+- **Earlier close of #1181.** Its close evidence leaned on "the respond and publish crons never auto-act". errata-hub
+  declares no crons at all, so none of its members runs. Filed as #1747 (ERRATA-HUB-CRONS-UNDECLARED-1, pillar
+  research). Enabling them sends replies and can publish corrections, so it is a charter decision, not a silent fix.
+- **Version collisions with concurrent PRs.** qnfo-social, qnfo-fleet-dashboard, qnfo-lifecycle and calendar-api
+  collided with versions taken by concurrent PRs. Each was resolved by taking the next version. The push-event
+  version-bump-guard compares per push, so calendar-api needed one more bump (0.4.3) after the first merge of main.
+
+### State at 22:20Z
+
+- RM-GATE-C6: `enforced`, re-measured 21:44Z.
+- capability_audit_snapshot: 44 of 44 conforming and fresh. It is kept fresh by the 6-hourly deploy-guard snapshot and the cron-only self-reports.
+- Open from this round: #1747 (charter decision on errata-hub crons).
