@@ -1,21 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@797a4296e350",
- "due": 1,
+ "verifier": "remediation-consumer@aba14be0014d",
+ "due": 0,
  "pass": 0,
- "fail": 1,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "issue-1730",
-   "issue_id": 1730,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -32,7 +23,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 3853,
- "head": "797a4296e350451900dde6b2130bc820ba803f28",
+ "spent_ms": 2316,
+ "head": "aba14be0014dcdf2174b403731cb6f767892803f",
  "job_status": "success"
 }
