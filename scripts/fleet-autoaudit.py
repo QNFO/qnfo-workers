@@ -56,6 +56,7 @@ import datetime
 import json
 import os
 import subprocess
+import time
 import sys
 import urllib.error
 import urllib.request
@@ -128,6 +129,62 @@ def _refresh_repo():
         return False
 
 
+SETTLE_BUDGET_S = 90      # total wall budget for waiting on in-flight deploys, shared by all candidates
+SETTLE_POLL_S = 15
+SETTLE_RECENT_S = 900     # only a commit this young can plausibly still be deploying
+
+
+def _commit_age_s(directory):
+    """Seconds since the newest commit touching <directory>; None if unknown."""
+    try:
+        p = subprocess.run(["git", "log", "-1", "--format=%ct", "--", directory],
+                           capture_output=True, text=True, cwd=ROOT)
+        ts = (p.stdout or "").strip()
+        return max(0, int(time.time()) - int(ts)) if ts else None
+    except Exception:
+        return None
+
+
+def _settle_inflight(data):
+    """DEPLOY-SETTLE-1 (2026-10-01): wait briefly for a deploy that is still landing before calling it DRIFT.
+
+    Every merge that bumps a worker opens a one-to-three-minute window in which the repo is ahead of live and the
+    canonical deploy is still running; an audit that probes inside it reports DRIFT for a worker that is about to be
+    SYNC (errata-hub 1.1.3 vs 1.1.4, probed 30 s before its deploy completed). Only workers the guard already put in
+    `ahead` (repo STRICTLY ahead, one unambiguous version) are considered, and only if their newest commit is recent.
+    If live reaches the repo version inside the budget the worker is reported SYNC and removed from `ahead`, so --apply
+    cannot redeploy something that just deployed. Anything that does not settle stays DRIFT. Never raises.
+    """
+    cands = [i for i in data.get("ahead", []) if i.get("worker") and i.get("repo")]
+    cands = [i for i in cands if (_commit_age_s(i.get("dir") or i["worker"]) or 10 ** 9) <= SETTLE_RECENT_S]
+    if not cands:
+        return data
+    settled = []
+    deadline = time.time() + SETTLE_BUDGET_S
+    pending = list(cands)
+    while pending:
+        still = []
+        for it in pending:
+            if probe_version(it["worker"]) == it["repo"]:
+                settled.append(it)
+            else:
+                still.append(it)
+        pending = still
+        if not pending or time.time() + SETTLE_POLL_S > deadline:
+            break
+        time.sleep(SETTLE_POLL_S)
+    if settled:
+        names = {i["worker"] for i in settled}
+        data["drift"] = [i for i in data.get("drift", []) if _w(i) not in names]
+        data["ahead"] = [i for i in data.get("ahead", []) if i.get("worker") not in names]
+        data.setdefault("sync_workers", []).extend({"worker": i["worker"], "version": i["repo"]} for i in settled)
+        print("DEPLOY-SETTLE-1: in-flight deploy(s) landed within %ds -> SYNC: %s" % (SETTLE_BUDGET_S, sorted(names)))
+    if pending:
+        print("DEPLOY-SETTLE-1: still ahead after %ds (reported as drift): %s" % (SETTLE_BUDGET_S, sorted(i["worker"] for i in pending)))
+    data["_deploy_settle"] = {"waited_for": sorted(i["worker"] for i in cands), "settled": sorted(i["worker"] for i in settled)}
+    return data
+
+
 def run_guard():
     data = _run_guard_once()
     # Confirm before reporting: a drift row must survive a fresh checkout to be real. One extra pass, only when drift
@@ -138,6 +195,8 @@ def run_guard():
         data["_drift_confirm"] = {"first_pass": first, "refreshed": True,
                                   "second_pass": sorted(_w(i) for i in (data.get("drift", []) + data.get("content_drift", [])))}
         print("DRIFT-CONFIRM-1: first pass %s; after fast-forwarding to origin/main: %s" % (first, data["_drift_confirm"]["second_pass"]))
+    if data.get("ahead"):
+        data = _settle_inflight(data)
     # DEAD-STATE-FILE-1 (2026-09-29): apply_ahead() reads STATE and NOTHING in this
     # repository ever wrote it, so `--apply` always reached die() and exited rc=3.
     # Measured: every fleet-autodeploy run failed at the apply step, so the automatic

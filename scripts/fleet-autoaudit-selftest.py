@@ -55,5 +55,76 @@ check("content drift is confirmed the same way", not d["content_drift"] and c["g
 d, c = scenario([DRIFT, CLEAN], True)
 check("guard return code is preserved and state is persisted", d.get("_guard_rc") == 0 and os.path.getsize(fa.STATE) > 0)
 
+# ---------------------------------------------------------------- DEPLOY-SETTLE-1
+class FakeTime:
+    """Virtual clock: sleep() advances time, so the budget logic is exercised instantly and deterministically."""
+    def __init__(self): self.t = 1_000_000.0
+    def time(self): return self.t
+    def sleep(self, x): self.t += x
+
+def settle_case(ahead, probes, age_s):
+    """probes: {worker: [version, ...]} consumed one per probe (last value repeats)."""
+    clock, calls = FakeTime(), {"probe": 0}
+    seq = {w: list(v) for w, v in probes.items()}
+    def fake_probe(w):
+        calls["probe"] += 1
+        v = seq[w]
+        return v.pop(0) if len(v) > 1 else v[0]
+    real = (fa.time, fa.probe_version, fa._commit_age_s)
+    fa.time, fa.probe_version, fa._commit_age_s = clock, fake_probe, (lambda d: age_s)
+    try:
+        data = {"drift": [{"worker": a["worker"], "repo": a["repo"], "live": a["live"]} for a in ahead],
+                "ahead": [dict(a, dir=a["worker"], artifact=a["worker"] + "/worker.js") for a in ahead], "sync_workers": []}
+        out = fa._settle_inflight(data)
+    finally:
+        fa.time, fa.probe_version, fa._commit_age_s = real
+    return out, calls, clock.t - 1_000_000.0
+
+ERR = {"worker": "errata-hub", "repo": "1.1.4", "live": "1.1.3"}
+RAD = {"worker": "radar-hub", "repo": "1.0.9", "live": "1.0.8"}
+
+out, calls, waited = settle_case([ERR], {"errata-hub": ["1.1.3", "1.1.3", "1.1.4"]}, 60)
+check("deploy landing inside the window -> SYNC, removed from drift AND ahead (so --apply cannot redeploy it)",
+      not out["drift"] and not out["ahead"] and out["sync_workers"] == [{"worker": "errata-hub", "version": "1.1.4"}] and calls["probe"] == 3, (out, calls))
+check("it only waited as long as needed", waited == 30, waited)
+
+out, calls, waited = settle_case([ERR], {"errata-hub": ["1.1.3"]}, 60)
+check("deploy that never lands stays DRIFT and ahead", [i["worker"] for i in out["drift"]] == ["errata-hub"] and len(out["ahead"]) == 1 and not out["sync_workers"], out)
+check("the wait is bounded by the budget", waited <= fa.SETTLE_BUDGET_S and calls["probe"] <= 8, (waited, calls))
+
+out, calls, waited = settle_case([ERR], {"errata-hub": ["1.1.3"]}, 5000)
+check("an old commit cannot be mid-deploy: no probing, no waiting", calls["probe"] == 0 and waited == 0 and len(out["drift"]) == 1, (calls, waited))
+
+out, calls, waited = settle_case([ERR], {"errata-hub": ["1.1.3"]}, None)
+check("unknown commit age: no waiting (never guess)", calls["probe"] == 0 and waited == 0, (calls, waited))
+
+out, calls, waited = settle_case([ERR, RAD], {"errata-hub": ["1.1.3", "1.1.4"], "radar-hub": ["1.0.8"]}, 60)
+check("mixed: the one that landed is SYNC, the one that did not stays DRIFT",
+      [i["worker"] for i in out["drift"]] == ["radar-hub"] and [i["worker"] for i in out["ahead"]] == ["radar-hub"] and [i["worker"] for i in out["sync_workers"]] == ["errata-hub"], out)
+
+# a drift row that is NOT repo-ahead (live ahead of repo) is never touched or waited on
+calls2 = {"probe": 0}
+real = fa.probe_version
+fa.probe_version = lambda w: calls2.__setitem__("probe", calls2["probe"] + 1) or "x"
+try:
+    live_ahead = fa._settle_inflight({"drift": [{"worker": "w", "repo": "1.0", "live": "2.0"}], "ahead": [], "sync_workers": []})
+finally:
+    fa.probe_version = real
+check("drift that is not repo-ahead is never waited on", calls2["probe"] == 0 and len(live_ahead["drift"]) == 1, calls2)
+
+# end to end: run_guard settles after the confirm step and persists the settled result
+real_guard, real_ref, real_settle_deps = fa._run_guard_once, fa._refresh_repo, (fa.time, fa.probe_version, fa._commit_age_s)
+fa._run_guard_once = lambda: dict({"drift": [{"worker": "errata-hub", "repo": "1.1.4", "live": "1.1.3"}], "content_drift": [],
+    "ahead": [{"worker": "errata-hub", "dir": "errata-hub", "repo": "1.1.4", "live": "1.1.3", "artifact": "errata-hub/worker.js"}], "sync_workers": []}, _guard_rc=0)
+fa._refresh_repo = lambda: False
+fa.time, fa.probe_version, fa._commit_age_s = FakeTime(), (lambda w: "1.1.4"), (lambda d: 30)
+try:
+    d = fa.run_guard()
+finally:
+    fa._run_guard_once, fa._refresh_repo = real_guard, real_ref
+    fa.time, fa.probe_version, fa._commit_age_s = real_settle_deps
+check("run_guard end to end: in-flight deploy reported SYNC, state persisted without drift",
+      not d["drift"] and not d["ahead"] and d.get("_deploy_settle", {}).get("settled") == ["errata-hub"], d.get("_deploy_settle"))
+
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
