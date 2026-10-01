@@ -1,11 +1,25 @@
 {
-  "audited_at": "2026-10-01 11:52:31",
-  "d1_write_failures": [],
-  "d1_writes_ok": 113,
+  "audited_at": "2026-10-01 11:58:12",
+  "d1_write_failures": [
+    [
+      "personal-companion",
+      "<urlopen error [Errno 104] Connection reset by peer>"
+    ],
+    [
+      "personal-life-maintain",
+      "<urlopen error [Errno 104] Connection reset by peer>"
+    ],
+    [
+      "qnfo-agent-orchestrator-legacy-dup",
+      "<urlopen error [Errno 104] Connection reset by peer>"
+    ]
+  ],
+  "d1_writes_ok": 110,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-gateway"
+        "qnfo-gateway",
+        "qnfo-outreach"
       ],
       "refreshed": true,
       "second_pass": []
@@ -41,7 +55,18 @@
     ],
     "cron_only_count": 3,
     "drift": [],
-    "live_err": [],
+    "live_err": [
+      {
+        "dir": "qnfo-gateway",
+        "err": "ERR:<urlopen error [Errno 104] Connection reset by pee",
+        "worker": "qnfo-gateway"
+      },
+      {
+        "dir": "qnfo-register-guard",
+        "err": "ERR:<urlopen error [Errno 104] Connection reset by pee",
+        "worker": "qnfo-register-guard"
+      }
+    ],
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
@@ -139,7 +164,6 @@
       "qnfo-pipeline-ops",
       "qnfo-proof",
       "qnfo-qwav",
-      "qnfo-register-guard",
       "qnfo-research-radar",
       "qnfo-research-supervisor",
       "qnfo-scorecard",
@@ -149,7 +173,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 60,
+    "not_deployed_notdrift": 59,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -356,10 +380,6 @@
         "worker": "qnfo-qwav"
       },
       {
-        "dir": "qnfo-register-guard",
-        "worker": "qnfo-register-guard"
-      },
-      {
         "dir": "qnfo-research-radar",
         "worker": "qnfo-research-radar"
       },
@@ -395,7 +415,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 41,
+    "sync": 40,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -474,7 +494,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.2.3",
+        "version": "0.2.4",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -501,11 +521,6 @@
         "dir": "qnfo-fleet-dashboard",
         "version": "1.9.1-invest-spend-basis",
         "worker": "qnfo-fleet-dashboard"
-      },
-      {
-        "dir": "qnfo-gateway",
-        "version": "3.7.20-scholar-pdf-ua",
-        "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-infra",
@@ -549,7 +564,7 @@
       },
       {
         "dir": "qnfo-outreach",
-        "version": "0.3.4-shared-cap",
+        "version": "0.3.5-shared-cap-notes",
         "worker": "qnfo-outreach"
       },
       {
@@ -569,7 +584,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.35-revise-patch",
+        "version": "0.9.36-zenodo-version-requests",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1039,9 +1054,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.2.3",
+      "before": "0.2.4",
       "http": 200,
-      "live": "0.2.3",
+      "live": "0.2.4",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1183,11 +1198,11 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.20-scholar-pdf-ua",
-      "http": 200,
-      "live": "3.7.20-scholar-pdf-ua",
-      "match": 1,
-      "note": "SYNC",
+      "before": null,
+      "http": 0,
+      "live": null,
+      "match": 0,
+      "note": "LIVE_ERR",
       "worker": "qnfo-gateway"
     },
     "qnfo-idea-factory": {
@@ -1295,9 +1310,9 @@
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
-      "before": "0.3.4-shared-cap",
+      "before": "0.3.5-shared-cap-notes",
       "http": 200,
-      "live": "0.3.4-shared-cap",
+      "live": "0.3.5-shared-cap-notes",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-outreach"
@@ -1360,16 +1375,16 @@
     },
     "qnfo-register-guard": {
       "before": null,
-      "http": 404,
+      "http": 0,
       "live": null,
       "match": 0,
-      "note": "NOT_DEPLOYED",
+      "note": "LIVE_ERR",
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.35-revise-patch",
+      "before": "0.9.36-zenodo-version-requests",
       "http": 200,
-      "live": "0.9.35-revise-patch",
+      "live": "0.9.36-zenodo-version-requests",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1511,5 +1526,5 @@
       "worker": "vault-indexer"
     }
   },
-  "stale_rows_purged": 0
+  "stale_rows_purged": 3
 }
