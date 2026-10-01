@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.2.12-chain-draining"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.2.13-chain-cadence"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -369,13 +369,17 @@ const INTEGRATION_CHAINS = [
     sql: "SELECT COUNT(*) n FROM agent_issues WHERE status='open' AND (title LIKE '%health%' OR title LIKE '%availability%' OR title LIKE '%heartbeat%' OR title LIKE '%reachable%' OR title LIKE '%endpoint down%' OR title LIKE '%is down%' OR title LIKE '%alert-storm%' OR title LIKE '%exception%' OR title LIKE '%error-burst%' OR title LIKE '%recurring fail%' OR title LIKE 'MODEL-DEGRADED%')",
     total: "SELECT COUNT(*) n FROM agent_issues",
     max: 10, minOk: null, expectEmpty: true, want: 'drainable open <= 10 (health/availability/exception/MODEL-DEGRADED = what backlog-exec auto-closes); residual open defects are tracked elsewhere, not backpressure' },
-  { id: 'alerts', name: 'Alerts -> digest consumer', producer: 'qnfo-observability', consumer: '(none wired)', medium: 'alerts',
+  { id: 'alerts', name: 'Alerts -> digest consumer', producer: 'fleet (sla-breach, qnfo-fleet-control, qnfo-observability, ...)', consumer: 'qnfo-social alertDigest (0 7 * * *)', medium: 'alerts',
     // v1.2.7: no digest consumer was ever built for the alerts medium (audit 2026-09-21); name it honestly.
     // v1.1.5: was `digested = 0` (0 rows). Live values are TEXT 'auto' (914), INTEGER 1 (141), NULL (45).
     // The column is declared INTEGER but producers write TEXT, so an equality test on 0 can never match.
-    sql: "SELECT COUNT(*) n FROM alerts WHERE digested IS NULL OR digested = '' OR digested = 0",
+    // CHAIN-CADENCE-1 (2026-10-01): the consumer exists. qnfo-social alertDigest runs daily at 07:00 UTC and marks up to
+    // 100 rows digested=1; it last ran 2026-10-01T07:00 and left nothing older. Counting every undigested row meant the
+    // chain read "stuck" each day between digests: 52 rows at 08:45, all raised after 07:00, 44 of them the 08:00
+    // SLA-breach batch. Stuck now means rows the daily consumer has missed: undigested and older than 26h.
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM alerts WHERE (digested IS NULL OR digested = '' OR digested = 0) AND created_at < datetime('now','-26 hours')",
     total: "SELECT COUNT(*) n FROM alerts",
-    max: 5, minOk: null, expectEmpty: true, want: 'undigested <= 5' },
+    max: 5, minOk: null, expectEmpty: true, want: 'undigested older than 26h <= 5 (daily consumer at 07:00 UTC)' },
   { id: 'email', name: 'Inbound email -> triage', producer: 'SMTP gateway', consumer: 'qnfo-email workers', medium: 'emails',
     sql: "SELECT COUNT(*) n FROM emails WHERE status = 'received'",
     total: "SELECT COUNT(*) n FROM emails",
@@ -393,9 +397,12 @@ const INTEGRATION_CHAINS = [
     progress: "SELECT MAX(ts) latest FROM cloud_ops_events WHERE job='qnfo-research-exec' AND kind='done' AND status='ok' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-3 hours')",
     progressWindowH: 3 },
   { id: 'revisions', name: 'Revision log -> publish drain', producer: 'qnfo-paper-reviser', consumer: 'qnfo-research-exec', medium: 'paper_revision_log',
-    sql: "SELECT COUNT(*) n FROM paper_revision_log WHERE status = 'queued'",
+    // CHAIN-CADENCE-1: the reviser writes 'queued' when it queues a version, and qnfo-research-exec moves the row to
+    // 'published'. 0 queued means drained, not a predicate mismatch. The live enum is already-revised, published,
+    // needs-substantive-revision, quarantined, wontfix; queued rows are transient. Flagged "empty-match" otherwise.
+    sql: "SELECT COUNT(*) n, MIN(created_at) oldest FROM paper_revision_log WHERE status = 'queued'",
     total: "SELECT COUNT(*) n FROM paper_revision_log",
-    max: 8, minOk: null, expectEmpty: false, want: 'queued <= 8' },
+    max: 8, minOk: null, expectEmpty: true, want: 'queued <= 8 (0 = drained: queued -> published by qnfo-research-exec)' },
 ];
 
 // PRECONDITION: schema ensured. POSTCONDITION: integration_state row appended with latest assessment.
