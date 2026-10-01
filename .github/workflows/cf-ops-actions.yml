@@ -1,0 +1,64 @@
+name: cf-ops-actions
+
+# CF-OPS-ACTIONS-1 (2026-10-01). Allowlisted Cloudflare API actions for steps an agent session cannot
+# run (it holds no CF token): delete a script whose repo directory carries a RETIRED/FOLDED marker,
+# AI Gateway log attribution, Workers AI neurons by model, gateway cost by model, Access scope probe.
+# All logic lives in scripts/cf_ops_actions.py; each action prints one RESULT_JSON line.
+# Dispatch only (GitHub schedule never fires on this repo). Never prints a secret.
+# Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "delete-worker | gateway-logs | ai-neurons | gateway-cost | access-probe"
+        required: true
+        type: choice
+        options:
+          - ai-neurons
+          - gateway-cost
+          - gateway-logs
+          - access-probe
+          - delete-worker
+      target:
+        description: "worker name (delete-worker only)"
+        required: false
+        default: ""
+      model:
+        description: "model filter (gateway-logs only)"
+        required: false
+        default: ""
+      gateway:
+        description: "AI Gateway id (gateway-logs only)"
+        required: false
+        default: "default"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cf-ops-actions
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      IN_ACTION: ${{ github.event.inputs.action }}
+      IN_TARGET: ${{ github.event.inputs.target }}
+      IN_MODEL: ${{ github.event.inputs.model }}
+      IN_GATEWAY: ${{ github.event.inputs.gateway }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run the allowlisted action
+        run: |
+          set -uo pipefail
+          python3 scripts/cf_ops_actions.py "$IN_ACTION" --target "${IN_TARGET:-}" --model "${IN_MODEL:-}" --gateway "${IN_GATEWAY:-default}"
