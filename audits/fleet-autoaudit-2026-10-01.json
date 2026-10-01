@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 08:35:58",
+  "audited_at": "2026-10-01 08:39:47",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -33,14 +33,7 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "live": "1.7.44-lineage-truth",
-        "repo": "1.7.43-scheduled-no-run-handler",
-        "worker": "qnfo-fleet-dashboard"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -398,7 +391,7 @@
       }
     ],
     "scope": "all",
-    "sync": 39,
+    "sync": 40,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -494,6 +487,11 @@
         "dir": "qnfo-fleet-control",
         "version": "0.4.59-census-uncontracted",
         "worker": "qnfo-fleet-control"
+      },
+      {
+        "dir": "qnfo-fleet-dashboard",
+        "version": "1.7.44-lineage-truth",
+        "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
@@ -1152,11 +1150,11 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.43-scheduled-no-run-handler",
+      "before": "1.7.44-lineage-truth",
       "http": 200,
       "live": "1.7.44-lineage-truth",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
