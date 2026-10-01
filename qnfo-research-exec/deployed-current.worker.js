@@ -12,7 +12,43 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.31-cron-15m";
+var VERSION = "0.9.32-ai-attr";
+// WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
+// binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
+// Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
+var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
+function __aiAttrEnv(env, worker, aiKey, dbKey) {
+  try {
+    if (!env || env.__aiAttr) return env;
+    var ai = env[aiKey], db = env[dbKey];
+    if (!ai || typeof ai.run !== "function" || !db) return env;
+    var wrapped = new Proxy(ai, { get: function (t, p) {
+      if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
+      return async function (model, input, opts) {
+        var t0 = Date.now(), ok = 1, res;
+        try { res = await t.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+        finally {
+          try {
+            var u = res && typeof res === "object" && res.usage || {};
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
+            var outTok = Number(u.completion_tokens || u.output_tokens || 0);
+            var r = __AI_ATTR_RATES[String(model)] || [0, 0];
+            var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
+            await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
+              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
+          } catch (e2) {}
+        }
+      };
+    } });
+    var copy = Object.assign({}, env);
+    copy[aiKey] = wrapped;
+    copy.__aiAttr = 1;
+    return copy;
+  } catch (e) {
+    return env;
+  }
+}
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -2317,6 +2353,7 @@ async function runLeased(env, holder, maxStages, budgetMs) {
 }
 var worker_default = {
   async scheduled(event, env, ctx) {
+    env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     ctx.waitUntil((async function() {
       try {
         // HEARTBEAT-1 (2026-09-27): research-exec had no heartbeat row, so a dead cron was invisible
@@ -2345,6 +2382,7 @@ var worker_default = {
     })());
   },
   async fetch(request, env) {
+    env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     const url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION });
     if (url.pathname === "/run" && request.method === "POST") {
