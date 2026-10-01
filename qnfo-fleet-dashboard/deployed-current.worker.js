@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.10.1-owner-respond";
+var VERSION = "1.10.2-owner-respond";
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2064,6 +2064,8 @@ async function handleRequest(request, env, ctx) {
   if (request.method === "OPTIONS") return json({}, 204);
   const owner = await ownerState(request, env);
   if (path.indexOf("/api/owner/") === 0) return await ownerRoutes(request, env, ctx, path, owner);
+  // OWNER-PAGE-1 (2026-10-01): private owner page. Reconciled with OWNER-RESPOND-1: the owner cookie OR LOOP_TOKEN opens it.
+  if (path === "/owner" || path === "/owner/" || path.indexOf("/owner/doc/") === 0) return await ownerRoute(request, env, path, owner);
   if (path === "/health") {
     return json({ ok: true, worker: NAME, version: VERSION, generated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
@@ -2456,6 +2458,10 @@ var worker_default = {
       // REACH-SIGNALS-INGEST-1 (2026-10-01, #1711): once per UTC day after 02:00Z; throttled inside on the
       // cloud_ops_events row reach-ingest-<day> (ok = done; partial retried up to 3 attempts).
       ctx.waitUntil(within(ingestReachSignals(env).catch(function() {
+      })));
+      // PORTFOLIO-DAILY-1 (2026-10-01): owner-voice guard + portfolio_runs row, once per UTC day after 05:00Z; throttled
+      // inside on the cloud_ops_events row portfolio-daily-<day>.
+      ctx.waitUntil(within(portfolioDailyRun(env).catch(function() {
       })));
       try {
         await within(loopExecute(env, deadline - 12e4), 6e4);
@@ -4081,6 +4087,549 @@ function lockedHtml() {
   o.push('</style></head><body><main><div class="card"><h1>Fleet</h1><p>This dashboard is private. Enter the owner key to continue.</p><form id="f"><input id="k" type="password" autocomplete="current-password" placeholder="Owner key" autofocus><button>Sign in</button></form><div id="e"></div></div></main>');
   o.push("<script>document.getElementById('f').addEventListener('submit',function(ev){ev.preventDefault();var e=document.getElementById('e');e.textContent='';fetch('/api/owner/login',{method:'POST',headers:{'Content-Type':'application/json','x-fleet-ui':'1'},body:JSON.stringify({token:document.getElementById('k').value})}).then(function(r){return r.json().then(function(j){return{r:r,j:j}})}).then(function(x){if(x.r.ok)location.reload();else e.textContent=x.j.error||'failed'}).catch(function(){e.textContent='network error'})})</script></body></html>");
   return o.join("");
+}
+// PORTFOLIO-DAILY-1 (2026-10-01, docs/PORTFOLIO-OPERATIONS.md s2, owner directive "never claude.ai"): the deterministic
+// duties of the retired claude.ai portfolio routine, run by this worker's cron on Cloudflare. Once per UTC day after
+// 05:00Z (after the 02:00Z reach ingest), throttled on cloud_ops_events row portfolio-daily-<day>:
+//   1. OWNER-VOICE-GUARD-1 (STRATEGY s5): Bluesky posts of the last 24h (mojibake, a q08.org link) and the 7-day cadence
+//      cap; outreach_log of the last 24h (a fake "Re:" follow-up, more than 8 sends). A violation sets the stream's kill
+//      switch (qnfo-audit pipeline_flags.social_paused='1'; qnfo-outreach pipeline_state.external_sends_enabled='0') and
+//      files one deduped agent_issues row. The guard only ever pauses; it never re-enables a stream.
+//   2. One qnfo-audit.portfolio_runs row: the reach scorecard + Bluesky followers + confirmed subscribers + open STRATEGY
+//      issues; needs_owner is read from qnfo-audit.human_actions (the single owner queue shown at "/").
+//   3. Mondays kind='weekly-cron', the 1st kind='monthly-cron', with KPI deltas vs the rows 7 and 28 days earlier.
+// FAIL-SOFT, NEVER FABRICATED: a source that cannot be read is null in the row and named in `skipped`.
+var PORTFOLIO_AFTER_UTC_HOUR = 5;
+var PORTFOLIO_MAX_ATTEMPTS = 3;
+var PORTFOLIO_RUNNING_STALE_MS = 10 * 60 * 1e3;
+var PORTFOLIO_BSKY_ACTOR = "qnfo.bsky.social";
+var PORTFOLIO_BSKY_API = "https://public.api.bsky.app/xrpc/";
+var PORTFOLIO_OUTREACH_DAILY_MAX = 8;
+// Posts before this instant predate the q08 queue gate (q08-signal-engine 0.7.36) and the qnfo-social weekly cap; they
+// are history, not a live violation, so the guard ignores them (env PORTFOLIO_GUARD_SINCE overrides).
+var PORTFOLIO_GUARD_SINCE = "2026-10-01T05:00:00Z";
+var PORTFOLIO_STRATEGY_SOURCE = "claude-code-session:STRATEGY-1";
+var OWNER_GUARD_SOURCE = "qnfo-fleet-dashboard:portfolio-guard";
+var OWNER_GUARD_TAG = "OWNER-VOICE-GUARD-1";
+var PORTFOLIO_DDL = [
+  "CREATE TABLE IF NOT EXISTS pipeline_flags (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)",
+  "CREATE TABLE IF NOT EXISTS portfolio_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, run_date TEXT, kind TEXT, session TEXT, summary TEXT, scorecard_json TEXT, actions_json TEXT, needs_owner TEXT, created_at TEXT DEFAULT (datetime('now')))"
+];
+// STRATEGY s5 gate 3: U+00C3, U+00E2 followed by a C1 control (U+0080-U+009F), or U+00E2 U+20AC (UTF-8 read as cp1252).
+function portfolioMojibake(s) {
+  return /\u00c3|\u00e2[\u0080-\u009f]|\u00e2\u20ac/.test(String(s || ""));
+}
+function portfolioQ08Link(s) {
+  return /(^|[^a-z0-9-])q08\.org(?![a-z0-9-])/i.test(String(s || ""));
+}
+function portfolioWeeklyCap(env) {
+  const n = parseInt(String(env && env.SOCIAL_WEEKLY_CAP != null ? env.SOCIAL_WEEKLY_CAP : ""), 10);
+  return Number.isFinite(n) && n >= 0 ? n : 2;
+}
+// Every URI a post carries: text, link facets, external embed (also inside recordWithMedia).
+function portfolioPostUris(post) {
+  const rec = post && post.record || {};
+  const u = [];
+  for (const f of rec.facets || []) for (const ft of f && f.features || []) if (ft && ft.uri) u.push(String(ft.uri));
+  const em = rec.embed || {};
+  if (em.external && em.external.uri) u.push(String(em.external.uri));
+  if (em.media && em.media.external && em.media.external.uri) u.push(String(em.media.external.uri));
+  return u;
+}
+// Pure check over a getAuthorFeed `feed` array. Reposts (item.reason) and other authors' posts are not the owner's text.
+function portfolioCheckBluesky(feed, nowMs, cap, sinceMs) {
+  const res = { feed_items: 0, posts_24h: 0, posts_7d: 0, cap, violations: [] };
+  for (const item of Array.isArray(feed) ? feed : []) {
+    res.feed_items++;
+    if (!item || item.reason) continue;
+    const post = item.post || {};
+    const handle = post.author && post.author.handle;
+    if (handle && String(handle).toLowerCase() !== PORTFOLIO_BSKY_ACTOR) continue;
+    const rec = post.record || {};
+    const t = Date.parse(rec.createdAt || post.indexedAt || "");
+    if (!Number.isFinite(t)) continue;
+    if (Number.isFinite(sinceMs) && t < sinceMs) continue;
+    const age = nowMs - t;
+    if (age > 7 * DAY_MS) continue;
+    res.posts_7d++;
+    if (age > DAY_MS) continue;
+    res.posts_24h++;
+    const text = String(rec.text || "");
+    const ev = { stream: "bluesky", uri: post.uri || null, created_at: rec.createdAt || null, sample: text.slice(0, 120) };
+    if (portfolioMojibake(text)) res.violations.push(Object.assign({ rule: "mojibake" }, ev));
+    if (portfolioQ08Link(text) || portfolioPostUris(post).some(portfolioQ08Link)) res.violations.push(Object.assign({ rule: "q08-link" }, ev));
+  }
+  if (res.posts_7d > cap) res.violations.push({ stream: "bluesky", rule: "cadence", posts_7d: res.posts_7d, cap });
+  return res;
+}
+async function portfolioFetchJson(url) {
+  const r = await fetch(url, { headers: { Accept: "application/json", "User-Agent": NAME + "/" + VERSION }, signal: AbortSignal.timeout(15e3) });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return await r.json();
+}
+async function ownerVoiceGuard(env, nowMs) {
+  const g = { checked: { bluesky: null, outreach: null }, violations: [], actions: [], skipped: [], notes: [] };
+  try {
+    const j = await portfolioFetchJson(PORTFOLIO_BSKY_API + "app.bsky.feed.getAuthorFeed?actor=" + PORTFOLIO_BSKY_ACTOR + "&limit=30&filter=posts_no_replies");
+    if (!j || !Array.isArray(j.feed)) throw new Error("no feed array");
+    const b = portfolioCheckBluesky(j.feed, nowMs, portfolioWeeklyCap(env), Date.parse(env.PORTFOLIO_GUARD_SINCE || PORTFOLIO_GUARD_SINCE));
+    g.checked.bluesky = { feed_items: b.feed_items, posts_24h: b.posts_24h, posts_7d: b.posts_7d, cap: b.cap };
+    if (b.feed_items >= 30 && b.posts_7d >= 30) g.notes.push("bluesky: 30-item page, posts_7d is a lower bound");
+    g.violations = g.violations.concat(b.violations);
+  } catch (e) {
+    g.skipped.push("bluesky: " + reachErr(e));
+  }
+  try {
+    const since = new Date(nowMs - DAY_MS).toISOString().slice(0, 19).replace("T", " ");
+    const o = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, SUM(CASE WHEN status = 'followup' AND LTRIM(COALESCE(subject, '')) LIKE 'Re:%' THEN 1 ELSE 0 END) AS fake_re FROM outreach_log WHERE datetime(sent_at) >= datetime(?)", [since]);
+    const fake = o.length ? Number(o[0].fake_re) || 0 : 0;
+    // The cap is 8 per UTC day (STRATEGY s5), so count yesterday and today separately, not a rolling 24h.
+    const d0 = new Date(nowMs - DAY_MS).toISOString().slice(0, 10);
+    const pd = await d1all(env.AUDIT, "SELECT date(sent_at) AS d, COUNT(*) AS n FROM outreach_log WHERE date(sent_at) >= ? GROUP BY date(sent_at)", [d0]);
+    let n = 0;
+    for (const r of pd) n = Math.max(n, Number(r.n) || 0);
+    g.checked.outreach = { max_sends_per_utc_day: n, fake_re_followups_24h: fake, max: PORTFOLIO_OUTREACH_DAILY_MAX };
+    g.notes.push("outreach: opt-out line not checked (outreach_log has no body column)");
+    if (fake > 0) g.violations.push({ stream: "outreach", rule: "re-followup", count: fake });
+    if (n > PORTFOLIO_OUTREACH_DAILY_MAX) g.violations.push({ stream: "outreach", rule: "daily-cap", count: n, max: PORTFOLIO_OUTREACH_DAILY_MAX });
+  } catch (e) {
+    g.skipped.push("outreach_log: " + reachErr(e));
+  }
+  if (!g.violations.length) return g;
+  const iso = new Date(nowMs).toISOString();
+  const streams = {};
+  for (const v of g.violations) streams[v.stream] = true;
+  if (streams.bluesky) {
+    try {
+      await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS pipeline_flags (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)").run();
+      await env.AUDIT.prepare("INSERT INTO pipeline_flags (key, value, updated_at) VALUES ('social_paused', '1', ?) ON CONFLICT(key) DO UPDATE SET value = '1', updated_at = excluded.updated_at").bind(iso).run();
+      g.actions.push("set qnfo-audit pipeline_flags.social_paused=1");
+    } catch (e) {
+      g.skipped.push("social kill switch: " + reachErr(e));
+    }
+  }
+  if (streams.outreach) {
+    if (env.OUTREACH) {
+      try {
+        await env.OUTREACH.prepare("INSERT INTO pipeline_state (key, value, updated_at) VALUES ('external_sends_enabled', '0', ?) ON CONFLICT(key) DO UPDATE SET value = '0', updated_at = excluded.updated_at").bind(iso).run();
+        g.actions.push("set qnfo-outreach pipeline_state.external_sends_enabled=0");
+      } catch (e) {
+        g.skipped.push("email kill switch: " + reachErr(e));
+      }
+    } else g.notes.push("email kill switch: OUTREACH binding absent, flagged only");
+  }
+  const names = Object.keys(streams).sort();
+  const title = OWNER_GUARD_TAG + ": owner-voice gate violation (" + names.join("+") + ")";
+  const desc = "AUTO-FILED by " + NAME + " v" + VERSION + " portfolio guard (docs/STRATEGY.md s5) at " + iso + ". Violations: " + JSON.stringify(g.violations).slice(0, 2500) + " Actions: " + (g.actions.join("; ") || "none") + ". Re-enable a stream only after the cause is fixed (the guard never re-enables). Close with evidence in issue_triage.close_evidence.";
+  try {
+    const r = await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, ?3, 'outreach', 'high', 'open', ?4, ?4 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind(title, desc, OWNER_GUARD_SOURCE, iso).run();
+    const ch = r && r.meta && r.meta.changes || 0;
+    g.actions.push(ch ? "filed agent_issue '" + title + "'" : "agent_issue '" + title + "' already open");
+  } catch (e) {
+    g.skipped.push("agent_issues: " + reachErr(e));
+  }
+  return g;
+}
+// One owner list (OWNER-RESPOND-1): the queue the dashboard shows at "/" is human_actions, so the portfolio run and the
+// /owner page read it instead of seeding a second list.
+async function portfolioOwnerActions(env, iso) {
+  await ensureHumanTable(env);
+  return d1all(env.AUDIT, "SELECT id, title AS action, due, status FROM human_actions WHERE status = 'open' ORDER BY CASE WHEN due IS NULL OR due = '' THEN 1 ELSE 0 END, due, id");
+}
+function portfolioSum(rows, metric) {
+  if (!Array.isArray(rows)) return null;
+  let v = null;
+  for (const r of rows) if (r && r.metric === metric && r.v != null) v = (v || 0) + Number(r.v);
+  return v;
+}
+// Flat numeric KPIs, the basis of the weekly/monthly deltas. null = not measured.
+function portfolioKpis(sc, extra) {
+  const w = sc && sc.windows || {};
+  const pv = function(x) {
+    return x && x.pageviews && x.pageviews.value != null ? Number(x.pageviews.value) : null;
+  };
+  return {
+    pageviews_7d: pv(w.d7),
+    pageviews_28d: pv(w.d28),
+    outreach_sent_7d: portfolioSum(w.d7 && w.d7.outreach, "sent"),
+    outreach_sent_28d: portfolioSum(w.d28 && w.d28.outreach, "sent"),
+    outreach_replied_28d: portfolioSum(w.d28 && w.d28.outreach, "replied"),
+    bluesky_followers: extra.bluesky_followers,
+    confirmed_subscribers_qnfo: extra.confirmed_subscribers.qnfo,
+    open_strategy_issues: extra.open_strategy_issues
+  };
+}
+function portfolioDeltas(cur, prevRow) {
+  if (!prevRow) return null;
+  let pk = null;
+  try {
+    pk = (JSON.parse(prevRow.scorecard_json || "{}") || {}).kpis || null;
+  } catch (e) {
+  }
+  const d = { vs_run_date: String(prevRow.run_date || "").slice(0, 10) };
+  for (const k of Object.keys(cur)) {
+    const a = cur[k], b = pk ? pk[k] : null;
+    d[k] = typeof a === "number" && typeof b === "number" ? a - b : null;
+  }
+  return d;
+}
+async function portfolioDailyRun(env, opts) {
+  opts = opts || {};
+  const nowMs = opts.nowMs || Date.now();
+  const now = new Date(nowMs);
+  const day = now.toISOString().slice(0, 10);
+  const iso = now.toISOString();
+  if (!env || !env.AUDIT) return { skipped: "AUDIT binding absent" };
+  if (now.getUTCHours() < PORTFOLIO_AFTER_UTC_HOUR) return { not_yet: "runs after 05:00Z" };
+  const evId = "portfolio-daily-" + day;
+  const out = { day, version: VERSION, attempts: 1, kind: null, skipped: [], notes: [] };
+  // Throttle. An unreadable throttle row means no run: a blind run every 15 min would append duplicate rows.
+  try {
+    const prev = await d1all(env.AUDIT, "SELECT ts, status, meta FROM cloud_ops_events WHERE id = ?", [evId]);
+    if (prev.length) {
+      let pm = {};
+      try {
+        pm = JSON.parse(prev[0].meta || "{}") || {};
+      } catch (e) {
+      }
+      const att = Number(pm.attempts) || 1;
+      if (prev[0].status === "ok") return { throttled: day };
+      if (prev[0].status === "running" && nowMs - Date.parse(prev[0].ts) < PORTFOLIO_RUNNING_STALE_MS) return { in_progress: day };
+      if (att >= PORTFOLIO_MAX_ATTEMPTS) return { gave_up: day, attempts: att };
+      out.attempts = att + 1;
+    }
+  } catch (e) {
+    return { error: "throttle unreadable: " + reachErr(e) };
+  }
+  const record = async function(status, text) {
+    try {
+      await env.AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, 'portfolio-daily', ?, ?, ?, ?)").bind(evId, iso, text, JSON.stringify(out).slice(0, 4e3), NAME, status).run();
+    } catch (e) {
+    }
+  };
+  await record("running", "portfolio daily " + day + " started");
+  for (const s of PORTFOLIO_DDL) {
+    try {
+      await env.AUDIT.prepare(s).run();
+    } catch (e) {
+      out.skipped.push("ddl: " + reachErr(e));
+    }
+  }
+  // 1. Guard first: protect the owner's name before anything is measured.
+  let guard = null;
+  try {
+    guard = await ownerVoiceGuard(env, nowMs);
+  } catch (e) {
+    out.skipped.push("guard: " + reachErr(e));
+  }
+  if (guard) out.skipped = out.skipped.concat(guard.skipped.map(function(s) {
+    return "guard " + s;
+  }));
+  // 2. Measure. Each source is independent; a failure is null + a skipped reason.
+  let sc = null;
+  try {
+    sc = await reachScorecardData(env, nowMs);
+  } catch (e) {
+    out.skipped.push("reach scorecard: " + reachErr(e));
+  }
+  let followers = null;
+  try {
+    const p = await portfolioFetchJson(PORTFOLIO_BSKY_API + "app.bsky.actor.getProfile?actor=" + PORTFOLIO_BSKY_ACTOR);
+    if (p && typeof p.followersCount === "number") followers = p.followersCount;
+    else out.skipped.push("bluesky followers: followersCount missing");
+  } catch (e) {
+    out.skipped.push("bluesky followers: " + reachErr(e));
+  }
+  const subs = { qnfo: null, q08: null };
+  try {
+    const s = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM subscribers WHERE status = 'subscribed'");
+    if (s.length && s[0].n != null) subs.qnfo = Number(s[0].n);
+    else out.skipped.push("subscribers qnfo: no count");
+  } catch (e) {
+    out.skipped.push("subscribers qnfo: " + reachErr(e));
+  }
+  out.skipped.push("subscribers q08: no binding to D1 q08-signal from this worker");
+  let strat = null;
+  try {
+    const s = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM agent_issues WHERE source = ? AND status = 'open'", [PORTFOLIO_STRATEGY_SOURCE]);
+    if (s.length && s[0].n != null) strat = Number(s[0].n);
+  } catch (e) {
+    out.skipped.push("strategy issues: " + reachErr(e));
+  }
+  let needs = null;
+  try {
+    needs = (await portfolioOwnerActions(env, iso)).map(function(r) {
+      return { id: r.id, action: r.action, due: r.due || null };
+    });
+  } catch (e) {
+    out.skipped.push("human_actions: " + reachErr(e));
+  }
+  // 3. Kind and deltas.
+  const kind = now.getUTCDate() === 1 ? "monthly-cron" : now.getUTCDay() === 1 ? "weekly-cron" : "daily-cron";
+  out.kind = kind;
+  const extra = { bluesky_followers: followers, confirmed_subscribers: subs, open_strategy_issues: strat };
+  const kpis = portfolioKpis(sc, extra);
+  let deltas = null;
+  if (kind !== "daily-cron") {
+    deltas = { d7: null, d28: null };
+    for (const pair of [["d7", 7], ["d28", 28]]) {
+      try {
+        const r = await d1all(env.AUDIT, "SELECT run_date, scorecard_json FROM portfolio_runs WHERE substr(run_date, 1, 10) = ? ORDER BY rowid DESC LIMIT 1", [reachShiftDay(day, -pair[1])]);
+        deltas[pair[0]] = portfolioDeltas(kpis, r[0] || null);
+        if (!r.length) out.notes.push("deltas " + pair[0] + ": no row on " + reachShiftDay(day, -pair[1]));
+      } catch (e) {
+        out.skipped.push("deltas " + pair[0] + ": " + reachErr(e));
+      }
+    }
+  }
+  const violations = guard ? guard.violations : null;
+  const scorecard = { schema: "portfolio-scorecard/v1", version: VERSION, generated_at: iso, kpis, deltas, reach: sc, bluesky_followers: followers, confirmed_subscribers: subs, open_strategy_issues: strat, guard: guard ? { checked: guard.checked, violations: guard.violations, notes: guard.notes } : null, skipped: out.skipped };
+  const actions = { guard: guard ? guard.actions : null, notes: out.notes };
+  const fmt = function(v) {
+    return v == null ? "null" : String(v);
+  };
+  const summary = kind + " " + day + ": guard " + (violations == null ? "not run" : violations.length ? violations.length + " violation(s) [" + violations.map(function(v) {
+    return v.stream + ":" + v.rule;
+  }).join(", ") + "]" : "clean") + "; pageviews_7d=" + fmt(kpis.pageviews_7d) + "; bluesky_followers=" + fmt(followers) + "; subscribers_qnfo=" + fmt(subs.qnfo) + "; open_strategy_issues=" + fmt(strat) + "; owner actions open=" + (needs ? needs.length : "null") + (out.skipped.length ? "; skipped " + out.skipped.length : "");
+  try {
+    await env.AUDIT.prepare("INSERT INTO portfolio_runs (run_date, kind, session, summary, scorecard_json, actions_json, needs_owner) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(day, kind, NAME, summary, JSON.stringify(scorecard), JSON.stringify(actions), needs == null ? null : JSON.stringify(needs)).run();
+  } catch (e) {
+    out.skipped.push("portfolio_runs insert: " + reachErr(e));
+    await record("error", "portfolio daily " + day + ": run row not written");
+    return out;
+  }
+  out.summary = summary;
+  out.violations = violations ? violations.length : null;
+  await record("ok", summary.slice(0, 500));
+  return out;
+}
+// OWNER-PAGE-1 (2026-10-01): the owner's private page. qnfo-audit.owner_docs holds personal data (email, EIN, career,
+// job applications), so it is never public. personal-api (personal.qnfo.org, Bearer API_KEY) has no binding to
+// qnfo-audit, so the page lives here behind the existing LOOP_TOKEN check; no new secret. The token is accepted as
+// `Authorization: Bearer`, `x-loop-token`, or the password field of the page's own POST form (never a query string,
+// never a cookie). Responses: no-store, noindex, CSP with no script source; markdown is rendered with every byte escaped.
+function ownerEsc(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function ownerSafeEq(a, b) {
+  a = String(a || "");
+  b = String(b || "");
+  if (!a || !b || a.length !== b.length) return false;
+  let x = 0;
+  for (let i = 0; i < a.length; i++) x |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return x === 0;
+}
+function ownerSafeUrl(u) {
+  const s = String(u || "").trim();
+  if (/^(https?:\/\/|mailto:)/i.test(s) || /^#[A-Za-z0-9_-]*$/.test(s)) return s;
+  return null;
+}
+// Inline markdown: `code`, [text](url), <https://url>, **bold**, *em*, bare https:// links. Text is escaped piecewise.
+function ownerInline(raw, depth) {
+  const src = String(raw || "");
+  const re = /`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|<(https?:\/\/[^>\s]+)>|\*\*([^*]+)\*\*|\*([^*\s][^*]*)\*|(https?:\/\/[^\s<>"'`)\]]+)/g;
+  let o = "", last = 0, m;
+  while ((m = re.exec(src)) !== null) {
+    o += ownerEsc(src.slice(last, m.index));
+    last = re.lastIndex;
+    if (m[1] != null) o += "<code>" + ownerEsc(m[1]) + "</code>";
+    else if (m[2] != null) {
+      const href = ownerSafeUrl(m[3]);
+      const label = (depth || 0) < 1 ? ownerInline(m[2], 1) : ownerEsc(m[2]);
+      o += href ? '<a href="' + ownerEsc(href) + '" rel="noopener noreferrer nofollow">' + label + "</a>" : label;
+    } else if (m[4] != null || m[7] != null) {
+      const u = m[4] != null ? m[4] : m[7];
+      o += '<a href="' + ownerEsc(u) + '" rel="noopener noreferrer nofollow">' + ownerEsc(u) + "</a>";
+    } else if (m[5] != null) o += "<strong>" + ((depth || 0) < 1 ? ownerInline(m[5], 1) : ownerEsc(m[5])) + "</strong>";
+    else if (m[6] != null) o += "<em>" + ownerEsc(m[6]) + "</em>";
+  }
+  return o + ownerEsc(src.slice(last));
+}
+function ownerTableCells(line) {
+  let s = String(line).trim().replace(/\\\|/g, "\u0000");
+  if (s.charAt(0) === "|") s = s.slice(1);
+  if (s.charAt(s.length - 1) === "|") s = s.slice(0, -1);
+  return s.split("|").map(function(c) {
+    return c.replace(/\u0000/g, "|").trim();
+  });
+}
+// Block markdown: headings, paragraphs, fenced code, hr, blockquotes (nested), pipe tables, ul/ol. Raw HTML in the
+// source is text, never markup.
+function ownerMarkdown(md, depth) {
+  depth = depth || 0;
+  const lines = String(md == null ? "" : md).replace(/\r\n?/g, "\n").split("\n");
+  const o = [];
+  let i = 0;
+  const isSep = function(l) {
+    return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l || "") && String(l).indexOf("-") >= 0;
+  };
+  const listRe = /^\s*([-*+]|\d{1,3}[.)])\s+(.*)$/;
+  const startsBlock = function(l, next) {
+    return /^\s*$/.test(l) || /^#{1,6}\s/.test(l) || /^\s*```/.test(l) || /^\s*>/.test(l) || listRe.test(l) || /^\s*([-*_])(\s*\1){2,}\s*$/.test(l) || /^\s*\|/.test(l) && isSep(next);
+  };
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*$/.test(l)) {
+      i++;
+      continue;
+    }
+    if (/^\s*```/.test(l)) {
+      const buf = [];
+      i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]);
+      i++;
+      o.push("<pre><code>" + ownerEsc(buf.join("\n")) + "</code></pre>");
+      continue;
+    }
+    const h = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(l);
+    if (h) {
+      const n = Math.min(6, h[1].length + 1);
+      o.push("<h" + n + ">" + ownerInline(h[2]) + "</h" + n + ">");
+      i++;
+      continue;
+    }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) {
+      o.push("<hr>");
+      i++;
+      continue;
+    }
+    if (/^\s*>/.test(l)) {
+      const buf = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) buf.push(lines[i++].replace(/^\s*>\s?/, ""));
+      o.push("<blockquote>" + (depth < 3 ? ownerMarkdown(buf.join("\n"), depth + 1) : "<p>" + ownerInline(buf.join(" ")) + "</p>") + "</blockquote>");
+      continue;
+    }
+    if (/^\s*\|/.test(l) && isSep(lines[i + 1])) {
+      const head = ownerTableCells(l);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(ownerTableCells(lines[i++]));
+      o.push("<div class=tw><table><thead><tr>" + head.map(function(c) {
+        return "<th>" + ownerInline(c) + "</th>";
+      }).join("") + "</tr></thead><tbody>" + rows.map(function(r) {
+        return "<tr>" + r.map(function(c) {
+          return "<td>" + ownerInline(c) + "</td>";
+        }).join("") + "</tr>";
+      }).join("") + "</tbody></table></div>");
+      continue;
+    }
+    const lm = listRe.exec(l);
+    if (lm) {
+      const ordered = /\d/.test(lm[1]);
+      const items = [];
+      while (i < lines.length) {
+        const m2 = listRe.exec(lines[i]);
+        if (m2 && /\d/.test(m2[1]) === ordered) {
+          items.push(m2[2]);
+          i++;
+        } else if (items.length && /^\s{2,}\S/.test(lines[i]) && !listRe.test(lines[i])) {
+          items[items.length - 1] += " " + lines[i].trim();
+          i++;
+        } else break;
+      }
+      const tag = ordered ? "ol" : "ul";
+      o.push("<" + tag + ">" + items.map(function(t) {
+        return "<li>" + ownerInline(t) + "</li>";
+      }).join("") + "</" + tag + ">");
+      continue;
+    }
+    const buf = [l.trim()];
+    i++;
+    while (i < lines.length && !startsBlock(lines[i], lines[i + 1])) buf.push(lines[i++].trim());
+    o.push("<p>" + ownerInline(buf.join(" ")) + "</p>");
+  }
+  return o.join("\n");
+}
+var OWNER_CSS = "body{font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:900px;margin:0 auto;padding:16px;line-height:1.5;color:#1a1a1a;background:#fff}a{color:#0b57d0}table{border-collapse:collapse;margin:8px 0;font-size:.9rem}th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}.tw{overflow-x:auto}blockquote{border-left:3px solid #ccc;margin:8px 0;padding:0 12px;color:#444}pre{background:#f2f2f2;padding:8px;overflow-x:auto}code{background:#f2f2f2;padding:0 3px}.mut{color:#666;font-size:.85rem}input,button{font-size:1rem;padding:6px 8px}@media (prefers-color-scheme:dark){body{background:#121212;color:#e8e8e8}a{color:#8ab4f8}th,td{border-color:#444}pre,code{background:#222}blockquote{color:#bbb;border-color:#555}.mut{color:#aaa}}";
+function ownerHtml(title, inner, status) {
+  const body = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"><title>' + ownerEsc(title) + "</title><style>" + OWNER_CSS + "</style></head><body>" + inner + "</body></html>";
+  return new Response(body, { status: status || 200, headers: {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store, private",
+    "X-Robots-Tag": "noindex, nofollow, noarchive",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+  } });
+}
+function ownerLogin(path, bad) {
+  const r = ownerHtml("Owner sign-in", "<h1>Owner page</h1><p>Private. Enter the owner token (LOOP_TOKEN).</p>" + (bad ? "<p><strong>Token not accepted.</strong></p>" : "") + '<form method="post" action="' + ownerEsc(path) + '"><input type="password" name="token" autocomplete="current-password" required> <button type="submit">Open</button></form>', 401);
+  r.headers.set("WWW-Authenticate", 'Bearer realm="owner"');
+  return r;
+}
+async function ownerDocSection(env, key) {
+  const r = await d1all(env.AUDIT, "SELECT key, title, body_md, source, visibility, updated_at FROM owner_docs WHERE key = ?", [key]);
+  if (!r.length) return null;
+  const d = r[0];
+  return "<article><h1>" + ownerEsc(d.title || d.key) + '</h1><p class="mut">owner_docs.' + ownerEsc(d.key) + " - updated " + ownerEsc(d.updated_at || "?") + (d.source ? " - source " + ownerEsc(d.source) : "") + "</p>" + ownerMarkdown(d.body_md || "") + "</article>";
+}
+// Returns a Response for /owner and /owner/doc/<key>, or null for every other path.
+async function ownerRoute(request, env, path, ownerCk) {
+  if (path !== "/owner" && path !== "/owner/" && path.indexOf("/owner/doc/") !== 0) return null;
+  if (request.method !== "GET" && request.method !== "POST") return json({ error: "method not allowed" }, 405);
+  let tok = "";
+  const ah = request.headers.get("authorization") || "";
+  const bm = /^Bearer\s+(\S+)\s*$/i.exec(ah);
+  if (bm) tok = bm[1];
+  else if (request.headers.get("x-loop-token")) tok = request.headers.get("x-loop-token");
+  let fromForm = false;
+  if (!tok && request.method === "POST") {
+    try {
+      if (/application\/x-www-form-urlencoded/i.test(request.headers.get("content-type") || "")) {
+        tok = new URLSearchParams((await request.text()).slice(0, 4096)).get("token") || "";
+        fromForm = true;
+      }
+    } catch (e) {
+    }
+  }
+  const viaCookie = !!(ownerCk && ownerCk.authed);
+  const viaToken = !!(env.LOOP_TOKEN && ownerSafeEq(tok, env.LOOP_TOKEN));
+  if (!viaCookie && !viaToken) {
+    // OWNER_TOKEN is configured: one sign-in (the cookie from "/") opens every owner page.
+    if (ownerCk && ownerCk.configured) return new Response(lockedHtml(), { status: 401, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" } });
+    return ownerLogin(path, fromForm || !!tok);
+  }
+  if (!env.AUDIT) return ownerHtml("Owner", "<p>AUDIT binding absent.</p>", 503);
+  const fail = function(what, e) {
+    return '<p class="mut">' + ownerEsc(what) + " could not be read: " + ownerEsc(reachErr(e)) + "</p>";
+  };
+  if (path.indexOf("/owner/doc/") === 0) {
+    const key = path.slice("/owner/doc/".length);
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(key)) return ownerHtml("Not found", "<p>Unknown document.</p>", 404);
+    let sec = null;
+    try {
+      sec = await ownerDocSection(env, key);
+    } catch (e) {
+      return ownerHtml("Owner document", fail("owner_docs." + key, e), 503);
+    }
+    if (!sec) return ownerHtml("Not found", "<p>No document " + ownerEsc(key) + ".</p>", 404);
+    return ownerHtml("Owner - " + key, sec);
+  }
+  const parts = ["<h1>Owner</h1><p class=\"mut\">Private page (" + ownerEsc(NAME) + " v" + ownerEsc(VERSION) + "). Data: qnfo-audit human_actions, portfolio_runs, owner_docs.</p>"];
+  try {
+    const a = await d1all(env.AUDIT, "SELECT id, title AS action, due, status, updated_at FROM human_actions ORDER BY CASE WHEN status = 'open' THEN 0 ELSE 1 END, id");
+    parts.push("<h2>Owner-only actions</h2>" + (a.length ? "<div class=tw><table><thead><tr><th>#</th><th>Action</th><th>Due</th><th>Status</th></tr></thead><tbody>" + a.map(function(r) {
+      return "<tr><td>" + ownerEsc(r.id) + "</td><td>" + ownerInline(r.action) + "</td><td>" + ownerEsc(r.due || "") + "</td><td>" + ownerEsc(r.status || "") + "</td></tr>";
+    }).join("") + "</tbody></table></div>" : "<p>None recorded.</p>"));
+  } catch (e) {
+    parts.push("<h2>Owner-only actions</h2>" + fail("human_actions", e));
+  }
+  try {
+    const rr = await d1all(env.AUDIT, "SELECT run_date, kind, session, summary FROM portfolio_runs ORDER BY rowid DESC LIMIT 7");
+    parts.push("<h2>Last 7 portfolio runs</h2>" + (rr.length ? "<div class=tw><table><thead><tr><th>Date</th><th>Kind</th><th>By</th><th>Summary</th></tr></thead><tbody>" + rr.map(function(r) {
+      return "<tr><td>" + ownerEsc(r.run_date) + "</td><td>" + ownerEsc(r.kind) + "</td><td>" + ownerEsc(r.session) + "</td><td>" + ownerEsc(r.summary) + "</td></tr>";
+    }).join("") + "</tbody></table></div>" : "<p>No runs recorded.</p>"));
+  } catch (e) {
+    parts.push("<h2>Last 7 portfolio runs</h2>" + fail("portfolio_runs", e));
+  }
+  try {
+    const sec = await ownerDocSection(env, "identity");
+    parts.push("<hr>" + (sec || "<p>No identity document (owner_docs.identity).</p>"));
+  } catch (e) {
+    parts.push("<hr>" + fail("owner_docs.identity", e));
+  }
+  return ownerHtml("Owner", parts.join("\n"));
 }
 export {
   worker_default as default

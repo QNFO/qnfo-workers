@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-01 11:52:31",
+  "audited_at": "2026-10-01 12:04:40",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-gateway"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -40,7 +33,14 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-fleet-dashboard",
+        "live": "1.10.0-portfolio-guard",
+        "repo": "1.9.1-invest-spend-basis",
+        "worker": "qnfo-fleet-dashboard"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -395,7 +395,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 41,
+    "sync": 40,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -474,7 +474,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.2.3",
+        "version": "0.2.4",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -498,13 +498,8 @@
         "worker": "qnfo-fleet-control"
       },
       {
-        "dir": "qnfo-fleet-dashboard",
-        "version": "1.9.1-invest-spend-basis",
-        "worker": "qnfo-fleet-dashboard"
-      },
-      {
         "dir": "qnfo-gateway",
-        "version": "3.7.20-scholar-pdf-ua",
+        "version": "3.7.22-scholar-pdf-rendered",
         "worker": "qnfo-gateway"
       },
       {
@@ -549,7 +544,7 @@
       },
       {
         "dir": "qnfo-outreach",
-        "version": "0.3.4-shared-cap",
+        "version": "0.3.5-shared-cap-notes",
         "worker": "qnfo-outreach"
       },
       {
@@ -569,7 +564,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.35-revise-patch",
+        "version": "0.9.36-zenodo-version-requests",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1039,9 +1034,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.2.3",
+      "before": "0.2.4",
       "http": 200,
-      "live": "0.2.3",
+      "live": "0.2.4",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1161,9 +1156,9 @@
     "qnfo-fleet-dashboard": {
       "before": "1.9.1-invest-spend-basis",
       "http": 200,
-      "live": "1.9.1-invest-spend-basis",
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.10.0-portfolio-guard",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
@@ -1183,9 +1178,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.20-scholar-pdf-ua",
+      "before": "3.7.22-scholar-pdf-rendered",
       "http": 200,
-      "live": "3.7.20-scholar-pdf-ua",
+      "live": "3.7.22-scholar-pdf-rendered",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1295,9 +1290,9 @@
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
-      "before": "0.3.4-shared-cap",
+      "before": "0.3.5-shared-cap-notes",
       "http": 200,
-      "live": "0.3.4-shared-cap",
+      "live": "0.3.5-shared-cap-notes",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-outreach"
@@ -1367,9 +1362,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.35-revise-patch",
+      "before": "0.9.36-zenodo-version-requests",
       "http": 200,
-      "live": "0.9.35-revise-patch",
+      "live": "0.9.36-zenodo-version-requests",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
