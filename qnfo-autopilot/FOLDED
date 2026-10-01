@@ -1,0 +1,11 @@
+qnfo-autopilot is FOLDED (2026-10-01, AUTOPILOT-FOLD-1, issue 1640). Do not redeploy this directory.
+
+The worker vanished unrecorded around 2026-09-25 and its duties now run inside existing workers:
+  overdue task_dod_register census -> qnfo-fleet-control registerWatch() (already hourly; not duplicated)
+  worker_activity_daily snapshot   -> qnfo-fleet-control activitySnapshotDaily() (daily 03:00 UTC cron)
+  think loop (research questions)  -> idea-hub thinkLoop() (every 6h, proposal backpressure)
+  evolve loop (self-rewrite)       -> qnfo-fleet-control EVOLVE-PR-1 (hourly; rebuilt to land through PRs + CI)
+  /publish/report, /git/commit, /evolve/apply, /heartbeat -> not carried over (no callers; the write routes were
+                                      unauthenticated)
+
+canonical-deploy.yml skips any directory containing a FOLDED file. This source is kept for reference only.
