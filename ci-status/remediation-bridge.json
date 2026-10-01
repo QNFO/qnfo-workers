@@ -4,7 +4,7 @@
  "probe_map_entries": 39,
  "open_issues": 30,
  "with_contract_before": 30,
- "upgraded_sentinel_to_active": 1,
+ "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
  "active_contracts": 59,
@@ -116,6 +116,6 @@
   1696,
   1702
  ],
- "head": "e5c8f38049b5586bdd42c3ce99aa9b506facee6b",
+ "head": "ca7c3c8b5e559adb9fc98646b2c625d667fff982",
  "job_status": "success"
 }
