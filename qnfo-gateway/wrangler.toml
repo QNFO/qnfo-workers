@@ -24,6 +24,14 @@ database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
 binding = "QNFO_BUCKET"
 bucket_name = "qnfo"
 
+# SCHOLAR-PDF-URL-1 (2026-10-01, agent_issues #1714): /papers/<slug>.pdf asks qnfo-pdf (live) to render a
+# paper once and stores the result in QNFO_BUCKET under pdf/<slug>/. A same-account fetch to *.workers.dev
+# can fail as CF error 1042, so the call goes through this binding; the canonical deploy installs it.
+[[services]]
+binding = "PDF_RENDERER"
+service = "qnfo-pdf"
+environment = "production"
+
 # Secrets (wrangler secret put): SYNC_TOKEN, TURNSTILE_SECRET
 
 [triggers]
