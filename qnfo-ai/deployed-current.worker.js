@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.6-aig-caller-meta";
+var VERSION = "5.29.7-internal-host-trust";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -2628,6 +2628,14 @@ async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // INTERNAL-HOST-TRUST-1 (#1703): the host "qnfo-ai.internal" cannot be routed from the public edge; only a
+    // Worker holding the QNFO_AI service binding can send it. Such callers are inside the fleet trust boundary,
+    // so authenticate them here instead of via a per-caller copy of the router key that a rotation strands.
+    if (url.hostname === "qnfo-ai.internal" && env.ROUTER_AUTH_KEY) {
+      const _ih = new Headers(request.headers);
+      _ih.set("Authorization", "Bearer " + env.ROUTER_AUTH_KEY);
+      request = new Request(request, { headers: _ih });
+    }
     const path = url.pathname;
     const method = request.method;
     if (method === "OPTIONS") return json({ ok: true });
