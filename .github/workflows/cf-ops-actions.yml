@@ -11,17 +11,19 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "delete-worker | gateway-logs | ai-neurons | gateway-cost | access-probe"
+        description: "report | delete-worker | gateway-logs | ai-neurons | gateway-cost | access-probe | r2-get"
         required: true
         type: choice
         options:
+          - report
+          - r2-get
           - ai-neurons
           - gateway-cost
           - gateway-logs
           - access-probe
           - delete-worker
       target:
-        description: "worker name (delete-worker only)"
+        description: "worker name (delete-worker) or ops-workspace path (r2-get)"
         required: false
         default: ""
       model:
@@ -36,8 +38,10 @@ on:
 permissions:
   contents: read
 
+# One group per action+target: a single shared group kept only ONE pending run, so dispatching several
+# actions back to back silently cancelled the middle ones (runs 2-4 on 2026-10-01).
 concurrency:
-  group: cf-ops-actions
+  group: cf-ops-actions-${{ github.event.inputs.action }}-${{ github.event.inputs.target }}
   cancel-in-progress: false
 
 jobs:
