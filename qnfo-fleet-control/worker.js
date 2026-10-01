@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.81-revise-outside-cap";
+var VERSION = "0.4.82-hygiene-scope";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2948,7 +2948,7 @@ var CHARTER_PILLARS = [
 var CHARTER_SYNTHETIC = {
   security_open_issues: { pillar: "security", target: "0 (open SEC-* or category security issues)" },
   personal_mvp_serving: { pillar: "personal", target: ">=3 (qnfo-email, personal-api, calendar-api serving)" },
-  portfolio_hygiene: { pillar: "autonomy", target: ">=0.9 (graded repositories with licence, description and topics)" }
+  portfolio_hygiene: { pillar: "autonomy", target: ">=0.9 (graded public repositories with licence, description and topics)" }
 };
 // The minimum verified core: the components the charter says the system IS. Anything else is optional surface and
 // must earn its place through the net-zero rule (fleet_budget) and live-consumer proof (F1/F2).
@@ -3458,10 +3458,14 @@ function pfEvaluate(repos, wbsRows, nowIso) {
   rows.sort(function(a, b) { return PF_TIER_ORDER.indexOf(a.tier) - PF_TIER_ORDER.indexOf(b.tier) || String(b.pushed_at || "").localeCompare(String(a.pushed_at || "")); });
   var tiers = {}, pillars = {}, priv = 0;
   rows.forEach(function(r) { tiers[r.tier] = (tiers[r.tier] || 0) + 1; pillars[r.pillar] = (pillars[r.pillar] || 0) + 1; if (r.visibility === "private") priv++; });
-  var graded = rows.filter(function(r) { return r.tier !== "archived" && r.tier !== "fork" && r.tier !== "client-config"; });
+  // HYGIENE-SCOPE-1: the score grades what the loop may repair and what rule 2 asks of every active PUBLIC repository.
+  // Private repositories are counted (rule 4), never named and never touched, so they neither raise nor lower the
+  // score and never appear in the dormant or unlinked lists (19:00Z 2026-10-01: 4 private platform repositories held
+  // the score at 34/39 = 0.87 with every public gap closed).
+  var graded = rows.filter(function(r) { return r.visibility === "public" && r.tier !== "archived" && r.tier !== "fork" && r.tier !== "client-config"; });
   var clean = graded.filter(function(r) { return r.flags.filter(function(f) { return f.indexOf("dormant") !== 0; }).length === 0; }).length;
   var dormant = graded.filter(function(r) { return r.flags.some(function(f) { return f.indexOf("dormant") === 0; }); });
-  var unlinked = rows.filter(function(r) { return r.tier === "research" && !r.wbs.length; });
+  var unlinked = rows.filter(function(r) { return r.visibility === "public" && r.tier === "research" && !r.wbs.length; });
   var candidates = dormant.filter(function(r) { return r.tier === "research" && !r.wbs.length; });
   var linkedWbs = {};
   rows.forEach(function(r) { r.wbs.forEach(function(w) { linkedWbs[w] = true; }); });
@@ -3493,7 +3497,7 @@ function pfRenderBody(ev) {
   L.push("| Signal | Value |");
   L.push("|---|---|");
   L.push("| Repositories in the organisation | " + ev.total + " (" + ev.private_count + " private) |");
-  L.push("| Active, graded repositories (platform, governance, research, demo) | " + ev.graded + " |");
+  L.push("| Active, graded public repositories (platform, governance, research, demo) | " + ev.graded + " |");
   L.push("| Hygiene score (description, licence and topics all present) | " + (ev.hygiene_score === null ? "n/a" : ev.hygiene_score) + " |");
   L.push("| Dormant graded repositories (no push for " + PF_DORMANT_DAYS + "+ days) | " + ev.dormant.length + " |");
   L.push("| Research repositories with no WBS program code | " + ev.unlinked_research.length + " |");
