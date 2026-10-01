@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 21:31:27",
+  "audited_at": "2026-10-01 21:45:26",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -392,32 +392,32 @@
     "sync_workers": [
       {
         "dir": "calendar-api",
-        "version": "0.4.1-personal-ics-auth",
+        "version": "0.4.3-feed-rotation",
         "worker": "calendar-api"
       },
       {
         "dir": "errata-hub",
-        "version": "1.1.4-republish-verify",
+        "version": "1.1.5-capability-contract",
         "worker": "errata-hub"
       },
       {
         "dir": "fleet-exec",
-        "version": "1.0.2",
+        "version": "1.0.3-capability-contract",
         "worker": "fleet-exec"
       },
       {
         "dir": "idea-hub",
-        "version": "1.3.2-identity-lexicon",
+        "version": "1.3.3-capability-contract",
         "worker": "idea-hub"
       },
       {
         "dir": "personal-api",
-        "version": "4.1.18-predictions-robust",
+        "version": "4.1.19-capability-contract",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.7.3-ai-attribution",
+        "version": "1.7.4-feed-dynamic",
         "worker": "personal-companion"
       },
       {
@@ -427,7 +427,7 @@
       },
       {
         "dir": "qnfo-agent-orchestrator",
-        "version": "1.1.0",
+        "version": "1.1.1-capability-contract",
         "worker": "qnfo-agent-orchestrator"
       },
       {
@@ -442,7 +442,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "1.0.2",
+        "version": "1.0.3-capability-contract",
         "worker": "qnfo-ai-search"
       },
       {
@@ -457,17 +457,17 @@
       },
       {
         "dir": "qnfo-backlog-exec",
-        "version": "2.0.1-health-probe-budget",
+        "version": "2.0.2-capability-contract",
         "worker": "qnfo-backlog-exec"
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.16.3-identity-moved",
+        "version": "1.16.4-capability-contract",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.0",
+        "version": "0.3.1-capability-contract",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -482,37 +482,37 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.2.2-options-auth",
+        "version": "2.2.3-capability-contract",
         "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.82-hygiene-scope",
+        "version": "0.4.83-capability-contract",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.15.1-queue-delegated",
+        "version": "1.15.2-capability-contract",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.7.24-query-auth",
+        "version": "3.7.25-capability-contract",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.2.9",
+        "version": "1.2.10-capability-contract",
         "worker": "qnfo-infra"
       },
       {
         "dir": "qnfo-intent-orchestrator",
-        "version": "1.3.7-intake-bounded-classify",
+        "version": "1.3.8-capability-contract",
         "worker": "qnfo-intent-orchestrator"
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.4.5",
+        "version": "3.4.6-capability-contract",
         "worker": "qnfo-ipatent"
       },
       {
@@ -522,7 +522,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.6.6-research-metrics-writer",
+        "version": "1.6.7-run-internal",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -532,7 +532,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.2.13-chain-cadence",
+        "version": "1.2.14-public-read-only",
         "worker": "qnfo-observability"
       },
       {
@@ -542,7 +542,7 @@
       },
       {
         "dir": "qnfo-outreach",
-        "version": "0.3.6-api-auth",
+        "version": "0.3.7-capability-contract",
         "worker": "qnfo-outreach"
       },
       {
@@ -557,7 +557,7 @@
       },
       {
         "dir": "qnfo-pdf",
-        "version": "1.0.0",
+        "version": "1.0.1-render-internal",
         "worker": "qnfo-pdf"
       },
       {
@@ -572,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.25-linkedin-delegated",
+        "version": "0.7.26-capability-contract",
         "worker": "qnfo-social"
       },
       {
@@ -582,7 +582,7 @@
       },
       {
         "dir": "qnfo-tools-mcp",
-        "version": "1.1.5",
+        "version": "1.1.6-capability-contract",
         "worker": "qnfo-tools-mcp"
       },
       {
@@ -624,9 +624,9 @@
       "worker": "audits"
     },
     "calendar-api": {
-      "before": "0.4.1-personal-ics-auth",
+      "before": "0.4.3-feed-rotation",
       "http": 200,
-      "live": "0.4.1-personal-ics-auth",
+      "live": "0.4.3-feed-rotation",
       "match": 1,
       "note": "SYNC",
       "worker": "calendar-api"
@@ -656,9 +656,9 @@
       "worker": "docs"
     },
     "errata-hub": {
-      "before": "1.1.4-republish-verify",
+      "before": "1.1.5-capability-contract",
       "http": 200,
-      "live": "1.1.4-republish-verify",
+      "live": "1.1.5-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "errata-hub"
@@ -672,9 +672,9 @@
       "worker": "events-radar"
     },
     "fleet-exec": {
-      "before": "1.0.2",
+      "before": "1.0.3-capability-contract",
       "http": 200,
-      "live": "1.0.2",
+      "live": "1.0.3-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "fleet-exec"
@@ -688,9 +688,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.3.2-identity-lexicon",
+      "before": "1.3.3-capability-contract",
       "http": 200,
-      "live": "1.3.2-identity-lexicon",
+      "live": "1.3.3-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -800,17 +800,17 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.1.18-predictions-robust",
+      "before": "4.1.19-capability-contract",
       "http": 200,
-      "live": "4.1.18-predictions-robust",
+      "live": "4.1.19-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.7.3-ai-attribution",
+      "before": "1.7.4-feed-dynamic",
       "http": 200,
-      "live": "1.7.3-ai-attribution",
+      "live": "1.7.4-feed-dynamic",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -856,9 +856,9 @@
       "worker": "q08-signal-engine"
     },
     "qnfo-agent-orchestrator": {
-      "before": "1.1.0",
+      "before": "1.1.1-capability-contract",
       "http": 200,
-      "live": "1.1.0",
+      "live": "1.1.1-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-agent-orchestrator"
@@ -896,9 +896,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "1.0.2",
+      "before": "1.0.3-capability-contract",
       "http": 200,
-      "live": "1.0.2",
+      "live": "1.0.3-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -968,9 +968,9 @@
       "worker": "qnfo-autopilot"
     },
     "qnfo-backlog-exec": {
-      "before": "2.0.1-health-probe-budget",
+      "before": "2.0.2-capability-contract",
       "http": 200,
-      "live": "2.0.1-health-probe-budget",
+      "live": "2.0.2-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-backlog-exec"
@@ -1016,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.16.3-identity-moved",
+      "before": "1.16.4-capability-contract",
       "http": 200,
-      "live": "1.16.3-identity-moved",
+      "live": "1.16.4-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.0",
+      "before": "0.3.1-capability-contract",
       "http": 200,
-      "live": "0.3.0",
+      "live": "0.3.1-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1064,9 +1064,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.2.2-options-auth",
+      "before": "2.2.3-capability-contract",
       "http": 200,
-      "live": "2.2.2-options-auth",
+      "live": "2.2.3-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.82-hygiene-scope",
+      "before": "0.4.83-capability-contract",
       "http": 200,
-      "live": "0.4.82-hygiene-scope",
+      "live": "0.4.83-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.15.1-queue-delegated",
+      "before": "1.15.2-capability-contract",
       "http": 200,
-      "live": "1.15.1-queue-delegated",
+      "live": "1.15.2-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.24-query-auth",
+      "before": "3.7.25-capability-contract",
       "http": 200,
-      "live": "3.7.24-query-auth",
+      "live": "3.7.25-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1216,25 +1216,25 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.2.9",
+      "before": "1.2.10-capability-contract",
       "http": 200,
-      "live": "1.2.9",
+      "live": "1.2.10-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
     },
     "qnfo-intent-orchestrator": {
-      "before": "1.3.7-intake-bounded-classify",
+      "before": "1.3.8-capability-contract",
       "http": 200,
-      "live": "1.3.7-intake-bounded-classify",
+      "live": "1.3.8-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.4.5",
+      "before": "3.4.6-capability-contract",
       "http": 200,
-      "live": "3.4.5",
+      "live": "3.4.6-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1248,9 +1248,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.6.6-research-metrics-writer",
+      "before": "1.6.7-run-internal",
       "http": 200,
-      "live": "1.6.6-research-metrics-writer",
+      "live": "1.6.7-run-internal",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1272,9 +1272,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.2.13-chain-cadence",
+      "before": "1.2.14-public-read-only",
       "http": 200,
-      "live": "1.2.13-chain-cadence",
+      "live": "1.2.14-public-read-only",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
@@ -1288,9 +1288,9 @@
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
-      "before": "0.3.6-api-auth",
+      "before": "0.3.7-capability-contract",
       "http": 200,
-      "live": "0.3.6-api-auth",
+      "live": "0.3.7-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-outreach"
@@ -1320,9 +1320,9 @@
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
-      "before": "1.0.0",
+      "before": "1.0.1-render-internal",
       "http": 200,
-      "live": "1.0.0",
+      "live": "1.0.1-render-internal",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-pdf"
@@ -1416,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.25-linkedin-delegated",
+      "before": "0.7.26-capability-contract",
       "http": 200,
-      "live": "0.7.25-linkedin-delegated",
+      "live": "0.7.26-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
@@ -1440,9 +1440,9 @@
       "worker": "qnfo-thread-ingest"
     },
     "qnfo-tools-mcp": {
-      "before": "1.1.5",
+      "before": "1.1.6-capability-contract",
       "http": 200,
-      "live": "1.1.5",
+      "live": "1.1.6-capability-contract",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-tools-mcp"
