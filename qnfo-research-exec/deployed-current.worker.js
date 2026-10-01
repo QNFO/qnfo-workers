@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.33-revise-diag";
+var VERSION = "0.9.34-reasoning-budget";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1514,8 +1514,14 @@ var GH_API = "https://api.github.com";
 var GH_OWNER = "QNFO";
 var GH_REPO = "qnfo-ensemble-research";
 var PIPELINE_VERSION = "0.8.0-artifact-deposit";
+// AI-TEXT-REASONING-BUDGET-1 (2026-10-01, #1620/#1504): every MODELS entry is a reasoning model whose
+// reasoning tokens count against max_tokens. A flat 8192 cap left a paper-length rewrite (6-9k content
+// tokens on top of the reasoning over a 22k-char input) truncated: all 8 glm-5.3-flash calls on
+// 2026-10-01 ended at exactly 8192 output tokens, and every revise and reconcile came back under the
+// 10000-char floor. The caps match qnfo-ai MAX_OUT for the same Workers AI ids.
+var AI_TEXT_MAX_OUT = { "@cf/zai-org/glm-5.3-flash": 32768, "@cf/zai-org/glm-5.3": 32768, "@cf/openai/gpt-oss-120b": 32768 };
 async function aiText(env, model, prompt, maxTokens) {
-  const cappedTokens = Math.min(maxTokens, 8192);
+  const cappedTokens = Math.min(maxTokens, AI_TEXT_MAX_OUT[model] || 8192);
   try {
     const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 });
     if (typeof r === "string") return r;
@@ -1915,7 +1921,7 @@ async function stageReconcile(env, row) {
       await markError(env, row, "reconcile: output too short (" + (reconciled ? reconciled.length : 0) + ")");
       return { ok: false, stage: "reconcile" };
     }
-    await logEvent(env, "reconcile-degrade", "gateway empty; reconciled from best leg (len=" + body.length + ")", "warn");
+    await logEvent(env, "reconcile-degrade", "reconcile output short (" + (reconciled ? reconciled.length : 0) + " < 10000 chars after retry); reconciled from best leg (len=" + body.length + ")", "warn");
     await r2Put(env, String(row.id) + "/reconciled.md", body);
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, degraded: true }).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "reconcile->review", len: body.length, degraded: true };
