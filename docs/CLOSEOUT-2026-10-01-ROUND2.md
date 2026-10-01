@@ -81,8 +81,8 @@ Also this round:
   - #1683 (30-day spend decay).
   - #1710 (first post-resume send).
   - #1711 and #1718 (7-day windows).
-- Owned by the sessions that filed them: #1712 and #1716 (STRATEGY-1), #1723 to #1727 (owner directive on Claude
-  independence, in progress).
+- Filed by sessions, owned by the fleet's issue loop like any other row: #1712 and #1716 (STRATEGY-1), #1723 to #1727
+  (owner directive on Claude independence; 1723 closed with evidence, 1725 built as OBJECTIVE-REVISION-APPLY-1).
 - #1713 needs the owner to connect LinkedIn in Buffer (account connection, by design).
 - fleet.qnfo.org reads ACTION_NEEDED only for the two qnfo-research-exec internalError invocations in the 12:00Z hour, the
   wall-limit overrun fixed in 0.9.39. They share an hourly bucket with the 12:37Z redeploy, so the hour-granular "after the

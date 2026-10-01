@@ -225,8 +225,8 @@ def classify(log: str, wf_name: str) -> tuple[str, str]:
     if ("status=401" in L and "canonical deploy failed" in L) or "Unauthorized - set" in L:
         return "deploy-unauthorized", (
             "ops.qnfo.org rejected the Actions secret OPS_ROUTER_AUTH_KEY (HTTP 401): it no longer matches the Worker's "
-            "key (credential rotation in progress, issues 1676/1701). Update the secret from the rotating session; "
-            "do not rotate from CI"
+            "key (credential rotation in progress, issues 1676/1701). The credential holder sets the Actions secret to the "
+            "Worker's current key (repository Settings > Secrets and variables > Actions); do not rotate from CI"
         )
     # A push race is a finding only if the push did NOT recover; the artifact steps retry onto origin/main and log
     # "pushed on attempt N" when they land (ARTIFACT-PUSH-CONFLICT-1). Match the git conflict itself, not the word

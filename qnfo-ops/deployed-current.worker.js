@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.33-cache-no-tool-answers";
+var VERSION = "2.38.34-no-anthropic-upstream";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -168,7 +168,8 @@ var OPS_EXEC_MODELS = {
   "gpt-5-codex": "openai/gpt-5-codex",
   "gpt-5.6-terra": "openai/gpt-5.6-terra",
   "gpt-5.6-luna": "openai/gpt-5.6-luna",
-  "claude-sonnet-4.5": "anthropic/claude-sonnet-4.5",
+  // NO-CLAUDE-RUNTIME-DEPENDENCY-1 (2.38.34, owner directive 2026-10-01): no Anthropic upstream. A request naming
+  // claude-sonnet-4.5 (or any claude-*) is a foreign id and routes to the public ops model like every other one.
   "deepseek-chat": "deepseek/deepseek-chat",
   "typesafe-jev": "typesafe/jev"
 };
