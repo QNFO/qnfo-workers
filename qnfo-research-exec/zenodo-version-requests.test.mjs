@@ -2,7 +2,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { applyCreatorPatch, drainMetadataEdits, drainVersionRequests } from "./worker.js";
+import { applyCreatorPatch, drainMetadataEdits, drainVersionRequests, verifyMetadataBackfill } from "./worker.js";
 
 const db = new DatabaseSync(":memory:");
 db.exec(readFileSync(new URL("../migrations/2026-10-01-zenodo-version-requests.sql", import.meta.url), "utf8"));
@@ -138,4 +138,34 @@ for (let r = 600; r < 612; r++) addMeta(r, PATCH);
 deps[600] = deps[501];
 const lim = await drainMetadataEdits(env, 3);
 assert.equal(lim.length, 3);
+
+// 11. METADATA-BACKFILL-VERIFY-1: the backfill issue closes itself only when the queue is drained, no row errored and
+// every sampled record reads back with the patched creator on the public API.
+db.exec("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT, updated_at INTEGER)");
+db.exec("CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT)");
+db.exec("INSERT INTO agent_issues (id, title, status) VALUES (1732, 'ZENODO-METADATA-EDITS-1 backfill: one creator identity', 'open')");
+db.exec("DELETE FROM zenodo_version_requests WHERE kind='metadata'");
+const live = {};
+const pubFetch = async (url) => { const id = String(url).split("/").pop(); return live[id] ? ok({ metadata: { creators: live[id] } }) : ok({}, 404); };
+const want = PATCH.creator_by_orcid;
+const seeded = (id) => { live[id] = [{ name: want.name, affiliation: want.affiliation, orcid: want.orcid }]; return addMeta(id, PATCH); };
+const busy = seeded(701);
+let v = await verifyMetadataBackfill(env, pubFetch);
+assert.deepEqual(v, { issue: 1732, waiting: 1 });
+db.prepare("UPDATE zenodo_version_requests SET status='published' WHERE id=?").run(busy);
+const errRow = addMeta(702, PATCH); db.prepare("UPDATE zenodo_version_requests SET status='error' WHERE id=?").run(errRow);
+v = await verifyMetadataBackfill(env, pubFetch);
+assert.equal(v.closed, false); assert.match(v.summary, /error=1/);
+db.prepare("DELETE FROM zenodo_version_requests WHERE id=?").run(errRow);
+const stale = seeded(703); db.prepare("UPDATE zenodo_version_requests SET status='published' WHERE id=?").run(stale);
+live[703] = [{ name: want.name, affiliation: "QWAV", orcid: want.orcid }];
+v = await verifyMetadataBackfill(env, pubFetch);
+assert.equal(v.closed, false); assert.match(v.summary, /failed: 703/);
+assert.equal(db.prepare("SELECT status FROM agent_issues WHERE id=1732").get().status, "open");
+live[703] = [{ name: want.name, affiliation: want.affiliation, orcid: "https://orcid.org/" + want.orcid }];
+v = await verifyMetadataBackfill(env, pubFetch);
+assert.equal(v.closed, true); assert.match(v.summary, /public re-read 2\/2/);
+assert.equal(db.prepare("SELECT status FROM agent_issues WHERE id=1732").get().status, "closed");
+assert.match(db.prepare("SELECT close_evidence FROM issue_triage WHERE issue_id=1732").get().close_evidence, /^METADATA-BACKFILL-VERIFY-1 /);
+assert.equal(await verifyMetadataBackfill(env, pubFetch), null);
 console.log("zenodo-version-requests: all assertions passed");

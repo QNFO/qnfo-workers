@@ -51,6 +51,12 @@ assert.deepEqual(await syncProfile(env), { held: "owner-edited", current: MINE }
 assert.equal(putBody, null);
 globalThis.fetch = realFetch;
 
+// 3b2. OWNER-DELEGATION-SOCIAL-1: the bio hand-edited on 1 Oct is superseded by the owner's delegation and replaced.
+const DELEGATED = "Founder of QNFO: independent open-science research on quantum computing architectures and the energy cost of computation. Previously AARP Livability Index, US DOT NHTS, Deloitte, Publicis. qnfo.org ORCID: orcid.org/0009-0002-4317-5604";
+reset(); publicDesc = DELEGATED; recordValue = { $type: "app.bsky.actor.profile", displayName: "Rowan Brad Quni-Gudzinas", description: DELEGATED };
+const d2 = await syncProfile(env);
+assert.equal(d2.updated, true); assert.equal(putBody.record.description, PROFILE_DESCRIPTION); assert.equal(putBody.swapRecord, "cid1");
+
 // 3c. An empty bio is filled.
 reset(); publicDesc = ""; recordValue = { $type: "app.bsky.actor.profile", displayName: "Rowan Brad Quni-Gudzinas" };
 assert.equal((await syncProfile(env)).updated, true); assert.equal(putBody.record.description, PROFILE_DESCRIPTION);
