@@ -31,7 +31,30 @@ def issues():
         out.append(f"#{i['number']} {i['title']}")
     return out
 
+def live_audit():
+    """Class table of the live fleet-autoaudit issue; None if unavailable (artifact file lags it)."""
+    tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if not tok:
+        return None
+    req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/issues?state=open&labels=fleet-autoaudit&per_page=1",
+        headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json", "User-Agent": "qnfo-drain-hook"})
+    rows = json.load(urllib.request.urlopen(req, timeout=10))
+    if not rows:
+        return None
+    out = []
+    for line in (rows[0].get("body") or "").splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) == 2 and cells[0] in BAD and cells[1].isdigit() and int(cells[1]) > 0:
+            out.append(f"autoaudit #{rows[0]['number']}: {cells[1]} x {cells[0]}")
+    return out
+
 def audit():
+    try:
+        live = live_audit()
+        if live is not None:
+            return live
+    except Exception:
+        pass
     fs = sorted(glob.glob(os.path.join(root, "audits", "fleet-autoaudit-2*.json")))
     if not fs:
         return []
