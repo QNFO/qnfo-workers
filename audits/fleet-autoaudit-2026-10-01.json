@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 03:07:26",
+  "audited_at": "2026-10-01 04:27:24",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -29,7 +29,7 @@
     "drift": [
       {
         "dir": "qnfo-fleet-control",
-        "live": "0.4.47-autopilot-fold",
+        "live": "0.4.48-evolve-guardrails",
         "repo": "\\d+\\.\\d+\\.\\d+[^",
         "worker": "qnfo-fleet-control"
       }
@@ -570,7 +570,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.25-evolve-c115",
+        "version": "0.9.26-dlf-hold",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1144,7 +1144,7 @@
     "qnfo-fleet-control": {
       "before": "\\d+\\.\\d+\\.\\d+[^",
       "http": 200,
-      "live": "0.4.47-autopilot-fold",
+      "live": "0.4.48-evolve-guardrails",
       "match": 0,
       "note": "DRIFT",
       "worker": "qnfo-fleet-control"
@@ -1358,9 +1358,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.25-evolve-c115",
+      "before": "0.9.26-dlf-hold",
       "http": 200,
-      "live": "0.9.25-evolve-c115",
+      "live": "0.9.26-dlf-hold",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
