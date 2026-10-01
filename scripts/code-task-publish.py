@@ -11,6 +11,8 @@ WHAT IT DOES (per ready task of THIS repo)
   claim (ready_to_publish -> publishing, compare-and-set) -> re-check path policy -> reuse an existing PR for the
   branch if one exists (idempotent) -> else `git apply --check` + apply on a fresh branch off origin/main -> commit ->
   push -> open PR -> record status='published' + pr_url.  Any failure records status='publish_failed' with last_error.
+  Then (PR-OUTCOME-RECONCILE-1) it reads the state of each published / branch_pushed / pr_open task's PR and records
+  status='merged' or 'closed' once a person has merged or closed it.
   It NEVER merges, never force-pushes, never touches main, never deletes rows, and uses no credential other than the
   environment's (CF_ACCOUNT_ID / CLOUDFLARE_API_TOKEN for D1, GH_TOKEN for gh). No secret value is read or printed.
 
@@ -165,6 +167,13 @@ class GhPR:
             raise RuntimeError("gh pr create failed: " + r.stderr.strip()[:200])
         return r.stdout.strip().splitlines()[-1]
 
+    def state(self, url):
+        """OPEN, MERGED or CLOSED for a PR URL (read-only)."""
+        r = subprocess.run(["gh", "pr", "view", url, "--json", "state", "--jq", ".state"], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError("gh pr view failed: " + r.stderr.strip()[:200])
+        return r.stdout.strip().upper()
+
 
 def git(repo_dir, *args, check=True):
     r = subprocess.run(["git", "-c", "user.name=qnfo-code-task-publish", "-c", "user.email=fleet-bot@qnfo.org", *args],
@@ -263,6 +272,45 @@ def publish_all(store, repo_dir, base, pr, log=print):
     return out
 
 
+# PR-OUTCOME-RECONCILE-1 (2026-10-01): a published task kept status 'published' after its PR merged or closed (#297 merged
+# at 10:40Z and #368 at 21:04Z, both still 'published' hours later), so the fleet's watchmaker index counted merged PRs as
+# "waiting on a person". Each run reads the PR state of every published / branch_pushed task and records the outcome:
+# status 'merged' or 'closed' (with the PR URL). The orchestrator's own 'pr_open' rows are covered the same way. An open PR,
+# a branch with no PR yet, or a failed lookup leaves the row as is. Read-only on GitHub; it never merges or closes anything.
+PULL_URL = re.compile(r"^https://github\.com/[^/]+/[^/]+/pull/\d+$")
+
+
+def reconcile_outcomes(store, pr, log=print):
+    out = {"merged": 0, "closed": 0, "open": 0, "errors": 0}
+    try:
+        rows = store.rows("SELECT id, branch, pr_url, status FROM code_tasks WHERE status IN ('published','branch_pushed','pr_open') ORDER BY updated_at ASC LIMIT 50")
+    except MissingTable:
+        return out
+    for t in rows:
+        url = t.get("pr_url") or ""
+        try:
+            if not PULL_URL.match(url):
+                found = pr.existing(t["branch"]) if t.get("branch") else None
+                if not found or not PULL_URL.match(found):
+                    out["open"] += 1
+                    continue
+                url = found
+            st = pr.state(url)
+        except RuntimeError as e:
+            out["errors"] += 1
+            log(f"::warning::reconcile {t['id']}: {e}")
+            continue
+        if st in ("MERGED", "CLOSED"):
+            new = "merged" if st == "MERGED" else "closed"
+            store.changes("UPDATE code_tasks SET status=?, pr_url=?, updated_at=? WHERE id=? AND status IN ('published','branch_pushed','pr_open')",
+                          [new, url, now(), t["id"]])
+            out[new] += 1
+            log(f"{t['id']}: PR {url} {new}")
+        else:
+            out["open"] += 1
+    return out
+
+
 # ------------------------------------------------------------------ selftest
 class FakePR:
     def __init__(self, refuse=False):
@@ -278,6 +326,12 @@ class FakePR:
         self.by_branch[branch] = url
         self.created.append(branch)
         return url
+
+    def state(self, url):
+        st = getattr(self, "states", {}).get(url)
+        if st is None:
+            raise RuntimeError("gh pr view failed: not found")
+        return st
 
 
 DDL = ("CREATE TABLE code_tasks (id TEXT PRIMARY KEY, repo TEXT NOT NULL, path TEXT NOT NULL, goal TEXT NOT NULL, "
@@ -420,6 +474,37 @@ def selftest():
     except RuntimeError as e:
         check("a real D1 failure still raises", "500" in str(e) and not isinstance(e, MissingTable), e)
 
+    # 7. PR-OUTCOME-RECONCILE-1: merged / closed PRs are recorded; open, unknown and PR-less rows are left alone
+    remote, work, store = fixture()
+    pr = FakePR()
+    pr.states = {"https://github.com/QNFO/qnfo-workers/pull/297": "MERGED", "https://github.com/QNFO/qnfo-workers/pull/300": "CLOSED",
+                 "https://github.com/QNFO/qnfo-workers/pull/301": "OPEN", "https://github.com/QNFO/qnfo-workers/pull/302": "MERGED"}
+    pr.by_branch = {"codeagent-bp": "https://github.com/QNFO/qnfo-workers/pull/302"}
+    add(store, "ct_merged000001", good, status="published")
+    add(store, "ct_closed000001", good, status="published")
+    add(store, "ct_open00000001", good, status="published")
+    add(store, "ct_gone00000001", good, status="published")
+    add(store, "ct_bp0000000001", good, status="branch_pushed", branch="codeagent-bp")
+    add(store, "ct_bpnopr000001", good, status="branch_pushed", branch="codeagent-none")
+    add(store, "ct_needshuman01", good, status="needs_human")
+    add(store, "ct_propen000001", good, status="pr_open")
+    for tid, url in (("ct_merged000001", 297), ("ct_closed000001", 300), ("ct_open00000001", 301), ("ct_gone00000001", 999), ("ct_propen000001", 302)):
+        store.changes("UPDATE code_tasks SET pr_url=? WHERE id=?", [f"https://github.com/QNFO/qnfo-workers/pull/{url}", tid])
+    store.changes("UPDATE code_tasks SET pr_url=? WHERE id IN ('ct_bp0000000001','ct_bpnopr000001')", ["https://github.com/QNFO/qnfo-workers/compare/main...x?expand=1"])
+    r = reconcile_outcomes(store, pr, quiet)
+    check("a merged PR is recorded as merged", row(store, "ct_merged000001")["status"] == "merged")
+    check("a closed PR is recorded as closed", row(store, "ct_closed000001")["status"] == "closed")
+    check("an open PR is left published", row(store, "ct_open00000001")["status"] == "published")
+    check("a failed lookup is left published and counted", row(store, "ct_gone00000001")["status"] == "published" and r["errors"] == 1, r)
+    t = row(store, "ct_bp0000000001")
+    check("a branch_pushed task whose PR was opened later is reconciled with that PR's URL", t["status"] == "merged" and t["pr_url"].endswith("/pull/302"), t)
+    check("a branch with no PR stays branch_pushed", row(store, "ct_bpnopr000001")["status"] == "branch_pushed")
+    check("the orchestrator's pr_open row is reconciled too", row(store, "ct_propen000001")["status"] == "merged")
+    check("other statuses are never touched", row(store, "ct_needshuman01")["status"] == "needs_human")
+    check("reconcile counts", r == {"merged": 3, "closed": 1, "open": 2, "errors": 1}, r)
+    r2 = reconcile_outcomes(store, pr, quiet)
+    check("reconcile is idempotent", r2["merged"] == 0 and r2["closed"] == 0, r2)
+
     print(f"\nselftest: {len(fails)} failure(s)")
     return 1 if fails else 0
 
@@ -436,6 +521,7 @@ def main():
     try:
         git(a.repo_dir, "fetch", "-q", "origin", a.base)
         out = publish_all(store, a.repo_dir, a.base, GhPR())
+        out["outcomes"] = reconcile_outcomes(store, GhPR())
     except RuntimeError as e:
         print("::error::code-task-publish could not run: " + str(e))
         return 2

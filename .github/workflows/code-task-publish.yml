@@ -7,6 +7,8 @@ name: code-task-publish
 # 'ready_to_publish') and this workflow PULLS them, applies each patch on a new branch, opens a PR, and records
 # status 'published' + pr_url back in D1. A patch that does not apply becomes 'publish_failed' with a reason and
 # turns this run red (never silent). It NEVER merges.
+# PR-OUTCOME-RECONCILE-1: each run also reads the state of every 'published'/'branch_pushed' task's PR (read-only) and
+# records 'merged' or 'closed' in D1, so a PR a person merged stops counting as waiting (watchmaker code-task-merge).
 #
 # TRIGGERS: the GitHub `schedule` event has never fired on this repository, so there is deliberately NO cron.
 # It hangs off workflow_run of mirror-sync (runs on every push to main) and fleet-autodeploy, plus workflow_dispatch.
