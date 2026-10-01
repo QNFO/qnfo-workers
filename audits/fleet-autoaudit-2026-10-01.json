@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 08:16:23",
+  "audited_at": "2026-10-01 08:18:58",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -34,12 +34,6 @@
     ],
     "cron_only_count": 3,
     "drift": [
-      {
-        "dir": "personal-api",
-        "live": "4.1.17-signals-consumer",
-        "repo": "4.1.16-event-profile-guard",
-        "worker": "personal-api"
-      },
       {
         "dir": "radar-hub",
         "live": "1.0.9",
@@ -413,7 +407,7 @@
       }
     ],
     "scope": "all",
-    "sync": 38,
+    "sync": 39,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -434,6 +428,11 @@
         "dir": "idea-hub",
         "version": "1.3.1-reentry-rescore",
         "worker": "idea-hub"
+      },
+      {
+        "dir": "personal-api",
+        "version": "4.1.17-signals-consumer",
+        "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
@@ -577,7 +576,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.27-gw-breaker",
+        "version": "0.9.28-queue-antistarvation",
         "worker": "qnfo-research-exec"
       },
       {
@@ -810,11 +809,11 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.1.16-event-profile-guard",
+      "before": "4.1.17-signals-consumer",
       "http": 200,
       "live": "4.1.17-signals-consumer",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
@@ -1370,9 +1369,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.27-gw-breaker",
+      "before": "0.9.28-queue-antistarvation",
       "http": 200,
-      "live": "0.9.27-gw-breaker",
+      "live": "0.9.28-queue-antistarvation",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
