@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.46-gates-bib-aware";
+var VERSION = "0.9.47-capability-contract";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2885,7 +2885,7 @@ var worker_default = {
   async fetch(request, env) {
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     const url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION });
+    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "zenodo-publish"], limitations: ["stages run only on the */15 cron under a single-flight lease (one stage per tick)", "papers cite only the grounding bibliography", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
     if (url.pathname === "/run" && request.method === "POST") {
       if (url.searchParams.get("sync") !== "1") {
         await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");

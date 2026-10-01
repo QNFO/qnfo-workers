@@ -4,7 +4,8 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var PROTOCOL_VERSION = "2024-11-05";
 var SERVER_NAME = "qnfo-memory-mcp";
-var SERVER_VERSION = "2.0.4";
+var VERSION = "2.0.5-capability-contract";
+var SERVER_VERSION = VERSION;
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var TOOLS = [
   { name: "search_papers", description: "Semantic search across QWAV research papers using Vectorize.", inputSchema: { type: "object", properties: { query: { type: "string", description: "Natural language search query" }, limit: { type: "number", description: "Maximum results (1-20, default 10)", default: 10 } }, required: ["query"] } },
@@ -351,7 +352,7 @@ var worker_default = {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
     if (url.pathname === "/health") {
-      return json({ status: "ok", server: SERVER_NAME, version: SERVER_VERSION, auth: !!env.MCP_TOKEN });
+      return json({ status: "ok", server: SERVER_NAME, version: SERVER_VERSION, auth: !!env.MCP_TOKEN, capabilities: ["mcp", "persistent-memory", "knowledge-graph", "vector-recall"], limitations: ["bearer token required on /mcp and /mcp/sse", "fails closed (503) when MCP_TOKEN is unset", "the tool list is served only to authenticated clients"] });
     }
     // MCP-AUTH-1 (2026-09-30, closes the external red-team finding "qnfo-memory-mcp is
     // unauthenticated"): anonymous tools/list + arbitrary query_graph SQL + a remember_fact WRITE

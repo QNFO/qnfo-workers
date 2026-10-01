@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.7-auth-fail-closed";
+var VERSION = "1.2.8-capability-contract";
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -663,7 +663,7 @@ var worker_default = {
   async fetch(request, env, ctx) {
     var url = new URL(request.url);
     var path = url.pathname;
-    if (path === "/health") return json({ ok: true, worker: "qnfo-ai-calibration", version: VERSION, bindings: { qnfo_audit: !!env.QNFO_AUDIT }, crons: ["*/30 * * * *"] });
+    if (path === "/health") return json({ ok: true, worker: "qnfo-ai-calibration", version: VERSION, bindings: { qnfo_audit: !!env.QNFO_AUDIT }, crons: ["*/30 * * * *"], capabilities: ["model-calibration", "drift-detection", "model-health"], limitations: ["calibrates on the */30 cron; POST /run and GET /results require the router key", "fails closed when the key is not configured"] });
     if (path === "/manifest") return json({ service: "qnfo-ai-calibration", kind: "worker", version: VERSION, purpose: "autonomous periodic stress-testing/calibration of QNFO AI endpoints (self-auditing, self-correcting, self-improving)", capabilities: ["endpoint-stress-sweeps", "catalog-truth-audit", "vision-tools-stream-routing-boundary-probes", "health-table-publishing", "ticket-lifecycle-self-heal", "config-driven-thresholds"], routes: ["/health", "/manifest", "/run", "/results", "/"], crons: ["*/30 * * * *"] });
     if (path === "/run" && request.method === "POST") {
       if (!await authorized(request, env)) return json({ error: "unauthorized" }, 401);
