@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.8-roster-ctx-catalog";
+var VERSION = "5.29.9-ai-attribution";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -463,7 +463,7 @@ __name2(shouldEnsemble, "shouldEnsemble");
 __name22(shouldEnsemble, "shouldEnsemble");
 var QNFO_INDEXES = ["PAPER_VZ", "NOTES_VZ", "TASKS_VZ", "HANDOFFS_VZ", "LOG_VZ", "IPATENT_VZ", "INFRA_VZ", "CLOUD_OPS_VZ"];
 async function searchQnfoIndexes(env, q, k) {
-  const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
+  const embed = await aiRunAttr(env, "qnfo-ai", "embed-search", "@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
   const vec = embed?.data?.[0] || (Array.isArray(embed) ? embed[0] : null);
   if (!vec) return { error: "embedding generation failed" };
   const sources = {};
@@ -668,7 +668,7 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
     const aiBody = buildAIBody(initialMsgs);
     for (let attempt = 0; ; attempt++) {
       try {
-        return await env.AI.run(modelId, aiBody);
+        return await aiRunAttr(env, "qnfo-ai", "chat", modelId, aiBody);
       } catch (e) {
         const msg = String(e && e.message || e || "");
         const isCapErr = /max_tokens|max output|context window|too (many|long)|token limit|max_new_tokens/i.test(msg);
@@ -871,7 +871,7 @@ async function executeGatewayTool(env, fnName, args) {
       var q = String(args.query || "").slice(0, 500);
       var limit = Math.min(parseInt(args.limit || 5, 10) || 5, 10);
       if (!env.PAPER_VZ) return { ok: false, error: "paper index not bound" };
-      var embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [q] });
+      var embed = await aiRunAttr(env, "qnfo-ai", "embed-query", "@cf/baai/bge-base-en-v1.5", { text: [q] });
       var vec = embed && embed.data && embed.data[0] || (Array.isArray(embed) ? embed[0] : null);
       if (!vec) return { ok: false, error: "embedding failed" };
       var hits = await env.PAPER_VZ.query(vec, { topK: limit, returnValues: false, returnMetadata: "all" });
@@ -891,7 +891,7 @@ async function executeGatewayTool(env, fnName, args) {
       var topic = String(args.topic || "").slice(0, 300);
       var lim2 = Math.min(parseInt(args.limit || 5, 10) || 5, 10);
       if (!env.PAPER_VZ) return { ok: false, error: "paper index not bound" };
-      var emb = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [topic] });
+      var emb = await aiRunAttr(env, "qnfo-ai", "embed-topic", "@cf/baai/bge-base-en-v1.5", { text: [topic] });
       var v2 = emb && emb.data && emb.data[0] || (Array.isArray(emb) ? emb[0] : null);
       if (!v2) return { ok: false, error: "embedding failed" };
       var h2 = await env.PAPER_VZ.query(v2, { topK: lim2, returnValues: false, returnMetadata: "all" });
@@ -1101,7 +1101,7 @@ async function qnfoAiFreeFallback(env, messages, maxTokens) {
   for (let _i = 0; _i < _cands.length; _i++) {
     try {
       if (!env.AI) return null;
-      const _r = await env.AI.run(_cands[_i], { messages: messages, max_tokens: Math.min(Math.max(maxTokens || 2048, 512), 8192) });
+      const _r = await aiRunAttr(env, "qnfo-ai", "chat-fallback", _cands[_i], { messages: messages, max_tokens: Math.min(Math.max(maxTokens || 2048, 512), 8192) });
       const _t = _r && (_r.response != null ? _r.response : (_r.choices && _r.choices[0] && _r.choices[0].message && _r.choices[0].message.content)) || "";
       if (_t && String(_t).trim()) { console.log("QNFO_AI_FREE_FALLBACK " + _cands[_i]); return String(_t); }
     } catch (e) { }
@@ -1922,7 +1922,7 @@ __name22(lastUserText, "lastUserText");
 async function semanticCacheLookup(env, q, model) {
   try {
     if (!env.LOG_VZ || !env.AI) return null;
-    const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
+    const embed = await aiRunAttr(env, "qnfo-ai", "embed-search2", "@cf/baai/bge-base-en-v1.5", { text: [String(q).slice(0, 500)] });
     const vec = embed && embed.data && embed.data[0] || (Array.isArray(embed) ? embed[0] : null);
     if (!vec) return null;
     const hits = await env.LOG_VZ.query(vec, { topK: 3, returnMetadata: "all" });
@@ -1999,7 +1999,7 @@ async function logQuery(env, record) {
     if (env.LOG_VZ && env.AI && !_internalProbe) {
       const text = [record.prompt.slice(0, 2e3), record.response.slice(0, 2e3)].filter(Boolean);
       if (text.length) {
-        const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text });
+        const embed = await aiRunAttr(env, "qnfo-ai", "embed-index", "@cf/baai/bge-base-en-v1.5", { text });
         const vecs = (embed?.data || []).filter((v) => Array.isArray(v) && v.length === 768);
         if (vecs.length) {
           const day = String(record.ts || "").slice(0, 10) || "unknown";
@@ -2856,7 +2856,7 @@ var worker_default = {
       if (q) {
         if (!env.LOG_VZ || !env.AI) return json({ error: "semantic history requires Vectorize qnfo-ai-log + AI bindings" }, 501);
         try {
-          const embed = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [q] });
+          const embed = await aiRunAttr(env, "qnfo-ai", "embed-query2", "@cf/baai/bge-base-en-v1.5", { text: [q] });
           const vec = embed?.data?.[0] || (Array.isArray(embed) ? embed[0] : null);
           if (!vec) return json({ error: "embedding generation failed" }, 502);
           const matches = await env.LOG_VZ.query(vec, { topK: Math.min(Math.max(parseInt(url.searchParams.get("k") || "10", 10), 1), 20), returnMetadata: "all" });
@@ -2995,6 +2995,32 @@ var worker_default = {
     return json({ error: "Not found" }, 404);
   }
 };
+// WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a
+// per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
+// Copied from qnfo-fleet-control (workers cannot import across directories); same table/columns. No new paid service.
+// Unlike fleet-control the counter write is NOT awaited (fire-and-forget, errors swallowed) so it can never add latency.
+var AI_ATTR_DB_BINDINGS = ["AUDIT_DB","AUDIT","DB_AUDIT","QNFO_AUDIT"];
+async function aiRunAttr(env, worker, purpose, model, input, opts) {
+  var t0 = Date.now(), ok = 1;
+  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  finally {
+    try {
+      var db = null;
+      for (var bi = 0; bi < AI_ATTR_DB_BINDINGS.length && !db; bi++) db = env[AI_ATTR_DB_BINDINGS[bi]];
+      if (db) {
+        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
+        var day = new Date().toISOString().slice(0, 10);
+        var ms = Date.now() - t0;
+        var wr = (async function() {
+          await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
+          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, ms).run();
+        })();
+        wr.catch(function() {});
+      }
+    } catch (e3) {}
+  }
+}
+// end aiRunAttr
 export {
   worker_default as default
 };

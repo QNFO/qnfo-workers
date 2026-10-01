@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.3.3";
+var VERSION = "0.3.4-ai-attribution";
 var NAME = "qnfo-autopilot";
 var DASH = "https://fleet.qnfo.org/api/state";
 var UA = "qnfo-autopilot/" + VERSION;
@@ -200,7 +200,7 @@ async function evolvePropose(env, worker, goal) {
   const prompt = "You are improving a Cloudflare Worker. Goal: " + (goal || "add a /version endpoint that returns JSON {ok:true,version}") + ". Here is the current module source:\n\n" + code.slice(0, 16e3) + "\n\nReturn ONLY the complete modified source (JavaScript, valid module syntax).";
   let proposal;
   try {
-    const out = await env.AI.run(EVOLVE_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 4096 });
+    const out = await aiRunAttr(env, "qnfo-autopilot", "evolve", EVOLVE_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 4096 });
     proposal = typeof out === "string" ? out : out.response || JSON.stringify(out);
   } catch (e) {
     return { ok: false, why: "AI " + String(e && e.message ? e.message : e).slice(0, 80) };
@@ -419,7 +419,7 @@ async function thinkLoop(env) {
   await ensureSchema(env);
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, question TEXT, hypothesis TEXT, source TEXT, status TEXT)").run();
   try {
-    const ai = await env.AI.run(THINK_MODEL, {
+    const ai = await aiRunAttr(env, "qnfo-autopilot", "think", THINK_MODEL, {
       messages: [
         { role: "system", content: 'You are the QNFO research collective. Propose ONE novel, falsifiable research question the fleet should investigate next. Output strict JSON only: {"question": "...", "hypothesis": "...", "why": "..."}. No markdown.' },
         { role: "user", content: "Generate one novel research question. Consider energy-efficient computing, quantum foundations, information thermodynamics, or a gap in the existing corpus." }
@@ -563,6 +563,32 @@ var worker_default = {
     return json({ ok: false, error: "not found", endpoints: ["/health", "/run/cycle", "/git/commit", "/publish/report", "/evolve/propose", "/evolve/apply", "/heartbeat"] }, 404);
   }
 };
+// WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a
+// per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
+// Copied from qnfo-fleet-control (workers cannot import across directories); same table/columns. No new paid service.
+// Unlike fleet-control the counter write is NOT awaited (fire-and-forget, errors swallowed) so it can never add latency.
+var AI_ATTR_DB_BINDINGS = ["AUDIT_DB","AUDIT","DB_AUDIT","QNFO_AUDIT"];
+async function aiRunAttr(env, worker, purpose, model, input, opts) {
+  var t0 = Date.now(), ok = 1;
+  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  finally {
+    try {
+      var db = null;
+      for (var bi = 0; bi < AI_ATTR_DB_BINDINGS.length && !db; bi++) db = env[AI_ATTR_DB_BINDINGS[bi]];
+      if (db) {
+        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
+        var day = new Date().toISOString().slice(0, 10);
+        var ms = Date.now() - t0;
+        var wr = (async function() {
+          await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
+          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, ms).run();
+        })();
+        wr.catch(function() {});
+      }
+    } catch (e3) {}
+  }
+}
+// end aiRunAttr
 export {
   worker_default as default
 };

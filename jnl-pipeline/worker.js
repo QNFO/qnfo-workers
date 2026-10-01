@@ -12,7 +12,7 @@ var jnlWatchMod = (function() {
   var COMMUNITY_ID = "87f14e85-7156-4146-84e9-9e3a11e29c1d";
   var COMMUNITY = `https://zenodo.org/api/communities/${COMMUNITY_ID}/records`;
   var CURSOR_KEY = "cursor:lastModified";
-  var VERSION = "0.1.9";
+  var VERSION = "0.1.10-ai-attribution";
   var PAGE_SIZE = 25;
   var MAX_PAGES = 40;
   var UA = "jnl-watch/0.1.9 (QNFO AI-referee overlay for Zenodo community aiscience)";
@@ -576,7 +576,7 @@ var jnlRefereeMod = (function() {
   __name2(arrOf, "arrOf");
   __name22(arrOf, "arrOf");
   async function aiRun(env, model, sys, usr) {
-    var r = await env.AI.run(model, { messages: [{ role: "system", content: sys }, { role: "user", content: usr }], max_tokens: MAX_TOKENS });
+    var r = await aiRunAttr(env, "jnl-pipeline", "referee", model, { messages: [{ role: "system", content: sys }, { role: "user", content: usr }], max_tokens: MAX_TOKENS });
     return extractText(r);
   }
   __name(aiRun, "aiRun");
@@ -1550,7 +1550,7 @@ DECISION: ${review.decision} (avg ${review.avg_score}/10)
 
 PAPER (${mdLimited.length} chars shown of ${mdText.length}):
 ${mdLimited}`;
-        const ar = await env.AI.run(MODEL, { prompt: `${sysP}
+        const ar = await aiRunAttr(env, "jnl-pipeline", "reviser-draft", MODEL, { prompt: `${sysP}
 
 ${userP}`, max_tokens: 1500 });
         const raw = extractText(ar).slice(0, 6e3);
@@ -1584,7 +1584,7 @@ ${userP}`, max_tokens: 1500 });
         }
         if (applied.length === 0) {
           const sysB = `You are an expert copyeditor. Referee feedback asks for clarity on empirical status and accessibility. Add a small number of INSERTIONS ONLY (never alter existing wording, never invent citations/data/results/experiments). Return STRICT JSON: {"edits":[{"find":"exact unique substring >= 30 chars to anchor after (verbatim from paper)","insert":"1-3 sentences to append right after the anchor","reason":"which referee point this addresses"}]}. Each insert must truthfully clarify scope, empirical status, or define a dense term for non-experts (e.g. "In this work, X is presented as a theoretical proposal; experimental validation is left to future work."). Max 3 edits. If none are safe return {"edits":[]}.`;
-          const arB = await env.AI.run(MODEL, { prompt: `${sysB}
+          const arB = await aiRunAttr(env, "jnl-pipeline", "reviser-weakness", MODEL, { prompt: `${sysB}
 
 REFEREE WEAKNESSES:
 ${weakText}
@@ -1887,6 +1887,32 @@ var worker_default = {
     if (event.cron === "23 */2 * * *") return jnlRefereeMod.default.scheduled(event, env, ctx);
   }
 };
+// WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a
+// per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
+// Copied from qnfo-fleet-control (workers cannot import across directories); same table/columns. No new paid service.
+// Unlike fleet-control the counter write is NOT awaited (fire-and-forget, errors swallowed) so it can never add latency.
+var AI_ATTR_DB_BINDINGS = ["AUDIT_DB","AUDIT","DB_AUDIT","QNFO_AUDIT"];
+async function aiRunAttr(env, worker, purpose, model, input, opts) {
+  var t0 = Date.now(), ok = 1;
+  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  finally {
+    try {
+      var db = null;
+      for (var bi = 0; bi < AI_ATTR_DB_BINDINGS.length && !db; bi++) db = env[AI_ATTR_DB_BINDINGS[bi]];
+      if (db) {
+        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
+        var day = new Date().toISOString().slice(0, 10);
+        var ms = Date.now() - t0;
+        var wr = (async function() {
+          await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
+          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, ms).run();
+        })();
+        wr.catch(function() {});
+      }
+    } catch (e3) {}
+  }
+}
+// end aiRunAttr
 export {
   worker_default as default
 };

@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = "0.7.17-distribution-reconcile";
+var VERSION = "0.7.18-ai-attribution";
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -289,13 +289,13 @@ async function checkThread(env, title, abstract, posts) {
     }
     return null;
   }
-  const ai1 = await env.AI.run(CHECKER_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 2000 });
+  const ai1 = await aiRunAttr(env, "qnfo-social", "checker", CHECKER_MODEL, { messages: [{ role: 'user', content: base }], max_tokens: 2000 });
   let text = extractText(ai1).trim();
   let issues = parseIssues(text);
   let diagText = text;
   let lastAi = ai1;
   if (issues === null) {
-    const ai2 = await env.AI.run(CHECKER_MODEL, { messages: [{ role: 'user', content: 'Reply with ONLY a JSON array. Nothing else.\n' + base }], max_tokens: 2000 });
+    const ai2 = await aiRunAttr(env, "qnfo-social", "checker-retry", CHECKER_MODEL, { messages: [{ role: 'user', content: 'Reply with ONLY a JSON array. Nothing else.\n' + base }], max_tokens: 2000 });
     const retryText = extractText(ai2).trim();
     diagText = retryText;
     lastAi = ai2;
@@ -391,7 +391,7 @@ async function autoScan(env) {
         "Title: " + title,
         "Abstract: " + abstract
       ].join(String.fromCharCode(10));
-      const ai = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
+      const ai = await aiRunAttr(env, "qnfo-social", "compose", COMPOSE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
       const posts = sanitizePosts(extractText(ai).split(String.fromCharCode(10)));
       if (posts.length < 3) continue;
       const issues = await checkThread(env, title, abstract, posts);
@@ -757,7 +757,7 @@ export default {
           "Title: " + title,
           "Abstract: " + abstract
         ].join("\n");
-        const ai = await env.AI.run(COMPOSE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
+        const ai = await aiRunAttr(env, "qnfo-social", "compose-2", COMPOSE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
         const text = extractText(ai);
         const posts = sanitizePosts(text.split("\n"));
         if (posts.length < 3) return new Response(JSON.stringify({ error: 'compose produced too few posts', raw: text.slice(0, 500) }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -842,4 +842,30 @@ export default {
   }
 };
 
+// WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a
+// per-worker/purpose call counter to D1 ai_call_counters (one UPSERT per call, fail-soft, never blocks or alters the AI call).
+// Copied from qnfo-fleet-control (workers cannot import across directories); same table/columns. No new paid service.
+// Unlike fleet-control the counter write is NOT awaited (fire-and-forget, errors swallowed) so it can never add latency.
+var AI_ATTR_DB_BINDINGS = ["DB"];
+async function aiRunAttr(env, worker, purpose, model, input, opts) {
+  var t0 = Date.now(), ok = 1;
+  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  finally {
+    try {
+      var db = null;
+      for (var bi = 0; bi < AI_ATTR_DB_BINDINGS.length && !db; bi++) db = env[AI_ATTR_DB_BINDINGS[bi]];
+      if (db) {
+        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
+        var day = new Date().toISOString().slice(0, 10);
+        var ms = Date.now() - t0;
+        var wr = (async function() {
+          await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
+          await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, ms).run();
+        })();
+        wr.catch(function() {});
+      }
+    } catch (e3) {}
+  }
+}
+// end aiRunAttr
 export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls };
