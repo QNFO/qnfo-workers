@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.26-selfheal-sum-null";
+var VERSION = "2.38.27-resurrection-guard";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -6047,6 +6047,25 @@ async function opsDeploy(env, args) {
       if (toVer && srcVer && srcVer !== toVer) {
         result = { ok: false, error: "source VERSION " + srcVer + " != to_version " + toVer };
         return Object.assign({ log }, result);
+      }
+      // WORKER-RESURRECTION-GUARD-1 (2026-10-01): a PUT /content to an ABSENT script CREATES it, so any repo touch of
+      // a retired worker's directory silently resurrected it (MEASURED: qnfo-agent-ws created_on 2026-10-01T09:26:41Z by
+      // the PR 253 wrangler-only push, while the worker was absent pending owner decision RM-AGENT-WS-DECISION-1; the
+      // folded qnfo-fleet-calibrator attempt failed only by luck). The canonical route now refuses to CREATE a worker
+      // unless the caller states that intent (allow_create:true: canonical-deploy passes it for a worker.js ADDED in
+      // the push or an explicitly named workflow_dispatch target). Only a definite 404 refuses; anything else proceeds.
+      if (!(args && args.allow_create === true)) {
+        let _exists = null;
+        try {
+          const _er = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
+          _exists = _er.status === 404 ? false : _er.ok ? true : null;
+        } catch (_eE) {
+        }
+        log.push({ step: "exists", exists: _exists });
+        if (_exists === false) {
+          result = { ok: false, rejected: true, error: "WORKER-RESURRECTION-GUARD-1: " + worker + " does not exist on the account; the canonical deploy refuses to CREATE it implicitly (a retired or folded worker would be resurrected). Pass allow_create:true for an intentional new worker." };
+          return Object.assign({ log }, result);
+        }
       }
       const dep = await cfWorkerDeploy(env, { worker, content, version: toVer || srcVer || void 0, expected_version: fromVer || void 0 });
       log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, binding_install_note: dep.binding_install_note || null });

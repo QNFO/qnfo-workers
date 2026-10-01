@@ -1,0 +1,4 @@
+absent from the live fleet pending owner decision RM-AGENT-WS-DECISION-1 (redeploy with a consumer, or archive)
+
+The PR 253 wrangler-only push (2026-10-01 09:26:41Z) recreated the script by mistake; WORKER-RESURRECTION-GUARD-1 (qnfo-ops 2.38.27) now refuses implicit creates.
+Remove this file only together with the owner's redeploy decision.

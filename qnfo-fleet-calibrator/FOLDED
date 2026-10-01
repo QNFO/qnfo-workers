@@ -1,0 +1,3 @@
+folded into qnfo-fleet-control 2026-10-01: calibratorMod is mounted at /cal and its crons (0 3 * * *, 30 3 * * 1, 0 4 1 * *) run on qnfo-fleet-control; the script is absent from the account
+
+WORKER-FOLD-SKIP-1: canonical-deploy skips this directory. A deploy of it would recreate a retired worker (the 2026-10-01 PR 253 push attempted it and failed with CF 400).
