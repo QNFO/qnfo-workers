@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.6";
+var VERSION = "1.3.7-classify-deadline";
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -143,7 +143,18 @@ async function handleIntent(env, body, source, device) {
   if (isNoise(desire) || /^(name|title|summarize|summarise)\s+(this|the)\s+(conversation|chat)/i.test(desire)) {
     return { silent: true, reason: "meta", type: "unknown", status: "silenced" };
   }
-  const ai = await classifyAI(env, desire);
+  // INTENT-CLASSIFY-DEADLINE-1 (#1189): classifyAI can take up to 2 x 25 s (two model attempts) and ran BEFORE the row was
+  // inserted, while callers abort much sooner (qnfo-ops research_queue gives up at 20 s). A slow or hung classifier therefore
+  // dropped the idea: live probe 2026-10-01 10:27-10:28Z took 65.6 s, glm-5.3-flash timed out at 25 s, and nothing was
+  // persisted. The AI classification is now bounded by a deadline; past it the existing rule-based fallback (the same one
+  // used when both models fail) classifies the desire, so the row is always written inside the callers' window.
+  const deadlineMs = Number(env.CLASSIFY_DEADLINE_MS) > 0 ? Number(env.CLASSIFY_DEADLINE_MS) : 12e3;
+  let deadlineTimer;
+  const ai = await Promise.race([
+    classifyAI(env, desire).catch(function() { return null; }),
+    new Promise(function(resolve) { deadlineTimer = setTimeout(function() { resolve(null); }, deadlineMs); })
+  ]);
+  clearTimeout(deadlineTimer);
   const cls = ai || classifyRules(desire);
   if (!cls.summary) {
     cls.summary = clamp(desire.replace(/^calendar event:\s*/i, "").trim(), 120);
