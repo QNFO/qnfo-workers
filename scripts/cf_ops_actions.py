@@ -120,6 +120,9 @@ def gateway_logs(acct: str, token: str, gateway: str, model: str | None, pages: 
             "user_agent", "authentication", "byok", "step")
     agg: dict[str, collections.Counter] = {k: collections.Counter() for k in keys}
     combo: collections.Counter = collections.Counter()
+    # CALLER-PROFILE-1 (issue 1684): numeric fingerprint per (model, metadata, user_agent) bucket, no content. Constant
+    # tokens_in points at a fixed-prompt loop; an even hour-of-day spread points at an unattended 24/7 process.
+    prof: dict[tuple, dict] = {}
     seen = 0
     first_keys: list[str] = []
     for page in range(1, pages + 1):
@@ -140,11 +143,32 @@ def gateway_logs(acct: str, token: str, gateway: str, model: str | None, pages: 
                 agg[k][json.dumps(v)[:120] if isinstance(v, (dict, list)) else str(v)[:120]] += 1
             combo[(str(r.get("model"))[:40], json.dumps(r.get("metadata"))[:80], str(r.get("user_agent"))[:80],
                    str(r.get("byok")), str(r.get("authentication")))] += 1
+            pk = (str(r.get("model"))[:40], json.dumps(r.get("metadata"))[:60], str(r.get("user_agent"))[:40])
+            pr = prof.setdefault(pk, {"tin": [], "tout": [], "dur": [], "hours": collections.Counter(), "ts": []})
+            for fld, key in (("tokens_in", "tin"), ("tokens_out", "tout"), ("duration", "dur")):
+                if isinstance(r.get(fld), (int, float)):
+                    pr[key].append(r[fld])
+            ca = str(r.get("created_at") or "")
+            if len(ca) >= 13:
+                pr["hours"][ca[11:13]] += 1
+                pr["ts"].append(ca)
         if len(rows) < 50:
             break
+    def pct(v: list, q: float):
+        v = sorted(v)
+        return v[min(len(v) - 1, int(q * len(v)))] if v else None
+
+    profile = []
+    for pk, pr in sorted(prof.items(), key=lambda kv: -len(kv[1]["ts"]))[:6]:
+        ts = sorted(pr["ts"])
+        profile.append({"model": pk[0], "metadata": pk[1], "user_agent": pk[2], "n": len(ts), "first": ts[0] if ts else None,
+                        "last": ts[-1] if ts else None,
+                        "tokens_in": {"p10": pct(pr["tin"], .1), "p50": pct(pr["tin"], .5), "p90": pct(pr["tin"], .9)},
+                        "tokens_out": {"p50": pct(pr["tout"], .5), "p90": pct(pr["tout"], .9)},
+                        "duration_ms_p50": pct(pr["dur"], .5), "hours_utc": sorted(pr["hours"].items())})
     emit({"action": "gateway-logs", "ok": True, "gateway": gateway, "model_filter": model, "rows": seen,
           "fields": first_keys, "top": {k: agg[k].most_common(8) for k in keys},
-          "combos": [[list(k), n] for k, n in combo.most_common(12)]})
+          "combos": [[list(k), n] for k, n in combo.most_common(12)], "profile": profile})
     return 0
 
 
