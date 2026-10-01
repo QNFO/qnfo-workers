@@ -2275,7 +2275,7 @@ async function contentSignalAudit(env) {
   var probeCache = {};
   try {
     var rows = await env.AUDIT.prepare(
-      "SELECT s.id, s.source, s.content, s.domain, s.evidential_weight, s.decision, fso.matches_failure_mode, fso.action_taken FROM signals s LEFT JOIN fleet_signal_observations fso ON fso.signal_id = s.id WHERE s.source IN ('q08','reading') AND s.status = 'open'"
+      "SELECT s.id, s.source, s.content, s.domain, s.evidential_weight, s.decision, s.created_at, fso.id AS fso_id, fso.matches_failure_mode, fso.action_taken FROM signals s LEFT JOIN fleet_signal_observations fso ON fso.signal_id = s.id WHERE s.source IN ('q08','reading') AND s.status = 'open'"
     ).all();
     var rs = rows && rows.results || [];
     out.signals = rs.length;
@@ -2305,9 +2305,27 @@ async function contentSignalAudit(env) {
         unresolved = 1;
         var obs = "FRESH-PROBE(" + dom + " n=" + fresh.n + "): " + (active ? "failure-mode-active" : "nominal");
         try {
-          await env.AUDIT.prepare("UPDATE fleet_signal_observations SET matches_failure_mode=?1, action_taken=?2, observed_at=datetime('now') WHERE signal_id=?3").bind(active, obs, s.id).run();
+          // SIGNAL-OBSERVATION-INSERT-1 (#1654): this used to UPDATE only, so a signal without an
+          // observation row was probed but never recorded. Insert the first observation.
+          if (s.fso_id == null) await env.AUDIT.prepare("INSERT INTO fleet_signal_observations (signal_id, observed_at, subsystem, current_state, matches_failure_mode, evidence, action_taken) VALUES (?1, datetime('now'), ?2, ?3, ?4, ?5, ?6)").bind(s.id, dom, active ? "failure-mode-active" : "nominal", active, "SIGNAL_PROBES." + dom + " n=" + fresh.n, obs).run();
+          else await env.AUDIT.prepare("UPDATE fleet_signal_observations SET matches_failure_mode=?1, action_taken=?2, observed_at=datetime('now') WHERE signal_id=?3").bind(active, obs, s.id).run();
         } catch (e) {
         }
+      } else if (!SIGNAL_PROBES[dom]) {
+        // SIGNAL-INFORMATIONAL-1 (#1654, explicit decision 2026-10-01): a q08/reading signal whose domain
+        // has no subsystem probe (104 of 113 carry the generic domain 'fleet') cannot be matched to a
+        // failure mode, so it is informational context for the digests that consult it read-only. It
+        // stays open for 30 days, then expires with that decision recorded instead of sitting open forever.
+        out.informational = (out.informational || 0) + 1;
+        var ageOk = Date.parse(String(s.created_at || "").replace(" ", "T")) < Date.now() - 30 * 864e5;
+        if (ageOk) {
+          try {
+            await env.AUDIT.prepare("UPDATE signals SET status='expired', decision=?1 WHERE id=?2 AND status='open'").bind("SIGNAL-INFORMATIONAL-1: informational (domain '" + (dom || "none") + "' has no subsystem probe); consulted read-only by digests for 30d, then expired by qnfo-fleet-control " + VERSION, s.id).run();
+            out.expired = (out.expired || 0) + 1;
+          } catch (e) {
+          }
+        }
+        continue;
       } else {
         active = Number(s.matches_failure_mode) === 1;
         unresolved = !s.action_taken || String(s.action_taken).indexOf("OPEN") === 0;
