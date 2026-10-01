@@ -21591,7 +21591,7 @@ async function internalErrataIntake(request, env) {
       .bind(id, kind, ref, now, str(b.detected_by, 128) || source, sev, claim, str(b.falsification, 8000), str(b.evidence, 8000), str(b.remediation, 4000), str(b.owner, 128)).run();
     await env.WATCH_DB.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status) VALUES (NULL, ?1, ?2, ?3, NULL, ?4, 1.0, 'internal-open')")
       .bind(source, str(b.detected_by, 128) || source, id, claim).run();
-  } catch (e) { return j({ ok: false, error: String(e && e.message || e) }, 500); }
+  } catch (e) { console.error("[errata-hub] internal-errata intake failed:", e && e.message); return j({ ok: false, error: "intake failed" }, 500); }
   return j({ ok: true, id, source });
 }
 export default {
