@@ -1,12 +1,27 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@0481a7a82b77",
- "due": 0,
- "pass": 0,
+ "verifier": "remediation-consumer@32b560db37a5",
+ "due": 2,
+ "pass": 1,
  "fail": 0,
- "skipped": 0,
- "contracts": [],
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "EVID-1642-VENUE",
+   "issue_id": 1642,
+   "verdict": "pass",
+   "expected": "ran",
+   "observed": "ran",
+   "written": true
+  },
+  {
+   "class": "EVID-1653-RADAR",
+   "issue_id": 1653,
+   "verdict": "probe-error",
+   "reason": "The read operation timed out"
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -23,7 +38,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 2835,
- "head": "0481a7a82b774d1ff4659821f5949231ffc91d80",
+ "spent_ms": 65863,
+ "head": "32b560db37a5e46a2cf75db4ff6b09bb70ab5613",
  "job_status": "success"
 }
