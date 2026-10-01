@@ -27,7 +27,7 @@ if (a < 0 || b < 0 || b < a) {
 }
 const sandbox = { VERSION: "0.0.0-test", timedFetch: null, b64encode: null, charterOne: null, charterRows: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, TextDecoder, atob, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER, pfWbsHint, pfTopicsFor, pfDescriptionFromReadme, pfHygienePlan, PF_HYGIENE_MAX, pfNeedsSync, PF_STALE_H };", sandbox, { filename: "portfolio-block.js" });
+vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER, pfWbsHint, pfTopicsFor, pfDescriptionFromReadme, pfHygienePlan, PF_HYGIENE_MAX, pfNeedsSync, PF_STALE_H, pfScrubProfile, PF_PROFILE_SCRUB };", sandbox, { filename: "portfolio-block.js" });
 const P = sandbox.__export;
 const fx = JSON.parse(readFileSync(join(here, "portfolio.fixture.json"), "utf8"));
 const NOW = "2026-10-01T12:00:00.000Z";
@@ -106,6 +106,18 @@ const again = P.pfSpliceOrBootstrap(boot, rd2);
 ok(again.includes("2026-10-02") && again.split(P.PF_BEGIN).length === 2, "later pass replaces in place, no duplicate markers");
 eq(P.pfSpliceOrBootstrap("no anchor here", rd), null, "no markers and no anchor refuses");
 eq(P.pfSplice("plain", doc), null, "splice refuses a doc without markers");
+
+// --- PROFILE-CLAIMS-SCRUB-1 ------------------------------------------------------
+const claims = P.PF_PROFILE_SCRUB.map((x) => x[0]);
+const dirty = "# QNFO\n\n" + claims.join("\n") + "\n" + boot;
+const clean = P.pfScrubProfile(dirty);
+eq(claims.filter((c) => clean.includes(c)).length, 0, "every retired claim is replaced");
+ok(clean.includes("independent research imprint") && clean.includes("$1.5M federal research"), "the replacements land");
+ok(!/co-directed the \$10M|foundational US patents|Publicis\n|501\(c\)\(3\)|\(92 records\)|867 records/.test(clean), "no retired claim survives");
+eq(P.pfScrubProfile(clean), clean, "scrub is idempotent");
+eq(P.pfScrubProfile(boot), boot, "a README without the claims is unchanged (managed block untouched)");
+ok(clean.indexOf(P.PF_BEGIN) > 0 && clean.split(P.PF_BEGIN).length === 2, "the managed block survives the scrub");
+eq(P.pfScrubProfile("x co-directed the $10M y"), "x co-directed the $10M y", "drifted text is left alone, not guessed at");
 
 if (process.argv.includes("--render")) console.log(doc);
 if (process.argv.includes("--public")) console.log(pub);

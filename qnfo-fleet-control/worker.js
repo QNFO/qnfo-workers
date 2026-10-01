@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.78-hint-link";
+var VERSION = "0.4.79-profile-scrub";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3573,6 +3573,33 @@ function pfSplice(doc, block) {
   if (a < 0 || b < 0 || b < a) return null;
   return doc.slice(0, a) + block + doc.slice(b + PF_END.length);
 }
+// PROFILE-CLAIMS-SCRUB-1 (2026-10-01, pillar reach): the organisation README's hand-written sections carried claims the
+// public record does not support (owner_docs identity, "Claims against the record"; STRATEGY-1 s2.1-s2.4): the $10M NHTS
+// "co-directed" line, "Holds foundational US patents", "predictive analytics deployments at Deloitte and Publicis",
+// Empowering Change as QNFO's current 501(c)(3), "scientific research incubator", stale record counts, a duplicated
+// ledger row and a theory-first publication list. Every sync applies these exact [from, to] pairs to
+// profile/README.md before the commit. Each pair is a no-op once applied, so the scrub is idempotent, and text that has
+// drifted from `from` is left alone (the identity review reports it) rather than guessed at.
+var PF_PROFILE_SCRUB = [
+  ["QNFO is a **scientific research incubator** founded and directed by Rowan Brad Quni-Gudzinas.",
+   "QNFO is an **independent research imprint** founded and run by Rowan Brad Quni-Gudzinas."],
+  ["- **National-scale data initiatives:** Managed the AARP Livability Index and\n  co-directed the $10M US DOT National Household Travel Survey (NHTS)\n- **Patented quantum computing technology:** Holds foundational US patents\n- **AI & data science leadership:** Led predictive analytics deployments at\n  Deloitte and Publicis\n", // identity-guard: allow (the scrub must name the claim it removes)
+   "- **National data and policy research:** led the AARP Livability Index and managed a $1.5M federal research\n  portfolio at the U.S. DOT Federal Highway Administration\n- **AI & data science:** analytics and machine-learning engagements at Deloitte; product management at Epsilon\n  (Publicis Groupe) and iManage\n- **Research systems:** built and runs QNFO's AI-assisted research pipeline on Cloudflare\n"],
+  ["QNFO is the primary research initiative of **Empowering Change**, a U.S.-registered 501(c)(3) non-profit.",
+   "QNFO is an independent research imprint: one researcher and an AI-assisted pipeline."],
+  ["(35+ publications, filterable by domain)", "(filterable by domain)"],
+  ["[zenodo.org/communities/qwav/](https://zenodo.org/communities/qwav/) (92 records). QNFO subject-tagged corpus: [867 records](https://zenodo.org/search?q=QNFO).",
+   "[zenodo.org/communities/qwav/](https://zenodo.org/communities/qwav/). QNFO subject-tagged corpus: [zenodo.org/search?q=QNFO](https://zenodo.org/search?q=QNFO)."],
+  ["[community archive](https://zenodo.org/communities/qwav/) (92 records), [QNFO-tagged corpus](https://zenodo.org/search?q=QNFO) (867 records).",
+   "[community archive](https://zenodo.org/communities/qwav/), [QNFO-tagged corpus](https://zenodo.org/search?q=QNFO)."],
+  ["| **Portfolio Status Ledger** | [Auto-generated from Cloudflare canonical (D1 + KG)](PORTFOLIO-STATUS.md) \u2014 regenerated weekly |\n| **Portfolio Status Ledger** | [Auto-generated from Cloudflare canonical (D1 + KG)](PORTFOLIO-STATUS.md) \u2014 regenerated weekly |\n", "| **Portfolio Status Ledger** | [Auto-generated from Cloudflare canonical (D1 + KG)](PORTFOLIO-STATUS.md) \u2014 regenerated weekly |\n"],
+  ["**Representative publications:**\n\n- [Computational Validation of Ultrametric Error Confinement](https://doi.org/10.5281/zenodo.20134944) (2026-05-12)\n- [Ultrametric Quantum Computing Foundations](https://doi.org/10.5281/zenodo.20154557) (2026-05-15)\n- [Symmetric Extension -- Ternary Tree Architecture](https://doi.org/10.5281/zenodo.20208437) (2026-05-16)\n- [Q-PNA Research Specification v2.0](https://doi.org/10.5281/zenodo.20287742) (2026-05-19)\n- [Convergence, Consilience, and the Hierarchical Architecture of Reality](https://doi.org/10.5281/zenodo.20302276) (2026-05-20)\n- [The Tree Is Real](https://doi.org/10.5281/zenodo.20325850) (2026-05-21)\n", "**Selected work** (STRATEGY-1 s2.4):\n\n- [The Joules-per-Solution Metric](https://doi.org/10.5281/zenodo.21637028)\n- [Error Correction Is a Landauer Machine](https://doi.org/10.5281/zenodo.22261547)\n- [JPCUB Competitive Landscape v2.0](https://doi.org/10.5281/zenodo.21821767)\n- [Joules-per-Solution for Stochastic and Agentic Inference](https://doi.org/10.5281/zenodo.21945415)\n- [The Universal Ignorance Audit](https://doi.org/10.5281/zenodo.21901984)\n- [Epistemic Legibility in AI-Assisted Science](https://doi.org/10.5281/zenodo.22026592)\n- [Operating the Quniverse Fleet](https://doi.org/10.5281/zenodo.23079905)\n"]
+];
+function pfScrubProfile(doc) {
+  var out = String(doc || "");
+  for (var i = 0; i < PF_PROFILE_SCRUB.length; i++) out = out.split(PF_PROFILE_SCRUB[i][0]).join(PF_PROFILE_SCRUB[i][1]);
+  return out;
+}
 // The org README had no markers before this loop existed: insert the block once, just above the anchor heading.
 function pfSpliceOrBootstrap(doc, block) {
   var s = pfSplice(doc, block);
@@ -3648,6 +3675,7 @@ async function pfCommit(env, repo, path, content, message, mode) {
   if (mode === "splice") { next = pfSplice(cur, content); if (next === null) return { path: repo + "/" + path, status: "markers-missing" }; }
   else if (mode === "bootstrap") { next = pfSpliceOrBootstrap(cur, content); if (next === null) return { path: repo + "/" + path, status: "anchor-missing" }; }
   else next = content;
+  if (repo === PF_PROFILE_REPO && path === "profile/README.md") next = pfScrubProfile(next);
   if (next === cur) return { path: repo + "/" + path, status: "unchanged" };
   var body = { message: message, content: b64encode(next), branch: branch };
   if (sha) body.sha = sha;
