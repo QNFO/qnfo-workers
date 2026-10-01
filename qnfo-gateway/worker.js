@@ -1,4 +1,4 @@
-var VERSION="3.7.20-scholar-pdf-ua";
+var VERSION="3.7.21-author-of-record";
 // ORG-LABEL-1 (2026-10-01, docs/STRATEGY.md s2.1): there is no legal entity and the work is one researcher with an
 // AI-assisted pipeline, so "Research Foundation" and "research collective" overclaim. Labels only; the positioning copy
 // waits for the owner's approval in the Identity doc. ABOUT-GA-1: /about was the one gateway page without the GA4 tag.
@@ -747,19 +747,36 @@ __name2222222(renderIndexHTML, "renderIndexHTML");
 __name22222222(renderIndexHTML, "renderIndexHTML");
 __name222222222(renderIndexHTML, "renderIndexHTML");
 __name2222222222(renderIndexHTML, "renderIndexHTML");
+// AUTHOR-OF-RECORD-1 (2026-10-01, docs/STRATEGY.md s2.1): 273 published rows carry a placeholder author ("QNFO Research",
+// "QNFO", "QNFO Research Agent", "QNFO Research / QWAV") while their Zenodo DOI records list Quni-Gudzinas, Rowan Brad with
+// ORCID 0009-0002-4317-5604. Pages must match the registered record, so placeholders render as the author of record.
+var AUTHOR_OF_RECORD = "Rowan Brad Quni-Gudzinas";
+var PLACEHOLDER_AUTHOR_RE = /^\s*qnfo(\s+research(\s+agent)?)?(\s*\/\s*qwav)?\s*$/i;
+function paperAuthors(paper) {
+  const rawAuth = paper.authors || "";
+  let authors = [];
+  try {
+    const p = JSON.parse(rawAuth);
+    if (Array.isArray(p)) authors = p.map((a) => typeof a === "object" && a ? a.name || "" : String(a));
+  } catch (e) {
+    authors = String(rawAuth).split(",").map((st) => st.trim()).filter(Boolean);
+  }
+  const out = [];
+  for (const a of authors) {
+    let n = String(a || "").trim();
+    if (!n) continue;
+    if (PLACEHOLDER_AUTHOR_RE.test(n)) n = AUTHOR_OF_RECORD;
+    if (/^quni-gudzinas,\s*rowan brad$/i.test(n)) n = AUTHOR_OF_RECORD;
+    if (out.indexOf(n) < 0) out.push(n);
+  }
+  return out;
+}
 function buildPaperJsonLd(paper) {
   const title = displayTitle(paper.title) || "Untitled";
   const slug = paper.slug || "";
   const doi = paper.doi || "";
   const abs = (paper.abstract || "").slice(0, 3e3);
-  let authors = [];
-  const rawAuth = paper.authors || "";
-  try {
-    const p = JSON.parse(rawAuth);
-    if (Array.isArray(p)) authors = p.map((a) => typeof a === "object" ? a.name || "" : String(a));
-  } catch (e) {
-    authors = rawAuth.split(",").map((s) => s.trim()).filter(Boolean);
-  }
+  const authors = paperAuthors(paper);
   // PAPER-PAGE-SEO-1 (2026-10-01): tie the owner's byline to the owner's ORCID iD so scholarly indexes
   // attribute the paper to one person. Serialised by the same JSON.stringify + <>& escape below.
   const authorObjs = authors.map((n) => String(n).indexOf("Quni-Gudzinas") >= 0 ? { "@type": "Person", name: n, sameAs: "https://orcid.org/0009-0002-4317-5604" } : { "@type": "Person", name: n });
@@ -789,14 +806,7 @@ __name222(buildPaperJsonLd, "buildPaperJsonLd");
 __name2222(buildPaperJsonLd, "buildPaperJsonLd");
 __name22222(buildPaperJsonLd, "buildPaperJsonLd");
 function citationAuthorsMeta(paper) {
-  const rawAuth = paper.authors || "";
-  let authors = [];
-  try {
-    const p = JSON.parse(rawAuth);
-    if (Array.isArray(p)) authors = p.map((a) => typeof a === "object" ? a.name || "" : String(a));
-  } catch (e) {
-    authors = rawAuth.split(",").map((st) => st.trim()).filter(Boolean);
-  }
+  const authors = paperAuthors(paper);
   return authors.map((n) => '<meta name="citation_author" content="' + escAttr(n) + '">').join("");
 }
 __name(citationAuthorsMeta, "citationAuthorsMeta");
