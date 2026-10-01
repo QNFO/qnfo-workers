@@ -14,7 +14,10 @@ subject to the autonomy-ladder cap, cost ceilings (A9), and the residual-consent
 ## Cost ceiling A9 (objective_key=cost-ceiling, v2 corrected 2026-09-26)
 Enforce a HARD monthly AI-spend ceiling that actually blocks spend. Unified AI Gateway burn ~$188/mo (corrected from a 100x cents-to-dollars misread). KPI: monthly cost_usd.
 
-> Note 2026-10-01 (STRATEGY-1 section 8): the live ceiling is the $150/30d gateway cap; the target is at most $60/30d by 2026-10-31.
+> Note 2026-10-01 (STRATEGY-1 section 8): the live ceiling is the $150/30d gateway cap; the target is at most $60/30d by
+> 2026-10-31. The cap covers gateway-metered AI only. Direct-provider keys (about $400-500/month, unmetered) get
+> per-provider throttles and one unified monthly cost figure (RM-COST-UNIFIED-SPEND-1, #1683); the owner's standing
+> directive for them is throttling, not a hard cap, so the "HARD ... ceiling" above applies to the gateway.
 
 ## Return-on-spend (objective_key=return-on-spend, v2 corrected 2026-09-26)
 Tie monthly AI spend to measurable return. Return gates: full_reports_live_30d >= 2 AND impressions_growth >= 30% (baseline 5610). KPI per $1000 spent: subscriber_count, pageviews_30d, published_papers_30d, impressions_growth.

@@ -41,7 +41,7 @@ Two converging gaps:
 ## 3. The ask
 
 **$25,000–$60,000 per year** to sustain and scale this work:
-- Sustain the QNFO platform at current velocity (actual spend: $400–600/month on the AI stack; Cloudflare $100–200/month optimized target) (August 2026 figures; dated: the 2026-10-01 position is AI spend under the $150/30d gateway cap with a target of at most $60/30d, STRATEGY section 8)
+- Sustain the QNFO platform at current velocity (actual spend: $400–600/month on the AI stack; Cloudflare $100–200/month optimized target) (August 2026 figures; dated. STRATEGY sections 1 and 8 record total fleet cost of about $725/month on 2026-09-26: Cloudflare plan about $200, direct DeepSeek/Anthropic keys about $400-500, AI Gateway about $110-170; gateway AI stays under the $150/30d cap with a target of at most $60/30d)
 - Open-source and decentralize the knowledge infrastructure (IPFS/Filecoin mirroring, open protocols, public-good tooling)
 - Productize the audit methodology (Universal Ignorance Audit, AI-generation detection) as public goods
 - Advance JPCUB toward a neutral consortium standard (SPEC-style), starting with the first credible JPCUB-Verified measurement

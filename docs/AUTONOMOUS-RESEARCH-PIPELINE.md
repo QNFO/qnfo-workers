@@ -60,7 +60,8 @@ third parties, off-pillar topics, follow/like/repost automation and paid promoti
 - Multi-channel via Buffer: LinkedIn (personal profile, primary professional channel, 2-3 posts/week; drafted automatically,
   published only after the owner's one-tap approval because LinkedIn API Terms 3.1 forbid automated posting), X (low-priority
   mirror, at most 2/week), Mastodon and Threads (mirrors of Bluesky, automatic). STRATEGY.md section 6.1 records the Buffer API token as present;
-  the channels are pending the owner connecting LinkedIn (and optionally X/Mastodon) in Buffer once. Until then Bluesky is
+  Threads can also post through the free Threads API. The channels are pending the owner connecting LinkedIn (and
+  optionally Mastodon, Threads, X) in Buffer once. Until then Bluesky is
   the live social channel. (Changed 2026-10-01; v1.0 listed this as P2 pending BUFFER_TOKEN provisioning.)
 - Hacker News, LessWrong, Reddit: manual only (their norms penalise automated posting).
 - Outreach: qnfo-outreach claims outreach_queue; personalization REQUIRED (cite-their-work / same-subfield / recent-paper signal from contact_ledger + KG); at most 8/day in total across both engines (qnfo-outreach + qnfo-cloud-ops) and 3/day per domain (changed 2026-10-01, STRATEGY-1; v1.0 said 15/day); test target alerts@qnfo.org (TEST-SEND-TARGET-1); never a personal inbox (DIGEST-TO-PERSONAL-1).
@@ -82,7 +83,7 @@ Boundaries: NO new skills (NO-MORE-SKILLS-1); updates are additive gate-sections
 
 ## 7. Cost & budget guardrails
 
-AI Gateway $150/30d spend limit (sliding) is the live backstop; target at most $60/30d by 2026-10-31 (docs/STRATEGY.md section 8; changed 2026-10-01, STRATEGY-1; v1.0 said $90/30d). Per-paper cost = sum of stage model calls, recorded in pipeline_tasks. The v1.0 design also paused auto-dispatch above $70/30d (env guard in triage v1.1.0); no such guard is present in qnfo-idea-triage/worker.js as read on 2026-10-01.
+AI Gateway $150/30d spend limit (sliding) is the live backstop; target at most $60/30d by 2026-10-31 (docs/STRATEGY.md section 8; changed 2026-10-01, STRATEGY-1; v1.0 said $90/30d). The cap covers gateway-metered AI only: BYOK direct-provider keys bypass it and get per-provider throttles and one unified monthly cost figure instead (RM-COST-UNIFIED-SPEND-1, #1683; the owner's standing directive is throttling, not a hard cap). Per-paper cost = sum of stage model calls, recorded in pipeline_tasks. The v1.0 design also paused auto-dispatch above $70/30d (env guard in triage v1.1.0); no such guard is present in qnfo-idea-triage/worker.js as read on 2026-10-01.
 
 ## 8. Testing protocol (Phase 3)
 

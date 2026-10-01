@@ -27,6 +27,11 @@ are aligned to docs/STRATEGY.md sections 4, 7, 8, 9 and 11. The section 1 P&L is
 
 Headline: **the entire burn is agent-session LLM spend; the system produces research output with zero monetization; its own survival gate (impressions +30% MoM) is failing.** (2026-10-01: that gate is retired; see section 2.)
 
+Note 2026-10-01 (STRATEGY-1 sections 1 and 8): the table above covers the AI Gateway only. STRATEGY.md records total fleet
+cost of about $725/month on 2026-09-26: Cloudflare plan about $200, direct DeepSeek/Anthropic keys about $400-500 with no
+limit or visibility (BYOK providers bypass the gateway cap), AI Gateway about $110-170. "The entire burn" therefore means
+the entire gateway burn.
+
 ## 2. The binding constraint (read this first)
 
 **Review gate 2026-12-31 (changed 2026-10-01, STRATEGY-1 section 9).** On 2026-12-31 the research layer continues if
@@ -53,15 +58,19 @@ The 2026-10-25 phase-1 date and the growth gate no longer apply (changed 2026-10
 ### Phase A (week 1): make the cost non-lethal
 1. Route ops-exec/ops-frontier agent traffic off gpt-5.5 onto gpt-4.1/deepseek-class models
    (gateway logs: deepseek-flash ≈ $0.0044/req; gpt-5.5 line is 92% of the invoice).
-2. Target: AI spend at most $60/30d by 2026-10-31 (changed 2026-10-01, STRATEGY-1 section 8). v1 set ≤ $40 and computed a
-   break-even on $10/mo subscribers; that arithmetic no longer applies because the premium digest is deferred (Phase B).
+2. Target: gateway AI spend at most $60/30d by 2026-10-31 (changed 2026-10-01, STRATEGY-1 section 8). v1 set ≤ $40 and
+   computed a break-even on $10/mo subscribers; that arithmetic no longer applies because the premium digest is deferred
+   (Phase B).
 3. Keep the $150/30d cap as a hard ceiling; add a per-model budget alert.
+4. Direct-provider keys (about $400-500/month, unmetered): per-provider throttles and one unified monthly cost figure
+   (RM-COST-UNIFIED-SPEND-1, #1683). The owner's standing directive for them is throttling, not a hard cap. (Added
+   2026-10-01, STRATEGY-1 section 8: cost is the biggest ROI lever because total spend dwarfs any near-term income.)
 - Progress recorded in STRATEGY.md section 8: ops-frontier traffic moved off gpt-5.5 in qnfo-ops 2.38.31. No paid advertising.
 
 ### Phase B (weeks 2–4): funding first, then the first revenue line (changed 2026-10-01, STRATEGY-1 sections 7 and 8)
 Framing: QNFO is open, public-interest research with a funding target, funded by grants first and by paid assessments
 second. Paid products follow audience, not the other way round. Funding target: grant or engagement income at least equal
-to the AI burn by 2027-03-31.
+to the AI burn by 2027-03-31, then to total fleet cost.
 
 Existing assets (2026-09-26 record): 904-paper living corpus (451 full reports, 219 Zenodo DOIs),
 q08.org signal engine, ipatent (free experiment at ipatent.qnfo.org; `ipatent.me` has no DNS and is not cited), qnfo-ai

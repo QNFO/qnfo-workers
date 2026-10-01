@@ -1,5 +1,7 @@
 # Chatbox (Windows) — Full QNFO Setup
 
+> Aligned to docs/STRATEGY.md (STRATEGY-1, 2026-10-01). Where they differ, STRATEGY.md wins.
+
 Chatbox 1.22.6 is installed at `C:\Program Files\Chatbox\Chatbox.exe` (winget: Bin-Huang.Chatbox).
 This page wires it to the Cloudflare stack: two OpenAI-compatible providers, two MCP servers,
 and the QNFO prompt library. Everything below runs off Cloudflare — Chatbox is only the UI
@@ -93,8 +95,10 @@ Working rules:
 - Publications: plain scholarly prose for external readers; no internal pipeline vocabulary,
   no brand labels, no meta-commentary; every superseded record carries isObsoletedBy; verify every
   citation live; deposit all source files; run the runtime verifier after deploys.
-- Naming: Rowan Brad Quni-Gudzinas (full name); QNFO (research) / QWAV (commercial) - never
-  "Research Collective"; plain signatures.
+- Naming: Rowan Brad Quni-Gudzinas (full name; author of record, cited as Quni-Gudzinas, R. B.); QNFO is the
+  research imprint, written QNFO with no organisation suffix; Quniverse names the autonomous research system only, never
+  an organisation; QWAV is a parked commercial label, not used in bios, outreach or paper metadata; never
+  "Research Foundation", "Research Collective" or "Research Program"; plain signatures.
 - Segregation: research notes go to QNFO Router; personal notes go to Personal Twin; never mix.
 ```
 
