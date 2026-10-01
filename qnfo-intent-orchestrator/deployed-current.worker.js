@@ -5,8 +5,8 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.7";
-var ROUTER = "https://qnfo-ai.internal"; // INTERNAL-HOST-TRUST-1 (#1703): service-binding host; qnfo-ai authenticates it without a key copy
+var VERSION = "1.3.6";
+var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
 var DEDUP_SIM = 0.92;

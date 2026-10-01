@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.7-internal-host-trust";
+var VERSION = "5.29.7-internal-caller-props";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -1443,6 +1443,7 @@ __name(mediaProcess, "mediaProcess");
 __name2(mediaProcess, "mediaProcess");
 __name22(mediaProcess, "mediaProcess");
 async function handleChat(env, body, authHeader, ctx, ua) {
+  if (!internalCaller(ctx)) {
   const expected = env.ROUTER_AUTH_KEY;
   if (!authHeader || !authHeader.startsWith("Bearer ") || !expected) {
     return json({ error: "Unauthorized" }, 401);
@@ -1453,6 +1454,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   const b = await crypto.subtle.digest("SHA-256", enc.encode(expected));
   if (!timingSafeEqual(a, b) && !(env.ROUTER_AUTH_KEY_2 && timingSafeEqual(a, await crypto.subtle.digest("SHA-256", enc.encode(env.ROUTER_AUTH_KEY_2))))) {
     return json({ error: "Unauthorized" }, 401);
+  }
   }
   const { model, messages: rawMessages, max_tokens, stream, temperature, top_p, tools, tool_choice } = body || {};
   const clientToolChoice = tool_choice;
@@ -2209,7 +2211,26 @@ async function webFetch(url, maxChars, env) {
 __name(webFetch, "webFetch");
 __name2(webFetch, "webFetch");
 __name22(webFetch, "webFetch");
-async function authOk(header, env) {
+// INTERNAL-CALLER-PROPS-1 (2026-10-01, agent_issues #1703): every rotation of ROUTER_AUTH_KEY
+// stranded the internal callers, because each kept its OWN copy of the key under another secret
+// name (calibration QNFO_ROUTER_KEY, research-exec ROUTER_TOKEN, intent-orchestrator/tools-mcp RT):
+// after the #1676 rotation they all got 401 and research fell back to Workers AI. A service binding
+// can carry ctx.props, which the platform lets ONLY someone with deploy rights on the CALLER set
+// (developers.cloudflare.com/workers/runtime-apis/context/#props: "you can trust that the content
+// of ctx.props is authentic"). Public requests never carry props, so a binding that declares
+// props = { caller = "qnfo-..." } in its wrangler.toml authenticates without any shared secret.
+// Request-scoped: env is never mutated and no key is materialised.
+function internalCaller(ctx) {
+  try {
+    const c = ctx && ctx.props && typeof ctx.props.caller === "string" ? ctx.props.caller : "";
+    return /^qnfo-[a-z0-9-]{1,60}$/.test(c) ? c : "";
+  } catch (_e) {
+    return "";
+  }
+}
+__name(internalCaller, "internalCaller");
+async function authOk(header, env, ctx) {
+  if (internalCaller(ctx)) return true;
   const expected = env.ROUTER_AUTH_KEY;
   if (!header || !header.startsWith("Bearer ") || !expected) return false;
   const provided = header.slice("Bearer ".length);
@@ -2580,6 +2601,7 @@ async function anthRelay(env, oai) {
   }
 }
 async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
+  if (!internalCaller(ctx)) {
   var expected = env.ROUTER_AUTH_KEY;
   if (!authHeader || authHeader.indexOf("Bearer ") !== 0 || !expected) return json({ type: "error", error: { type: "authentication_error", message: "Unauthorized" } }, 401);
   var provided = authHeader.slice("Bearer ".length);
@@ -2588,6 +2610,7 @@ async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
   var b = await crypto.subtle.digest("SHA-256", enc.encode(expected));
   if (!timingSafeEqual(a, b) && !(env.ROUTER_AUTH_KEY_2 && timingSafeEqual(a, await crypto.subtle.digest("SHA-256", enc.encode(env.ROUTER_AUTH_KEY_2))))) {
     return json({ type: "error", error: { type: "authentication_error", message: "Unauthorized" } }, 401);
+  }
   }
   var wantStream = !!(body && body.stream);
   var oai = anthToOpenAI(body);
@@ -2628,14 +2651,6 @@ async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    // INTERNAL-HOST-TRUST-1 (#1703): the host "qnfo-ai.internal" cannot be routed from the public edge; only a
-    // Worker holding the QNFO_AI service binding can send it. Such callers are inside the fleet trust boundary,
-    // so authenticate them here instead of via a per-caller copy of the router key that a rotation strands.
-    if (url.hostname === "qnfo-ai.internal" && env.ROUTER_AUTH_KEY) {
-      const _ih = new Headers(request.headers);
-      _ih.set("Authorization", "Bearer " + env.ROUTER_AUTH_KEY);
-      request = new Request(request, { headers: _ih });
-    }
     const path = url.pathname;
     const method = request.method;
     if (method === "OPTIONS") return json({ ok: true });
@@ -2716,7 +2731,7 @@ var worker_default = {
       });
       // CAL-ROSTER-INTERNAL-1 (2026-09-27): the calibration roster audit reads the internal roster
       // (with _router metadata) when called with the router key; public callers still get ONE model.
-      if ((request.headers.get("Authorization") || "") === "Bearer " + ((env.ROUTER_AUTH_KEY || env.QNFO_ROUTER_KEY) || "\u0000")) return json({ object: "list", data });
+      if (internalCaller(ctx) || (request.headers.get("Authorization") || "") === "Bearer " + ((env.ROUTER_AUTH_KEY || env.QNFO_ROUTER_KEY) || "\u0000")) return json({ object: "list", data });
       // QNFO-SINGLE-MODEL-1 (2026-09-26): advertise exactly ONE model; routing is back-end.
       return json({ object: "list", data: [{ id: "qnfo", object: "model", created: 171e7, owned_by: "qnfo", capabilities: ["chat", "code", "streaming", "agent", "tool_use", "reasoning"], limit: { context: 1310720, output: 32768 }, contextWindow: 1310720, context_length: 1310720, context_window: 1310720, maxOutput: 32768, max_output_tokens: 32768, max_output: 32768, max_tokens: 32768, max_input_tokens: 1310720, temperature: true, tool_call: true, default_tool_mode: "agent" }] });
     }
@@ -2799,7 +2814,7 @@ var worker_default = {
     }
     if (path === "/v1/threads" && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       if (!env.QNFO_AUDIT) return json({ error: "QNFO_AUDIT binding missing" }, 501);
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10), 1), 200);
       const rows = await env.QNFO_AUDIT.prepare("SELECT thread, COUNT(*) AS n, MIN(ts) AS first_ts, MAX(ts) AS last_ts FROM chat GROUP BY thread ORDER BY last_ts DESC LIMIT ?1").bind(limit).all();
@@ -2807,7 +2822,7 @@ var worker_default = {
     }
     if (path.startsWith("/v1/threads/") && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       if (!env.QNFO_AUDIT) return json({ error: "QNFO_AUDIT binding missing" }, 501);
       const thread = decodeURIComponent(path.slice("/v1/threads/".length));
       if (!thread) return json({ error: "thread required" }, 400);
@@ -2816,7 +2831,7 @@ var worker_default = {
     }
     if (path === "/v1/search" && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       const q = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
       const k = Math.min(Math.max(parseInt(url.searchParams.get("k") || "5", 10) || 5, 1), 20);
       if (!q) return json({ error: "Missing q parameter" }, 400);
@@ -2836,7 +2851,7 @@ var worker_default = {
     }
     if (path === "/v1/history" && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       const q = (url.searchParams.get("q") || "").trim();
       if (q) {
         if (!env.LOG_VZ || !env.AI) return json({ error: "semantic history requires Vectorize qnfo-ai-log + AI bindings" }, 501);
@@ -2872,7 +2887,7 @@ var worker_default = {
     }
     if (path === "/v1/records" && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       const q = (url.searchParams.get("q") || "").trim();
       const scope = (url.searchParams.get("scope") || "research").toLowerCase();
       if (scope !== "research" && scope !== "infra") return json({ error: "scope must be research or infra (personal scope is served by the Personal Twin \u2014 separation mandate)" }, 400);
@@ -2890,7 +2905,7 @@ var worker_default = {
     }
     if (path === "/v1/context" && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       const q = (url.searchParams.get("q") || "").trim();
       const scope = (url.searchParams.get("scope") || "research").toLowerCase();
       if (scope !== "research" && scope !== "infra") return json({ error: "scope must be research or infra (personal scope is served by the Personal Twin \u2014 separation mandate)" }, 400);
@@ -2911,7 +2926,7 @@ var worker_default = {
     }
     if (path === "/v1/web/search" && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       const q = (url.searchParams.get("q") || "").trim();
       const k = Math.min(Math.max(parseInt(url.searchParams.get("k") || "5", 10), 1), 10);
       if (!q) return json({ error: "q required" }, 400);
@@ -2925,7 +2940,7 @@ var worker_default = {
     }
     if (path === "/v1/web/fetch" && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       const u = (url.searchParams.get("url") || "").trim();
       const max = Math.min(Math.max(parseInt(url.searchParams.get("max") || "6000", 10), 500), 2e4);
       if (!u) return json({ error: "url required" }, 400);
@@ -2948,7 +2963,7 @@ var worker_default = {
     }
     if (path.startsWith("/v1/media") && method === "GET") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       if (!env.QNFO_AUDIT) return json({ error: "QNFO_AUDIT binding missing" }, 501);
       await ensureMediaTable(env);
       let rest = path.slice("/v1/media".length);
@@ -2972,7 +2987,7 @@ var worker_default = {
     }
     if (path.startsWith("/v1/media/") && method === "POST") {
       const authH = request.headers.get("Authorization") || "";
-      if (!await authOk(authH, env)) return json({ error: "Unauthorized" }, 401);
+      if (!await authOk(authH, env, ctx)) return json({ error: "Unauthorized" }, 401);
       const id = decodeURIComponent(path.slice("/v1/media/".length).split("/")[0] || "");
       const pr = await mediaProcess(env, id);
       return json(pr, pr.ok ? 200 : 502);

@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.17-settings-ledger-autoresolve";
+var VERSION = "1.3.18-secret-lock";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -308,6 +308,17 @@ export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(scan(env).catch(function () {})); },
   async fetch(request, env, ctx) {
     var url = new URL(request.url); var p = url.pathname;
+    // CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (#1701): shared-secret mutations (rotate/PUT of a worker secret) are
+    // serialized through the same D1 deploy_locks lease under the key "secrets:<worker>" (separate from deploy locks).
+    // A session POSTs /secret-lock/acquire {worker, owner, ttl_sec}, mutates, then verifies on the next-cycle re-probe and
+    // POSTs /secret-lock/release {worker, token}. The lease expires (ttl 60s..MAX_TTL) so a dead session never blocks forever.
+    if ((p === "/secret-lock/acquire" || p === "/secret-lock/release") && request.method === "POST") {
+      var sb = await request.json().catch(function () { return {}; });
+      if (!sb.worker) return json({ error: "worker required" }, 400);
+      sb.worker = "secrets:" + String(sb.worker); delete sb.expected_version;
+      p = "/lock/" + p.slice("/secret-lock/".length);
+      request = new Request(url.origin + p, { method: "POST", body: JSON.stringify(sb) });
+    }
     if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: nowIso() });
     if (p === "/report" && request.method === "GET") { var rp = await env.FLEET_CONFIG.get(REPORT_KEY); return json(rp ? JSON.parse(rp) : { ts: null }); }
     if (p === "/locks" && request.method === "GET") { var lr = await auditAll(env, "SELECT worker, owner, since, expires_at, expected_version FROM deploy_locks WHERE expires_at > ?1", [Date.now()]); return json({ locks: lr, now: nowIso() }); }
