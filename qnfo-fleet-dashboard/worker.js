@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.9.0-invest-decision";
+var VERSION = "1.9.1-invest-spend-basis";
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -3134,13 +3134,17 @@ async function collectHumanActions(env) {
 // Rules of the road:
 //  - ADVISORY. Nothing here retires a worker, deletes data or raises a cap (AUTONOMY-DECISION-POLICY.md "Never").
 //    shutdown_manifest and its owner-confirm gate remain the only retirement path.
-//  - COST BASIS. #1699: the gateway-metered figure is an ESTIMATED LIST cost over all providers, not cash. The
-//    cap meters unified billing, so the verdict uses the billing-API gross usage ("cash"). If cash is unreadable
-//    the verdict can never be SCALE_BACK or KILL off the metered estimate alone.
+//  - COST BASIS. #1699: the all-provider gateway-metered figure is an ESTIMATED LIST cost, not what the cap meters
+//    (the cap meters unified billing only). The verdict uses qnfo-fleet-control's fleet_budget ai_spend:total, the
+//    30-day unified-billing spend (BYOK-BILLING-SPLIT-1), which is the cap-comparable measure #1699 prescribes. It must
+//    be fresh (<6h). The billing API's "current period to date" is NOT a 30-day figure (it reads ~$0 on the 1st of a
+//    month) and is shown as context only. If the unified figure is unreadable the verdict can never be SCALE_BACK or
+//    KILL off the all-provider estimate alone.
 //  - EVIDENCE. credibility_events and funding_secured are not machine-measurable; they are attested through
 //    POST /api/decision/fact with evidence, and shown as "unattested" until then. At the gate date with nothing
 //    ever attested the verdict is UNKNOWN (a human decision), never KILL by omission.
-var CASH_BASIS = "AI Gateway invoice draft, gross usage (unified billing), current period";
+var SPEND_BASIS = "fleet_budget ai_spend:total: 30-day unified-billing list cost (what the cap meters), written by qnfo-fleet-control";
+var SPEND_FRESH_MS = 6 * 36e5;
 var INVEST_FACT_KEYS = { credibility_events: "number", funding_secured: "boolean", revenue_30d_usd: "number" };
 var INVEST_LEVEL = { CONTINUE: 0, AT_RISK: 1, SCALE_BACK: 2, KILL: 3, UNKNOWN: -1 };
 var INVEST_SUBS_TARGET = 50;
@@ -3148,7 +3152,11 @@ var INVEST_CRED_TARGET = 2;
 var SCALE_BACK_LEAD_DAYS = 45;
 async function ensureInvestTables(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS invest_facts (key TEXT PRIMARY KEY, value TEXT, evidence TEXT, updated_at TEXT DEFAULT (datetime('now')))").run();
-  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS invest_decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), verdict TEXT, risk TEXT, basis TEXT, cash30 REAL, metered30 REAL, subs INTEGER, gate_return_met INTEGER, days_to_gate INTEGER, reasons_json TEXT)").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS invest_decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), verdict TEXT, risk TEXT, basis TEXT, cash30 REAL, spend30 REAL, metered30 REAL, subs INTEGER, gate_return_met INTEGER, days_to_gate INTEGER, reasons_json TEXT)").run();
+  try {
+    await env.AUDIT.prepare("ALTER TABLE invest_decision_log ADD COLUMN spend30 REAL").run();
+  } catch (e) {
+  }
 }
 async function readInvestFacts(env) {
   const out = {};
@@ -3164,12 +3172,12 @@ async function readInvestFacts(env) {
 function decideInvestment(f) {
   const reasons = [];
   const flips = [];
-  const cashKnown = f.cash30 != null;
-  const costOk = cashKnown ? f.cash30 <= f.cap : null;
+  const spendKnown = f.spend30 != null;
+  const costOk = spendKnown ? f.spend30 <= f.cap : null;
   const returnMet = f.credibility >= INVEST_CRED_TARGET || f.subs >= INVEST_SUBS_TARGET || f.funding === true;
-  const out = { verdict: "UNKNOWN", risk: null, basis: cashKnown ? "cash" : f.metered30 != null ? "metered-estimate" : "none", headline: "", reasons, flips, levers: [], gate: { return_met: returnMet, cost_ok: costOk, due: f.gate_date, days: f.days } };
-  if (cashKnown) reasons.push("Cash spend this billing period $" + f.cash30.toFixed(0) + " vs your $" + f.cap + " cap (" + (costOk ? "within" : "OVER") + ").");
-  else if (f.metered30 != null) reasons.push("Cash spend unreadable. Metered list-cost estimate is $" + f.metered30.toFixed(0) + "/30d, which is not cash and cannot trigger a scale-back (#1699).");
+  const out = { verdict: "UNKNOWN", risk: null, basis: spendKnown ? "unified-30d" : f.metered30 != null ? "metered-estimate" : "none", headline: "", reasons, flips, levers: [], gate: { return_met: returnMet, cost_ok: costOk, due: f.gate_date, days: f.days } };
+  if (spendKnown) reasons.push("AI spend over the last 30 days, unified billing (what the cap meters): $" + f.spend30.toFixed(0) + " vs your $" + f.cap + " cap (" + (costOk ? "within" : "OVER") + ").");
+  else if (f.metered30 != null) reasons.push("The cap-comparable 30-day spend is unreadable. The all-provider list-cost estimate is $" + f.metered30.toFixed(0) + "/30d, which is not what the cap meters and cannot trigger a scale-back (#1699).");
   else reasons.push("No spend reading at all.");
   reasons.push("Return so far: " + f.subs + "/" + INVEST_SUBS_TARGET + " confirmed subscribers, " + (f.credibility == null ? "credibility events unattested" : f.credibility + "/" + INVEST_CRED_TARGET + " credibility events") + ", funding " + (f.funding === true ? "secured" : "none attested") + ", revenue $" + (f.revenue30 != null ? f.revenue30.toFixed(0) : "0 (none recorded)") + ".");
   if (/FIRED|EXECUTED/i.test(f.early || "")) {
@@ -3179,7 +3187,7 @@ function decideInvestment(f) {
     reasons.push("shutdown_manifest EARLY-TRIGGER state is " + f.early + ".");
     return out;
   }
-  if (!cashKnown && f.metered30 == null) {
+  if (!spendKnown && f.metered30 == null) {
     out.headline = "Cannot judge: no spend measurement is readable.";
     return out;
   }
@@ -3189,7 +3197,7 @@ function decideInvestment(f) {
       out.risk = "gate_due";
       flips.push("Attest credibility_events / funding_secured with evidence (POST /api/decision/fact), or decide.");
     } else if (costOk === null) {
-      out.headline = "The review gate is due but cash spend is unreadable, so the cost half of the rule cannot be evaluated.";
+      out.headline = "The review gate is due but the 30-day spend is unreadable, so the cost half of the rule cannot be evaluated.";
     } else if (returnMet && costOk) {
       out.verdict = "CONTINUE";
       out.risk = "on_track";
@@ -3209,8 +3217,8 @@ function decideInvestment(f) {
   if (costOk === false) {
     out.verdict = "SCALE_BACK";
     out.risk = "cost";
-    out.headline = "Spend is over the cap you set ($" + f.cash30.toFixed(0) + " vs $" + f.cap + "). Scale spend back before judging return.";
-    flips.push("Cash spend back to $" + f.cap + " or less.");
+    out.headline = "Spend is over the cap you set ($" + f.spend30.toFixed(0) + " vs $" + f.cap + "). Scale spend back before judging return.";
+    flips.push("30-day unified-billing spend back to $" + f.cap + " or less (STRATEGY s8 targets $60).");
     return out;
   }
   const proj = f.subs + (f.subsNew30 || 0) * (f.days / 30);
@@ -3235,9 +3243,9 @@ function decideInvestment(f) {
   }
   if (!returnMet) {
     flips.push((INVEST_SUBS_TARGET - f.subs) + " more confirmed subscribers (or 1 attested credibility event, or funding) turns AT RISK into on track.");
-    if (costOk === null) flips.push("Cash spend is unreadable; fixing the billing read lets this judge cost too.");
+    if (costOk === null) flips.push("The 30-day spend is unreadable; restoring fleet_budget ai_spend:total lets this judge cost too.");
   }
-  if (cashKnown) flips.push("Cash spend above $" + f.cap + " flips this to scale back immediately.");
+  if (spendKnown) flips.push("30-day spend above $" + f.cap + " flips this to scale back immediately.");
   return out;
 }
 var govInflight = null;
@@ -3343,9 +3351,20 @@ async function governanceSnapshotRun(env, st) {
   } catch (e) {
   }
   // Billing amounts are USD CENTS (AI-GW-COST-UNIT-CENTS-1); gross, never the credit-netted amount_due.
-  const cash30 = inv && Array.isArray(inv.invoice_lines) ? inv.invoice_lines.reduce(function(a, L) {
+  const periodGross = inv && Array.isArray(inv.invoice_lines) ? inv.invoice_lines.reduce(function(a, L) {
     return a + (Number(L.amount) > 0 ? Number(L.amount) : 0);
   }, 0) / 100 : null;
+  // Cap-comparable 30-day spend: fleet_budget ai_spend:total (unified billing). Stale or missing => null (unverified).
+  let spend30 = null, spendAt = null;
+  try {
+    const fb = await one("SELECT current AS v, updated_at AS at FROM fleet_budget WHERE node_class='ai_spend:total'");
+    const t = fb ? Date.parse(String(fb.at || "")) : NaN;
+    if (fb && isFinite(Number(fb.v)) && !isNaN(t) && Date.now() - t <= SPEND_FRESH_MS) {
+      spend30 = Number(fb.v);
+      spendAt = new Date(t).toISOString();
+    }
+  } catch (e) {
+  }
   const rep30 = num(await one("SELECT COUNT(*) AS n FROM papers WHERE status='published' AND length(body_md) >= 5000 AND created_at >= date('now','-30 day')", env.LIVING), "n");
   const new30 = num(await one("SELECT COUNT(*) AS n FROM subscribers WHERE status='subscribed' AND created_at >= datetime('now','-30 day')"), "n");
   const subsTotal = num(await one("SELECT COALESCE(SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END),0) AS n FROM subscribers"), "n");
@@ -3463,7 +3482,7 @@ async function governanceSnapshotRun(env, st) {
   }
   const snap = {
     at: new Date(now).toISOString(),
-    cost: { cash30, cash_basis: CASH_BASIS, metered30, metered_top: topModels, cap: gwLimit != null ? gwLimit : SPEND_CAP_USD, balance: bal && bal.balance != null ? Number(bal.balance) / 100 : null, total_est30: totalCostEst, workers_ai30: waiLive, neurons30: aiN },
+    cost: { spend30, spend_basis: SPEND_BASIS, spend_at: spendAt, period_gross: periodGross, metered30, metered_top: topModels, cap: SPEND_CAP_USD, gateway_limit: gwLimit, balance: bal && bal.balance != null ? Number(bal.balance) / 100 : null, total_est30: totalCostEst, workers_ai30: waiLive, neurons30: aiN },
     ret: { subs_confirmed: subsConfirmed, subs_total: subsTotal, subs_new30: new30, pageviews30: rumTotal, pageviews_mom: trueMoM, pageviews_prior_days: priorDays, reports30: rep30, publish_events30: pubEvents, zenodo_views: zViews, zenodo_downloads: zDl, impact_per_usd: impactPerUsd },
     autonomy: { overall: autoOverall, self_heal: selfHeal },
     reach,
@@ -3483,7 +3502,7 @@ function investInputs(snap, facts) {
   const gateDays = Math.ceil((Date.parse(REVIEW_GATE_DATE + "T00:00:00Z") - Date.now()) / DAY_MS);
   const cred = facts.credibility_events ? facts.credibility_events.value : null;
   const fund = facts.funding_secured ? facts.funding_secured.value : null;
-  return { cash30: c.cash30 != null ? c.cash30 : null, metered30: c.metered30 != null ? c.metered30 : null, cap: c.cap != null ? c.cap : SPEND_CAP_USD, subs: r.subs_confirmed != null ? r.subs_confirmed : 0, subsNew30: r.subs_new30 != null ? r.subs_new30 : 0, credibility: cred, funding: fund, revenue30: facts.revenue_30d_usd ? facts.revenue_30d_usd.value : null, attested: !!(facts.credibility_events || facts.funding_secured), early: snap ? snap.early_trigger : null, days: gateDays, gate_date: REVIEW_GATE_DATE };
+  return { spend30: c.spend30 != null ? c.spend30 : null, metered30: c.metered30 != null ? c.metered30 : null, cap: c.cap != null ? c.cap : SPEND_CAP_USD, subs: r.subs_confirmed != null ? r.subs_confirmed : 0, subsNew30: r.subs_new30 != null ? r.subs_new30 : 0, credibility: cred, funding: fund, revenue30: facts.revenue_30d_usd ? facts.revenue_30d_usd.value : null, attested: !!(facts.credibility_events || facts.funding_secured), early: snap ? snap.early_trigger : null, days: gateDays, gate_date: REVIEW_GATE_DATE };
 }
 async function humanView(env, st, ctx) {
   const [h, meta, facts] = await Promise.all([collectHumanActions(env), loopMetaGet(env), readInvestFacts(env)]);
@@ -3626,7 +3645,7 @@ async function publishFeeds(env, v) {
     const lastAt = meta.invest_last_log_at ? Date.parse(meta.invest_last_log_at) : 0;
     if (meta.invest_last_key !== key || Date.now() - lastAt > 24 * 36e5) {
       const i = d.inputs || {};
-      await A.prepare("INSERT INTO invest_decision_log (verdict, risk, basis, cash30, metered30, subs, gate_return_met, days_to_gate, reasons_json) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)").bind(d.verdict, d.risk || null, d.basis, i.cash30 != null ? i.cash30 : null, i.metered30 != null ? i.metered30 : null, i.subs != null ? i.subs : null, d.gate && d.gate.return_met ? 1 : 0, d.gate && d.gate.days != null ? d.gate.days : null, JSON.stringify({ headline: d.headline, reasons: d.reasons, flips: d.flips, levers: d.levers })).run();
+      await A.prepare("INSERT INTO invest_decision_log (verdict, risk, basis, spend30, metered30, subs, gate_return_met, days_to_gate, reasons_json) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)").bind(d.verdict, d.risk || null, d.basis, i.spend30 != null ? i.spend30 : null, i.metered30 != null ? i.metered30 : null, i.subs != null ? i.subs : null, d.gate && d.gate.return_met ? 1 : 0, d.gate && d.gate.days != null ? d.gate.days : null, JSON.stringify({ headline: d.headline, reasons: d.reasons, flips: d.flips, levers: d.levers })).run();
       await loopMetaSet(env, "invest_last_key", key);
       await loopMetaSet(env, "invest_last_log_at", new Date().toISOString());
       out.log = true;
@@ -3682,16 +3701,16 @@ function humanFragment(v) {
   if (!b) o.push('<div class="meta">Measuring for the first time, back in a moment.</div>');
   else {
     const c = b.cost, r = b.ret, a = b.autonomy, ex = b.facts || {};
-    const cashCls = c.cash30 == null ? "amber" : c.cash30 > c.cap ? "bad" : c.cash30 > c.cap * 0.75 ? "amber" : "good";
+    const cashCls = c.spend30 == null ? "amber" : c.spend30 > c.cap ? "bad" : c.spend30 > c.cap * 0.75 ? "amber" : "good";
     o.push('<div class="grid">');
-    o.push('<div class="stat"><div class="n ' + cashCls + '">' + money(c.cash30) + '</div><div class="l">cash spend this period (cap $' + e(c.cap) + ")" + (c.balance != null ? " &middot; credit left " + money(c.balance) : "") + "</div></div>");
+    o.push('<div class="stat"><div class="n ' + cashCls + '">' + money(c.spend30) + '</div><div class="l">AI spend, last 30 days, unified billing (cap $' + e(c.cap) + ")" + (c.period_gross != null ? " &middot; this billing period so far " + money(c.period_gross) : "") + (c.balance != null ? " &middot; credit left " + money(c.balance) : "") + "</div></div>");
     o.push('<div class="stat"><div class="n">' + e(r.subs_confirmed != null ? r.subs_confirmed : "n/a") + '/50</div><div class="l">confirmed subscribers (+' + e(r.subs_new30 != null ? r.subs_new30 : 0) + " in 30d)</div></div>");
     o.push('<div class="stat"><div class="n">' + (ex.revenue_30d_usd ? money(ex.revenue_30d_usd.value) : "$0") + '</div><div class="l">revenue 30d' + (ex.revenue_30d_usd ? "" : " (none recorded)") + "</div></div>");
     o.push('<div class="stat"><div class="n">' + (ex.credibility_events ? e(ex.credibility_events.value) + "/2" : "?") + '</div><div class="l">credibility events' + (ex.credibility_events ? "" : " (unattested)") + "</div></div>");
     const mom = r.pageviews_mom;
     o.push('<div class="stat"><div class="n ' + (mom == null ? "amber" : mom >= 0 ? "good" : "bad") + '">' + (mom != null ? (mom >= 0 ? "+" : "") + mom + "%" : "n/a") + '</div><div class="l">pageviews vs prior 30d (' + e(r.pageviews30 != null ? r.pageviews30.toLocaleString() : "n/a") + ")" + (mom == null && r.pageviews_prior_days != null && r.pageviews_prior_days < RUM_MIN_PRIOR_DAYS ? " &middot; prior window only " + e(r.pageviews_prior_days) + "/30 days of data" : "") + "</div></div>");
-    const perRep = c.cash30 != null && r.reports30 > 0 ? c.cash30 / r.reports30 : null;
-    o.push('<div class="stat"><div class="n">' + (perRep != null ? "$" + perRep.toFixed(0) : "n/a") + '</div><div class="l">cash per full report (' + e(r.reports30 != null ? r.reports30 : "?") + " in 30d)</div></div>");
+    const perRep = c.spend30 != null && r.reports30 > 0 ? c.spend30 / r.reports30 : null;
+    o.push('<div class="stat"><div class="n">' + (perRep != null ? "$" + perRep.toFixed(0) : "n/a") + '</div><div class="l">AI spend per full report (' + e(r.reports30 != null ? r.reports30 : "?") + " in 30d)</div></div>");
     o.push('<div class="stat"><div class="n">' + (a.overall != null ? e(a.overall) + "/5" : "n/a") + '</div><div class="l">autonomy' + (a.self_heal != null ? " &middot; self-heal " + e(a.self_heal) + "/5" : "") + "</div></div>");
     o.push('<div class="stat"><div class="n ' + (v.attention.open ? "amber" : "good") + '">' + e(v.attention.open) + '</div><div class="l">of your time: open items' + (v.attention.oldest_days >= 1 ? " &middot; oldest " + Math.round(v.attention.oldest_days) + "d" : "") + "</div></div>");
     o.push("</div>");
