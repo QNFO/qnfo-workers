@@ -3652,7 +3652,7 @@ async function ensureFeedWiring(env) {
   // metric_registry rows: picked up by qnfo-fleet-control evaluateMetricTriggers, the staleness/kill-band views and
   // the autonomy scorer. Cadence */15 makes a silent publisher show up as a stale metric.
   const reg = async function(metric, kind, target) {
-    await run("registry:" + metric, A.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1,'system',?2,?3,'qnfo-fleet-dashboard','human','*/15 * * * *','MEASURED')").bind(metric, kind, target));
+    await run("registry:" + metric, A.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1,'system',?2,?3,'qnfo-fleet-dashboard','human','*/15','MEASURED')").bind(metric, kind, target));
   };
   await reg("invest_decision_level", "lagging", "0 continue, 1 continue-at-risk, 2 scale back, 3 stop, -1 unknown (advisory; owner decides)");
   await reg("human_actions_open", "leading", "0 (system resolves everything else)");
@@ -3676,15 +3676,20 @@ async function publishFeeds(env, v) {
     out.wiring_errors = [String(e && e.message || e).slice(0, 120)];
   }
   const A = env.AUDIT;
+  // metric_registry carries D1 guard triggers (METRIC-CADENCE-CANONICAL-1), so an insert can be refused and the
+  // UPDATE below then matches no row. "registry" is true only when every row was actually written.
   const upd = async function(metric, val) {
-    await A.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2 WHERE metric=?3").bind(String(val), new Date().toISOString(), metric).run();
+    const r = await A.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2 WHERE metric=?3").bind(String(val), new Date().toISOString(), metric).run();
+    return !!(r && r.meta && Number(r.meta.changes) > 0);
   };
   try {
-    await upd("invest_decision_level", v.decision.level);
-    await upd("human_actions_open", v.attention.open);
-    await upd("human_wait_oldest_days", Math.round(v.attention.oldest_days * 10) / 10);
-    out.registry = true;
+    const wrote = [await upd("invest_decision_level", v.decision.level), await upd("human_actions_open", v.attention.open), await upd("human_wait_oldest_days", Math.round(v.attention.oldest_days * 10) / 10)];
+    out.registry = wrote.every(Boolean);
+    if (!out.registry) out.registry_missing = ["invest_decision_level", "human_actions_open", "human_wait_oldest_days"].filter(function(_m, i) {
+      return !wrote[i];
+    });
   } catch (e) {
+    out.registry = false;
   }
   const d = v.decision;
   const key = d.verdict + "/" + (d.risk || "-") + "/" + d.basis;
@@ -3712,7 +3717,7 @@ async function publishFeeds(env, v) {
   } catch (e) {
     out.log_error = String(e && e.message || e).slice(0, 120);
   }
-  await loopMetaSet(env, "invest_feed_status", JSON.stringify({ at: new Date().toISOString(), registry: out.registry, logged: out.log, issue: out.issue, wiring_errors: out.wiring_errors || [], log_error: out.log_error || null }));
+  await loopMetaSet(env, "invest_feed_status", JSON.stringify({ at: new Date().toISOString(), registry: out.registry, logged: out.log, issue: out.issue, wiring_errors: out.wiring_errors || [], registry_missing: out.registry_missing || [], log_error: out.log_error || null }));
   return out;
 }
 // ---------- page ----------
