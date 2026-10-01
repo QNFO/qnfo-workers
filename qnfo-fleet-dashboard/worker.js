@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.9.1-invest-spend-basis";
+var VERSION = "1.10.0-owner-respond";
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2062,6 +2062,8 @@ async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
   if (request.method === "OPTIONS") return json({}, 204);
+  const owner = await ownerState(request, env);
+  if (path.indexOf("/api/owner/") === 0) return await ownerRoutes(request, env, ctx, path, owner);
   if (path === "/health") {
     return json({ ok: true, worker: NAME, version: VERSION, generated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
@@ -2125,9 +2127,17 @@ async function handleRequest(request, env, ctx) {
     return json(st.integration || { error: "no integration data" });
   }
   if (path === "/" || path === "") {
+    const frag = url.searchParams.get("frag") === "1";
+    // OWNER-RESPOND-1: once OWNER_TOKEN is set, everyone without the owner cookie gets a locked shell.
+    if (owner.configured && !owner.authed) return new Response(frag ? "locked" : lockedHtml(), { status: frag ? 401 : 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
     const st = await currentState(env, ctx, 5 * 6e4);
     const v = await humanView(env, st, ctx);
-    const body = url.searchParams.get("frag") === "1" ? humanFragment(v) : humanHtml(v);
+    if (owner.authed) {
+      v.owner.authed = true;
+      v.prompts = await ownerPromptsView(env);
+      v.responses = await recentResponses(env);
+    }
+    const body = frag ? humanFragment(v) : humanHtml(v);
     return new Response(body, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
   }
   // REACH-SIGNALS-INGEST-1 (2026-10-01, #1711): the scorecard as JSON for the daily portfolio run, and a token-gated
@@ -2144,9 +2154,15 @@ async function handleRequest(request, env, ctx) {
   if (path === "/roi" || path === "/api/roi" || path === "/ops") {
     return new Response(null, { status: 301, headers: { Location: "/", "Cache-Control": "no-store" } });
   }
+  // Machine callers present x-loop-token (same secret as the POST endpoints); the owner uses the cookie.
+  const machine = !!(env.LOOP_TOKEN && request.headers.get("x-loop-token") === env.LOOP_TOKEN);
+  const privateView = owner.configured && !owner.authed && !machine;
   if (path === "/api/human" && request.method === "GET") {
     const st = await currentState(env, ctx, 5 * 6e4);
-    return json(await humanView(env, st, ctx));
+    const v = await humanView(env, st, ctx);
+    if (privateView) return json({ schema_version: "fleet-human/v2", locked: true, verdict: v.verdict, count: v.count });
+    if (owner.authed || machine) v.responses = await recentResponses(env);
+    return json(v);
   }
   // The investment verdict + the business-case inputs behind it. ?refresh=1 (used by the fleet-exec heartbeat task)
   // re-measures (throttled to one run / 2 min) and republishes to the ops/fleet feeds.
@@ -2159,6 +2175,7 @@ async function handleRequest(request, env, ctx) {
     }).catch(function() {
     }));
     const v = await humanView(env, st, ctx);
+    if (privateView) return json({ schema_version: "fleet-decision/v1", locked: true, verdict: v.decision.verdict, level: v.decision.level, advisory: true });
     return json({ schema_version: "fleet-decision/v1", worker: NAME, version: VERSION, generated_at: v.generated_at, verdict: v.decision.verdict, risk: v.decision.risk, level: v.decision.level, basis: v.decision.basis, headline: v.decision.headline, reasons: v.decision.reasons, flips: v.decision.flips, levers: v.decision.levers, gate: v.decision.gate, inputs: v.decision.inputs, business: v.business, feeds: v.feeds, advisory: true });
   }
   // Attest evidence the machines cannot measure (credibility events, funding, revenue). Evidence is mandatory.
@@ -3107,6 +3124,13 @@ async function collectHumanActions(env) {
     }
     for (const d of Object.keys(byDom)) add({ key: "mail:" + d, source: "inbox", title: "Reply to " + byDom[d].n + " message" + (byDom[d].n > 1 ? "s" : "") + " from " + d, why: "A real person wrote to qnfo@qnfo.org; the system does not send mail as you.", fallback: "No reply goes out until you send one.", action: "Open the qnfo inbox and reply.", url: "", due: "", age: byDom[d].oldest });
   });
+  // Objective revisions are immutable by the fleet: only the owner ratifies or rejects them (QUNIVERSE-CHARTER s7).
+  // Derived live from goals, so it clears itself the moment the last proposal is decided.
+  await read("objective-revisions", async function() {
+    const rows = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, MIN(created_at) AS oldest FROM goals WHERE goal_type='objective-revision' AND status='proposed'");
+    const n = rows && rows.length ? Number(rows[0].n || 0) : 0;
+    if (n > 0) add({ key: "goals:objective-revision", source: "objectives", title: "Ratify or reject " + n + " proposed objective revision" + (n > 1 ? "s" : ""), why: "The fleet cannot change its own objectives; only you can ratify them.", fallback: "The current objectives stay in force.", action: "Tell a session which to ratify or reject (qnfo-audit goals, goal_type objective-revision).", url: "", due: "", age: ageDaysOf(rows[0].oldest) });
+  });
   await read("shutdown-manifest", async function() {
     const rows = await d1all(env.AUDIT, "SELECT id, phase, component, condition, due_date, state FROM shutdown_manifest ORDER BY id");
     const phase1Live = rows.some(function(r) {
@@ -3145,6 +3169,7 @@ async function collectHumanActions(env) {
 //    ever attested the verdict is UNKNOWN (a human decision), never KILL by omission.
 var SPEND_BASIS = "fleet_budget ai_spend:total: 30-day unified-billing list cost (what the cap meters), written by qnfo-fleet-control";
 var SPEND_FRESH_MS = 6 * 36e5;
+var UPCOMING_DAYS = 14;
 var INVEST_FACT_KEYS = { credibility_events: "number", funding_secured: "boolean", revenue_30d_usd: "number" };
 var INVEST_LEVEL = { CONTINUE: 0, AT_RISK: 1, SCALE_BACK: 2, KILL: 3, UNKNOWN: -1 };
 var INVEST_SUBS_TARGET = 50;
@@ -3505,7 +3530,15 @@ function investInputs(snap, facts) {
   return { spend30: c.spend30 != null ? c.spend30 : null, metered30: c.metered30 != null ? c.metered30 : null, cap: c.cap != null ? c.cap : SPEND_CAP_USD, subs: r.subs_confirmed != null ? r.subs_confirmed : 0, subsNew30: r.subs_new30 != null ? r.subs_new30 : 0, credibility: cred, funding: fund, revenue30: facts.revenue_30d_usd ? facts.revenue_30d_usd.value : null, attested: !!(facts.credibility_events || facts.funding_secured), early: snap ? snap.early_trigger : null, days: gateDays, gate_date: REVIEW_GATE_DATE };
 }
 async function humanView(env, st, ctx) {
-  const [h, meta, facts] = await Promise.all([collectHumanActions(env), loopMetaGet(env), readInvestFacts(env)]);
+  const [h, meta, facts, snoozes] = await Promise.all([collectHumanActions(env), loopMetaGet(env), readInvestFacts(env), activeSnoozes(env)]);
+  const ownerCfg = !!(env.OWNER_TOKEN && String(env.OWNER_TOKEN).length >= OWNER_TOKEN_MIN);
+  const snoozedN = h.items.filter(function(i) {
+    return snoozes[i.key];
+  }).length;
+  h.items = h.items.filter(function(i) {
+    return !snoozes[i.key];
+  });
+  if (!ownerCfg) h.items.unshift({ key: "owner-key", source: "dashboard", sev: "normal", title: "Set the dashboard owner key (OWNER_TOKEN) to respond here and lock this page", why: "Responding and sending prompts from the dashboard needs your identity, and the page is currently public.", fallback: "The page stays read-only and public (noindex).", action: "Cloudflare dashboard > Workers & Pages > qnfo-fleet-dashboard > Settings > Variables and Secrets: add a secret named OWNER_TOKEN (24+ random characters, e.g. from a password manager). Then open this page and enter it once.", url: "", due: "", age: null });
   let gov = null;
   try {
     gov = meta.human_gov_snapshot ? JSON.parse(meta.human_gov_snapshot) : null;
@@ -3539,9 +3572,21 @@ async function humanView(env, st, ctx) {
   });
   const probes = st && st.probes || [];
   const drift = st && st.integration && st.integration.drift;
-  const items = h.items.slice();
   const gateDue = decision.gate && decision.gate.days != null && decision.gate.days <= 0;
-  if (decision.verdict === "KILL" || decision.verdict === "SCALE_BACK" || gateDue && decision.verdict === "UNKNOWN") items.unshift({ key: "decision", source: "decision", sev: decision.verdict === "SCALE_BACK" ? "normal" : "urgent", title: decision.verdict === "KILL" ? "Decide: stop the fleet?" : decision.verdict === "SCALE_BACK" ? "Decide: scale the fleet back" : "Decide: continue or stop (review gate due)", why: decision.headline, fallback: "Nothing is retired, deleted or re-capped until you act. The armed shutdown_manifest rows still apply on their own dates.", action: "Read the decision below. Email 'shutdown' to qnfo@qnfo.org to stop, or attest evidence at /api/decision/fact.", url: "", due: decision.verdict === "SCALE_BACK" && decision.risk === "cost" ? "" : REVIEW_GATE_DATE, age: null });
+  // Only what needs action now counts toward the banner. Dated items more than UPCOMING_DAYS away wait under "Coming up".
+  const dueMs = function(it) {
+    const t = Date.parse(String(it.due || "") + "T00:00:00Z");
+    return isNaN(t) ? null : t;
+  };
+  const isLater = function(it) {
+    const t = dueMs(it);
+    return t != null && t - Date.now() > UPCOMING_DAYS * DAY_MS;
+  };
+  const upcoming = h.items.filter(isLater);
+  const items = h.items.filter(function(it) {
+    return !isLater(it);
+  });
+  if (decision.verdict === "KILL" || decision.verdict === "SCALE_BACK" || gateDue && decision.verdict === "UNKNOWN") items.unshift({ key: "decision", source: "decision", sev: decision.verdict === "SCALE_BACK" ? "normal" : "urgent", title: decision.verdict === "KILL" ? "Decide: stop the fleet?" : decision.verdict === "SCALE_BACK" ? "Decide: scale the fleet back" : "Decide: continue or stop (review gate due)", why: decision.headline, fallback: "Nothing is retired, deleted or re-capped until you act. The armed shutdown_manifest rows still apply on their own dates.", action: "Read the decision below. Email 'shutdown' to qnfo@qnfo.org to stop, or attest evidence at /api/decision/fact.", url: "", due: gateDue ? REVIEW_GATE_DATE : "", age: null });
   const stale = stateAgeMin == null || stateAgeMin > 60;
   const moneyStale = !gov || govAge > 6 * 36e5;
   let verdict = "CLEAR";
@@ -3549,6 +3594,8 @@ async function humanView(env, st, ctx) {
   else if (h.blind.length || stale) verdict = "UNCONFIRMED";
   return {
     schema_version: "fleet-human/v2",
+    snoozed: snoozedN,
+    owner: { configured: ownerCfg, authed: false },
     worker: NAME,
     version: VERSION,
     generated_at: new Date().toISOString(),
@@ -3558,6 +3605,7 @@ async function humanView(env, st, ctx) {
       return i.sev === "urgent";
     }).length,
     items,
+    upcoming,
     blind: h.blind,
     decision: Object.assign({}, decision, { level: INVEST_LEVEL[decision.verdict === "CONTINUE" && decision.risk === "at_risk" ? "AT_RISK" : decision.verdict], inputs: inp }),
     business: gov ? { measured_at: gov.at, money_stale: moneyStale, cost: gov.cost, ret: gov.ret, reach: gov.reach || null, autonomy: gov.autonomy, trend: gov.trend, gates_met: gov.gates_met, gates_total: gov.gates_total, facts } : null,
@@ -3686,7 +3734,13 @@ function humanFragment(v) {
     if (it.fallback) o.push('<div class="row"><b>If you wait</b>' + e(it.fallback) + "</div>");
     if (it.action) o.push('<div class="row"><b>To do</b>' + e(it.action) + "</div>");
     if (/^https:\/\//.test(it.url || "")) o.push('<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>');
+    if (v.owner && v.owner.authed) o.push('<div class="acts" data-key="' + e(it.key) + '">' + (String(it.key).indexOf("ha:") === 0 ? '<button data-act="done">Done</button><button data-act="dismiss">Not doing</button>' : "") + '<button data-act="snooze" data-days="3">Snooze 3d</button><button data-act="snooze" data-days="7">Snooze 7d</button><button data-act="note">Add note</button></div>');
     o.push("</article>");
+  }
+  if (v.upcoming && v.upcoming.length) {
+    o.push("<details><summary>Coming up (" + v.upcoming.length + ")</summary><ul>");
+    for (const it of v.upcoming) o.push("<li><b>" + e(it.due) + "</b> " + e(it.title) + (it.action ? ' <span class="meta">&mdash; ' + e(it.action) + "</span>" : "") + (/^https:\/\//.test(it.url || "") ? ' <a href="' + e(it.url) + '" rel="noopener">open</a>' : "") + "</li>");
+    o.push("</ul></details>");
   }
   const lbl = { CONTINUE: "CONTINUE", SCALE_BACK: "SCALE BACK", KILL: "STOP", UNKNOWN: "CAN'T JUDGE" }[d.verdict] || d.verdict;
   const dcls = d.verdict === "CONTINUE" ? d.risk === "at_risk" ? "unk" : "ok" : d.verdict === "UNKNOWN" ? "unk" : "act";
@@ -3717,6 +3771,19 @@ function humanFragment(v) {
     const t = b.trend;
     o.push('<div class="meta" style="margin-top:8px">' + (t ? "Since " + e(t.from) + ": pageviews " + e(t.pageviews[0]) + " &rarr; " + e(t.pageviews[1]) + ", subscribers " + e(t.subscribers[0]) + " &rarr; " + e(t.subscribers[1]) + ", full reports " + e(t.papers[0]) + " &rarr; " + e(t.papers[1]) + ". " : "") + (c.metered30 != null ? "Estimated list cost across all providers: " + money(c.metered30) + "/30d (an estimate, not cash, #1699). " : "") + (b.reach && b.reach.pv28 != null ? "Reach 28d (" + e(b.reach.days28) + " days ingested): " + e(Math.round(b.reach.pv28).toLocaleString()) + " pageviews. " : "Reach scorecard: first daily ingest pending (/api/reach). ") + (c.total_est30 != null ? "Whole-fleet cost estimate: " + money(c.total_est30) + "/30d. " : "") + (r.zenodo_views != null ? "Zenodo views " + e(Number(r.zenodo_views).toLocaleString()) + ", downloads " + e(Number(r.zenodo_downloads || 0).toLocaleString()) + ". " : "") + "Measured " + e(agoText(ageDaysOf(b.measured_at))) + (b.money_stale ? " &mdash; <b class=\"amber\">stale</b>" : "") + ".</div>");
   }
+  if (v.owner && v.owner.authed) {
+    o.push('<h3>Tell or ask the fleet</h3><section class="card"><textarea id="ptext" rows="3" maxlength="2000" placeholder="Ask about the queue, decision or spend, or tell the fleet to do something"></textarea><div class="acts"><button id="pask">Ask now</button><button id="ptask">Queue as task</button><span class="meta" id="pmsg"></span></div><div class="meta" style="margin-top:6px">Ask now answers from the current queue and decision (no actions). Queue as task goes to the intent orchestrator\'s next triage (06:00 and 06:30 UTC).</div>');
+    for (const pr of v.prompts || []) {
+      const chip = pr.mode === "task" ? "task &middot; " + e(pr.intent_status || pr.status) + (pr.triage_decision ? " &middot; " + e(pr.triage_decision) : "") : e(pr.status) + (pr.model ? " &middot; " + e(pr.model) : "");
+      o.push('<div class="pr"><div class="meta">' + e(String(pr.ts || "").slice(0, 16)) + " &middot; " + chip + "</div><div>" + e(String(pr.prompt || "").slice(0, 220)) + "</div>" + (pr.response ? '<details><summary>Answer</summary><div class="ans">' + e(pr.response) + "</div></details>" : "") + (pr.error ? '<div class="meta bad">' + e(pr.error) + "</div>" : "") + "</div>");
+    }
+    o.push("</section>");
+    if (v.responses && v.responses.length) {
+      o.push('<div class="meta" style="margin-top:6px">Recent responses: ' + v.responses.slice(0, 5).map(function(r) {
+        return e(r.kind) + " " + e(String(r.key).replace(/^ha:/, "")) + (r.until ? " until " + e(String(r.until).slice(0, 10)) : "") + (r.note ? " (" + e(String(r.note).slice(0, 60)) + ")" : "");
+      }).join("; ") + (v.snoozed ? "; " + v.snoozed + " snoozed now" : "") + ".</div>");
+    }
+  }
   const s = v.system;
   const sysBad = s.stuck.length > 0;
   o.push("<details" + (sysBad ? " open" : "") + "><summary>" + (sysBad ? '<b class="bad">System has ' + s.stuck.length + " error" + (s.stuck.length > 1 ? "s" : "") + " unresolved past its 2h SLA</b>" : "System is handling the rest") + " &middot; " + e(s.verdict) + " &middot; " + s.errors + " err / " + s.warnings + " warn &middot; " + s.probes_ok + "/" + s.probes_total + " probes ok</summary>");
@@ -3743,13 +3810,236 @@ function humanHtml(v) {
   o.push(".tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--line);color:var(--mute);margin-right:6px}.tag.u{background:var(--act);color:#fff}");
   o.push(".verdict.ok{border-left:5px solid var(--ok)}.verdict.unk{border-left:5px solid var(--unk)}.verdict.act{border-left:5px solid var(--act)}.vtop{display:flex;gap:6px;align-items:center}.chip{font-weight:800;letter-spacing:.04em;padding:3px 10px;border-radius:8px;font-size:14px}.chip.ok{background:var(--okbg);color:var(--ok)}.chip.unk{background:var(--unkbg);color:var(--unk)}.chip.act{background:var(--actbg);color:var(--act)}.vhead{margin:8px 0 4px;font-size:16px;font-weight:600}.why{margin:6px 0 0;padding-left:18px;font-size:14px;color:var(--mute)}");
   o.push("h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:24px 0 8px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}.stat .n{font-size:22px;font-weight:700}.stat .l{font-size:12px;color:var(--mute)}.bad{color:var(--act)}.good{color:var(--ok)}.amber{color:var(--warn)}");
-  o.push("details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-top:14px}summary{cursor:pointer;color:var(--mute);font-size:14px}details ul{margin:8px 0 0;padding-left:18px;font-size:14px}a{color:var(--link)}footer{margin-top:28px;font-size:12px;color:var(--mute)}");
+  o.push(".acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}.acts button{padding:6px 11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;cursor:pointer}.acts button:hover{border-color:var(--link)}.acts button:disabled{opacity:.5;cursor:default}#ptext{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}.pr{border-top:1px solid var(--line);margin-top:10px;padding-top:8px;font-size:14px}.ans{white-space:pre-wrap;font-size:14px;margin-top:6px}#so{color:var(--mute);margin-left:10px}details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-top:14px}summary{cursor:pointer;color:var(--mute);font-size:14px}details ul{margin:8px 0 0;padding-left:18px;font-size:14px}a{color:var(--link)}footer{margin-top:28px;font-size:12px;color:var(--mute)}");
   o.push("</style></head><body><main>");
-  o.push('<div class="top"><b>Fleet &middot; your queue</b><span><span id="dot" class="dot g"></span><span id="age">live</span></span></div>');
+  o.push('<div class="top"><b>Fleet &middot; your queue</b><span><span id="dot" class="dot g"></span><span id="age">live</span>' + (v.owner && v.owner.authed ? '<a href="#" id="so">sign out</a>' : "") + "</span></div>");
   o.push('<div id="live">' + humanFragment(v) + "</div>");
   // Real-time: re-fetch the server-rendered fragment every 10s (queue is read live from D1 on each call). The dot
   // goes amber/red when updates stop arriving, so a frozen page cannot masquerade as an all-clear.
-  o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false;function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(){if(document.hidden||busy)return;busy=true;var d=live.querySelector('details'),open=d&&d.open;fetch('/?frag=1',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(h){live.innerHTML=h;var n=live.querySelector('details');if(n&&open)n.open=true;last=Date.now()}).catch(function(){}).then(function(){busy=false;paint()})}setInterval(tick,10000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script></body></html>");
+  o.push("</main><script>(function(){var live=document.getElementById('live'),dot=document.getElementById('dot'),age=document.getElementById('age'),last=Date.now(),busy=false;var H={'Content-Type':'application/json','x-fleet-ui':'1'};function paint(){var s=(Date.now()-last)/1000;age.textContent=s<15?'live':'updated '+Math.round(s)+'s ago';dot.className='dot '+(s<30?'g':s<90?'a':'r')}function tick(force){if((document.hidden&&!force)||busy)return;busy=true;var d=live.querySelector('details'),open=d&&d.open,ta=document.getElementById('ptext'),tv=ta?ta.value:'',tf=ta&&document.activeElement===ta;fetch('/?frag=1',{cache:'no-store'}).then(function(r){if(r.status===401){location.reload();throw 0}if(!r.ok)throw 0;return r.text()}).then(function(h){live.innerHTML=h;var n=live.querySelector('details');if(n&&open)n.open=true;var t=document.getElementById('ptext');if(t&&tv){t.value=tv;if(tf)t.focus()}last=Date.now()}).catch(function(){}).then(function(){busy=false;paint()})}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b)}).then(function(r){if(r.status===401){location.reload();throw 0}return r.json()})}live.addEventListener('click',function(ev){var t=ev.target;if(!t||t.tagName!=='BUTTON')return;var box=t.closest('.acts');if(t.id==='pask'||t.id==='ptask'){var ta=document.getElementById('ptext'),m=document.getElementById('pmsg');if(!ta.value.trim())return;var mode=t.id==='pask'?'ask':'task';t.disabled=true;m.textContent=mode==='ask'?'asking...':'queuing...';post('/api/owner/prompt',{text:ta.value,mode:mode}).then(function(j){m.textContent=j.ok?'':(j.error||'failed');if(j.ok||j.status==='failed'){if(j.ok)ta.value=''}tick(true)}).catch(function(){}).then(function(){t.disabled=false});return}if(!box||!t.dataset.act)return;var body={key:box.dataset.key,kind:t.dataset.act};if(t.dataset.act==='snooze')body.days=Number(t.dataset.days);if(t.dataset.act==='note'){var n=prompt('Note to the fleet (kept with this item):');if(!n)return;body.note=n}if(t.dataset.act==='done'&&!confirm('Mark this as done?'))return;t.disabled=true;post('/api/owner/respond',body).then(function(j){if(!j.ok)alert(j.error||'failed');tick(true)}).catch(function(){t.disabled=false})});var so=document.getElementById('so');if(so)so.addEventListener('click',function(ev){ev.preventDefault();post('/api/owner/logout',{}).then(function(){location.reload()})});setInterval(tick,10000);setInterval(paint,1000);document.addEventListener('visibilitychange',function(){if(!document.hidden)tick()})})();</script></body></html>");
+  return o.join("");
+}
+// OWNER-RESPOND-1 (2026-10-01): respond to the fleet from the dashboard itself, and start/track server-side prompts.
+//
+// What existed before: no web page for this in this repo. ai.qnfo.org (research chat) and personal.qnfo.org (personal
+// twin) are separate key-gated playgrounds; ops.qnfo.org is API-only (POST /v1/jobs, driven from DeepChat/ChatBox).
+// This puts the owner's side of that into the one page.
+//
+// Access: the dashboard was public. Responding needs identity, so it is owner-gated by ONE secret, OWNER_TOKEN
+// (>= 24 chars, set by the owner in the Worker's settings; no agent session can or should mint it). Until it is set the
+// page stays exactly as it was and shows a card asking for it. Once set:
+//   - the page and the human/decision JSON show a locked shell (verdict only) to anyone without the owner cookie;
+//   - POST /api/owner/login {token} sets an HttpOnly, Secure, SameSite=Strict cookie holding sha256(token);
+//   - every write needs that cookie plus the custom header x-fleet-ui: 1 (preflight blocks cross-origin forms);
+//   - login attempts are throttled (10 failures / 10 min).
+// What a response does (all inside this worker's own D1 rows; no credential is copied anywhere):
+//   done / dismiss  resolve or dismiss a queue item (human_actions); evidence = "owner via dashboard"
+//   snooze          hide any item for 1-90 days (human_responses); derived items return if still true afterwards
+//   note            a note on any item, kept in human_responses and listed in /api/human for sessions to read
+//   Ask now         runs the prompt through qnfo-ai over the dashboard's service binding (authenticated by binding
+//                   props, no key), grounded in the current queue + decision, no tools, daily-capped
+//   Queue as task   inserts a pending task into the intents table the intent-orchestrator already triages
+var OWNER_COOKIE = "fleet_owner";
+var OWNER_TOKEN_MIN = 24;
+var OWNER_PROMPT_CAP_DEFAULT = 20;
+var OWNER_LOGIN_MAX_FAILS = 10;
+var OWNER_LOGIN_WINDOW_MS = 10 * 60 * 1e3;
+var ASK_MODELS = ["glm-5.3-flash", "glm-5.2"];
+async function sha256hex(s) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
+  return Array.from(new Uint8Array(d)).map(function(b) {
+    return b.toString(16).padStart(2, "0");
+  }).join("");
+}
+function constEq(a, b) {
+  a = String(a);
+  b = String(b);
+  let r = a.length === b.length ? 0 : 1;
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) r |= (a.charCodeAt(i % (a.length || 1)) ^ b.charCodeAt(i % (b.length || 1))) | 0;
+  return r === 0;
+}
+async function ownerState(request, env) {
+  const tok = env && env.OWNER_TOKEN ? String(env.OWNER_TOKEN) : "";
+  const configured = tok.length >= OWNER_TOKEN_MIN;
+  if (!configured) return { configured: false, tooShort: tok.length > 0, authed: false };
+  const want = await sha256hex(tok);
+  const m = /(?:^|;\s*)fleet_owner=([0-9a-f]{64})/.exec(request.headers.get("Cookie") || "");
+  return { configured: true, tooShort: false, authed: !!m && constEq(m[1], want), hash: want };
+}
+function ownerJson(data, status, extraHeaders) {
+  return new Response(JSON.stringify(data), { status: status || 200, headers: Object.assign({ "Content-Type": "application/json", "Cache-Control": "no-store" }, extraHeaders || {}) });
+}
+async function ensureOwnerTables(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS human_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, kind TEXT NOT NULL, note TEXT, until TEXT, ts TEXT DEFAULT (datetime('now')))").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS owner_prompts (id TEXT PRIMARY KEY, ts TEXT DEFAULT (datetime('now')), mode TEXT, prompt TEXT, status TEXT, response TEXT, model TEXT, intent_id TEXT, error TEXT)").run();
+}
+async function ownerLoginThrottled(env) {
+  try {
+    const meta = await loopMetaGet(env);
+    const rec = meta.owner_login_fail ? JSON.parse(meta.owner_login_fail) : null;
+    return !!(rec && Date.now() - rec.t < OWNER_LOGIN_WINDOW_MS && rec.n >= OWNER_LOGIN_MAX_FAILS);
+  } catch (e) {
+    return false;
+  }
+}
+async function ownerLoginFailed(env) {
+  try {
+    const meta = await loopMetaGet(env);
+    const rec = meta.owner_login_fail ? JSON.parse(meta.owner_login_fail) : null;
+    const fresh = rec && Date.now() - rec.t < OWNER_LOGIN_WINDOW_MS;
+    await loopMetaSet(env, "owner_login_fail", JSON.stringify({ n: fresh ? rec.n + 1 : 1, t: fresh ? rec.t : Date.now() }));
+  } catch (e) {
+  }
+}
+// Snoozes hide an item; they never change its source, so a derived item that is still true returns afterwards.
+async function activeSnoozes(env) {
+  const out = {};
+  try {
+    await ensureOwnerTables(env);
+    const rows = await d1all(env.AUDIT, "SELECT key, MAX(until) AS until FROM human_responses WHERE kind='snooze' AND until > ? GROUP BY key", [new Date().toISOString()]);
+    for (const r of rows) out[r.key] = r.until;
+  } catch (e) {
+  }
+  return out;
+}
+async function ownerPromptsView(env) {
+  try {
+    await ensureOwnerTables(env);
+    const rows = await d1all(env.AUDIT, "SELECT p.id, p.ts, p.mode, p.prompt, p.status, p.response, p.model, p.error, i.status AS intent_status, i.triage_decision FROM owner_prompts p LEFT JOIN intents i ON i.id = p.intent_id ORDER BY p.ts DESC LIMIT 6");
+    return rows;
+  } catch (e) {
+    return [];
+  }
+}
+async function recentResponses(env) {
+  try {
+    await ensureOwnerTables(env);
+    return await d1all(env.AUDIT, "SELECT key, kind, note, until, ts FROM human_responses ORDER BY id DESC LIMIT 8");
+  } catch (e) {
+    return [];
+  }
+}
+function askContext(v) {
+  const c = { queue: (v.items || []).slice(0, 12).map(function(i) {
+    return { title: i.title, why: i.why, due: i.due || null, source: i.source };
+  }), upcoming: (v.upcoming || []).map(function(i) {
+    return { title: i.title, due: i.due };
+  }), decision: { verdict: v.decision.verdict, risk: v.decision.risk, headline: v.decision.headline, reasons: v.decision.reasons, flips: v.decision.flips }, system: { verdict: v.system.verdict, errors: v.system.errors, warnings: v.system.warnings, probes: v.system.probes_ok + "/" + v.system.probes_total } };
+  if (v.business) c.business = { spend30_unified: v.business.cost.spend30, cap: v.business.cost.cap, subscribers: v.business.ret.subs_confirmed, pageviews30: v.business.ret.pageviews30, autonomy: v.business.autonomy };
+  return JSON.stringify(c).slice(0, 6e3);
+}
+async function runAsk(env, text, v) {
+  const sys = "You are the fleet's assistant answering its owner inside the fleet dashboard. Answer briefly and concretely from CONTEXT only; if the answer is not in CONTEXT say so. You cannot take actions or call tools: if the owner wants something done, tell them to use 'Queue as task'. Never invent numbers.\nCONTEXT: " + askContext(v);
+  let lastErr = "no model";
+  for (const model of ASK_MODELS) {
+    try {
+      const r = await Promise.race([env.SVC_QNFO_AI.fetch("https://ai.qnfo.org/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "system", content: sys }, { role: "user", content: text }], max_tokens: 700 }) }), new Promise(function(_res, rej) {
+        setTimeout(function() {
+          rej(new Error("timeout 25s"));
+        }, 25e3);
+      })]);
+      const j = await r.json().catch(function() {
+        return null;
+      });
+      const content = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+      if (r.ok && content && String(content).trim()) return { ok: true, text: String(content).trim().slice(0, 4e3), model };
+      lastErr = model + ": http " + r.status + " " + squash(JSON.stringify(j && j.error || j || "")).slice(0, 100);
+    } catch (e) {
+      lastErr = model + ": " + String(e && e.message || e).slice(0, 100);
+    }
+  }
+  return { ok: false, error: lastErr };
+}
+// Returns a Response for /api/owner/* paths, or null when the path is not an owner path.
+async function ownerRoutes(request, env, ctx, path, owner) {
+  if (path.indexOf("/api/owner/") !== 0) return null;
+  if (request.method !== "POST" && request.method !== "GET") return ownerJson({ error: "method" }, 405);
+  if (!owner.configured) return ownerJson({ error: owner.tooShort ? "OWNER_TOKEN is shorter than " + OWNER_TOKEN_MIN + " characters" : "OWNER_TOKEN is not set" }, 503);
+  if (path === "/api/owner/login" && request.method === "POST") {
+    if (await ownerLoginThrottled(env)) return ownerJson({ error: "too many attempts; wait 10 minutes" }, 429);
+    let b = null;
+    try {
+      b = await request.json();
+    } catch (e) {
+    }
+    const ok = b && typeof b.token === "string" && constEq(await sha256hex(b.token), owner.hash);
+    if (!ok) {
+      await ownerLoginFailed(env);
+      return ownerJson({ error: "wrong key" }, 401);
+    }
+    return ownerJson({ ok: true }, 200, { "Set-Cookie": OWNER_COOKIE + "=" + owner.hash + "; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Strict" });
+  }
+  if (path === "/api/owner/logout" && request.method === "POST") return ownerJson({ ok: true }, 200, { "Set-Cookie": OWNER_COOKIE + "=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict" });
+  if (!owner.authed) return ownerJson({ error: "sign in" }, 401);
+  if (request.method === "POST" && request.headers.get("x-fleet-ui") !== "1") return ownerJson({ error: "missing x-fleet-ui header" }, 400);
+  await ensureOwnerTables(env);
+  if (path === "/api/owner/prompts" && request.method === "GET") return ownerJson({ prompts: await ownerPromptsView(env), responses: await recentResponses(env) });
+  let b = null;
+  try {
+    b = await request.json();
+  } catch (e) {
+    return ownerJson({ error: "invalid JSON" }, 400);
+  }
+  if (path === "/api/owner/respond") {
+    const key = String(b && b.key || "");
+    const kind = String(b && b.kind || "");
+    const note = String(b && b.note || "").trim().slice(0, 500);
+    if (!/^[A-Za-z0-9:._-]{3,160}$/.test(key)) return ownerJson({ error: "bad key" }, 400);
+    if (["done", "dismiss", "snooze", "note"].indexOf(kind) < 0) return ownerJson({ error: "kind must be done|dismiss|snooze|note" }, 400);
+    if (kind === "note" && !note) return ownerJson({ error: "note text required" }, 400);
+    let until = null;
+    if (kind === "snooze") {
+      const days = Math.max(1, Math.min(90, Math.round(Number(b.days) || 0)));
+      if (!(Number(b.days) >= 1)) return ownerJson({ error: "days 1-90 required" }, 400);
+      until = new Date(Date.now() + days * DAY_MS).toISOString();
+    }
+    if (kind === "done" || kind === "dismiss") {
+      if (key.indexOf("ha:") !== 0) return ownerJson({ error: "only queue items can be marked " + kind + "; derived items clear when their source clears (snooze them instead)" }, 400);
+      const slug = key.slice(3);
+      const st = kind === "done" ? "resolved" : "dismissed";
+      const r = await env.AUDIT.prepare("UPDATE human_actions SET status=?1, resolved_at=datetime('now'), updated_at=datetime('now'), resolution=?2 WHERE slug=?3 AND status='open'").bind(st, "owner " + kind + " via dashboard" + (note ? ": " + note : ""), slug).run();
+      if (!(r.meta && r.meta.changes)) return ownerJson({ error: "no open queue item " + slug }, 404);
+    }
+    await env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note, until) VALUES (?1,?2,?3,?4)").bind(key, kind, note || null, until).run();
+    return ownerJson({ ok: true, key, kind, until });
+  }
+  if (path === "/api/owner/prompt") {
+    const text = String(b && b.text || "").trim();
+    const mode = String(b && b.mode || "");
+    if (text.length < 3 || text.length > 2e3) return ownerJson({ error: "prompt must be 3-2000 characters" }, 400);
+    if (mode !== "ask" && mode !== "task") return ownerJson({ error: "mode must be ask|task" }, 400);
+    const cap = Math.max(1, Math.min(200, parseInt(env.OWNER_PROMPTS_DAILY_CAP || OWNER_PROMPT_CAP_DEFAULT, 10) || OWNER_PROMPT_CAP_DEFAULT));
+    const today = new Date().toISOString().slice(0, 10);
+    const cnt = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM owner_prompts WHERE ts >= ?", [today]);
+    if (cnt.length && Number(cnt[0].n) >= cap) return ownerJson({ error: "daily prompt cap reached (" + cap + ")" }, 429);
+    const id = "op-" + Date.now().toString(36) + Math.random().toString(16).slice(2, 6);
+    if (mode === "task") {
+      const iid = "int-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+      const dup = await d1all(env.AUDIT, "SELECT id FROM intents WHERE desire = ? AND status NOT IN ('rejected','deduped') LIMIT 1", [text]);
+      const intentId = dup.length ? dup[0].id : iid;
+      if (!dup.length) await env.AUDIT.prepare("INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-dashboard','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind(iid, text, text.slice(0, 120), new Date().toISOString()).run();
+      await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status, intent_id) VALUES (?1,'task',?2,'queued',?3)").bind(id, text, intentId).run();
+      return ownerJson({ ok: true, id, status: "queued", intent_id: intentId, duplicate: !!dup.length });
+    }
+    await env.AUDIT.prepare("INSERT INTO owner_prompts (id, mode, prompt, status) VALUES (?1,'ask',?2,'running')").bind(id, text).run();
+    const st = await currentState(env, ctx, 5 * 6e4);
+    const v = await humanView(env, st, null);
+    const ans = await runAsk(env, text, v);
+    if (ans.ok) await env.AUDIT.prepare("UPDATE owner_prompts SET status='answered', response=?1, model=?2 WHERE id=?3").bind(ans.text, ans.model, id).run();
+    else await env.AUDIT.prepare("UPDATE owner_prompts SET status='failed', error=?1 WHERE id=?2").bind(ans.error, id).run();
+    return ownerJson({ ok: ans.ok, id, status: ans.ok ? "answered" : "failed", error: ans.error || null });
+  }
+  return ownerJson({ error: "not found" }, 404);
+}
+// Shown to anyone without the owner cookie once OWNER_TOKEN is set: no queue, no money, no decision detail.
+function lockedHtml() {
+  const o = [];
+  o.push('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fleet</title><style>');
+  o.push(":root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--mute:#5b6472;--line:#e2e5ea;--link:#0b5cd5;--act:#b42318}@media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--ink:#e8eaee;--mute:#9aa3b1;--line:#2a303a;--link:#7db1ff;--act:#ff8a80}}");
+  o.push("*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}main{max-width:420px;margin:12vh auto;padding:0 16px}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}h1{font-size:20px;margin:0 0 6px}p{color:var(--mute);margin:0 0 14px;font-size:14px}input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:16px}button{margin-top:10px;padding:10px 16px;border:0;border-radius:8px;background:var(--link);color:#fff;font-weight:600;font-size:15px;cursor:pointer}#e{color:var(--act);font-size:13px;margin-top:8px;min-height:18px}");
+  o.push('</style></head><body><main><div class="card"><h1>Fleet</h1><p>This dashboard is private. Enter the owner key to continue.</p><form id="f"><input id="k" type="password" autocomplete="current-password" placeholder="Owner key" autofocus><button>Sign in</button></form><div id="e"></div></div></main>');
+  o.push("<script>document.getElementById('f').addEventListener('submit',function(ev){ev.preventDefault();var e=document.getElementById('e');e.textContent='';fetch('/api/owner/login',{method:'POST',headers:{'Content-Type':'application/json','x-fleet-ui':'1'},body:JSON.stringify({token:document.getElementById('k').value})}).then(function(r){return r.json().then(function(j){return{r:r,j:j}})}).then(function(x){if(x.r.ok)location.reload();else e.textContent=x.j.error||'failed'}).catch(function(){e.textContent='network error'})})</script></body></html>");
   return o.join("");
 }
 export {
