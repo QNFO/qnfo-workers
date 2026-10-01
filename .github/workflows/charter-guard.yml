@@ -85,6 +85,14 @@ jobs:
           echo "$out" | grep -q "0 failed" \
             || { echo "::error::loop watchdog suite reported failures"; exit 1; }
 
+      - name: Replay the objective-revision applier offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/objective-revision.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "0 failed" \
+            || { echo "::error::objective-revision applier suite reported failures"; exit 1; }
+
       - name: Resolve the diff range
         id: range
         run: |

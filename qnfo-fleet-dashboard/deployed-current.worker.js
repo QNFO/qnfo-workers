@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.12.1-identity-sync"; /* IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.12.2-objective-apply-text"; /* IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -3160,7 +3160,7 @@ async function collectHumanActions(env) {
         const a = ageDaysOf(r.created_at);
         if (a != null && (oldest == null || a > oldest)) oldest = a;
       }
-      add({ key: "goals:objective-revision", source: "objectives", title: "Ratify or reject " + n + " proposed objective revision" + (n > 1 ? "s" : ""), why: "The fleet cannot change its own objectives; only you can ratify them.", fallback: "The current objectives stay in force.", action: "Decide each one on this card. A ratified change is recorded now; applying it to the objective function is tracked in OBJECTIVE-REVISION-APPLY-1.", url: "", due: "", age: oldest, detail: rows.map(function(r) {
+      add({ key: "goals:objective-revision", source: "objectives", title: "Ratify or reject " + n + " proposed objective revision" + (n > 1 ? "s" : ""), why: "The fleet cannot change its own objectives; only you can ratify them.", fallback: "The current objectives stay in force.", action: "Decide each one on this card. A ratified weight change whose weights still sum to 1 is applied to the objective function by qnfo-fleet-control within the hour (objectives.version bumps, the old formula stays on record); one that does not comes back here with the reason; anything that is not a weight change is marked ratified-manual for a hand-written statement.", url: "", due: "", age: oldest, detail: rows.map(function(r) {
         return { id: r.id, statement: String(r.statement || "").slice(0, 220), why: String(r.alignment || "").slice(0, 200) };
       }) });
     }

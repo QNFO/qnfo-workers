@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.74-loop-watch";
+var VERSION = "0.4.75-objective-apply";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3745,6 +3745,102 @@ async function loopWatch(env) {
   return { ok: true, ts: nowIso, healthy: findings.length === 0, findings: findings, filed: filed, closed: closed, charter_last: f.charter_last, portfolio_last: f.portfolio_last ? { ts: f.portfolio_last.ts, status: f.portfolio_last.status, note: f.portfolio_last.note } : null, first_seen: f.first_seen };
 }
 // ---- LOOP-WATCH-1:END ----
+
+// ---- OBJECTIVE-REVISION-APPLY-1:BEGIN (2026-10-01, agent_issues #1725) ----
+// The owner ratifies or rejects proposed objective revisions on the fleet dashboard (goals.goal_type =
+// 'objective-revision', status proposed -> ratified | rejected). Until now nothing applied a ratified
+// revision to qnfo-audit.objectives, so a Claude session edited the SAI weights by hand: a Claude
+// dependency (owner directive 2026-10-01: none). This block applies ratified WEIGHT changes
+// deterministically on the hourly tick. Rules: the statement must parse as one or more
+// "(Increase|Decrease) the weight of <dim> from X to Y" clauses; every "from" must equal the live weight;
+// the new weights must sum to 1.00; no two ratified revisions may touch the same weight. A revision that
+// fails a rule goes BACK to the owner (status proposed, the reason appended to alignment). A ratified
+// revision that is not a weight change (a new constraint, a re-evaluation) becomes ratified-manual:
+// decided, but it needs a hand-written objective statement. Every application bumps objectives.version,
+// records ratified_by / ratified_on, keeps the previous formula inside the statement, writes one
+// objective_revision_log row and marks the goal applied. The fleet never changes a weight on its own.
+var ORA_ALIAS = { "self-improv": "self_improv", "self_improvement": "self_improv", "self-improvement": "self_improv", "selfimprov": "self_improv", "external-impact": "external_impact", "externalimpact": "external_impact", "impact": "external_impact" };
+function oraDim(s) { var k = String(s || "").trim().toLowerCase().replace(/['"`]/g, "").replace(/\s+/g, "_"); return ORA_ALIAS[k] || k; }
+function oraRound(x) { return Math.round(x * 1000) / 1000; }
+function parseSaiWeights(statement) {
+  var m = /Maximize SAI\s*=\s*([^,;]+?)(?:\s*,|\s*;|\s+subject|$)/i.exec(String(statement || ""));
+  if (!m) return null;
+  var formula = m[1].trim(); var weights = {}; var order = []; var re = /(\d+(?:\.\d+)?)\s*\*\s*([a-z_]+)/gi; var t;
+  while ((t = re.exec(formula))) { var d = oraDim(t[2]); if (!(d in weights)) order.push(d); weights[d] = Number(t[1]); }
+  if (!order.length) return null;
+  return { formula: formula, weights: weights, order: order, sum: oraRound(order.reduce(function(s, d) { return s + weights[d]; }, 0)) };
+}
+function parseWeightRevision(statement) {
+  var s = String(statement || ""); var out = []; var m;
+  var re = /(increase|decrease|change|set|raise|lower)\s+the\s+weight\s+of\s+['"`]?([a-z][a-z_\- ]*?)['"`]?\s+from\s+(\d+(?:\.\d+)?)\s+to\s+(\d+(?:\.\d+)?)/gi;
+  while ((m = re.exec(s))) out.push({ dim: oraDim(m[2]), from: Number(m[3]), to: Number(m[4]), verb: m[1].toLowerCase() });
+  return out.length ? out : null;
+}
+function renderSaiStatement(statement, parsed, newWeights, note) {
+  var formula = parsed.order.map(function(d) { return newWeights[d].toFixed(2) + "*" + d; }).join(" + ");
+  return String(statement || "").replace(parsed.formula, formula) + " " + note + " Was: " + parsed.formula + ".";
+}
+function planObjectiveRevisions(objective, goals, today) {
+  var parsed = parseSaiWeights(objective && objective.statement);
+  var out = { decisions: [], applied: 0, refused: 0, manual: 0, weights: parsed ? Object.assign({}, parsed.weights) : null, parsed: parsed, statement: null, error: null };
+  if (!parsed) { out.error = "objective-function statement has no parseable 'Maximize SAI = ...' formula"; return out; }
+  var touched = {};
+  (goals || []).slice().sort(function(a, b) { return Number(a.id) - Number(b.id); }).forEach(function(g) {
+    var changes = parseWeightRevision(g.statement);
+    if (!changes) { out.manual++; out.decisions.push({ id: g.id, verdict: "manual", why: "not a weight change; needs a hand-written objective statement", changes: null }); return; }
+    var why = null; var trial = Object.assign({}, out.weights);
+    changes.forEach(function(c) {
+      if (why) return;
+      if (!(c.dim in trial)) why = "unknown dimension '" + c.dim + "' (known: " + parsed.order.join(", ") + ")";
+      else if (touched[c.dim]) why = "conflicts with ratified revision #" + touched[c.dim] + " on '" + c.dim + "'";
+      else if (Math.abs(trial[c.dim] - c.from) > 1e-9) why = "'" + c.dim + "' is " + trial[c.dim].toFixed(2) + " today, not " + c.from.toFixed(2) + " (stale proposal)";
+      else if (!(c.to >= 0 && c.to <= 1)) why = "'" + c.dim + "' -> " + c.to + " is outside 0..1";
+      else trial[c.dim] = c.to;
+    });
+    if (!why) { var sum = oraRound(parsed.order.reduce(function(s, d) { return s + trial[d]; }, 0)); if (Math.abs(sum - 1) > 0.001) why = "weights would sum to " + sum.toFixed(3) + ", not 1.000 (name the dimension that funds the change)"; }
+    if (why) { out.refused++; out.decisions.push({ id: g.id, verdict: "refused", why: why, changes: changes }); return; }
+    changes.forEach(function(c) { touched[c.dim] = g.id; });
+    out.weights = trial; out.applied++;
+    out.decisions.push({ id: g.id, verdict: "apply", why: null, changes: changes, weights: Object.assign({}, trial) });
+  });
+  if (out.applied) {
+    var ids = out.decisions.filter(function(d) { return d.verdict === "apply"; }).map(function(d) { return "#" + d.id; }).join(", ");
+    var sumAll = oraRound(parsed.order.reduce(function(s, d) { return s + out.weights[d]; }, 0));
+    out.statement = renderSaiStatement(objective.statement, parsed, out.weights, "RATIFIED " + today + " by the owner on the fleet dashboard (goals " + ids + "); applied by qnfo-fleet-control OBJECTIVE-REVISION-APPLY-1 (sum " + sumAll.toFixed(2) + ").");
+  }
+  return out;
+}
+function oraChangesText(changes) { return (changes || []).map(function(c) { return c.dim + " " + c.from.toFixed(2) + " -> " + c.to.toFixed(2); }).join(", "); }
+async function objectiveRevisionApply(env) {
+  var goals = await charterRows(env, "SELECT id, goal_key, statement FROM goals WHERE goal_type='objective-revision' AND status='ratified' ORDER BY id");
+  if (!goals.length) return { ratified: 0, applied: 0, refused: 0, manual: 0 };
+  var objective = await charterOne(env, "SELECT id, objective_key, statement, version FROM objectives WHERE objective_key='objective-function' AND status='ACTIVE' ORDER BY version DESC LIMIT 1");
+  var now = new Date().toISOString(); var today = now.slice(0, 10);
+  try { await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS objective_revision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, goal_id INTEGER, objective_key TEXT, from_version INTEGER, to_version INTEGER, verdict TEXT, why TEXT, changes_json TEXT, weights_json TEXT)").run(); } catch (e) {}
+  var plan = planObjectiveRevisions(objective, goals, today);
+  var fromV = objective ? Number(objective.version || 1) : null; var toV = fromV != null ? fromV + 1 : null;
+  var stmts = [];
+  goals.forEach(function(g) {
+    var d = plan.decisions.find(function(x) { return x.id === g.id; }) || { verdict: "refused", why: plan.error || "no decision", changes: null };
+    var ver = d.verdict, why = d.why;
+    if (plan.error && ver === "apply") { ver = "refused"; why = plan.error; }
+    if (ver === "apply") {
+      stmts.push(env.AUDIT.prepare("UPDATE goals SET status='applied', completed_at=?1, updated_at=?1, alignment=COALESCE(alignment,'') || ?2 WHERE id=?3 AND status='ratified'").bind(now, " | APPLIED " + today + " by qnfo-fleet-control OBJECTIVE-REVISION-APPLY-1: objectives.objective-function v" + fromV + " -> v" + toV + " (" + oraChangesText(d.changes) + ")", g.id));
+    } else if (ver === "manual") {
+      stmts.push(env.AUDIT.prepare("UPDATE goals SET status='ratified-manual', updated_at=?1, alignment=COALESCE(alignment,'') || ?2 WHERE id=?3 AND status='ratified'").bind(now, " | RATIFIED-MANUAL " + today + " (OBJECTIVE-REVISION-APPLY-1): " + why + "; the objective statement changes by a hand-written revision, not automatically", g.id));
+    } else {
+      stmts.push(env.AUDIT.prepare("UPDATE goals SET status='proposed', updated_at=?1, alignment=COALESCE(alignment,'') || ?2 WHERE id=?3 AND status='ratified'").bind(now, " | APPLY-REFUSED " + today + " (OBJECTIVE-REVISION-APPLY-1): " + why + "; back to you to decide again", g.id));
+    }
+    stmts.push(env.AUDIT.prepare("INSERT INTO objective_revision_log (ts, goal_id, objective_key, from_version, to_version, verdict, why, changes_json, weights_json) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)").bind(now, g.id, "objective-function", fromV, ver === "apply" ? toV : fromV, ver, why || null, d.changes ? JSON.stringify(d.changes) : null, ver === "apply" ? JSON.stringify(d.weights) : null));
+  });
+  if (plan.applied && objective && plan.statement) {
+    stmts.push(env.AUDIT.prepare("UPDATE objectives SET statement=?1, version=?2, ratified_by=?3, ratified_on=?4 WHERE id=?5 AND version=?6").bind(plan.statement, toV, "human (owner, fleet dashboard); applied by qnfo-fleet-control OBJECTIVE-REVISION-APPLY-1", today, objective.id, fromV));
+  }
+  try { await env.AUDIT.batch(stmts); } catch (e) { return { ratified: goals.length, error: String(e && e.message || e).slice(0, 200) }; }
+  return { ratified: goals.length, applied: plan.applied, refused: plan.refused, manual: plan.manual, version: plan.applied ? toV : fromV, weights: plan.applied ? plan.weights : void 0 };
+}
+__name(objectiveRevisionApply, "objectiveRevisionApply");
+// ---- OBJECTIVE-REVISION-APPLY-1:END ----
 var worker_default2 = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -3869,6 +3965,7 @@ var worker_default2 = {
     ctx.waitUntil(aiAttributionCoverage(env).catch((e) => console.error("aiAttributionCoverage error:", e && e.message || e)));
     ctx.waitUntil(portfolioSyncIfStale(env).catch((e) => console.error("portfolioSync error:", e && e.message || e)));
     ctx.waitUntil(loopWatch(env).catch((e) => console.error("loopWatch error:", e && e.message || e)));
+    ctx.waitUntil(objectiveRevisionApply(env).then((r) => { if (r && r.ratified) console.log("objectiveRevisionApply", JSON.stringify(r)); }).catch((e) => console.error("objectiveRevisionApply error:", e && e.message || e)));
     ctx.waitUntil(remediationContractsTick(env).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
