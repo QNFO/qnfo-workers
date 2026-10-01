@@ -5,6 +5,11 @@
   "_timestamp_formats": "Audit timestamps are NOT uniform. Most are ISO-8601 with a literal 'T' (device_tasks, fleet_agents, report_card_inputs, venue_radar_runs, events_radar, conference_radar, social_engagements) and are normalised with replace(substr(col,1,19),'T',' '). paper_explain_log and publications use a space separator, for which the same expression is a harmless no-op. proof_events.ts is epoch-MILLISECONDS and must be divided by 1000 and read as 'unixepoch'. Getting this wrong yields a 1970 comparison that silently mis-grades the probe.",
   "_transport_limit": "The consumer's d1() resolves a single database (REMEDIATION_DB, default qnfo-audit). A probe therefore CANNOT reference another bound database. Issues whose only evidence lives in personal / outreach / living / graph / portfolio / cms / ipatent are unmappable here and stay 'needs-machine-probe' until a cross-database transport exists.",
   "probes": {
+    "1727": {
+      "probe": "SELECT '1' AS expected, CAST(MIN(1, COUNT(*)) AS TEXT) AS observed FROM charter_snapshots WHERE commit_note LIKE '%mirrored' AND julianday('now') - julianday(ts) < 2",
+      "transport": "d1-query",
+      "claim": "the charter mirror wrote to Cloudflare storage within the last 2 days"
+    },
     "1654": {"probe": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM signals WHERE status='new'", "transport": "d1-query", "claim": "no signals stuck in status=new"},
     "1629": {"probe": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM guard_registry WHERE verified_at IS NULL", "transport": "d1-query", "claim": "every registered guard has been verified"},
     "1619": {"probe": "SELECT '0' AS expected, CAST(COUNT(*) AS TEXT) AS observed FROM v_sla_breaches", "transport": "d1-query", "claim": "no open SLA breaches"},
