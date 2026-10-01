@@ -12,7 +12,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags). AI: env.AI.
 
-var VERSION = "0.7.22-profile-owner-wins";
+var VERSION = "0.7.23-owner-delegation";
 // LINKEDIN-BUFFER-DRAFTS-1 (2026-10-01, agent_issues #1713, docs/STRATEGY.md s4-s5): LinkedIn's API Terms 3.1 forbid
 // automated posting, so the LinkedIn channel never receives a shareNow post. bufferPost saves it as a Buffer DRAFT
 // (saveToDraft: true) that the owner approves with one tap in Buffer; Mastodon and X keep posting automatically inside
@@ -247,7 +247,11 @@ async function session(env) {
 // 1 Oct, between the audit (10:17Z) and the first deploy, the bio was rewritten by hand outside the fleet; a bio the fleet
 // does not recognise is the owner's edit and is left alone ({ held }) until the owner chooses.
 var PROFILE_DESCRIPTION = "I build open, auditable AI-assisted research (QNFO). Asking what a correct computation costs in energy. Formerly FHWA and AARP. Some posts are drafted by my research pipeline. qnfo.org";
-var PROFILE_SUPERSEDED_PREFIXES = ["Philosopher-scientist, AI-focused tech entrepreneur"];
+// OWNER-DELEGATION-SOCIAL-1 (2026-10-01): the owner directed "automatically manage all my social media accounts ... I will not
+// provide any manual action or intervention", which decides human_actions bluesky-bio-choice by delegation: the bio
+// hand-edited earlier that day is superseded by the approved systems-first short bio (its text is kept in the
+// resolution). A bio edited later and not listed here is still left alone.
+var PROFILE_SUPERSEDED_PREFIXES = ["Philosopher-scientist, AI-focused tech entrepreneur", "Founder of QNFO: independent open-science research on quantum computing architectures"];
 function profileReplaceable(desc) {
   const d = String(desc || '').trim();
   return d === '' || PROFILE_SUPERSEDED_PREFIXES.some((p) => d.startsWith(p));

@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.47-capability-contract";
+var VERSION = "0.9.48-capability-contract";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2790,6 +2790,40 @@ async function drainMetadataEdits(env, limit) {
   }
   return out;
 }
+// METADATA-BACKFILL-VERIFY-1 (2026-10-01, CLOUD-ONLY-VERIFICATION-1): the backfill's open agent_issues row
+// ('ZENODO-METADATA-EDITS-1 backfill...') closes itself instead of waiting for a session. Once no metadata row is pending
+// or publishing, it re-reads up to 20 random published/unchanged records on the PUBLIC records API and checks that the
+// ORCID-matched creator carries the patch's name and affiliation. All pass and no error rows: the issue is closed with
+// that measurement as close_evidence. Otherwise it stays open and the counts are logged (at most hourly).
+var BACKFILL_ISSUE_PREFIX = "ZENODO-METADATA-EDITS-1 backfill";
+async function verifyMetadataBackfill(env, fetchImpl) {
+  var f = fetchImpl || fetch;
+  var db = env.QNFO_AUDIT;
+  if (!db) return null;
+  var iss = await db.prepare("SELECT id FROM agent_issues WHERE status='open' AND title LIKE ? ORDER BY id ASC LIMIT 1").bind(BACKFILL_ISSUE_PREFIX + "%").first();
+  if (!iss) return null;
+  var c = await db.prepare("SELECT SUM(status IN ('pending','publishing')) AS busy, SUM(status='error') AS err, SUM(status='published') AS pub, SUM(status='unchanged') AS unch, COUNT(*) AS n FROM zenodo_version_requests WHERE kind='metadata'").first();
+  if (!c || !Number(c.n) || Number(c.busy)) return { issue: iss.id, waiting: Number(c && c.busy || 0) };
+  var rs = await db.prepare("SELECT record_id, metadata_json FROM zenodo_version_requests WHERE kind='metadata' AND status IN ('published','unchanged') ORDER BY random() LIMIT 20").all();
+  var sample = (rs && rs.results) || [], pass = 0, fails = [];
+  for (var i = 0; i < sample.length; i++) {
+    var s = sample[i], ok = false;
+    try {
+      var want = JSON.parse(s.metadata_json || "{}").creator_by_orcid || {};
+      var r = await f("https://zenodo.org/api/records/" + Number(s.record_id), { headers: { "User-Agent": "qnfo-research-exec/" + VERSION } });
+      var j = r && r.ok ? await r.json() : null;
+      var cr = ((j && j.metadata && j.metadata.creators) || []).filter(function(x) { return String(x.orcid || "").replace(/^https?:\/\/orcid\.org\//, "") === want.orcid; })[0];
+      ok = !!cr && (typeof want.affiliation !== "string" || cr.affiliation === want.affiliation) && (typeof want.name !== "string" || cr.name === want.name);
+    } catch (e) { ok = false; }
+    if (ok) pass++; else fails.push(Number(s.record_id));
+  }
+  var summary = "rows=" + c.n + " published=" + (c.pub || 0) + " unchanged=" + (c.unch || 0) + " error=" + (c.err || 0) + "; public re-read " + pass + "/" + sample.length + " carry the patched creator" + (fails.length ? " (failed: " + fails.slice(0, 10).join(",") + ")" : "");
+  if (Number(c.err) || fails.length || !sample.length) return { issue: iss.id, closed: false, summary: summary };
+  var ev = "METADATA-BACKFILL-VERIFY-1 " + new Date().toISOString() + ": " + summary;
+  await db.prepare("UPDATE agent_issues SET status='closed', updated_at=? WHERE id=? AND status='open'").bind(Date.now(), iss.id).run();
+  await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'METADATA-BACKFILL-VERIFY-1', 'closed', 'qnfo-research-exec', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(iss.id, ev).run();
+  return { issue: iss.id, closed: true, summary: summary };
+}
 async function drainVersionRequests(env) {
   if (!env.ZENODO_TOKEN || !env.QNFO_AUDIT) return null;
   var row = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE kind='version' AND status='pending' ORDER BY id ASC LIMIT 1").first();
@@ -2870,6 +2904,10 @@ var worker_default = {
       try {
         var me = await drainMetadataEdits(env);
         if (me.length) await logEvent(env, "zenodo-metadata", JSON.stringify(me).slice(0, 700), me.some(function(x) { return x.status === "error"; }) ? "error" : "ok");
+        else if (new Date().getUTCMinutes() < 15) {
+          var bv = await verifyMetadataBackfill(env);
+          if (bv && bv.summary) await logEvent(env, "zenodo-metadata-verify", "issue " + bv.issue + (bv.closed ? " closed: " : " open: ") + bv.summary, bv.closed ? "ok" : "error");
+        }
       } catch (e) {
         await logEvent(env, "error", "drainMetadataEdits threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
@@ -2909,6 +2947,7 @@ export {
   drainVersionRequests,
   markError,
   parkPoisonRow,
-  reclaimStaleResearching
+  reclaimStaleResearching,
+  verifyMetadataBackfill
 };
 //# sourceMappingURL=worker.js.map
