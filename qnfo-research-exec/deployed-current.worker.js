@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.28-queue-antistarvation";
+var VERSION = "0.9.29-gw-auth-drift";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -1496,6 +1496,7 @@ __name2222(aiText, "aiText");
 // gw-ok and closes the breaker.
 var GW_BREAKER_PROBE_MS = 3 * 60 * 60 * 1e3;
 var GW_BREAKER_KINDS = ["gw-canned", "gw-error", "gw-fallback", "gw-ok"];
+var _authDriftLogged = false;
 var _gwBreaker = null;
 var _gwBreakerLoad = null;
 async function gwBreakerOpen(env) {
@@ -1539,6 +1540,13 @@ async function gwCall(env, prompt, maxTokens) {
         _eb = "(body unreadable)";
       }
       gwBreakerTrip(false);
+      // ROUTER-KEY-ROTATION-CALLER-DRIFT-1 (#1703): a 401/403 means ROUTER_TOKEN is a stale copy of
+      // the qnfo-ai key. Self-report it as its own event kind (once per isolate) instead of
+      // flooding gw-fallback; no secret is read or logged. Fail-soft to Workers AI as before.
+      if ((r.status === 401 || r.status === 403) && !_authDriftLogged) {
+        _authDriftLogged = true;
+        await logEvent(env, "gw-auth-drift", "qnfo-ai rejected ROUTER_TOKEN (HTTP " + r.status + "); caller key is stale vs qnfo-ai ROUTER_AUTH_KEY; degraded to Workers AI", "warn");
+      }
       await logEvent(env, "gw-fallback", "gateway HTTP " + r.status + " host=" + _lastRouterHost + " body=" + _eb + "; falling back to Workers AI", "warn");
       return await aiText(env, MODELS[0], prompt, maxTokens);
     }
