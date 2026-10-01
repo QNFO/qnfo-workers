@@ -11,7 +11,7 @@
 //   >=6h run backoff; per-venue audit rows; self-doc /health; manual trigger /?run=1.
 // DEPLOY: cd qnfo-workers/qnfo-venue-radar && wrangler d1 execute qnfo-audit --remote --file=migrations/001_venue_radar.sql && wrangler deploy
 // CANONICAL SOURCE: github.com/QNFO/qnfo-workers -> qnfo-workers/qnfo-venue-radar/worker.js
-const VERSION = "1.0.4";
+var VERSION = "1.0.4";
 const WORKER = "qnfo-venue-radar";
 
 // QNFO research keyword buckets (extends LESSWRONG-INTEGRATION.md section 6 + events-radar DOMAINS)
