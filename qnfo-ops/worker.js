@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.28-intake-idempotent";
+var VERSION = "2.38.30-secret-lock-budget-checkpoint-intake";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -241,6 +241,37 @@ async function opsSurfacePromoted(env) {
   }
 }
 __name(opsSurfacePromoted, "opsSurfacePromoted");
+// OPS-AGENT-TOOL-BUDGET-INCOMPLETE-1 (#1680) smallest step: when a turn exhausts its tool budget and was NOT handed
+// to a durable job (opsBudgetPromote declined: <3 tools, daily cap, no queue, client tools, other source), persist a
+// checkpoint (what was done, what remains) to cloud_ops_events with status 'resumable' instead of silently ending.
+// opsSurfaceCheckpoints() shows it at the start of the owner's next turn and marks it 'resumed' so work continues.
+function opsCheckpointSummary(prompt, toolLog, iter, deadlineHit) {
+  const done = (toolLog || []).filter(function(t) { return t && t.name && t.name !== "(budget-exhausted)"; }).slice(0, 40).map(function(t) { return String(t.name).slice(0, 60); });
+  return { prompt: String(prompt || "").slice(0, 1200), done: done, tools_run: done.length, remaining: "Original request above was not completed: the turn hit its " + (deadlineHit ? "wall-clock deadline" : "round cap") + " at round " + iter + ". Continue from the completed tool calls; do not repeat them.", iter: iter, deadlineHit: !!deadlineHit, version: VERSION };
+}
+__name(opsCheckpointSummary, "opsCheckpointSummary");
+async function opsBudgetCheckpoint(env, prompt, toolLog, iter, deadlineHit) {
+  try {
+    if (!env.QNFO_AUDIT) return null;
+    const id = randId("evt-");
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ops_budget_checkpoint', ?3, ?4, 'qnfo-ops', 'resumable')").bind(id, iso(), String(prompt || "").slice(0, 200), JSON.stringify(opsCheckpointSummary(prompt, toolLog, iter, deadlineHit)).slice(0, 4000)).run();
+    return id;
+  } catch (e) { return null; }
+}
+__name(opsBudgetCheckpoint, "opsBudgetCheckpoint");
+async function opsSurfaceCheckpoints(env) {
+  try {
+    if (!env.QNFO_AUDIT) return "";
+    const since = new Date(Date.now() - 72 * 3600e3).toISOString();
+    const rs = await env.QNFO_AUDIT.prepare("SELECT id, ts, meta FROM cloud_ops_events WHERE kind = 'ops_budget_checkpoint' AND status = 'resumable' AND ts >= ?1 ORDER BY ts ASC LIMIT 3").bind(since).all();
+    const rows = rs && rs.results || [];
+    if (!rows.length) return "";
+    const ids = rows.map(function(r) { return r.id; });
+    await env.QNFO_AUDIT.prepare("UPDATE cloud_ops_events SET status = 'resumed' WHERE id IN (" + ids.map(function(_, i) { return "?" + (i + 1); }).join(",") + ")").bind(...ids).run();
+    return "RESUMABLE TASKS (OPS-AGENT-TOOL-BUDGET-INCOMPLETE-1): earlier turn(s) ran out of tool budget before finishing. If the owner's new message does not supersede them, continue the unfinished work first using the checkpoint(s) below (tools already run are listed; do not repeat them).\n\n" + rows.map(function(r) { return "[" + r.id + " | " + r.ts + "] " + String(r.meta || "").slice(0, 2000); }).join("\n\n---\n\n");
+  } catch (e) { return ""; }
+}
+__name(opsSurfaceCheckpoints, "opsSurfaceCheckpoints");
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
 var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
 var CONTINUE_DIRECTIVE = "You ended your turn with a PROGRESS REPORT and a promise of future work instead of a finished deliverable. That is a contract violation. Do the promised work NOW in this same turn: call the next tool(s) immediately and keep going until the task is fully complete. Do NOT narrate what you are about to do. Only end your turn when you are delivering the final completed result (or an explicit 'INCOMPLETE: <what remains and why>' line when genuinely blocked).";
@@ -4708,6 +4739,8 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   if (!clientTools && !execUpstream && (source === "mobile" || source === "deepchat")) {
     const _bg = await opsSurfacePromoted(env);
     if (_bg) work.splice(1, 0, { role: "system", content: _bg });
+    const _ck = await opsSurfaceCheckpoints(env);
+    if (_ck) work.splice(1, 0, { role: "system", content: _ck });
   }
   let promotedJobId = null;
   let promoteNoteStreamed = false;
@@ -4982,6 +5015,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
               work.push({ role: "system", content: BUDGET_PROMOTED_DIRECTIVE.replace(/\{job\}/g, _pj.id) });
             }
           }
+          if (_firstBail && !promotedJobId) await opsBudgetCheckpoint(env, lastUserText(messages), toolLog, iter, deadlineHit);
         }
         const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: _t2Blocked };
         let _r1 = null;
@@ -6030,6 +6064,28 @@ async function opsDeploy(env, args) {
     }
     log.push({ step: "lock", http: lr.status, body: String(_lt).slice(0, 220), acquired: !!lock.acquired });
     if (!lock.acquired) return { ok: false, error: "lock not acquired (fail-closed)", lock, log };
+    // CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (#1701): the deploy PUT rewrites bindings, so also hold the
+    // secrets:<worker> lease (deploy-guard /secret-lock/*), fail-closed, released in the finally below.
+    let sLock = null;
+    let sDenied = false;
+    try {
+      const slr = await dg(DG + "/secret-lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, owner: "qnfo-ops/ops-deploy", ttl_sec: 900 }) });
+      const _slt = await slr.text();
+      try { sLock = JSON.parse(_slt); } catch (_e2) { sLock = {}; }
+      sDenied = !!(sLock && sLock.acquired === false && (slr.status === 200 || slr.status === 409 || slr.status === 423));
+      log.push({ step: "secret-lock", http: slr.status, acquired: !!(sLock && sLock.acquired), denied: sDenied });
+    } catch (_e3) {
+      sLock = { acquired: false, error: String(_e3 && _e3.message || _e3).slice(0, 120) };
+    }
+    if (sDenied) {
+      try { await dg(DG + "/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: lock.token }) }); } catch (_e4) {}
+      return { ok: false, error: "secret-lock DENIED (another holder has secrets:" + worker + ")", secret_lock: sLock, log };
+    }
+    if (!sLock || !sLock.acquired || !sLock.token) {
+      // lock SERVICE unavailable (unreachable / non-JSON / error): degrade, never brick the deploy route
+      log.push({ step: "secret-lock", unavailable: true, note: "proceeding without a secrets lease" });
+      sLock = null;
+    }
     let ok = false;
     let result = null;
     try {
@@ -6151,6 +6207,10 @@ async function opsDeploy(env, args) {
     } finally {
       try {
         await dg(DG + "/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, actor: "qnfo-ops/ops-deploy", from: fromVer, to: toVer, ok, note: "server-side deploy (opsDeploy route)" }) });
+      } catch (e) {
+      }
+      try {
+        if (sLock && sLock.token) await dg(DG + "/secret-lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: sLock.token }) });
       } catch (e) {
       }
       try {
