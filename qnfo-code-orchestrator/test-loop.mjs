@@ -285,7 +285,7 @@ function fakeLoader(spinMs) {
   const { env } = envWith([]);
   const r = await worker.fetch(new Request("https://x/health"), env);
   const h = await r.json();
-  check("/health reports 0.2.2 + task-loop + the ladder + js_verify off by default", h.version === "0.2.2" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
+  check("/health reports 0.2.3 + task-loop + the ladder + js_verify off by default", h.version === "0.2.3" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
 }
 
 // ===== 12. scheduled() drives the loop with no HTTP request =====
@@ -328,6 +328,16 @@ function fakeLoader(spinMs) {
   check("pull mode: patch for a file without trailing newline applies", row.status === "ready_to_publish" && ap.status === 0, { st: row.status, err: ap.stderr });
 }
 
+// ---- NEWLINE-PRESERVE-1: a proposal that drops the base file's final newline gets it back ----
+{
+  globalThis.fetch = async (url) => new Response("hello\nworld\n", { status: 200 });
+  const { env } = envWith(["```file\nhello\nworld\nmore\n```"], { PR_PUBLISH_MODE: "pull", CODE_AGENT_KEY: undefined });
+  const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "docs/x.md", goal: "append a line" });
+  await call(env, "POST", "/v1/tick", {});
+  const row = await env.AUDIT_DB.prepare("SELECT status, ctx FROM code_tasks WHERE id=?").bind(enq.body.id).first();
+  const prop = row && row.ctx ? JSON.parse(row.ctx).proposal : null;
+  check("newline preserved: proposal ends with the base file's newline", row.status === "ready_to_publish" && prop === "hello\nworld\nmore\n", { st: row.status, prop });
+}
 // ---- KEYLESS-READ-1: with no CODE_AGENT_KEY the read step uses the public raw endpoint ----
 {
   const seen = [];

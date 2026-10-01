@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.2.2";
+var VERSION = "0.2.3";
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -347,7 +347,9 @@ async function stepTask(env, task) {
       const l = ladder(env);
       const model = l[Math.min(task.attempts, l.length - 1)];
       const txt = await ai(env, model, promptFor(task, ctx.base || "", ctx.lastError || null));
-      const file = extractFile(txt);
+      let file = extractFile(txt);
+      // NEWLINE-PRESERVE-1: a fenced block drops the final newline; keep the base file's convention (the smoke PR #297 lost it).
+      if (file != null && ctx.base && ctx.base.charAt(ctx.base.length - 1) === "\n" && file.length && file.charAt(file.length - 1) !== "\n") file += "\n";
       if (file == null) return await fail("model " + model + " returned no ```file block", false);
       if (file === ctx.base) return await fail("model " + model + " proposed no change", true);
       ctx.proposal = file;
