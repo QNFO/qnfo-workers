@@ -213,7 +213,7 @@ eq(planM.filter((a) => a.action !== "description-revise").length, P.PF_HYGIENE_M
 
 // --- HYGIENE-SCOPE-1 ----------------------------------------------------------
 const scopeRepos = [
-  { name: "pub-clean", description: "d", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" },
+  { name: "qnfo-ops", description: "d", visibility: "public", archived: false, fork: false, pushed_at: NOW, topics: ["a"], license: "MIT" },
   { name: "priv-dirty", description: "", visibility: "private", private: true, archived: false, fork: false, pushed_at: "2025-01-01T00:00:00Z", topics: [], license: null }
 ];
 const evS = P.pfEvaluate(scopeRepos, [], NOW);
