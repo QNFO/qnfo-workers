@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.65-retired-present";
+var VERSION = "0.4.66-byok-billing-split";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3342,7 +3342,7 @@ async function refreshOwnedMetrics(env) {
       var parts = Object.keys(byProv).sort(function (a, b) { return byProv[b] - byProv[a]; }).map(function (k) { return k + " $" + byProv[k].toFixed(2); }).join(", ");
       await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='cost_usd_30d'").bind(total.toFixed(2), nowIso, "LIST-COST ESTIMATE (not billed): unified 30d AI spend, all providers incl. BYOK = SUM(aiGatewayRequestsAdaptiveGroups.sum.cost, provider<>workers-ai) + workers_ai_cost_30d_usd (UNIFIED-AI-SPEND-1, qnfo-fleet-control hourly)", "CF GraphQL aiGatewayRequestsAdaptiveGroups + aiInferenceAdaptiveGroups: " + parts.slice(0, 400)).run();
       out.written.push("cost_usd_30d=" + total.toFixed(2) + " (" + parts.slice(0, 160) + ")");
-      var byBill = aiSpendByBilling(grows);
+      var byBill = aiSpendByBilling(grows, env);
       out.aiSpend = { total: Number(total.toFixed(2)), byProvider: byProv, byBilling: byBill, alerts: await aiSpendCaps(db, byProv, total, byBill) };
       // METRIC-TRIGGER-LOOP-1 (#1634): the analytics trigger inputs had no writer since a one-off audit on
       // 2026-09-26. Keep the cost keys fresh from the same measurement.
@@ -3382,18 +3382,26 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 __name(aiRunAttr, "aiRunAttr");
-// BUDGET-OVER-METRIC-DEFINITION-1 (#1699): billing-mode split. Unified-billing traffic arrives as provider
-// compat/unknown/universal (real provider = model prefix); every other named provider row is BYOK (billed by the provider,
-// not against the gateway credit). Workers AI is neuron-billed and excluded. The monthly cap meters unified only.
-function aiSpendByBilling(rows) {
+// BUDGET-OVER-METRIC-DEFINITION-1 (#1699): billing-mode split. Workers AI is neuron-billed and excluded; the monthly
+// gateway cap meters unified billing only.
+// BYOK-BILLING-SPLIT-1 (2026-10-01): the first version classified unified billing as provider compat/unknown/universal,
+// which measurement falsified: GraphQL reports compat-endpoint traffic under its REAL provider, so ai_spend:total read
+// $0 while openai/gpt-5.5 (called through /compat with cf-aig-authorization and no stored OpenAI key) was billed
+// against the gateway credit. The per-request byok flag in the gateway logs is the ground truth (cf-ops-actions
+// gateway-logs 2026-10-01: deepseek rows byok="default", openai/gpt-5.5 rows byok=None). Providers with a stored
+// gateway key are therefore BYOK and everything else is unified. The set is env-overridable (AIG_BYOK_PROVIDERS,
+// comma list) for when a key is added or removed.
+function aiSpendByBilling(rows, env) {
   var o = { unified: 0, byok: 0 };
+  var byokSet = {};
+  String(env && env.AIG_BYOK_PROVIDERS || "deepseek").split(",").forEach(function (p) { p = p.trim().toLowerCase(); if (p) byokSet[p] = 1; });
   (rows || []).forEach(function (r) {
     var d = r && r.dimensions || {};
     var prov = String(d.provider || "unknown").toLowerCase();
     if (prov === "workers-ai" || prov === "workers_ai") return;
     var c = r && r.sum && Number(r.sum.cost) || 0;
     if (!(c > 0)) return;
-    if (prov === "compat" || prov === "unknown" || prov === "universal") o.unified += c; else o.byok += c;
+    if (byokSet[prov]) o.byok += c; else o.unified += c;
   });
   return o;
 }
