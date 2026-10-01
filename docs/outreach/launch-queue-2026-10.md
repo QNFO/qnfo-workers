@@ -1,7 +1,9 @@
 # Launch queue, October 2026 (STRATEGY-1)
 
 Ready-to-approve posts for the selected works (docs/STRATEGY.md s2.4). LinkedIn posts go to Buffer as drafts and are published
-only after the owner's one-tap approval (LinkedIn API Terms 3.1). Bluesky versions post automatically inside the s5 gates.
+only after the owner's one-tap approval (LinkedIn API Terms 3.1). Bluesky versions post automatically inside the s5 gates
+once the owner has approved the voice (Identity doc tracker item 1; "approve once, then automatic"). Cadence is 1-2 posts a
+week. Every post carries the claim, the test and the status (Identity doc rule).
 Every claim below is taken from the work's own abstract; nothing names a company. One link per post, UTM-tagged with a
 short campaign code: jps-metric = joules-per-solution-metric, qec-landauer = jpcub-qec-landauer, jpcub-17 =
 jpcub-competitive-landscape, fleet-lessons = quniverse-fleet-lessons (entity_map, s6.2).
@@ -27,11 +29,17 @@ Schedule (Europe/Amsterdam, Tue/Thu mornings, then the bandit in s6.4 takes over
 >
 > If you measure energy on any platform, quantum or classical, I would value your critique, and your numbers.
 >
+> Claim: Joules per solution is the first cross-domain energy benchmark: total system energy per correct answer.
+> Test: A survey of 14 existing benchmarks; a five-phase protocol with anti-gaming rules.
+> Status: proposed standard; preprint, not peer reviewed.
+>
 > https://papers.qnfo.org/papers/joules-per-solution-metric?utm_source=linkedin&utm_medium=social&utm_campaign=jps-metric
 
 **Bluesky (under 300 characters)**
 
-> What does a correct answer cost? Joules per solution: total system energy per correct answer, with anti-gaming rules. None of 14 existing benchmarks compares across domains.
+> Claim: one energy benchmark across domains: joules per correct answer.
+> Test: 14 benchmarks surveyed; a protocol with anti-gaming rules.
+> Status: proposed standard; preprint.
 > https://papers.qnfo.org/papers/joules-per-solution-metric?utm_source=bluesky&utm_medium=social&utm_campaign=jps-metric
 
 Source: abstract of 10.5281/zenodo.21637028.
@@ -52,11 +60,17 @@ Source: abstract of 10.5281/zenodo.21637028.
 > clustered channel, at the cost of more residual errors; and the floor is an architecture choice, because autonomous
 > (dissipative) correction sits outside the claim.
 >
+> Claim: Measurement-based QEC has a Landauer floor of (n-k)/k x kT ln 2 per logical qubit per round.
+> Test: Scaling computed across code families; nested vs flat codes on a clustered channel.
+> Status: preprint, not peer reviewed.
+>
 > https://papers.qnfo.org/papers/jpcub-qec-landauer?utm_source=linkedin&utm_medium=social&utm_campaign=qec-landauer
 
 **Bluesky**
 
-> Measurement-based QEC erases bits each round, so Landauer sets a floor: (n-k)/k x kT ln 2 per logical qubit per round. Autonomous correction is outside the claim.
+> Claim: measurement-based QEC has a Landauer floor, (n-k)/k x kT ln 2 per logical qubit per round.
+> Test: scaling computed across code families.
+> Status: preprint, not peer reviewed.
 > https://papers.qnfo.org/papers/jpcub-qec-landauer?utm_source=bluesky&utm_medium=social&utm_campaign=qec-landauer
 
 Source: abstract of 10.5281/zenodo.22261547.
@@ -80,11 +94,17 @@ Source: abstract of 10.5281/zenodo.22261547.
 >
 > Measured numbers would beat my estimates. If you have them, I would like to compare.
 >
+> Claim: Gate speed, not cooling, dominates energy per correct answer across 17 quantum platforms.
+> Test: One system-level power model applied to published specifications.
+> Status: estimates, not measurements; preprint.
+>
 > https://papers.qnfo.org/papers/jpcub-competitive-landscape?utm_source=linkedin&utm_medium=social&utm_campaign=jpcub-17
 
 **Bluesky**
 
-> Energy per correct answer for 17 quantum platforms, estimated from published specs: gate speed, not cooling, dominates. Estimates, not measurements; data welcome.
+> Claim: gate speed, not cooling, dominates energy per correct answer.
+> Test: one power model over 17 platforms' published specs.
+> Status: estimates, not measurements.
 > https://papers.qnfo.org/papers/jpcub-competitive-landscape?utm_source=bluesky&utm_medium=social&utm_campaign=jpcub-17
 
 Source: abstract of 10.5281/zenodo.21821767.
@@ -107,11 +127,17 @@ Source: abstract of 10.5281/zenodo.21821767.
 >
 > If you run agents in production, the failure ledger is the part worth reading.
 >
+> Claim: Encoding every observed failure as an enforceable gate is what keeps an autonomous research system running.
+> Test: About a year of operating logs from the system itself.
+> Status: experience report; autonomy 3.6/5 on its own scoring.
+>
 > https://papers.qnfo.org/papers/quniverse-fleet-lessons?utm_source=linkedin&utm_medium=social&utm_campaign=fleet-lessons
 
 **Bluesky**
 
-> A year of an autonomous agent running my research system: every observed failure became an enforceable gate; autonomy 3.6/5 on its own scoring. The failure ledger:
+> Claim: turning each observed failure into an enforceable gate keeps an autonomous research system going.
+> Test: a year of the system's operating logs.
+> Status: experience report.
 > https://papers.qnfo.org/papers/quniverse-fleet-lessons?utm_source=bluesky&utm_medium=social&utm_campaign=fleet-lessons
 
 Source: abstract of 10.5281/zenodo.23079905.

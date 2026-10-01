@@ -41,21 +41,27 @@ measurement loop**.
 | Tool | **ipatent** (ipatent.qnfo.org) | free experimental patent-drafting assistant | not promoted; `ipatent.me` has no DNS and is not cited |
 
 ### 2.2 Positioning
-**One line:** Rowan Brad Quni-Gudzinas builds honest yardsticks for computation: what a correct answer costs in energy, what
-an AI-assisted claim is worth, and what autonomous AI research actually delivers.
+**Canonical profile copy lives in the owner's Identity doc**, not here:
+[Rowan Brad Quni-Gudzinas: Identity, Brand and Opportunities](https://claude.ai/code/artifact/553e4316-5725-4601-bf41-e5fd7102c96b)
+(sections "Your brand", "Profile copy, ready to paste", "Updated CV"). It is the owner's approval surface (tracker item 1,
+due 2026-10-07) and the owner's edits win. This file keeps only what the fleet needs, and must not drift from it.
 
-**Headline (LinkedIn / Bluesky, under 220 characters):**
-> Independent researcher building honest yardsticks for computation: energy per correct answer (JPCUB), ignorance audits for AI-assisted science, and lessons from running an autonomous AI research system. QNFO.
+**Person-level identity (from the Identity doc, pending owner approval):** a builder of trustworthy research systems:
+15+ years turning national data into public decisions (U.S. Federal Highway Administration; AARP Public Policy Institute,
+Livability Index), now building open, auditable AI-assisted research at QNFO. That verifiable career record is the
+credibility anchor; the research sits under it, not on top.
+> Headline: Research systems builder · Founder, QNFO: open, auditable AI-assisted research · 15 years of national data and policy research (FHWA, AARP Livability Index)
 
-**Short bio (50 words):**
-> Rowan Brad Quni-Gudzinas is an independent researcher and the author behind QNFO. The work asks what computation really
-> costs and delivers: the JPCUB joules-per-correct-answer benchmark for quantum and classical systems, ignorance audits for
-> AI-assisted science, and a public failure ledger from operating an autonomous cloud research system. ORCID 0009-0002-4317-5604.
+**Research line (what the work asks):** what computation really costs and delivers: energy per correct answer (JPCUB),
+what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers.
 
-**Long bio (about 130 words):** short bio, plus: twenty years of software and systems engineering; the work is open
-(Zenodo DOIs, CC licences) and produced with an AI-assisted pipeline that the author designs, audits and is accountable for;
-the current focus is turning JPCUB into a shared, measurable standard and inviting groups to contribute measurements.
-(Bios are written without pronouns on purpose; the owner adds them if wanted.)
+**Names:** one name everywhere, Rowan Brad Quni-Gudzinas; earlier work appears as Brad Gudzinas / Bradley Gudzinas and
+some profiles as Rowan Quni, so those go in "also known as" fields wherever a platform allows (that is what links the FHWA
+and AARP record to the same person). Affiliation string everywhere: `QNFO (independent research)`.
+
+**Claims we never make** (a background check fails on them; Identity doc "What to stop signalling"): patents without
+application numbers, "clearance-eligible", unlinked media features, shifting publication counts, physics headlines such as
+"thermodynamic dead end". Fleet size is stated as deployed workers (44 on 2026-10-01), never the repo directory count.
 
 ### 2.3 Research pillars, in the order we lead with them
 1. **Energy-honest computing (JPCUB)**: the lead. Concrete, falsifiable and relevant to industry and academia.
@@ -84,6 +90,8 @@ the funding strategy's own "volume trap" warning applies.
   on profile pages, ScholarlyArticle with author ORCID on paper pages), GA4 and the Cloudflare beacon, subscribe CTA.
 - No internal jargon on public pages (worker counts, guard names, ticket tags).
 - AI disclosure on every work: *Prepared with an AI-assisted research pipeline; the author is responsible for the content.*
+- Every paper and every post about it carries three lines: the **claim**, the **test**, and the **status** (hypothesis,
+  tested, estimate or retracted) (Identity doc, "How people should read the research").
 - Text sent outside the system uses ASCII-safe escapes for typographic characters (the `â` defect).
 
 ---
@@ -106,11 +114,13 @@ the funding strategy's own "volume trap" warning applies.
 | qnfo.org + papers.qnfo.org | home of record; every post links here | QNFO | continuous | owned (qnfo-gateway) | live; SEO fixes in PAPER-PAGE-SEO-1 |
 | Email digest | the owned audience | Rowan | monthly research note (replaces weekly auto-digest once 10+ subscribers) | qnfo-subscribers | live, 1 subscriber |
 | LinkedIn (personal profile) | primary professional channel | Rowan | 2-3 posts/week; flagship document posts | the fleet writes each post into Buffer as a draft; **the owner approves it with one tap** (LinkedIn API Terms 3.1 forbid using the APIs "to automate posting") | not connected |
-| Bluesky | research community | Rowan | at most 1/day, research only | direct AT Protocol, fully automatic (live) | live; q08 removed from it |
+| Bluesky | research community | Rowan | 1-2 curated posts/week (Identity doc tracker item 10), research only | direct AT Protocol, automatic once the owner approves the voice | live; q08 removed from it |
 | Mastodon | academic mirror | Rowan | mirror of Bluesky | via Buffer, automatic | not connected |
 | Threads | general-audience mirror | Rowan | mirror of Bluesky | Threads API (free; per-post views) or Buffer, automatic | not connected |
 | X | low priority mirror | Rowan | at most 2/week | via Buffer; X API is pay-per-use ($0.20 per post with a link) | not connected |
 | Cold email | warm conversations with researchers and journalists | Rowan | at most 8/day across both engines | qnfo-outreach + qnfo-cloud-ops | **paused** until OUTREACH-CONSENT-1 deploys, then resumed |
+| Facebook | personal | Rowan | none | none: one Intro line and one link to qnfo.org, set by the owner | personal; no automation |
+| Funders, employers, applications | career and funding | Rowan | as leads arise | drafted by the fleet in the Identity doc; **the owner sends or submits** (forms with CAPTCHA, signatures) | weekly review (Mondays) |
 | arXiv | prestige and discoverability for works 1, 2, 4 | Rowan | as ready | submitted by hand; since 2026-01-21 a new author needs a **personal endorsement from an established arXiv author in the field**, so ask one warm contact individually (never a mass request) | prepare packages |
 | Conferences / workshops | credibility events | Rowan | per deadline | owner submits; fleet tracks deadlines (radar-hub) | track |
 | Hacker News, LessWrong, Reddit | high-reach communities | Rowan | occasional | **manual only**: their norms penalise automated posting | owner posts when a work fits |
@@ -148,6 +158,9 @@ drafted automatically and published only after the owner's one-tap approval in B
 welcome if interactions stay opt-in), Mastodon and Threads allow automatic posting inside the gates below.
 
 **Never automatic (draft only, or not at all):**
+- any change to the owner's name, bio, CV or public profiles; any application; any email to a funder, hiring manager or
+  other named person outside the research-outreach campaign; anything that commits money or the owner's time; anything on
+  Facebook (Identity doc "Rules I would work under");
 - replies, comments or DMs to individuals on social platforms;
 - anything that names a third party (person or company) critically, or makes a claim not present in the source work;
 - topics outside the four pillars (politics, news commentary);
@@ -232,7 +245,8 @@ Baselines are set from the first full week of ingested data; targets are in sect
 | QWAV label | **park** | no product yet |
 | Premium digest ($10/mo) | **defer** until 200+ confirmed subscribers | 1 subscriber; no payment rail (#1616) |
 | Assessment / advisory offer (JPCUB measurement for a platform or data centre) | **open** via warm replies | first revenue line that matches the lead pillar |
-| Grants | **priority**: NLnet proposal (deadline 2026-11-03), then Emergent Ventures, Foresight, LTFF follow-ups | highest expected value per hour; needs the reframing in section 8 |
+| Grants | **priority**: NLnet Restack Fund (deadline 2026-11-03), pitched as provenance and verification tooling, not AI (Restack excludes AI projects under 1M users); then Foresight AI for Science Nodes and the Corrigibility Fund (both 2026-10-31), Emergent Ventures (web form) | highest expected value per hour; Identity doc tracker items 4, 7, 8 |
+| Career track | **open**: Forecasting Research Institute (two remote roles, $80k-$130k, rolling), METR, and research-management roles that fit the FHWA/AARP record; leads, deadlines and drafted answers live in the Identity doc's Opportunities section | the fastest route to income; the owner submits forms |
 | Personal utility layer | unchanged, outside the research P&L | owner infrastructure |
 | AI-reviewed journal overlay (jnl-*) | dormant | not deployed; not a priority |
 
@@ -303,6 +317,10 @@ pages (fleet work, weeks 2-4).
 | q08 on the owner's Bluesky | removed (2.1, 7) |
 | `ipatent.me` sold in the business plan | not cited; ipatent.qnfo.org is the tool (2.1) |
 | Shutdown on 2026-10-25 with data deletion on 2026-11-01 | review gate 2026-12-31; no automatic deletion (9) |
+| Two identity workstreams: this file vs the Identity doc (other session, 2026-10-01) | the Identity doc holds the canonical profile copy, CV, opportunities and the owner's approvals; this file holds fleet strategy and points to it (2.2) |
+| Bluesky up to 1/day (this file) vs 1-2 curated posts/week (Identity doc) | 1-2/week |
+| Messages to named people: automatic (this file) vs always ask (Identity doc) | research-author outreach automatic under consent rules; funders, employers and applications drafted for the owner (5) |
+| "94 Cloudflare Workers" (Identity doc, repo directory count) | 44 deployed workers on 2026-10-01 |
 
 Documents aligned to this strategy on 2026-10-01: `docs/BUSINESS-PLAN.md`, `docs/AUTONOMY-DECISION-POLICY.md`,
 `docs/AUTONOMOUS-RESEARCH-PIPELINE.md`, `docs/AUTONOMOUS-USE-CASES.md`, `docs/FLEET-REPORT-CARD.md`, `funding/DOSSIER.md`,
