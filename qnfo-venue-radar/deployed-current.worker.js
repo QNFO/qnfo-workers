@@ -11,7 +11,7 @@
 //   >=6h run backoff; per-venue audit rows; self-doc /health; manual trigger /?run=1.
 // DEPLOY: cd qnfo-workers/qnfo-venue-radar && wrangler d1 execute qnfo-audit --remote --file=migrations/001_venue_radar.sql && wrangler deploy
 // CANONICAL SOURCE: github.com/QNFO/qnfo-workers -> qnfo-workers/qnfo-venue-radar/worker.js
-var VERSION = "1.0.4";
+var VERSION = "1.0.5";
 const WORKER = "qnfo-venue-radar";
 
 // QNFO research keyword buckets (extends LESSWRONG-INTEGRATION.md section 6 + events-radar DOMAINS)
@@ -236,7 +236,7 @@ export default {
       return new Response(JSON.stringify({ worker: WORKER, version: VERSION, signal_rows: cnt ? cnt.n : 0, runs: rows.results || [] }), { headers: { "content-type": "application/json" } });
     }
     if (url.pathname === "/health") {
-      return new Response(JSON.stringify({ ok: true, worker: WORKER, version: VERSION, purpose: "multi-venue read radar (LW/AF + EA RSS + HN Algolia) -> qnfo-audit D1", sources: ["lesswrong/alignmentforum", "eaforum-rss", "hackernews-algolia"], schedule: "45 6 * * * UTC", canonical: "github.com/QNFO/qnfo-workers/qnfo-venue-radar" }), { headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true, worker: WORKER, version: VERSION, capabilities: ["lesswrong-alignmentforum-radar", "ea-forum-radar", "hacker-news-radar"], limitations: ["public feeds only; one daily scan at 06:45 (GET /?run=1 triggers one on demand)", "keyword matching, no model call"], purpose: "multi-venue read radar (LW/AF + EA RSS + HN Algolia) -> qnfo-audit D1", sources: ["lesswrong/alignmentforum", "eaforum-rss", "hackernews-algolia"], schedule: "45 6 * * * UTC", canonical: "github.com/QNFO/qnfo-workers/qnfo-venue-radar" }), { headers: { "content-type": "application/json" } });
     }
     return new Response("qnfo-venue-radar: GET / (status) | GET /?run=1 (trigger scan) | GET /health", { status: 404 });
   }
