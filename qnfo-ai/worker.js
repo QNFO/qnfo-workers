@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.8-roster-ctx-catalog";
+var VERSION = "5.29.9-ensemble-stage-share";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -1163,6 +1163,9 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   const _stageCap = (share, floorMs) => Math.max(floorMs, Math.min(Math.floor(ENSEMBLE_BUDGET_MS * share), _remaining()));
   const _deadline = t0 + ENSEMBLE_BUDGET_MS;
   const _remaining = () => Math.max(0, _deadline - Date.now());
+  // ENSEMBLE-STAGE-SHARE-1 (#1504): per-stage outcome so the canned-response share is measurable per stage.
+  const _stages = {};
+  const _mk = (name, ts, ok, e) => { _stages[name] = { ms: Date.now() - ts, ok: !!ok, err: ok ? "" : String(e && e.message || e || "empty").slice(0, 60), rem: _remaining() }; };
   let primaryText = "";
   const useCoderPrimary = domain === "code";
   const _key = (function() {
@@ -1178,22 +1181,29 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   const intendedPrimary = seededPick(_pool, _key) || (useCoderPrimary ? ENSEMBLE.primary.wa : "@cf/deepseek-ai/deepseek-v4-flash-0731");
   let primaryModel = intendedPrimary;
   try {
+    var _s1 = Date.now();
     const primary = await withTimeout(runWorkersAI(env, intendedPrimary, messages, maxTokens, false), _stageCap(0.5, 2e4), "ensemble-primary");
     primaryText = extractWAContent(primary);
+    _mk("primary", _s1, !!primaryText);
   } catch (e) {
+    _mk("primary", _s1, false, e);
     primaryText = "";
   }
   if (!primaryText) {
+    var _s2 = Date.now();
     try {
       const fb = await withTimeout(callDeepSeek(env, MODELS["deepseek-v4-flash"].api, messages, maxTokens, false), _stageCap(0.3, 1.5e4), "ensemble-fallback");
       primaryText = extractWAContent(fb);
       primaryModel = "deepseek-v4-flash";
+      _mk("fallback", _s2, !!primaryText);
     } catch (e2) {
+      _mk("fallback", _s2, false, e2);
       primaryText = "";
       primaryModel = "deepseek-v4-flash";
     }
   }
   if (!primaryText) {
+    var _s3 = Date.now();
     try {
       const retryMsgs = truncateMessagesToFit(messages, Math.floor(ENSEMBLE.primary.ctx * 0.6));
       const retry = await withTimeout(runWorkersAI(env, ENSEMBLE.primary.wa, retryMsgs, Math.max(1024, Math.floor((maxTokens || 2048) * 0.6)), false), _stageCap(0.15, 8e3), "ensemble-primary-retry");
@@ -1202,7 +1212,9 @@ async function runEnsemble(env, messages, maxTokens, domain) {
         primaryText = rt;
         primaryModel = ENSEMBLE.primary.wa;
       }
+      _mk("retry", _s3, !!primaryText);
     } catch (e3) {
+      _mk("retry", _s3, false, e3);
       primaryText = "";
     }
   }
@@ -1260,7 +1272,9 @@ async function runEnsemble(env, messages, maxTokens, domain) {
     verified_by: verifiedBy,
     verification_result: verificationResult,
     agreement_rate: agreementRate,
-    latency_ms: Date.now() - t0
+    latency_ms: Date.now() - t0,
+    stages: _stages,
+    budget_ms: ENSEMBLE_BUDGET_MS
   };
 }
 __name(runEnsemble, "runEnsemble");
@@ -1701,6 +1715,14 @@ async function handleChat(env, body, authHeader, ctx, ua) {
       const ensCap = clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]);
       const ens = await runEnsemble(env, messages, ensCap, cls.domain);
       const ensText = (ens.text || "").trim() || FALLBACK_TEXT;
+      if (ensText === FALLBACK_TEXT) {
+        // ENSEMBLE-STAGE-SHARE-1 (#1504): record which stage(s) failed so canned share per stage is queryable.
+        try {
+          const _failed = Object.keys(ens.stages || {}).filter((k) => !ens.stages[k].ok);
+          await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)").bind("ens-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36), (/* @__PURE__ */ new Date()).toISOString(), "ensemble-canned", ("canned ensemble; failed stages=" + (_failed.join(",") || "none") + "; latency_ms=" + ens.latency_ms).slice(0, 800), JSON.stringify({ stages: ens.stages || {}, failed: _failed, latency_ms: ens.latency_ms, budget_ms: ens.budget_ms, domain: cls.domain }).slice(0, 1800), "qnfo-ai", "warn").run();
+        } catch (eSt) {
+        }
+      }
       const ensOutTokens = estimateOutputTokens(ensText);
       const ensTruncated = (ens.text || "").trim().length > 0 && ensOutTokens >= ensCap;
       const respBody = {
