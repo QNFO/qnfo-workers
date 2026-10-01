@@ -83,7 +83,8 @@ than 120 days). The hygiene score is the share of graded repositories with none 
    from the inventory; the fleet's own sites (qnfo.org, papers.qnfo.org, fleet.qnfo.org) are linked from the mirror.
 
 How it runs: `portfolioSyncIfStale` on the kernel's hourly cron (syncs when the last successful run is older than
-20 hours, so a new deploy syncs within the hour), `POST /portfolio/sync` with the admin token on demand. A failed
+20 hours, within 50 minutes after a partial run, and on the first tick after every kernel deploy, so a change to the
+loop verifies itself within the hour; DEPLOY-SYNC-1), `POST /portfolio/sync` with the admin token on demand. A failed
 organisation fetch writes nothing. Every run is a `portfolio_sync_runs` row with the per-surface commit status.
 `charter-guard` fails CI if this document loses its markers; `portfolio.test.mjs` replays the organisation fixture
 through the classifier and the three renderers on every pull request that touches the kernel.

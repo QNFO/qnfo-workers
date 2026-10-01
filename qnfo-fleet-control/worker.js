@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.76-portfolio-hygiene";
+var VERSION = "0.4.77-deploy-sync";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3680,18 +3680,30 @@ async function portfolioSync(env, force) {
   }
   var status = writes.every(function(w) { return w.status === "committed" || w.status === "unchanged"; }) ? "ok" : "partial";
   var done = actions.filter(function(a) { return a.status === "committed"; }).length;
-  try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length + "; actions " + actions.length + " (" + done + " committed)", JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) {}
+  try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "kernel " + VERSION + "; wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length + "; actions " + actions.length + " (" + done + " committed)", JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) {}
   return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, wbs: wbs.note, writes: writes, actions: actions, ms: Date.now() - t0 };
 }
 // PARTIAL-RETRY-1: a run that left a surface unwritten (partial) is retried on the next hourly tick, not after 20h;
 // a fully written run (ok) holds for PF_STALE_H. The writes are idempotent (unchanged content is a no-op), so an
 // hourly retry of a persistent failure costs a handful of GitHub reads and files LOOP-WATCH-1's issue meanwhile.
+// DEPLOY-SYNC-1: a new kernel version verifies its own change on the next hourly tick instead of waiting out the
+// 20h hold (the note of every run names the kernel that wrote it). Pure: the last run -> why to sync now, or null.
+function pfNeedsSync(last, version, nowMs) {
+  if (!last || !last.ts) return "no successful run yet";
+  if (String(last.note || "").indexOf("kernel " + version + ";") < 0) return "kernel " + version + " has not synced yet";
+  var holdMs = last.status === "ok" ? PF_STALE_H * 3600000 : 50 * 60000;
+  var age = nowMs - Date.parse(last.ts);
+  if (isNaN(age) || age >= holdMs) return "last " + last.status + " run is " + Math.round(age / 3600000) + "h old";
+  return null;
+}
 async function portfolioSyncIfStale(env) {
   await pfSchema(env);
-  var last = await charterOne(env, "SELECT ts, status FROM portfolio_sync_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1");
-  var holdMs = last && last.status === "ok" ? PF_STALE_H * 3600000 : 50 * 60000;
-  if (last && last.ts && Date.now() - Date.parse(last.ts) < holdMs) return { ok: true, status: "fresh", last: last.ts, last_status: last.status };
-  return portfolioSync(env, false);
+  var last = await charterOne(env, "SELECT ts, status, note FROM portfolio_sync_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1");
+  var why = pfNeedsSync(last, VERSION, Date.now());
+  if (!why) return { ok: true, status: "fresh", last: last.ts, last_status: last.status };
+  var r = await portfolioSync(env, false);
+  r.reason = why;
+  return r;
 }
 async function portfolioLatest(env) {
   await pfSchema(env);
