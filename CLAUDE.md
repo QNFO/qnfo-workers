@@ -45,6 +45,12 @@ because each one was broken at least once; the linked issue holds the evidence.
   qnfo-fleet-control (PORTFOLIO-LOOP-1); never edit them by hand. A new repository names its tier and, for research, a
   WBS code in `portfolio-state.program_registry`; private repositories are counted and never named.
 
+## Nothing depends on Claude (CLOUD-ONLY-VERIFICATION-1)
+- All fleet data lives on Cloudflare (D1, R2, KV, Vectorize) or in the QNFO GitHub organisation; never in a claude.ai
+  document, artifact or routine. A session that needs a durable record writes a D1 row or a repository file.
+- Recurring verification belongs to worker crons (LOOP-WATCH-1 in qnfo-fleet-control, `GET /loops`), not to session
+  check-ins or routines. A session may arm a short-lived reminder for its own in-flight PR, and deletes it when done.
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
