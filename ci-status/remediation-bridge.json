@@ -92,8 +92,8 @@
    "reason": "not-a-select"
   }
  ],
- "contracts_needs_machine_probe": 100,
- "open_issues_without_active_contract": 9,
+ "contracts_needs_machine_probe": 101,
+ "open_issues_without_active_contract": 10,
  "residual_gap_ids": [
   1710,
   1711,
@@ -103,8 +103,9 @@
   1649,
   1714,
   1715,
-  1716
+  1716,
+  1718
  ],
- "head": "1c94abd76ee4872c7d9188c8556a1d3242f1f3e2",
+ "head": "0f22f1dfff3917f2f41638072a729e133d76ff31",
  "job_status": "success"
 }
