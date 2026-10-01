@@ -23,9 +23,11 @@ max_instances = 2
 name = "PY_CONTAINER"
 class_name = "PyContainer"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["PyContainer"]
+# EXPORTS-LIFECYCLE-1 (2026-10-01, deploy-code-orchestrator run 36847868908): wrangler 4.145 reconciles Durable Object classes against
+# `exports`; the class provisioned by the first deploy is only accepted when declared there (and migrations cannot be mixed with it).
+[exports.PyContainer]
+type = "durable-object"
+storage = "sqlite"
 
 [[d1_databases]]
 binding = "AUDIT_DB"
