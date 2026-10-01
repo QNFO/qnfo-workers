@@ -24,6 +24,12 @@ database_id = "70a58cb3-b2cd-498d-877f-ecca86859a22"
 binding = "QNFO_BUCKET"
 bucket_name = "qnfo"
 
+# SCHOLAR-PDF-URL-1 (#1714): qnfo-pdf renders each paper to pdf/<slug>.pdf here (papers.pdf_path). The gateway serves it
+# at /papers/<slug>.pdf when the paper's Zenodo record carries no PDF.
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "qnfo-releases"
+
 # Secrets (wrangler secret put): SYNC_TOKEN, TURNSTILE_SECRET
 
 [triggers]

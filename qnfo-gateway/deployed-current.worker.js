@@ -1,4 +1,4 @@
-var VERSION="3.7.20-scholar-pdf-ua";
+var VERSION="3.7.21-scholar-pdf-rendered";
 // ORG-LABEL-1 (2026-10-01, docs/STRATEGY.md s2.1): there is no legal entity and the work is one researcher with an
 // AI-assisted pipeline, so "Research Foundation" and "research collective" overclaim. Labels only; the positioning copy
 // waits for the owner's approval in the Identity doc. ABOUT-GA-1: /about was the one gateway page without the GA4 tag.
@@ -975,15 +975,27 @@ function zenodoRecId(doi) {
   return m ? m[1] : null;
 }
 __name(zenodoRecId, "zenodoRecId");
+// The rendered fallback: qnfo-pdf stores pdf/<slug>.pdf in qnfo-releases and records it in papers.pdf_path.
+async function servedRenderedPdf(env, paper) {
+  if (!paper || !paper.pdf_path || !env.RELEASES) return null;
+  const obj = await env.RELEASES.get(String(paper.pdf_path));
+  if (!obj || !obj.body || Number(obj.size || 0) <= 0 || Number(obj.size) > SCHOLAR_PDF_MAX) return null;
+  return new Response(obj.body, { headers: { "Content-Type": "application/pdf", "Content-Disposition": 'inline; filename="' + paper.slug + '.pdf"', "Cache-Control": "public, max-age=86400", "X-PDF-Source": "rendered" } });
+}
+__name(servedRenderedPdf, "servedRenderedPdf");
 async function handlePaperPdf(env, slug) {
   const nf = new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   const paper = await env.LIVING_PAPER.prepare(
-    "SELECT slug,doi FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
+    "SELECT slug,doi,pdf_path FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
   ).bind(slug).first();
-  const rec = paper && zenodoRecId(paper.doi);
-  if (!rec) return nf;
-  const info = await zenodoPdfInfo(rec);
-  if (!info.url) return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "X-PDF-Lookup": "zenodo-" + info.status } });
+  if (!paper) return nf;
+  const rec = zenodoRecId(paper.doi);
+  const info = rec ? await zenodoPdfInfo(rec) : { url: null, status: 0 };
+  if (!info.url) {
+    const rendered = await servedRenderedPdf(env, paper);
+    if (rendered) return rendered;
+    return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "X-PDF-Lookup": "zenodo-" + info.status } });
+  }
   const r = await fetch(info.url, { headers: { "User-Agent": ZENODO_UA }, cf: { cacheEverything: true, cacheTtl: 86400 } });
   if (!r.ok || !r.body) return new Response("PDF temporarily unavailable", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8", "X-PDF-Lookup": "content-" + r.status } });
   return new Response(r.body, { headers: { "Content-Type": "application/pdf", "Content-Disposition": 'inline; filename="' + slug + '.pdf"', "Cache-Control": "public, max-age=86400" } });
@@ -1001,7 +1013,7 @@ async function handlePaperDetail(request, env, path) {
   }
   try {
     const paper = await env.LIVING_PAPER.prepare(
-      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
+      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version,pdf_path FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
     ).bind(slug).first();
     if (!paper) return json({ error: "Paper not found", slug }, 404);
     const accept = request.headers.get("Accept") || "";
@@ -1010,6 +1022,13 @@ async function handlePaperDetail(request, env, path) {
       if (_rec) {
         try {
           paper._pdf = !!(await zenodoPdfInfo(_rec)).url;
+        } catch (e) {
+        }
+      }
+      if (!paper._pdf && paper.pdf_path && env.RELEASES) {
+        try {
+          const _h = await env.RELEASES.head(String(paper.pdf_path));
+          paper._pdf = !!(_h && Number(_h.size || 0) > 0 && Number(_h.size) <= SCHOLAR_PDF_MAX);
         } catch (e) {
         }
       }
