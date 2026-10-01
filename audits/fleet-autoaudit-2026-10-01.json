@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-01 15:03:23",
+  "audited_at": "2026-10-01 15:07:50",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-ipatent"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
