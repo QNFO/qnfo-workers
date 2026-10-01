@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.50-sla-escalate";
+var VERSION = "0.4.51-unified-ai-spend";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3186,11 +3186,11 @@ async function refreshOwnedMetrics(env) {
     var okr = await db.prepare("SELECT COUNT(*) AS n FROM ops_ai_log WHERE ok=1 AND ts >= datetime('now','-30 day')").first();
     var okN = okr ? Number(okr.n || 0) : 0;
     if (spent != null && isFinite(spent)) {
-      await put("cost_usd_30d", spent.toFixed(2));
+      // cost_usd_30d is written by UNIFIED-AI-SPEND-1 below (all providers); the ladder ledger only feeds the per-task ratio.
       if (okN > 0) await put("cost_per_successful_task_by_class", (spent / okN).toFixed(4));
       else out.skipped.cost_per_successful_task_by_class = "0 successful ops calls in 30d";
     } else {
-      out.skipped.cost_usd_30d = "model_ladder_budget unreadable";
+      out.skipped.cost_per_successful_task_by_class = "model_ladder_budget unreadable";
     }
   } catch (e) {
     out.skipped.cost = String(e && e.message || e).slice(0, 160);
@@ -3238,6 +3238,7 @@ async function refreshOwnedMetrics(env) {
   // workersInvocationsAdaptive.neurons, a field that does not exist, and the row carried a hand-set 15.6.
   // Workers AI usage lives in aiInferenceAdaptiveGroups.sum.totalNeurons; cost at the published rate
   // ($0.011 per 1k neurons after 10k/day free). Measured 2026-09-30: 5.57M neurons/30d (~$58 list).
+  var waiUsd = null;
   try {
     var since = new Date(Date.now() - 30 * 864e5).toISOString();
     var q = 'query { viewer { accounts(filter: { accountTag: "' + acct + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + since + '", datetime_leq: "' + nowIso + '" }) { sum { totalNeurons } } } } }';
@@ -3247,6 +3248,7 @@ async function refreshOwnedMetrics(env) {
     if (Array.isArray(rows)) {
       var neurons = rows.reduce(function (a, x) { return a + (x && x.sum && Number(x.sum.totalNeurons) || 0); }, 0);
       var usd = Math.max(0, neurons - 1e4 * 30) / 1e3 * 0.011;
+      waiUsd = usd;
       await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='workers_ai_cost_30d_usd'").bind(usd.toFixed(2), nowIso, "max(0, SUM(aiInferenceAdaptiveGroups.sum.totalNeurons over 30d) - 10k/day free) / 1000 * $0.011 (published Workers AI rate); refreshed hourly by qnfo-fleet-control", "CF GraphQL aiInferenceAdaptiveGroups (" + Math.round(neurons) + " neurons at refresh)").run();
       out.written.push("workers_ai_cost_30d_usd=" + usd.toFixed(2));
     } else {
@@ -3255,9 +3257,74 @@ async function refreshOwnedMetrics(env) {
   } catch (e) {
     out.skipped.workers_ai_cost_30d_usd = String(e && e.message || e).slice(0, 160);
   }
+  // UNIFIED-AI-SPEND-1 (2026-10-01, #1683 AI-SPEND-OVER-CAP-ALL-PROVIDERS-1): cost_usd_30d was
+  // SUM(model_ladder_budget.spent_usd), an internal ladder ledger that omits BYOK providers and agent
+  // sessions; the gateway spend limit governs unified billing only, so BYOK DeepSeek bypassed every cap.
+  // cost_usd_30d is now the one all-provider figure: gateway-metered cost of every request (unified
+  // billing + BYOK, aiGatewayRequestsAdaptiveGroups.sum.cost, workers-ai rows excluded) + the Workers AI
+  // neuron cost above. Per-provider soft caps live in fleet_budget (node_class 'ai_spend:<provider>',
+  // 'ai_spend:total'); a breach raises one digest alert per cap per day. Hard blocking of BYOK traffic
+  // and re-routing agent sessions stay owner decisions (AI Gateway settings / client configuration).
+  try {
+    var since2 = new Date(Date.now() - 30 * 864e5).toISOString();
+    var gq = 'query { viewer { accounts(filter: { accountTag: "' + acct + '" }) { aiGatewayRequestsAdaptiveGroups(limit: 2000, filter: { datetime_geq: "' + since2 + '", datetime_leq: "' + nowIso + '" }) { count sum { cost } dimensions { provider model } } } } }';
+    var gqr = await fetch("https://api.cloudflare.com/client/v4/graphql", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, H), body: JSON.stringify({ query: gq }), signal: AbortSignal.timeout(2e4) });
+    var gqj = await gqr.json().catch(function () { return null; });
+    var grows = gqj && !gqj.errors && gqj.data && gqj.data.viewer && gqj.data.viewer.accounts && gqj.data.viewer.accounts[0] ? gqj.data.viewer.accounts[0].aiGatewayRequestsAdaptiveGroups : null;
+    if (Array.isArray(grows)) {
+      var byProv = aiSpendByProvider(grows);
+      if (waiUsd != null) byProv["workers-ai"] = (byProv["workers-ai"] || 0) + waiUsd;
+      var total = Object.keys(byProv).reduce(function (a, k) { return a + byProv[k]; }, 0);
+      var parts = Object.keys(byProv).sort(function (a, b) { return byProv[b] - byProv[a]; }).map(function (k) { return k + " $" + byProv[k].toFixed(2); }).join(", ");
+      await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='cost_usd_30d'").bind(total.toFixed(2), nowIso, "unified 30d AI spend, all providers incl. BYOK = SUM(aiGatewayRequestsAdaptiveGroups.sum.cost, provider<>workers-ai) + workers_ai_cost_30d_usd (UNIFIED-AI-SPEND-1, qnfo-fleet-control hourly)", "CF GraphQL aiGatewayRequestsAdaptiveGroups + aiInferenceAdaptiveGroups: " + parts.slice(0, 400)).run();
+      out.written.push("cost_usd_30d=" + total.toFixed(2) + " (" + parts.slice(0, 160) + ")");
+      out.aiSpend = { total: Number(total.toFixed(2)), byProvider: byProv, alerts: await aiSpendCaps(db, byProv, total) };
+    } else {
+      out.skipped.cost_usd_30d_unified = "aiGatewayRequestsAdaptiveGroups unreadable" + (gqj && gqj.errors ? ": " + JSON.stringify(gqj.errors).slice(0, 120) : "");
+    }
+  } catch (e) {
+    out.skipped.cost_usd_30d_unified = String(e && e.message || e).slice(0, 160);
+  }
   return out;
 }
 __name(refreshOwnedMetrics, "refreshOwnedMetrics");
+// Gateway rows -> USD by provider. Unified-billing "compat" rows carry the real provider as the model prefix.
+// Workers AI rows are dropped here because their cost is counted from neurons.
+function aiSpendByProvider(rows) {
+  var by = {};
+  rows.forEach(function (r) {
+    var d = r && r.dimensions || {};
+    var prov = String(d.provider || "unknown").toLowerCase();
+    var model = String(d.model || "");
+    if ((prov === "compat" || prov === "unknown" || prov === "universal") && model.indexOf("/") > 0) prov = model.split("/")[0].toLowerCase();
+    if (prov === "workers-ai" || prov === "workers_ai") return;
+    var c = r && r.sum && Number(r.sum.cost) || 0;
+    if (c > 0) by[prov] = (by[prov] || 0) + c;
+  });
+  return by;
+}
+__name(aiSpendByProvider, "aiSpendByProvider");
+// Record measured spend against fleet_budget soft caps and raise one digest alert per breached cap per day.
+async function aiSpendCaps(db, byProv, total) {
+  var raised = [];
+  var rs = await db.prepare("SELECT node_class, cap, target FROM fleet_budget WHERE node_class LIKE 'ai_spend:%'").all().catch(function () { return { results: [] }; });
+  var caps = rs.results || [];
+  for (var i = 0; i < caps.length; i++) {
+    var c = caps[i], key = String(c.node_class).slice("ai_spend:".length);
+    var cur = key === "total" ? total : (byProv[key] || 0);
+    await db.prepare("UPDATE fleet_budget SET current=?1, updated_at=?2 WHERE node_class=?3").bind(Number(cur.toFixed(2)), new Date().toISOString(), c.node_class).run().catch(function () {});
+    if (c.cap != null && cur > Number(c.cap)) {
+      var msg = "AI-SPEND-CAP " + c.node_class + ": 30d $" + cur.toFixed(2) + " > soft cap $" + Number(c.cap).toFixed(2) + " (target $" + c.target + "; UNIFIED-AI-SPEND-1, includes BYOK)";
+      var dup = await db.prepare("SELECT id FROM alerts WHERE source='qnfo-fleet-control' AND message LIKE ?1 AND created_at > datetime('now','-1 day') LIMIT 1").bind("AI-SPEND-CAP " + c.node_class + ":%").first().catch(function () { return null; });
+      if (!dup) {
+        await db.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('qnfo-fleet-control', 'warning', ?1, NULL)").bind(msg).run().catch(function () {});
+        raised.push(c.node_class);
+      }
+    }
+  }
+  return raised;
+}
+__name(aiSpendCaps, "aiSpendCaps");
 async function reassertObservability(env) {
   try {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
