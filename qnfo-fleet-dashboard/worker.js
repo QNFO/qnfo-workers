@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.12.0-identity-store"; /* IDENTITY-STORE-1 + IDENTITY-WEEKLY-1 (moved from qnfo-cloud-ops); 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.12.1-identity-sync"; /* IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2466,8 +2466,8 @@ var worker_default = {
       ctx.waitUntil(within(portfolioDailyRun(env).catch(function() {
       })));
       // IDENTITY-STORE-1: complete the one-time, byte-checked move of owner_docs into the private store within one tick of a
-      // deploy (after that this is one store_meta read per isolate).
-      ctx.waitUntil(within(identityStoreMigrate(env).catch(function() {
+      // deploy, then bring any later write to qnfo-audit.owner_docs across (copy only, 1.12.1).
+      ctx.waitUntil(within(identityStoreSync(env).catch(function() {
       })));
       // IDENTITY-WEEKLY-1 (moved from qnfo-cloud-ops with IDENTITY-STORE-1): Mondays after 06:00Z, throttled inside on the
       // cloud_ops_events row identity-weekly-<day>.
@@ -3099,6 +3099,7 @@ async function collectHumanActions(env) {
   const blind = [];
   const add = function(it) {
     it.sev = it.sev || "normal";
+    it.url = safeLink(it.url);
     items.push(it);
   };
   const read = async function(name, fn) {
@@ -4432,8 +4433,15 @@ function ownerSafeEq(a, b) {
 }
 function ownerSafeUrl(u) {
   const s = String(u || "").trim();
-  if (/^(https?:\/\/|mailto:)/i.test(s) || /^#[A-Za-z0-9_-]*$/.test(s)) return s;
+  if (/^#[A-Za-z0-9_-]*$/.test(s) || /^mailto:/i.test(s)) return s;
+  if (/^https?:\/\//i.test(s)) return ownerOffHost(s) ? null : s;
   return null;
+}
+// NO-CLAUDE-RUNTIME-DEPENDENCY-1: an owner document never links out to claude.ai or anthropic.com (the text stays, the link
+// does not), matching safeLink on the queue.
+function ownerOffHost(u) {
+  const m = /^https?:\/\/([^\/?#:]+)/i.exec(String(u || ""));
+  return !!m && /(^|\.)(claude\.ai|claude\.site|claudeusercontent\.com|anthropic\.com)$/i.test(m[1]);
 }
 // Inline markdown: `code`, [text](url), <https://url>, **bold**, *em*, bare https:// links. Text is escaped piecewise.
 function ownerInline(raw, depth) {
@@ -4450,7 +4458,7 @@ function ownerInline(raw, depth) {
       o += href ? '<a href="' + ownerEsc(href) + '" rel="noopener noreferrer nofollow">' + label + "</a>" : label;
     } else if (m[4] != null || m[7] != null) {
       const u = m[4] != null ? m[4] : m[7];
-      o += '<a href="' + ownerEsc(u) + '" rel="noopener noreferrer nofollow">' + ownerEsc(u) + "</a>";
+      o += ownerOffHost(u) ? ownerEsc(u) : '<a href="' + ownerEsc(u) + '" rel="noopener noreferrer nofollow">' + ownerEsc(u) + "</a>";
     } else if (m[5] != null) o += "<strong>" + ((depth || 0) < 1 ? ownerInline(m[5], 1) : ownerEsc(m[5])) + "</strong>";
     else if (m[6] != null) o += "<em>" + ownerEsc(m[6]) + "</em>";
   }
@@ -4571,10 +4579,14 @@ function ownerLogin(path, bad) {
 }
 // IDENTITY-STORE-1 (2026-10-01, NO-CLAUDE-RUNTIME-DEPENDENCY-1 / agent_issues 1723): the owner's documents (identity, CV,
 // opportunities, archives, edit history) live in their own D1, qnfo-identity, bound ONLY to this worker (binding IDENTITY),
-// not in the shared qnfo-audit that many workers and sessions read. On first use the worker copies any qnfo-audit.owner_docs
-// rows across (INSERT OR IGNORE), checks every body byte for byte, and records the move in qnfo-identity.store_meta; it
-// never copies again after that. Without the binding it falls back to qnfo-audit so nothing breaks mid-deploy.
+// not in the shared qnfo-audit that many workers and sessions read. On first use the worker copies every qnfo-audit.owner_docs
+// row across, checks every body byte for byte, and records the move in qnfo-identity.store_meta; nothing reads the private
+// store before that record exists, so an interrupted copy is simply redone (the shared copy wins until then). A failed read
+// of qnfo-audit never records a move. Without the binding it falls back to qnfo-audit so nothing breaks mid-deploy.
 var IDENTITY_STORE_READY = false;
+function idsHistoryKey(key) {
+  return String(key || "").indexOf("--v") >= 0;
+}
 async function identityStoreMigrate(env) {
   if (!env || !env.IDENTITY) return { store: "qnfo-audit (IDENTITY binding absent)" };
   const db = env.IDENTITY;
@@ -4591,31 +4603,104 @@ async function identityStoreMigrate(env) {
     IDENTITY_STORE_READY = true;
     return { store: "qnfo-identity", migrated: done.value, at: done.updated_at };
   }
-  let rows = [];
+  let rows;
   try {
     rows = (await env.AUDIT.prepare("SELECT key, title, body_md, source, visibility, updated_at FROM owner_docs").all()).results || [];
   } catch (e) {
-    rows = [];
+    return { store: "qnfo-audit", error: "qnfo-audit.owner_docs unreadable (" + String(e && e.message || e).slice(0, 80) + "); retried on next use" };
   }
   for (const r of rows) {
-    await db.prepare("INSERT OR IGNORE INTO owner_docs (key, title, body_md, source, visibility, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(r.key, r.title, r.body_md, r.source, r.visibility || "private", r.updated_at).run();
+    await db.prepare("INSERT OR REPLACE INTO owner_docs (key, title, body_md, source, visibility, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(r.key, r.title, r.body_md, r.source, idsHistoryKey(r.key) ? "history" : r.visibility || "private", r.updated_at).run();
   }
   const bad = [];
   for (const r of rows) {
     const c = await db.prepare("SELECT body_md FROM owner_docs WHERE key = ?1").bind(r.key).first();
     if (!c || c.body_md !== r.body_md) bad.push(r.key);
   }
-  if (bad.length) return { store: "qnfo-identity", error: "copy differs for " + bad.join(", ") + "; retried on next use" };
+  if (bad.length) return { store: "qnfo-audit", error: "copy differs for " + bad.join(", ") + "; retried on next use" };
   const summary = JSON.stringify({ rows: rows.length, keys: rows.map(function(r) {
     return r.key;
   }), bytes: rows.reduce(function(n, r) {
     return n + new TextEncoder().encode(r.body_md || "").length;
   }, 0), version: VERSION });
   await db.prepare("INSERT OR REPLACE INTO store_meta (key, value, updated_at) VALUES ('migrated_from_audit', ?1, datetime('now'))").bind(summary).run();
+  await db.prepare("INSERT OR REPLACE INTO store_meta (key, value, updated_at) VALUES ('audit_seen', ?1, datetime('now'))").bind(JSON.stringify(await idsSeenMap(rows))).run();
   IDENTITY_STORE_READY = true;
   return { store: "qnfo-identity", migrated: summary };
 }
 __name(identityStoreMigrate, "identityStoreMigrate");
+// IDENTITY-STORE-1 sync (1.12.1). The move copies; it never deletes the qnfo-audit rows (removing that shared copy is the
+// owner's call). A session or worker still following the old rule may write qnfo-audit.owner_docs after the move, so each
+// */15 tick looks for qnfo-audit rows that changed since the last tick (store_meta 'audit_seen', sha-256 of body and
+// updated_at) and brings each one into the private store: a new key is copied; a different body and a newer updated_at
+// becomes current with the replaced version kept as a '<key>--v<stamp>' history row; an older one is kept as history. Copy
+// only: it never writes or deletes anything in qnfo-audit. Recorded in store_meta 'last_sync'.
+async function idsSeenMap(rows) {
+  const out = {};
+  for (const r of rows) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(r.updated_at || "") + "\u0000" + String(r.body_md || "")));
+    out[r.key] = Array.from(new Uint8Array(buf)).map(function(b) {
+      return b.toString(16).padStart(2, "0");
+    }).join("");
+  }
+  return out;
+}
+__name(idsSeenMap, "idsSeenMap");
+async function idsKeepVersion(db, baseKey, row, why) {
+  const stamp = String(row.updated_at || "").replace(/[^0-9]/g, "").slice(0, 14) || "0";
+  const key = String(baseKey).slice(0, 40) + "--v" + stamp;
+  for (let i = 0; i < 26; i++) {
+    const k = i ? key + "-" + String.fromCharCode(96 + i) : key;
+    const c = await db.prepare("SELECT body_md FROM owner_docs WHERE key = ?1").bind(k).first();
+    if (c && c.body_md === row.body_md) return k;
+    if (!c) {
+      await db.prepare("INSERT INTO owner_docs (key, title, body_md, source, visibility, updated_at) VALUES (?1, ?2, ?3, ?4, 'history', ?5)").bind(k, "Earlier version: " + String(row.title || baseKey).replace(/^(Earlier version: )+/, ""), row.body_md, why, row.updated_at || null).run();
+      return k;
+    }
+  }
+  throw new Error("no free history key for " + baseKey);
+}
+__name(idsKeepVersion, "idsKeepVersion");
+async function identityStoreSync(env) {
+  if (!env || !env.IDENTITY || !env.AUDIT) return { skipped: "binding absent" };
+  const m = await identityStoreMigrate(env);
+  if (m.error || !m.migrated) return { skipped: m.error || "not moved yet" };
+  const db = env.IDENTITY;
+  const rows = (await env.AUDIT.prepare("SELECT key, title, body_md, source, visibility, updated_at FROM owner_docs").all()).results || [];
+  const seenRow = await db.prepare("SELECT value FROM store_meta WHERE key = 'audit_seen'").first();
+  let seen = {};
+  try {
+    seen = JSON.parse(seenRow && seenRow.value || "{}") || {};
+  } catch (e) {
+    seen = {};
+  }
+  const now = await idsSeenMap(rows);
+  const out = { at: new Date().toISOString(), copied: [], made_current: [], kept_as_history: [] };
+  const why = "written to qnfo-audit.owner_docs after IDENTITY-STORE-1 moved the owner documents; synced by the */15 tick";
+  for (const r of rows) {
+    if (seen[r.key] === now[r.key]) continue;
+    const cur = await db.prepare("SELECT key, title, body_md, source, visibility, updated_at FROM owner_docs WHERE key = ?1").bind(r.key).first();
+    const vis = idsHistoryKey(r.key) ? "history" : r.visibility || "private";
+    if (!cur) {
+      await db.prepare("INSERT INTO owner_docs (key, title, body_md, source, visibility, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(r.key, r.title || r.key, r.body_md, r.source, vis, r.updated_at || null).run();
+      out.copied.push(r.key);
+    } else if (cur.body_md !== r.body_md) {
+      if (String(r.updated_at || "") > String(cur.updated_at || "")) {
+        out.kept_as_history.push(await idsKeepVersion(db, r.key, cur, "owner_docs." + r.key + " as of " + cur.updated_at + ", replaced by a newer write (" + why + ")"));
+        await db.prepare("UPDATE owner_docs SET title = ?2, body_md = ?3, source = ?4, visibility = ?5, updated_at = ?6 WHERE key = ?1").bind(r.key, r.title || cur.title, r.body_md, r.source, vis, r.updated_at || null).run();
+        out.made_current.push(r.key);
+      } else {
+        out.kept_as_history.push(await idsKeepVersion(db, r.key, r, "an older version of owner_docs." + r.key + " (" + why + ")"));
+      }
+    }
+  }
+  await db.prepare("INSERT OR REPLACE INTO store_meta (key, value, updated_at) VALUES ('audit_seen', ?1, datetime('now'))").bind(JSON.stringify(now)).run();
+  if (out.copied.length || out.made_current.length || out.kept_as_history.length) {
+    await db.prepare("INSERT OR REPLACE INTO store_meta (key, value, updated_at) VALUES ('last_sync', ?1, datetime('now'))").bind(JSON.stringify(out)).run();
+  }
+  return out;
+}
+__name(identityStoreSync, "identityStoreSync");
 // The D1 that holds owner_docs: qnfo-identity once its one-time copy is verified, qnfo-audit before that or without the binding.
 async function ownerStore(env) {
   if (!env.IDENTITY) return env.AUDIT;
@@ -5027,11 +5112,15 @@ async function ownerRoute(request, env, path, ownerCk) {
     const items = iw && iw.needs_owner ? String(iw.needs_owner).split("\n").filter(Boolean) : [];
     parts.push("<h2>Identity review (weekly)</h2>" + (iw ? "<p>" + ownerEsc(iw.run_date) + ": " + ownerEsc(iw.summary) + "</p>" + (items.length ? "<ul>" + items.map(function(n) {
       return "<li>" + ownerEsc(n) + "</li>";
-    }).join("") + "</ul>" : "<p>Nothing needs you.</p>") : '<p class="mut">No run yet. qnfo-cloud-ops writes one every Monday 07:30 Amsterdam (IDENTITY-WEEKLY-1).</p>'));
+    }).join("") + "</ul>" : "<p>Nothing needs you.</p>") : '<p class="mut">No run yet. This worker writes one every Monday after 06:00 UTC (IDENTITY-WEEKLY-1).</p>'));
   } catch (e) {
     parts.push("<h2>Identity review (weekly)</h2>" + fail("portfolio_runs", e));
   }
   try {
+    // IDENTITY-STORE-1: bring any later write to qnfo-audit.owner_docs across before listing (copy only).
+    const sync = env.IDENTITY ? await identityStoreSync(env).catch(function(e) {
+      return { error: reachErr(e) };
+    }) : null;
     const docs = await d1all(await ownerStore(env), "SELECT key, title, updated_at, visibility FROM owner_docs ORDER BY key");
     const cur = docs.filter(function(d) {
       return d.visibility !== "history";
@@ -5043,7 +5132,15 @@ async function ownerRoute(request, env, path, ownerCk) {
     const sm = await identityStoreMigrate(env).catch(function(e) {
       return { error: reachErr(e) };
     });
-    parts.push('<p class="mut">Store: ' + ownerEsc(sm.store || "?") + (sm.at ? ", moved from qnfo-audit " + ownerEsc(sm.at) : "") + (sm.error ? " - " + ownerEsc(sm.error) : "") + "</p>");
+    let shared = null;
+    if (sm.store === "qnfo-identity") {
+      const c = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM owner_docs").first().catch(function() {
+        return null;
+      });
+      shared = c ? Number(c.n) : null;
+    }
+    const synced = sync && !sync.skipped && !sync.error ? sync.copied.length + sync.made_current.length + sync.kept_as_history.length : 0;
+    parts.push('<p class="mut">Store: ' + ownerEsc(sm.store || "?") + (sm.at ? ", moved from qnfo-audit " + ownerEsc(sm.at) : "") + (sm.error ? " - " + ownerEsc(sm.error) : "") + (sync && sync.error ? " - sync: " + ownerEsc(sync.error) : "") + (synced ? " - just synced " + synced + " later write(s) from qnfo-audit" : "") + (shared ? ". The earlier copy (" + shared + " row(s)) is still in the shared qnfo-audit.owner_docs; it is no longer read, later writes there are synced here, and removing it is your call." : "") + "</p>");
   } catch (e) {
     parts.push("<h2>Documents</h2>" + fail("owner_docs", e));
   }

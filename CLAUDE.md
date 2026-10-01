@@ -59,7 +59,9 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Owner documents (identity, brand, CV, opportunities, their archives and edit history) live in the private D1
   `qnfo-identity`, table `owner_docs` (canonical key `identity`), bound ONLY to qnfo-fleet-dashboard (IDENTITY-STORE-1). The
   dashboard serves and edits them at fleet.qnfo.org/owner and runs IDENTITY-WEEKLY-1 from them; never bind `qnfo-identity`
-  to another worker and never copy its rows into the shared `qnfo-audit` D1. The final verbatim export of the retired Claude
+  to another worker and never copy its rows into the shared `qnfo-audit` D1. Do not write `qnfo-audit.owner_docs` (no longer
+  read; a write there is copied into `qnfo-identity` on the next */15 tick). A session that must change a document writes
+  `qnfo-identity.owner_docs` and first keeps the current text as a `<key>--v<yyyymmddhhmmss>` row, visibility `history`. The final verbatim export of the retired Claude
   Doc (rev 46, with its five comment threads) is `personal-life.owner_documents` key `identity-brand-opportunities` (private
   plane). Never recreate an owner document on claude.ai.
 - Known violations retired on 2026-10-01: the Identity doc on Claude Docs (exported, deleted) and this session's routines;
