@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.53-signal-observe";
+var VERSION = "0.4.54-version-regex-safe";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2649,8 +2649,8 @@ function evBalanced(a, b) {
 }
 __name(evBalanced, "evBalanced");
 function evBump(content, cid) {
-  var re = /^var VERSION = "(\d+)\.(\d+)\.(\d+)([^"]*)";$/m;
-  var all = content.match(/^var VERSION = "[^"]*";$/gm) || [];
+  var re = /^var\sVERSION\s=\s"(\d+)\.(\d+)\.(\d+)([^"]*)";$/m;
+  var all = content.match(/^var\sVERSION\s=\s"[^"]*";$/gm) || [];
   if (all.length !== 1) return null;
   var m = content.match(re);
   if (!m) return null;
@@ -2760,7 +2760,7 @@ async function evPropose(env) {
     var toml = await evReadFile(env, worker + "/wrangler.toml", "main");
     if (!toml || /^\[\[containers\]\]/m.test(toml)) continue;
     var content = await evReadFile(env, worker + "/worker.js", "main");
-    if (!content || !/^var VERSION = "\d+\.\d+\.\d+[^"]*";$/m.test(content)) continue;
+    if (!content || !/^var\sVERSION\s=\s"\d+\.\d+\.\d+[^"]*";$/m.test(content)) continue;
     var now = new Date().toISOString();
     var ins = await env.AUDIT.prepare("INSERT INTO evolve_candidates (worker, ts, status, kind, issue_id, path, updated_at) VALUES (?1, ?2, 'proposing', 'fix', ?3, ?4, ?2)").bind(worker, now, iss.id, worker + "/worker.js").run();
     var cid = ins.meta.last_row_id;
