@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.62-usage-snapshot-hourly";
+var VERSION = "0.4.64-resurrection-signal";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -1132,6 +1132,16 @@ async function selfState(env) {
     out.issues = { open_total: tot, by_priority: by, by_source: sr.results || [], top: tr.results || [] };
   } catch (e) {
     out.issues = { error: String(e && e.message || e).slice(0, 160) };
+  }
+  // RESURRECTED-RETIRED-SIGNAL-1 (#272): a worker recorded as folded/removed in worker_removals that now answers its
+  // /health with 2xx in worker_live_audit has been recreated (2026-10-01: qnfo-agent-ws, then qnfo-fleet-calibrator).
+  // Surfacing it here means the fleet notices a resurrection on its own instead of by chance.
+  try {
+    var rr = await env.DB_AUDIT.prepare("SELECT r.worker AS worker, r.action AS action, r.removed_at AS removed_at, a.http AS http, a.live_version AS live_version, a.probed_at AS probed_at FROM worker_removals r JOIN worker_live_audit a ON a.worker = r.worker WHERE a.http BETWEEN 200 AND 399 AND r.id = (SELECT MAX(id) FROM worker_removals WHERE worker = r.worker) AND lower(coalesce(r.action,'')) IN ('fold','folded','deleted','delete','removed','archive','archived') ORDER BY r.worker LIMIT 50").all();
+    out.resurrected_retired = rr.results || [];
+    out.summary.resurrected_retired = out.resurrected_retired.length;
+  } catch (e) {
+    out.resurrected_retired_error = String(e && e.message || e).slice(0, 160);
   }
   try {
     var qr = await env.DB_AUDIT.prepare("SELECT status, COUNT(*) AS n FROM outreach_queue GROUP BY status").all();
