@@ -51,7 +51,7 @@ File or clear an action from any worker/session (header `x-loop-token`, secret `
 `GET /api/human` returns the same view as JSON (`fleet-human/v1`).
 
 ## Machine endpoints (unchanged; consumed by qnfo-fleet-control and qnfo-autopilot)
-`/api/state`, `/api/actions`, `/api/loop`, `/api/loop/sync`, `/api/loop/execute`, `/api/integration`, `/api/refresh`, `/health`.
+`/api/state`, `/api/actions`, `/api/loop`, `/api/loop/sync`, `/api/loop/execute`, `/api/integration`, `/api/refresh`, `/health`, plus `/api/reach` and `POST /api/reach/ingest` (REACH-SIGNALS-INGEST-1, STRATEGY-1; the daily ingest still runs in the cron). The HTML reach scorecard that briefly lived on `/roi` is folded into the one page as a reach line in the business case; the full 7d/28d data stays at `/api/reach`. Every response carries `X-Robots-Tag: noindex` (DASHBOARD-NOINDEX-1).
 
 ## Refresh and storage
 - Cron `*/15`: rebuilds system state, runs the issue loop, and runs `governanceSnapshot` (GraphQL spend/pageviews, survival gates).

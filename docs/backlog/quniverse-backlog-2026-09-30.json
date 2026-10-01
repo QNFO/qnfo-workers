@@ -429,7 +429,7 @@
    "status": "owner-decision",
    "owner": "owner",
    "source": "docs/BUSINESS-PLAN.md Phase B.1",
-   "title": "Premium research digest ($10/mo) product line (depends on NO-PAYMENT-RAIL-1 #1616)"
+   "title": "Premium research digest ($10/mo) product line (depends on NO-PAYMENT-RAIL-1 #1616). Decided 2026-10-01 (docs/STRATEGY.md section 7): deferred until 200+ confirmed subscribers"
   },
   {
    "item": "RM-IPATENT-B2B-1",
@@ -439,7 +439,7 @@
    "status": "owner-decision",
    "owner": "owner",
    "source": "docs/BUSINESS-PLAN.md Phase B.2; #1648",
-   "title": "ipatent.me patent analytics B2B pilot with 5 users"
+   "title": "ipatent.me patent analytics B2B pilot with 5 users. Decided 2026-10-01 (docs/STRATEGY.md section 7): not pursued now; ipatent (ipatent.qnfo.org) stays a free experiment and ipatent.me is not cited"
   },
   {
    "item": "RM-BESPOKE-REPORTS-1",
@@ -449,7 +449,7 @@
    "status": "owner-decision",
    "owner": "owner",
    "source": "docs/BUSINESS-PLAN.md Phase B.3",
-   "title": "Bespoke research reports offered through warm outreach replies (12 replied)"
+   "title": "Bespoke research reports offered through warm outreach replies (12 replied). Decided 2026-10-01 (docs/STRATEGY.md section 7): becomes the JPCUB assessment offer (measurement for a platform or data centre), opened through warm replies"
   },
   {
    "item": "RM-BUFFER-MULTICHANNEL-1",
@@ -459,7 +459,7 @@
    "status": "owner-decision",
    "owner": "owner",
    "source": "docs/AUTONOMOUS-RESEARCH-PIPELINE.md s4 vs BUSINESS-PLAN standing rule 'no social media'",
-   "title": "Decide multi-channel distribution (LinkedIn/X/Mastodon via Buffer, BUFFER_TOKEN unprovisioned) vs own-pages-only rule"
+   "title": "Decide multi-channel distribution (LinkedIn/X/Mastodon via Buffer, BUFFER_TOKEN unprovisioned) vs own-pages-only rule. Decided 2026-10-01 (docs/STRATEGY.md sections 4-5): multi-channel distribution via Buffer in the owner's voice as gated T1; LinkedIn (primary) is drafted automatically and published after the owner's one-tap approval (LinkedIn API Terms 3.1), Mastodon, Threads and X post automatically inside the gates; live once the owner connects LinkedIn in Buffer"
   },
   {
    "item": "RM-SEO-INDEXNOW-JSONLD-1",
@@ -629,7 +629,7 @@
    "status": "owner-decision",
    "owner": "owner",
    "source": "handoffs 28929/28930",
-   "title": "Adaptive suggestion engine wave 1: suggestion-event logging + bandit (awaiting owner pick)"
+   "title": "Adaptive suggestion engine wave 1: suggestion-event logging + bandit (awaiting owner pick). Decided 2026-10-01 (docs/STRATEGY.md section 6.4): adopted as the weekly distribution bandit (Thompson sampling over topic x format x time slot, rewarded by engaged sessions and subscriptions attributed through UTM)"
   },
   {
    "item": "RM-PAGES-SITES-MIGRATION-1",
@@ -789,7 +789,7 @@
    "status": "owner-decision",
    "owner": "owner",
    "source": "impact_thresholds vs metric_registry impressions definition; fleet_budget workers cap 39 vs survival gate <= 28",
-   "title": "Owner decisions before 2026-10-25: impressions gate definition (frozen 5,610 baseline vs ratified prior-window MoM) and worker-count gate (cap re-baselined to 39 vs <= 28)"
+   "title": "Owner decisions before 2026-10-25: impressions gate definition (frozen 5,610 baseline vs ratified prior-window MoM) and worker-count gate (cap re-baselined to 39 vs <= 28). Decided 2026-10-01 (docs/STRATEGY.md sections 6.3 and 9): the impressions gate is retired in favour of the scorecard, and the 2026-10-25 gate is replaced by the review gate on 2026-12-31; the worker-count gate is not settled by STRATEGY.md"
   },
   {
    "item": "RM-ADOPTED-GOALS-CLOSEOUT-1",

@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.68-remediation-tick";
+var VERSION = "0.4.69-charter-loop";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2900,10 +2900,427 @@ async function activitySnapshotDaily(env) {
   return { ok: true, workers: stmts.length / 2 };
 }
 __name(activitySnapshotDaily, "activitySnapshotDaily");
+// ---- CHARTER-LOOP-1:BEGIN (2026-10-01, QUNIVERSE-CHARTER-1) ----
+// The Quniverse charter (docs/QUNIVERSE-CHARTER.md) is a MEASURED document, not an essay. Its hand-written half
+// states what the system is, what it should be, its objectives, SWOT, MVP, blue-sky footprint and decision rules.
+// Its generated half (between the CHARTER-LIVE markers) is recomputed here from the live registers every day and
+// committed back to main, so the charter can never be older than the fleet it describes. The owner directive behind
+// it (2026-10-01): research these questions once, then keep them "baked into the heart and soul" of every development
+// decision automatically, server-side, without further user involvement.
+//
+// What this block does, in order (charterTick):
+//   facts    = one read of the registers the charter is graded on (objectives, metric_registry, impact_thresholds,
+//              fleet_budget, survival_state, shutdown_manifest, autonomy_scores, roadmap_implementation, agent_issues,
+//              worker_live_audit, guard_registry, subscribers, goals, fleet_deploys). Every read is individually
+//              fail-soft: a missing table yields an empty fact, never an exception.
+//   evaluate = pure: pillar health (metric meets target), MVP component status, a live SWOT, the roadmap by horizon,
+//              the review gate, and the list of charter breaches.
+//   snapshot = one charter_snapshots row per tick (state_json + rendered sha), so the dashboard and any session can
+//              read the fleet's own account of itself.
+//   breaches = CHARTER-MVP-DOWN-1 issues are filed (open-title dedup) while an MVP component is not serving, and
+//              closed with close_evidence when it serves again. Nothing else is filed from here: budget, spend and
+//              gate breaches already have owners and are only REPORTED in the charter.
+//   commit   = the rendered block replaces the CHARTER-LIVE section of docs/QUNIVERSE-CHARTER.md on main through the
+//              GitHub Contents API (the same GITHUB_TOKEN write path LAND-CODE-FIX-1 proved), at most once per UTC day
+//              and only when the block changed. A doc without both markers is never written (nothing to anchor to).
+// The pure functions take no env and touch no I/O, so qnfo-fleet-control/charter.test.mjs exercises them offline.
+var CHARTER_VERSION = "1.0.0";
+var CHARTER_REPO = "QNFO/qnfo-workers";
+var CHARTER_DOC_PATH = "docs/QUNIVERSE-CHARTER.md";
+var CHARTER_BEGIN = "<!-- CHARTER-LIVE:BEGIN -->";
+var CHARTER_END = "<!-- CHARTER-LIVE:END -->";
+var CHARTER_PILLARS = [
+  { key: "core", name: "Smallest verified core", objective: "mission", metrics: ["worker_count", "drift_total", "probe_coverage_pct", "deploy_freshness_h", "cron_compliance", "guard_rcs"], types: ["core", "gate"] },
+  { key: "autonomy", name: "Human as override, never dependency", objective: "objective-function", metrics: ["open_agent_issues", "fleet_context_tokens"], types: ["autonomy", "governance", "observability"] },
+  { key: "research", name: "Research that is read and cited", objective: "return-on-spend", metrics: ["publications_30d", "full_reports_live_30d", "zenodo_versions_per_flagship", "indexed_surface"], types: ["research-product"] },
+  { key: "reach", name: "Credible reach", objective: "return-on-spend", metrics: ["distribution_posts_30d", "subscribers_growth_monthly", "pageviews_30d", "referral_30d", "external_impact_per_dollar", "zenodo_views_total"], types: ["impact", "web"] },
+  { key: "cost", name: "Cost that returns", objective: "cost-ceiling", metrics: ["cost_usd_30d", "workers_ai_cost_30d_usd", "gateway_cap_30d_usd", "cost_per_successful_task_by_class", "workers_ai_attribution_coverage_pct"], types: ["cost"] },
+  { key: "security", name: "A trust boundary that holds", objective: "mission", metrics: [], types: ["security"] },
+  { key: "personal", name: "Personal utility layer", objective: "mission", metrics: [], types: ["personal"] }
+];
+// The minimum verified core: the components the charter says the system IS. Anything else is optional surface and
+// must earn its place through the net-zero rule (fleet_budget) and live-consumer proof (F1/F2).
+var CHARTER_MVP = [
+  { worker: "qnfo-ops", pillar: "core", role: "canonical deploy path (/ops/deploy), service registry, ops agent" },
+  { worker: "qnfo-deploy-guard", pillar: "core", role: "deploy lock, deploy ledger, secret-lock leases, mutation detector" },
+  { worker: "qnfo-ai", pillar: "core", role: "model router and research gateway (cost ladder, ensembles, RAG)" },
+  { worker: "qnfo-tools-mcp", pillar: "core", role: "the machine tool surface every client uses" },
+  { worker: "qnfo-memory-mcp", pillar: "core", role: "persistent agent memory (D1 + Vectorize + KG)" },
+  { worker: "qnfo-fleet-control", pillar: "autonomy", role: "governance kernel: drift scan, self-heal, evolve, metrics, charter loop" },
+  { worker: "qnfo-autonomy-scorer", pillar: "autonomy", role: "measured VSM/OODA autonomy scores and survival state" },
+  { worker: "qnfo-fleet-dashboard", pillar: "autonomy", role: "the owner surface (fleet.qnfo.org) and probe coverage" },
+  { worker: "fleet-exec", pillar: "autonomy", role: "D1-defined task engine and cron dispatcher" },
+  { worker: "qnfo-research-exec", pillar: "research", role: "research queue -> publish (Zenodo DOI, PDF, KG)" },
+  { worker: "qnfo-paper-indexer", pillar: "research", role: "corpus index, versions, citation impact" },
+  { worker: "qnfo-paper-reviser", pillar: "research", role: "adversarial revision loop" },
+  { worker: "qnfo-gateway", pillar: "reach", role: "qnfo.org and papers.qnfo.org, the home of record" },
+  { worker: "qnfo-subscribers", pillar: "reach", role: "the owned audience (double opt-in, digest)" },
+  { worker: "qnfo-social", pillar: "reach", role: "distribution of published work inside the cadence caps" },
+  { worker: "qnfo-email", pillar: "personal", role: "owner channel: alerts, command verbs, intake" },
+  { worker: "personal-api", pillar: "personal", role: "personal twin (calendar, tasks, memory, brief)" },
+  { worker: "calendar-api", pillar: "personal", role: "calendar plane and ICS publish" }
+];
+var CHARTER_TYPE_WEIGHT = { impact: 5, cost: 5, autonomy: 4, security: 4, "research-product": 3, core: 3, observability: 2, governance: 2, web: 2, personal: 2, gate: 1 };
+var CHARTER_STATUS_WEIGHT = { broken: 5, violated: 5, "gate-verify": 4, partial: 3, "not-built": 2, open: 2, "local-only": 1, "enforced-partial": 1, "enforced-unverified": 1 };
+var CHARTER_HORIZON = { broken: "H0", violated: "H0", "gate-verify": "H0", partial: "H1", "not-built": "H2", open: "H2", "owner-decision": "parked", deferred: "parked", "local-only": "parked", "enforced-partial": "watch", "enforced-unverified": "watch", "enforced-verified": "done", "violated-remediated": "done" };
+function charterNum(v) {
+  if (v === null || v === void 0) return null;
+  if (typeof v === "number") return isFinite(v) ? v : null;
+  var m = String(v).replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+  return m ? Number(m[0]) : null;
+}
+// Parses a metric_registry / impact_thresholds target into {op, val}. Returns null for "maximize", prose or RETIRED.
+function charterTarget(t) {
+  if (t === null || t === void 0) return null;
+  var s = String(t).trim();
+  if (!s || /^(maximize|minimize|retired|tbd|n\/a)/i.test(s)) return null;
+  // A per-unit rule ("<=144/day each") is a constraint on each worker's cron rate, not a threshold on the
+  // registry value (cron_compliance stores a percentage); grading it would read 100% <= 144 as "met".
+  if (/\/day each/i.test(s)) return null;
+  var m = s.match(/^(<=|>=|<|>|==?)?\s*(all\s+)?\$?(\+)?(-?\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  var op = m[1] || (m[3] ? ">=" : "<=");
+  if (op === "=" || op === "==") op = "==";
+  return { op: op, val: Number(m[4]) };
+}
+function charterMeets(value, tgt) {
+  if (value === null || !tgt) return null;
+  if (tgt.op === "<=") return value <= tgt.val;
+  if (tgt.op === ">=") return value >= tgt.val;
+  if (tgt.op === "<") return value < tgt.val;
+  if (tgt.op === ">") return value > tgt.val;
+  return value === tgt.val;
+}
+function charterPillarOf(worker) {
+  for (var i = 0; i < CHARTER_MVP.length; i++) if (CHARTER_MVP[i].worker === worker) return CHARTER_MVP[i].pillar;
+  return null;
+}
+function charterPillarOfMetric(metric) {
+  for (var i = 0; i < CHARTER_PILLARS.length; i++) if (CHARTER_PILLARS[i].metrics.indexOf(metric) >= 0) return CHARTER_PILLARS[i].key;
+  return null;
+}
+function charterPillarOfType(type) {
+  for (var i = 0; i < CHARTER_PILLARS.length; i++) if (CHARTER_PILLARS[i].types.indexOf(String(type || "")) >= 0) return CHARTER_PILLARS[i].key;
+  return "autonomy";
+}
+function charterRound(x, d) { var p = Math.pow(10, d || 2); return Math.round(x * p) / p; }
+// Pure: facts -> the charter's measured state. No I/O.
+function charterEvaluate(f, nowIso) {
+  f = f || {};
+  var now = nowIso || new Date().toISOString();
+  var retired = {};
+  (f.impact_thresholds || []).forEach(function(r) { if (/^retired/i.test(String(r.target || ""))) retired[r.metric] = true; });
+  // 1. metrics: value vs target per pillar
+  var metrics = [];
+  var byMetric = {};
+  (f.metric_registry || []).forEach(function(r) {
+    var val = charterNum(r.last_value);
+    var tgt = charterTarget(r.target);
+    var meets = retired[r.metric] ? null : charterMeets(val, tgt);
+    var row = { metric: r.metric, pillar: charterPillarOfMetric(r.metric), value: val, raw: r.last_value, target: r.target, meets: meets, refreshed: r.last_refreshed, retired: !!retired[r.metric] };
+    metrics.push(row);
+    byMetric[r.metric] = row;
+  });
+  var pillars = CHARTER_PILLARS.map(function(p) {
+    var met = 0, evald = 0, missing = [];
+    p.metrics.forEach(function(m) {
+      var r = byMetric[m];
+      if (!r || r.meets === null) return;
+      evald++;
+      if (r.meets) met++; else missing.push(m);
+    });
+    return { key: p.key, name: p.name, objective: p.objective, met: met, evaluated: evald, health: evald ? charterRound(met / evald) : null, missing: missing };
+  });
+  // 2. MVP component status from the live audit
+  var audit = {};
+  (f.worker_live_audit || []).forEach(function(r) { audit[r.worker] = r; });
+  var mvp = CHARTER_MVP.map(function(c) {
+    var a = audit[c.worker];
+    var note = a ? String(a.note || "") : "ABSENT";
+    var up = note === "SYNC" || note === "CRON_ONLY" || (a && Number(a.http) === 200);
+    return { worker: c.worker, pillar: c.pillar, role: c.role, note: note, version: a ? a.live_version : null, up: !!up };
+  });
+  var mvpUp = mvp.filter(function(c) { return c.up; }).length;
+  // 3. budget classes over cap
+  var over = (f.fleet_budget || []).filter(function(b) { return charterNum(b.current) !== null && charterNum(b.cap) !== null && charterNum(b.current) > charterNum(b.cap); })
+    .map(function(b) { return { node_class: b.node_class, current: charterNum(b.current), cap: charterNum(b.cap), unit: b.unit }; });
+  // 4. roadmap by horizon with a priority score
+  var roadmap = (f.roadmap || []).map(function(r) {
+    var tw = CHARTER_TYPE_WEIGHT[r.artifact_type] || 1, sw = CHARTER_STATUS_WEIGHT[r.status] || 0;
+    return { item: r.item, status: r.status, type: r.artifact_type, pillar: charterPillarOfType(r.artifact_type), horizon: CHARTER_HORIZON[r.status] || "watch", score: tw * sw, title: String(r.title || "").slice(0, 110) };
+  });
+  roadmap.sort(function(a, b) { return b.score - a.score || String(a.item).localeCompare(String(b.item)); });
+  var horizons = {};
+  roadmap.forEach(function(r) { horizons[r.horizon] = (horizons[r.horizon] || 0) + 1; });
+  // 5. issues
+  var issues = f.open_issues || [];
+  var highIssues = issues.filter(function(i) { return i.priority === "high" || i.priority === "critical"; });
+  var secIssues = issues.filter(function(i) { return /^SEC-/.test(String(i.title || "")); });
+  // 6. autonomy
+  var dims = f.autonomy_scores || [];
+  var composite = null;
+  dims.forEach(function(d) { if (d.dimension === "overall") composite = charterNum(d.score); });
+  var weakDims = dims.filter(function(d) { return charterNum(d.score) !== null && charterNum(d.score) < 3 && d.dimension !== "overall"; });
+  var strongDims = dims.filter(function(d) { return charterNum(d.score) !== null && charterNum(d.score) >= 4.5 && d.dimension !== "overall"; });
+  // 7. review gate (the 2026-12-31 gate from docs/STRATEGY.md s9, as recorded in impact_thresholds)
+  var gate = null;
+  (f.impact_thresholds || []).forEach(function(r) { if (r.metric === "review_gate_2026_12_31") gate = { state: r.state, due: r.due, baseline: r.baseline, description: r.description }; });
+  // 8. SWOT, measured
+  var S = [], W = [], O = [], T = [];
+  metrics.forEach(function(m) { if (m.meets === true) S.push(m.metric + " = " + m.raw + " (target " + String(m.target).split("(")[0].trim() + ")"); });
+  strongDims.forEach(function(d) { S.push("autonomy " + d.dimension + " " + d.score + "/5"); });
+  if (f.guards_total) S.push("guard_registry " + f.guards_verified + "/" + f.guards_total + " guards verified");
+  if (mvpUp === mvp.length) S.push("every MVP component serving (" + mvpUp + "/" + mvp.length + ")");
+  roadmap.filter(function(r) { return r.status === "enforced-verified"; }).forEach(function(r) { S.push("gate " + r.item + " holds: " + r.title); });
+  metrics.forEach(function(m) { if (m.meets === false) W.push(m.metric + " = " + m.raw + " vs target " + String(m.target).split("(")[0].trim()); });
+  weakDims.forEach(function(d) { W.push("autonomy " + d.dimension + " " + d.score + "/5: " + String(d.gap || "").slice(0, 90)); });
+  over.forEach(function(b) { W.push("fleet_budget " + b.node_class + " " + b.current + " > cap " + b.cap + " " + (b.unit || "")); });
+  mvp.filter(function(c) { return !c.up; }).forEach(function(c) { W.push("MVP component " + c.worker + " not serving (" + c.note + ")"); });
+  roadmap.filter(function(r) { return r.status === "violated" || r.status === "broken"; }).forEach(function(r) { W.push(r.status + " " + r.item + ": " + r.title); });
+  roadmap.filter(function(r) { return (r.horizon === "H1" || r.horizon === "H2") && r.score >= 6; }).slice(0, 12).forEach(function(r) { O.push(r.item + " [" + r.pillar + ", " + r.status + "]: " + r.title); });
+  (f.shutdown_manifest || []).forEach(function(r) { if (String(r.state).indexOf("ARMED") === 0) T.push("shutdown_manifest phase " + r.phase + " " + r.component + " ARMED (due " + r.due_date + ")"); });
+  if (gate) T.push("review gate 2026-12-31 " + gate.state + ": " + String(gate.baseline || "").slice(0, 120));
+  over.filter(function(b) { return /^ai_spend/.test(b.node_class); }).forEach(function(b) { T.push("AI spend " + b.node_class + " $" + b.current + " over cap $" + b.cap); });
+  secIssues.forEach(function(i) { T.push("open security issue #" + i.id + " " + String(i.title).slice(0, 80)); });
+  if (highIssues.length) T.push(highIssues.length + " open high-priority issues (" + charterTopCats(highIssues) + ")");
+  // 9. breaches the charter itself acts on
+  var breaches = [];
+  mvp.filter(function(c) { return !c.up; }).forEach(function(c) { breaches.push({ key: "CHARTER-MVP-DOWN-1: " + c.worker, severity: "high", text: "MVP component " + c.worker + " (" + c.role + ") is " + c.note + " in worker_live_audit." }); });
+  var healthVals = pillars.filter(function(p) { return p.health !== null; }).map(function(p) { return p.health; });
+  var health = healthVals.length ? charterRound(healthVals.reduce(function(a, b) { return a + b; }, 0) / healthVals.length) : null;
+  return {
+    charter_version: CHARTER_VERSION, ts: now, health: health, composite_autonomy: composite,
+    pillars: pillars, metrics: metrics, mvp: mvp, mvp_up: mvpUp, budget_over: over,
+    roadmap: roadmap, horizons: horizons, open_issues: issues.length, high_issues: highIssues.length, security_issues: secIssues.length,
+    review_gate: gate, objectives: f.objectives || [], survival: f.survival || null, shutdown: f.shutdown_manifest || [],
+    subscribers_confirmed: f.subscribers_confirmed, proposed_revisions: f.proposed_revisions, deploys_7d: f.deploys_7d, deploy_ok_7d: f.deploy_ok_7d,
+    live_workers: f.live_workers, swot: { strengths: S, weaknesses: W, opportunities: O, threats: T }, breaches: breaches
+  };
+}
+function charterTopCats(issues) {
+  var c = {};
+  issues.forEach(function(i) { c[i.category || "?"] = (c[i.category || "?"] || 0) + 1; });
+  return Object.keys(c).sort(function(a, b) { return c[b] - c[a]; }).slice(0, 4).map(function(k) { return k + " " + c[k]; }).join(", ");
+}
+function charterCell(s) { return String(s === null || s === void 0 ? "" : s).replace(/\|/g, "\\|").replace(/\r?\n/g, " "); }
+// Pure: measured state -> the markdown block between the CHARTER-LIVE markers.
+function charterRender(ev) {
+  var L = [];
+  L.push(CHARTER_BEGIN);
+  L.push("_Generated by qnfo-fleet-control CHARTER-LOOP-1 at " + ev.ts + " (charter " + ev.charter_version + "). Do not edit by hand: the next daily tick overwrites this section. Live JSON: `GET https://qnfo-fleet-control.q08.workers.dev/charter`._");
+  L.push("");
+  L.push("### Scoreboard");
+  L.push("");
+  L.push("| Signal | Value |");
+  L.push("|---|---|");
+  L.push("| Charter health (mean pillar health, metrics meeting target) | " + (ev.health === null ? "n/a" : ev.health) + " |");
+  L.push("| Autonomy composite (qnfo-autonomy-scorer) | " + (ev.composite_autonomy === null ? "n/a" : ev.composite_autonomy + " / 5") + " |");
+  L.push("| MVP components serving | " + ev.mvp_up + " / " + ev.mvp.length + " |");
+  L.push("| Live workers (service_registry) | " + charterCell(ev.live_workers) + " |");
+  L.push("| Open agent issues (high) | " + ev.open_issues + " (" + ev.high_issues + ") |");
+  L.push("| Canonical deploys last 7d (ok) | " + charterCell(ev.deploys_7d) + " (" + charterCell(ev.deploy_ok_7d) + ") |");
+  L.push("| Confirmed subscribers | " + charterCell(ev.subscribers_confirmed) + " |");
+  L.push("| Objective revisions awaiting ratification | " + charterCell(ev.proposed_revisions) + " |");
+  if (ev.survival) L.push("| Survival state (sai / survival_score) | " + charterCell(ev.survival.sai) + " / " + charterCell(ev.survival.survival_score) + " at " + charterCell(ev.survival.ts) + " |");
+  L.push("");
+  L.push("### Pillars");
+  L.push("");
+  L.push("| Pillar | Objective | Metrics met | Health | Missing target |");
+  L.push("|---|---|---|---|---|");
+  ev.pillars.forEach(function(p) { L.push("| " + p.key + ": " + p.name + " | " + p.objective + " | " + p.met + "/" + p.evaluated + " | " + (p.health === null ? "n/a" : p.health) + " | " + (p.missing.join(", ") || "none") + " |"); });
+  L.push("");
+  L.push("### MVP (the minimum verified core)");
+  L.push("");
+  L.push("| Component | Pillar | Role | Live | Version |");
+  L.push("|---|---|---|---|---|");
+  ev.mvp.forEach(function(c) { L.push("| " + c.worker + " | " + c.pillar + " | " + charterCell(c.role) + " | " + (c.up ? "yes" : "**NO**") + " (" + c.note + ") | " + charterCell(c.version || "") + " |"); });
+  L.push("");
+  L.push("### SWOT, measured today");
+  L.push("");
+  var sw = ev.swot;
+  function list(title, arr) {
+    L.push("**" + title + "**");
+    L.push("");
+    if (!arr.length) L.push("- none measured");
+    arr.slice(0, 14).forEach(function(x) { L.push("- " + charterCell(x)); });
+    if (arr.length > 14) L.push("- and " + (arr.length - 14) + " more");
+    L.push("");
+  }
+  list("Strengths", sw.strengths);
+  list("Weaknesses", sw.weaknesses);
+  list("Opportunities (highest-leverage open roadmap items)", sw.opportunities);
+  list("Threats", sw.threats);
+  L.push("### Roadmap by horizon (roadmap_implementation)");
+  L.push("");
+  L.push("| Horizon | Meaning | Items |");
+  L.push("|---|---|---|");
+  L.push("| H0 | now: broken, violated or awaiting gate verification | " + (ev.horizons.H0 || 0) + " |");
+  L.push("| H1 | to the 2026-12-31 review gate: partial builds to finish | " + (ev.horizons.H1 || 0) + " |");
+  L.push("| H2 | after the gate: not yet built | " + (ev.horizons.H2 || 0) + " |");
+  L.push("| watch | gates enforced but partial or unverified | " + (ev.horizons.watch || 0) + " |");
+  L.push("| parked | owner decision, deferred or local-only (a default is in effect) | " + (ev.horizons.parked || 0) + " |");
+  L.push("| done | gates enforced and verified, or remediated | " + (ev.horizons.done || 0) + " |");
+  L.push("");
+  L.push("Top of the queue (priority = pillar weight x status weight):");
+  L.push("");
+  ev.roadmap.filter(function(r) { return r.horizon === "H0" || r.horizon === "H1" || r.horizon === "H2"; }).slice(0, 15).forEach(function(r) { L.push("- " + r.horizon + " " + r.item + " [" + r.pillar + ", " + r.status + "] " + charterCell(r.title)); });
+  L.push("");
+  L.push("### Review gate 2026-12-31");
+  L.push("");
+  if (ev.review_gate) L.push("State **" + ev.review_gate.state + "**. " + charterCell(ev.review_gate.description) + " Baseline: " + charterCell(ev.review_gate.baseline) + ".");
+  else L.push("No review_gate_2026_12_31 row in impact_thresholds.");
+  L.push("");
+  L.push("### Charter breaches");
+  L.push("");
+  if (!ev.breaches.length) L.push("None. Every MVP component is serving.");
+  ev.breaches.forEach(function(b) { L.push("- **" + b.severity + "** " + charterCell(b.key) + ": " + charterCell(b.text)); });
+  L.push("");
+  L.push("### Terminal objectives (qnfo-audit.objectives, immutable by the fleet)");
+  L.push("");
+  ev.objectives.forEach(function(o) { L.push("- **" + o.objective_key + "** v" + o.version + " (" + o.status + ", ratified " + charterCell(o.ratified_on || "n/a") + "): " + charterCell(String(o.statement || "").slice(0, 240)) + (String(o.statement || "").length > 240 ? "..." : "")); });
+  L.push(CHARTER_END);
+  return L.join("\n");
+}
+function charterSplice(doc, block) {
+  var a = doc.indexOf(CHARTER_BEGIN), b = doc.indexOf(CHARTER_END);
+  if (a < 0 || b < 0 || b < a) return null;
+  return doc.slice(0, a) + block + doc.slice(b + CHARTER_END.length);
+}
+async function charterSchema(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS charter_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, charter_version TEXT, worker_version TEXT, health REAL, mvp_up INTEGER, breaches INTEGER, state_json TEXT, rendered_sha TEXT, commit_sha TEXT, commit_note TEXT)").run();
+}
+async function charterRows(env, sql) {
+  try { var r = await env.AUDIT.prepare(sql).all(); return (r && r.results) || []; } catch (e) { return []; }
+}
+async function charterOne(env, sql) {
+  try { return await env.AUDIT.prepare(sql).first(); } catch (e) { return null; }
+}
+async function charterFacts(env) {
+  var f = {};
+  f.objectives = await charterRows(env, "SELECT objective_key, statement, version, status, ratified_on FROM objectives WHERE status='ACTIVE' ORDER BY id");
+  f.metric_registry = await charterRows(env, "SELECT metric, layer, kind, last_value, last_refreshed, target, state FROM metric_registry");
+  f.impact_thresholds = await charterRows(env, "SELECT metric, description, baseline, target, due, state FROM impact_thresholds");
+  f.fleet_budget = await charterRows(env, "SELECT node_class, cap, target, current, unit FROM fleet_budget");
+  f.survival = await charterOne(env, "SELECT ts, sai, survival_score, graded_score FROM survival_state WHERE id=1");
+  f.shutdown_manifest = await charterRows(env, "SELECT phase, component, state, due_date, substr(condition,1,160) AS condition FROM shutdown_manifest ORDER BY phase, id");
+  f.autonomy_scores = await charterRows(env, "SELECT dimension, framework, score, scored_at, substr(gap,1,120) AS gap FROM autonomy_scores");
+  f.roadmap = await charterRows(env, "SELECT item, status, artifact_type, substr(title,1,120) AS title FROM roadmap_implementation ORDER BY id LIMIT 500");
+  f.open_issues = await charterRows(env, "SELECT id, substr(title,1,140) AS title, priority, category, source FROM agent_issues WHERE status='open' ORDER BY id DESC LIMIT 400");
+  f.worker_live_audit = await charterRows(env, "SELECT worker, note, live_version, http, probed_at FROM worker_live_audit");
+  var g = await charterOne(env, "SELECT COUNT(*) AS n, SUM(CASE WHEN status='verified' THEN 1 ELSE 0 END) AS v FROM guard_registry");
+  f.guards_total = g ? Number(g.n || 0) : 0;
+  f.guards_verified = g ? Number(g.v || 0) : 0;
+  var s = await charterOne(env, "SELECT COUNT(*) AS n FROM subscribers WHERE confirmed_at IS NOT NULL OR status='confirmed'");
+  f.subscribers_confirmed = s ? Number(s.n || 0) : null;
+  var pr = await charterOne(env, "SELECT COUNT(*) AS n FROM goals WHERE goal_type='objective-revision' AND status='proposed'");
+  f.proposed_revisions = pr ? Number(pr.n || 0) : null;
+  var d = await charterOne(env, "SELECT COUNT(*) AS n, SUM(CASE WHEN ok=1 THEN 1 ELSE 0 END) AS ok FROM fleet_deploys WHERE ts > datetime('now','-7 days')");
+  f.deploys_7d = d ? Number(d.n || 0) : null;
+  f.deploy_ok_7d = d ? Number(d.ok || 0) : null;
+  var lw = await charterOne(env, "SELECT COUNT(*) AS n FROM service_registry WHERE state='live'");
+  f.live_workers = lw ? Number(lw.n || 0) : null;
+  return f;
+}
+async function charterBreaches(env, ev) {
+  var filed = 0, closed = 0, nowMs = Date.now();
+  var openRows = await charterRows(env, "SELECT id, title FROM agent_issues WHERE status='open' AND title LIKE 'CHARTER-MVP-DOWN-1: %'");
+  var openByTitle = {};
+  openRows.forEach(function(r) { openByTitle[r.title] = r.id; });
+  for (var i = 0; i < ev.breaches.length; i++) {
+    var b = ev.breaches[i];
+    if (openByTitle[b.key]) continue;
+    try {
+      await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'charter-loop', 'reliability', ?3, 'open', ?4, ?4)")
+        .bind(b.key, "AUTO-FILED by qnfo-fleet-control CHARTER-LOOP-1 (docs/QUNIVERSE-CHARTER.md, MVP section). " + b.text + " DoD: worker_live_audit note SYNC or CRON_ONLY on two consecutive daily ticks; the loop closes this issue itself with close_evidence.", b.severity, nowMs).run();
+      filed++;
+    } catch (e) {}
+  }
+  var want = {};
+  ev.breaches.forEach(function(b) { want[b.key] = true; });
+  for (var t in openByTitle) {
+    if (want[t]) continue;
+    var id = openByTitle[t];
+    try {
+      await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'CHARTER-LOOP-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'")
+        .bind(id, "CHARTER-LOOP-1 " + ev.ts + ": component serving again in worker_live_audit (live probe), charter snapshot mvp_up=" + ev.mvp_up + "/" + ev.mvp.length).run();
+      await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1").bind(id, nowMs).run();
+      closed++;
+    } catch (e) {}
+  }
+  return { filed: filed, closed: closed };
+}
+async function charterCommit(env, block, day, force) {
+  if (!env.GITHUB_TOKEN) return { status: "no-token", note: "GITHUB_TOKEN missing; snapshot only" };
+  var last = await charterOne(env, "SELECT substr(ts,1,10) AS day FROM charter_snapshots WHERE commit_sha IS NOT NULL ORDER BY id DESC LIMIT 1");
+  if (!force && last && last.day === day) return { status: "already-today", note: "committed earlier today" };
+  var hdr = { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/charter", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+  var gr = await timedFetch("https://api.github.com/repos/" + CHARTER_REPO + "/contents/" + CHARTER_DOC_PATH + "?ref=main", { headers: hdr }, 12e3);
+  if (gr.status !== 200) return { status: "read-failed", note: "GET contents HTTP " + gr.status };
+  var gj = await gr.json().catch(function() { return null; });
+  if (!gj || !gj.content || !gj.sha) return { status: "read-failed", note: "contents response unreadable" };
+  var doc;
+  try { doc = new TextDecoder().decode(Uint8Array.from(atob(String(gj.content).replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); })); } catch (e) { return { status: "read-failed", note: "base64 decode failed" }; }
+  var next = charterSplice(doc, block);
+  if (next === null) return { status: "markers-missing", note: "doc lacks CHARTER-LIVE markers; refusing to write" };
+  if (next === doc) return { status: "unchanged", note: "rendered block identical to main" };
+  var body = { message: "chore(charter): CHARTER-LOOP-1 refresh " + day + " [skip ci]", content: b64encode(next), sha: gj.sha, branch: "main" };
+  var pr = await timedFetch("https://api.github.com/repos/" + CHARTER_REPO + "/contents/" + CHARTER_DOC_PATH, { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify(body) }, 15e3);
+  var pj = pr.status === 200 || pr.status === 201 ? await pr.json().catch(function() { return null; }) : null;
+  if (!pj || !pj.commit || !pj.commit.sha) return { status: "write-failed", note: "PUT contents HTTP " + pr.status };
+  return { status: "committed", sha: pj.commit.sha, note: "docs/QUNIVERSE-CHARTER.md refreshed on main" };
+}
+async function charterTick(env, force) {
+  var t0 = Date.now();
+  await charterSchema(env);
+  var facts = await charterFacts(env);
+  var ev = charterEvaluate(facts, new Date().toISOString());
+  var block = charterRender(ev);
+  var sha = await sha256(block);
+  var br = await charterBreaches(env, ev);
+  var day = ev.ts.slice(0, 10);
+  var commit;
+  try { commit = await charterCommit(env, block, day, !!force); } catch (e) { commit = { status: "write-failed", note: String(e && e.message || e).slice(0, 120) }; }
+  try {
+    await env.AUDIT.prepare("INSERT INTO charter_snapshots (ts, charter_version, worker_version, health, mvp_up, breaches, state_json, rendered_sha, commit_sha, commit_note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)")
+      .bind(ev.ts, CHARTER_VERSION, VERSION, ev.health, ev.mvp_up, ev.breaches.length, JSON.stringify(ev).slice(0, 180000), sha, commit.sha || null, (commit.status + ": " + commit.note).slice(0, 200)).run();
+    await env.AUDIT.prepare("DELETE FROM charter_snapshots WHERE id NOT IN (SELECT id FROM charter_snapshots ORDER BY id DESC LIMIT 400)").run();
+  } catch (e) {}
+  return { ok: true, ts: ev.ts, health: ev.health, mvp_up: ev.mvp_up + "/" + ev.mvp.length, breaches: ev.breaches.length, issues: br, commit: commit, rendered_sha: sha, ms: Date.now() - t0 };
+}
+async function charterLatest(env) {
+  await charterSchema(env);
+  var row = await charterOne(env, "SELECT id, ts, charter_version, worker_version, health, mvp_up, breaches, state_json, rendered_sha, commit_sha, commit_note FROM charter_snapshots ORDER BY id DESC LIMIT 1");
+  if (!row) return null;
+  var state = null;
+  try { state = JSON.parse(row.state_json); } catch (e) {}
+  return { id: row.id, ts: row.ts, charter_version: row.charter_version, worker_version: row.worker_version, health: row.health, mvp_up: row.mvp_up, breaches: row.breaches, rendered_sha: row.rendered_sha, commit_sha: row.commit_sha, commit_note: row.commit_note, state: state };
+}
+// ---- CHARTER-LOOP-1:END ----
 var worker_default2 = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const p = url.pathname;
+    // CHARTER-LOOP-1 (QUNIVERSE-CHARTER-1): the fleet's own account of itself. GET is public (it is what the charter
+    // document publishes anyway); the tick is admin-gated like every other mutating route here.
+    if (p === "/charter" && request.method === "GET") {
+      var latest = await charterLatest(env);
+      if (url.searchParams.get("live") === "1" || !latest) {
+        var cf = await charterFacts(env);
+        var cev = charterEvaluate(cf, new Date().toISOString());
+        return json({ ok: true, source: "live", worker_version: VERSION, state: cev, facts: url.searchParams.get("facts") === "1" ? cf : void 0 });
+      }
+      return json({ ok: true, source: "snapshot", worker_version: VERSION, snapshot: latest });
+    }
+    if (p === "/charter.md" && request.method === "GET") {
+      var cf2 = await charterFacts(env);
+      return new Response(charterRender(charterEvaluate(cf2, new Date().toISOString())), { status: 200, headers: { "Content-Type": "text/markdown; charset=utf-8" } });
+    }
+    if (p === "/charter/tick" && request.method === "POST") {
+      var chh = request.headers.get("Authorization") || "";
+      var cht = chh.indexOf("Bearer ") === 0 ? chh.slice(7) : chh;
+      if (!(cht && ((env.DEPLOY_ADMIN_TOKEN && cht === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && cht === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
+      return json(await charterTick(env, url.searchParams.get("force") === "1"));
+    }
     if (p === "/obs/reassert" && request.method === "POST") {
       return json(await reassertObservability(env));
     }
@@ -2957,6 +3374,7 @@ var worker_default2 = {
     if (cron === "*/20 * * * *") { ctx.waitUntil(reassertObservability(env).catch((e) => console.error("reassertObservability error:", e && e.message || e))); return advisorMod.default.scheduled(event, env, ctx); }
     if (cron === "0 3 * * *") {
       ctx.waitUntil(disposeRetired(env));
+      ctx.waitUntil(charterTick(env, false).catch((e) => console.error("charterTick error:", e && e.message || e)));
       ctx.waitUntil(costImpactGuard(env).catch((e) => console.error("costImpactGuard error:", e && e.message || e)));
       ctx.waitUntil(activitySnapshotDaily(env).catch((e) => console.error("activitySnapshotDaily error:", e && e.message || e)));
       return calibratorMod.default.scheduled(event, env, ctx);

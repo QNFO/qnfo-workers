@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.7-radar-truthful"; /* OUTREACH-ATTEMPT-CAP-1 */
+var VERSION = "1.15.8-outreach-consent"; /* OUTREACH-CONSENT-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -761,7 +761,7 @@ async function jobBriefing(env) {
     if (regText) {
       const now = /* @__PURE__ */ new Date();
       const due = [];
-      const re = /^- \[ \] (\d{4}-\d{2}-\d{2})(?:[ T]\d{2}:\d{2})?.*? — (.+)$/gm;
+      const re = /^- \[ \] (\d{4}-\d{2}-\d{2})(?:[ T]\d{2}:\d{2})?.*? \u2014 (.+)$/gm;
       let m;
       while ((m = re.exec(regText)) !== null) {
         const d2 = /* @__PURE__ */ new Date(m[1] + "T00:00:00Z");
@@ -1332,7 +1332,7 @@ async function jobBoardSync(env) {
   const existingLower = new Set(existing.map((t) => t.toLowerCase()));
   const haveCode = /* @__PURE__ */ new Set();
   for (const t of existing) {
-    const m = t.match(/^([A-Z0-9.]+)—/);
+    const m = t.match(/^([A-Z0-9.]+)\u2014/);
     if (m) haveCode.add(m[1].trim());
   }
   const esc = /* @__PURE__ */ __name((s) => String(s || "").replace(/\\/g, "").replace(/"/g, "'").replace(/\n/g, " ").replace(/\r/g, " ").slice(0, 400), "esc");
@@ -1530,8 +1530,23 @@ async function verifyArxivEmail(env, paperId) {
   }
 }
 __name(verifyArxivEmail, "verifyArxivEmail");
+/* OUTREACH-CONSENT-1 (2026-10-01): jobOutreach mails as the owner but never consulted the opt-out
+   list that qnfo-outreach honours (sendRaw SUPPRESSION-1 and suppressed()). Same tables, same
+   predicates: qnfo-audit email_suppression + contact_ledger.suppress (AUDIT), qnfo-outreach
+   contacts.suppress=1 (OUTREACH). Deliberately does not catch: the caller skips the send when the
+   lookup throws, so a D1 error can never wave an opted-out address through. */
+var OUTREACH_OPT_OUT = "If you would rather not hear from me again, reply \u201Cstop\u201D and I will not write again.";
+async function outreachSuppressed(env, email) {
+  const e = String(email || "").toLowerCase();
+  if (await env.AUDIT.prepare("SELECT 1 AS x FROM email_suppression WHERE lower(email)=?1").bind(e).first()) return true;
+  const l = await env.AUDIT.prepare("SELECT suppress FROM contact_ledger WHERE lower(email)=?1").bind(e).first();
+  if (l && l.suppress) return true;
+  const c = await env.OUTREACH.prepare("SELECT suppress FROM contacts WHERE lower(email)=?1").bind(e).first();
+  return !!(c && Number(c.suppress) === 1);
+}
+__name(outreachSuppressed, "outreachSuppressed");
 async function jobOutreach(env) {
-  const out = { pending: 0, sent: 0, followups: 0, skipped_no_email: 0, skipped_dupe: 0, errors: [], capped: false };
+  const out = { pending: 0, sent: 0, followups: 0, skipped_no_email: 0, skipped_dupe: 0, skipped_suppressed: 0, errors: [], capped: false };
   if (!env.SEND_EMAIL) return { status: "error", notes: { error: "SEND_EMAIL binding missing" } };
   try {
     const kill = await env.OUTREACH.prepare("SELECT value FROM pipeline_state WHERE key = 'external_sends_enabled'").first();
@@ -1599,6 +1614,21 @@ async function jobOutreach(env) {
         });
         continue;
       }
+      /* OUTREACH-CONSENT-1: an opted-out address leaves the work set (OUTREACH-TERMINAL-STATUS-1
+         pattern). A failed lookup skips this row for this run only; it stays pending. */
+      let isSuppressed;
+      try {
+        isSuppressed = await outreachSuppressed(env, email);
+      } catch (e) {
+        out.errors.push({ id: r.id, error: "suppression lookup failed, send skipped: " + String(e && e.message || e) });
+        continue;
+      }
+      if (isSuppressed) {
+        out.skipped_suppressed++;
+        await env.AUDIT.prepare("UPDATE outreach_queue SET status='skipped-suppressed', error='suppressed (email_suppression/contact_ledger/contacts)' WHERE id=?1").bind(r.id).run().catch(function() {
+        });
+        continue;
+      }
       const subject = "QNFO \u2014 the energy-efficiency benchmark for quantum computing";
       const body = [
         "Hello,",
@@ -1608,6 +1638,8 @@ async function jobOutreach(env) {
         r.paper_id ? "I came across your recent work (arXiv " + r.paper_id + (r.reason ? " \u2014 " + r.reason : "") + ") and it looks directly relevant to this program." : "I came across your recent work and it looks directly relevant to this program.",
         "",
         "Would you be open to a brief exchange on how your results relate to energy accounting for quantum computation? Happy to share our working papers and benchmark definitions.",
+        "",
+        OUTREACH_OPT_OUT,
         "",
         "Best regards,",
         "Rowan Brad Quni-Gudzinas",
@@ -1637,12 +1669,30 @@ async function jobOutreach(env) {
           continue;
         }
         if (sentToday >= CAP) break;
+        /* OUTREACH-CONSENT-1: never follow up on an opted-out address. Suppressed -> 'rejected'
+           (as the invalid-email path above); a failed lookup skips it for this run only. */
+        let fuSuppressed;
         try {
-          const subject = "Re: " + String(f.subject || "").replace(/^Re:\s*/i, "");
+          fuSuppressed = await outreachSuppressed(env, f.email);
+        } catch (e) {
+          out.errors.push({ id: "fu-" + f.email, error: "suppression lookup failed, follow-up skipped: " + String(e && e.message || e) });
+          continue;
+        }
+        if (fuSuppressed) {
+          out.skipped_suppressed++;
+          await env.AUDIT.prepare("UPDATE outreach_log SET status='rejected' WHERE id=?1").bind(f.id).run().catch(function() {
+          });
+          continue;
+        }
+        try {
+          /* OUTREACH-CONSENT-1: "Re:" claimed a reply in a thread that does not exist. */
+          const subject = "Following up: " + String(f.subject || "").replace(/^(?:\s*(?:Re|Following up):\s*)+/i, "");
           const body = [
             "Hello,",
             "",
             "Following up on my earlier note about the energy-efficiency benchmark for quantum computing \u2014 I would still welcome a brief exchange if you are open to it.",
+            "",
+            OUTREACH_OPT_OUT,
             "",
             "Best regards,",
             "Rowan Brad Quni-Gudzinas",

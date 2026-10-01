@@ -1,5 +1,7 @@
 # AUTONOMY-DECISION-POLICY-1: a human is an override, never a dependency
 
+> Aligned to docs/STRATEGY.md (STRATEGY-1, 2026-10-01). Where they differ, STRATEGY.md wins.
+
 **Source (owner directive, 2026-10-01):** "THE SYSTEM SHALL RESOLVE ALL ISSUES AND ALL BLOCKERS AUTOMATICALLY AND SHALL NEVER REQUIRE A USER
 ON CRITICAL-PATH DECISIONS/ACTIONS/EXECUTION." This page is a session's reading of that directive: it is reversible, and the owner's
 word overrides it. It exists so the next session does not have to guess where the lines are.
@@ -12,9 +14,35 @@ pipeline, serving traffic). It is a **parked** state with a default already in e
 ## Three tiers
 | Tier | What | The system |
 |---|---|---|
-| **T1** reversible, bounded, inside existing limits | thresholds, dead-code retirement, redefining an infeasible DoD, merging a green PR, ordering a queue | **decides and executes**, and records why (PR text, `agent_issues` row, this doc) |
-| **T2** irreversible, external-facing, or touches credentials/spend/exposure | rotating or overwriting a live credential, publishing as the owner, enabling an access gate that can lock people out, anything that bills | does **not** act. Keeps the current safe configuration serving, parks the item with the default stated, and **continues all other work** |
-| **Never** (regardless of directive) | raising a spend cap; minting, rotating or overwriting a live credential; deleting data; disabling a security control or guard; routing around the canonical deploy path; sending third-party mail or posts as the owner | refused. If one of these is the *only* way forward the item parks (T2) |
+| **T1** reversible, bounded, inside existing limits | thresholds, dead-code retirement, redefining an infeasible DoD, merging a green PR, ordering a queue; **owner-voice publishing inside the gates below (gated T1)** | **decides and executes**, and records why (PR text, `agent_issues` row, this doc) |
+| **T2** irreversible, external-facing (other than gated owner-voice publishing), or touches credentials/spend/exposure | rotating or overwriting a live credential, enabling an access gate that can lock people out, anything that bills | does **not** act. Keeps the current safe configuration serving, parks the item with the default stated, and **continues all other work** |
+| **Never** (regardless of directive) | raising a spend cap; minting, rotating or overwriting a live credential; deleting data; disabling a security control or guard; routing around the canonical deploy path | refused. If one of these is the *only* way forward the item parks (T2) |
+
+Changed 2026-10-01 (STRATEGY-1): "publishing as the owner" left T2 and "sending third-party mail or posts as the owner" left
+Never. Owner directive 2026-10-01 authorises the system to publish and send as the owner, so owner-voice publishing is
+gated T1 (next section). Every other Never item is unchanged.
+
+## Owner-voice publishing (gated T1)
+Source: docs/STRATEGY.md section 5, which is authoritative; this is a summary. The system decides and executes inside these
+gates and records each act.
+- **Platform rule first:** LinkedIn's API Terms (3.1) forbid automated posting, so LinkedIn posts are drafted automatically
+  and published only after the owner's one-tap approval in Buffer. Bluesky, Mastodon and Threads allow automatic posting.
+- **Automatic (inside the gates):** posts that summarise or announce the owner's own published works (selected works first);
+  the scheduled cadence in STRATEGY.md section 4; first-contact research emails and one follow-up under the consent rules;
+  the subscriber digest / research note.
+- **Never automatic (draft only, or not at all):** replies, comments or DMs to individuals on social platforms; anything that
+  names a third party (person or company) critically, or makes a claim not present in the source work; topics outside the
+  four pillars (politics, news commentary); follows, likes or reposts at scale; paid promotion, raising any spend cap,
+  credentials, deleting data (the unchanged Never items).
+- **Gates every owner-voice item passes:** (1) fact check against the source title and abstract; (2) identity lexicon
+  (STRATEGY.md section 2.1 names only, no banned labels); (3) encoding check, no mojibake sequences; (4) link liveness and a
+  UTM tag on every link; (5) cadence caps per channel and a duplicate check against the last 30 days; (6) one kill switch
+  per stream (`pipeline_state.external_sends_enabled` for email, `Q08_SOCIAL_QUEUE` for q08, a social pause flag to add in
+  qnfo-social); (7) a daily "sent as you" digest to the owner's alerts channel listing every item, with the one-line stop
+  command.
+- **Cold email consent rules (OUTREACH-CONSENT-1):** a real reason tied to the recipient's own work; an opt-out line in
+  every message; suppression list honoured by both engines; one honest follow-up (`Following up:`, never a fake `Re:`); at
+  most 8/day in total and 3/day per domain; no repeat contact after an opt-out, bounce or reply.
 
 ## Why "never" includes credentials
 A session cannot read a secret it did not mint, and issue #1701 recorded the failure mode of sessions rotating shared secrets on each other
@@ -26,7 +54,7 @@ This one was resolved by a peer session within the hour, and nothing on the crit
 | Item | Why it cannot be T1 | Default in effect (nothing waits) | What would change it |
 |---|---|---|---|
 | Cloudflare Access (#1277) | needs an Access-scoped credential; a wrong policy locks the owner out | admin routes stay bearer-protected; `scripts/access_probe.py` (PR #219) measures exposure | owner enables Access per `docs/CF-ACCESS-ROLLOUT-1277.md` |
-| Publication of a curated article (#1163), Zenodo deposit (#1091) | publishes externally as the owner | stays a draft; `fleet-control` publication preflight reports the route state hourly | owner publishes, or supplies the deposit credential |
+| Publication of a curated article (#1163), Zenodo deposit (#1091) | the parked reason ("publishes externally as the owner") no longer holds: publication as the owner is gated T1 since 2026-10-01 (STRATEGY.md section 5) | stays a draft; `fleet-control` publication preflight reports the route state hourly | the system publishes once the item passes the owner-voice gates (or the owner publishes); the deposit still needs the deposit credential |
 | `qnfo-code-agent` PR-write credential | a session cannot mint a GitHub App or PAT | `qnfo-code-orchestrator` parks tasks as `needs_human` (it never opens an unverified PR) | a credential is supplied |
 | Spend caps (#1683, #1699) | raising a cap is **Never** | caps unchanged; the *measurement* is fixed, never the threshold | owner changes the cap |
 | Local DeepChat guards (#1686) | they inspect the owner's machine | **T1 decided below** | n/a |

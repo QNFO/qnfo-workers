@@ -9,3 +9,5 @@ State at probe time:
 - ops_issues_list status=all still returns count 0 (listIssues missing-await bug live, confirmed)
 
 If this file exists on main, GITHUB_TOKEN write access is confirmed for the session.
+
+Smoke test 2026-10-01: appended by the Cloudflare code-task loop.

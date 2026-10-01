@@ -1,6 +1,8 @@
 # QNFO Quniverse — Autonomous Use Cases & Best Practices
 **Version:** 2026-09-14 | **Gate:** AUTONOMY-PILLARS-1 | **Fleet:** 55 workers
 
+> Aligned to docs/STRATEGY.md (STRATEGY-1, 2026-10-01). Where they differ, STRATEGY.md wins.
+
 ## Architecture: Prompt → Autonomous Execution
 
 User Prompt (any client: DeepChat/ChatBox/SannaBot/Android)
@@ -40,9 +42,13 @@ Trigger: Inbound SMTP → qnfo-email worker
 Chain: emails → classification → processed/archived/spam → optional auto-reply
 
 ### UC-6: Outreach (ACTIVATION_AT 2026-09-15)
-Trigger: Cron 0 11 * * 1-5 UTC — AUTONOMOUS, no per-instance approval
-Chain: outreach_queue → qnfo-outreach → sends (cap 8/day global, 3/domain/day)
-Kill switch: qnfo-outreach D1 pipeline_state.external_sends_enabled=0
+Trigger: Cron 0 11 * * 1-5 UTC — AUTONOMOUS as gated T1 (owner-voice gates, docs/STRATEGY.md section 5); no per-instance approval
+Chain: outreach_queue → qnfo-outreach (and the qnfo-cloud-ops outreach job) → sends (cap 8/day in total across both engines, 3/day per domain)
+Consent rules (OUTREACH-CONSENT-1): a real reason tied to the recipient's own work; an opt-out line in every message;
+suppression list honoured by both engines; one honest follow-up (`Following up:`, never a fake `Re:`); no repeat contact
+after an opt-out, bounce or reply.
+Kill switch: qnfo-outreach D1 pipeline_state.external_sends_enabled=0 (paused 2026-10-01; resumes after OUTREACH-CONSENT-1 deploys)
+(changed 2026-10-01, STRATEGY-1)
 
 ### UC-7: Knowledge Graph Maintenance
 Trigger: Paper publish events, signal-loop
@@ -58,6 +64,7 @@ Coverage: 55 workers, 30-day retention, anomaly detection (error ratio >50%)
 Trigger: Cron 0 16 * * 1 UTC (Mondays)
 Chain: papers (new since last digest) → qnfo-subscribers → email to subscribed list
 State: 1 subscriber, double opt-in enforced
+Cadence: a monthly research note replaces the weekly auto-digest once there are 10+ subscribers (docs/STRATEGY.md section 4)
 
 ### UC-10: AI Model Health Monitoring
 Trigger: ai-health-prober cron (hourly)

@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.18-secret-lock";
+var VERSION = "1.3.19-wrangler-container-ledger";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -133,7 +133,10 @@ function coalesceBursts(list) {
 // That is why settings mutators now ledger themselves (SETTINGS-ONLY-LEDGER-1, fleet-control obs reassert).
 function isSettingsOnly(note) { return String(note || "").indexOf("SETTINGS-ONLY") === 0; }
 var MUT_SLACK_MS = 180000;
-var CONTAINER_WORKERS = ["qnfo-containers-pilot"]; // mirrors qnfo-ops cfWorkerDeploy _CONTAINER_WORKERS
+// WRANGLER-CONTAINER-LEDGER-1 (#1708/#1709): qnfo-code-orchestrator is also a container worker deployed by wrangler
+// (deploy-code-orchestrator.yml) because canonical-deploy skips any directory with [[containers]]. It is NOT in qnfo-ops
+// _CONTAINER_WORKERS (it never reaches /ops/deploy), so this list is the pilot (which mirrors qnfo-ops) plus the orchestrator.
+var CONTAINER_WORKERS = ["qnfo-containers-pilot", "qnfo-code-orchestrator"];
 var EVENT_TYPES = { "UNLOGGED-MUTATION": "unlogged-mutation", "UNCOORDINATED-DEPLOY": "uncoordinated-deploy" };
 function workerSettled(w, since, rc) {
   if (rc.haveLive && !rc.liveNames[w]) return "worker no longer live (retired/disposed)";
