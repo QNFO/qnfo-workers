@@ -1,8 +1,8 @@
 {
  "actor": "rwnq8",
  "guard_exit": "success",
- "head": "bfe273a9b34dc497657755731b12a3d510e2214d",
+ "head": "688bda65f95a650c19a4909e31ddea3449a05260",
  "repair_exit": "success",
- "ts": "2026-10-01T08:24:28.263912Z",
+ "ts": "2026-10-01T08:28:38.720572Z",
  "workflow": "apply-unmangle-worker-js"
 }
