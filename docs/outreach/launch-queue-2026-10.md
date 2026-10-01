@@ -1,9 +1,12 @@
 # Launch queue, October 2026 (STRATEGY-1)
 
-Ready-to-approve posts for the selected works (docs/STRATEGY.md s2.4). LinkedIn posts go to Buffer as drafts and are published
-only after the owner's one-tap approval (LinkedIn API Terms 3.1). Bluesky versions post automatically inside the s5 gates
-once the owner has approved the voice (Identity doc tracker item 1; "approve once, then automatic"). Cadence is 1-2 posts a
-week. Every post carries the claim, the test and the status (Identity doc rule).
+Posts for the selected works (docs/STRATEGY.md s2.4). **Queued 2026-10-01 21:30Z** as `qnfo-audit.social_threads` rows
+`jps-metric`, `qec-landauer`, `jpcub-17` and `fleet-lessons` (flag `selected`, so the drain takes them before anything else).
+qnfo-social posts the Bluesky text below and cross-posts it through Buffer to LinkedIn, Mastodon and X; LinkedIn publishes
+from the Buffer queue (STRATEGY 1.3, LINKEDIN-OWNER-DELEGATED-1). The weekly cap (2 Bluesky posts per 7 days), the pause
+flag, the content gate and a link check apply to every post, so the dates below are the earliest, not fixed. Each link is
+UTM-tagged per channel with the campaign code (`entity_map.utm_campaign`). The longer LinkedIn texts below are kept for
+reference. Every post carries the claim, the test and the status.
 Every claim below is taken from the work's own abstract; nothing names a company. One link per post, UTM-tagged with a
 short campaign code: jps-metric = joules-per-solution-metric, qec-landauer = jpcub-qec-landauer, jpcub-17 =
 jpcub-competitive-landscape, fleet-lessons = quniverse-fleet-lessons (entity_map, s6.2).
