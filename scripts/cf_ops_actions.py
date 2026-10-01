@@ -30,6 +30,10 @@ ACTIONS
   r2-get PATH            Read one text object under qnfo-backups/ops-workspace/ (the qnfo-ops workspace), e.g. a draft
                          that must be reviewed before publication (#1163). Read-only and prefix-restricted.
   report                 ai-neurons + gateway-cost + gateway-logs + access-probe in one run.
+  ops-intake-probe       #1189 DoD: ask the qnfo-ops agent (OPS_ROUTER_AUTH_KEY) to call research_queue once with a
+                         clearly marked probe idea and return the raw tool JSON, proving the intake envelope reports
+                         persistence truthfully. The probe intent is cancelled afterwards from D1, before the 06:00Z
+                         triage, so it never becomes research.
 
 Every action prints one line `RESULT_JSON=<json>` so the job log is machine-readable.
 """
@@ -260,14 +264,41 @@ def delete_vectorize_index(name: str, acct: str, token: str) -> int:
     return 0 if ok else 1
 
 
+PROBE_IDEA = "[PROBE #1189] research intake persistence check 2026-10-01 - not a research idea, cancel on sight"
+
+
+def ops_intake_probe() -> int:
+    key = os.environ.get("OPS_ROUTER_AUTH_KEY", "").strip()
+    if not key:
+        emit({"action": "ops-intake-probe", "ok": False, "error": "OPS_ROUTER_AUTH_KEY not configured"})
+        return 2
+    body = {"model": "ops", "stream": False, "max_tokens": 2000, "messages": [{"role": "user", "content":
+            "Call the research_queue tool exactly once with idea=\"" + PROBE_IDEA + "\" and express=true. "
+            "Do not call any other tool. Then reply with ONLY the raw JSON object the tool returned."}]}
+    req = urllib.request.Request("https://ops.qnfo.org/v1/chat/completions", data=json.dumps(body).encode(), method="POST",
+                                 headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
+                                          "User-Agent": "cf-ops-actions/ops-intake-probe"})
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            j = json.loads(r.read().decode() or "{}")
+    except urllib.error.HTTPError as e:
+        emit({"action": "ops-intake-probe", "ok": False, "http": e.code})
+        return 1
+    text = (((j.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
+    emit({"action": "ops-intake-probe", "ok": True, "probe_idea": PROBE_IDEA, "reply": text[:2500]})
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe"])
+    ap.add_argument("action", choices=["ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
     ap.add_argument("--pages", type=int, default=6)
     a = ap.parse_args()
+    if a.action == "ops-intake-probe":
+        return ops_intake_probe()
     token, acct = env("CLOUDFLARE_API_TOKEN"), env("CLOUDFLARE_ACCOUNT_ID")
     if a.action == "delete-worker":
         if not a.target:
