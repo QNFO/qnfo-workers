@@ -1,0 +1,147 @@
+name: deploy-code-orchestrator
+
+# CODE-ORCH-FIRST-DEPLOY-1. qnfo-code-orchestrator declares [ai], [[containers]] PyContainer, a
+# Durable Object + migration, D1 AUDIT_DB, [[worker_loaders]] LOADER and a cron. The canonical
+# route (scripts/canonical_deploy.py -> qnfo-ops /ops/deploy, binding-preserving PUT /content)
+# cannot create new bindings, containers or DO classes, so the first deploy needs wrangler.
+# canonical-deploy.yml already skips container workers on purpose; this workflow is their path.
+#
+# Scope: ONLY qnfo-code-orchestrator. No schedule trigger (GitHub schedule never fires on this
+# repo); the worker's own Cloudflare cron (*/10) drives the loop once deployed.
+# Secrets: reuses CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID only. It never sets or prints
+# any secret; ORCH_TOKEN stays unset (worker is fail-closed on it by design).
+# Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "qnfo-code-orchestrator/**"
+      - ".github/workflows/deploy-code-orchestrator.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-code-orchestrator
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER: qnfo-code-orchestrator
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Require Cloudflare credentials
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not configured - refusing to no-op"
+            exit 1
+          fi
+
+      - name: Pre-deploy gates (syntax, offline loop test, mirror guard)
+        run: |
+          set -euo pipefail
+          node --check qnfo-code-orchestrator/worker.js
+          node --no-warnings qnfo-code-orchestrator/test-loop.mjs
+          python3 scripts/mirror-guard.py
+
+      - name: Assert required bindings are declared
+        run: |
+          set -euo pipefail
+          f=qnfo-code-orchestrator/wrangler.toml
+          for key in '^\[ai\]' '^\[\[containers\]\]' 'class_name = "PyContainer"' '^\[\[migrations\]\]' '^\[\[d1_databases\]\]' 'binding = "AUDIT_DB"' '^\[\[worker_loaders\]\]' '^crons = '; do
+            grep -Eq "$key" "$f" || { echo "::error::wrangler.toml missing $key"; exit 1; }
+          done
+
+      - name: Resolve the repo VERSION
+        id: ver
+        run: |
+          set -euo pipefail
+          want="$(grep -m1 -oE '^var VERSION = "[^"]+"' qnfo-code-orchestrator/worker.js | sed -E 's/.*"([^"]+)"/\1/')"
+          [ -n "$want" ] || { echo "::error::could not read VERSION from worker.js"; exit 1; }
+          echo "want=$want" >> "$GITHUB_OUTPUT"
+          echo "repo VERSION=$want"
+
+      - name: Deploy with wrangler (this worker only)
+        id: wrangler
+        working-directory: qnfo-code-orchestrator
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4 deploy 2>&1 | tee /tmp/wrangler.log
+
+      - name: Gate on live health VERSION (fail closed)
+        id: health
+        env:
+          WANT: ${{ steps.ver.outputs.want }}
+        run: |
+          set -uo pipefail
+          sub="$(curl -s --max-time 30 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -r '.result.subdomain // empty')"
+          url=""
+          if [ -n "$sub" ]; then url="https://$WORKER.$sub.workers.dev"; fi
+          if [ -z "$url" ]; then
+            url="$(grep -oE "https://$WORKER\.[a-z0-9-]+\.workers\.dev" /tmp/wrangler.log | head -1 || true)"
+          fi
+          if [ -z "$url" ]; then echo "::error::cannot determine workers.dev URL"; exit 1; fi
+          echo "health url=$url/health"
+          got=""
+          for i in 1 2 3 4 5 6 7 8; do
+            sleep 15
+            got="$(curl -s --max-time 30 "$url/health" | jq -r '.version // empty' 2>/dev/null || true)"
+            echo "attempt $i live VERSION=$got want=$WANT"
+            [ "$got" = "$WANT" ] && break
+          done
+          echo "got=$got" >> "$GITHUB_OUTPUT"
+          if [ "$got" != "$WANT" ]; then
+            echo "::error::live VERSION '$got' != repo '$WANT'"
+            exit 1
+          fi
+
+      - name: Record the deploy in D1 cloud_ops_events
+        if: always()
+        env:
+          WANT: ${{ steps.ver.outputs.want }}
+          GOT: ${{ steps.health.outputs.got }}
+          WR: ${{ steps.wrangler.outcome }}
+          HC: ${{ steps.health.outcome }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then echo "::error::no credentials, deploy unlogged"; exit 1; fi
+          dbid="$(grep -m1 -E '^database_id' qnfo-code-orchestrator/wrangler.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          st=ok
+          if [ "$WR" != "success" ] || [ "$HC" != "success" ]; then st=error; fi
+          id="ce_$(date -u +%s)_${GITHUB_RUN_ID}"
+          ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          txt="wrangler deploy $WORKER sha=${GITHUB_SHA::12} want=$WANT live=${GOT:-none} wrangler=$WR health=$HC"
+          meta="$(jq -cn --arg sha "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" --arg actor "$GITHUB_ACTOR" '{sha:$sha,run:$run,actor:$actor}')"
+          body="$(jq -cn --arg id "$id" --arg ts "$ts" --arg txt "$txt" --arg meta "$meta" --arg job "$WORKER" --arg st "$st" \
+            '{sql:"INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)",params:[$id,$ts,"deploy.wrangler",$txt,$meta,$job,$st]}')"
+          code="$(curl -s -o /tmp/d1.json -w '%{http_code}' --max-time 30 -X POST \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database/$dbid/query" --data "$body")"
+          echo "D1 ledger write HTTP $code success=$(jq -r '.success' /tmp/d1.json 2>/dev/null)"
+          if [ "$code" != "200" ]; then echo "::error::deploy ledger write failed"; exit 1; fi
+
+      - name: Upload the wrangler log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-code-orchestrator-log
+          path: /tmp/wrangler.log
+          if-no-files-found: ignore
+          retention-days: 14

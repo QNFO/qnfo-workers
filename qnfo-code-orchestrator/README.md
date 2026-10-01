@@ -9,7 +9,7 @@
   label integration-slice (not autonomous-ready - no LLM yet); /exec output caps (64 KiB,
   stdoutTruncated/stderrTruncated); AUDIT_DB cloud_ops_events logging.
 - **Capabilities**: github-read (via code-agent), container-exec (own containers binding).
-- **Deploy**: cd qnfo-workers/qnfo-code-orchestrator && wrangler deploy
+- **Deploy**: see the Deploy section below.
 - **Canonical source**: QNFO/qnfo-workers/qnfo-code-orchestrator
 - **Secrets** (fail-closed): ORCH_TOKEN (auth), CODE_AGENT_KEY (call code-agent).
 - **Bindings**: AUDIT_DB (qnfo-audit cloud_ops_events).
@@ -85,3 +85,6 @@ Only a real run verifies: D1 REST access from Actions, `gh pr create` with `GITH
 ## Roadmap
 - v0.2.0: LLM plan loop (DeepSeek via AI Gateway for plan/verdict, kimi for cheap rounds),
   code-agent /v1/repo/edit + create_pr, bounded iterate until container verify passes.
+
+## Deploy
+First and subsequent deploys use `.github/workflows/deploy-code-orchestrator.yml` (wrangler 4, this worker only), on push to main touching `qnfo-code-orchestrator/**` or via workflow_dispatch. The canonical `/content` route cannot create bindings, containers or DO classes. The job runs `node --check`, `test-loop.mjs` and `scripts/mirror-guard.py`, deploys, polls `/health` until VERSION equals worker.js, and writes a `deploy.wrangler` row to `cloud_ops_events` through the D1 REST API. It uses the existing `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets and sets none. `ORCH_TOKEN` stays unset (fail-closed). The cron runs every 10 minutes (144 per day).
