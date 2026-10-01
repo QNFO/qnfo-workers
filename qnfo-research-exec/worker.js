@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.34-reasoning-budget";
+var VERSION = "0.9.35-revise-patch";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1724,6 +1724,39 @@ var REVISE_PROMPT = [
   "For each fix: correct the quantitative claim using the computed value, remove or move-to-Discussion-as-explicitly-labeled-hypothesis unverifiable claims, replace invented references with bibliography entries (or remove the sentence), fix structure and length. Do not add new unsupported claims. Output ONLY the paper.",
   "FIXES (JSON):"
 ].join("\n");
+// REVISE-PATCH-1 (2026-10-01, #1620/#1504): a revise asked for the WHOLE paper back even when the reviewer raised one
+// short HARD fix (row 5435c847: 22729-char paper, 124-char fixes). A full rewrite is 6-9k content tokens on top of the
+// reasoning: at max_tokens 8192 the reasoning model returned 0 chars, and at 32768 Workers AI ended the call with
+// "3046: Request timeout" (both attempts, 11:27Z). Patch mode asks only for exact find/replace edits (short output, same
+// size class as the review JSON that succeeds) and applies each edit only where its excerpt occurs exactly once, so a
+// hallucinated excerpt changes nothing. The full rewrite stays as the fallback when no edit applies.
+var REVISE_PATCH_PROMPT = [
+  "You are the revising author. Resolve each HARD fix below by editing the paper in place.",
+  'Return ONLY a JSON array, no prose and no code fence: [{"find":"<exact verbatim excerpt of the PAPER, 40 to 800 characters, occurring once>","replace":"<corrected text>"}].',
+  "Copy each find excerpt character for character from the PAPER. Use at most 8 edits. To remove a sentence, replace it with an empty string.",
+  "FIXES (JSON):"
+].join("\n");
+function applyRevisePatch(paper, raw) {
+  let edits = [];
+  try {
+    const t = String(raw || "");
+    const a = t.indexOf("["), b = t.lastIndexOf("]");
+    if (a >= 0 && b > a) edits = JSON.parse(t.slice(a, b + 1));
+  } catch (e) {
+    edits = [];
+  }
+  if (!Array.isArray(edits)) edits = [];
+  let out = String(paper || "");
+  let applied = 0;
+  for (const e of edits.slice(0, 8)) {
+    if (!e || typeof e.find !== "string" || typeof e.replace !== "string" || e.find.length < 20) continue;
+    const i = out.indexOf(e.find);
+    if (i < 0 || out.indexOf(e.find, i + 1) >= 0) continue;
+    out = out.slice(0, i) + e.replace + out.slice(i + e.find.length);
+    applied++;
+  }
+  return { text: out, applied, proposed: edits.length };
+}
 var VERIFY_EXTRACT_PROMPT = [
   "Extract every QUANTITATIVE claim from this paper that can be independently computed. Output STRICT JSON array:",
   '[{"id":"Q1","statement":"...","inputs":"named numbers with values","formula":"math in plain text"}]',
@@ -1979,6 +2012,17 @@ async function stageRevise(env, row) {
   try {
     ctx = JSON.parse(row.context || "{}");
   } catch (e) {
+  }
+  if (paper.length >= 1e4) {
+    const _praw = await gwCall(env, REVISE_PATCH_PROMPT + "\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 12e3);
+    const _p = applyRevisePatch(paper, _praw);
+    await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length, _p.applied ? "ok" : "warn");
+    if (_p.applied > 0 && _p.text.length >= 1e4) {
+      await r2Put(env, String(row.id) + "/reconciled.md", _p.text);
+      const _c2 = (ctx.cycles || 0) + 1;
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: _c2, patch: _p.applied }).slice(0, 6e3), row.id).run();
+      return { ok: true, stage: "revise->review", cycle: _c2, patch: _p.applied };
+    }
   }
   let revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
   const _len1 = revised ? revised.length : 0;
