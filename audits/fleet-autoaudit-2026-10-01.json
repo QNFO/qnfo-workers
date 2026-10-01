@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 07:30:58",
+  "audited_at": "2026-10-01 07:34:25",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -35,10 +35,10 @@
     "cron_only_count": 3,
     "drift": [
       {
-        "dir": "qnfo-fleet-control",
-        "live": "0.4.54-version-regex-safe",
-        "repo": "0.4.53-signal-observe",
-        "worker": "qnfo-fleet-control"
+        "dir": "personal-companion",
+        "live": "1.7.2-vault-indexer-fold",
+        "repo": "0.1.21-folded",
+        "worker": "personal-companion"
       }
     ],
     "live_err": [],
@@ -436,11 +436,6 @@
         "worker": "personal-api"
       },
       {
-        "dir": "personal-companion",
-        "version": "1.7.1-adv1",
-        "worker": "personal-companion"
-      },
-      {
         "dir": "q08-signal-engine",
         "version": "0.7.34-alert-undigested",
         "worker": "q08-signal-engine"
@@ -501,8 +496,13 @@
         "worker": "qnfo-email"
       },
       {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.54-version-regex-safe",
+        "worker": "qnfo-fleet-control"
+      },
+      {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.42-autonomy-stale-flag",
+        "version": "1.7.43-scheduled-no-run-handler",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -547,7 +547,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.18-budget-auto-promote",
+        "version": "2.38.20-selffetch-inproc",
         "worker": "qnfo-ops"
       },
       {
@@ -808,11 +808,11 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.7.1-adv1",
+      "before": "0.1.21-folded",
       "http": 200,
-      "live": "1.7.1-adv1",
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.7.2-vault-indexer-fold",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "personal-companion"
     },
     "personal-events-radar": {
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.53-signal-observe",
+      "before": "0.4.54-version-regex-safe",
       "http": 200,
       "live": "0.4.54-version-regex-safe",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.42-autonomy-stale-flag",
+      "before": "1.7.43-scheduled-no-run-handler",
       "http": 200,
-      "live": "1.7.42-autonomy-stale-flag",
+      "live": "1.7.43-scheduled-no-run-handler",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1280,9 +1280,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.18-budget-auto-promote",
+      "before": "2.38.20-selffetch-inproc",
       "http": 200,
-      "live": "2.38.18-budget-auto-promote",
+      "live": "2.38.20-selffetch-inproc",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
