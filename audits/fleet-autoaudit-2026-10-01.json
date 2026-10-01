@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 01:42:48",
+  "audited_at": "2026-10-01 01:48:12",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -26,7 +26,14 @@
       }
     ],
     "cron_only_count": 2,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-fleet-control",
+        "live": "0.4.47-autopilot-fold",
+        "repo": "\\d+\\.\\d+\\.\\d+[^",
+        "worker": "qnfo-fleet-control"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -404,11 +411,11 @@
       }
     ],
     "scope": "all",
-    "sync": 37,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "calendar-api",
-        "version": "0.3.3-autopublish",
+        "version": "0.4.0-notes-intake",
         "worker": "calendar-api"
       },
       {
@@ -418,7 +425,7 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.2.1-errata-gate",
+        "version": "1.3.0-think-loop",
         "worker": "idea-hub"
       },
       {
@@ -490,11 +497,6 @@
         "dir": "qnfo-email",
         "version": "2.1.8-owner-dmarc-gate",
         "worker": "qnfo-email"
-      },
-      {
-        "dir": "qnfo-fleet-control",
-        "version": "0.4.46-crons-quoted-parse",
-        "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -620,9 +622,9 @@
       "worker": "audits"
     },
     "calendar-api": {
-      "before": "0.3.3-autopublish",
+      "before": "0.4.0-notes-intake",
       "http": 200,
-      "live": "0.3.3-autopublish",
+      "live": "0.4.0-notes-intake",
       "match": 1,
       "note": "SYNC",
       "worker": "calendar-api"
@@ -684,9 +686,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.2.1-errata-gate",
+      "before": "1.3.0-think-loop",
       "http": 200,
-      "live": "1.2.1-errata-gate",
+      "live": "1.3.0-think-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1140,11 +1142,11 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.46-crons-quoted-parse",
+      "before": "\\d+\\.\\d+\\.\\d+[^",
       "http": 200,
-      "live": "0.4.46-crons-quoted-parse",
-      "match": 1,
-      "note": "SYNC",
+      "live": "0.4.47-autopilot-fold",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
