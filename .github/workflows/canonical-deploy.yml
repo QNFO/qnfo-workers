@@ -119,6 +119,11 @@ jobs:
                 # workers (qnfo-autopilot, notes-intake); deploying the old directory would recreate a retired worker.
                 if [ -f "$d/FOLDED" ]; then echo "skip $d (FOLDED: $(head -1 "$d/FOLDED"))"; continue; fi
                 if [ -f "$d/RETIRED" ]; then echo "skip $d (RETIRED: $(head -1 "$d/RETIRED"))"; continue; fi
+                # WRANGLER-ONLY-SKIP-1 (2026-10-01, watchdog issue 254): /ops/deploy PUTs /content and only PRESERVES bindings that
+                # already exist on the live worker, so a worker that has never been deployed and declares D1/R2/KV/Vectorize bindings
+                # gets CF API 400 (qnfo-fleet-calibrator, run 36842708566). Such a worker needs its first deploy through wrangler; a
+                # WRANGLER-ONLY marker (first line = reason) keeps it out of this push-diff set until that has happened.
+                if [ -f "$d/WRANGLER-ONLY" ]; then echo "skip $d (WRANGLER-ONLY: $(head -1 "$d/WRANGLER-ONLY"))"; continue; fi
                 if grep -q '^\[\[containers\]\]' "$d/wrangler.toml"; then echo "skip $d (container worker: canonical /content deploy refuses it by design; deployed by deploy-containers-pilot / restore-container-config-1485)"; continue; fi
                 echo "$n $d/worker.js" >> /tmp/targets.txt
               done < /tmp/dirs.txt
