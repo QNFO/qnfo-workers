@@ -27,7 +27,7 @@ if (a < 0 || b < 0 || b < a) {
 }
 const sandbox = { timedFetch: null, b64encode: null, charterOne: null, charterRows: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, TextDecoder, atob, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER };", sandbox, { filename: "portfolio-block.js" });
+vm.runInContext(src.slice(a, b + END.length) + "\n__export = { pfTier, pfHygiene, pfEvaluate, pfRenderDocBlock, pfRenderPublic, pfRenderReadmeBlock, pfSplice, pfSpliceOrBootstrap, PF_BEGIN, PF_END, PF_README_ANCHOR, PF_TIER_ORDER, pfWbsHint, pfTopicsFor, pfDescriptionFromReadme, pfHygienePlan, PF_HYGIENE_MAX };", sandbox, { filename: "portfolio-block.js" });
 const P = sandbox.__export;
 const fx = JSON.parse(readFileSync(join(here, "portfolio.fixture.json"), "utf8"));
 const NOW = "2026-10-01T12:00:00.000Z";
@@ -109,5 +109,38 @@ eq(P.pfSplice("plain", doc), null, "splice refuses a doc without markers");
 
 if (process.argv.includes("--render")) console.log(doc);
 if (process.argv.includes("--public")) console.log(pub);
+
+// --- PORTFOLIO-HYGIENE-1 ---------------------------------------------------
+eq(P.pfHygiene({ name: "QWAV", description: "d", license: "NOASSERTION", topics: ["a"], pushed_at: NOW }, "research", nowMs).length, 0, "a NOASSERTION licence file (the QNFO-ULA) counts as licensed on every tier");
+eq(P.pfWbsHint("QNFO.UMP.004: QEC-Darwinism tradeoff").join(","), "QNFO.UMP.004", "a WBS code in the description is a hint");
+eq(P.pfWbsHint("QNFO Research Artifacts").length, 0, "the bare imprint name is not a code");
+eq(P.pfWbsHint("codes QNFO.ADL.001 and QNFO.ADL.001 and QWAV.DEM").join(","), "QNFO.ADL.001,QWAV.DEM", "codes are deduped");
+eq(P.pfDescriptionFromReadme("# Title\n\n![badge](x)\n\nThis repository holds the **Adelic** [theory](u) of things.\n\nMore."), "This repository holds the Adelic theory of things.", "first real paragraph, markdown stripped");
+eq(P.pfDescriptionFromReadme("# Only a title\n\n- a list\n- only"), null, "no paragraph means no description");
+eq(P.pfDescriptionFromReadme("---\ntitle: x\n---\n\nFront matter is skipped before the paragraph."), "Front matter is skipped before the paragraph.", "front matter is skipped");
+ok(P.pfDescriptionFromReadme("word ".repeat(80) + "end").length <= 244, "long paragraphs are cut at a word with an ellipsis");
+const wbsAll = fx.wbs.concat([
+  { wbs_code: "QWAV", level: "portfolio", slug: "qwav", name: "QWAV", status: "active", github_repo: null },
+  { wbs_code: "QNFO.QEC.001", level: "project", slug: "qec-darwinism-ultrametric", name: "x", status: "active", github_repo: null },
+  { wbs_code: "QNFO.TST", level: "program", slug: "Test Program", name: "t", status: "active", github_repo: null }
+]);
+eq(P.pfTopicsFor({ tier: "research", wbs: ["QNFO.TST.001"], description: "" }, wbsAll).join(","), "qnfo,research,open-research,test-program", "topics = tier baseline + served program slug");
+eq(P.pfTopicsFor({ tier: "demo", wbs: [], description: "part of QWAV.DEM" }, wbsAll).join(","), "qnfo,qwav,interactive-demo", "a slug already in the baseline is not repeated");
+const evH = P.pfEvaluate(fx.repos, wbsAll, NOW);
+const plan = P.pfHygienePlan(evH, wbsAll);
+ok(plan.length > 0 && plan.length <= P.PF_HYGIENE_MAX, "the plan is bounded (" + plan.length + " <= " + P.PF_HYGIENE_MAX + ")");
+eq(plan[0].action, "wbs-link", "registry links come first");
+ok(plan.some((a) => a.repo === "QWAV" && a.action === "wbs-link" && a.code === "QWAV"), "QWAV links by slug");
+ok(plan.some((a) => a.repo === "qec-darwinism-ultrametric" && a.action === "wbs-link" && a.code === "QNFO.QEC.001"), "qec-darwinism-ultrametric links by slug");
+ok(plan.every((a) => { const r = evH.rows.find((x) => x.name === a.repo); return r && r.visibility === "public" && !r.archived && !r.fork && r.tier !== "client-config"; }), "no action touches a private, archived, fork or client-config repository");
+ok(plan.filter((a) => a.action === "license").every((a) => evH.rows.find((x) => x.name === a.repo).license === null), "licence actions only where no LICENSE file exists");
+ok(plan.filter((a) => a.action === "topics").every((a) => a.topics.length >= 2 && a.topics.every((t) => /^[a-z0-9][a-z0-9-]{0,49}$/.test(t))), "topic actions carry valid GitHub topics");
+const fullPlan = (() => { const ev2 = P.pfEvaluate(fx.repos, wbsAll, NOW); return ev2.rows.filter((r) => r.visibility === "public" && !r.archived && !r.fork && r.tier !== "client-config" && r.flags.some((f) => f.indexOf("dormant") !== 0)).length; })();
+ok(fullPlan > P.PF_HYGIENE_MAX, "the fixture has more work than one sync takes (" + fullPlan + " flagged repositories)");
+eq(P.pfHygienePlan({ rows: [] }, wbsAll).length, 0, "an empty register plans nothing");
+const evA = Object.assign({}, evH, { actions: [{ repo: "x", action: "license", status: "committed", note: "abc" }] });
+ok(P.pfRenderDocBlock(evA).includes("Hygiene actions the loop took") && P.pfRenderDocBlock(evA).includes("- x: license committed (abc)"), "actions taken are rendered");
+ok(!P.pfRenderDocBlock(evH).includes("Hygiene actions the loop took"), "no actions, no section");
+
 console.log(`portfolio.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

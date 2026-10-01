@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.74-loop-watch";
+var VERSION = "0.4.75-portfolio-hygiene";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2924,7 +2924,7 @@ __name(activitySnapshotDaily, "activitySnapshotDaily");
 //              GitHub Contents API (the same GITHUB_TOKEN write path LAND-CODE-FIX-1 proved), at most once per UTC day
 //              and only when the block changed. A doc without both markers is never written (nothing to anchor to).
 // The pure functions take no env and touch no I/O, so qnfo-fleet-control/charter.test.mjs exercises them offline.
-var CHARTER_VERSION = "1.0.3";
+var CHARTER_VERSION = "1.0.4";
 // CHARTER-ON-CLOUDFLARE-1 (#1727, owner directive 2026-10-01: all data on Cloudflare): every tick also writes the
 // whole charter (hand-written sections + the live block) to R2 qnfo-canonical under this key, so the document is
 // readable from Cloudflare storage (GET /charter/full.md) when GitHub or any agent session is not.
@@ -2935,13 +2935,21 @@ var CHARTER_BEGIN = "<!-- CHARTER-LIVE:BEGIN -->";
 var CHARTER_END = "<!-- CHARTER-LIVE:END -->";
 var CHARTER_PILLARS = [
   { key: "core", name: "Smallest verified core", objective: "mission", metrics: ["worker_count", "drift_total", "probe_coverage_pct", "deploy_freshness_h", "cron_compliance", "guard_rcs"], types: ["core", "gate"] },
-  { key: "autonomy", name: "Human as override, never dependency", objective: "objective-function", metrics: ["open_agent_issues", "fleet_context_tokens"], types: ["autonomy", "governance", "observability"] },
+  { key: "autonomy", name: "Human as override, never dependency", objective: "objective-function", metrics: ["open_agent_issues", "fleet_context_tokens", "portfolio_hygiene"], types: ["autonomy", "governance", "observability"] },
   { key: "research", name: "Research that is read and cited", objective: "return-on-spend", metrics: ["publications_30d", "full_reports_live_30d", "zenodo_versions_per_flagship", "indexed_surface"], types: ["research-product"] },
   { key: "reach", name: "Credible reach", objective: "return-on-spend", metrics: ["distribution_posts_30d", "subscribers_growth_monthly", "pageviews_30d", "referral_30d", "external_impact_per_dollar", "zenodo_views_total"], types: ["impact", "web"] },
   { key: "cost", name: "Cost that returns", objective: "cost-ceiling", metrics: ["cost_usd_30d", "workers_ai_cost_30d_usd", "gateway_cap_30d_usd", "cost_per_successful_task_by_class", "workers_ai_attribution_coverage_pct"], types: ["cost"] },
-  { key: "security", name: "A trust boundary that holds", objective: "mission", metrics: [], types: ["security"] },
-  { key: "personal", name: "Personal utility layer", objective: "mission", metrics: [], types: ["personal"] }
+  { key: "security", name: "A trust boundary that holds", objective: "mission", metrics: ["security_open_issues"], types: ["security"] },
+  { key: "personal", name: "Personal utility layer", objective: "mission", metrics: ["personal_mvp_serving"], types: ["personal"] }
 ];
+// CHARTER-GRADE-ALL-PILLARS-1 (1.0.4): security, personal and the portfolio had no metric_registry row, so two pillars
+// read "n/a" and the portfolio's hygiene never reached the charter grade. These three are synthesised from facts the
+// tick already reads (open issues, the MVP probes, the last portfolio sync) and graded like registry metrics.
+var CHARTER_SYNTHETIC = {
+  security_open_issues: { pillar: "security", target: "0 (open SEC-* or category security issues)" },
+  personal_mvp_serving: { pillar: "personal", target: ">=3 (qnfo-email, personal-api, calendar-api serving)" },
+  portfolio_hygiene: { pillar: "autonomy", target: ">=0.9 (graded repositories with licence, description and topics)" }
+};
 // The minimum verified core: the components the charter says the system IS. Anything else is optional surface and
 // must earn its place through the net-zero rule (fleet_budget) and live-consumer proof (F1/F2).
 var CHARTER_MVP = [
@@ -3025,6 +3033,23 @@ function charterEvaluate(f, nowIso) {
     metrics.push(row);
     byMetric[r.metric] = row;
   });
+  // CHARTER-GRADE-ALL-PILLARS-1: synthetic metrics from the facts (a registry row of the same name wins)
+  var allIssues = f.open_issues || [];
+  var secIssues = allIssues.filter(function(i) { return /^SEC-/.test(String(i.title || "")) || String(i.category || "") === "security"; });
+  var mvpAudit = {};
+  (f.worker_live_audit || []).forEach(function(r) { mvpAudit[r.worker] = r; });
+  var personalUp = CHARTER_MVP.filter(function(c) { var a = mvpAudit[c.worker]; var n = a ? String(a.note || "") : ""; return c.pillar === "personal" && (n === "SYNC" || n === "CRON_ONLY" || (a && Number(a.http) === 200)); }).length;
+  // a fact that was not read is not a zero: each synthetic metric needs its source present
+  var synth = [];
+  if (Array.isArray(f.open_issues)) synth.push({ metric: "security_open_issues", value: secIssues.length, meets: secIssues.length === 0, refreshed: now });
+  if (Array.isArray(f.worker_live_audit) && f.worker_live_audit.length) synth.push({ metric: "personal_mvp_serving", value: personalUp, meets: personalUp >= 3, refreshed: now });
+  if (f.portfolio_hygiene && charterNum(f.portfolio_hygiene.value) !== null) synth.push({ metric: "portfolio_hygiene", value: charterNum(f.portfolio_hygiene.value), meets: charterNum(f.portfolio_hygiene.value) >= 0.9, refreshed: f.portfolio_hygiene.ts });
+  synth.forEach(function(s) {
+    if (byMetric[s.metric]) return;
+    var row = { metric: s.metric, pillar: CHARTER_SYNTHETIC[s.metric].pillar, value: s.value, raw: String(s.value), target: CHARTER_SYNTHETIC[s.metric].target, meets: s.meets, refreshed: s.refreshed, retired: false, synthetic: true };
+    metrics.push(row);
+    byMetric[s.metric] = row;
+  });
   var pillars = CHARTER_PILLARS.map(function(p) {
     var met = 0, evald = 0, missing = [];
     p.metrics.forEach(function(m) {
@@ -3057,9 +3082,8 @@ function charterEvaluate(f, nowIso) {
   var horizons = {};
   roadmap.forEach(function(r) { horizons[r.horizon] = (horizons[r.horizon] || 0) + 1; });
   // 5. issues
-  var issues = f.open_issues || [];
+  var issues = allIssues;
   var highIssues = issues.filter(function(i) { return i.priority === "high" || i.priority === "critical"; });
-  var secIssues = issues.filter(function(i) { return /^SEC-/.test(String(i.title || "")); });
   // 6. autonomy
   var dims = f.autonomy_scores || [];
   var composite = null;
@@ -3230,6 +3254,8 @@ async function charterFacts(env) {
   var pf = await charterOne(env, "SELECT COUNT(*) AS n, SUM(CASE WHEN visibility='private' THEN 1 ELSE 0 END) AS priv, SUM(CASE WHEN tier='archived' THEN 1 ELSE 0 END) AS archived, SUM(CASE WHEN tier='research' THEN 1 ELSE 0 END) AS research, SUM(CASE WHEN tier='platform' THEN 1 ELSE 0 END) AS platform, SUM(CASE WHEN tier='demo' THEN 1 ELSE 0 END) AS demo, MAX(synced_at) AS synced_at FROM portfolio_repos WHERE seen=1");
   f.portfolio = pf && Number(pf.n || 0) > 0 ? { repos: Number(pf.n), private: Number(pf.priv || 0), archived: Number(pf.archived || 0), research: Number(pf.research || 0), platform: Number(pf.platform || 0), demo: Number(pf.demo || 0), synced_at: pf.synced_at } : null;
   f.live_workers = lw ? Number(lw.n || 0) : null;
+  var ph = await charterOne(env, "SELECT hygiene, ts FROM portfolio_sync_runs WHERE status IN ('ok','partial') AND hygiene IS NOT NULL ORDER BY id DESC LIMIT 1");
+  f.portfolio_hygiene = ph ? { value: Number(ph.hygiene), ts: ph.ts } : null;
   return f;
 }
 async function charterBreaches(env, ev) {
@@ -3393,7 +3419,9 @@ function pfHygiene(r, tier, nowMs) {
   var flags = [];
   if (tier === "archived" || tier === "fork") return flags;
   if (!r.description) flags.push("no-description");
-  if (!r.license || r.license === "NOASSERTION" && tier !== "governance") flags.push("no-license");
+  // NOASSERTION is GitHub's answer for a LICENSE file it cannot classify: the QNFO Unified License Agreement itself
+  // (QNFO/license, SPDX LicenseRef-QNFO-ULA-2.0). A repository carrying it is licensed; only a missing file is a flag.
+  if (!r.license) flags.push("no-license");
   if (!r.topics || !r.topics.length) flags.push("no-topics");
   var d = pfDays(r.pushed_at, nowMs);
   if (d !== null && d > PF_DORMANT_DAYS) flags.push("dormant-" + d + "d");
@@ -3461,7 +3489,7 @@ function pfRenderBody(ev) {
   L.push("| Hygiene score (description, licence and topics all present) | " + (ev.hygiene_score === null ? "n/a" : ev.hygiene_score) + " |");
   L.push("| Dormant graded repositories (no push for " + PF_DORMANT_DAYS + "+ days) | " + ev.dormant.length + " |");
   L.push("| Research repositories with no WBS program code | " + ev.unlinked_research.length + " |");
-  L.push("| WBS codes linked to a repository | " + ev.wbs_linked + " of " + ev.wbs_total + " with a github_repo |");
+  L.push("| WBS codes linked to a repository | " + ev.wbs_linked + " of " + ev.wbs_total + " in program_registry |");
   L.push("");
   L.push("### Tiers");
   L.push("");
@@ -3492,6 +3520,12 @@ function pfRenderBody(ev) {
   var hyg = ev.rows.filter(function(r) { return r.visibility === "public" && r.flags.some(function(f) { return f.indexOf("dormant") !== 0; }); });
   if (hyg.length) L.push("- Hygiene (description, licence, topics) to fix: " + hyg.map(function(r) { return r.name + " (" + r.flags.filter(function(f) { return f.indexOf("dormant") !== 0; }).join(", ") + ")"; }).join("; "));
   if (!ev.archive_candidates.length && !ev.unlinked_research.length && !hyg.length) L.push("- none");
+  if (ev.actions && ev.actions.length) {
+    L.push("");
+    L.push("### Hygiene actions the loop took this sync (PORTFOLIO-HYGIENE-1; the next sync measures them)");
+    L.push("");
+    ev.actions.forEach(function(a) { L.push("- " + a.repo + ": " + a.action + " " + a.status + (a.note ? " (" + pfCell(String(a.note).slice(0, 100)) + ")" : "")); });
+  }
   return L;
 }
 function pfRenderDocBlock(ev) {
@@ -3542,6 +3576,7 @@ function pfSpliceOrBootstrap(doc, block) {
 async function pfSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS portfolio_repos (name TEXT PRIMARY KEY, full_name TEXT, tier TEXT, pillar TEXT, visibility TEXT, archived INTEGER, fork INTEGER, description TEXT, license TEXT, topics TEXT, homepage TEXT, language TEXT, pushed_at TEXT, created_at TEXT, has_pages INTEGER, open_issues INTEGER, stars INTEGER, wbs TEXT, flags TEXT, seen INTEGER DEFAULT 1, synced_at TEXT)").run();
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS portfolio_sync_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, repos INTEGER, hygiene REAL, status TEXT, note TEXT, writes TEXT)").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS portfolio_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, repo TEXT, action TEXT, status TEXT, detail TEXT)").run();
 }
 function pfGh(env) {
   return { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/portfolio", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
@@ -3563,7 +3598,8 @@ async function pfFetchOrg(env) {
 async function pfWbs(env) {
   if (!env.PORTFOLIO) return { ok: false, rows: [], note: "no PORTFOLIO (portfolio-state) binding" };
   try {
-    var r = await env.PORTFOLIO.prepare("SELECT wbs_code, level, name, status, github_repo FROM program_registry WHERE github_repo IS NOT NULL AND github_repo <> ''").all();
+    // every row, linked or not: pfEvaluate links by github_repo, pfHygienePlan fills the empty ones by slug or code
+    var r = await env.PORTFOLIO.prepare("SELECT wbs_code, level, name, slug, status, github_repo FROM program_registry").all();
     return { ok: true, rows: (r && r.results) || [], note: "ok" };
   } catch (e) { return { ok: false, rows: [], note: "program_registry read failed: " + String(e && e.message || e).slice(0, 80) }; }
 }
@@ -3625,6 +3661,12 @@ async function portfolioSync(env, force) {
   var wbs = await pfWbs(env);
   var ev = pfEvaluate(org.repos, wbs.rows, new Date().toISOString());
   await pfUpsert(env, ev);
+  // PORTFOLIO-HYGIENE-1: fix what is deterministic before the surfaces are rendered, so the day's documents also list
+  // what was done. The register rows and flags still describe the organisation as read at the top of this run; the
+  // next sync measures the effect.
+  var actions = [];
+  try { actions = await pfHygieneApply(env, ev, wbs.rows); } catch (e) { actions = [{ repo: "*", action: "hygiene", status: "write-failed", note: String(e && e.message || e).slice(0, 100) }]; }
+  ev.actions = actions;
   var day = ev.ts.slice(0, 10), msg = "chore(portfolio): PORTFOLIO-LOOP-1 sync " + day + " [skip ci]";
   var writes = [];
   var targets = [
@@ -3637,8 +3679,9 @@ async function portfolioSync(env, force) {
     catch (e) { writes.push({ path: targets[i][0] + "/" + targets[i][1], status: "write-failed", note: String(e && e.message || e).slice(0, 100) }); }
   }
   var status = writes.every(function(w) { return w.status === "committed" || w.status === "unchanged"; }) ? "ok" : "partial";
-  try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length, JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) {}
-  return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, wbs: wbs.note, writes: writes, ms: Date.now() - t0 };
+  var done = actions.filter(function(a) { return a.status === "committed"; }).length;
+  try { await env.AUDIT.prepare("INSERT INTO portfolio_sync_runs (ts, repos, hygiene, status, note, writes) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(ev.ts, ev.total, ev.hygiene_score, status, "wbs:" + wbs.note + "; dormant " + ev.dormant.length + "; unlinked " + ev.unlinked_research.length + "; actions " + actions.length + " (" + done + " committed)", JSON.stringify(writes).slice(0, 1500)).run(); } catch (e) {}
+  return { ok: true, status: status, ts: ev.ts, repos: ev.total, tiers: ev.tiers, hygiene: ev.hygiene_score, wbs: wbs.note, writes: writes, actions: actions, ms: Date.now() - t0 };
 }
 // PARTIAL-RETRY-1: a run that left a surface unwritten (partial) is retried on the next hourly tick, not after 20h;
 // a fully written run (ok) holds for PF_STALE_H. The writes are idempotent (unchanged content is a no-op), so an
@@ -3654,9 +3697,138 @@ async function portfolioLatest(env) {
   await pfSchema(env);
   var rows = await charterRows(env, "SELECT name, tier, pillar, visibility, archived, fork, description, license, topics, homepage, pushed_at, wbs, flags, seen, synced_at FROM portfolio_repos WHERE seen=1 ORDER BY tier, pushed_at DESC");
   var run = await charterOne(env, "SELECT ts, repos, hygiene, status, note, writes FROM portfolio_sync_runs ORDER BY id DESC LIMIT 1");
+  var acts = await charterRows(env, "SELECT ts, repo, action, status, detail FROM portfolio_actions ORDER BY id DESC LIMIT 40");
   var tiers = {};
   rows.forEach(function(r) { tiers[r.tier] = (tiers[r.tier] || 0) + 1; });
-  return { last_run: run, repos: rows.length, tiers: tiers, rows: rows.map(function(r) { if (r.visibility === "private") return { name: "(private)", tier: r.tier, pillar: r.pillar, visibility: "private" }; r.topics = JSON.parse(r.topics || "[]"); r.wbs = r.wbs ? r.wbs.split(",") : []; r.flags = r.flags ? r.flags.split(",") : []; return r; }) };
+  return { last_run: run, repos: rows.length, tiers: tiers, actions: acts, rows: rows.map(function(r) { if (r.visibility === "private") return { name: "(private)", tier: r.tier, pillar: r.pillar, visibility: "private" }; r.topics = JSON.parse(r.topics || "[]"); r.wbs = r.wbs ? r.wbs.split(",") : []; r.flags = r.flags ? r.flags.split(",") : []; return r; }) };
+}
+// ---- PORTFOLIO-HYGIENE-1 (2026-10-01, pillar autonomy) ----
+// The first live register (hygiene 0.08: 32 of 39 graded public repositories lacked a licence file, a description or
+// topics; 6 research repositories had no WBS code) was a list of proposals for a session to act on, which is exactly
+// the dependency the owner directive removes. The loop now fixes what is deterministic and reversible on its own:
+//   license      the QNFO Unified License Agreement v2.0 (QNFO/license, SPDX LicenseRef-QNFO-ULA-2.0) applies by its own
+//                scope to every repository of the organisation, code included; a LICENSE file is created where none
+//                exists and never replaced.
+//   description  the first paragraph of the repository's README, only where the description is empty.
+//   topics       a baseline per tier plus the slugs of the WBS programs the repository serves, only where it has none.
+//   wbs-link     program_registry.github_repo filled where it is empty and either the row's slug equals the repository
+//                name or the repository's description names the code; a session still creates new codes.
+// Every action is a portfolio_actions row and the next sync measures the result. At most PF_HYGIENE_MAX actions per
+// sync, so one bad run cannot touch the whole organisation. Nothing is archived or deleted (docs/PORTFOLIO.md rule 3).
+var PF_HYGIENE_MAX = 12;
+var PF_LICENSE_REPO = "QNFO/license";
+var PF_LICENSE_PATH = "LICENSE";
+var PF_TIER_TOPICS = { platform: ["qnfo", "cloudflare-workers", "research-infrastructure"], governance: ["qnfo", "governance"], research: ["qnfo", "research", "open-research"], demo: ["qnfo", "qwav", "interactive-demo"] };
+function pfWbsHint(desc) {
+  var out = [], m, re = /\b(QNFO|QWAV)\.[A-Z]{2,4}(?:\.\d{3})?\b/g;
+  while ((m = re.exec(String(desc || ""))) !== null) if (out.indexOf(m[0]) < 0) out.push(m[0]);
+  return out;
+}
+function pfTopic(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50); }
+// Pure: a register row + registry rows -> the topics the repository gets when it has none.
+function pfTopicsFor(row, wbsRows) {
+  var base = (PF_TIER_TOPICS[row.tier] || ["qnfo"]).slice();
+  var codes = (row.wbs || []).concat(pfWbsHint(row.description));
+  (wbsRows || []).forEach(function(w) {
+    if (!w || !w.slug || (w.level !== "program" && w.level !== "portfolio")) return;
+    var code = String(w.wbs_code || ""), t = pfTopic(w.slug);
+    var serves = codes.some(function(c) { return c === code || c.indexOf(code + ".") === 0; });
+    if (serves && t && base.indexOf(t) < 0) base.push(t);
+  });
+  return base.filter(function(t) { return /^[a-z0-9][a-z0-9-]{0,49}$/.test(t); }).slice(0, 20);
+}
+// Pure: README markdown -> the first real paragraph as a one-line description, or null when there is none.
+function pfDescriptionFromReadme(md) {
+  var text = String(md || "").replace(/\r/g, "");
+  if (/^---\n/.test(text)) { var fm = text.indexOf("\n---", 3); if (fm > 0) text = text.slice(fm + 4); }
+  text = text.replace(/<!--[\s\S]*?-->/g, "");
+  var paras = text.split(/\n\s*\n/);
+  for (var i = 0; i < paras.length; i++) {
+    var lines = paras[i].split("\n").map(function(l) { return l.trim(); }).filter(function(l) { return l; });
+    if (!lines.length) continue;
+    var skip = /^(#|!\[|\[!\[|<|\||>|[-*]\s|\d+\.\s|```|---|===)/;
+    if (lines.every(function(l) { return skip.test(l); })) continue;
+    var p = lines.filter(function(l) { return !skip.test(l); }).join(" ");
+    p = p.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/<[^>]+>/g, "").replace(/[`*_~]/g, "").replace(/\s+/g, " ").trim();
+    if (p.length < 20) continue;
+    if (p.length > 240) { p = p.slice(0, 240); var cut = p.lastIndexOf(" "); if (cut > 120) p = p.slice(0, cut); p = p.replace(/[,;:\-]+$/, "") + "..."; }
+    return p;
+  }
+  return null;
+}
+// Pure: the evaluated register + registry rows -> the bounded, ordered list of actions for this sync.
+function pfHygienePlan(ev, wbsRows) {
+  var acts = [], bySlug = {}, byCode = {};
+  (wbsRows || []).forEach(function(w) { if (!w) return; byCode[w.wbs_code] = w; if (w.slug) bySlug[String(w.slug).toLowerCase()] = w; });
+  (ev.rows || []).forEach(function(r) {
+    if (r.visibility !== "public" || r.archived || r.fork || r.tier === "client-config") return;
+    if (r.tier === "research" && !r.wbs.length) {
+      var cand = null, s = bySlug[String(r.name).toLowerCase()];
+      if (s && !s.github_repo) cand = s;
+      if (!cand) pfWbsHint(r.description).forEach(function(c) { var w = byCode[c]; if (!cand && w && !w.github_repo) cand = w; });
+      if (cand) acts.push({ repo: r.name, action: "wbs-link", code: cand.wbs_code });
+    }
+    if (r.flags.indexOf("no-license") >= 0) acts.push({ repo: r.name, action: "license" });
+    if (r.flags.indexOf("no-description") >= 0) acts.push({ repo: r.name, action: "description" });
+    if (r.flags.indexOf("no-topics") >= 0) acts.push({ repo: r.name, action: "topics", topics: pfTopicsFor(r, wbsRows) });
+  });
+  // registry links first (one D1 write each), then the cheapest GitHub writes; the rest waits for the next sync
+  var order = { "wbs-link": 0, topics: 1, description: 2, license: 3 };
+  acts.sort(function(a, b) { return order[a.action] - order[b.action] || String(a.repo).localeCompare(String(b.repo)); });
+  return acts.slice(0, PF_HYGIENE_MAX);
+}
+async function pfGhJson(env, method, url, body, timeoutMs) {
+  var opt = { method: method, headers: pfGh(env) };
+  if (body !== void 0) { opt.headers = Object.assign({ "Content-Type": "application/json" }, opt.headers); opt.body = JSON.stringify(body); }
+  var r = await timedFetch(url, opt, timeoutMs || 12e3);
+  var j = null;
+  try { j = await r.json(); } catch (e) { j = null; }
+  return { status: r.status, json: j };
+}
+async function pfLicenseText(env) {
+  var r = await timedFetch("https://api.github.com/repos/" + PF_LICENSE_REPO + "/contents/" + PF_LICENSE_PATH, { headers: Object.assign({}, pfGh(env), { Accept: "application/vnd.github.raw+json" }) }, 12e3);
+  if (r.status !== 200) return null;
+  var t = await r.text();
+  return t && t.length > 2000 && /QNFO Unified License Agreement/.test(t) ? t : null;
+}
+async function pfCreateIfAbsent(env, repo, path, content, message) {
+  var hdr = pfGh(env), branch = await pfDefaultBranch(env, repo);
+  var gr = await timedFetch("https://api.github.com/repos/" + repo + "/contents/" + path + "?ref=" + encodeURIComponent(branch), { headers: hdr }, 12e3);
+  if (gr.status === 200) return { status: "exists" };
+  if (gr.status !== 404) return { status: "read-failed", note: "HTTP " + gr.status };
+  var pr = await pfGhJson(env, "PUT", "https://api.github.com/repos/" + repo + "/contents/" + path, { message: message, content: b64encode(content), branch: branch }, 15e3);
+  if (!(pr.json && pr.json.commit && pr.json.commit.sha)) return { status: "write-failed", note: "PUT HTTP " + pr.status + " on " + branch };
+  return { status: "committed", note: pr.json.commit.sha + " on " + branch };
+}
+async function pfHygieneApply(env, ev, wbsRows) {
+  var plan = pfHygienePlan(ev, wbsRows), out = [], lic = null;
+  var msg = "chore(portfolio): PORTFOLIO-HYGIENE-1 " + ev.ts.slice(0, 10) + " [skip ci]";
+  for (var i = 0; i < plan.length; i++) {
+    var a = plan[i], full = PF_ORG + "/" + a.repo, res;
+    try {
+      if (a.action === "license") {
+        if (lic === null) lic = (await pfLicenseText(env)) || false;
+        res = lic ? await pfCreateIfAbsent(env, full, PF_LICENSE_PATH, lic, msg + "\n\nThe QNFO Unified License Agreement v2.0 (SPDX LicenseRef-QNFO-ULA-2.0) applies by its own scope to every repository of the organisation; this file makes it visible here. Source of truth: https://github.com/" + PF_LICENSE_REPO) : { status: "skipped", note: "licence text unavailable from " + PF_LICENSE_REPO };
+      } else if (a.action === "description") {
+        var rd = await timedFetch("https://api.github.com/repos/" + full + "/readme", { headers: Object.assign({}, pfGh(env), { Accept: "application/vnd.github.raw+json" }) }, 12e3);
+        var desc = rd.status === 200 ? pfDescriptionFromReadme(await rd.text()) : null;
+        if (!desc) res = { status: "skipped", note: rd.status === 200 ? "README has no usable first paragraph" : "README HTTP " + rd.status };
+        else { var pd = await pfGhJson(env, "PATCH", "https://api.github.com/repos/" + full, { description: desc }); res = pd.status === 200 ? { status: "committed", note: desc.slice(0, 120) } : { status: "write-failed", note: "PATCH HTTP " + pd.status }; }
+      } else if (a.action === "topics") {
+        var pt = await pfGhJson(env, "PUT", "https://api.github.com/repos/" + full + "/topics", { names: a.topics });
+        res = pt.status === 200 ? { status: "committed", note: a.topics.join(",") } : { status: "write-failed", note: "PUT HTTP " + pt.status };
+      } else if (a.action === "wbs-link") {
+        if (!env.PORTFOLIO) res = { status: "skipped", note: "no PORTFOLIO binding" };
+        else {
+          var u = await env.PORTFOLIO.prepare("UPDATE program_registry SET github_repo=?1, updated_at=datetime('now') WHERE wbs_code=?2 AND (github_repo IS NULL OR github_repo='')").bind(full, a.code).run();
+          res = u && u.meta && u.meta.changes ? { status: "committed", note: a.code + " -> " + full } : { status: "skipped", note: a.code + " already linked" };
+        }
+      } else res = { status: "skipped", note: "unknown action" };
+    } catch (e) { res = { status: "write-failed", note: String(e && e.message || e).slice(0, 100) }; }
+    out.push({ repo: a.repo, action: a.action, status: res.status, note: res.note || "" });
+    try { await env.AUDIT.prepare("INSERT INTO portfolio_actions (ts, repo, action, status, detail) VALUES (?1, ?2, ?3, ?4, ?5)").bind(ev.ts, a.repo, a.action, res.status, String(res.note || "").slice(0, 300)).run(); } catch (e2) {}
+  }
+  return out;
 }
 // ---- PORTFOLIO-LOOP-1:END ----
 // ---- LOOP-WATCH-1:BEGIN (2026-10-01, CLOUD-ONLY-VERIFICATION-1) ----
