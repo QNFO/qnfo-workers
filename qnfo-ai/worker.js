@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.29.11-ai-attr";
+var VERSION = "5.30.0-spend-gov";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -62,7 +62,344 @@ globalThis.fetch = function(input, init) {
   return __aigBaseFetch(input, init);
 };
 
-var ROUTES = ["/health", "/", "/v1/chat/completions", "/v1/messages", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
+// SPEND-GOVERNOR-1 (2026-10-01, #1683 AI-SPEND-OVER-CAP-ALL-PROVIDERS-1; charter pillar: cost). An enforced rolling-30d
+// spend governor over every paid upstream this router calls: Workers AI (gateway compat path and the AI binding), the
+// direct DeepSeek key (BYOK, invisible to the gateway spend limit) and the unified-billing gateway. Each call is priced
+// in code (token usage x SPEND_PRICES, or x Cloudflare neuron rates for Workers AI) and UPSERTed into qnfo-audit
+// ai_spend_ledger (day, provider, caller, model). Before routing, the 30d sum per provider and in total is compared with
+// env caps whose defaults sum to $60/30d (docs/STRATEGY.md section 8):
+//   provider >= soft fraction x cap -> premium models of that provider drop to SPEND_CHEAP_MODEL, and the ensemble
+//                                      (3-4 paid legs) collapses to one cheap leg;
+//   provider >= cap                  -> that provider is skipped (downgrade to the cheap Workers AI model);
+//   total >= SPEND_CAP_TOTAL_USD     -> critical callers are throttled to the cheap model (never refused: the owner
+//                                      directive is throttling, not a hard cap); every other caller gets HTTP 429.
+// Callers are named by the service-binding ctx.props.caller (INTERNAL-CALLER-PROPS-1); a router-key request without
+// props is "public" (the owner's own clients). The ledger sees only traffic through this router. Account-wide spend
+// (gateway BYOK/unified from other clients, Workers AI from other workers) is read from fleet_budget and
+// analytics_dash_meta (written hourly by qnfo-fleet-control) for GET /spend, and is enforced only when
+// SPEND_GOVERN_SCOPE=account. A D1 failure fails open (allow) and is reported on /spend.
+var SPEND_DEFAULT_CAPS = { "workers-ai": 35, "deepseek": 15, "gateway": 10, "total": 60 };
+var SPEND_CAP_ENV = { "workers-ai": "SPEND_CAP_WORKERS_AI_USD", "deepseek": "SPEND_CAP_DEEPSEEK_USD", "gateway": "SPEND_CAP_GATEWAY_USD", "total": "SPEND_CAP_TOTAL_USD" };
+var SPEND_PROVIDERS = ["workers-ai", "deepseek", "gateway"];
+var SPEND_NEURON_USD = 0.011 / 1000;
+var SPEND_PRICES = {
+  // USD per 1M tokens [input, output]; same list prices as qnfo-ops COST_TIER_PRICES. "*" prices an unknown model dear.
+  "deepseek": { "deepseek-chat": [0.22, 0.66], "deepseek-reasoner": [0.22, 0.66], "*": [0.66, 1.98] },
+  "gateway": { "openai/gpt-5.5": [5, 30], "openai/gpt-5-mini": [0.15, 0.6], "deepseek/deepseek-v4-flash": [0.22, 0.66], "deepseek/deepseek-v4-pro": [0.66, 1.98], "*": [5, 30] }
+};
+var SPEND_WA_FALLBACK_RATE = [127273, 400000];
+var SPEND_CHEAP_MODEL = "glm-5.3-flash";
+var SPEND_CHEAP_WA = "@cf/zai-org/glm-5.3-flash";
+var SPEND_DEFAULT_CRITICAL = "public,qnfo-ops,qnfo-agent-ws,qnfo-intent-orchestrator,qnfo-research-exec,qnfo-fleet-dashboard";
+var __spendState = { at: 0, by: {}, pending: {}, ensured: false, err: null, account: null, accountAt: 0 };
+function spendNum(v, d) {
+  var n = Number(v);
+  return isFinite(n) && n > 0 ? n : d;
+}
+function spendCaps(env) {
+  var c = {};
+  for (var k in SPEND_DEFAULT_CAPS) c[k] = spendNum(env && env[SPEND_CAP_ENV[k]], SPEND_DEFAULT_CAPS[k]);
+  return c;
+}
+function spendSoft(env) {
+  var s = Number(env && env.SPEND_SOFT_FRACTION);
+  return isFinite(s) && s > 0 && s <= 1 ? s : 0.8;
+}
+function spendCritical(env) {
+  var o = {};
+  String(env && env.SPEND_CRITICAL_CALLERS || SPEND_DEFAULT_CRITICAL).split(",").forEach(function (x) { x = x.trim(); if (x) o[x] = 1; });
+  return o;
+}
+function spendDay(offsetDays) {
+  return new Date(Date.now() + (offsetDays || 0) * 864e5).toISOString().slice(0, 10);
+}
+function spendCallerOf(ctx, ua) {
+  var c = internalCaller(ctx);
+  if (c) return c;
+  var u = String(ua || "");
+  if (/QNFO-AI-Calibration/i.test(u)) return "qnfo-ai-calibration";
+  if (/qnfo-chat-canary|qnfo-canary/i.test(u)) return "qnfo-chat-canary";
+  return "public";
+}
+function spendUsd(provider, model, inTok, outTok) {
+  var i = Math.max(0, Number(inTok) || 0), o = Math.max(0, Number(outTok) || 0);
+  if (provider === "workers-ai") {
+    var r = __AI_ATTR_RATES[String(model)] || SPEND_WA_FALLBACK_RATE;
+    return (i * r[0] + o * r[1]) / 1e6 * SPEND_NEURON_USD;
+  }
+  var tbl = SPEND_PRICES[provider] || SPEND_PRICES.gateway;
+  var p = tbl[String(model)] || tbl["*"];
+  return (i * p[0] + o * p[1]) / 1e6;
+}
+// Premium = a blended 1M-in/0.25M-out unit costs more than 1.5x the cheap model's (deepseek-chat is not premium).
+function spendIsPremium(provider, model) {
+  if (model === "ensemble") return true;
+  return spendUsd(provider, model, 1e6, 25e4) > 1.5 * spendUsd("workers-ai", SPEND_CHEAP_WA, 1e6, 25e4);
+}
+function spendModelProvider(spec) {
+  if (!spec) return "deepseek";
+  return spec.wa ? "workers-ai" : spec.api ? "deepseek" : spec.gateway ? "gateway" : "workers-ai";
+}
+function spendSum(by) {
+  var t = 0;
+  for (var k in by) t += Number(by[k]) || 0;
+  return t;
+}
+// Pure decision. by: {provider: usd30d}; returns {action: allow|downgrade|refuse, to?, noEnsemble?, reason}.
+function spendDecide(by, caps, provider, model, caller, critical, soft, wantEnsemble) {
+  var total = spendSum(by);
+  var cur = Number(by[provider]) || 0;
+  var wa = Number(by["workers-ai"]) || 0;
+  var isCrit = !!critical[caller];
+  var base = { provider: provider, model: model, caller: caller, critical: isCrit, provider_usd: Math.round(cur * 1e4) / 1e4, provider_cap: caps[provider], total_usd: Math.round(total * 1e4) / 1e4, total_cap: caps.total };
+  var throttle = function (reason) {
+    if (!isCrit) return Object.assign(base, { action: "refuse", reason: reason });
+    if (model === SPEND_CHEAP_WA && !wantEnsemble) return Object.assign(base, { action: "allow", reason: reason + "; critical caller already on the cheap model" });
+    return Object.assign(base, { action: "downgrade", to: SPEND_CHEAP_MODEL, noEnsemble: true, reason: reason + "; critical caller throttled to " + SPEND_CHEAP_MODEL });
+  };
+  if (total >= caps.total) return throttle("total 30d spend " + total.toFixed(2) + " >= cap " + caps.total);
+  if (cur >= caps[provider]) {
+    if (provider !== "workers-ai" && wa < caps["workers-ai"]) return Object.assign(base, { action: "downgrade", to: SPEND_CHEAP_MODEL, noEnsemble: true, reason: provider + " 30d spend " + cur.toFixed(2) + " >= cap " + caps[provider] + "; routed to " + SPEND_CHEAP_MODEL });
+    return throttle(provider + " 30d spend " + cur.toFixed(2) + " >= cap " + caps[provider]);
+  }
+  if (wantEnsemble && wa >= soft * caps["workers-ai"]) return Object.assign(base, { action: "downgrade", to: SPEND_CHEAP_MODEL, noEnsemble: true, reason: "workers-ai 30d spend " + wa.toFixed(2) + " >= " + soft + " x cap; ensemble collapsed to one cheap leg" });
+  if (cur >= soft * caps[provider] && spendIsPremium(provider, model)) return Object.assign(base, { action: "downgrade", to: SPEND_CHEAP_MODEL, noEnsemble: true, reason: provider + " 30d spend " + cur.toFixed(2) + " >= " + soft + " x cap; premium model downgraded" });
+  return Object.assign(base, { action: "allow" });
+}
+async function spendEnsure(db) {
+  if (__spendState.ensured) return;
+  await db.prepare("CREATE TABLE IF NOT EXISTS ai_spend_ledger (day TEXT NOT NULL, provider TEXT NOT NULL, caller TEXT NOT NULL, model TEXT NOT NULL, calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, usd REAL DEFAULT 0, downgraded INTEGER DEFAULT 0, refused INTEGER DEFAULT 0, PRIMARY KEY (day, provider, caller, model))").run();
+  __spendState.ensured = true;
+}
+async function spendAccount(env, force) {
+  var db = env && env.QNFO_AUDIT;
+  if (!db) return null;
+  if (!force && __spendState.account && Date.now() - __spendState.accountAt < 3e5) return __spendState.account;
+  var a = { source: "qnfo-audit fleet_budget ai_spend:* + analytics_dash_meta (qnfo-fleet-control hourly, gateway GraphQL list cost + Workers AI neurons)", by_provider: {}, soft_caps: {} };
+  try {
+    var fb = await db.prepare("SELECT node_class, cap, current, updated_at FROM fleet_budget WHERE node_class LIKE 'ai_spend:%'").all();
+    (fb && fb.results || []).forEach(function (r) {
+      var k = String(r.node_class).slice("ai_spend:".length);
+      a.soft_caps[k] = r.cap;
+      if (k !== "total") a.by_provider[k] = Number(r.current) || 0;
+      if (!a.updated_at || String(r.updated_at) > a.updated_at) a.updated_at = String(r.updated_at);
+    });
+    var mt = await db.prepare("SELECT key, value FROM analytics_dash_meta WHERE key IN ('gateway_cost_usd_30d','unified_cost_usd_30d','byok_cost_usd_30d','last_refresh')").all();
+    var m = {};
+    (mt && mt.results || []).forEach(function (r) { m[r.key] = r.value; });
+    a.gateway_usd = Number(m.gateway_cost_usd_30d) || 0;
+    a.gateway_unified_usd = Number(m.unified_cost_usd_30d) || 0;
+    a.gateway_byok_usd = Number(m.byok_cost_usd_30d) || 0;
+    a.workers_ai_usd = Number(a.by_provider["workers-ai"]) || 0;
+    a.refreshed_at = m.last_refresh || a.updated_at || null;
+    try {
+      var ext = await db.prepare("SELECT date, usd FROM cost_daily WHERE source = 'direct_providers_external' ORDER BY date DESC LIMIT 1").first();
+      if (ext) a.external_unmetered_estimate_usd_month = { usd: Number(ext.usd) || 0, as_of: ext.date, note: "owner-declared estimate of direct-provider keys used outside Cloudflare; not metered, not in unified_30d_usd" };
+    } catch (e0) {
+    }
+  } catch (e) {
+    a.error = String(e && e.message || e).slice(0, 160);
+  }
+  __spendState.account = a;
+  __spendState.accountAt = Date.now();
+  return a;
+}
+async function spendLoad(env, force) {
+  var db = env && env.QNFO_AUDIT;
+  if (!db) return __spendState;
+  if (!force && __spendState.at && Date.now() - __spendState.at < 6e4) return __spendState;
+  try {
+    await spendEnsure(db);
+    var r = await db.prepare("SELECT provider, SUM(usd) AS usd FROM ai_spend_ledger WHERE day >= ?1 GROUP BY provider").bind(spendDay(-29)).all();
+    var by = {};
+    (r && r.results || []).forEach(function (x) { by[x.provider] = Number(x.usd) || 0; });
+    __spendState.by = by;
+    __spendState.pending = {};
+    __spendState.err = null;
+  } catch (e) {
+    __spendState.err = String(e && e.message || e).slice(0, 160);
+  }
+  __spendState.at = Date.now();
+  if (String(env.SPEND_GOVERN_SCOPE || "").toLowerCase() === "account") await spendAccount(env, false);
+  return __spendState;
+}
+// Router ledger + this isolate's not-yet-reloaded spend; with SPEND_GOVERN_SCOPE=account, the account-wide figures too.
+function spendBy(env) {
+  var by = {};
+  SPEND_PROVIDERS.forEach(function (p) { by[p] = (Number(__spendState.by[p]) || 0) + (Number(__spendState.pending[p]) || 0); });
+  var a = __spendState.account;
+  if (a && String(env && env.SPEND_GOVERN_SCOPE || "").toLowerCase() === "account") {
+    var ap = a.by_provider || {};
+    by["workers-ai"] = Math.max(by["workers-ai"], Number(ap["workers-ai"]) || 0);
+    by.deepseek = by.deepseek + (Number(ap.deepseek) || 0);
+    var gwOther = 0;
+    for (var k in ap) if (k !== "workers-ai" && k !== "deepseek") gwOther += Number(ap[k]) || 0;
+    by.gateway = Math.max(by.gateway, gwOther);
+  }
+  return by;
+}
+function spendRecord(env, provider, model, inTok, outTok, flags) {
+  try {
+    var f = flags || {};
+    var usd = f.refused || f.downgraded ? 0 : spendUsd(provider, model, inTok, outTok);
+    __spendState.pending[provider] = (Number(__spendState.pending[provider]) || 0) + usd;
+    var db = env && env.QNFO_AUDIT;
+    if (!db) return;
+    var caller = env.__spendCaller || "public";
+    var calls = f.refused || f.downgraded ? 0 : 1;
+    var p = (async function () {
+      await spendEnsure(db);
+      await db.prepare("INSERT INTO ai_spend_ledger (day, provider, caller, model, calls, in_tok, out_tok, usd, downgraded, refused) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(day, provider, caller, model) DO UPDATE SET calls=calls+excluded.calls, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, usd=usd+excluded.usd, downgraded=downgraded+excluded.downgraded, refused=refused+excluded.refused")
+        .bind(spendDay(0), provider, String(caller).slice(0, 80), String(model).slice(0, 120), calls, Math.round(Number(inTok) || 0), Math.round(Number(outTok) || 0), usd, f.downgraded ? 1 : 0, f.refused ? 1 : 0).run();
+    })();
+    var safe = p.catch(function () {});
+    if (env.__spendCtx && typeof env.__spendCtx.waitUntil === "function") env.__spendCtx.waitUntil(safe);
+  } catch (e) {
+  }
+}
+function spendUsageOf(res, fallbackIn, fallbackOut) {
+  var u = res && typeof res === "object" ? res.usage || res.result && res.result.usage || null : null;
+  var i = u ? Number(u.prompt_tokens || u.input_tokens || 0) : 0;
+  var o = u ? Number(u.completion_tokens || u.output_tokens || 0) : 0;
+  return { in: i > 0 ? i : Number(fallbackIn) || 0, out: o > 0 ? o : Number(fallbackOut) || 0 };
+}
+function spendOutEstimate(res) {
+  try {
+    var m = res && res.choices && res.choices[0] && res.choices[0].message;
+    if (m) return Math.ceil((String(m.content || "").length + String(m.reasoning_content || "").length + (m.tool_calls ? JSON.stringify(m.tool_calls).length : 0)) / 3);
+    if (res && typeof res.response === "string") return Math.ceil(res.response.length / 3);
+  } catch (e) {
+  }
+  return 0;
+}
+function spendInEstimate(messages) {
+  try { return estimateInputTokens(messages); } catch (e) { return 0; }
+}
+// Route-level gate (handleChat): returns the decision and records downgrades/refusals in the ledger.
+async function spendGovern(env, provider, model, wantEnsemble) {
+  await spendLoad(env, false);
+  var d = spendDecide(spendBy(env), spendCaps(env), provider, model, env.__spendCaller || "public", spendCritical(env), spendSoft(env), !!wantEnsemble);
+  if (d.action === "refuse") spendRecord(env, provider, model, 0, 0, { refused: true });
+  else if (d.action === "downgrade") spendRecord(env, provider, model, 0, 0, { downgraded: true });
+  if (__spendState.err) d.ledger_error = __spendState.err;
+  return d;
+}
+// Chokepoint for Workers AI chat calls (covers ensemble legs and fallbacks): premium -> cheap at the soft threshold.
+async function spendGovernWA(env, modelId) {
+  try {
+    var r = __AI_ATTR_RATES[String(modelId)];
+    if (!r || !(r[1] > 0) || modelId === SPEND_CHEAP_WA) return modelId;
+    await spendLoad(env, false);
+    var by = spendBy(env), caps = spendCaps(env), soft = spendSoft(env);
+    if ((spendSum(by) >= soft * caps.total || by["workers-ai"] >= soft * caps["workers-ai"]) && spendIsPremium("workers-ai", modelId)) {
+      spendRecord(env, "workers-ai", modelId, 0, 0, { downgraded: true });
+      return SPEND_CHEAP_WA;
+    }
+  } catch (e) {
+  }
+  return modelId;
+}
+// Chokepoint for direct-key / gateway calls: throws at the provider or total cap; every caller already falls back to
+// Workers AI on a thrown upstream error, so a capped paid provider degrades instead of failing.
+async function spendGuardPaid(env, provider, model) {
+  await spendLoad(env, false);
+  var by = spendBy(env), caps = spendCaps(env);
+  var total = spendSum(by);
+  if (by[provider] >= caps[provider] || total >= caps.total) {
+    spendRecord(env, provider, model, 0, 0, { refused: true });
+    throw new Error("spend-governor: " + provider + " 30d spend " + by[provider].toFixed(2) + " (cap " + caps[provider] + "), total " + total.toFixed(2) + " (cap " + caps.total + "); paid upstream skipped");
+  }
+}
+// Streams carry no usage unless asked: count delta text (content, reasoning, tool calls) and price it at end of stream.
+function spendMeterStream(env, resp, provider, model, inEst) {
+  try {
+    if (!resp || !resp.body || typeof TransformStream !== "function") {
+      spendRecord(env, provider, model, inEst, 0);
+      return resp;
+    }
+    var dec = new TextDecoder(), buf = "", chars = 0, usage = null;
+    var scan = function (line) {
+      line = line.trim();
+      if (line.indexOf("data:") !== 0) return;
+      var d = line.slice(5).trim();
+      if (!d || d === "[DONE]") return;
+      try {
+        var j = JSON.parse(d);
+        if (j.usage) usage = j.usage;
+        var dl = j.choices && j.choices[0] && j.choices[0].delta;
+        if (dl) {
+          if (typeof dl.content === "string") chars += dl.content.length;
+          if (typeof dl.reasoning_content === "string") chars += dl.reasoning_content.length;
+          if (dl.tool_calls) chars += JSON.stringify(dl.tool_calls).length;
+        }
+      } catch (e) {
+      }
+    };
+    var ts = new TransformStream({
+      transform: function (chunk, c) {
+        c.enqueue(chunk);
+        try {
+          buf += dec.decode(chunk, { stream: true });
+          var lines = buf.split("\n");
+          buf = lines.pop();
+          for (var i = 0; i < lines.length; i++) scan(lines[i]);
+        } catch (e) {
+        }
+      },
+      flush: function () {
+        if (buf) scan(buf);
+        var u = spendUsageOf({ usage: usage }, inEst, Math.ceil(chars / 3));
+        spendRecord(env, provider, model, u.in, u.out);
+      }
+    });
+    return new Response(resp.body.pipeThrough(ts), { status: resp.status, statusText: resp.statusText, headers: resp.headers });
+  } catch (e) {
+    return resp;
+  }
+}
+async function spendReport(env) {
+  var db = env && env.QNFO_AUDIT;
+  await spendLoad(env, true);
+  var caps = spendCaps(env), soft = spendSoft(env), since = spendDay(-29);
+  var by = spendBy(env);
+  var out = { ok: true, worker: "qnfo-ai", version: VERSION, window_days: 30, since: since, measured_at: new Date().toISOString() };
+  var state = {};
+  SPEND_PROVIDERS.concat(["total"]).forEach(function (p) {
+    var v = p === "total" ? spendSum(by) : by[p] || 0;
+    state[p] = { usd_30d: Math.round(v * 1e4) / 1e4, cap_usd: caps[p], pct_of_cap: Math.round(v / caps[p] * 1e3) / 10, status: v >= caps[p] ? "at-cap" : v >= soft * caps[p] ? "soft-limit" : "ok" };
+  });
+  out.governor = { scope: String(env.SPEND_GOVERN_SCOPE || "router").toLowerCase() === "account" ? "account" : "router", caps: caps, soft_fraction: soft, cheap_model: SPEND_CHEAP_MODEL, critical_callers: Object.keys(spendCritical(env)), state: state, ledger_error: __spendState.err };
+  var router = { total_usd_30d: state.total.usd_30d, by_provider: {}, by_caller: [], by_model: [], ledger_first_day: null };
+  SPEND_PROVIDERS.forEach(function (p) { router.by_provider[p] = state[p].usd_30d; });
+  if (db) {
+    try {
+      router.by_caller = (await db.prepare("SELECT caller, provider, SUM(calls) AS calls, SUM(in_tok) AS in_tok, SUM(out_tok) AS out_tok, ROUND(SUM(usd), 4) AS usd, SUM(downgraded) AS downgraded, SUM(refused) AS refused FROM ai_spend_ledger WHERE day >= ?1 GROUP BY caller, provider ORDER BY usd DESC LIMIT 50").bind(since).all()).results || [];
+      router.by_model = (await db.prepare("SELECT provider, model, SUM(calls) AS calls, SUM(in_tok) AS in_tok, SUM(out_tok) AS out_tok, ROUND(SUM(usd), 4) AS usd, SUM(downgraded) AS downgraded, SUM(refused) AS refused FROM ai_spend_ledger WHERE day >= ?1 GROUP BY provider, model ORDER BY usd DESC LIMIT 50").bind(since).all()).results || [];
+      var fd = await db.prepare("SELECT MIN(day) AS d FROM ai_spend_ledger").first();
+      router.ledger_first_day = fd && fd.d || null;
+    } catch (e) {
+      router.error = String(e && e.message || e).slice(0, 160);
+    }
+  }
+  router.note = "traffic through qnfo-ai only; the ledger starts at its first deploy (ledger_first_day), so the 30d window fills over 30 days";
+  out.router = router;
+  var a = await spendAccount(env, true);
+  out.account = a;
+  // One figure across providers: gateway list cost (unified + BYOK, all providers, every client) + Workers AI neurons
+  // (every worker) + this router's direct DeepSeek key (never crosses the gateway). Router Workers AI and gateway
+  // traffic are already inside the account figures, so they are not added twice.
+  if (a && !a.error) {
+    var comp = { gateway_all_providers_usd: a.gateway_usd, workers_ai_usd: a.workers_ai_usd, router_direct_deepseek_usd: state.deepseek.usd_30d };
+    out.unified_30d_usd = Math.round((comp.gateway_all_providers_usd + comp.workers_ai_usd + comp.router_direct_deepseek_usd) * 100) / 100;
+    out.unified_components = comp;
+    out.gateway_spend_limit_metered_usd = a.gateway_unified_usd;
+  } else {
+    out.unified_30d_usd = null;
+  }
+  return out;
+}
+
+var ROUTES = ["/health", "/", "/spend", "/v1/chat/completions", "/v1/messages", "/v1/models", "/v1/models/:id", "/v1/responses", "/chat/completions", "/v1/search", "/v1/history", "/v1/web/search", "/v1/web/fetch"];
 var DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var VISION_FALLBACK = "glm-5.3-flash";
@@ -662,6 +999,7 @@ __name2(autoRoute, "autoRoute");
 __name22(autoRoute, "autoRoute");
 async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}) {
   const { temperature, top_p, tools, vision, tool_choice } = opts;
+  modelId = await spendGovernWA(env, modelId);
   const directOnly = !!(tools && tools.length);
   const msgsHaveImages = Array.isArray(messages) && messages.some((m) => Array.isArray(m && m.content) && m.content.some((p) => p && typeof p === "object" && (p.type === "image_url" || p.image_url)));
   let specVision = !!vision;
@@ -740,8 +1078,11 @@ async function runWorkersAI(env, modelId, messages, maxTokens, stream, opts = {}
         break;
       }
       if (gwResp.ok) {
-        if (stream) return gwResp;
-        return await gwResp.json();
+        if (stream) return spendMeterStream(env, gwResp, "workers-ai", modelId, spendInEstimate(baseMsgs));
+        const gwJson = await gwResp.json();
+        const gwU = spendUsageOf(gwJson, spendInEstimate(baseMsgs), spendOutEstimate(gwJson));
+        spendRecord(env, "workers-ai", modelId, gwU.in, gwU.out);
+        return gwJson;
       }
       if (gwResp.status === 429 && gi === 0) {
         await new Promise((r2) => setTimeout(r2, 350));
@@ -1120,14 +1461,18 @@ async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, o
   }
   if (Number.isFinite(temperature)) body.temperature = temperature;
   if (Number.isFinite(top_p)) body.top_p = top_p;
+  await spendGuardPaid(env, "deepseek", apiModel);
   const resp = await fetch(DEEPSEEK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.DEEPSEEK_API_KEY}` },
     body: JSON.stringify(body)
   });
   if (!resp.ok) throw new Error(`deepseek ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
-  if (stream) return resp;
-  return resp.json();
+  if (stream) return spendMeterStream(env, resp, "deepseek", apiModel, spendInEstimate(messages));
+  const dsJson = await resp.json();
+  const dsU = spendUsageOf(dsJson, spendInEstimate(messages), spendOutEstimate(dsJson));
+  spendRecord(env, "deepseek", apiModel, dsU.in, dsU.out);
+  return dsJson;
 }
 __name(callDeepSeek, "callDeepSeek");
 __name2(callDeepSeek, "callDeepSeek");
@@ -1146,14 +1491,18 @@ async function qnfoAiFreeFallback(env, messages, maxTokens) {
 }
 __name(qnfoAiFreeFallback, "qnfoAiFreeFallback");
 async function callGateway(env, model, messages, maxTokens, stream) {
+  await spendGuardPaid(env, "gateway", model);
   const resp = await fetch(GW_COMPAT, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.CF_API_TOKEN}` },
     body: JSON.stringify(isOAIUpstream(model) ? { model, messages, max_completion_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false } : { model, messages, max_tokens: clampTokens(maxTokens, DEFAULT_MAX_OUT), stream: stream || false })
   });
   if (!resp.ok) throw new Error(`gateway ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
-  if (stream) return resp;
-  return resp.json();
+  if (stream) return spendMeterStream(env, resp, "gateway", model, spendInEstimate(messages));
+  const gJson = await resp.json();
+  const gU = spendUsageOf(gJson, spendInEstimate(messages), spendOutEstimate(gJson));
+  spendRecord(env, "gateway", model, gU.in, gU.out);
+  return gJson;
 }
 __name(callGateway, "callGateway");
 __name2(callGateway, "callGateway");
@@ -1480,6 +1829,7 @@ async function mediaProcess(env, id) {
     });
     if (gw.ok) {
       const gj = await gw.json();
+      try { const mU = spendUsageOf(gj, 1e3, spendOutEstimate(gj)); spendRecord(env, "workers-ai", SPEND_CHEAP_WA, mU.in, mU.out); } catch (eSp) {}
       text = String(gj && gj.choices && gj.choices[0] && gj.choices[0].message && gj.choices[0].message.content || "").trim();
     }
   } catch (e) {
@@ -1507,6 +1857,11 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   }
   }
   const { model, messages: rawMessages, max_tokens, stream, temperature, top_p, tools, tool_choice } = body || {};
+  // SPEND-GOVERNOR-1 waste cut: qnfo-ai-calibration probes every model about 1,000 times a day ("Reply with exactly:
+  // OK"); each probe carried the full research system prompt (about 2k tokens), the calendar block and, for question
+  // probes, web/RAG context. Liveness probes get a one-line system prompt and no enrichment.
+  const _leanProbe = env.__spendCaller === "qnfo-ai-calibration";
+  let _govInfo = null;
   const clientToolChoice = tool_choice;
   const _firstUser = Array.isArray(rawMessages) ? rawMessages.find((m) => m && m.role === "user") : null;
   const _firstSlug = String(stripRoleWrapper(_firstUser && _firstUser.content || "")).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || Math.random().toString(16).slice(2, 10);
@@ -1532,9 +1887,9 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     }));
   }
   const wantsCode = body.run_code === true || body.run_code === "true" || body.agent === true || body.agent === "true" || wantsAgentTools(body, messages) || Array.isArray(tools) && tools.some((t) => t && t.function && t.function.name === "run_code");
-  const SYS = DEFAULT_SYSTEM_PROMPT + "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground all time-relative statements (today, next week, deadlines, calendar windows) in this date.";
+  const SYS = (_leanProbe ? "You are a concise assistant." : DEFAULT_SYSTEM_PROMPT) + "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground all time-relative statements (today, next week, deadlines, calendar windows) in this date.";
   messages = [{ role: "system", content: SYS }, ...messages];
-  if (env.CAL_API) {
+  if (env.CAL_API && !_leanProbe) {
     try {
       const _calCtx = await getCalendarContext(env);
       if (_calCtx) messages = [{ role: "system", content: SYS }, { role: "system", content: _calCtx }, ...messages];
@@ -1561,7 +1916,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   const cls = classify(lastUserText(messages));
   const isStream = !!stream && !wantsCode;
   let webSources = null;
-  if (body.web || isCurrentEvents(lastUserText(messages)) || /\b(open problems?|unsolved|state of the art|latest research|recent developments|frontier results)\b/i.test(lastUserText(messages).slice(0, 300))) {
+  if (!_leanProbe && (body.web || isCurrentEvents(lastUserText(messages)) || /\b(open problems?|unsolved|state of the art|latest research|recent developments|frontier results)\b/i.test(lastUserText(messages).slice(0, 300)))) {
     const wq = lastUserText(messages).slice(0, 300);
     if (wq) {
       try {
@@ -1596,7 +1951,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   const _ragIsGreeting = /^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|bye|good morning|good afternoon|good evening)\b/i.test(_ragLastQ);
   const _ragIsCode = cls.domain === "code";
   const _shouldRag = ragForce || cls.domain === "science" || /\b(jpcub|qwav|paqit|qnfo|joules[- ]per[- ](solution|compute))\b/i.test(_ragLastQ.slice(0, 300)) || /\b(open problems?|unsolved|conjectur|literature|state of the art|sota|frontier|debate|objections|empirical evidence|proven vs)\b/i.test(_ragLastQ.slice(0, 300)) || (_ragIsQuestion && !_ragIsGreeting && !_ragIsCode);
-  if (env.QNFO_INFRA && env.INFRA_TOKEN && !ragOff && _shouldRag) {
+  if (env.QNFO_INFRA && env.INFRA_TOKEN && !ragOff && _shouldRag && !_leanProbe) {
     const rq = lastUserText(messages).slice(0, 300);
     if (rq) {
       try {
@@ -1650,6 +2005,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     family: MODELS[routed]?.family || "unknown",
     classification_ms: 0,
     total_latency_ms: Date.now() - t0,
+    ...(_govInfo ? { spend_governor: _govInfo } : {}),
     ...extra
   }), "mkRouter");
   const reqModel = body.model;
@@ -1689,7 +2045,19 @@ async function handleChat(env, body, authHeader, ctx, ua) {
       spec = MODELS["deepseek-v4-flash"];
     }
   }
-  const autoEnsemble = isAuto && !hasImage && !wantsCode && (!tools || !tools.length) && shouldEnsemble(cls);
+  // SPEND-GOVERNOR-1 route gate: price class of the chosen upstream vs the rolling-30d caps.
+  const _spendWantEns = isEnsemble || isAuto && !hasImage && !wantsCode && (!tools || !tools.length) && shouldEnsemble(cls);
+  const _spendSpec = MODELS[target] || (isEnsemble ? null : MODELS["deepseek-v4-flash"]);
+  const _gov = await spendGovern(env, _spendWantEns ? "workers-ai" : spendModelProvider(_spendSpec), _spendWantEns ? "ensemble" : _spendSpec ? _spendSpec.wa || _spendSpec.api || _spendSpec.model || target : "deepseek-chat", _spendWantEns);
+  if (_gov.action !== "allow") _govInfo = { action: _gov.action, reason: _gov.reason, caller: _gov.caller, from: _spendWantEns ? "ensemble" : target, to: _gov.to || null };
+  if (_gov.action === "refuse") {
+    return json({ error: { message: "AI spend cap reached for non-critical caller " + _gov.caller + ": " + _gov.reason + ". Retry after the rolling 30-day window falls under the cap (GET /spend).", type: "insufficient_quota", code: "spend_cap" }, _router: { spend_governor: _govInfo } }, 429);
+  }
+  if (_gov.action === "downgrade" && MODELS[_gov.to]) {
+    target = _gov.to;
+    spec = MODELS[target];
+  }
+  const autoEnsemble = isAuto && !hasImage && !wantsCode && (!tools || !tools.length) && shouldEnsemble(cls) && !_gov.noEnsemble;
   const effective = spec ? target : "deepseek-v4-flash";
   const effSpec = spec ? spec : MODELS["deepseek-v4-flash"];
   const routedModel = effective;
@@ -1705,7 +2073,7 @@ async function handleChat(env, body, authHeader, ctx, ua) {
     estInputTokens = estimateInputTokens(messages);
     truncation = { truncated: true, messages_before: before, messages_after: messages.length, budget_tokens: ctxBudget };
   }
-  if (isEnsemble || autoEnsemble) {
+  if ((isEnsemble || autoEnsemble) && !_gov.noEnsemble) {
     try {
       const ensResp = /* @__PURE__ */ __name22((content, body2) => {
         const logRec = { ...mkLogRec(), model: "ensemble", streamed: isStream ? 1 : 0, response: String(content).slice(0, 2e5), prompt_tokens: estimateInputTokens(messages), completion_tokens: estimateOutputTokens(content), latency_ms: Date.now() - t0 };
@@ -2709,6 +3077,8 @@ async function handleAnthropicMessages(env, body, authHeader, ctx, ua) {
 var worker_default = {
   async fetch(request, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-ai", "AI", "QNFO_AUDIT");
+    // SPEND-GOVERNOR-1: request-scoped caller identity for the spend ledger (a fresh copy, so env is never mutated).
+    env = Object.assign({}, env, { __spendCaller: spendCallerOf(ctx, request.headers.get("User-Agent") || ""), __spendCtx: ctx });
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
@@ -2740,8 +3110,24 @@ var worker_default = {
           qnfo_infra: !!env.QNFO_INFRA,
           qnfo_intent: !!env.QNFO_INTENT,
           intent_token: !!env.INTENT_TOKEN
+        },
+        // SPEND-GOVERNOR-1: cached router figure only (no D1 read on /health); GET /spend has the unified 30d cost.
+        spend: {
+          route: "/spend",
+          router_30d_usd: __spendState.at ? Math.round(spendSum(spendBy(env)) * 1e4) / 1e4 : null,
+          caps_usd: spendCaps(env),
+          soft_fraction: spendSoft(env),
+          account_unified_30d_usd: __spendState.account && !__spendState.account.error ? Math.round((__spendState.account.gateway_usd + __spendState.account.workers_ai_usd + (Number(__spendState.by.deepseek) || 0)) * 100) / 100 : null
         }
       });
+    }
+    if (path === "/spend" && method === "GET") {
+      // SPEND-GOVERNOR-1: read-only unified 30d AI cost (router ledger per provider/caller/model + account-wide figures).
+      try {
+        return json(await spendReport(env));
+      } catch (e) {
+        return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 500);
+      }
     }
     if (path === "/v1/models" && method === "GET") {
       const health = await loadModelHealth(env);
@@ -3060,9 +3446,18 @@ var worker_default = {
 // Unlike fleet-control the counter write is NOT awaited (fire-and-forget, errors swallowed) so it can never add latency.
 var AI_ATTR_DB_BINDINGS = ["AUDIT_DB","AUDIT","DB_AUDIT","QNFO_AUDIT"];
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
-  var t0 = Date.now(), ok = 1;
-  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  var t0 = Date.now(), ok = 1, res;
+  try { res = await env.AI.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
   finally {
+    // SPEND-GOVERNOR-1: price every binding call into ai_spend_ledger (fail-soft, not awaited).
+    try {
+      if (ok) {
+        var sIn = 0;
+        try { sIn = Math.ceil(JSON.stringify(input && (input.messages || input.text || input.prompt) || "").length / 4); } catch (e4) {}
+        var sU = spendUsageOf(res, sIn, spendOutEstimate(res));
+        spendRecord(env, "workers-ai", String(model), sU.in, sU.out);
+      }
+    } catch (e5) {}
     try {
       var db = null;
       for (var bi = 0; bi < AI_ATTR_DB_BINDINGS.length && !db; bi++) db = env[AI_ATTR_DB_BINDINGS[bi]];
