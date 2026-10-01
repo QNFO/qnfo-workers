@@ -5,6 +5,8 @@ import { DatabaseSync } from "node:sqlite";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const mod = await import(pathToFileURL(path.join(here, "worker.js")).href);
@@ -283,7 +285,7 @@ function fakeLoader(spinMs) {
   const { env } = envWith([]);
   const r = await worker.fetch(new Request("https://x/health"), env);
   const h = await r.json();
-  check("/health reports 0.2.0 + task-loop + the ladder + js_verify off by default", h.version === "0.2.0" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
+  check("/health reports 0.2.1 + task-loop + the ladder + js_verify off by default", h.version === "0.2.1" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
 }
 
 // ===== 12. scheduled() drives the loop with no HTTP request =====
@@ -294,6 +296,36 @@ function fakeLoader(spinMs) {
   let p; await worker.scheduled({}, env, { waitUntil: (x) => { p = x; } }); await p;
   const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
   check("cron tick alone takes a task to pr_open", got.body.task.status === "pr_open", got.body.task);
+}
+
+// ===== PR_PUBLISH_MODE=pull: verified patch is parked as ready_to_publish, code-agent edit is never called =====
+{
+  const calls = installCodeAgent({ "qnfo-workers/scripts/x.py": "def f():\n    return 1\n" });
+  const { env } = envWith([fileBlock("def f():\n    return 2\n")], { PR_PUBLISH_MODE: "pull" });
+  const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "scripts/x.py", goal: "return 2" });
+  await call(env, "POST", "/v1/tick", {});
+  const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
+  check("pull mode: task is ready_to_publish, no code-agent edit", got.body.task.status === "ready_to_publish" && got.body.task.step === "done" && calls.edit.length === 0, got.body.task);
+  const row = await env.AUDIT_DB.prepare("SELECT ctx FROM code_tasks WHERE id=?").bind(enq.body.id).first();
+  const patch = JSON.parse(row.ctx).patch;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pp-"));
+  fs.mkdirSync(path.join(dir, "scripts"));
+  fs.writeFileSync(path.join(dir, "scripts/x.py"), "def f():\n    return 1\n");
+  fs.writeFileSync(path.join(dir, "p.diff"), patch);
+  const ap = spawnSync("git", ["apply", "p.diff"], { cwd: dir, encoding: "utf8" });
+  check("pull mode: stored patch applies with git apply and yields the proposal", ap.status === 0 && fs.readFileSync(path.join(dir, "scripts/x.py"), "utf8") === "def f():\n    return 2\n", ap.stderr);
+}
+// patch shape edge case: no trailing newline on the base
+{
+  installCodeAgent({ "qnfo-workers/n.md": "a\nb" });
+  const { env } = envWith(["```file\na\nc\n```"], { PR_PUBLISH_MODE: "pull" });
+  const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "n.md", goal: "g" });
+  await call(env, "POST", "/v1/tick", {});
+  const row = await env.AUDIT_DB.prepare("SELECT status, ctx FROM code_tasks WHERE id=?").bind(enq.body.id).first();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pp-"));
+  fs.writeFileSync(path.join(dir, "n.md"), "a\nb"); fs.writeFileSync(path.join(dir, "p.diff"), JSON.parse(row.ctx).patch);
+  const ap = spawnSync("git", ["apply", "p.diff"], { cwd: dir, encoding: "utf8" });
+  check("pull mode: patch for a file without trailing newline applies", row.status === "ready_to_publish" && ap.status === 0, { st: row.status, err: ap.stderr });
 }
 
 console.log("\n" + failures + " failure(s)");

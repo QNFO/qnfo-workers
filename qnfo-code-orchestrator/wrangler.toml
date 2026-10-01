@@ -45,6 +45,9 @@ binding = "LOADER"
 
 [vars]
 JS_VERIFY = "off"
+# PULL-BASED PR PUBLISHING: no GitHub PR-write credential here; verified patches park as status ready_to_publish and
+# .github/workflows/code-task-publish.yml turns them into PRs with the Actions GITHUB_TOKEN.
+PR_PUBLISH_MODE = "pull"
 
 # Cron drives the loop with no human session. CRON-RATE-CEILING-1: one fire per 10 minutes is the floor (144/day).
 [triggers]

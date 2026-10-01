@@ -41,6 +41,19 @@ queued --read--> propose --> verify --(fail, attempts<3)--> propose  (NEXT model
 | /v1/tick | POST | ORCH_TOKEN | run steps now `{maxSteps, budgetMs}` |
 | /v1/probe/dynamic-cpu | POST | ORCH_TOKEN | measure whether the platform enforces `limits.cpuMs` (gate for `JS_VERIFY=dynamic`) |
 
+### v0.2.1: pull-based PR publishing (no PR-write credential needed)
+Neither this worker nor a session holds a GitHub PR-write credential, and a session cannot mint one. With `PR_PUBLISH_MODE=pull`
+(set in `wrangler.toml`) the `commit` step does not call code-agent: it stores a unified diff in `ctx.patch` and sets
+`status='ready_to_publish'` (new status; `step='done'`). `.github/workflows/code-task-publish.yml` then PULLS those rows from D1
+(same `CLOUDFLARE_*` secrets as `fleet-autodeploy`), applies each patch on a fresh `codeagent-*` branch off `main` with the built-in
+`GITHUB_TOKEN`, opens a PR, and records `status='published'` + `pr_url`. It runs on `workflow_run` of `mirror-sync` /
+`fleet-autodeploy` plus `workflow_dispatch` (GitHub `schedule` never fires on this repo). It never merges. A patch that no longer
+applies (main moved) becomes `publish_failed` with `last_error` and the run goes red. Re-runs are idempotent (compare-and-set claim,
+existing PR for the branch is adopted). Offline selftest (no network, real git + sqlite3, also a workflow step):
+`python3 scripts/code-task-publish.py --selftest` covers no tasks, patch applies, patch fails, duplicate publish. Without
+`PR_PUBLISH_MODE=pull` the original code-agent path (`pr_open`) is unchanged. Statuses: `queued | ready_to_publish | publishing | published | publish_failed | pr_open | needs_human | failed`.
+Only a real run verifies: D1 REST access from Actions, `gh pr create` with `GITHUB_TOKEN` (repo setting "Allow GitHub Actions to create pull requests" must be on), and that PRs from `GITHUB_TOKEN` do not auto-start CI.
+
 ### Status (what is and is not true)
 - **Verified offline** (`node --no-warnings qnfo-code-orchestrator/test-loop.mjs`, 35 assertions, also run in CI as `code-loop-test`):
   the whole state machine against real SQL and real `python3`, model escalation with error feedback, lease resume + FIFO, policy
