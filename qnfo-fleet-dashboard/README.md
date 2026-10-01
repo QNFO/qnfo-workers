@@ -1,6 +1,6 @@
 # qnfo-fleet-dashboard
 
-ONE human page: https://fleet.qnfo.org/  answers "what do I have to do, and should I keep investing?" and nothing else (HUMAN-DASHBOARD-1 + INVEST-DECISION-1, v1.9.0).
+ONE human page: https://fleet.qnfo.org/  answers "what do I have to do, and should I keep investing?" and nothing else (HUMAN-DASHBOARD-1 + INVEST-DECISION-1 + OWNER-RESPOND-1).
 Mirror: https://qnfo-fleet-dashboard.q08.workers.dev/
 
 ## The page
@@ -31,6 +31,21 @@ CONTINUE (on track / at risk) | SCALE_BACK (cash over the cap; or at risk <=45 d
 | qnfo-autopilot `thinkLoop` | `metric_registry.invest_decision_level` | paused (reversible T1 spend lever) while level>=2 and fresh (<3h) |
 | autonomy scorer / staleness views | `metric_registry` (cadence `*/15`) | a silent publisher shows as a stale metric |
 | audit trail | `invest_decision_log` | a row on every change of verdict/risk/basis and at least daily |
+
+## Respond from the dashboard (OWNER-RESPOND-1)
+The owner's side of "manage, track, initiate server-side prompts" lives in the one page. (For reference: `ai.qnfo.org` and `personal.qnfo.org` are separate key-gated chat playgrounds, `ops.qnfo.org` is API-only (`/v1/jobs`, driven from DeepChat/ChatBox), and `qnfo-agent-ws` is RETIRED pending RM-AGENT-WS-DECISION-1.)
+
+**Access.** The page was public. Responding needs identity, so it is gated by one secret, `OWNER_TOKEN` (24+ characters; set it in the Worker's Settings > Variables and Secrets, or `wrangler secret put OWNER_TOKEN`; no agent session can or should mint it). Until it is set the page behaves as before and shows a card asking for it. Once set: anyone without the owner cookie gets a locked shell, `/api/human` and `/api/decision` return only the verdict (machine callers use `x-loop-token`), login sets an HttpOnly/Secure/SameSite=Strict cookie holding `sha256(token)`, every write needs that cookie plus `x-fleet-ui: 1`, and login is throttled (10 failures / 10 min).
+
+**Per card** (`POST /api/owner/respond {key, kind, days?, note?}`): *Done* / *Not doing* resolve or dismiss a queue item (`human_actions`, evidence "owner via dashboard"); *Snooze 3d/7d* hides any item (derived items return if still true); *Add note* keeps a note with the item (listed in `/api/human` for sessions). Derived items (mail, objective revisions, issue-loop, code-loop) clear when their source clears, so they can be snoozed or noted, not marked done.
+
+**Prompts** (`POST /api/owner/prompt {text, mode}`, 20/day, `OWNER_PROMPTS_DAILY_CAP`): *Ask now* runs the prompt through qnfo-ai over the dashboard's service binding (authenticated by binding props, no key), grounded in the current queue and decision, with no tools; *Queue as task* inserts a `pending` task into `intents`, which the intent-orchestrator triages (06:00 and 06:30 UTC). Both are listed and tracked on the page (`owner_prompts`, joined to `intents.status` / `triage_decision`).
+
+Tables (created on first use): `human_responses`, `owner_prompts`. The owner-only to-dos from the charter are seeded by `migrations/2026-10-01-owner-only-actions.sql`; the objective-revision item is derived live from `goals`. Dated items more than 14 days away sit under "Coming up" and do not count toward the banner. The first five cards show; the rest sit under "N more waiting on you".
+
+**Objective revisions** are decided on their card (`POST /api/owner/objective {id, decision: ratify|reject}`): the goal becomes `ratified` or `rejected` in D1. Applying a ratified change to the objective function has no Cloudflare consumer yet (OBJECTIVE-REVISION-APPLY-1), so a ratified row is recorded but not yet applied.
+
+**No Claude dependency (NO-CLAUDE-RUNTIME-DEPENDENCY-1).** Every response, prompt and decision is stored and acted on in Cloudflare; the dashboard never links claude.ai or anthropic.com (`safeLink`, also enforced on `POST /api/human`). *Ask now* uses `@cf/zai-org/glm-5.3-flash` on Workers AI through qnfo-ai.
 
 ## What counts as "needs the human" (docs/AUTONOMY-DECISION-POLICY.md T2)
 | Source | Rows that appear |
