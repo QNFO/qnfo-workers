@@ -1,12 +1,19 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@4ee637fa7ab2",
- "due": 0,
+ "verifier": "remediation-consumer@025749106757",
+ "due": 1,
  "pass": 0,
  "fail": 0,
- "skipped": 0,
- "contracts": [],
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "EVID-1649-BRIEF",
+   "issue_id": 1649,
+   "verdict": "probe-error",
+   "reason": "HTTP Error 400: Bad Request"
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -22,7 +29,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 2253,
- "head": "4ee637fa7ab2413b5531d507e958cb9cab72878d",
+ "spent_ms": 3388,
+ "head": "02574910675713944b7f53bea15152422d6997a9",
  "job_status": "success"
 }
