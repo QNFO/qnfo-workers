@@ -96,6 +96,10 @@ class SqliteStore:
 
 
 def list_ready(store):
+    # The orchestrator creates code_tasks on its first deploy. Until then there is nothing to publish; an absent
+    # table is an empty queue, not a failure (the first live run failed with D1 HTTP 400 for exactly this reason).
+    if not store.rows("SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name='code_tasks'"):
+        return []
     return store.rows(
         "SELECT * FROM code_tasks WHERE status='ready_to_publish' OR (status='publishing' AND updated_at < ?) ORDER BY created_at ASC LIMIT 20",
         [ago(STALE_PUBLISHING_MIN)])
@@ -289,6 +293,11 @@ def selftest():
         return store.rows("SELECT * FROM code_tasks WHERE id=?", [tid])[0]
 
     quiet = lambda *_: None  # noqa: E731
+
+    # 0. table not created yet (orchestrator not deployed): empty queue, exit clean
+    notable = SqliteStore(sqlite3.connect(":memory:"))
+    r = publish_all(notable, ".", "main", FakePR(), quiet)
+    check("code_tasks table absent: treated as empty queue, not a failure", r == {"published": 0, "failed": 0, "skipped": 0}, r)
 
     # 1. no tasks
     remote, work, store = fixture()
