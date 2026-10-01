@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.46-obs-lastobserved";
+var VERSION = "1.8.0-human-only";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1857,38 +1857,6 @@ __name2(readSystemIntegration, "readSystemIntegration");
 __name22(readSystemIntegration, "readSystemIntegration");
 __name222(readSystemIntegration, "readSystemIntegration");
 __name2222(readSystemIntegration, "readSystemIntegration");
-function systemIntegrationHtml(sys) {
-  if (!sys || !sys.score) return '<h2>System integration at a glance</h2><div class="sub">no assessment yet - waiting for qnfo-observability telemetry</div>';
-  const sc = sys.score;
-  const badge = /* @__PURE__ */ __name222(function(status) {
-    const color = status === "healthy" ? "#2ea043" : status === "degraded" ? "#d29922" : status === "stuck" ? "#f85149" : "#8b949e";
-    return '<span style="color:' + color + ';font-weight:600">' + status + "</span>";
-  }, "badge");
-  let out = '<h2>System integration at a glance <span class="sub">score ' + sc.total + "/100 &middot; chains " + sc.chains + " &middot; coverage " + sc.coverage + " &middot; freshness " + sc.freshness + " &middot; weights: " + esc(sc.weights) + " &middot; assessed " + esc(String(sys.generated_at || "").slice(0, 16).replace("T", " ")) + "</span></h2>";
-  out += "<table><tr><th>chain (producer &rarr; consumer)</th><th>medium</th><th>state</th><th>pending</th><th>oldest</th></tr>";
-  for (const c of sys.chains || []) {
-    out += "<tr><td>" + esc(c.name) + '</td><td class="sub">' + esc(c.medium) + "</td><td>" + badge(c.status) + "</td><td>" + (c.n == null ? "-" : c.n) + "</td><td>" + (c.oldest_h == null ? "-" : c.oldest_h.toFixed(1) + "h") + "</td></tr>";
-  }
-  out += "</table>";
-  out += '<div class="sub">coverage: ' + sys.coverage.probed + " probed / " + sys.coverage.traced + " traced / " + sys.coverage.invocated + " invocated of " + sys.coverage.fleet_size + " workers &middot; decay: ";
-  out += (sys.decay || []).map(function(d) {
-    return d.signal + " " + (d.age_h == null ? "?" : d.age_h.toFixed(1) + "h");
-  }).join(", ");
-  out += "</div>";
-  if (sys.opportunities && sys.opportunities.length) {
-    out += "<h3>Integration opportunities (" + sys.opportunities.length + ")</h3><ul>";
-    for (const o of sys.opportunities) out += '<li><span class="sub">[' + esc(o.kind) + "]</span> " + esc(o.text) + "</li>";
-    out += "</ul>";
-  } else {
-    out += '<div class="sub">no integration opportunities detected</div>';
-  }
-  return out;
-}
-__name(systemIntegrationHtml, "systemIntegrationHtml");
-__name2(systemIntegrationHtml, "systemIntegrationHtml");
-__name22(systemIntegrationHtml, "systemIntegrationHtml");
-__name222(systemIntegrationHtml, "systemIntegrationHtml");
-__name2222(systemIntegrationHtml, "systemIntegrationHtml");
 async function integrationView(env, liveNames) {
   const rows = await d1all(env.AUDIT, "SELECT service, kind, version, deps FROM service_registry WHERE kind='worker'") || [];
   const liveSet = new Set((liveNames || []).map(function(n) {
@@ -2062,243 +2030,6 @@ __name2(reportCardData, "reportCardData");
 __name22(reportCardData, "reportCardData");
 __name222(reportCardData, "reportCardData");
 __name2222(reportCardData, "reportCardData");
-function reportCardHtml(rc) {
-  if (!rc) return "";
-  const h = [];
-  h.push("<h2>Systems report card (autonomy + intelligence)</h2>");
-  h.push('<div class="sub">Scored against citable frameworks (Sheridan-Verplanck LoA, Beer VSM, OpenAI/DeepMind AGI levels, OODA). TOP of scale = human-level autonomy + independent decision-making. Canonical: qnfo-ops/docs/SYSTEMS-REPORT-CARD.md</div>');
-  h.push("<table><tr><th>dimension</th><th>framework</th><th>level</th><th>top of scale</th></tr>");
-  h.push("<tr><td>Decision authority</td><td>Sheridan-Verplanck LoA</td><td>" + (rc.loa != null ? "LoA " + rc.loa + " (" + esc(rc.loa_label) + ")" : "n/a") + "</td><td>LoA 10</td></tr>");
-  h.push("<tr><td>Intelligence</td><td>OpenAI/DeepMind levels</td><td>" + esc(rc.agi == null ? "n/a" : rc.agi) + "</td><td>L5 Organization</td></tr>");
-  h.push("<tr><td>Organizational viability</td><td>Beer VSM</td><td>" + esc(rc.vsm || "n/a") + "</td><td>S1-S5 closed, S5 internalized</td></tr>");
-  h.push("<tr><td>Decision cycle</td><td>OODA</td><td>" + esc(rc.ooda || "n/a") + "</td><td>closed, real-time</td></tr>");
-  h.push("</table>");
-  h.push('<div class="chips">');
-  h.push(rc.human_open === 0 ? chip("ok", "human-gated ops: 0") : chip("warn", "human-gated ops: " + rc.human_open));
-  h.push(rc.self_heal_total >= 0 ? chip("info", "self-heal actions: " + rc.self_heal_total) : chip("warn", "self-heal: n/a"));
-  h.push(rc.open_issues >= 0 ? rc.open_issues === 0 ? chip("ok", "open agent issues: 0") : chip("warn", "open agent issues: " + rc.open_issues) : chip("warn", "issues: n/a"));
-  h.push(rc.drift_total > 0 ? chip("warn", "drift divergence: " + rc.drift_total) : chip("ok", "drift divergence: 0"));
-  h.push("</div>");
-  h.push('<div class="sub">Objective function (Watchmaker): human-intervention -> 0; drift -> 0; self-heal -> 1. Next level: ' + esc(rc.top) + ". Highest-leverage gap: normalize service_registry.version to semver (currently " + rc.drift.unversioned + " unversioned).</div>");
-  return h.join("");
-}
-__name(reportCardHtml, "reportCardHtml");
-__name2(reportCardHtml, "reportCardHtml");
-__name22(reportCardHtml, "reportCardHtml");
-__name222(reportCardHtml, "reportCardHtml");
-__name2222(reportCardHtml, "reportCardHtml");
-function integrationHtml(ig, st) {
-  if (!ig) return "";
-  const h = [];
-  h.push("<h2>System integration (fleet-wide)</h2>");
-  h.push('<div class="sub">Nodes = service_registry; edges = declared deps resolving to another registered service. Islands = no declared in/out edge (runs but not integrated). Ghost = registered but not live. Unregistered = live but invisible to the registry. Unversioned = invisible to drift management. Lens: systems theory (integration edges are first-class; closed loops with receipts) + chaos theory (drift as distance from the canonical attractor; ghost/unregistered/unversioned = amplifying drift).</div>');
-  h.push('<div class="chips">');
-  h.push(chip("info", ig.registered + " registered"));
-  h.push(chip("info", (ig.live == null ? "?" : ig.live) + " live"));
-  h.push(chip("info", ig.edges + " worker edges / " + (ig.contract_edges || 0) + " contract edges (density " + ig.density + " worker, " + (ig.density_contract == null ? "n/a" : ig.density_contract) + " contract)"));
-  h.push(ig.drift.ghost > 0 ? chip("warn", ig.drift.ghost + " ghost") : chip("ok", "0 ghost"));
-  h.push(ig.drift.unregistered > 0 ? chip("warn", ig.drift.unregistered + " unregistered") : chip("ok", "0 unregistered"));
-  h.push(ig.drift.unversioned > 0 ? chip("warn", ig.drift.unversioned + " unversioned") : chip("ok", "0 unversioned"));
-  h.push("</div>");
-  const opp = [];
-  if (ig.unregistered.length) opp.push("Register " + ig.unregistered.length + " live-but-invisible worker(s): " + ig.unregistered.join(", ") + " (they exist but the registry cannot integrate them).");
-  if (ig.ghost.length) opp.push("Purge " + ig.ghost.length + " ghost registry row(s) (declared but not live): " + ig.ghost.join(", ") + ".");
-  if (ig.unversioned.length) opp.push("Version " + ig.unversioned.length + " worker(s) (invisible to drift management): " + ig.unversioned.join(", ") + ".");
-  if (ig.islands.length) opp.push("Wire or retire " + ig.islands.length + " island worker(s) (no declared in/out edge): " + ig.islands.join(", ") + ".");
-  if (opp.length) {
-    h.push('<div class="card"><h2>Integration opportunities (' + opp.length + ")</h2><ul>");
-    for (const o of opp) h.push('<li class="issue-warn">' + esc(o) + "</li>");
-    h.push("</ul></div>");
-  } else {
-    h.push('<div class="card"><h2>Integration opportunities</h2><div>No structural integration gaps detected: every live worker is registered, versioned, and wired.</div></div>');
-  }
-  h.push("<h2>Integration hubs (most declared out-edges)</h2>");
-  h.push("<table><tr><th>service</th><th>out</th><th>in</th></tr>");
-  for (const hb of ig.hubs) h.push("<tr><td>" + esc(hb.service) + "</td><td>" + hb.out + "</td><td>" + hb.in + "</td></tr>");
-  h.push("</table>");
-  if (ig.islands.length) h.push('<h2>Islands (no declared in/out edge)</h2><div class="sub">' + esc(ig.islands.join(", ")) + "</div>");
-  h.push("<h2>Flow chains (transformation health)</h2>");
-  h.push("<table><tr><th>chain</th><th>state</th><th>signals</th></tr>");
-  for (const ch of st.chains || []) {
-    h.push("<tr><td><b>" + esc(ch.label) + '</b><div class="sub">' + esc((ch.stages || []).join(" -> ")) + "</div></td><td>" + chip(ch.state, ch.state) + "</td><td>" + ch.results.map(function(r) {
-      return esc(r.label) + "=" + (r.n === null ? "err" : r.n) + (r.state !== "ok" ? ' <b style="color:#d29922">!</b>' : "");
-    }).join(" &middot; ") + "</td></tr>");
-  }
-  h.push("</table>");
-  const opp2 = st.integration_opportunities || [];
-  if (opp2.length) {
-    h.push("<h2>Consolidation roadmap (curated)</h2><ul>");
-    for (const o of opp2) h.push("<li><b>" + esc(o.label) + "</b> &mdash; " + esc(o.note) + ' <span class="sub">[' + (o.workers || []).length + " workers]</span></li>");
-    h.push("</ul>");
-  }
-  return h.join("");
-}
-__name(integrationHtml, "integrationHtml");
-__name2(integrationHtml, "integrationHtml");
-__name22(integrationHtml, "integrationHtml");
-__name222(integrationHtml, "integrationHtml");
-__name2222(integrationHtml, "integrationHtml");
-function chipClass(state) {
-  const s = String(state || "").toUpperCase();
-  if (s === "OK") return "ok";
-  if (s === "ERR") return "err";
-  if (s === "WARN") return "warn";
-  if (s === "NO-RUN") return "warn";
-  if (s === "IDLE") return "idle";
-  return "info";
-}
-__name(chipClass, "chipClass");
-__name2(chipClass, "chipClass");
-__name22(chipClass, "chipClass");
-__name222(chipClass, "chipClass");
-__name2222(chipClass, "chipClass");
-function chip(state, text) {
-  return '<span class="chip chip-' + chipClass(state) + '">' + esc(text == null ? state : text) + "</span>";
-}
-__name(chip, "chip");
-__name2(chip, "chip");
-__name22(chip, "chip");
-__name222(chip, "chip");
-__name2222(chip, "chip");
-function topologySvg(ig) {
-  if (!ig || !ig.edge_list || !ig.edge_list.length) return '<div class="sub">no declared dependency edges</div>';
-  const edges = ig.edge_list;
-  const set = {};
-  for (const e of edges) {
-    set[e.from] = 1;
-    set[e.to] = 1;
-  }
-  const nodes = Object.keys(set);
-  if (!nodes.length) return '<div class="sub">no nodes</div>';
-  const W = 620, H = 300, cx = W / 2, cy = H / 2, R = Math.min(cx, cy) - 24;
-  const pos = {};
-  for (let i = 0; i < nodes.length; i++) {
-    const a = 2 * Math.PI * i / nodes.length - Math.PI / 2;
-    pos[nodes[i]] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) };
-  }
-  const hubSet = {};
-  (ig.hubs || []).forEach(function(x) {
-    hubSet[x.service] = 1;
-  });
-  let s = '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%;height:calc(100% - 52px);display:block">';
-  for (const e of edges) {
-    const a = pos[e.from], b = pos[e.to];
-    if (!a || !b) continue;
-    s += '<line x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) + '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '" stroke="#1f6feb" stroke-width="0.5" opacity="0.4"/>';
-  }
-  for (const n of nodes) {
-    const p = pos[n], hub = hubSet[n];
-    s += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (hub ? 4 : 2.4) + '" fill="' + (hub ? "#d29922" : "#3fb950") + '"><title>' + esc(n) + "</title></circle>";
-  }
-  for (const hh of (ig.hubs || []).slice(0, 8)) {
-    const p = pos[hh.service];
-    if (p) s += '<text x="' + (p.x + 5).toFixed(1) + '" y="' + (p.y + 3).toFixed(1) + '" fill="#8b949e" font-size="7">' + esc(hh.service) + "</text>";
-  }
-  return s + "</svg>";
-}
-__name(topologySvg, "topologySvg");
-__name2(topologySvg, "topologySvg");
-__name22(topologySvg, "topologySvg");
-function pageHtml(st) {
-  const h = [];
-  h.push('<div style="margin:8px 0 16px;padding:10px 14px;background:#0d1a12;border:1px solid #2a4d33;border-radius:8px"><b>ROI view:</b> <a href="/roi" style="color:#6f6">cost vs output vs impressions vs reach</a></div>');
-  h.push('<div style="margin:8px 0 16px;padding:10px 14px;background:#2d1215;border:1px solid #da3633;border-radius:8px"><b>RED INVENTORY (root):</b> <a href="/" style="color:#f66">failures-only view &mdash; shutdown manifest, gates, audited cost truth, complete open-issue inventory, unremediated registers</a></div>');
-  const issues = st.issues || [];
-  const errs = issues.filter(function(i) {
-    return i.sev === "err";
-  });
-  const warns = issues.filter(function(i) {
-    return i.sev === "warn";
-  });
-  const sched = st.scheduled || [];
-  const probes = st.probes || [];
-  const totalErr = sched.filter(function(x) {
-    return x.status === "ERR";
-  }).length;
-  const totalNoRun = sched.filter(function(x) {
-    return x.status === "NO-RUN";
-  }).length;
-  const probeOk = probes.filter(function(p) {
-    return p.ok;
-  }).length;
-  const ig = st.integration || {};
-  const rc = st.report_card || {};
-  const verd = st.verdict || (errs.length ? "ACTION_NEEDED" : warns.length ? "DEGRADED" : "HEALTHY");
-  const vcls = verd === "HEALTHY" ? "ok" : verd === "DEGRADED" ? "warn" : "err";
-  h.push('<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>');
-  h.push("<title>Quniverse Fleet Dashboard</title><style>");
-  h.push("*{box-sizing:border-box}html,body{height:100%;margin:0}");
-  h.push("body{font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;background:#0d1117;color:#c9d1d9;overflow:hidden}");
-  h.push("a{color:#58a6ff;text-decoration:none}.sub{color:#8b949e;font-size:10px}");
-  h.push(".app{display:grid;grid-template-columns:1.5fr 1fr 1.25fr;grid-template-rows:auto minmax(0,1.2fr) minmax(0,1fr);gap:7px;height:100vh;padding:7px}");
-  h.push(".hdr{grid-column:1/4;display:flex;align-items:center;gap:9px;flex-wrap:wrap;border-bottom:1px solid #30363d;padding-bottom:6px}");
-  h.push(".hdr h1{font-size:15px;margin:0 4px 0 0}");
-  h.push(".panel{border:1px solid #30363d;border-radius:6px;padding:6px 8px;overflow:auto;min-height:0}");
-  h.push(".panel h2{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#8b949e;margin:0 0 5px}");
-  h.push(".chips{display:flex;gap:5px;flex-wrap:wrap}.chip{padding:1px 7px;border-radius:9px;font-size:10px;white-space:nowrap}");
-  h.push(".chip-ok{background:#12291b;color:#3fb950;border:1px solid #238636}.chip-err{background:#2d1215;color:#f85149;border:1px solid #da3633}");
-  h.push(".chip-warn{background:#2d1f0c;color:#d29922;border:1px solid #9e6a03}.chip-idle{background:#161b22;color:#8b949e;border:1px solid #30363d}.chip-info{background:#0d2333;color:#58a6ff;border:1px solid #1f6feb}");
-  h.push("table{border-collapse:collapse;width:100%;font-size:10px}th,td{border-bottom:1px solid #21262d;padding:2px 4px;text-align:left;vertical-align:top}th{color:#8b949e}");
-  h.push("tr:hover td{background:#161b22}.issue-err{color:#f85149}.issue-warn{color:#d29922}");
-  h.push(".dot{display:inline-block;width:7px;height:7px;border-radius:4px;margin-right:4px}.dot-ok{background:#3fb950}.dot-err{background:#f85149}.dot-warn{background:#d29922}.dot-idle{background:#6e7681}");
-  h.push(".iss{border-left:2px solid #da3633;padding:1px 0 2px 6px;margin:3px 0}.iss.w{border-left-color:#9e6a03}");
-  h.push(".gauge{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:10px}");
-  h.push('</style></head><body><div class="app">');
-  h.push('<div class="hdr"><h1>Quniverse Fleet</h1><span class="chip chip-' + vcls + '">' + esc(verd) + '</span><span class="chips">');
-  h.push(chip("info", st.fleet.workers + " workers") + chip("info", st.fleet.scheduled + " sched") + chip("info", st.fleet.d1_databases + " D1") + chip("info", st.totals.req24 + " req/24h"));
-  h.push(st.totals.err24 > 0 ? chip("err", st.totals.err24 + " err/24h") : chip("ok", "0 err/24h"));
-  h.push(probeOk === probes.length ? chip("ok", probeOk + "/" + probes.length + " probes") : chip("warn", probeOk + "/" + probes.length + " probes"));
-  h.push(totalErr > 0 ? chip("err", totalErr + " sched-err") : chip("ok", "sched ok"));
-  if (totalNoRun > 0) h.push(chip("warn", totalNoRun + " no-run"));
-  h.push(ig.drift && ig.drift.ghost ? chip("warn", ig.drift.ghost + " ghost") : chip("ok", "0 ghost"));
-  h.push(ig.drift && ig.drift.unregistered ? chip("warn", ig.drift.unregistered + " unreg") : chip("ok", "0 unreg"));
-  h.push('</span><span class="sub" style="margin-left:auto">v' + esc(st.version) + " &middot; " + esc(String(st.generated_at || "").slice(0, 16).replace("T", " ")) + 'U &middot; <a href="/api/state">state</a> <a href="/api/actions">actions</a> <a href="/api/loop">loop</a></span></div>');
-  h.push('<div class="panel"><h2>Fleet topology &middot; ' + (ig.registered || 0) + " nodes / " + (ig.edges || 0) + " worker edges / " + (ig.contract_edges || 0) + " contract edges &middot; density " + (ig.density == null ? "n/a" : ig.density) + " worker / " + (ig.density_contract == null ? "n/a" : ig.density_contract) + " contract</h2>");
-  h.push(topologySvg(ig));
-  h.push('<div class="chips">' + chip("info", (ig.live == null ? "?" : ig.live) + " live") + chip("ok", (ig.registered || 0) + " registered") + (ig.hubs && ig.hubs.length ? chip("info", "top hub " + esc(ig.hubs[0].service) + " (" + ig.hubs[0].out + " out)") : "") + (ig.islands && ig.islands.length ? chip("warn", ig.islands.length + " islands") : "") + (ig.drift && ig.drift.unversioned ? chip("warn", ig.drift.unversioned + " unversioned") : "") + "</div>");
-  if (ig.islands && ig.islands.length) h.push('<div class="sub" style="margin-top:3px">islands (no declared edge): ' + esc(ig.islands.slice(0, 16).join(", ")) + "</div>");
-  h.push("</div>");
-  h.push('<div class="panel"><h2>Systems report card</h2><div class="gauge">');
-  h.push('<span class="sub">Decision</span><span>LoA ' + (rc.loa || "n/a") + "</span>");
-  h.push('<span class="sub">Intelligence</span><span>' + esc(rc.agi || "n/a") + "</span>");
-  h.push('<span class="sub">VSM</span><span>' + esc(rc.vsm || "n/a") + "</span>");
-  h.push('<span class="sub">OODA</span><span>' + esc(rc.ooda || "n/a") + "</span>");
-  h.push('<span class="sub">Watchmaker</span><span>' + esc(rc.watchmaker || "n/a") + "</span>");
-  h.push('</div><div class="chips" style="margin-top:6px">');
-  h.push(rc.human_open === 0 ? chip("ok", "human-gated 0") : chip("warn", "human-gated " + rc.human_open));
-  h.push(chip("info", "self-heal " + rc.self_heal_total));
-  h.push(rc.open_issues === 0 ? chip("ok", "open issues 0") : chip("warn", "open issues " + rc.open_issues));
-  h.push(rc.drift_total > 0 ? chip("warn", "drift " + rc.drift_total) : chip("ok", "drift 0"));
-  h.push('</div><div class="sub" style="margin-top:6px">Objective: human-intervention&rarr;0, drift&rarr;0, self-heal&rarr;1.</div></div>');
-  h.push('<div class="panel"><h2>Action board &middot; ' + errs.length + " err / " + warns.length + " warn</h2>");
-  if (!issues.length) h.push('<div class="sub">HEALTHY - no active conditions.</div>');
-  else for (const i of issues.slice(0, 60)) h.push('<div class="iss' + (i.sev === "err" ? "" : " w") + '"><b class="' + (i.sev === "err" ? "issue-err" : "issue-warn") + '">' + esc(i.category || i.sev) + "</b> " + esc(String(i.title || i.detail || "").slice(0, 160)) + "</div>");
-  h.push("</div>");
-  h.push('<div class="panel"><h2>Scheduled workers &middot; next runs UTC</h2><table><tr><th></th><th>worker</th><th>cron</th><th>next</th><th>24h</th><th>err</th><th>last</th></tr>');
-  for (const s of sched) {
-    const dc = s.status === "ERR" ? "err" : s.status === "OK" ? "ok" : s.status === "NO-RUN" ? "warn" : "idle";
-    h.push('<tr><td><span class="dot dot-' + dc + '"></span></td><td>' + esc(s.name) + '</td><td class="sub">' + esc((s.crons || []).join(",")) + '</td><td class="sub">' + esc(s.next && s.next.length ? s.next[0].at : "-") + "</td><td>" + s.req24 + "</td><td>" + (s.err24 > 0 ? '<b class="issue-err">' + s.err24 + "</b>" : s.err24) + '</td><td class="sub">' + esc(String(s.lastRun || "").slice(5, 16).replace("T", " ")) + "</td></tr>");
-  }
-  h.push("</table></div>");
-  h.push('<div class="panel"><h2>Probes ' + probeOk + "/" + probes.length + " up &middot; audits</h2><table>");
-  for (const p of probes) h.push("<tr><td>" + (p.ok ? '<span class="dot dot-ok"></span>' : '<span class="dot dot-warn"></span>') + "</td><td>" + esc(p.name) + '</td><td class="sub">' + esc(p.url || "") + "</td><td>" + p.status + "</td><td>" + p.ms + "ms</td></tr>");
-  for (const a of st.audits || []) h.push("<tr><td>" + chip(a.state, a.state) + '</td><td colspan="4" class="sub">' + esc(a.label) + ": " + esc(a.detail || "") + "</td></tr>");
-  h.push("</table></div>");
-  h.push('<div class="panel"><h2>Chains, queues &amp; device</h2>');
-  if (st.integration && st.integration.system && st.integration.system.score) h.push('<div class="sub">system integration: score ' + esc(st.integration.system.score.total) + " &middot; chains " + esc(st.integration.system.score.chains) + " &middot; coverage " + esc(st.integration.system.score.coverage) + " &middot; freshness " + esc(st.integration.system.score.freshness) + "</div>");
-  h.push("<table>");
-  for (const q of st.queues || []) h.push("<tr><td>" + esc(q.queue) + '</td><td class="sub">' + esc(q.db) + "</td><td>open " + q.open + "</td><td>" + (q.stale ? '<span class="chip chip-warn">stale ' + (q.age_h || "?") + "h</span>" : '<span class="chip chip-ok">fresh</span>') + "</td></tr>");
-  h.push("</table>");
-  h.push('<div class="sub">device ' + esc(String(st.device && st.device.captured_at || "").slice(0, 16)) + " &middot; " + (st.device && st.device.windows_tasks ? st.device.windows_tasks.length : 0) + " win-tasks &middot; front-end only (CLOUD-FRONTEND-ONLY-1)</div>");
-  h.push("</div>");
-  h.push("</div></body></html>");
-  return h.join("");
-}
-__name(pageHtml, "pageHtml");
-__name2(pageHtml, "pageHtml");
-__name22(pageHtml, "pageHtml");
-__name222(pageHtml, "pageHtml");
-__name2222(pageHtml, "pageHtml");
 var inflight = null;
 // WORKER-ERRORS-RECENCY-1: errors inside this window are "active"; older 24h errors are
 // reported as recovered (cleared by a later deploy) or as a warn (no deploy since).
@@ -2308,6 +2039,20 @@ var ERR_ACTIVE_MS = 3 * 36e5;
 // bound, and the Workers Observability API recorded "Worker invocation ended with
 // exceededWallTime" (15 internalError/24h). Every phase now runs against one deadline.
 var SCHEDULED_BUDGET_MS = 10 * 60 * 1e3;
+// Cached state for the human page: never blocks on a rebuild unless nothing is cached yet.
+async function currentState(env, ctx) {
+  const rec = await loadState(env);
+  if (!rec) {
+    try {
+      return await runRefresh(env, ctx);
+    } catch (e) {
+      return null;
+    }
+  }
+  if (Date.now() - new Date(rec.updatedAt).getTime() > STALE_MS) ctx.waitUntil(runRefresh(env, ctx).catch(function() {
+  }));
+  return rec.state;
+}
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -2375,34 +2120,43 @@ async function handleRequest(request, env, ctx) {
     return json(st.integration || { error: "no integration data" });
   }
   if (path === "/" || path === "") {
-    try {
-      return new Response(await redHtml(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
-    } catch (e) {
-      return new Response("RED inventory error: " + String(e && e.message || e), { status: 500 });
-    }
+    const st = await currentState(env, ctx);
+    const v = await humanView(env, st, ctx);
+    return new Response(humanHtml(v), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
   }
-  if (path === "/roi" || path === "/api/roi") {
-    try {
-      return new Response(await roiHtml(env), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
-    } catch (e) {
-      return new Response("ROI error: " + String(e && e.message || e), { status: 500 });
-    }
+  // HUMAN-DASHBOARD-1: /ops and /roi were folded into the one human page; old bookmarks land there.
+  if (path === "/roi" || path === "/api/roi" || path === "/ops") {
+    return new Response(null, { status: 301, headers: { Location: "/", "Cache-Control": "no-store" } });
   }
-  if (path === "/ops") {
-    const rec = await loadState(env);
-    let st = rec ? rec.state : null;
-    if (!st) {
-      try {
-        st = await runRefresh(env, ctx);
-      } catch (e) {
-        st = { error: String(e.message || e), generated_at: (/* @__PURE__ */ new Date()).toISOString(), version: VERSION, fleet: { workers: 0, scheduled: 0, probes: 0, d1_databases: 9 }, totals: { req24: 0, err24: 0 }, scheduled: [], audits: [], probes: [], device: await liveDevice(env), issues: [{ sev: "err", text: "refresh failed: " + String(e.message || e) }], meta: {} };
-      }
-    } else {
-      const age = Date.now() - new Date(rec.updatedAt).getTime();
-      if (age > STALE_MS) ctx.waitUntil(runRefresh(env, ctx).catch(function() {
-      }));
+  if (path === "/api/human" && request.method === "GET") {
+    const st = await currentState(env, ctx);
+    return json(await humanView(env, st, ctx));
+  }
+  // Any worker or session files / clears a human action here (same token as the loop endpoints).
+  //   {"op":"add","slug":"...","title":"...","why":"...","default":"...","action":"...","url":"https://...","sev":"urgent|normal","due":"YYYY-MM-DD"}
+  //   {"op":"resolve","slug":"...","resolution":"evidence"}
+  if (path === "/api/human" && request.method === "POST") {
+    const tok = request.headers.get("x-loop-token") || "";
+    if (!env.LOOP_TOKEN || tok !== env.LOOP_TOKEN) return json({ error: "unauthorized" }, 401);
+    let b = null;
+    try {
+      b = await request.json();
+    } catch (e) {
     }
-    return new Response(pageHtml(st), { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    if (!b || !/^[a-z0-9][a-z0-9._:-]{2,80}$/.test(String(b.slug || ""))) return json({ error: "slug required: [a-z0-9._:-]{3,81}" }, 400);
+    await ensureHumanTable(env);
+    if (b.op === "resolve") {
+      if (!String(b.resolution || "").trim()) return json({ error: "resolution (evidence) required" }, 400);
+      const r = await env.AUDIT.prepare("UPDATE human_actions SET status='resolved', resolved_at=datetime('now'), updated_at=datetime('now'), resolution=?1 WHERE slug=?2 AND status='open'").bind(String(b.resolution).slice(0, 500), b.slug).run();
+      return json({ ok: true, resolved: r.meta && r.meta.changes || 0 });
+    }
+    if (b.op === "add") {
+      if (!String(b.title || "").trim()) return json({ error: "title required" }, 400);
+      if (b.url && !/^https:\/\//.test(String(b.url))) return json({ error: "url must be https" }, 400);
+      await env.AUDIT.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(slug) DO UPDATE SET title=excluded.title, why=excluded.why, default_in_effect=excluded.default_in_effect, action=excluded.action, url=excluded.url, sev=excluded.sev, due=excluded.due, status='open', resolved_at=NULL, resolution=NULL, updated_at=datetime('now')").bind(b.slug, String(b.title).slice(0, 200), String(b.why || "").slice(0, 400), String(b.default || "").slice(0, 300), String(b.action || "").slice(0, 300), String(b.url || ""), b.sev === "urgent" ? "urgent" : "normal", String(b.due || "").slice(0, 10), String(b.source || "api").slice(0, 60)).run();
+      return json({ ok: true, slug: b.slug });
+    }
+    return json({ error: "op must be add|resolve" }, 400);
   }
   return json({ error: "not found", path }, 404);
 }
@@ -2610,6 +2364,8 @@ var worker_default = {
       })));
       ctx.waitUntil(within(refreshRegistryMetrics(env).catch(function() {
       })));
+      ctx.waitUntil(within(governanceSnapshot(env, st).catch(function() {
+      })));
       try {
         await within(loopExecute(env, deadline - 12e4), 6e4);
       } catch (e3) {
@@ -2777,759 +2533,382 @@ async function roiGf(env, query) {
 }
 __name(roiGf, "roiGf");
 __name2(roiGf, "roiGf");
-async function redHtml(env) {
-  const H = [];
-  const now = Date.now();
-  const dead = (/* @__PURE__ */ new Date("2026-10-25T00:00:00Z")).getTime();
-  const daysLeft = Math.max(0, Math.ceil((dead - now) / 864e5));
-  const usd = /* @__PURE__ */ __name2(function(centsV) {
-    const n = Number(centsV);
-    return isFinite(n) && centsV != null ? "$" + (n / 100).toFixed(2) : "n/a";
-  }, "usd");
-  const rec = await loadState(env);
-  let st = rec ? rec.state : null;
-  if (!st) {
+// HUMAN-DASHBOARD-1 (2026-10-01): fleet.qnfo.org is ONE page for the human owner. It answers a single
+// question -- "what do I have to do?" -- and nothing else. The old root (9-panel failure inventory), /ops
+// (scheduler view) and /roi (cost view) were consolidated here; they redirect to "/". Everything the system
+// can resolve itself (red flags, drift, queues, probes, retries) is the system's job (qnfo-fleet-control /
+// the issue loop) and is only summarised in one collapsed line. Machine endpoints (/api/state, /api/actions,
+// /api/loop, ...) are unchanged because qnfo-fleet-control and qnfo-autopilot consume them.
+//
+// What counts as "needs the human" (docs/AUTONOMY-DECISION-POLICY.md, tier T2 + "Never"):
+//   - human_actions       the canonical queue; any worker/session files a row (POST /api/human, x-loop-token)
+//   - v_waiting_on_human  governance register rows owned by user/mixed
+//   - gtd_register        open lines owned by user/mixed
+//   - fleet_issue_dispatch exec_state=needs-human (the issue loop found no safe autonomous action)
+//   - code_tasks          status=needs_human (code loop could not verify a change / has no PR credential)
+//   - v_email_human_pending_v2 inbound mail from real people (not bounces, bots, our own domains)
+//   - shutdown_manifest   owner-confirm gates once phase 1 has fired, and gates due within 45 days
+// FAIL-CLOSED: a source that cannot be read is listed under `blind` and the verdict becomes UNCONFIRMED;
+// the page never claims "nothing needs you" while it could not look.
+// PRIVACY: this page is public and unauthenticated, so third-party mail is shown as domain + count + age
+// only (never an address or subject).
+var SPEND_CAP_USD = 150;
+var REVIEW_GATE_DATE = "2026-12-31";
+var HUMAN_SNAPSHOT_MAX_AGE_MS = 3 * 36e5;
+async function ensureHumanTable(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT DEFAULT 'normal', due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), resolved_at TEXT, resolution TEXT)").run();
+}
+function mailDomain(addr) {
+  const m = String(addr || "").toLowerCase().match(/@([a-z0-9.-]+)\s*>?\s*$/);
+  return m ? m[1] : "unknown sender";
+}
+function ageDaysOf(raw) {
+  if (raw == null || raw === "") return null;
+  const t = typeof raw === "number" ? raw : Date.parse(String(raw).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(raw)) ? "" : "Z"));
+  if (isNaN(t)) return null;
+  return Math.max(0, (Date.now() - t) / DAY_MS);
+}
+function agoText(days) {
+  if (days == null) return "";
+  if (days < 1 / 24) return "just now";
+  if (days < 1) return Math.round(days * 24) + "h ago";
+  return Math.round(days) + "d ago";
+}
+async function collectHumanActions(env) {
+  const items = [];
+  const blind = [];
+  const add = function(it) {
+    it.sev = it.sev || "normal";
+    items.push(it);
+  };
+  const read = async function(name, fn) {
     try {
-      st = await runRefresh(env, {});
+      await fn();
     } catch (e) {
-      st = { error: String(e && e.message || e), issues: [], scheduled: [], probes: [], audits: [], integration: {}, totals: { req24: 0, err24: 0 }, fleet: { workers: 0 }, generated_at: (/* @__PURE__ */ new Date()).toISOString(), version: VERSION };
+      blind.push(name + ": " + squash(String(e && e.message || e)).slice(0, 80));
     }
-  } else if (Date.now() - new Date(rec.updatedAt).getTime() > STALE_MS) {
-    runRefresh(env, {}).catch(function() {
-    });
-  }
-  const issues = st.issues || [];
-  const errs = issues.filter(function(i) {
-    return i.sev === "err";
-  });
-  const warns = issues.filter(function(i) {
-    return i.sev === "warn";
-  });
-  H.push('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"/><title>QUNIVERSE FAILURE INVENTORY</title><style>');
-  H.push("body{font-family:system-ui,Segoe UI,monospace;background:#0b0e14;color:#e6e6e6;margin:0;padding:24px}h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:18px 0 6px;color:#f6a5a5}table{border-collapse:collapse;width:100%;max-width:1150px}td,th{border:1px solid #2a2f3a;padding:3px 7px;font-size:12px;text-align:left;vertical-align:top}th{background:#141a24;color:#f6a5a5}tr:hover td{background:#161b24}.ok{color:#6f6}.warn{color:#fa3}.bad{color:#f66}.sub{color:#9aa;font-size:11px}.panel{background:#11151d;border:1px solid #3a2326;border-radius:8px;padding:12px 14px;margin:10px 0;max-width:1180px}a{color:#9af}.collapsed{color:#3fb950;font-size:12px}");
-  H.push("</style></head><body>");
-  H.push("<h1>QUNIVERSE FAILURE INVENTORY</h1>");
-  H.push('<div class="sub">failures, flags, open issues and unremediated items only &mdash; greens are collapsed to one line at the bottom. <a href="/roi">cost/output ROI</a> &middot; <a href="/ops">operational drill-down</a> &middot; <a href="/api/state">machine state</a> &middot; generated ' + (/* @__PURE__ */ new Date()).toISOString() + ' &middot; <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + " days to shutdown-gate deadline 2026-10-25</b></div>");
-  if (st.error) H.push('<div class="panel"><h2>STATE ERROR</h2><div class="bad">' + esc(st.error) + "</div></div>");
-  let sh = [];
-  try {
-    sh = await d1all(env.AUDIT, "SELECT * FROM shutdown_manifest ORDER BY id");
-  } catch (e) {
-  }
-  // MANIFEST-STATE-CLASS-1 (2026-09-30): every row was painted "bad" and the heading counted every
-  // row as ARMED, including a DISARMED trigger. Colour by state: FIRED/EXECUTED bad, ARMED warn
-  // (a live kill condition, evaluated by the gates below), DISARMED ok.
-  const _armedN = sh.filter(function(r) {
-    return String(r.state || "").toUpperCase() === "ARMED";
-  }).length;
-  const _shCls = function(stv) {
-    const u = String(stv || "").toUpperCase();
-    return u === "DISARMED" ? "ok" : u === "ARMED" ? "warn" : "bad";
   };
-  H.push('<div class="panel"><h2>1 &middot; SHUTDOWN MANIFEST &mdash; ' + _armedN + " ARMED of " + sh.length + " kill conditions</h2><table><tr><th>id</th><th>phase</th><th>component</th><th>condition</th><th>action</th><th>due</th><th>state</th></tr>");
-  for (const r of sh) H.push('<tr><td class="' + _shCls(r.state) + '"><b>' + esc(r.id) + "</b></td><td>" + esc(r.phase) + '</td><td class="' + _shCls(r.state) + '">' + esc(r.component) + "</td><td>" + esc(r.condition) + '</td><td class="sub">' + esc(r.action) + "</td><td>" + esc(r.due_date) + '</td><td class="' + _shCls(r.state) + '">' + esc(r.state) + "</td></tr>");
-  H.push('</table><div class="sub">phase-1 retires every research/self-monitor worker on 2026-10-25 unless the gates below pass; phase-2 then archives + drops research data. EARLY-TRIGGER: AI-gateway spend &ge; $150/30d with zero publish events. OWNER-KILL: one email command. Mechanical, not advisory. EARLY-TRIGGER is evaluated in the COST TRUTH panel below.</div></div>');
-  let th = [];
-  try {
-    th = await d1all(env.AUDIT, "SELECT metric, target, state FROM impact_thresholds ORDER BY metric");
-  } catch (e) {
-  }
-  let rumTotal = null, growth = null, rep30 = null, repTotal = null, snapMoM = null;
-  try {
-    const d = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(now - 720 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now).toISOString() + '" }) { count } } } }');
-    const rows = (((d || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || [];
-    rumTotal = rows.reduce(function(s, x) {
-      return s + x.count;
-    }, 0);
-    growth = rumTotal != null ? Math.round(1e4 * (rumTotal - 5610) / 5610) / 100 : null;
-  } catch (e) {
-  }
-  let rumPrior = null, trueMoM = null;
-  try {
-    const dp = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + new Date(now - 1440 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now - 720 * 36e5).toISOString() + '" }) { count } } } }');
-    const rp = (((dp || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || [];
-    rumPrior = rp.reduce(function(s, x) {
-      return s + x.count;
-    }, 0);
-    trueMoM = rumPrior > 0 ? Math.round(1e4 * (rumTotal - rumPrior) / rumPrior) / 100 : null;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n FROM papers WHERE status='published' AND length(body_md) >= 5000 AND created_at >= date('now','-30 day')");
-    rep30 = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n FROM papers WHERE status='published' AND length(body_md) >= 5000");
-    repTotal = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  try {
-    const sn = await d1all(env.AUDIT, "SELECT d, pageviews FROM roi_daily_snapshots ORDER BY d DESC LIMIT 2") || [];
-    if (sn.length === 2 && Number(sn[0].pageviews) > 0 && Number(sn[1].pageviews) > 0) snapMoM = Math.round(1e4 * (Number(sn[0].pageviews) - Number(sn[1].pageviews)) / Number(sn[1].pageviews)) / 100;
-  } catch (e) {
-  }
-  // GATE-STATE-LIVE-1 (2026-09-30): impact_thresholds.state was a stored label, so
-  // full_reports_live_30d read OPEN while the same panel measured 10 (gate >=2, PASSING).
-  // A governance gate is evaluated from its source at evaluation time; the stored label is used
-  // only when no live measurement exists, and a changed verdict is written back (registry-as-truth).
-  let _new30 = null, _wcLive = null, _waiLive = null;
-  try {
-    const rn = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM subscribers WHERE status='subscribed' AND created_at >= datetime('now','-30 day')");
-    _new30 = rn && rn.length ? Number(rn[0].n) : null;
-  } catch (e) {
-  }
-  try {
-    const rw = await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric='worker_count'");
-    _wcLive = rw && rw.length && rw[0].last_value != null ? Number(rw[0].last_value) : null;
-    const ra = await d1all(env.AUDIT, "SELECT last_value FROM metric_registry WHERE metric='workers_ai_cost_30d_usd'");
-    _waiLive = ra && ra.length && ra[0].last_value != null ? Number(ra[0].last_value) : null;
-  } catch (e) {
-  }
-  const _liveGate = {
-    full_reports_live_30d: rep30 != null ? { st: rep30 >= 2 ? "MET" : "OPEN", v: String(rep30) } : null,
-    // metric_registry.impressions_growth_30d (RATIFIED 2026-09-27): prior-window MoM is authoritative.
-    impressions_growth_30d: trueMoM != null ? { st: trueMoM >= 30 ? "MET" : "OPEN", v: (trueMoM >= 0 ? "+" : "") + trueMoM + "% prior-window MoM" } : null,
-    subscribers_growth_monthly: _new30 != null ? { st: _new30 >= 10 ? "MET" : "OPEN", v: "+" + _new30 + " in 30d" } : null,
-    worker_count: _wcLive != null && isFinite(_wcLive) ? { st: _wcLive <= 28 ? "MET" : "OPEN", v: String(_wcLive) } : null,
-    workers_ai_cost_30d_usd: _waiLive != null && isFinite(_waiLive) ? { st: _waiLive <= 7.5 ? "MET" : "OPEN", v: "$" + _waiLive.toFixed(2) } : null
-  };
-  H.push('<div class="panel"><h2>2 &middot; SURVIVAL GATES vs measured</h2><table><tr><th>gate</th><th>target</th><th>measured</th><th>state</th></tr>');
-  for (const t of th) {
-    const lg = _liveGate[t.metric] || null;
-    const stv = lg ? lg.st : t.state;
-    const cls = stv === "MET" ? "ok" : stv === "MEASURED" ? "warn" : "bad";
-    H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + "</td><td>" + (lg ? esc(lg.v) : '<span class="sub">stored</span>') + '</td><td class="' + cls + '">' + esc(stv) + "</td></tr>");
-    if (lg && lg.st !== t.state) {
+  await read("human_actions", async function() {
+    await ensureHumanTable(env);
+    const rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at FROM human_actions WHERE status='open' ORDER BY id");
+    for (const r of rows) add({ key: "ha:" + r.slug, source: "queue", title: r.title, why: r.why || "", fallback: r.default_in_effect || "", action: r.action || "", url: r.url || "", sev: r.sev === "urgent" ? "urgent" : "normal", due: r.due || "", age: ageDaysOf(r.created_at) });
+  });
+  await read("register", async function() {
+    const rows = await d1all(env.AUDIT, "SELECT id, title, dod, due, updated_at FROM v_waiting_on_human ORDER BY due = '', due, id");
+    for (const r of rows) add({ key: "reg:" + r.id, source: "register", title: r.title, why: "Owned by you in the governance register.", fallback: "", action: r.dod || "", url: "", due: r.due || "", age: ageDaysOf(r.updated_at) });
+  });
+  await read("gtd", async function() {
+    const rows = await d1all(env.AUDIT, "SELECT id, line, dod, section, updated_at FROM gtd_register WHERE done=0 AND owner IN ('user','mixed') ORDER BY id");
+    for (const r of rows) add({ key: "gtd:" + r.id, source: "gtd", title: String(r.line || "").slice(0, 160), why: r.section ? "GTD: " + r.section : "Your open GTD line.", fallback: "", action: r.dod || "", url: "", due: "", age: ageDaysOf(r.updated_at) });
+  });
+  await read("issue-loop", async function() {
+    const rows = await d1all(env.AUDIT, "SELECT fingerprint, category, owner, action, payload, gh_number, exec_result, created_at FROM fleet_issue_dispatch WHERE state='queued' AND exec_state='needs-human' ORDER BY created_at");
+    for (const r of rows) {
+      let p = {};
       try {
-        await env.AUDIT.prepare("UPDATE impact_thresholds SET state=?1 WHERE metric=?2").bind(lg.st, t.metric).run();
+        p = JSON.parse(r.payload || "{}");
       } catch (e) {
       }
+      add({ key: "disp:" + r.fingerprint, source: "issue-loop", title: String(p.title || r.category || "Fleet issue needs a decision").slice(0, 160), why: "The issue loop found no safe autonomous fix. " + squash(String(r.exec_result || "")).slice(0, 160), fallback: "The system keeps the current safe configuration serving.", action: String(r.action || ""), url: r.gh_number ? "https://github.com/" + GH_REPO + "/issues/" + r.gh_number : "", due: "", age: ageDaysOf(r.created_at) });
     }
-  }
-  H.push('</table><div class="sub">measured now: full reports 30d = ' + (rep30 != null ? rep30 : "n/a") + " (gate &ge;2 &rarr; " + (rep30 != null && rep30 >= 2 ? '<span class="ok">PASSING</span>' : '<b class="bad">FAILING</b>') + ") &middot; pageviews 30d = " + (rumTotal != null ? rumTotal.toLocaleString() : "n/a") + " &middot; true MoM (30d vs prior-30d) = " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a") + " &middot; context: vs frozen baseline 5,610 = " + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + ' (not the gate: metric_registry ratified prior-window MoM on 2026-09-27)' + ' <span class="sub">(WS-2 metric fix: prior &quot;snapshot MoM&quot; was day-over-day rolling, not month-over-month)</span></div></div>');
-  let inv = null, bal = null, tup = null, aiN = null;
+  });
+  await read("code-tasks", async function() {
+    const rows = await d1all(env.AUDIT, "SELECT id, goal, repo, last_error, pr_url, updated_at FROM code_tasks WHERE status='needs_human' ORDER BY updated_at");
+    for (const r of rows) add({ key: "code:" + r.id, source: "code-loop", title: "Code task parked: " + String(r.goal || r.id).slice(0, 140), why: "The code loop could not verify this change itself. " + squash(String(r.last_error || "")).slice(0, 140), fallback: "Nothing is merged or deployed until it is verified.", action: "Review or drop it.", url: r.pr_url || "", due: "", age: ageDaysOf(r.updated_at) });
+  });
+  await read("inbox", async function() {
+    const rows = await d1all(env.AUDIT, "SELECT sender, subject, received_at FROM v_email_human_pending_v2");
+    const byDom = {};
+    for (const r of rows) {
+      const d = mailDomain(r.sender);
+      const g = byDom[d] || (byDom[d] = { n: 0, oldest: null });
+      g.n++;
+      const a = ageDaysOf(r.received_at);
+      if (a != null && (g.oldest == null || a > g.oldest)) g.oldest = a;
+    }
+    for (const d of Object.keys(byDom)) add({ key: "mail:" + d, source: "inbox", title: "Reply to " + byDom[d].n + " message" + (byDom[d].n > 1 ? "s" : "") + " from " + d, why: "A real person wrote to qnfo@qnfo.org; the system does not send mail as you.", fallback: "No reply goes out until you send one.", action: "Open the qnfo inbox and reply.", url: "", due: "", age: byDom[d].oldest });
+  });
+  await read("shutdown-manifest", async function() {
+    const rows = await d1all(env.AUDIT, "SELECT id, phase, component, condition, due_date, state FROM shutdown_manifest ORDER BY id");
+    const phase1Live = rows.some(function(r) {
+      return Number(r.phase) === 1 && /ARMED|DISARMED/i.test(String(r.state || ""));
+    });
+    for (const r of rows) {
+      const stv = String(r.state || "").toUpperCase();
+      if (stv === "OWNER-CONFIRM-REQUIRED" && !phase1Live) add({ key: "sm:" + r.id, source: "shutdown", sev: "urgent", title: "Confirm: " + r.component, why: String(r.condition || "").slice(0, 200), fallback: "Nothing is deleted without your email confirmation.", action: "Reply by email to confirm or refuse.", url: "", due: "", age: null });
+      const due = Date.parse(String(r.due_date || ""));
+      if (stv === "ARMED" && !isNaN(due) && due - Date.now() <= 45 * DAY_MS) add({ key: "smd:" + r.id, source: "shutdown", title: "Decision due " + String(r.due_date).slice(0, 10) + ": " + r.component, why: String(r.condition || "").slice(0, 200), fallback: "The mechanical gate decides if you do nothing.", action: "Review the gate before the date.", url: "", due: String(r.due_date).slice(0, 10), age: null });
+    }
+  });
+  items.sort(function(a, b) {
+    return (a.sev === "urgent" ? 0 : 1) - (b.sev === "urgent" ? 0 : 1) || String(a.due || "9999").localeCompare(String(b.due || "9999")) || (b.age || 0) - (a.age || 0);
+  });
+  return { items, blind };
+}
+async function governanceSnapshot(env, st) {
+  const now = Date.now();
+  const iso = function(h) {
+    return new Date(now - h * 36e5).toISOString();
+  };
+  const acct = function(d, key) {
+    return d ? (((d.viewer || {}).accounts || [{}])[0] || {})[key] || [] : null;
+  };
+  const rumCount = async function(fromH, toH) {
+    const d = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + iso(fromH) + '", datetime_leq: "' + iso(toH) + '" }) { count } } } }');
+    const rows = acct(d, "rumPageloadEventsAdaptiveGroups");
+    return rows ? rows.reduce(function(s, x) {
+      return s + x.count;
+    }, 0) : null;
+  };
+  const one = async function(sql, db) {
+    try {
+      const r = await d1all(db || env.AUDIT, sql);
+      return r && r.length ? r[0] : null;
+    } catch (e) {
+      return null;
+    }
+  };
+  const num = function(r, k) {
+    return r && r[k] != null ? Number(r[k]) : null;
+  };
+  let rumTotal = null, rumPrior = null, trueMoM = null, gwSpend30 = null, aiN = null, gwLimit = null;
   try {
-    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/billing/invoice-preview", { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
-    const j = await r.json();
-    inv = j.result || null;
+    rumTotal = await rumCount(720, 0);
+    rumPrior = await rumCount(1440, 720);
+    trueMoM = rumTotal != null && rumPrior > 0 ? Math.round(1e4 * (rumTotal - rumPrior) / rumPrior) / 100 : null;
   } catch (e) {
   }
   try {
-    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/billing/credit-balance", { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
-    const j = await r.json();
-    bal = j.result || null;
-  } catch (e) {
-  }
-  try {
-    const r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/billing/topup/config", { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
-    const j = await r.json();
-    tup = j.result || null;
-  } catch (e) {
-  }
-  // WAI-NEURONS-DATASET-1 (2026-09-30): workersInvocationsAdaptive has no `neurons` field, so this
-  // query always errored and the row always read n/a. Workers AI usage lives in aiInferenceAdaptiveGroups.
-  try {
-    const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + new Date(now - 720 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now).toISOString() + '" }) { sum { totalNeurons } } } } }');
-    const rows = (((g || {}).viewer || {}).accounts || [{}])[0].aiInferenceAdaptiveGroups || [];
-    aiN = rows.reduce(function(a, x) {
+    const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { aiInferenceAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + iso(720) + '", datetime_leq: "' + iso(0) + '" }) { sum { totalNeurons } } } } }');
+    const rows = acct(g, "aiInferenceAdaptiveGroups");
+    aiN = rows ? rows.reduce(function(a, x) {
       return a + (x.sum && x.sum.totalNeurons || 0);
-    }, 0);
+    }, 0) : null;
     if (!(aiN > 0)) aiN = null;
   } catch (e) {
   }
-  // GATEWAY-METERED-SPEND-1: the AI Gateway invoice covers unified-billing providers only, and its
-  // amount_due is NET of credits ($0.00 while $212 of usage accrued). Spend for governance is the
-  // gateway-metered cost of every request (unified billing + BYOK providers), 30d sliding.
-  let gwSpend30 = null;
+  // GATEWAY-METERED-SPEND-1: governance spend is the gateway-metered 30d cost of every request.
   try {
-    const gg = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { aiGatewayRequestsAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + new Date(now - 720 * 36e5).toISOString() + '", datetime_leq: "' + new Date(now).toISOString() + '" }) { sum { cost } } } } }');
-    const rows = (((gg || {}).viewer || {}).accounts || [{}])[0].aiGatewayRequestsAdaptiveGroups || [];
-    if (rows.length) gwSpend30 = rows.reduce(function(a, x) {
+    const gg = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { aiGatewayRequestsAdaptiveGroups(limit: 1000, filter: { datetime_geq: "' + iso(720) + '", datetime_leq: "' + iso(0) + '" }) { sum { cost } } } } }');
+    const rows = acct(gg, "aiGatewayRequestsAdaptiveGroups");
+    if (rows && rows.length) gwSpend30 = rows.reduce(function(a, x) {
       return a + (x.sum && Number(x.sum.cost) || 0);
     }, 0);
   } catch (e) {
   }
-  H.push('<div class="panel"><h2>3 &middot; COST TRUTH (live billing, USD cents audited)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  const invGross = inv ? (inv.invoice_lines || []).reduce(function(a, L) {
-    return a + (Number(L.amount) > 0 ? Number(L.amount) : 0);
-  }, 0) : null;
-  if (gwSpend30 != null) H.push('<tr><td><b>AI spend 30d (gateway-metered, all providers incl. BYOK)</b></td><td class="' + (gwSpend30 >= 150 ? "bad" : gwSpend30 >= 110 ? "warn" : "ok") + '"><b>$' + gwSpend30.toFixed(2) + "</b> vs $150 cap &middot; $110 plan</td></tr>");
-  else H.push('<tr><td>AI spend 30d (gateway-metered)</td><td class="warn">analytics n/a</td></tr>');
-  if (inv) {
-    H.push("<tr><td>AI Gateway invoice draft (current period, unified billing)</td><td>" + usd(invGross) + " gross usage &middot; " + usd(inv.amount_due) + " due after credits</td></tr>");
-    const lines = (inv.invoice_lines || []).slice().sort(function(a, b) {
-      return (b.amount || 0) - (a.amount || 0);
-    }).slice(0, 7);
-    for (const L of lines) {
-      if (!(L.amount > 0)) continue;
-      H.push('<tr><td class="sub">&nbsp;&nbsp;' + esc(L.description) + "</td><td>" + usd(L.amount) + "</td></tr>");
-    }
-  } else H.push('<tr><td>AI Gateway invoice draft</td><td class="warn">billing API unavailable</td></tr>');
-  H.push("<tr><td>Credit balance</td><td>" + (bal ? usd(bal.balance) : '<span class="warn">n/a</span>') + "</td></tr>");
-  H.push("<tr><td>Auto top-up</td><td>" + (tup ? "refill " + usd(tup.amount) + " when balance &lt; " + usd(tup.threshold) : '<span class="warn">n/a</span>') + "</td></tr>");
-  const _waiEst = aiN != null ? Math.max(0, aiN - 1e4 * 30) / 1e3 * 0.011 : null;
-  H.push("<tr><td>Workers AI 30d</td><td>" + (aiN != null ? Math.round(aiN).toLocaleString() + " neurons &middot; list-price est $" + _waiEst.toFixed(2) + " (10k/day free, $0.011/1k)" + (_waiLive != null && isFinite(_waiLive) ? " &middot; registry $" + _waiLive.toFixed(2) : "") : '<span class="warn">n/a</span>') + "</td></tr>");
-  let gwLimitLive = null;
   try {
     const rgl = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default", { headers: { Authorization: "Bearer " + (env.CF_TOKEN || "") }, signal: AbortSignal.timeout(8e3) });
     const jgl = await rgl.json();
     const rules = jgl && jgl.result && jgl.result.spend_limits && jgl.result.spend_limits.rules ? jgl.result.spend_limits.rules : [];
-    if (rules.length && rules[0].limit != null) gwLimitLive = Number(rules[0].limit);
+    if (rules.length && rules[0].limit != null) gwLimit = Number(rules[0].limit);
   } catch (e) {
   }
-  let pubEvents = null;
+  const rep30 = num(await one("SELECT COUNT(*) AS n FROM papers WHERE status='published' AND length(body_md) >= 5000 AND created_at >= date('now','-30 day')", env.LIVING), "n");
+  const new30 = num(await one("SELECT COUNT(*) AS n FROM subscribers WHERE status='subscribed' AND created_at >= datetime('now','-30 day')"), "n");
+  const subsTotal = num(await one("SELECT COALESCE(SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END),0) AS n FROM subscribers"), "n");
+  const pubEvents = num(await one("SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND datetime(updated_at) >= datetime('now','-30 days')"), "n");
+  const wcLive = num(await one("SELECT last_value AS n FROM metric_registry WHERE metric='worker_count'"), "n");
+  const waiLive = num(await one("SELECT last_value AS n FROM metric_registry WHERE metric='workers_ai_cost_30d_usd'"), "n");
+  // GATE-STATE-LIVE-1: a governance gate is evaluated from its source at evaluation time; the stored label
+  // is used only when no live measurement exists, and a changed verdict is written back.
+  const liveGate = {
+    full_reports_live_30d: rep30 != null ? rep30 >= 2 ? "MET" : "OPEN" : null,
+    impressions_growth_30d: trueMoM != null ? trueMoM >= 30 ? "MET" : "OPEN" : null,
+    subscribers_growth_monthly: new30 != null ? new30 >= 10 ? "MET" : "OPEN" : null,
+    worker_count: wcLive != null && isFinite(wcLive) ? wcLive <= 28 ? "MET" : "OPEN" : null,
+    workers_ai_cost_30d_usd: waiLive != null && isFinite(waiLive) ? waiLive <= 7.5 ? "MET" : "OPEN" : null
+  };
+  let gatesMet = 0, gatesTotal = 0;
   try {
-    const rpe = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM version_queue WHERE status='published' AND datetime(updated_at) >= datetime('now','-30 days')");
-    pubEvents = rpe && rpe.length ? Number(rpe[0].n) : null;
-  } catch (e) {
-  }
-  // EARLY-TRIGGER spend = gateway-metered 30d cost (falls back to the invoice's GROSS usage).
-  const trigSpend = gwSpend30 != null ? gwSpend30 : invGross != null ? invGross / 100 : null;
-  const spendOver = trigSpend != null ? trigSpend >= 150 : false;
-  const earlyFire = spendOver && pubEvents === 0;
-  H.push("<tr><td>Spend limit</td><td>" + (gwLimitLive != null ? "$" + gwLimitLive + " / 30d sliding (live gateway config)" : "$150 / 30d sliding (manifest threshold)") + "</td></tr>");
-  H.push("<tr><td>EARLY-TRIGGER</td><td>spend " + (trigSpend != null ? "$" + trigSpend.toFixed(2) : "n/a") + " " + (spendOver ? '<b class="bad">&ge; $150/30d</b>' : "&lt; $150/30d") + " AND publish_events_30d=" + (pubEvents == null ? '<b class="bad">n/a</b>' : pubEvents) + (pubEvents === 0 ? ' (<b class="bad">ZERO</b>)' : ' (<span class="ok">non-zero</span>)') + " &rarr; " + (earlyFire ? '<b class="bad">TRIGGER FIRES</b>' : '<span class="ok">not firing</span>') + ' <span class="sub">defn: version_queue status=published last 30d (WS-0)</span></td></tr>');
-  H.push('</table><div class="sub">billing figures are USD cents from the API divided by 100 (AI-GW-COST-UNIT-CENTS-1); line items shown gross &mdash; amount_due is net of credits, so it is never used as spend. Governance spend is the gateway-metered 30d cost (aiGatewayRequestsAdaptiveGroups.sum.cost), which also covers BYOK providers billed outside Cloudflare.</div></div>');
-  let ghIssues = null, ghTotal = null;
-  try {
-    const g = await ghCall(env, "GET", "/search/issues?q=org%3AQNFO+is%3Aissue+is%3Aopen&per_page=100");
-    if (g.ok && g.json) {
-      ghIssues = (g.json.items || []).map(function(i) {
-        return { repo: String(i.repository_url || "").split("/").pop(), n: i.number, t: i.title };
-      });
-      ghTotal = g.json.total_count;
+    const th = await d1all(env.AUDIT, "SELECT metric, state FROM impact_thresholds");
+    for (const t of th) {
+      const stv = liveGate[t.metric] || t.state;
+      gatesTotal++;
+      if (stv === "MET") gatesMet++;
+      if (liveGate[t.metric] && liveGate[t.metric] !== t.state) await env.AUDIT.prepare("UPDATE impact_thresholds SET state=?1 WHERE metric=?2").bind(liveGate[t.metric], t.metric).run();
     }
   } catch (e) {
   }
-  let agOpen = [], agOpenCount = null, dodByOwner = [], gtdByOwner = null, dispatch = [], ilOpen = null;
+  // Survival headroom -> survival_state (consumed by the SAI external_impact term). STALE-GATE-FAILCLOSED-1
+  // (#1301): a metric past its refresh cadence is UNKNOWN and scored worst-case, never dropped.
+  let surv = null;
   try {
-    agOpen = await d1all(env.AUDIT, "SELECT id, title, category, priority FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled') ORDER BY priority DESC, id DESC LIMIT 60") || [];
-    // DASHBOARD-AGENT-ISSUES-UNDERCOUNT-1 (2026-09-30, agent_issues #1663): the panel below rendered
-    // agOpen.length, i.e. the LIMIT-60 PAGE SIZE, as the open-issue TOTAL. With 89 open
-    // rows it reported 60. Never derive a total from a truncated page: count separately.
-    const agCountRows = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM agent_issues WHERE status NOT IN ('closed','done','resolved','wontfix','cancelled')");
-    agOpenCount = agCountRows && agCountRows.length ? agCountRows[0].n : null;
-  } catch (e) {
-  }
-  try {
-    dodByOwner = await d1all(env.AUDIT, "SELECT owner, COUNT(*) AS n FROM task_dod_register WHERE status NOT IN ('done','closed','resolved','cancelled','cancelled-with-monitor') GROUP BY owner ORDER BY n DESC") || [];
-  } catch (e) {
-  }
-  try {
-    gtdByOwner = await d1all(env.AUDIT, "SELECT owner, COUNT(*) AS n FROM gtd_register WHERE done=0 GROUP BY owner ORDER BY n DESC") || [];
-  } catch (e) {
-  }
-  try {
-    dispatch = await d1all(env.AUDIT, "SELECT exec_state, COUNT(*) AS n FROM fleet_issue_dispatch WHERE state='queued' AND COALESCE(exec_state,'') NOT IN ('executed','verified-done','closed-failed','closed-no-action','no-action','dedupe-superseded','no-handler-superseded') GROUP BY exec_state ORDER BY n DESC") || [];
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM issue_ledger WHERE status='open'");
-    ilOpen = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  const dodOpen = dodByOwner.reduce(function(s, x) {
-    return s + x.n;
-  }, 0);
-  const gtdOpen = gtdByOwner ? gtdByOwner.reduce(function(s, x) {
-    return s + x.n;
-  }, 0) : null;
-  const dispOpen = dispatch.reduce(function(s, x) {
-    return s + x.n;
-  }, 0);
-  H.push('<div class="panel"><h2>4 &middot; COMPLETE OPEN-ISSUE INVENTORY</h2><table><tr><th>source</th><th>open</th><th>detail</th></tr>');
-  H.push('<tr><td>GitHub org QNFO</td><td class="' + (ghTotal > 0 ? "bad" : "ok") + '">' + (ghTotal != null ? ghTotal : '<span class="warn">api n/a</span>') + "</td><td>all repos, issues not PRs</td></tr>");
-  H.push('<tr><td>task_dod_register</td><td class="' + (dodOpen > 0 ? "bad" : "ok") + '">' + dodOpen + "</td><td>" + esc(dodByOwner.map(function(x) {
-    return x.owner + ":" + x.n;
-  }).join(", ")) + "</td></tr>");
-  H.push('<tr><td>gtd_register</td><td class="' + (gtdOpen > 0 ? "bad" : "ok") + '">' + (gtdOpen != null ? gtdOpen : "?") + "</td><td>" + (gtdByOwner ? esc(gtdByOwner.map(function(x) {
-    return x.owner + ":" + x.n;
-  }).join(", ")) : "") + "</td></tr>");
-  const agOpenShown = agOpenCount != null ? agOpenCount : agOpen.length;
-  H.push('<tr><td>agent_issues (D1)</td><td class="' + (agOpenShown > 0 ? "bad" : "ok") + '">' + agOpenShown + "</td><td>not closed/resolved/wontfix" + (agOpenCount != null && agOpenCount > agOpen.length ? " (listing shows newest " + agOpen.length + ")" : "") + "</td></tr>");
-  H.push('<tr><td>fleet_issue_dispatch (queued)</td><td class="' + (dispOpen > 0 ? "bad" : "ok") + '">' + dispOpen + "</td><td>" + esc(dispatch.map(function(x) {
-    return (x.exec_state || "undispatched") + ":" + x.n;
-  }).join(", ")) + "</td></tr>");
-  H.push("<tr><td>issue_ledger (open)</td><td>" + (ilOpen != null ? ilOpen : "?") + "</td><td>fingerprinted signals not yet resolved</td></tr>");
-  // REGISTER-INVENTORY-COMPLETE-2 (2026-09-28): panel 4 must COVER every register panel 6
-  // surfaces, so the operational lanes are listed here too -- ONE complete inventory.
-  const _n = async (sql, db) => { try { const r = await d1all(db || env.AUDIT, sql); return (r && r.length) ? Number(r[0].n != null ? r[0].n : 0) : 0; } catch (e) { return null; } };
-  const _elq = await _n("SELECT COUNT(*) AS n FROM email_loop_quarantine WHERE status NOT IN ('processed','archived','spam')");
-  const _agf = await _n("SELECT COALESCE(SUM(count),0) AS n FROM ai_gateway_failures WHERE ts >= ((strftime('%s','now')-86400)*1000)");
-  const _vq = await _n("SELECT COUNT(*) AS n FROM version_queue WHERE status NOT IN ('published','wontfix')");
-  const _dl = await _n("SELECT COUNT(*) AS n FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > (strftime('%s','now')*1000)");
-  const _epf = await _n("SELECT COUNT(*) AS n FROM email_parse_failures WHERE status IN ('open','handoff')");
-  const _esv = await _n("SELECT COUNT(*) AS n FROM email_send_violations WHERE COALESCE(resolved,0)=0");
-  const _dln = await _n("SELECT COUNT(*) AS n FROM dead_links WHERE resolved_at IS NULL");
-  const _oq2 = await _n("SELECT COUNT(*) AS n FROM outreach_queue WHERE COALESCE(status,'') NOT IN ('sent','skipped','cancelled','rejected') AND COALESCE(status,'') NOT LIKE 'skipped%'");
-  // A queue draining at its policy rate (last send < 26h) is working, not an open failure.
-  const _oqDrain = await _n("SELECT COUNT(*) AS n FROM outreach_queue WHERE status='sent' AND sent_at >= datetime('now','-26 hours')");
-  const _opsRows = [
-    ["email_loop_quarantine", _elq, "quarantine", "qnfo-email loop classifier"],
-    ["ai_gateway_failures (24h)", _agf, "event-plane", "qnfo-ai-calibration (not drainable)"],
-    ["version_queue", _vq, "pipeline", "qnfo-paper-reviser / zenodo depositor"],
-    ["deploy_locks (active)", _dl, "lock", "qnfo-deploy-guard reap"],
-    ["email_parse_failures", _epf, "issue", "qnfo-email parse-failure resolver"],
-    ["email_send_violations", _esv, "issue", "qnfo-email send policy"],
-    ["dead_links", _dln, "issue", "link checker"],
-    ["outreach_queue", _oq2, _oqDrain > 0 ? "draining" : "queue", "qnfo-cloud-ops jobOutreach (8/day cap)" + (_oqDrain > 0 && _oq2 > 0 ? ", " + _oqDrain + " sent 26h, ETA " + Math.ceil(_oq2 / 8) + "d" : "")]
-  ];
-  let _opsOpen = 0;
-  for (const row of _opsRows) {
-    const bad = row[1] != null && row[1] > 0 && row[2] !== "event-plane" && row[2] !== "lock" && row[2] !== "draining";
-    H.push("<tr><td>" + esc(row[0]) + '</td><td class="' + (bad ? "bad" : "ok") + '">' + (row[1] != null ? row[1] : "?") + "</td><td>" + esc(row[2] + " \u00b7 " + row[3]) + "</td></tr>");
-    if (bad) _opsOpen += row[1];
-  }
-  const invTotal = (ghTotal != null ? ghTotal : 0) + dodOpen + (gtdOpen != null ? gtdOpen : 0) + agOpen.length + dispOpen + (ilOpen != null ? ilOpen : 0) + _opsOpen;
-  H.push('<tr><td><b>TOTAL open-issue inventory</b></td><td class="' + (invTotal > 0 ? "bad" : "ok") + '"><b>' + invTotal + "</b></td><td>union of ALL 14 registers the failures inventory surfaces (panel 4 issue lanes + panel 6 operational lanes); every lane names a disposition actor</td></tr>");
-  H.push("</table>");
-  if (ghIssues && ghIssues.length) {
-    H.push('<div style="margin-top:8px"><b>GitHub open issues:</b></div><table style="margin-top:4px"><tr><th>repo</th><th>#</th><th>title</th></tr>');
-    for (const gi of ghIssues) H.push("<tr><td>" + esc(gi.repo) + "</td><td>" + esc(gi.n) + '</td><td><a href="https://github.com/QNFO/' + esc(gi.repo) + "/issues/" + esc(gi.n) + '">' + esc(String(gi.t || "").slice(0, 110)) + "</a></td></tr>");
-    H.push("</table>");
-  }
-  if (agOpen.length) {
-    H.push('<div style="margin-top:8px"><b>agent_issues open (D1):</b></div><table style="margin-top:4px"><tr><th>id</th><th>category</th><th>title</th></tr>');
-    for (const a of agOpen) H.push("<tr><td>" + esc(a.id) + "</td><td>" + esc(a.category) + "</td><td>" + esc(String(a.title || "").slice(0, 140)) + "</td></tr>");
-    H.push("</table>");
-  }
-  H.push("</div>");
-  H.push('<div class="panel"><h2>5 &middot; FLEET RED FLAGS &mdash; ' + errs.length + " err / " + warns.length + " warn</h2>");
-  if (!issues.length) H.push('<div class="ok">no active conditions</div>');
-  else {
-    H.push("<table><tr><th>sev</th><th>category</th><th>resource</th><th>condition</th><th>owner</th><th>remediation</th></tr>");
-    for (const i of issues) H.push('<tr><td class="' + (i.sev === "err" ? "bad" : "warn") + '">' + esc(i.sev) + "</td><td>" + esc(i.category || "") + "</td><td>" + esc(i.resource || "") + "</td><td>" + esc(String(i.title || i.detail || "").slice(0, 140)) + "</td><td>" + esc(i.owner || "") + '</td><td class="sub">' + esc(String(typeof i.remediation === "string" ? i.remediation : i.remediation ? JSON.stringify(i.remediation) : "").slice(0, 120)) + "</td></tr>");
-    H.push("</table>");
-  }
-  const ig = st.integration || {};
-  // DRIFT-FAILCLOSED-1 (issue #1301 residual): a FAILED integration read must not
-  // coalesce to 0. driftBad == null means "no readable drift signal"; every consumer
-  // below then treats it as FAIL-CLOSED (head 0), never as perfect headroom.
-  const driftBad = ig.drift ? ((ig.drift.ghost || 0) + (ig.drift.unregistered || 0) + (ig.drift.unversioned || 0)) : null;
-  const sched = st.scheduled || [];
-  const noRun = sched.filter(function(x) {
-    return x.status === "NO-RUN";
-  });
-  const schedErr = sched.filter(function(x) {
-    return x.status === "ERR";
-  });
-  const badProbes = (st.probes || []).filter(function(p) {
-    return !p.ok;
-  });
-  let auditMismatch = [];
-  try {
-    // LIVE-AUDIT-DRIFT-ONLY-1 (2026-09-30): match=0 also covers classified non-drift rows
-    // (NOT_DEPLOYED repo dirs, NOT_A_WORKER, CRON_ONLY workers with no HTTP surface), which
-    // rendered as "30 version mismatches" with empty live/registry columns. Drift = a live,
-    // probed worker whose version differs.
-    auditMismatch = await d1all(env.AUDIT, "SELECT worker, live_version, registry_before, probed_at FROM worker_live_audit WHERE match=0 AND COALESCE(note,'') NOT IN ('NOT_DEPLOYED','NOT_A_WORKER','CRON_ONLY') LIMIT 30") || [];
-  } catch (e) {
-  }
-  H.push('<div class="sub" style="margin-top:6px">drift: ghost ' + (ig.drift && ig.drift.ghost || 0) + " &middot; unregistered " + (ig.drift && ig.drift.unregistered || 0) + " &middot; unversioned " + (ig.drift && ig.drift.unversioned || 0) + " &middot; islands " + (ig.islands || []).length + " &middot; sched NO-RUN " + noRun.length + " &middot; sched ERR " + schedErr.length + " &middot; failed probes " + badProbes.length + " &middot; live-vs-registry version mismatches " + auditMismatch.length + "</div>");
-  if (noRun.length) H.push('<div class="warn" style="margin-top:4px">NO-RUN scheduled workers: ' + esc(noRun.map(function(x) {
-    return x.name;
-  }).join(", ")) + "</div>");
-  if (badProbes.length) H.push('<div class="warn" style="margin-top:4px">failed probes: ' + esc(badProbes.map(function(x) {
-    return x.name + "(" + x.status + ")";
-  }).join(", ")) + "</div>");
-  if (auditMismatch.length) {
-    H.push('<table style="margin-top:6px"><tr><th>worker</th><th>live</th><th>registry</th><th>probed</th></tr>');
-    for (const m of auditMismatch) H.push("<tr><td>" + esc(m.worker) + "</td><td>" + esc(m.live_version || "") + "</td><td>" + esc(m.registry_before || "") + '</td><td class="sub">' + esc(String(m.probed_at || "").slice(0, 10)) + "</td></tr>");
-    H.push("</table>");
-  }
-  H.push("</div>");
-  let qu = null, gwf = null, vq = [], dl = null, pr = null, sv = null, er = null;
-  try {
-    // PANEL6-MEDIATED-COUNT-1 issue #1486 - reuse panel 4 mediated count.  An unfiltered
-    // COUNT(*) here displayed 105 already-remediated rows as UNREMEDIATED.
-    qu = (typeof _elq === "number") ? _elq : null;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COALESCE(SUM(count),0) AS total, COALESCE(SUM(CASE WHEN ts >= ((strftime('%s','now')-86400)*1000) THEN count ELSE 0 END),0) AS d24, MAX(ts) AS latest FROM ai_gateway_failures");
-    gwf = r && r.length ? r[0] : null;
-  } catch (e) {
-  }
-  try {
-    vq = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS n FROM version_queue GROUP BY status ORDER BY n DESC") || [];
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > (strftime('%s','now')*1000)");
-    dl = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_parse_failures WHERE status IN ('open','handoff')");
-    pr = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM email_send_violations WHERE COALESCE(resolved,0)=0");
-    sv = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM dead_links WHERE resolved_at IS NULL");
-    er = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  H.push('<div class="panel"><h2>6 &middot; UNREMEDIATED REGISTERS</h2><table><tr><th>register</th><th>count</th><th>meaning</th></tr>');
-  H.push('<tr><td>email_loop_quarantine (open)</td><td class="' + (qu > 0 ? "bad" : "ok") + '">' + (qu != null ? qu : "?") + "</td><td>self-ingested email loops not yet processed/archived/spam</td></tr>");
-  // GOVERNANCE-METRIC-DEFINITION-VERIFY-1: an all-time event total is monotonic and can never
-  // clear; the register shows the 24h window (alerting lives in the live gw_failures audit).
-  H.push('<tr><td>ai_gateway_failures (24h)</td><td class="' + (gwf && Number(gwf.d24) >= 25 ? "warn" : "ok") + '">' + (gwf ? Number(gwf.d24).toLocaleString() : "?") + "</td><td>gateway error events, event-plane (not drainable); all-time " + (gwf ? Number(gwf.total).toLocaleString() : "?") + ", latest " + (gwf && gwf.latest ? new Date(Number(gwf.latest)).toISOString().slice(0, 16) : "?") + "</td></tr>");
-  H.push("<tr><td>version_queue</td><td>" + esc(vq.map(function(x) {
-    return x.status + ":" + x.n;
-  }).join(", ") || "0") + "</td><td>paper revision publishes waiting on Zenodo/PDF/KG</td></tr>");
-  H.push('<tr><td>deploy_locks (active)</td><td class="' + (dl > 0 ? "warn" : "ok") + '">' + (dl != null ? dl : "?") + "</td><td>held deploy locks (immortal-lock risk)</td></tr>");
-  H.push("<tr><td>email_parse_failures (open)</td><td>" + (pr != null ? pr : "?") + "</td><td>inbound mail the parser could not read</td></tr>");
-  H.push("<tr><td>email_send_violations (unresolved)</td><td>" + (sv != null ? sv : "?") + "</td><td>outbound-send policy violations</td></tr>");
-  H.push("<tr><td>dead_links (open)</td><td>" + (er != null ? er : "?") + "</td><td>checked links still failing</td></tr>");
-  let oq = null;
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM outreach_queue WHERE status NOT IN ('sent','skipped','cancelled','rejected') AND status NOT LIKE 'skipped%'");
-    oq = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  H.push('<tr><td>outreach_queue (open)</td><td class="' + (oq > 0 && !(_oqDrain > 0) ? "bad" : "ok") + '">' + (oq != null ? oq : "?") + "</td><td>outreach rows not yet sent/skipped" + (_oqDrain > 0 && oq > 0 ? " &middot; draining (" + _oqDrain + " sent in 26h, 8/day cap)" : "") + "</td></tr>");
-  H.push("</table></div>");
-  let em = null, subs = null, zenodoN = null;
-  try {
-    const r = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS n FROM emails GROUP BY status");
-    const m = {};
-    for (const x of r) m[x.status] = x.n;
-    em = m;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END) AS s FROM subscribers");
-    subs = r && r.length ? r[0] : null;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n FROM papers WHERE zenodo_doi IS NOT NULL AND status='published'");
-    zenodoN = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  // MONEY-MATH-GROSS-1: burn = gateway-metered 30d AI spend (never the credit-netted amount_due).
-  const burn = trigSpend;
-  const monthly = burn;
-  const cpr = monthly != null && rep30 > 0 ? monthly / rep30 : null;
-  H.push('<div class="panel"><h2>7 &middot; MONEY MATH (decision metrics)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push('<tr><td>Monthly burn (AI spend 30d, gateway-metered, all providers)</td><td class="' + (monthly == null ? "warn" : monthly >= 150 ? "bad" : monthly >= 110 ? "warn" : "ok") + '">' + (monthly != null ? "$" + monthly.toFixed(2) : '<span class="warn">n/a</span>') + "</td></tr>");
-  H.push('<tr><td>Revenue</td><td class="bad">$0.00 &mdash; no payment rail exists</td></tr>');
-  H.push("<tr><td>Subscribers (active)</td><td>" + (subs ? subs.s : "?") + "</td></tr>");
-  H.push("<tr><td>Email (sent / replied)</td><td>" + (em ? (em.sent || 0) + " sent &middot; " + (em.replied || 0) + " replied &middot; " + (em.sent ? Math.round(1e4 * (em.replied || 0) / em.sent) / 100 + "% reply rate" : "?") : "?") + "</td></tr>");
-  H.push("<tr><td>Output (30d / all-time)</td><td>" + (rep30 != null ? rep30 : "?") + " full reports / " + (repTotal != null ? repTotal : "?") + " total &middot; " + (zenodoN != null ? zenodoN : "?") + " Zenodo DOIs</td></tr>");
-  H.push("<tr><td>Cost per full report (30d)</td><td>" + (cpr != null ? "$" + cpr.toFixed(2) : "?") + "</td></tr>");
-  H.push("<tr><td>Break-even at $10/mo subscriber</td><td>" + (monthly != null ? Math.ceil(monthly / 10) + " paying subscribers" : "?") + "</td></tr>");
-  H.push("<tr><td>Pageviews 30d vs prior 30d (registry gate definition)</td><td>" + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : '<span class="warn">n/a</span>') + ' <span class="sub">(context: vs frozen baseline 5,610 ' + (growth != null ? (growth >= 0 ? "+" : "") + growth + "%" : "n/a") + "; day-over-day snapshot " + (snapMoM != null ? (snapMoM >= 0 ? "+" : "") + snapMoM + "%" : "n/a") + ")</span></td></tr>");
-  H.push("</table>");
-  // The impressions gate follows metric_registry.impressions_growth_30d (prior-window MoM, RATIFIED
-  // 2026-09-27); the frozen-baseline comparison is shown for context only.
-  let verdict = "NO JUSTIFICATION YET", vcls = "bad";
-  if (trueMoM != null && trueMoM >= 30 && rep30 != null && rep30 >= 2) {
-    verdict = "GATES ON TRACK";
-    vcls = "ok";
-  } else if (rep30 != null && rep30 >= 2) {
-    verdict = "PARTIAL \u2014 reports gate met, impressions gate " + (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "% of +30% prior-window MoM" : "unmeasured");
-    vcls = "warn";
-  }
-  H.push('<div style="margin-top:6px"><b class="' + vcls + '" style="font-size:16px">ROI VERDICT: ' + verdict + '</b> <span class="sub">&mdash; at current cost ($' + (monthly != null ? monthly.toFixed(0) : "?") + "/mo) and zero revenue, the 2026-10-25 phase-1 retirement fires unless the +30% impressions gate passes or the gates are revised by owner.</span></div>");
-  H.push("</div>");
-  const probes = st.probes || [];
-  const probeOk = probes.filter(function(p) {
-    return p.ok;
-  }).length;
-  // 9. SURVIVAL METERS (metric_registry + leading->lagging survival model; WS-SURVIVAL 2026-09-26)
-  let mr = [];
-  try {
-    mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, target, owner, warning_band, kill_band, last_value, last_refreshed, refresh_cadence FROM metric_registry ORDER BY kind DESC, layer, metric");
-  } catch (e) {
-  }
-  let subsTotal = null;
-  try {
-    const rs = await d1all(env.AUDIT, "SELECT SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END) AS s FROM subscribers");
-    subsTotal = rs && rs.length ? Number(rs[0].s || 0) : null;
-  } catch (e) {
-  }
-  const wc = (st.fleet && st.fleet.workers) || null;
-  const c01 = function(x) { return Math.max(0, Math.min(1, x)); };
-  // STALE-GATE-FAILCLOSED-1 (#1301, mitigates #1411): a metric whose last_refreshed
-  // exceeds its declared refresh_cadence is UNKNOWN, not passing. Unknown is scored
-  // worst-case below, never silently dropped.
-  const cadenceMs = function(c) {
-    const s = String(c == null ? "" : c).trim().toLowerCase();
-    if (!s) return null;
-    if (s === "daily") return 24 * 60 * 60 * 1e3;
-    if (s === "hourly") return 60 * 60 * 1e3;
-    if (s === "weekly") return 7 * 24 * 60 * 60 * 1e3;
-    const every = s.match(/^\*\/(\d+)/);
-    if (every) return Math.max(1, parseInt(every[1], 10)) * 60 * 1e3;
-    if (/^\d+ \* \* \* \*$/.test(s)) return parseInt(s, 10) * 60 * 60 * 1e3;
-    return null;
-  };
-  const staleOf = function(mm) {
-    if (!mm) return true;
-    if (mm.last_refreshed == null) return true;
-    const base = cadenceMs(mm.refresh_cadence);
-    if (base == null) return true;
-    const t = Date.parse(String(mm.last_refreshed).replace(" ", "T"));
-    if (isNaN(t)) return true;
-    return Date.now() - t > 2 * base + 5 * 60 * 1e3;
-  };
-  const staleN = (mr || []).filter(function(x) { return staleOf(x); }).length;
-  const regVal = function(name) {
-    const mm = (mr || []).filter(function(x) { return x.metric === name; })[0];
-    if (!mm || mm.last_value == null) return null;
-    if (staleOf(mm)) return null;
-    const n = Number(String(mm.last_value).replace(/[^0-9.]/g, ""));
-    return isNaN(n) ? null : n;
-  };
-  const waiCost = regVal("workers_ai_cost_30d_usd");
-  const costUsd = regVal("cost_usd_30d");
-  const gateRows = [
-    { m: "impressions_growth_30d", live: (trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a"), head: trueMoM != null ? c01(trueMoM / 30) : null },
-    { m: "full_reports_live_30d", live: String(rep30 != null ? rep30 : "n/a"), head: rep30 != null ? c01(rep30 / 2) : null },
-    { m: "subscribers_growth_monthly", live: (subsTotal != null ? subsTotal + " total" : "n/a"), head: subsTotal != null ? c01(subsTotal / 10) : null },
-    { m: "worker_count", live: String(wc != null ? wc : "n/a"), head: wc != null ? c01((57 - wc) / 29) : null },
-    { m: "workers_ai_cost_30d_usd", live: (waiCost != null ? "$" + waiCost.toFixed(2) + "/30d" : (aiN != null ? aiN.toLocaleString() + " neurons" : "n/a")), head: waiCost != null ? c01((15.03 - waiCost) / (15.03 - 7.5)) : (aiN != null ? c01((1500000 - aiN) / 800000) : null) },
-    { m: "drift_total", live: driftBad == null ? "n/a" : String(driftBad), head: driftBad == null ? 0 : c01(1 - driftBad) }
-  ];
-  const gateW = { impressions_growth_30d: 0.45, subscribers_growth_monthly: 0.20, full_reports_live_30d: 0.15, workers_ai_cost_30d_usd: 0.10, worker_count: 0.05, drift_total: 0.05 };
-  // GATE-EVAL-METRIC-STALENESS-FAILOPEN-1 (issue #1301): a gate with NO readable value
-  // was SKIPPED, dropping its weight from wsum, so MISSING DATA RAISED the reported
-  // headroom. A null gate is now counted as head 0: absent evidence is not health.
-  let wnum = 0, wsum = 0, nullGates = 0;
-  gateRows.forEach(function(x) {
-    const w = gateW[x.m] != null ? gateW[x.m] : 0.1;
-    const rmm = (mr || []).filter(function(y) { return y.metric === x.m; })[0];
-    if (staleOf(rmm)) { wsum += w; return; }
-    if (typeof x.head === "number") { wnum += w * x.head; wsum += w; }
-    else { nullGates += 1; wsum += w; }
-  });
-  const surv = wsum > 0 ? wnum / wsum : null;
-  const costEff = costUsd != null ? c01((250 - costUsd) / (250 - 100)) : 0.5;
-  const extImpact = surv != null ? surv * costEff : null;
-  H.push('<div class="panel"><h2>9 &middot; SURVIVAL METERS &mdash; registry + leading&rarr;lagging model</h2>');
-  H.push('<div class="sub">' + mr.length + ' registry metrics (' + staleN + ' STALE beyond cadence) (lagging kill-gates + leading indicators) &middot; headroom = mean gate progress (0% = baseline/kill-zone, 100% = target) &middot; graded objective = min(SAI, survival) per objectives.id=2 v2 (ratified 2026-09-26, external_impact 0.10) &middot; owner + disposition actor per metric</div>');
-  H.push('<table><tr><th>kind</th><th>metric</th><th>layer</th><th>live</th><th>headroom</th><th>target</th><th>warn / kill</th><th>owner</th></tr>');
-  for (const gg of gateRows) {
-    const mm = mr.filter(function(x) { return x.metric === gg.m; })[0] || {};
-    H.push('<tr><td>' + esc(mm.kind || "") + '</td><td>' + esc(gg.m) + '</td><td class="sub">' + esc(mm.layer || "") + '</td><td>' + esc(gg.live) + '</td><td>' + (gg.head == null ? "?" : Math.round(gg.head * 100) + "%") + '</td><td class="sub">' + esc(String(mm.target || "").slice(0, 44)) + '</td><td class="sub">' + esc(String(mm.warning_band || "") + " / " + String(mm.kill_band || "")).slice(0, 40) + '</td><td class="sub">' + esc(mm.owner || "") + '</td></tr>');
-  }
-  H.push("</table>");
-  H.push('<div style="margin-top:6px"><b class="' + (surv != null && surv >= 0.5 ? "warn" : "bad") + '" style="font-size:15px">SURVIVAL HEADROOM: ' + (surv != null ? Math.round(surv * 100) + "%" : "n/a") + " (weighted, x cost-eff " + (costEff != null ? Math.round(costEff * 100) + "%" : "n/a") + " = SAI external_impact " + (extImpact != null ? extImpact.toFixed(3) : "n/a") + '</b> <span class="sub">&mdash; the gap to the kill zone; drives the SAI external_impact term. Registry + causal edges in qnfo-audit (metric_registry + survival_model).</span></div></div>');
-  try {
+    const mr = await d1all(env.AUDIT, "SELECT metric, layer, kind, last_value, last_refreshed, refresh_cadence FROM metric_registry");
+    const c01 = function(x) {
+      return Math.max(0, Math.min(1, x));
+    };
+    const cadenceMs = function(c) {
+      const s = String(c == null ? "" : c).trim().toLowerCase();
+      if (!s) return null;
+      if (s === "daily") return 24 * 36e5;
+      if (s === "hourly") return 36e5;
+      if (s === "weekly") return 7 * 24 * 36e5;
+      const every = s.match(/^\*\/(\d+)/);
+      if (every) return Math.max(1, parseInt(every[1], 10)) * 6e4;
+      if (/^\d+ \* \* \* \*$/.test(s)) return parseInt(s, 10) * 36e5;
+      return null;
+    };
+    const staleOf = function(mm) {
+      if (!mm || mm.last_refreshed == null) return true;
+      const base = cadenceMs(mm.refresh_cadence);
+      if (base == null) return true;
+      const t = Date.parse(String(mm.last_refreshed).replace(" ", "T"));
+      return isNaN(t) || Date.now() - t > 2 * base + 5 * 6e4;
+    };
+    const regVal = function(name) {
+      const mm = mr.filter(function(x) {
+        return x.metric === name;
+      })[0];
+      if (!mm || mm.last_value == null || staleOf(mm)) return null;
+      const n = Number(String(mm.last_value).replace(/[^0-9.]/g, ""));
+      return isNaN(n) ? null : n;
+    };
+    const waiCost = regVal("workers_ai_cost_30d_usd");
+    const costUsd = regVal("cost_usd_30d");
+    const wc = st && st.fleet && st.fleet.workers || null;
+    const drift = st && st.integration && st.integration.drift;
+    const driftBad = drift ? (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0) : null;
+    const gateRows = [
+      { m: "impressions_growth_30d", live: trueMoM != null ? (trueMoM >= 0 ? "+" : "") + trueMoM + "%" : "n/a", head: trueMoM != null ? c01(trueMoM / 30) : null },
+      { m: "full_reports_live_30d", live: String(rep30 != null ? rep30 : "n/a"), head: rep30 != null ? c01(rep30 / 2) : null },
+      { m: "subscribers_growth_monthly", live: subsTotal != null ? subsTotal + " total" : "n/a", head: subsTotal != null ? c01(subsTotal / 10) : null },
+      { m: "worker_count", live: String(wc != null ? wc : "n/a"), head: wc != null ? c01((57 - wc) / 29) : null },
+      { m: "workers_ai_cost_30d_usd", live: waiCost != null ? "$" + waiCost.toFixed(2) + "/30d" : aiN != null ? aiN.toLocaleString() + " neurons" : "n/a", head: waiCost != null ? c01((15.03 - waiCost) / (15.03 - 7.5)) : aiN != null ? c01((15e5 - aiN) / 8e5) : null },
+      { m: "drift_total", live: driftBad == null ? "n/a" : String(driftBad), head: driftBad == null ? 0 : c01(1 - driftBad) }
+    ];
+    const gateW = { impressions_growth_30d: 0.45, subscribers_growth_monthly: 0.2, full_reports_live_30d: 0.15, workers_ai_cost_30d_usd: 0.1, worker_count: 0.05, drift_total: 0.05 };
+    let wnum = 0, wsum = 0, nullGates = 0;
+    gateRows.forEach(function(x) {
+      const w = gateW[x.m] != null ? gateW[x.m] : 0.1;
+      const rmm = mr.filter(function(y) {
+        return y.metric === x.m;
+      })[0];
+      wsum += w;
+      if (staleOf(rmm)) return;
+      if (typeof x.head === "number") wnum += w * x.head;
+      else nullGates += 1;
+    });
+    surv = wsum > 0 ? wnum / wsum : null;
+    const costEff = costUsd != null ? c01((250 - costUsd) / (250 - 100)) : 0.5;
+    const extImpact = surv != null ? surv * costEff : null;
     await env.AUDIT.prepare("INSERT INTO survival_state (id, ts, survival_score, graded_score, gates_json, note) VALUES (1, datetime('now'), ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, survival_score=excluded.survival_score, graded_score=excluded.graded_score, gates_json=excluded.gates_json").bind(surv, extImpact, JSON.stringify(gateRows), "weighted gate headroom x cost-efficiency = SAI external_impact (objectives.id=2 v2); FAIL-CLOSED #1301 null_gates=" + nullGates).run();
   } catch (e) {
   }
-  H.push('<div class="panel"><h2>8 &middot; COLLAPSED GREENS (not a failure &mdash; one line only)</h2><div class="collapsed">' + probeOk + "/" + probes.length + " probes ok &middot; " + (st.fleet ? st.fleet.workers : "?") + " workers live &middot; " + (st.totals ? st.totals.req24 : "?") + " req/24h &middot; " + (st.totals ? st.totals.err24 : "?") + " err/24h &middot; drift total " + (driftBad == null ? "n/a" : String(driftBad)) + ((st.recovered_workers || []).length ? " &middot; recovered (errors earlier in 24h, fixed by a later deploy): " + esc(st.recovered_workers.map(function(w) {
-    return w.name + "(" + w.errors + ")";
-  }).join(", ")) : "") + ' &middot; full green detail at <a href="/ops">/ops</a></div></div>');
-  H.push("</body></html>");
-  return H.join("");
+  const snap = { at: new Date(now).toISOString(), spend30: gwSpend30, spend_cap: gwLimit != null ? gwLimit : SPEND_CAP_USD, pageviews30: rumTotal, pageviews_mom: trueMoM, reports30: rep30, subscribers: subsTotal, subscribers_new30: new30, publish_events30: pubEvents, gates_met: gatesMet, gates_total: gatesTotal, survival: surv };
+  await loopMetaSet(env, "human_gov_snapshot", JSON.stringify(snap));
+  return snap;
 }
-__name(redHtml, "redHtml");
-async function roiHtml(env) {
-  const H = [];
-  const now = Date.now();
-  const since = /* @__PURE__ */ __name2(function(h) {
-    return new Date(now - h * 36e5).toISOString();
-  }, "since");
-  const dead = (/* @__PURE__ */ new Date("2026-10-25T00:00:00Z")).getTime();
-  const daysLeft = Math.max(0, Math.ceil((dead - now) / 864e5));
-  H.push('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QUNIVERSE ROI</title><style>body{font-family:system-ui;background:#0b0e14;color:#e6e6e6;margin:0;padding:24px}h1{font-size:22px}h2{font-size:16px;margin:18px 0 6px;color:#9fc}table{border-collapse:collapse;width:100%;max-width:900px}td,th{border:1px solid #2a2f3a;padding:4px 8px;font-size:13px;text-align:right}th{background:#141a24;color:#9fb}td:first-child,th:first-child{text-align:left}.ok{color:#6f6}.warn{color:#fa3}.bad{color:#f66}.sub{color:#9aa;font-size:12px}.panel{background:#11151d;border:1px solid #2a2f3a;border-radius:8px;padding:14px;margin:10px 0;max-width:940px}</style></head><body>');
-  H.push("<h1>QUNIVERSE ROI \u2014 cost vs output</h1>");
-  H.push('<div class="sub"><a href="/ops" style="color:#9af">operational detail (uptime/errors) \u2192 /ops</a></div>');
-  H.push('<div class="sub">generated ' + (/* @__PURE__ */ new Date()).toISOString() + ' \xB7 deadline 2026-10-25 \xB7 <b class="' + (daysLeft <= 7 ? "bad" : daysLeft <= 14 ? "warn" : "ok") + '">' + daysLeft + " days left</b></div>");
-  let opsN = null;
+async function humanView(env, st, ctx) {
+  const [h, meta] = await Promise.all([collectHumanActions(env), loopMetaGet(env)]);
+  let gov = null;
   try {
-    const or_ = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind='ops_ai_tool' AND ts >= ?", [since(720)]);
-    opsN = or_ && or_.length ? or_[0].n : null;
+    gov = meta.human_gov_snapshot ? JSON.parse(meta.human_gov_snapshot) : null;
   } catch (e) {
   }
-  let gw30 = null, topModels = [];
-  try {
-    const d = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { aiGatewayRequestsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + since(720) + '", datetime_leq: "' + since(0) + '" }) { count dimensions { model } } } } }');
-    const rows = (((d || {}).viewer || {}).accounts || [{}])[0].aiGatewayRequestsAdaptiveGroups || [];
-    const byModel = {};
-    for (const r of rows) {
-      const m = r.dimensions.model || "unknown";
-      byModel[m] = (byModel[m] || 0) + r.count;
-      gw30 = (gw30 || 0) + r.count;
+  const govAge = gov ? Date.now() - Date.parse(gov.at) : null;
+  if ((!gov || govAge > HUMAN_SNAPSHOT_MAX_AGE_MS) && ctx && ctx.waitUntil) ctx.waitUntil(governanceSnapshot(env, st).catch(function() {
+  }));
+  const stateAgeMin = st && st.generated_at ? (Date.now() - Date.parse(st.generated_at)) / 6e4 : null;
+  const issues = st && st.issues || [];
+  const errs = issues.filter(function(i) {
+    return i.sev === "err";
+  });
+  const stuck = errs.filter(function(i) {
+    const a = ageDaysOf(i.first_seen);
+    return a != null && a * 1440 > LOOP_SLA_ERR_MIN;
+  });
+  const probes = st && st.probes || [];
+  const drift = st && st.integration && st.integration.drift;
+  const daysToGate = Math.ceil((Date.parse(REVIEW_GATE_DATE + "T00:00:00Z") - Date.now()) / DAY_MS);
+  const dataStale = stateAgeMin == null || stateAgeMin > 60;
+  let verdict = "CLEAR";
+  if (h.items.length) verdict = "ACTION";
+  else if (h.blind.length || dataStale) verdict = "UNCONFIRMED";
+  return {
+    schema_version: "fleet-human/v1",
+    worker: NAME,
+    version: VERSION,
+    generated_at: new Date().toISOString(),
+    verdict,
+    count: h.items.length,
+    urgent: h.items.filter(function(i) {
+      return i.sev === "urgent";
+    }).length,
+    items: h.items,
+    blind: h.blind,
+    money: gov ? { spend30: gov.spend30, spend_cap: gov.spend_cap, pageviews30: gov.pageviews30, pageviews_mom: gov.pageviews_mom, subscribers: gov.subscribers, subscribers_new30: gov.subscribers_new30, reports30: gov.reports30, gates_met: gov.gates_met, gates_total: gov.gates_total, measured_at: gov.at } : null,
+    review_gate: { date: REVIEW_GATE_DATE, days: daysToGate },
+    system: {
+      verdict: st && st.verdict || "UNKNOWN",
+      state_age_min: stateAgeMin != null ? Math.round(stateAgeMin) : null,
+      workers: st && st.fleet ? st.fleet.workers : null,
+      probes_ok: probes.filter(function(p) {
+        return p.ok;
+      }).length,
+      probes_total: probes.length,
+      errors: errs.length,
+      warnings: issues.length - errs.length,
+      drift: drift ? (drift.ghost || 0) + (drift.unregistered || 0) + (drift.unversioned || 0) : null,
+      stuck: stuck.map(function(i) {
+        return { title: String(i.title || "").slice(0, 120), resource: i.resource || "", since: i.first_seen || null };
+      })
     }
-    topModels = Object.keys(byModel).map(function(m) {
-      return { m, n: byModel[m] };
-    }).sort(function(a, b) {
-      return b.n - a.n;
-    }).slice(0, 5);
-  } catch (e) {
-  }
-  let cap = null;
-  try {
-    const cr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/ai-gateway/gateways/default", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
-    const cj = await cr.json();
-    const v = cj.result || {};
-    cap = v.spend_limits && v.spend_limits.rules ? v.spend_limits.rules[0].limit : null;
-  } catch (e) {
-  }
-  let workersN = null;
-  try {
-    const wr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
-    const wj = await wr.json();
-    workersN = (wj.result || []).length;
-  } catch (e) {
-  }
-  let aiN = null;
-  try {
-    const g = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { workersInvocationsAdaptive(limit: 10000, filter: { datetime_geq: "' + since(720) + '", datetime_leq: "' + since(0) + '" }) { sum { neurons } dimensions { usageModel } } } } }');
-    const rows = (((g || {}).viewer || {}).accounts || [{}])[0].workersInvocationsAdaptive || [];
-    aiN = rows.reduce(function(a, x) {
-      return a + (x.sum && x.sum.neurons || 0);
-    }, 0);
-    if (aiN === 0) aiN = null;
-  } catch (e) {
-  }
-  H.push('<div class="panel"><h2>COST (AI traffic, 30d)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push("<tr><td>AI Gateway requests (30d)</td><td>" + (gw30 != null ? gw30.toLocaleString() : '<span class="warn">n/a</span>') + "</td></tr>");
-  for (const m of topModels) H.push('<tr><td class="sub">  model ' + esc(m.m) + "</td><td>" + m.n.toLocaleString() + "</td></tr>");
-  H.push("<tr><td>Gateway spend cap (30d sliding)</td><td>" + (cap != null ? cap : "?") + "</td></tr>");
-  H.push("<tr><td>Workers AI est cost 30d</td><td>$15.03 snapshot 2026-09-25 (infra_analytics; live Workers AI dataset not exposed via current token scope)</td></tr>");
-  H.push("<tr><td>Agent operations (30d) \u2014 time proxy</td><td>" + (opsN != null ? opsN.toLocaleString() : "?") + " ops_ai_tool events</td></tr>");
-  H.push("<tr><td>Live workers</td><td>" + (workersN != null ? workersN : "?") + " (was 57 on 2026-09-25)</td></tr>");
-  H.push("</table></div>");
-  let daily = [];
-  let wordsTotal = null, zenodoN = null;
-  try {
-    daily = await d1all(env.LIVING, "SELECT date(created_at) AS d, COUNT(*) AS n, COALESCE(SUM(length(body_md)),0) AS w FROM papers WHERE status='published' AND length(body_md) >= 5000 AND created_at >= date('now','-30 day') GROUP BY d ORDER BY d") || [];
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.LIVING, "SELECT COALESCE(SUM(length(body_md)),0) AS w FROM papers WHERE status='published' AND length(body_md) >= 5000");
-    wordsTotal = r && r.length ? r[0].w : null;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.LIVING, "SELECT COUNT(*) AS n FROM papers WHERE zenodo_doi IS NOT NULL AND status='published'");
-    zenodoN = r && r.length ? r[0].n : null;
-  } catch (e) {
-  }
-  const d30n = daily.reduce(function(s, x) {
-    return s + x.n;
-  }, 0);
-  const d30w = daily.reduce(function(s, x) {
-    return s + x.w;
-  }, 0);
-  H.push('<div class="panel"><h2>OUTPUT (last 30d)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push("<tr><td>Full reports published (30d)</td><td>" + d30n + "</td></tr>");
-  H.push("<tr><td>Chars published (30d)</td><td>" + d30w.toLocaleString() + "</td></tr>");
-  H.push("<tr><td>Full reports total (all time)</td><td>451</td></tr>");
-  H.push("<tr><td>Chars total (all time)</td><td>" + (wordsTotal != null ? wordsTotal.toLocaleString() : "?") + "</td></tr>");
-  H.push("<tr><td>Papers with Zenodo DOI</td><td>" + (zenodoN != null ? zenodoN : "?") + "</td></tr>");
-  H.push("</table>");
-  if (daily.length) {
-    H.push('<table style="margin-top:8px"><tr><th>date</th><th>reports</th><th>chars</th></tr>');
-    for (const d of daily.slice(-30)) H.push("<tr><td>" + esc(d.d) + "</td><td>" + d.n + "</td><td>" + d.w.toLocaleString() + "</td></tr>");
-    H.push("</table>");
-  }
-  H.push("</div>");
-  let rum = null;
-  try {
-    const d = await roiGf(env, 'query { viewer { accounts(filter: { accountTag: "edb167b78c9fb901ea5bca3ce58ccc4b" }) { rumPageloadEventsAdaptiveGroups(limit: 10000, filter: { datetime_geq: "' + since(720) + '", datetime_leq: "' + since(0) + '" }) { count dimensions { date siteTag } } } } }');
-    const rows = (((d || {}).viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups || [];
-    const byDay = {}, byTag = {};
-    for (const r of rows) {
-      const dt = r.dimensions.date || "?";
-      const t = r.dimensions.siteTag || "?";
-      byDay[dt] = (byDay[dt] || 0) + r.count;
-      byTag[t] = (byTag[t] || 0) + r.count;
-    }
-    rum = { total: rows.reduce(function(s, x) {
-      return s + x.count;
-    }, 0), byDay, tags: Object.keys(byTag).length };
-  } catch (e) {
-    rum = { err: String(e && e.message || e).slice(0, 60) };
-  }
-  H.push('<div class="panel"><h2>IMPRESSIONS (Web Analytics, 30d)</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push("<tr><td>Pageviews (30d)</td><td>" + (rum && rum.total != null ? rum.total.toLocaleString() : '<span class="warn">' + esc(rum && rum.err || "n/a") + "</span>") + "</td></tr>");
-  H.push("<tr><td>Baseline (2026-08-27..09-25)</td><td>5,610</td></tr>");
-  if (rum && rum.total != null) {
-    const g = Math.round(1e4 * (rum.total - 5610) / 5610) / 100;
-    H.push('<tr><td>Growth vs baseline</td><td class="' + (g >= 30 ? "ok" : g > 0 ? "warn" : "bad") + '">' + (g >= 0 ? "+" : "") + g + "% (gate: +30%)</td></tr>");
-  }
-  H.push("<tr><td>Active sites (30d)</td><td>" + (rum ? rum.tags : "?") + " of 12</td></tr>");
-  H.push("</table>");
-  if (rum && rum.byDay) {
-    const keys = Object.keys(rum.byDay).sort();
-    H.push('<table style="margin-top:8px"><tr><th>date</th><th>pageviews</th></tr>');
-    for (const k of keys) H.push("<tr><td>" + k + "</td><td>" + rum.byDay[k] + "</td></tr>");
-    H.push("</table>");
-  }
-  H.push("</div>");
-  let em = null, subs = null;
-  try {
-    const r = await d1all(env.AUDIT, "SELECT status, COUNT(*) AS n FROM emails GROUP BY status");
-    const st = {};
-    for (const x of r) st[x.status] = x.n;
-    em = st;
-  } catch (e) {
-  }
-  try {
-    const r = await d1all(env.AUDIT, "SELECT COUNT(*) AS n, SUM(CASE WHEN status='subscribed' THEN 1 ELSE 0 END) AS s FROM subscribers");
-    subs = r && r.length ? r[0] : null;
-  } catch (e) {
-  }
-  H.push('<div class="panel"><h2>REACH</h2><table><tr><th>metric</th><th>value</th></tr>');
-  H.push("<tr><td>Email sent (total)</td><td>" + (em ? em.sent || 0 : "?") + "</td></tr>");
-  H.push("<tr><td>Email replied</td><td>" + (em ? em.replied || 0 : "?") + "</td></tr>");
-  H.push("<tr><td>Reply rate</td><td>" + (em && em.sent ? Math.round(1e4 * (em.replied || 0) / em.sent) / 100 + "%" : "?") + "</td></tr>");
-  H.push("<tr><td>Subscribers</td><td>" + (subs ? subs.s : "?") + "</td></tr>");
-  H.push("</table></div>");
-  let th = [];
-  try {
-    th = await d1all(env.AUDIT, "SELECT metric, target, state FROM impact_thresholds ORDER BY metric");
-  } catch (e) {
-  }
-  H.push('<div class="panel"><h2>SURVIVAL GATES</h2><table><tr><th>gate</th><th>target</th><th>state</th></tr>');
-  for (const t of th) {
-    const cls = t.state === "MET" ? "ok" : t.state === "MEASURED" ? "warn" : "bad";
-    H.push("<tr><td>" + esc(t.metric) + '</td><td class="sub">' + esc(t.target) + '</td><td class="' + cls + '">' + esc(t.state) + "</td></tr>");
-  }
-  H.push('</table><div class="sub">4 armed shutdown rows \xB7 17 open work-queue rows \xB7 self-destruct is mechanical if gates fail by 2026-10-25</div></div>');
-  let verdict = "NO JUSTIFICATION YET", vcls = "bad";
-  if (rum && rum.total != null && rum.total >= 7293 && d30n >= 2) {
-    verdict = "GATES ON TRACK";
-    vcls = "ok";
-  } else if (rum && rum.total != null && rum.total >= 5610 || d30n >= 1) {
-    verdict = "PARTIAL \u2014 WATCH";
-    vcls = "warn";
-  }
-  H.push('<div class="panel"><h2>ROI VERDICT</h2><div class="' + vcls + '" style="font-size:18px;font-weight:700">' + verdict + '</div><div class="sub">cost: gateway requests + $150 cap \xB7 output: full reports + chars \xB7 impressions: pageviews +30% gate \xB7 reach: subscribers + replies \xB7 refresh for fresh numbers</div></div>');
-  let snap = [];
-  try {
-    snap = await d1all(env.AUDIT, "SELECT * FROM roi_daily_snapshots ORDER BY d DESC LIMIT 40") || [];
-  } catch (e) {
-  }
-  if (snap.length >= 2) {
-    H.push('<div class="panel"><h2>MONTH-OVER-MONTH (daily snapshots)</h2><table><tr><th>metric</th><th>now</th><th>' + esc(snap[snap.length - 1].d || "30d ago") + "</th><th>delta</th></tr>");
-    const last = snap[0], prev = snap[snap.length - 1];
-    const rows = [["Full reports (total)", last.papers, prev.papers], ["Chars published (total)", last.chars, prev.chars], ["Subscribers", last.subscribers, prev.subscribers], ["Gateway req (30d rolling)", last.gateway_req, prev.gateway_req], ["Pageviews (30d rolling)", last.pageviews, prev.pageviews]];
-    for (const r of rows) {
-      const d0 = Number(r[1]) || 0, d1 = Number(r[2]) || 0, dd = d0 - d1;
-      H.push("<tr><td>" + esc(r[0]) + "</td><td>" + d0.toLocaleString() + "</td><td>" + d1.toLocaleString() + '</td><td class="' + (dd >= 0 ? "ok" : "bad") + '">' + (dd >= 0 ? "+" : "") + dd.toLocaleString() + "</td></tr>");
-    }
-    H.push('</table><div class="sub">snapshots persisted daily by the dashboard cron; earliest ' + esc(snap[snap.length - 1].d) + "</div></div>");
-  } else {
-    H.push('<div class="panel"><h2>MONTH-OVER-MONTH</h2><div class="sub">awaiting snapshots \u2014 first persisted today, MoM deltas appear tomorrow onward</div></div>');
-  }
-  H.push("</body></html>");
-  return H.join("");
+  };
 }
-__name(roiHtml, "roiHtml");
-__name2(roiHtml, "roiHtml");
+function humanHtml(v) {
+  const o = [];
+  const e = esc;
+  const money = v.money;
+  const sysBad = v.system.stuck.length > 0;
+  const banner = v.verdict === "ACTION" ? { cls: "act", big: v.count + (v.count === 1 ? " thing needs" : " things need") + " you", sub: v.urgent ? v.urgent + " urgent" : "Nothing else. Everything else is handled." } : v.verdict === "CLEAR" ? { cls: "ok", big: "Nothing needs you", sub: "Every queue that can wait on a human is empty. The system is handling the rest." } : { cls: "unk", big: "Can't confirm", sub: v.blind.length ? "Could not read: " + v.blind.join("; ") : "System data is " + v.system.state_age_min + " min old, so an all-clear would be a guess." };
+  o.push('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="300"><title>Fleet: your queue</title><style>');
+  o.push(":root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--mute:#5b6472;--line:#e2e5ea;--ok:#157f3b;--okbg:#e7f6ec;--act:#b42318;--actbg:#fdecea;--unk:#8a5a00;--unkbg:#fff4d6;--warn:#8a5a00;--link:#0b5cd5}");
+  o.push("@media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--ink:#e8eaee;--mute:#9aa3b1;--line:#2a303a;--ok:#4cc17a;--okbg:#10241a;--act:#ff8a80;--actbg:#2d1513;--unk:#f0c05a;--unkbg:#2a2210;--warn:#f0c05a;--link:#7db1ff}}");
+  o.push("*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}main{max-width:720px;margin:0 auto;padding:20px 16px 48px}");
+  o.push(".top{display:flex;justify-content:space-between;align-items:baseline;color:var(--mute);font-size:13px;margin-bottom:12px}.top b{color:var(--ink);font-size:14px}");
+  o.push(".banner{border-radius:14px;padding:20px 18px;margin-bottom:18px}.banner.act{background:var(--actbg);border:1px solid var(--act)}.banner.ok{background:var(--okbg);border:1px solid var(--ok)}.banner.unk{background:var(--unkbg);border:1px solid var(--unk)}");
+  o.push(".banner h1{margin:0;font-size:30px;line-height:1.15}.banner.act h1{color:var(--act)}.banner.ok h1{color:var(--ok)}.banner.unk h1{color:var(--unk)}.banner p{margin:6px 0 0;color:var(--mute)}");
+  o.push(".card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}.card.urgent{border-left:5px solid var(--act)}.card h2{margin:0 0 4px;font-size:17px}");
+  o.push(".meta{font-size:13px;color:var(--mute)}.row{margin-top:8px;font-size:14px}.row b{display:inline-block;min-width:92px;color:var(--mute);font-weight:600}.do{display:inline-block;margin-top:10px;padding:8px 14px;border-radius:8px;background:var(--link);color:#fff;text-decoration:none;font-weight:600;font-size:14px}");
+  o.push(".tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--line);color:var(--mute);margin-right:6px}.tag.u{background:var(--act);color:#fff}");
+  o.push("h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:24px 0 8px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}.stat .n{font-size:22px;font-weight:700}.stat .l{font-size:12px;color:var(--mute)}.bad{color:var(--act)}.good{color:var(--ok)}.amber{color:var(--warn)}");
+  o.push("details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-top:10px}summary{cursor:pointer;color:var(--mute);font-size:14px}details ul{margin:8px 0 0;padding-left:18px;font-size:14px}a{color:var(--link)}footer{margin-top:28px;font-size:12px;color:var(--mute)}");
+  o.push("</style></head><body><main>");
+  o.push('<div class="top"><b>Fleet &middot; your queue</b><span>' + e(String(v.generated_at).slice(11, 16)) + " UTC</span></div>");
+  o.push('<section class="banner ' + banner.cls + '"><h1>' + e(banner.big) + "</h1><p>" + e(banner.sub) + "</p></section>");
+  if (v.verdict === "ACTION" && v.blind.length) o.push('<div class="card meta">Also could not read: ' + e(v.blind.join("; ")) + "</div>");
+  for (const it of v.items) {
+    o.push('<article class="card' + (it.sev === "urgent" ? " urgent" : "") + '"><h2>' + (it.sev === "urgent" ? '<span class="tag u">urgent</span>' : "") + e(it.title) + "</h2>");
+    o.push('<div class="meta">' + e(it.source) + (it.due ? " &middot; due " + e(it.due) : "") + (it.age != null ? " &middot; waiting " + e(agoText(it.age).replace(" ago", "")) : "") + "</div>");
+    if (it.why) o.push('<div class="row"><b>Why you</b>' + e(it.why) + "</div>");
+    if (it.fallback) o.push('<div class="row"><b>If you wait</b>' + e(it.fallback) + "</div>");
+    if (it.action) o.push('<div class="row"><b>To do</b>' + e(it.action) + "</div>");
+    if (/^https:\/\//.test(it.url || "")) o.push('<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>');
+    o.push("</article>");
+  }
+  o.push("<h3>Money and clock</h3><div class=\"grid\">");
+  const sp = money && money.spend30 != null ? money.spend30 : null;
+  const cap = money ? money.spend_cap : SPEND_CAP_USD;
+  const spCls = sp == null ? "amber" : sp >= cap ? "bad" : sp >= cap * 0.75 ? "amber" : "good";
+  o.push('<div class="stat"><div class="n ' + spCls + '">' + (sp != null ? "$" + sp.toFixed(0) : "n/a") + '</div><div class="l">AI spend, 30d (cap $' + e(cap) + ")</div></div>");
+  o.push('<div class="stat"><div class="n">' + e(v.review_gate.days) + 'd</div><div class="l">to the ' + e(v.review_gate.date) + " review gate</div></div>");
+  const mom = money ? money.pageviews_mom : null;
+  o.push('<div class="stat"><div class="n ' + (mom == null ? "amber" : mom >= 30 ? "good" : "amber") + '">' + (mom != null ? (mom >= 0 ? "+" : "") + mom + "%" : "n/a") + '</div><div class="l">pageviews vs prior 30d (gate +30%)</div></div>');
+  o.push('<div class="stat"><div class="n">' + e(money && money.subscribers != null ? money.subscribers : "n/a") + '</div><div class="l">subscribers' + (money && money.subscribers_new30 != null ? " (+" + e(money.subscribers_new30) + " in 30d)" : "") + "</div></div>");
+  o.push("</div>");
+  if (!money) o.push('<div class="meta" style="margin-top:8px">Money figures are being measured; refresh in a minute.</div>');
+  const s = v.system;
+  o.push("<details" + (sysBad ? " open" : "") + "><summary>" + (sysBad ? "<b class=\"bad\">System has " + s.stuck.length + " error" + (s.stuck.length > 1 ? "s" : "") + " unresolved past its 2h SLA</b>" : "System is handling the rest") + " &middot; " + e(s.verdict) + " &middot; " + s.errors + " err / " + s.warnings + " warn &middot; " + s.probes_ok + "/" + s.probes_total + " probes ok</summary>");
+  if (s.stuck.length) {
+    o.push("<ul>");
+    for (const i of s.stuck) o.push("<li>" + e(i.title) + (i.resource ? ' <span class="meta">(' + e(i.resource) + ")</span>" : "") + "</li>");
+    o.push("</ul>");
+  }
+  o.push('<div class="meta" style="margin-top:8px">Red flags, drift, queues and retries are worked by the issue loop and qnfo-fleet-control and are not your job unless they appear above.' + (s.drift ? " Drift: " + e(s.drift) + "." : "") + "</div></details>");
+  o.push("<footer>v" + e(v.version) + " &middot; system state " + (s.state_age_min != null ? e(s.state_age_min) + " min old" : "unknown") + ' &middot; <a href="/api/human">JSON</a></footer>');
+  o.push("</main></body></html>");
+  return o.join("");
+}
 export {
   worker_default as default
 };
