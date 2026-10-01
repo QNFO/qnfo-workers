@@ -52,7 +52,7 @@ queued --read--> propose --> verify --(fail, attempts<3)--> propose  (NEXT model
 - **NOT verified**: anything against live Cloudflare (this worker, `qnfo-code-agent` and Workers AI model output are not deployed /
   not exercised), real LLM output quality, and CPU-limit enforcement on the real platform.
 - **Not built**: GitHub webhook wake-up (CI/review events resuming a task), multi-file edits, a verifier that RUNS tests, the
-  `qnfo-code-agent` deploy. Deploy also needs the `OPS_ROUTER_AUTH_KEY` repo secret fixed (issue 212).
+  `qnfo-code-agent` deploy. Deploy must use a wrangler workflow (this worker has `[[containers]]` + a Durable Object; the canonical `/content` PUT destroys those bindings, see `qnfo-containers-pilot/RETRIGGER-4-DO-BINDING-LOST.md`), and `qnfo-code-agent` needs a GitHub credential with PR-write.
 
 ## Routes (v0.1.1, unchanged)
 | Route | Method | Auth | Effect |

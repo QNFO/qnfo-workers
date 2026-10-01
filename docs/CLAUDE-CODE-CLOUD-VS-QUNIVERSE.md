@@ -71,7 +71,7 @@ The essential property: **the session is disposable; the state and the triggers 
 | Durable state outside compute (D1/R2/KV) | **Live** | `docs/FLEET-NODE-MAP.md`; `qnfo-audit` D1 |
 | Scheduled resume (cron) | **Live** | 50 schedules; `scripts/cron_rate_guard.py` enforces the 10-minute floor |
 | Event wake-up (workflow_run chains, ci-watchdog) | **Live** | `fleet-autodeploy.yml`, `ci-watchdog.yml` |
-| Auto-deploy of repo-ahead workers | **Live but BLOCKED** | the canonical route returns 401 (`OPS_ROUTER_AUTH_KEY`, issue 212): no worker can deploy until the secret is fixed |
+| Auto-deploy of repo-ahead workers | **Live** | `canonical-deploy` has succeeded on every run since 08:09Z on 2026-10-01 (runs 94-100); live `qnfo-ops`, `qnfo-research-exec` (0.9.28), `qnfo-cloud-ops`, `personal-api` match the repo. An earlier 401 (`OPS_ROUTER_AUTH_KEY`, issue 212) was resolved. |
 | **Cloudflare Containers** | **Partial.** Live: `qnfo-containers-pilot` (shell, python, node22, git; `public_exec:false`, token-gated). Self-audit verdict AMBER: end-to-end exec not verifiable without the pilot token. `qnfo-code-orchestrator`'s `PyContainer` is **not deployed**. | autoaudit: pilot `SYNC 1.0.8`, orchestrator `NOT_DEPLOYED`; `ci-status/container-config-selfheal-cron.json` |
 | **Dynamic Workers** | **Partial.** Live only as a sandboxed `run_code` tool in `qnfo-ai` and `qnfo-ops` (`[[worker_loaders]]`, `globalOutbound:null`). Not used for per-task workers, verification, or Dynamic Workflows. | `qnfo-ai/worker.js` `env.LOADER.load`; `qnfo-ai`, `qnfo-ops` wrangler.toml |
 | Autonomous **research** agent (durable, alarm-driven) | **Live** | `qnfo-agent-orchestrator` `SYNC 1.1.0`, Durable Object `AgentTask` |
@@ -87,8 +87,9 @@ The essential property: **the session is disposable; the state and the triggers 
 - **Local `workerd` did not enforce `limits.cpuMs`**: a top-level `while(true){}` hung. Whether the real platform enforces it is **unmeasured**, which is why the loop's JS verifier ships off (`JS_VERIFY=off`) behind a probe route (`POST /v1/probe/dynamic-cpu`).
 
 ### What full implementation still requires (in order)
-1. Fix the `OPS_ROUTER_AUTH_KEY` secret (owner) so anything can deploy.
-2. Deploy `qnfo-code-agent` and `qnfo-code-orchestrator` through the canonical path, supply `ORCH_TOKEN`/`CODE_AGENT_KEY`, then run one real task end to end and record the result. Until then every claim about the loop is "passes offline", not "works".
+1. ~~Fix the deploy secret~~ done (see the Auto-deploy row).
+2. Deploy `qnfo-code-agent` and `qnfo-code-orchestrator`. **Not through the canonical `/content` path**: the orchestrator declares `[[containers]]` and a Durable Object, and this repo's own history (`qnfo-containers-pilot/RETRIGGER-4-DO-BINDING-LOST.md`, issues 1485/1487/1493) shows a `/content` PUT destroys container and DO bindings. It needs a wrangler-based workflow like `deploy-containers-pilot.yml`; do not list it in `deploy-targets.txt`. Then run one real task end to end and record the result. Until then every claim about the loop is "passes offline", not "works".
+   - Credentials: `ORCH_TOKEN` and `CODE_AGENT_KEY` can be generated and set by the pipeline. The one dependency a session cannot mint is a **GitHub credential with PR-write** for `qnfo-code-agent` (a GitHub App or PAT). Until one exists the loop must park tasks as `needs_human` rather than block anything else.
 3. Run the CPU-limit probe on the real platform; only then consider `JS_VERIFY=dynamic`.
 4. Add a GitHub webhook wake-up and a test-running verifier (the Container's shell/git-clone is the natural place).
 5. Point the drain routine (#174) at a cron or `workflow_run` trigger instead of a human-started session.
