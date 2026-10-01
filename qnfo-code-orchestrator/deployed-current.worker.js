@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.2.1";
+var VERSION = "0.2.2";
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -212,6 +212,26 @@ async function codeAgent(env, route, body) {
   if (d && d.status == null) d.status = r.status;
   return d;
 }
+// KEYLESS-READ-1 (2026-10-01): the loop's read step needed CODE_AGENT_KEY, which is deliberately unset, so every task died at
+// "read" before reaching a model. The repositories are public, so with no key (or when the code-agent refuses) read the file from
+// GitHub's public raw endpoint instead. Owner is pinned to QNFO, repo and path are validated, and the size cap is the caller's.
+const RAW_OWNER = "QNFO";
+async function readRepoFile(env, repo, path, maxChars) {
+  if (env.CODE_AGENT_KEY) {
+    const r = await codeAgent(env, "/v1/repo/read", { repo: repo, path: path, maxChars: maxChars });
+    if (r && r.ok === true) return r;
+  }
+  if (!/^[A-Za-z0-9._-]{1,100}$/.test(String(repo)) || String(repo).indexOf("..") >= 0) return { ok: false, status: 400, error: "repo name refused for raw read" };
+  const p = String(path || "");
+  if (!p || p.charAt(0) === "/" || p.indexOf("..") >= 0 || /[\u0000-\u001f?#]/.test(p) || p.length > 300) return { ok: false, status: 400, error: "path refused for raw read" };
+  try {
+    const url = "https://raw.githubusercontent.com/" + RAW_OWNER + "/" + repo + "/main/" + p.split("/").map(encodeURIComponent).join("/");
+    const rr = await fetch(url, { headers: { "User-Agent": WORKER } });
+    if (!rr.ok) return { ok: false, status: rr.status, error: "raw read HTTP " + rr.status };
+    const text = await rr.text();
+    return { ok: true, status: 200, content: text.slice(0, maxChars), truncated: text.length > maxChars, size: text.length, sha: null, via: "raw" };
+  } catch (e) { return { ok: false, status: 0, error: "raw read failed: " + String((e && e.message) || e).slice(0, 120) }; }
+}
 function b64utf8(str) {
   const bytes = new TextEncoder().encode(str);
   let bin = "";
@@ -317,7 +337,7 @@ async function stepTask(env, task) {
   };
   try {
     if (task.step === "read") {
-      const r = await codeAgent(env, "/v1/repo/read", { repo: task.repo, path: task.path, maxChars: MAX_FILE_CHARS + 1 });
+      const r = await readRepoFile(env, task.repo, task.path, MAX_FILE_CHARS + 1);
       if (!r || r.ok !== true) return await fail("read failed: " + ((r && r.error) || "unknown") + " (HTTP " + (r && r.status) + ")", false);
       if (r.truncated || String(r.content || "").length > MAX_FILE_CHARS) return await fail("file larger than " + MAX_FILE_CHARS + " chars; the loop edits whole files only", true);
       await save(env, task.id, { ctx: JSON.stringify({ base: r.content, sha: r.sha }), step: "propose", lease_until: null });

@@ -285,7 +285,7 @@ function fakeLoader(spinMs) {
   const { env } = envWith([]);
   const r = await worker.fetch(new Request("https://x/health"), env);
   const h = await r.json();
-  check("/health reports 0.2.1 + task-loop + the ladder + js_verify off by default", h.version === "0.2.1" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
+  check("/health reports 0.2.2 + task-loop + the ladder + js_verify off by default", h.version === "0.2.2" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
 }
 
 // ===== 12. scheduled() drives the loop with no HTTP request =====
@@ -326,6 +326,46 @@ function fakeLoader(spinMs) {
   fs.writeFileSync(path.join(dir, "n.md"), "a\nb"); fs.writeFileSync(path.join(dir, "p.diff"), JSON.parse(row.ctx).patch);
   const ap = spawnSync("git", ["apply", "p.diff"], { cwd: dir, encoding: "utf8" });
   check("pull mode: patch for a file without trailing newline applies", row.status === "ready_to_publish" && ap.status === 0, { st: row.status, err: ap.stderr });
+}
+
+// ---- KEYLESS-READ-1: with no CODE_AGENT_KEY the read step uses the public raw endpoint ----
+{
+  const seen = [];
+  const raw = { "qnfo-workers/docs/x.md": "hello\nworld\n" };
+  globalThis.fetch = async (url, init) => {
+    const u = String(url); seen.push(u);
+    const m = u.match(/^https:\/\/raw\.githubusercontent\.com\/QNFO\/([^/]+)\/main\/(.+)$/);
+    if (m) { const f = raw[m[1] + "/" + decodeURIComponent(m[2])]; return f == null ? new Response("nope", { status: 404 }) : new Response(f, { status: 200 }); }
+    return new Response(JSON.stringify({ error: "unexpected " + u }), { status: 500 });
+  };
+  const { env } = envWith(["```file\nhello\nworld\nmore\n```"], { PR_PUBLISH_MODE: "pull", CODE_AGENT_KEY: undefined });
+  const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "docs/x.md", goal: "append a line" });
+  const t1 = await call(env, "POST", "/v1/tick", {});
+  const row = await env.AUDIT_DB.prepare("SELECT status, step, ctx, last_error FROM code_tasks WHERE id=?").bind(enq.body.id).first();
+  check("keyless read: the task completes from a raw GitHub read with no CODE_AGENT_KEY", row.status === "ready_to_publish" && JSON.parse(row.ctx).base === "hello\nworld\n", { st: row.status, step: row.step, err: row.last_error });
+  check("keyless read: only the pinned QNFO raw URL was fetched", seen.length === 1 && seen[0] === "https://raw.githubusercontent.com/QNFO/qnfo-workers/main/docs/x.md", seen);
+
+  // a missing file is a recorded failure, not a crash
+  const enq2 = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "docs/missing.md", goal: "g" });
+  await call(env, "POST", "/v1/tick", {});
+  const r2 = await env.AUDIT_DB.prepare("SELECT status, last_error FROM code_tasks WHERE id=?").bind(enq2.body.id).first();
+  check("keyless read: a 404 is a recorded read failure", /read failed/.test(r2.last_error || "") && /404/.test(r2.last_error || ""), r2);
+
+  // traversal / odd paths are refused before any network call
+  seen.length = 0;
+  for (const [repo, p2] of [["qnfo-workers", "../etc/passwd"], ["qnfo-workers", "/abs"], ["..", "x"], ["a/b", "x"], ["qnfo-workers", "a?b=1"]]) {
+    const enq3 = await call(env, "POST", "/v1/tasks", { repo, path: p2, goal: "g" });
+    if (enq3.body && enq3.body.id) await call(env, "POST", "/v1/tick", {});
+  }
+  check("keyless read: traversal, absolute, nested-repo and query paths never reach the network", seen.length === 0, seen);
+
+  // with a key, the code-agent is still preferred
+  const calls = installCodeAgent({ "qnfo-workers/docs/x.md": "from-agent\n" });
+  const { env: env2 } = envWith(["```file\nfrom-agent\nx\n```"], { PR_PUBLISH_MODE: "pull", CODE_AGENT_KEY: "k" });
+  const e4 = await call(env2, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "docs/x.md", goal: "g" });
+  await call(env2, "POST", "/v1/tick", {});
+  const r4 = await env2.AUDIT_DB.prepare("SELECT ctx FROM code_tasks WHERE id=?").bind(e4.body.id).first();
+  check("with CODE_AGENT_KEY the code-agent read is still used first", calls.read.length === 1 && JSON.parse(r4.ctx).base === "from-agent\n", calls.read);
 }
 
 console.log("\n" + failures + " failure(s)");
