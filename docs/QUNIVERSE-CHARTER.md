@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.3, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification, same day). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.4, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: watchmaker index, same day). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -107,7 +107,7 @@ roadmap item names one. The keys are the contract: `scripts/charter-guard.py` fa
 | Pillar | Name | Objective | Graded by | Serves (roadmap artifact types) |
 |---|---|---|---|---|
 | `core` | Smallest verified core | mission | worker_count, drift_total, probe_coverage_pct, deploy_freshness_h, cron_compliance, guard_rcs | core, gate |
-| `autonomy` | Human as override, never dependency | objective-function | open_agent_issues, fleet_context_tokens, autonomy composite | autonomy, governance, observability |
+| `autonomy` | Human as override, never dependency | objective-function | open_agent_issues, fleet_context_tokens, watchmaker_index, autonomy composite | autonomy, governance, observability |
 | `research` | Research that is read and cited | return-on-spend | publications_30d, full_reports_live_30d, zenodo_versions_per_flagship, indexed_surface | research-product |
 | `reach` | Credible reach | return-on-spend | distribution_posts_30d, subscribers_growth_monthly, pageviews_30d, referral_30d, external_impact_per_dollar, zenodo_views_total | impact, web |
 | `cost` | Cost that returns | cost-ceiling | cost_usd_30d, workers_ai_cost_30d_usd, gateway_cap_30d_usd, cost_per_successful_task_by_class, workers_ai_attribution_coverage_pct | cost |
@@ -243,7 +243,7 @@ loop closed at every stage. Each item below is a direction with a measurable end
 | Repository worker dirs | 105 (60 undeployed) | n/a | n/a | live dirs only; the rest under `archive/` with a manifest |
 | AI spend, 30 days | about $450 | $150 unified | $110 | <= $60 gateway, every provider inside its class cap, 100% attributed |
 | Open agent issues | 20 | n/a | <= 10 | <= 10, all with a machine-executable remediation contract |
-| Watchmaker index (recurring ops needing a human) | not published | n/a | 0 | published daily, 0 |
+| Watchmaker index (recurring ops needing a human or an outside agent session) | published hourly as `metric_registry.watchmaker_index` (`GET /watchmaker`) | n/a | 0 | 0 |
 
 ## 7. Roadmap
 

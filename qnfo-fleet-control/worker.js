@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.74-loop-watch";
+var VERSION = "0.4.75-watchmaker-index";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2924,7 +2924,7 @@ __name(activitySnapshotDaily, "activitySnapshotDaily");
 //              GitHub Contents API (the same GITHUB_TOKEN write path LAND-CODE-FIX-1 proved), at most once per UTC day
 //              and only when the block changed. A doc without both markers is never written (nothing to anchor to).
 // The pure functions take no env and touch no I/O, so qnfo-fleet-control/charter.test.mjs exercises them offline.
-var CHARTER_VERSION = "1.0.3";
+var CHARTER_VERSION = "1.0.4";
 // CHARTER-ON-CLOUDFLARE-1 (#1727, owner directive 2026-10-01: all data on Cloudflare): every tick also writes the
 // whole charter (hand-written sections + the live block) to R2 qnfo-canonical under this key, so the document is
 // readable from Cloudflare storage (GET /charter/full.md) when GitHub or any agent session is not.
@@ -2935,7 +2935,7 @@ var CHARTER_BEGIN = "<!-- CHARTER-LIVE:BEGIN -->";
 var CHARTER_END = "<!-- CHARTER-LIVE:END -->";
 var CHARTER_PILLARS = [
   { key: "core", name: "Smallest verified core", objective: "mission", metrics: ["worker_count", "drift_total", "probe_coverage_pct", "deploy_freshness_h", "cron_compliance", "guard_rcs"], types: ["core", "gate"] },
-  { key: "autonomy", name: "Human as override, never dependency", objective: "objective-function", metrics: ["open_agent_issues", "fleet_context_tokens"], types: ["autonomy", "governance", "observability"] },
+  { key: "autonomy", name: "Human as override, never dependency", objective: "objective-function", metrics: ["open_agent_issues", "fleet_context_tokens", "watchmaker_index"], types: ["autonomy", "governance", "observability"] },
   { key: "research", name: "Research that is read and cited", objective: "return-on-spend", metrics: ["publications_30d", "full_reports_live_30d", "zenodo_versions_per_flagship", "indexed_surface"], types: ["research-product"] },
   { key: "reach", name: "Credible reach", objective: "return-on-spend", metrics: ["distribution_posts_30d", "subscribers_growth_monthly", "pageviews_30d", "referral_30d", "external_impact_per_dollar", "zenodo_views_total"], types: ["impact", "web"] },
   { key: "cost", name: "Cost that returns", objective: "cost-ceiling", metrics: ["cost_usd_30d", "workers_ai_cost_30d_usd", "gateway_cap_30d_usd", "cost_per_successful_task_by_class", "workers_ai_attribution_coverage_pct"], types: ["cost"] },
@@ -3791,6 +3791,9 @@ var worker_default2 = {
       var cmd = cm.customMetadata || {};
       return new Response(await cm.text(), { status: 200, headers: { "Content-Type": "text/markdown; charset=utf-8", "X-Charter-Version": String(cmd.charter_version || ""), "X-Charter-Mirrored-At": String(cmd.ts || "") } });
     }
+    if (p === "/watchmaker" && request.method === "GET") {
+      return json(await watchmakerIndexTick(env));
+    }
     if (p === "/charter/tick" && request.method === "POST") {
       var chh = request.headers.get("Authorization") || "";
       var cht = chh.indexOf("Bearer ") === 0 ? chh.slice(7) : chh;
@@ -3870,6 +3873,7 @@ var worker_default2 = {
     ctx.waitUntil(portfolioSyncIfStale(env).catch((e) => console.error("portfolioSync error:", e && e.message || e)));
     ctx.waitUntil(loopWatch(env).catch((e) => console.error("loopWatch error:", e && e.message || e)));
     ctx.waitUntil(remediationContractsTick(env).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
+    ctx.waitUntil(watchmakerIndexTick(env).catch((e) => console.error("watchmakerIndexTick error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -4038,6 +4042,49 @@ __name(aiAttributionCoverage, "aiAttributionCoverage");
 // guarantees: literal read-only SELECT only, expected and observed both taken from the probe (never invented), pass only
 // when both are non-empty and equal, and trusted transport d1-query only.
 var __RT_WRITE_KW = ["insert ", "update ", "delete ", "drop ", "alter ", "create ", "attach ", "detach ", "pragma ", "replace ", "vacuum", "reindex"];
+// WATCHMAKER-INDEX-1 (2026-10-01, RM-WATCHMAKER-INDEX-1, agent_issues #1726 CODE-LOOP-ON-CLAUDE-1). Owner directive:
+// the fleet must not depend on continued agent-session usage. The charter's blue-sky footprint names a "watchmaker
+// index": the count of recurring operations that still need a human or an outside agent session. It was "not
+// published". This publishes it hourly as metric_registry.watchmaker_index (target 0), from three counts the fleet
+// can read itself:
+//   unverifiable_issues  open agent_issues with no active machine-executable remediation contract (someone outside
+//                        the fleet has to verify and close them)
+//   external_agent_tasks recurring tasks run by an outside agent scheduler, as declared in
+//                        ops_config.external_agent_recurring_tasks (the fleet cannot observe that scheduler, so the
+//                        number is a declaration; a missing or non-numeric row is reported as undeclared, never as 0)
+//   overdue_owner_actions open human_actions whose due date has passed
+// The index is their sum. It never invents a value: if a source cannot be read, nothing is written this hour.
+function watchmakerCompute(f) {
+  f = f || {};
+  var parts = { unverifiable_issues: Number(f.unverifiable_issues), external_agent_tasks: f.external_agent_tasks == null || f.external_agent_tasks === "" ? NaN : Number(f.external_agent_tasks), overdue_owner_actions: Number(f.overdue_owner_actions) };
+  var undeclared = isNaN(parts.external_agent_tasks);
+  if (isNaN(parts.unverifiable_issues) || isNaN(parts.overdue_owner_actions)) return { ok: false, parts: parts };
+  var total = parts.unverifiable_issues + parts.overdue_owner_actions + (undeclared ? 0 : parts.external_agent_tasks);
+  return { ok: true, index: total, undeclared: undeclared, parts: parts, detail: "unverifiable_issues=" + parts.unverifiable_issues + " external_agent_tasks=" + (undeclared ? "undeclared" : parts.external_agent_tasks) + " overdue_owner_actions=" + parts.overdue_owner_actions };
+}
+__name(watchmakerCompute, "watchmakerCompute");
+async function watchmakerIndexTick(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+  if (!db) return { ok: false, error: "no AUDIT binding" };
+  var f = {};
+  try {
+    var a = await db.prepare("SELECT COUNT(*) AS n FROM agent_issues a WHERE a.status='open' AND NOT EXISTS (SELECT 1 FROM remediation_contracts r WHERE r.issue_id=a.id AND r.status='active' AND r.verify_probe <> 'needs-machine-probe')").first();
+    f.unverifiable_issues = a ? a.n : null;
+    var h = await db.prepare("SELECT COUNT(*) AS n FROM human_actions WHERE status='open' AND due IS NOT NULL AND due <> '' AND date(due) < date('now')").first();
+    f.overdue_owner_actions = h ? h.n : null;
+    var e = await db.prepare("SELECT value FROM ops_config WHERE key='external_agent_recurring_tasks'").first();
+    f.external_agent_tasks = e ? e.value : null;
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err).slice(0, 160) };
+  }
+  var w = watchmakerCompute(f);
+  if (!w.ok) return { ok: false, error: "source unreadable", parts: w.parts };
+  var nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  await db.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, state) VALUES ('watchmaker_index','operational','leading','open agent_issues without an active machine-executable remediation contract + ops_config.external_agent_recurring_tasks + overdue open human_actions','qnfo-audit: agent_issues, remediation_contracts, ops_config, human_actions','unpublished before 2026-10-01','0','qnfo-fleet-control','qnfo-fleet-control','hourly','MEASURED')").run();
+  await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state=?3, source_of_truth=?4 WHERE metric='watchmaker_index'").bind(String(w.index), nowIso, w.undeclared ? "PARTIAL" : "MEASURED", "qnfo-audit: agent_issues, remediation_contracts, ops_config, human_actions (" + w.detail + ")").run();
+  return { ok: true, index: w.index, detail: w.detail };
+}
+__name(watchmakerIndexTick, "watchmakerIndexTick");
 async function remediationContractsTick(env) {
   var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
   if (!db) return { ok: false };
