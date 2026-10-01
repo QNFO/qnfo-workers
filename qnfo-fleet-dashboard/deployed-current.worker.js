@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.10.2-owner-respond";
+var VERSION = "1.11.0-owner-edit";
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2065,7 +2065,9 @@ async function handleRequest(request, env, ctx) {
   const owner = await ownerState(request, env);
   if (path.indexOf("/api/owner/") === 0) return await ownerRoutes(request, env, ctx, path, owner);
   // OWNER-PAGE-1 (2026-10-01): private owner page. Reconciled with OWNER-RESPOND-1: the owner cookie OR LOOP_TOKEN opens it.
-  if (path === "/owner" || path === "/owner/" || path.indexOf("/owner/doc/") === 0) return await ownerRoute(request, env, path, owner);
+  // OWNER-EDIT-1 (2026-10-01, CLOUDFLARE-ONLY-HOST-1): /owner/edit/<key> is the owner's editor for owner_docs, so the Identity
+  // doc is read AND changed on Cloudflare; its claude.ai copy is retired.
+  if (path === "/owner" || path === "/owner/" || path.indexOf("/owner/doc/") === 0 || path.indexOf("/owner/edit/") === 0) return await ownerRoute(request, env, path, owner);
   if (path === "/health") {
     return json({ ok: true, worker: NAME, version: VERSION, generated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
@@ -4564,9 +4566,50 @@ async function ownerDocSection(env, key) {
   const d = r[0];
   return "<article><h1>" + ownerEsc(d.title || d.key) + '</h1><p class="mut">owner_docs.' + ownerEsc(d.key) + " - updated " + ownerEsc(d.updated_at || "?") + (d.source ? " - source " + ownerEsc(d.source) : "") + "</p>" + ownerMarkdown(d.body_md || "") + "</article>";
 }
-// Returns a Response for /owner and /owner/doc/<key>, or null for every other path.
+// OWNER-EDIT-1: the owner edits owner_docs from the browser. The page CSP allows no script, so the editor is a plain form:
+// it opens with the owner cookie (OWNER_TOKEN, SameSite=Strict) plus a same-origin check, or with LOOP_TOKEN typed into the
+// form. A save is optimistic (if_updated_at must match, else nothing is written and the owner sees the newer version) and
+// never loses text: the version it replaces is kept as owner_docs '<key>--v<yyyymmddhhmmss>' (visibility 'history').
+// Archives and earlier versions are read-only.
+var OWNER_DOC_MAX = 2e5;
+function ownerDocEditable(key) {
+  return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(key) && key.indexOf("--v") < 0 && !/(^|-)archive(-|$)/.test(key);
+}
+function ownerSameOrigin(request) {
+  const sfs = request.headers.get("sec-fetch-site");
+  if (sfs) return sfs === "same-origin";
+  const o = request.headers.get("origin");
+  return !!o && o === new URL(request.url).origin;
+}
+async function ownerDocSave(env, key, body, ifUpdated) {
+  body = String(body == null ? "" : body).replace(/\r\n?/g, "\n");
+  if (!body.trim()) return { error: "An empty document was not saved." };
+  if (body.length > OWNER_DOC_MAX) return { error: "The document is over " + OWNER_DOC_MAX + " characters and was not saved." };
+  const cur = (await d1all(env.AUDIT, "SELECT key, title, body_md, updated_at FROM owner_docs WHERE key = ?", [key]))[0];
+  if (!cur) return { error: "No document " + key + "." };
+  if (String(ifUpdated || "") !== String(cur.updated_at || "")) return { conflict: true, current: cur };
+  if (cur.body_md === body) return { ok: true, unchanged: true };
+  const hkey = key.slice(0, 40) + "--v" + String(cur.updated_at || "").replace(/[^0-9]/g, "").slice(0, 14);
+  const now = new Date().toISOString();
+  const r = await env.AUDIT.batch([
+    env.AUDIT.prepare("INSERT OR IGNORE INTO owner_docs (key, title, body_md, source, visibility, updated_at) VALUES (?1, ?2, ?3, ?4, 'history', ?5)").bind(hkey, "Earlier version: " + (cur.title || key), cur.body_md, "owner_docs." + key + " as of " + cur.updated_at + ", replaced by the owner via the dashboard at " + now, cur.updated_at),
+    env.AUDIT.prepare("UPDATE owner_docs SET body_md = ?1, updated_at = datetime('now') WHERE key = ?2 AND updated_at = ?3").bind(body, key, cur.updated_at)
+  ]);
+  if (!(r && r[1] && r[1].meta && r[1].meta.changes)) return { conflict: true, current: cur };
+  try {
+    await ensureOwnerTables(env);
+    await env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note) VALUES (?1, 'edit', ?2)").bind("doc:" + key, "owner edited owner_docs." + key + "; previous version kept as " + hkey).run();
+  } catch (e) {
+  }
+  return { ok: true, history_key: hkey };
+}
+function ownerEditor(key, d, needToken, notice, draft) {
+  const text = draft != null ? draft : d.body_md || "";
+  return "<h1>Edit: " + ownerEsc(d.title || key) + '</h1><p class="mut">owner_docs.' + ownerEsc(key) + " - version of " + ownerEsc(d.updated_at || "?") + '. Saving keeps the version it replaces. <a href="/owner/doc/' + ownerEsc(key) + '">Cancel</a></p>' + (notice ? "<p><strong>" + notice + "</strong></p>" : "") + '<form method="post" action="/owner/edit/' + ownerEsc(key) + '"><input type="hidden" name="if_updated_at" value="' + ownerEsc(d.updated_at || "") + '"><textarea name="body_md" rows="32" style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem" required>\n' + ownerEsc(text) + "</textarea>" + (needToken ? '<p><input type="password" name="token" autocomplete="current-password" placeholder="Owner token (LOOP_TOKEN)" required></p>' : "") + '<p><button type="submit">Save</button></p></form>';
+}
+// Returns a Response for /owner, /owner/doc/<key> and /owner/edit/<key>, or null for every other path.
 async function ownerRoute(request, env, path, ownerCk) {
-  if (path !== "/owner" && path !== "/owner/" && path.indexOf("/owner/doc/") !== 0) return null;
+  if (path !== "/owner" && path !== "/owner/" && path.indexOf("/owner/doc/") !== 0 && path.indexOf("/owner/edit/") !== 0) return null;
   if (request.method !== "GET" && request.method !== "POST") return json({ error: "method not allowed" }, 405);
   let tok = "";
   const ah = request.headers.get("authorization") || "";
@@ -4574,10 +4617,12 @@ async function ownerRoute(request, env, path, ownerCk) {
   if (bm) tok = bm[1];
   else if (request.headers.get("x-loop-token")) tok = request.headers.get("x-loop-token");
   let fromForm = false;
+  let form = null;
   if (!tok && request.method === "POST") {
     try {
       if (/application\/x-www-form-urlencoded/i.test(request.headers.get("content-type") || "")) {
-        tok = new URLSearchParams((await request.text()).slice(0, 4096)).get("token") || "";
+        form = new URLSearchParams((await request.text()).slice(0, 2 * OWNER_DOC_MAX + 8192));
+        tok = form.get("token") || "";
         fromForm = true;
       }
     } catch (e) {
@@ -4594,6 +4639,31 @@ async function ownerRoute(request, env, path, ownerCk) {
   const fail = function(what, e) {
     return '<p class="mut">' + ownerEsc(what) + " could not be read: " + ownerEsc(reachErr(e)) + "</p>";
   };
+  if (path.indexOf("/owner/edit/") === 0) {
+    const key = path.slice("/owner/edit/".length);
+    if (!ownerDocEditable(key)) return ownerHtml("Read-only", "<p>This document is read-only: archives and earlier versions are never edited.</p>", 403);
+    let d = null;
+    try {
+      d = (await d1all(env.AUDIT, "SELECT key, title, body_md, updated_at FROM owner_docs WHERE key = ?", [key]))[0];
+    } catch (e) {
+      return ownerHtml("Owner document", fail("owner_docs." + key, e), 503);
+    }
+    if (!d) return ownerHtml("Not found", "<p>No document " + ownerEsc(key) + ".</p>", 404);
+    if (request.method === "POST" && form && form.has("body_md")) {
+      if (!viaToken && !ownerSameOrigin(request)) return ownerHtml("Refused", "<p>A save from another site was refused.</p>", 403);
+      let res;
+      try {
+        res = await ownerDocSave(env, key, form.get("body_md"), form.get("if_updated_at"));
+      } catch (e) {
+        res = { error: "The save failed: " + reachErr(e) };
+      }
+      if (res.conflict) return ownerHtml("Edit conflict", ownerEditor(key, res.current, !viaCookie, "This document changed since you opened it (now version " + ownerEsc(res.current.updated_at || "?") + "). Nothing was saved. Your text is below; the current version is linked above.", String(form.get("body_md") || "").replace(/\r\n?/g, "\n")), 409);
+      if (res.error) return ownerHtml("Not saved", ownerEditor(key, d, !viaCookie, ownerEsc(res.error), String(form.get("body_md") || "").replace(/\r\n?/g, "\n")), 400);
+      const sec = await ownerDocSection(env, key);
+      return ownerHtml("Saved - " + key, "<p><strong>" + (res.unchanged ? "No changes to save." : "Saved. The previous version is kept as " + ownerEsc(res.history_key) + ".") + '</strong> <a href="/owner">Owner page</a></p>' + (sec || ""));
+    }
+    return ownerHtml("Edit - " + key, ownerEditor(key, d, !viaCookie));
+  }
   if (path.indexOf("/owner/doc/") === 0) {
     const key = path.slice("/owner/doc/".length);
     if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(key)) return ownerHtml("Not found", "<p>Unknown document.</p>", 404);
@@ -4604,7 +4674,7 @@ async function ownerRoute(request, env, path, ownerCk) {
       return ownerHtml("Owner document", fail("owner_docs." + key, e), 503);
     }
     if (!sec) return ownerHtml("Not found", "<p>No document " + ownerEsc(key) + ".</p>", 404);
-    return ownerHtml("Owner - " + key, sec);
+    return ownerHtml("Owner - " + key, '<p class="mut"><a href="/owner">Owner page</a>' + (ownerDocEditable(key) ? ' - <a href="/owner/edit/' + ownerEsc(key) + '">Edit</a>' : " - read-only") + "</p>" + sec);
   }
   const parts = ["<h1>Owner</h1><p class=\"mut\">Private page (" + ownerEsc(NAME) + " v" + ownerEsc(VERSION) + "). Data: qnfo-audit human_actions, portfolio_runs, owner_docs.</p>"];
   try {
@@ -4624,8 +4694,29 @@ async function ownerRoute(request, env, path, ownerCk) {
     parts.push("<h2>Last 7 portfolio runs</h2>" + fail("portfolio_runs", e));
   }
   try {
+    const iw = (await d1all(env.AUDIT, "SELECT run_date, summary, needs_owner FROM portfolio_runs WHERE kind = 'identity-weekly' ORDER BY rowid DESC LIMIT 1"))[0];
+    const items = iw && iw.needs_owner ? String(iw.needs_owner).split("\n").filter(Boolean) : [];
+    parts.push("<h2>Identity review (weekly)</h2>" + (iw ? "<p>" + ownerEsc(iw.run_date) + ": " + ownerEsc(iw.summary) + "</p>" + (items.length ? "<ul>" + items.map(function(n) {
+      return "<li>" + ownerEsc(n) + "</li>";
+    }).join("") + "</ul>" : "<p>Nothing needs you.</p>") : '<p class="mut">No run yet. qnfo-cloud-ops writes one every Monday 07:30 Amsterdam (IDENTITY-WEEKLY-1).</p>'));
+  } catch (e) {
+    parts.push("<h2>Identity review (weekly)</h2>" + fail("portfolio_runs", e));
+  }
+  try {
+    const docs = await d1all(env.AUDIT, "SELECT key, title, updated_at, visibility FROM owner_docs ORDER BY key");
+    const cur = docs.filter(function(d) {
+      return d.visibility !== "history";
+    });
+    const hist = docs.length - cur.length;
+    parts.push("<h2>Documents</h2><ul>" + cur.map(function(d) {
+      return '<li><a href="/owner/doc/' + ownerEsc(d.key) + '">' + ownerEsc(d.title || d.key) + "</a> (" + ownerEsc(d.updated_at || "?") + ")" + (ownerDocEditable(d.key) ? ' - <a href="/owner/edit/' + ownerEsc(d.key) + '">edit</a>' : " - read-only") + "</li>";
+    }).join("") + "</ul>" + (hist ? '<p class="mut">' + hist + " earlier version(s) kept (owner_docs visibility 'history').</p>" : ""));
+  } catch (e) {
+    parts.push("<h2>Documents</h2>" + fail("owner_docs", e));
+  }
+  try {
     const sec = await ownerDocSection(env, "identity");
-    parts.push("<hr>" + (sec || "<p>No identity document (owner_docs.identity).</p>"));
+    parts.push("<hr>" + (sec ? '<p class="mut"><a href="/owner/edit/identity">Edit this document</a></p>' + sec : "<p>No identity document (owner_docs.identity).</p>"));
   } catch (e) {
     parts.push("<hr>" + fail("owner_docs.identity", e));
   }

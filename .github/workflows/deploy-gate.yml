@@ -102,3 +102,12 @@ jobs:
       # its offline suite (synthetic doc, stubbed APIs, recording D1) must stay green.
       - name: IDENTITY-WEEKLY-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/identity-weekly.test.mjs
+
+      # OWNER-EDIT-1: the owner edits owner_docs (the Identity doc) on fleet.qnfo.org. The suite drives the real fetch
+      # handler against an in-memory SQLite D1 (node:sqlite needs Node 22, so this last step switches runtime).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: OWNER-EDIT-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/owner-edit.test.mjs

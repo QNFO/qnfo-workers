@@ -14,7 +14,7 @@ Any run may improve this file through a pull request; the improvement is part of
 | What | Where | Who changes it |
 |---|---|---|
 | Strategy, identity rules, channels, scorecard, portfolio, targets | `docs/STRATEGY.md` | this procedure (PR) |
-| Profile copy, CV, opportunities, the owner's approvals and to-dos | D1 `qnfo-audit.owner_docs` (key `identity`, private) and `owner_actions`, served behind the owner's login | the owner; the Monday identity review; this procedure comments only |
+| Profile copy, CV, opportunities, the owner's approvals and to-dos | D1 `qnfo-audit.owner_docs` (key `identity`, private) and `owner_actions`, read at fleet.qnfo.org/owner and edited at /owner/edit/identity behind the owner's login (each save keeps the replaced version) | the owner; the Monday identity review reports, never edits |
 | Open work | D1 `qnfo-audit.agent_issues` (+ `issue_triage`) | everyone; close only with evidence |
 | Gates and metrics | D1 `impact_thresholds`, `metric_registry`, `objectives`, `shutdown_manifest` | this procedure, with a STRATEGY reference |
 | Run log | D1 `qnfo-audit.portfolio_runs` (row 1 = the 2026-10-01 baseline) | each run appends one row |
