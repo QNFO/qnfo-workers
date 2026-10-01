@@ -22,6 +22,9 @@ ACTIONS
   ai-neurons             Workers AI neurons by model for the last 24h and 7d (GraphQL).
   gateway-cost           AI Gateway requests and cost by model and provider for the last 7d (GraphQL).
   access-probe           Whether the token can read the Zero Trust organisation and Access apps.
+  r2-get PATH            Read one text object under qnfo-backups/ops-workspace/ (the qnfo-ops workspace), e.g. a draft
+                         that must be reviewed before publication (#1163). Read-only and prefix-restricted.
+  report                 ai-neurons + gateway-cost + gateway-logs + access-probe in one run.
 
 Every action prints one line `RESULT_JSON=<json>` so the job log is machine-readable.
 """
@@ -181,9 +184,27 @@ def access_probe(acct: str, token: str) -> int:
     return 0
 
 
+def r2_get(acct: str, token: str, path: str) -> int:
+    path = path.lstrip("/").replace("..", "")
+    if not path:
+        emit({"action": "r2-get", "ok": False, "error": "path required"})
+        return 2
+    key = "ops-workspace/" + path
+    req = urllib.request.Request(f"{API}/accounts/{acct}/r2/buckets/qnfo-backups/objects/" + urllib.request.quote(key, safe="/"),
+                                 headers={"Authorization": "Bearer " + token})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            body = r.read()
+    except urllib.error.HTTPError as e:
+        emit({"action": "r2-get", "ok": False, "key": key, "http": e.code})
+        return 1
+    emit({"action": "r2-get", "ok": True, "key": key, "bytes": len(body), "content": body.decode("utf-8", "replace")[:60000]})
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["delete-worker", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe"])
+    ap.add_argument("action", choices=["report", "r2-get", "delete-worker", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -195,6 +216,19 @@ def main() -> int:
             print("::error::delete-worker needs --target")
             return 2
         return delete_worker(a.target, acct, token)
+    if a.action == "r2-get":
+        return r2_get(acct, token, a.target)
+    if a.action == "report":
+        rc = 0
+        for fn in (lambda: ai_neurons(acct, token), lambda: gateway_cost(acct, token),
+                   lambda: gateway_logs(acct, token, a.gateway, a.model or None, max(1, min(a.pages, 40))),
+                   lambda: access_probe(acct, token)):
+            try:
+                rc = max(rc, fn())
+            except Exception as e:  # one failing probe must not hide the others
+                emit({"action": "report-part", "ok": False, "error": str(e)[:300]})
+                rc = 1
+        return rc
     if a.action == "gateway-logs":
         return gateway_logs(acct, token, a.gateway, a.model or None, max(1, min(a.pages, 40)))
     if a.action == "ai-neurons":
