@@ -2,7 +2,7 @@
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.19-wrangler-container-ledger";
+var VERSION = "1.3.20-capability-snapshot";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -307,8 +307,62 @@ async function scan(env) {
   if (fp.ok) { try { var dn2 = await env.FLEET_CONFIG.list({ prefix: DENY_PREFIX }); for (var z = 0; z < dn2.keys.length; z++) { await env.FLEET_CONFIG.delete(dn2.keys[z].name); } } catch (e) {} }
   return report;
 }
+// CAPABILITY-SNAPSHOT-1 (2026-10-01, charter gate C6, issue #1628): qnfo-ops /capability-audit measures the capability
+// contract (non-empty capabilities and limitations on /health) from capability_audit_snapshot, because a worker cannot
+// fetch a sibling *.workers.dev URL without the global_fetch_strictly_public flag (IN-WORKER-PROBE-BLOCKED-1). The only
+// writer was scripts/capability-feed.py, which read a key from a desktop client database, so the snapshot went 11 days
+// stale and the gate read "violated". This worker has the flag and already reads live /health for registry versions,
+// so it refreshes the snapshot itself: every live worker in /fleet, at most once per CAP_EVERY_MS, from the cron.
+// A probe that fails leaves that worker's previous row untouched (its ts then shows how old it is); rows for workers no
+// longer live are removed so the conformance denominator is the live fleet.
+var CAP_EVERY_MS = 6 * 3600 * 1000;
+var CAP_KEY = "capsnap:last";
+async function capabilitySnapshot(env, force) {
+  var last = null;
+  try { var lv = await env.FLEET_CONFIG.get(CAP_KEY); if (lv) last = JSON.parse(lv); } catch (e) {}
+  var lastMs = last && last.ts ? ms(last.ts) : NaN;
+  var minGap = force ? 600000 : CAP_EVERY_MS;
+  if (isFinite(lastMs) && Date.now() - lastMs < minGap) return { ran: false, reason: "fresh", last: last };
+  var fp = await getJson(FLEET_URLS, 15000);
+  var fleet = (fp.ok && fp.j && fp.j.fleet) ? fp.j.fleet : [];
+  if (!fleet.length) return { ran: false, reason: "fleet probe failed" };
+  await auditRun(env, "CREATE TABLE IF NOT EXISTS capability_audit_snapshot (service TEXT PRIMARY KEY, version TEXT, capabilities TEXT, limitations TEXT, ts TEXT)", []);
+  var names = fleet.map(function (w) { return String((w && w.name) || ""); }).filter(Boolean);
+  var out = { ts: nowIso(), live: names.length, probed: 0, stored: 0, failed: [], conforming: 0, non_conforming: [], removed: 0 };
+  async function one(name) {
+    try {
+      var c = new AbortController(); var t = setTimeout(function () { c.abort(); }, 8000);
+      var r = await fetch("https://" + name + ".q08.workers.dev/health", { signal: c.signal, headers: { accept: "application/json", "user-agent": "qnfo-deploy-guard-capability/1.0" } });
+      clearTimeout(t);
+      out.probed++;
+      if (!r.ok) { out.failed.push(name + ":" + r.status); return; }
+      var j = await r.json().catch(function () { return null; });
+      if (!j || typeof j !== "object") { out.failed.push(name + ":no-json"); return; }
+      var caps = j.capabilities;
+      if (typeof caps === "string") caps = caps.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+      if (!Array.isArray(caps)) caps = caps && typeof caps === "object" ? Object.keys(caps) : [];
+      var lims = Array.isArray(j.limitations) ? j.limitations : [];
+      var ver = j.version || j.VERSION || null;
+      var w = await auditRun(env, "INSERT INTO capability_audit_snapshot (service, version, capabilities, limitations, ts) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(service) DO UPDATE SET version=excluded.version, capabilities=excluded.capabilities, limitations=excluded.limitations, ts=excluded.ts", [name, ver != null ? String(ver) : null, JSON.stringify(caps).slice(0, 4000), JSON.stringify(lims).slice(0, 4000), out.ts]);
+      if (w && w.ok !== false) out.stored++;
+      if (caps.length && lims.length) out.conforming++;
+      else out.non_conforming.push(name + ":" + (!lims.length ? "missing-limitations" : "empty-capabilities"));
+    } catch (e) { out.failed.push(name + ":" + String((e && e.name) || "error")); }
+  }
+  // Six at a time: a Worker invocation may hold six connections waiting for headers.
+  for (var i = 0; i < names.length; i += 6) await Promise.all(names.slice(i, i + 6).map(one));
+  try {
+    var have = await auditAll(env, "SELECT service FROM capability_audit_snapshot", []);
+    var live = {}; for (var k = 0; k < names.length; k++) live[names[k]] = 1;
+    for (var h = 0; h < have.length; h++) {
+      if (!live[have[h].service]) { await auditRun(env, "DELETE FROM capability_audit_snapshot WHERE service=?1", [have[h].service]); out.removed++; }
+    }
+  } catch (e) {}
+  try { await env.FLEET_CONFIG.put(CAP_KEY, JSON.stringify(out), { expirationTtl: 604800 }); } catch (e) {}
+  return Object.assign({ ran: true }, out);
+}
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(scan(env).catch(function () {})); },
+  async scheduled(event, env, ctx) { ctx.waitUntil(scan(env).catch(function () {})); ctx.waitUntil(capabilitySnapshot(env, false).catch(function () {})); },
   async fetch(request, env, ctx) {
     var url = new URL(request.url); var p = url.pathname;
     // CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (#1701): shared-secret mutations (rotate/PUT of a worker secret) are
@@ -322,7 +376,7 @@ export default {
       p = "/lock/" + p.slice("/secret-lock/".length);
       request = new Request(url.origin + p, { method: "POST", body: JSON.stringify(sb) });
     }
-    if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: nowIso() });
+    if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: nowIso(), capabilities: ["deploy-lock", "secret-lock", "ledger", "mutation-detector", "cost-watchdog", "capability-snapshot"], limitations: ["D1 lease, not a distributed consensus lock", "detects a mutation only on the next 20-minute scan", "capability snapshot at most every 6 hours (POST /capability-snapshot forces one, 10-minute floor)"] });
     if (p === "/report" && request.method === "GET") { var rp = await env.FLEET_CONFIG.get(REPORT_KEY); return json(rp ? JSON.parse(rp) : { ts: null }); }
     if (p === "/locks" && request.method === "GET") { var lr = await auditAll(env, "SELECT worker, owner, since, expires_at, expected_version FROM deploy_locks WHERE expires_at > ?1", [Date.now()]); return json({ locks: lr, now: nowIso() }); }
     if (p.indexOf("/lock/") === 0 && request.method === "GET") { var w3 = decodeURIComponent(p.slice(6)); return json({ worker: w3, lock: await readLock(env, w3), now: nowIso() }); }
@@ -374,6 +428,8 @@ export default {
     }
     if (p === "/thresholds" && request.method === "POST") { var bt = await request.json().catch(function () { return {}; }); await env.FLEET_CONFIG.put(THR_KEY, JSON.stringify({ day_usd: Number(bt.day_usd || 10), month_usd: Number(bt.month_usd || 150) })); return json({ set: true }); }
     if (p === "/scan" && (request.method === "POST" || request.method === "GET")) { return json(await scan(env)); }
+    if (p === "/capability-snapshot" && request.method === "GET") { var cs = await env.FLEET_CONFIG.get(CAP_KEY); return json(cs ? JSON.parse(cs) : { ts: null }); }
+    if (p === "/capability-snapshot" && request.method === "POST") { return json(await capabilitySnapshot(env, true)); }
     return json({ error: "not_found", worker: WORKER }, 404);
   }
 };
