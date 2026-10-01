@@ -20,6 +20,11 @@ environment = "production"
 binding = "MEDIA"
 bucket_name = "personal-media"
 
+# VAULT-INDEXER-FOLD-1 (2026-10-01): the Obsidian vault indexer runs here now (hourly cron).
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "obsidian-vault"
+
 [[d1_databases]]
 binding = "PERSONAL"
 database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"

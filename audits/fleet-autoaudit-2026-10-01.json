@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 07:22:16",
+  "audited_at": "2026-10-01 07:27:01",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -38,7 +38,12 @@
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
-    "no_health_route": [],
+    "no_health_route": [
+      {
+        "dir": "qnfo-signal-loop",
+        "worker": "qnfo-signal-loop"
+      }
+    ],
     "no_live_version": [],
     "no_repo_version": [],
     "not_a_worker": [
@@ -137,7 +142,6 @@
       "qnfo-research-radar",
       "qnfo-research-supervisor",
       "qnfo-scorecard",
-      "qnfo-signal-loop",
       "qnfo-thread-ingest",
       "qnfo-twin-maintain",
       "qnfo-venue-radar",
@@ -146,7 +150,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 64,
+    "not_deployed_notdrift": 63,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -371,10 +375,6 @@
       {
         "dir": "qnfo-scorecard",
         "worker": "qnfo-scorecard"
-      },
-      {
-        "dir": "qnfo-signal-loop",
-        "worker": "qnfo-signal-loop"
       },
       {
         "dir": "qnfo-thread-ingest",
@@ -1394,7 +1394,7 @@
       "http": 404,
       "live": null,
       "match": 0,
-      "note": "NOT_DEPLOYED",
+      "note": "NO_HEALTH_ROUTE",
       "worker": "qnfo-signal-loop"
     },
     "qnfo-skill-sync": {

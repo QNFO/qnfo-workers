@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.18-budget-auto-promote";
+var VERSION = "2.38.20-selffetch-inproc";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -1981,6 +1981,20 @@ async function webFetchTool(env, args) {
   // Without this the call burns two 522 subrequests and reports the result as a fleet
   // outage, which is how "ops.qnfo.org is down" readings from inside qnfo-ops arise.
   if (isSelfFetchHost(u.hostname)) {
+    // SELF-FETCH-INPROC-1 (2026-10-01, #1543): every remaining genuine web_fetch failure in 48h was an
+    // agent fetching this worker's own /health or /manifest and hitting the guard. Those two read-only,
+    // unauthenticated routes are now answered in-process through the worker's own fetch handler (no
+    // network subrequest), so the agent gets the real answer; every other self path stays blocked.
+    if (u.pathname === "/health" || u.pathname === "/manifest") {
+      try {
+        const self = await worker_default.fetch(new Request("https://" + u.hostname + u.pathname, { method: "GET" }), env, { waitUntil: function() {}, passThroughOnException: function() {} });
+        const txt = await self.text();
+        const maxIn = Math.max(500, Math.min(parseInt(args && args.maxChars, 10) || 8e3, 3e4));
+        return { ok: self.ok, status: self.status, url, self_fetch: "in-process", text: txt.slice(0, maxIn), truncated: txt.length > maxIn };
+      } catch (e) {
+        return { ok: false, error: "self-fetch in-process failed: " + String(e && e.message || e).slice(0, 200), url, self_fetch: true };
+      }
+    }
     return {
       ok: false,
       error: "self-fetch blocked: " + WORKER + " cannot fetch its own hostname (" + u.hostname + ")",
@@ -3392,7 +3406,18 @@ __name222(containerDispatch, "containerDispatch");
 __name2222(containerDispatch, "containerDispatch");
 __name22222(containerDispatch, "containerDispatch");
 function fmtContainer(j) {
-  if (!j || !j.ok) return { ok: false, error: j && j.error || "container error" };
+  // CONTAINER-EXIT-VISIBLE-1 (2026-10-01, #1664): the pilot answers a command that exits non-zero with
+  // {ok:false, result:{exitCode, stdout, stderr}} and no error field. This used to collapse to a bare
+  // "container error", discarding the exit code and output, so an ordinary failing command (missing file,
+  // failed grep) read as an infrastructure fault and the agent could not see why. Keep the result and
+  // label it as a command exit; "container error" is now reserved for responses with no result at all.
+  if (j && j.result && typeof j.result === "object" && j.result.exitCode != null) {
+    const r = j.result;
+    const out = { ok: r.exitCode === 0, exit_code: r.exitCode, stdout: (r.stdout || "").slice(0, 65536), stderr: (r.stderr || "").slice(0, 8192), stdout_truncated: !!r.stdoutTruncated, stderr_truncated: !!r.stderrTruncated };
+    if (r.exitCode !== 0) out.error = "command exited " + r.exitCode + (r.stderr ? ": " + String(r.stderr).slice(0, 200) : "");
+    return out;
+  }
+  if (!j || !j.ok) return { ok: false, error: j && j.error || "container error (no result in response)" };
   const r = j.result || {};
   return { ok: r.exitCode === 0, exit_code: r.exitCode, stdout: (r.stdout || "").slice(0, 65536), stderr: (r.stderr || "").slice(0, 8192), stdout_truncated: !!r.stdoutTruncated, stderr_truncated: !!r.stderrTruncated };
 }
