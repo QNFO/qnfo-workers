@@ -104,7 +104,7 @@ live, fixed at the root, deployed through the canonical path (or wrangler for th
 | The gateway was silently unused (0-char reconcile, every review "unparseable") | gwCall returned "" when ROUTER_TOKEN was absent, before any call and without an event; qnfo-ai authenticates the binding by props | GW-PROPS-AUTH-1 (369) | after 15:17Z the review returned real findings (`review->verify hardLeft 6`) |
 | Verification scripts never ran | the public pilot hostname answers 403 since PILOT-PUBLIC-EXEC-CLOSED-1, and the result was read from the wrong field | PILOT-PROPS-CALLER-1: a CONTAINERS_PILOT binding with props; the pilot injects its bearer for props callers (372) | pilot 1.0.10 and research-exec 0.9.46 live 15:29Z |
 | Reference gates failed papers that had references | the heading regex allowed only "7."; the split returned a capture group, so the count was always 0 | REFS-RENDER-1 renders References from the bibliography; REFCOUNT-SPLIT-1, bib-aware floor, 20000-char publish floor and REVISE-NOOP-ADVANCE-1 folded in from the wave-4 session's PR 358 (372) | unit cases: 9 cited entries pass, 2 fail, appendices kept, idempotent |
-| A verified new paper could never publish | the 0.8 pipeline never created the living-paper row nor set research_queue.paper_slug, so publish read slug NULL and markError re-grounded the verified paper | PAPER-ROW-PREP-1 ported from PR 358 with credit (research-exec 0.9.49): the draft row and slug are built from reconciled.md before any Zenodo call, with the 20000-char floor checked first | row 5099abb8 passed verify at 15:51Z (8 claims executed in the container through the new binding, 13 references rendered); it was parked as held until 0.9.49 was live, then resumed |
+| A verified new paper could never publish | the 0.8 pipeline never created the living-paper row nor set research_queue.paper_slug, so publish read slug NULL and markError re-grounded the verified paper | PAPER-ROW-PREP-1 ported from PR 358 with credit (research-exec 0.9.49): the draft row and slug are built from reconciled.md before any Zenodo call, with the 20000-char floor checked first | row 5099abb8 passed verify at 15:51Z (8 claims executed in the container through the new binding, 13 references rendered); it was parked as held until 0.9.49 was live, then resumed. **Published 16:01:19Z: 10.5281/zenodo.23086421**, the first publication since 2026-09-08. #1620 closed by EVID-1620-PUBLISH (verification #334, 16:03:29Z) |
 
 ### Charter gates (roadmap_implementation, re-measured)
 
@@ -135,3 +135,14 @@ The wave-4 session's PR 358 overlapped research-exec and radar-hub. Its research
 credit, and the overlap was noted on PR 358 and in handoff 29844. Issues owned by other sessions were left to them: #1710 to
 #1716 (STRATEGY-1), #1724 to #1727 (owner directive; PRs 345 and 353), #1731 (code-task loop smoke, PR 368), #1732 (Zenodo
 identity) and #1733 (PR 371).
+
+### State at 16:05Z
+
+- #1620 (research publish stall, 22 days) closed on evidence. Record 23086421 carries the canonical related identifier, one
+  funnel link and keywords. Its D1 row converged through the new trigger, and https://papers.qnfo.org/papers/<slug>/ answers 200.
+  The pipeline immediately claimed the next row (566) and grounded it with 14 bibliography entries.
+- Merged from this lane in round 4: PRs 359, 360, 361, 369, 370, 372, 375, 377, 378.
+- Gates re-measured: C5, C7, G2, G4, A2, A3, F2 and I7 remediated; C6 partial. Conformance rose from 5 to at least 17 of 44 and is
+  tracked by #1735 / EVID-C6-CONFORMANCE.
+- Self-closing contracts: EVID-QWAV-SCAN-CRON (#1734, 2026-10-02 08:30Z), EVID-GATE-A2-PUBLISHV2 (first new version),
+  EVID-C6-CONFORMANCE (#1735), plus those listed in round 3.
