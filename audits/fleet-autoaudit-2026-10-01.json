@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 06:02:45",
+  "audited_at": "2026-10-01 06:06:12",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -27,18 +27,6 @@
     ],
     "cron_only_count": 2,
     "drift": [
-      {
-        "dir": "q08-signal-engine",
-        "live": "0.7.34-alert-undigested",
-        "repo": "0.7.33-run-lifecycle",
-        "worker": "q08-signal-engine"
-      },
-      {
-        "dir": "qnfo-autonomy-scorer",
-        "live": "1.1.2-alert-undigested",
-        "repo": "1.1.1-vsm-ooda-measured",
-        "worker": "qnfo-autonomy-scorer"
-      },
       {
         "dir": "qnfo-fleet-control",
         "live": "0.4.50-sla-escalate",
@@ -418,7 +406,7 @@
       }
     ],
     "scope": "all",
-    "sync": 35,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -451,6 +439,11 @@
         "worker": "personal-companion"
       },
       {
+        "dir": "q08-signal-engine",
+        "version": "0.7.34-alert-undigested",
+        "worker": "q08-signal-engine"
+      },
+      {
         "dir": "qnfo-agent-orchestrator",
         "version": "1.1.0",
         "worker": "qnfo-agent-orchestrator"
@@ -474,6 +467,11 @@
         "dir": "qnfo-archive",
         "version": "1.2.0",
         "worker": "qnfo-archive"
+      },
+      {
+        "dir": "qnfo-autonomy-scorer",
+        "version": "1.1.2-alert-undigested",
+        "worker": "qnfo-autonomy-scorer"
       },
       {
         "dir": "qnfo-backlog-exec",
@@ -848,11 +846,11 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.7.33-run-lifecycle",
+      "before": "0.7.34-alert-undigested",
       "http": 200,
       "live": "0.7.34-alert-undigested",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "q08-signal-engine"
     },
     "qnfo-agent-orchestrator": {
@@ -952,11 +950,11 @@
       "worker": "qnfo-auditor"
     },
     "qnfo-autonomy-scorer": {
-      "before": "1.1.1-vsm-ooda-measured",
+      "before": "1.1.2-alert-undigested",
       "http": 200,
       "live": "1.1.2-alert-undigested",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-autonomy-scorer"
     },
     "qnfo-autopilot": {
