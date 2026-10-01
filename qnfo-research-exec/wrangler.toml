@@ -58,9 +58,13 @@ service = "qnfo-ai"
 # rotation no longer strands this worker. Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
 props = { caller = "qnfo-research-exec" }
 
-# Cron: research pipeline drain (10-min cadence, matches prior API schedule)
+# Cron: research pipeline drain. RESEARCH-THROUGHPUT-1 (2026-10-01, issues 1700/1620): a paper needs ~8-10 stages
+# (ground, ensemble, reconcile, review, revise x cycles, verify) and each hourly tick completed only 1-2 of them (the
+# 4-min loop budget ends after the first slow stage), so one paper took ~10h and 25 queued rows would have taken >1 week.
+# The single-flight lease (RESEARCH-SINGLE-FLIGHT-1) serialises runs, so a 15-min cadence is safe: an overrunning
+# stage just makes the next tick log lease-busy.
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/15 * * * *"]
 
 [observability]
 enabled = true
