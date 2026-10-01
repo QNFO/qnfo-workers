@@ -220,11 +220,13 @@ New from 2026-09-30 deep sweep (my recon): 1664 TOOL-ERROR-RATE-shell_exec-1; 16
 1614 CF-CAPABILITY-CATALOG-NEVER-BUILT-1; 1671 Q08-GATE-OUTAGE-UNMONITORED-1; 1670 Q08-STUCK-RUN-ROWS-1;
 1673 APPLIER-ROT-1 (28/103 repo appliers permanently dead).
 
-**Genuine defects added 2026-10-01 (this session, not yet ticket-sourced):**
-- CRONDRIFT-QNFO-CLOUD-OPS-UNRESOLVED-1: hourly `cronDrift=1` for qnfo-cloud-ops persists through
-  three deploys (0.4.42/0.4.43/0.4.44) that read declared crons from the uncached GitHub API; the
-  worker's declaredCrons returns a pre-CF-DOW 24-cron list that no reachable source (raw CDN, API, origin/main)
-  returns. Root cause UNATTRIBUTED → fi #1021 stays OPEN.
+**Genuine defects added 2026-10-01 (this session):**
+- CRONDRIFT-QNFO-CLOUD-OPS-1 — **RESOLVED 2026-10-01.** True root cause = `tomlCrons` parser bug:
+  `body.slice(...).split(",")` decomposed MERGED cron hour-lists (`"0 6,12 * * 2-6"` → `"0 6"` +
+  `"12 * * 2-6"`), inflating declared to 24 vs live 21 → permanent false `cronDrift=1`. Earlier
+  CDN/cache hypothesis was WRONG. Fixed (parse quoted entries) in commit `c8ca6a5`, deployed
+  `qnfo-fleet-control 0.4.46-crons-quoted-parse` (bindings 17), and VERIFIED: manual `/drift` re-probe
+  returned `cronDrift=0 scanned=39 clean=39 drifted=0`. fi #1021 → resolved.
 
 ---
 
@@ -304,6 +306,19 @@ FALSE (unified_open_issues > agent_issues; plus 14 dod + 9 ledger + 22 consolida
    cron_compliance 100 and is RIGHT that nothing is broken *right now*. Every Tier-2/3 item is a claim
    about *visibility of stopped or never-built subsystems*, not a claim the fleet is failing. The one
    item that is unambiguously existential is **Tier 0** — the survival gate + zero revenue.
+
+## 11b. RESOLVED THIS PASS (2026-10-01)
+1. **#1615 impressions metric — RESOLVED + gate leg re-measured.** Authoritative CF GraphQL RUM daily
+   series: current 30d (09-01..10-01) = 5,980 pageviews; prior 30d (08-02..09-01) = 1,130 → **+429.2%**.
+   `metric_registry.impressions_growth_30d` was CORRECT (+427%); BUSINESS-PLAN's "+0.89%" was the artifact
+   (window-vs-itself). Metric definition + source pinned; issue 1615 closed. **Consequence: the shutdown-gate
+   growth leg (+30%) PASSES; with full_reports_live_30d=10 >= 2, phase-1 does NOT fire on 2026-10-25.**
+2. **#1615 sibling — cronDrift root-caused and fixed (see §5).**
+3. **#1626 UNDEFINED metrics — resolved.** `referral_30d` (last_value 80) and `guard_rcs` (0) given explicit
+   formulas + sources; state OK.
+4. **#1627 worker cap — reconciled.** `fleet_budget workers`: cap=39 (measured ceiling), target=24
+   (documented 20-24 band); `current` 39. Previously cap 36/target 36.
+5. **#1350 FLEET-BUDGET-WORKERS-OVER-CAP-1 — closed** (2026-10-01, first pass). Budget over=[] verified.
 
 ## 11. ARTIFACTS
 - This file (repo `audits/2026-10-01-master-build-out-backlog-v2.md`) + R2 `qnfo-audit`.
