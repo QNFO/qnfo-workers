@@ -11,3 +11,4 @@ State at probe time:
 If this file exists on main, GITHUB_TOKEN write access is confirmed for the session.
 
 Smoke test 2026-10-01: appended by the Cloudflare code-task loop.
+Intake smoke 2026-10-01: queued from an issue by the Cloudflare code-task loop.
