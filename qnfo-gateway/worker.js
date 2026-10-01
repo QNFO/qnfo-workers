@@ -1,4 +1,4 @@
-var VERSION="3.7.20-author-of-record";
+var VERSION="3.7.21-author-of-record";
 // ORG-LABEL-1 (2026-10-01, docs/STRATEGY.md s2.1): there is no legal entity and the work is one researcher with an
 // AI-assisted pipeline, so "Research Foundation" and "research collective" overclaim. Labels only; the positioning copy
 // waits for the owner's approval in the Identity doc. ABOUT-GA-1: /about was the one gateway page without the GA4 tag.
@@ -947,28 +947,35 @@ __name(handleBlankPapers, "handleBlankPapers");
 // carries its PDF, so /papers/<slug>.pdf streams that file from the paper's own record and the page emits citation_pdf_url
 // only when the record has a PDF within the limit. The record lookup is cached for a day (an hour when no PDF is found).
 var SCHOLAR_PDF_MAX = 5 * 1024 * 1024;
+// SCHOLAR-PDF-UA-1: Zenodo rejects requests without a User-Agent (a Worker fetch sends none), so 3.7.19 cached every
+// lookup as "no PDF". The UA is sent, only an HTTP 200 answer is cached, and the lookup status is exposed for diagnosis.
+var ZENODO_UA = "QNFO-papers-gateway/3.7 (+https://papers.qnfo.org)";
 async function zenodoPdfInfo(recId) {
-  const ck = new Request("https://papers.qnfo.org/__zenodo-pdf-info/" + recId);
+  const ck = new Request("https://papers.qnfo.org/__zenodo-pdf-info/v2/" + recId);
   try {
     const hit = await caches.default.match(ck);
     if (hit) return await hit.json();
   } catch (e) {
   }
-  let info = { url: null, key: null, size: 0 };
+  let info = { url: null, key: null, size: 0, status: 0 };
   try {
-    const r = await fetch("https://zenodo.org/api/records/" + recId, { headers: { Accept: "application/json" } });
+    const r = await fetch("https://zenodo.org/api/records/" + recId, { headers: { Accept: "application/json", "User-Agent": ZENODO_UA } });
+    info.status = r.status;
     if (r.ok) {
       const d = await r.json();
       const f = (d.files || []).find(function(x) {
         return /\.pdf$/i.test(String(x && x.key || "")) && Number(x.size || 0) > 0 && Number(x.size) <= SCHOLAR_PDF_MAX;
       });
-      if (f) info = { url: f.links && f.links.self || "https://zenodo.org/api/records/" + recId + "/files/" + encodeURIComponent(f.key) + "/content", key: f.key, size: Number(f.size) };
+      if (f) info = { url: f.links && f.links.self || "https://zenodo.org/api/records/" + recId + "/files/" + encodeURIComponent(f.key) + "/content", key: f.key, size: Number(f.size), status: r.status };
     }
   } catch (e) {
+    info.status = -1;
   }
-  try {
-    await caches.default.put(ck, new Response(JSON.stringify(info), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + (info.url ? 86400 : 3600) } }));
-  } catch (e) {
+  if (info.status === 200) {
+    try {
+      await caches.default.put(ck, new Response(JSON.stringify(info), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + (info.url ? 86400 : 3600) } }));
+    } catch (e) {
+    }
   }
   return info;
 }
@@ -986,9 +993,9 @@ async function handlePaperPdf(env, slug) {
   const rec = paper && zenodoRecId(paper.doi);
   if (!rec) return nf;
   const info = await zenodoPdfInfo(rec);
-  if (!info.url) return nf;
-  const r = await fetch(info.url, { cf: { cacheEverything: true, cacheTtl: 86400 } });
-  if (!r.ok || !r.body) return new Response("PDF temporarily unavailable", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  if (!info.url) return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "X-PDF-Lookup": "zenodo-" + info.status } });
+  const r = await fetch(info.url, { headers: { "User-Agent": ZENODO_UA }, cf: { cacheEverything: true, cacheTtl: 86400 } });
+  if (!r.ok || !r.body) return new Response("PDF temporarily unavailable", { status: 502, headers: { "Content-Type": "text/plain; charset=utf-8", "X-PDF-Lookup": "content-" + r.status } });
   return new Response(r.body, { headers: { "Content-Type": "application/pdf", "Content-Disposition": 'inline; filename="' + slug + '.pdf"', "Cache-Control": "public, max-age=86400" } });
 }
 __name(handlePaperPdf, "handlePaperPdf");

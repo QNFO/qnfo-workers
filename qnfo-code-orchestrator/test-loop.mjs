@@ -285,7 +285,7 @@ function fakeLoader(spinMs) {
   const { env } = envWith([]);
   const r = await worker.fetch(new Request("https://x/health"), env);
   const h = await r.json();
-  check("/health reports 0.2.3 + task-loop + the ladder + js_verify off by default", h.version === "0.2.3" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
+  check("/health reports 0.2.4 + task-loop + the ladder + js_verify off by default", h.version === "0.2.4" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
 }
 
 // ===== 12. scheduled() drives the loop with no HTTP request =====
@@ -337,6 +337,20 @@ function fakeLoader(spinMs) {
   const row = await env.AUDIT_DB.prepare("SELECT status, ctx FROM code_tasks WHERE id=?").bind(enq.body.id).first();
   const prop = row && row.ctx ? JSON.parse(row.ctx).proposal : null;
   check("newline preserved: proposal ends with the base file's newline", row.status === "ready_to_publish" && prop === "hello\nworld\nmore\n", { st: row.status, prop });
+}
+// ---- ISSUE-INTAKE-1: an opted-in open issue becomes exactly one queued task ----
+{
+  const { env } = envWith([]);
+  await env.AUDIT_DB.prepare("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT)").run();
+  const ins = (id, title, desc, st) => env.AUDIT_DB.prepare("INSERT INTO agent_issues (id,title,description,status) VALUES (?,?,?,?)").bind(id, title, desc, st).run();
+  await ins(1, "Fix typo", "Fix the typo in the intro.\ncode-task: repo=qnfo-workers path=docs/x.md", "open");
+  await ins(2, "No marker", "Please look at docs/y.md", "open");
+  await ins(3, "Protected", "code-task: repo=qnfo-workers path=.github/workflows/ci.yml", "open");
+  await ins(4, "Closed", "code-task: repo=qnfo-workers path=docs/z.md", "closed");
+  await call(env, "POST", "/v1/tick", { maxSteps: 0 });
+  await call(env, "POST", "/v1/tick", { maxSteps: 0 });
+  const rows = (await env.AUDIT_DB.prepare("SELECT repo, path, goal FROM code_tasks").all()).results;
+  check("intake: only the opted-in open issue became a task, once (deduped over two ticks)", rows.length === 1 && rows[0].path === "docs/x.md" && /^\[issue #1\] Fix typo/.test(rows[0].goal) && !/code-task:/.test(rows[0].goal), rows);
 }
 // ---- KEYLESS-READ-1: with no CODE_AGENT_KEY the read step uses the public raw endpoint ----
 {
