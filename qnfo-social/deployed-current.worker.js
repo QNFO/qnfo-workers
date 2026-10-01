@@ -7,10 +7,12 @@
 //   failed-retry sweep + daily cap. v0.5.3-checker-failclosed (2026-09-13): checker returns null (not [])
 //   when unavailable -> draft. v0.5.2-checker-heal (2026-09-08): tolerant JSON parse + strict retry +
 //   agent_issue escalation. FIX 2026-09-15: checker max_tokens 1000->3000 for the reasoning model.
+// v0.7.19 POST-ID-UTM-1 (#1712, 2026-10-01): UTM tags on qnfo links, post ids persisted, weekly cadence cap
+//   (SOCIAL_WEEKLY_CAP, default 2) and the pipeline_flags.social_paused kill switch on both drains.
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
-// D1: DB (qnfo-audit.social_threads). AI: env.AI.
+// Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags). AI: env.AI.
 
-var VERSION = "0.7.18-ai-attribution";
+var VERSION = "0.7.19-post-id-utm";
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -82,6 +84,98 @@ function applyLink(text, link, max) {
   return head + ' \u2014 ' + link;
 }
 
+// POST-ID-UTM-1 (#1712, 2026-10-01): every papers.qnfo.org / qnfo.org link qnfo-social puts into a post carries
+// utm_source=<channel>&utm_medium=social&utm_campaign=<slug>, so a post joins to the visits it caused (STRATEGY 6.2).
+// Links to other domains (doi.org, zenodo.org, q08.org) are left untouched; a link that already has a utm_ parameter
+// is never re-tagged. Without a slug the campaign is the link's last path segment (the paper slug on papers.qnfo.org).
+var UTM_HOSTS = { 'qnfo.org': 1, 'www.qnfo.org': 1, 'papers.qnfo.org': 1 };
+var BUFFER_UTM_SOURCE = { mastodon: 'mastodon', linkedin: 'linkedin', twitter: 'x', threads: 'threads' };
+function utmTag(url, source, campaign) {
+  const u = String(url || '');
+  const hm = u.match(/^https?:\/\/([^\/?#:]+)/i);
+  if (!hm || !UTM_HOSTS[hm[1].toLowerCase()]) return u;
+  if (/[?&]utm_(source|medium|campaign)=/i.test(u)) return u;
+  const hashAt = u.indexOf('#');
+  const base = hashAt < 0 ? u : u.slice(0, hashAt);
+  const frag = hashAt < 0 ? '' : u.slice(hashAt);
+  const segs = base.replace(/^https?:\/\/[^\/?#]+/i, '').split('?')[0].split('/').filter(Boolean);
+  const camp = String(campaign || segs[segs.length - 1] || 'qnfo').trim() || 'qnfo';
+  const q = 'utm_source=' + encodeURIComponent(source || 'bluesky') + '&utm_medium=social&utm_campaign=' + encodeURIComponent(camp);
+  const sep = base.indexOf('?') < 0 ? '?' : (/[?&]$/.test(base) ? '' : '&');
+  return base + sep + q + frag;
+}
+function utmTagText(text, source, campaign) {
+  return String(text || '').replace(/https?:\/\/[^\s"'<>()\[\]{}]+/g, function(m) {
+    const core = m.replace(/[.,;:!?]+$/, '');
+    return utmTag(core, source, campaign) + m.slice(core.length);
+  });
+}
+// Fit text into max code points by shortening the PROSE, never a URL (truncateSafe drops a URL that crosses the cut,
+// and a UTM tag lengthens every qnfo link). The longest prose run is cut at a word boundary and marked with an
+// ellipsis, repeatedly, until the text fits. Returns null when the URLs alone do not fit.
+function fitKeepUrls(text, max) {
+  const s = String(text || '');
+  const len = function(x) { return Array.from(x).length; };
+  if (len(s) <= max) return s;
+  const runs = [];
+  const re = /https?:\/\/[^\s"'<>()\[\]{}]+/g;
+  let last = 0, m;
+  while ((m = re.exec(s)) !== null) {
+    const u = m[0].replace(/[.,;:!?]+$/, '');
+    runs.push({ prose: s.slice(last, m.index) });
+    runs.push({ url: u });
+    last = m.index + u.length;
+    re.lastIndex = last;
+  }
+  runs.push({ prose: s.slice(last) });
+  if (runs.length === 1) return truncateSafe(s, max);
+  for (const r of runs) {
+    if (r.url !== undefined) continue;
+    r.pre = r.prose.match(/^\s*/)[0];
+    const rest = r.prose.slice(r.pre.length);
+    r.post = rest.match(/[\s:\u2014\u2013-]*$/)[0];
+    r.body = rest.slice(0, rest.length - r.post.length);
+  }
+  const join = function() { return runs.map(function(r) { return r.url !== undefined ? r.url : r.pre + r.body + r.post; }).join(''); };
+  for (let guard = 0; guard < 64; guard++) {
+    const over = len(join()) - max;
+    if (over <= 0) break;
+    let best = null;
+    for (const r of runs) if (r.url === undefined && r.body && (!best || len(r.body) > len(best.body))) best = r;
+    if (!best) return null;
+    const pts = Array.from(best.body);
+    const keep = pts.length - over - 1;
+    if (keep <= 0) { best.body = ''; continue; }
+    let cut = pts.slice(0, keep).join('');
+    const w = cut.replace(/\s+\S*$/, '');
+    if (w && len(w) >= keep / 2) cut = w;
+    cut = cut.replace(/[\s,;:.!?\u2014\u2013-]+$/, '');
+    best.body = cut ? cut + '\u2026' : '';
+  }
+  const out = join().replace(/^[\s:\u2014\u2013-]+/, '').trimEnd();
+  return len(out) <= max ? out : null;
+}
+// Tag, then fit. Fail-soft: if the tagged text cannot fit (a URL longer than the limit), post it untagged.
+function tagAndFit(text, max, source, campaign) {
+  const plain = String(text || '');
+  try {
+    const tagged = fitKeepUrls(utmTagText(plain, source, campaign), max);
+    if (tagged !== null) return tagged;
+  } catch (e) {}
+  const fit = fitKeepUrls(plain, max);
+  return fit !== null ? fit : truncateSafe(plain, max);
+}
+// post_uri value: the Bluesky URI alone, a lone 'buffer:<id>', or (both) a small JSON object keyed by utm_source.
+function postUriValue(bskyUri, bufferResult) {
+  const ids = {};
+  if (bskyUri) ids.bluesky = String(bskyUri);
+  const res = (bufferResult && bufferResult.results) || [];
+  for (const r of res) if (r && r.status === 'ok' && r.post_id) ids[BUFFER_UTM_SOURCE[r.platform] || r.platform] = 'buffer:' + r.post_id;
+  const keys = Object.keys(ids);
+  if (!keys.length) return null;
+  return keys.length === 1 ? ids[keys[0]] : JSON.stringify(ids);
+}
+
 // Buffer (Mastodon/LinkedIn/X) publishes ONE standalone post with no thread, no facets and
 // no embed. A Bluesky thread's post[0] is often a bare noun-phrase title ("Redundant
 // Safeguards as Coupled Failure Modes") which is fine as a thread root but incoherent as a
@@ -137,7 +231,9 @@ async function session(env) {
 
 async function postText(s, text, reply, opts) {
   opts = opts || {};
-  const record = { text: truncateSafe(text, 290), createdAt: (opts.createdAt || new Date().toISOString()) };
+  // POST-ID-UTM-1 (#1712, 2026-10-01): tag qnfo links, then fit to 290 code points (inside Bluesky's 300 graphemes) by
+  // shortening the prose, never a URL. Facets and the link card below are built from this final text.
+  const record = { text: tagAndFit(text, 290, opts.utmSource || 'bluesky', opts.campaign), createdAt: (opts.createdAt || new Date().toISOString()) };
   if (reply) record.reply = reply;
   const facets = buildFacets(record.text);
   if (facets.length) record.facets = facets;
@@ -187,7 +283,7 @@ async function postThread(s, posts, threadOpts) {
     const p = posts[i];
     let text = typeof p === 'string' ? p : String((p && p.text) || '');
     const reply = i > 0 ? { root: root, parent: parent } : undefined;
-    const opts = { createdAt: p && p.createdAt ? p.createdAt : undefined };
+    const opts = { createdAt: p && p.createdAt ? p.createdAt : undefined, campaign: threadOpts.campaign };
     if (i === 0) {
       if (threadOpts.link) text = applyLink(text, threadOpts.link, 290);
       if (threadOpts.embed) opts.embed = threadOpts.embed;
@@ -216,7 +312,7 @@ async function repostThread(s, th) {
     return { text: String(p.text || ''), createdAt: p.createdAt };
   });
   const embed = { title: title || 'QNFO', desc: desc };
-  const uris = await postThread(s, revised, { embed: embed });
+  const uris = await postThread(s, revised, { embed: embed, campaign: th.slug ? String(th.slug) : undefined });
   return { deleted: deleted.length, newRoot: uris[0], count: uris.length };
 }
 
@@ -428,7 +524,10 @@ async function bufferGql(env, query) {
   if (!r.ok) throw new Error("buffer gql " + r.status);
   return r.json();
 }
-async function bufferPost(env, text) {
+// POST-ID-UTM-1 (#1712, 2026-10-01): each channel gets its own utm_source (twitter -> x). No refit after tagging:
+// X and Mastodon count every link as 23 characters and LinkedIn allows 3000, so the tag does not change the length
+// that the 280 cap was computed for.
+async function bufferPost(env, text, campaign) {
   if (!env.BUFFER_TOKEN) return { skipped: "no BUFFER_TOKEN" };
   const results = [];
   try {
@@ -442,7 +541,8 @@ async function bufferPost(env, text) {
       const ch = channels.find((c) => c.service === svc && !c.isDisconnected);
       if (!ch) { results.push({ platform: svc, status: "no-channel" }); continue; }
       try {
-        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(text) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: shareNow }) { ... on PostActionSuccess { post { id } } ... on MutationError { message } } }";
+        const svcText = utmTagText(text, BUFFER_UTM_SOURCE[svc] || svc, campaign);
+        const mutation = "mutation CreatePost { createPost(input: { text: " + JSON.stringify(svcText) + ", channelId: \"" + ch.id + "\", schedulingType: automatic, mode: shareNow }) { ... on PostActionSuccess { post { id } } ... on MutationError { message } } }";
         const r = await bufferGql(env, mutation);
         const cp = r && r.data && r.data.createPost;
         if (cp && cp.post) results.push({ platform: svc, status: "ok", post_id: cp.post.id });
@@ -488,6 +588,52 @@ async function recheckDrafts(env) {
 var DRAIN_PER_RUN = 6;      // threads posted per scheduled run
 var DRAIN_DAILY_CAP = 30;   // hard ceiling on posts per UTC day
 var MAX_RETRIES = 3;        // attempts before a thread is parked as failed
+
+// SOCIAL-CADENCE-CAP-1 + SOCIAL-PAUSE-1 (2026-10-01, STRATEGY 4 and 5 gates 5-6): both drains post to the owner's
+// personal Bluesky account, whose cadence is 1-2 curated posts a week. Before posting, each drain reads
+// pipeline_flags.social_paused ('1' = post nothing; no row = not paused) and counts Bluesky posts in the last 7 days
+// (social_threads + dissemination_tracker channel 'bluesky', status posted) against env.SOCIAL_WEEKLY_CAP (default 2).
+// Rows not posted stay queued: no status change, no retry_count bump. A gate read error holds the run (posts
+// nothing, logs) instead of posting blind. Order: drainQueue posts a row whose flags contain 'selected' (or whose
+// notes start with 'selected'; checker notes are JSON and never do) first, then oldest id first;
+// dissemination_tracker has no flags/notes column, so drainDissemination stays oldest created_at first.
+var SOCIAL_SCHEMA_DONE = false;
+async function ensureSocialSchema(env) {
+  if (SOCIAL_SCHEMA_DONE) return;
+  SOCIAL_SCHEMA_DONE = true;
+  try { await env.DB.prepare("CREATE TABLE IF NOT EXISTS pipeline_flags (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)").run(); } catch (e) {}
+  // POST-ID-UTM-1 (#1712): nullable post_uri; fails with 'duplicate column' once it exists, which is fine.
+  try { await env.DB.prepare("ALTER TABLE social_threads ADD COLUMN post_uri TEXT").run(); } catch (e) {}
+}
+function weeklyCap(env) {
+  const v = env && env.SOCIAL_WEEKLY_CAP;
+  const n = parseInt(String(v === undefined || v === null ? '' : v), 10);
+  return Number.isFinite(n) && n >= 0 ? n : 2;
+}
+async function socialGate(env, who) {
+  await ensureSocialSchema(env);
+  const cap = weeklyCap(env);
+  try {
+    const f = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_paused'").first();
+    if (f && String(f.value).trim() === '1') {
+      console.log('SOCIAL-PAUSE-1 ' + who + ': pipeline_flags.social_paused=1, posting nothing');
+      return { allowed: 0, reason: 'paused', cap: cap };
+    }
+    const c = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM social_threads WHERE status='posted' AND posted_at >= datetime('now','-7 days')) + (SELECT COUNT(*) FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND posted_at >= datetime('now','-7 days')) AS n").first();
+    const n = Number((c && c.n) || 0);
+    console.log('SOCIAL-CADENCE-CAP-1 ' + who + ': bluesky posts_7d=' + n + ' cap=' + cap + (n >= cap ? ' -> holding queued rows' : ''));
+    return { allowed: Math.max(0, cap - n), reason: n >= cap ? 'weekly-cap' : null, posted_7d: n, cap: cap };
+  } catch (e) {
+    console.log('SOCIAL-CADENCE-CAP-1 ' + who + ': gate read failed, posting nothing this run: ' + String(e).slice(0, 120));
+    return { allowed: 0, reason: 'gate-error', cap: cap };
+  }
+}
+async function recordPostUri(env, id, value) {
+  if (!value) return;
+  await ensureSocialSchema(env);
+  try { await env.DB.prepare("UPDATE social_threads SET post_uri=? WHERE id=?").bind(value, id).run(); }
+  catch (e) { console.log('POST-ID-UTM-1 post_uri write failed for thread ' + id + ': ' + String(e).slice(0, 120)); }
+}
 
 // Drain the share queue oldest-first under a daily ceiling.
 // WS-A3 (2026-09-26): consume the orphaned dissemination_tracker queue. 19 papers sat at
@@ -537,8 +683,10 @@ async function drainDissemination(env) {
   const cap = await env.DB.prepare("SELECT COUNT(*) n FROM dissemination_tracker WHERE action='posted' AND posted_at >= datetime('now','start of day')").first();
   const postedToday = (cap && cap.n) || 0;
   if (postedToday >= DRAIN_DAILY_CAP) return { skipped: 'daily-cap', posted_today: postedToday };
+  const gate = await socialGate(env, 'drainDissemination');
+  if (!gate.allowed) return { skipped: gate.reason || 'weekly-cap', posted_7d: gate.posted_7d, cap: gate.cap };
   let posted = 0, failed = 0;
-  for (let i = 0; i < DRAIN_PER_RUN; i++) {
+  for (let i = 0; i < DRAIN_PER_RUN && posted < gate.allowed; i++) {
     const row = await env.DB.prepare("SELECT * FROM dissemination_tracker WHERE action='queued' AND channel='bluesky' ORDER BY created_at ASC LIMIT 1").first();
     if (!row) break;
     try {
@@ -556,10 +704,15 @@ async function drainDissemination(env) {
         console.log("LINK_GATE dissemination " + row.id + " " + act + " " + link);
         continue;
       }
-      const text = truncateSafe(String(row.paper_title || row.paper_slug) + " \u2014 " + link, 290);
+      // POST-ID-UTM-1 (#1712): postText tags the link and fits by shortening the title, never the link.
+      const text = String(row.paper_title || row.paper_slug) + " \u2014 " + link;
       const s = await session(env);
-      const r = await postText(s, text, null, { embed: { title: String(row.paper_title || 'QNFO'), desc: 'QNFO research \u2014 open access' } });
-      await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, updated_at=datetime('now') WHERE id=?").bind(r.uri, r.uri, row.id).run();
+      const r = await postText(s, text, null, { embed: { title: String(row.paper_title || 'QNFO'), desc: 'QNFO research \u2014 open access' }, campaign: row.paper_slug ? String(row.paper_slug) : undefined });
+      // post_id = the at:// URI (retractDeadLinks deletes by it); post_url = the public bsky.app permalink.
+      const rkey = String(r.uri || '').split('/').pop();
+      const handle = String((s && s.handle) || env.BSKY_HANDLE || '');
+      const postUrl = handle && rkey ? 'https://bsky.app/profile/' + handle + '/post/' + rkey : r.uri;
+      await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, updated_at=datetime('now') WHERE id=?").bind(postUrl, r.uri, row.id).run();
       posted++;
     } catch (e) {
       failed++;
@@ -623,9 +776,11 @@ async function drainQueue(env) {
   ).first();
   const postedToday = (today && today.n) || 0;
   if (postedToday >= DRAIN_DAILY_CAP) return { skipped: 'daily-cap', posted_today: postedToday };
+  const gate = await socialGate(env, 'drainQueue');
+  if (!gate.allowed) return { skipped: gate.reason || 'weekly-cap', posted_7d: gate.posted_7d, cap: gate.cap, posted_today: postedToday };
   let posted = 0, failed = 0;
-  for (let i = 0; i < DRAIN_PER_RUN; i++) {
-    const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY id ASC LIMIT 1").first();
+  for (let i = 0; i < DRAIN_PER_RUN && posted < gate.allowed; i++) {
+    const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY CASE WHEN COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%' THEN 0 ELSE 1 END, id ASC LIMIT 1").first();
     if (!row) break;
     try {
       await env.DB.prepare("UPDATE social_threads SET status='posting' WHERE id=? AND status='queued'").bind(row.id).run();
@@ -649,17 +804,19 @@ async function drainQueue(env) {
         }
         if (p.verdict === "transient") { continue; }
       }
-      const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: String(row.title || 'QNFO'), desc: 'QNFO research' } : undefined });
+      const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: String(row.title || 'QNFO'), desc: 'QNFO research' } : undefined, campaign: row.slug ? String(row.slug) : undefined });
       // Buffer (Mastodon/LinkedIn/X) posts plain text with no facet/embed support - the
       // link MUST be applied to the text itself here, mirroring what postThread() does
       // internally for Bluesky's post 1. Previously this sent the raw linkless posts[0].
       let bufferResult = null;
       try {
         const bufText = pickBufferText(posts, threadLink, row.title, 280);
-        bufferResult = await bufferPost(env, bufText);
+        bufferResult = await bufferPost(env, bufText, row.slug ? String(row.slug) : undefined);
       } catch (e) { bufferResult = { error: String(e && e.message || e) }; }
       await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
       posted++;
+      // POST-ID-UTM-1 (#1712): a separate, fail-soft write, so a missing column can never re-queue a posted row.
+      await recordPostUri(env, row.id, postUriValue(uris[0], bufferResult));
       console.log('drain posted thread', row.slug, uris[0], 'buffer:', JSON.stringify(bufferResult).slice(0, 200));
     } catch (e) {
       failed++;
@@ -704,7 +861,7 @@ export default {
         const b = await request.json();
         const link = String(b.link || '');
         const bufText = link ? applyLink(String(b.text || ''), link, 280) : truncate(String(b.text || ''), 280);
-        const res = await bufferPost(env, bufText);
+        const res = await bufferPost(env, bufText, b.slug ? String(b.slug) : undefined);
         return new Response(JSON.stringify({ ok: true, buffer: res, text_sent: bufText }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       // Buffer admin proxy: Buffer posts are plain text with no facet/embed model, so a bad
@@ -783,8 +940,9 @@ export default {
         if (row.status === 'posted') return new Response(JSON.stringify({ error: 'already posted', status: row.status }), { status: 409, headers: { 'Content-Type': 'application/json', ...cors } });
         const posts = sanitizePosts(JSON.parse(row.posts));
         const s = await session(env);
-        const uris = await postThread(s, posts);
+        const uris = await postThread(s, posts, { campaign: row.slug ? String(row.slug) : undefined });
         await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(row.id).run();
+        await recordPostUri(env, row.id, postUriValue(uris[0], null));
         return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
 
@@ -868,4 +1026,4 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls };
+export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination };
