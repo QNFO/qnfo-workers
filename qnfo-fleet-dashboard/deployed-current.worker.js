@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.10.2-owner-respond";
+var VERSION = "1.10.3-feed-integrity";
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -3674,12 +3674,13 @@ async function ensureFeedWiring(env) {
   };
   // metric_registry rows: picked up by qnfo-fleet-control evaluateMetricTriggers, the staleness/kill-band views and
   // the autonomy scorer. Cadence */15 makes a silent publisher show up as a stale metric.
-  const reg = async function(metric, kind, target) {
-    await run("registry:" + metric, A.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1,'system',?2,?3,'qnfo-fleet-dashboard','human','*/15','MEASURED')").bind(metric, kind, target));
+  // METRIC-INTEGRITY-1 also refuses a row without source_of_truth, disposition_actor and refresh_cadence.
+  const reg = async function(metric, kind, target, formula, source) {
+    await run("registry:" + metric, A.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1,'system',?2,?3,?4,?5,'qnfo-fleet-dashboard','human','*/15','MEASURED')").bind(metric, kind, formula, source, target));
   };
-  await reg("invest_decision_level", "lagging", "0 continue, 1 continue-at-risk, 2 scale back, 3 stop, -1 unknown (advisory; owner decides)");
-  await reg("human_actions_open", "leading", "0 (system resolves everything else)");
-  await reg("human_wait_oldest_days", "leading", "<= 3");
+  await reg("invest_decision_level", "lagging", "0 continue, 1 continue-at-risk, 2 scale back, 3 stop, -1 unknown (advisory; owner decides)", "decideInvestment(): spend vs cap, return vs the 2026-12-31 gate", "https://fleet.qnfo.org/api/decision (qnfo-fleet-dashboard, fleet_budget ai_spend:total)");
+  await reg("human_actions_open", "leading", "0 (system resolves everything else)", "count of items the human must act on (queue + derived)", "https://fleet.qnfo.org/ (human_actions, qnfo-fleet-dashboard)");
+  await reg("human_wait_oldest_days", "leading", "<= 3", "days the oldest open human item has waited", "https://fleet.qnfo.org/ (human_actions, qnfo-fleet-dashboard)");
   // Threshold triggers (INSERT OR IGNORE on the UNIQUE metric_key): fleet-control files the issue / digest alert hourly.
   await run("trigger", A.prepare("INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes) VALUES ('invest_decision_level','Investment verdict is scale back or stop','meta','gte',2,9,'Read https://fleet.qnfo.org/api/decision. Advisory only: scale spend levers (T1) and put the keep/stop call to the owner; never retire or delete on this signal.','human','agent_issues',24,1,'INVEST-DECISION-1 qnfo-fleet-dashboard')"));
   await run("trigger", A.prepare("INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes) VALUES ('human_wait_oldest_days','A human action has waited over 7 days','meta','gte',7,6,'Owner-held item has been waiting a week: https://fleet.qnfo.org/ shows it.','human','alerts',72,1,'INVEST-DECISION-1 qnfo-fleet-dashboard')"));
@@ -3699,7 +3700,7 @@ async function publishFeeds(env, v) {
     out.wiring_errors = [String(e && e.message || e).slice(0, 120)];
   }
   const A = env.AUDIT;
-  // metric_registry carries D1 guard triggers (METRIC-CADENCE-CANONICAL-1), so an insert can be refused and the
+  // metric_registry carries D1 guard triggers (METRIC-CADENCE-CANONICAL-1, METRIC-INTEGRITY-1), so an insert can be refused and the
   // UPDATE below then matches no row. "registry" is true only when every row was actually written.
   const upd = async function(metric, val) {
     const r = await A.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2 WHERE metric=?3").bind(String(val), new Date().toISOString(), metric).run();
