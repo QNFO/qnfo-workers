@@ -54,6 +54,9 @@ service = "qnfo-pdf"
 [[services]]
 binding = "QNFO_AI"
 service = "qnfo-ai"
+# INTERNAL-CALLER-PROPS-1 (#1703): qnfo-ai authenticates this binding by ctx.props.caller, so a router key
+# rotation no longer strands this worker. Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
+props = { caller = "qnfo-research-exec" }
 
 # Cron: research pipeline drain (10-min cadence, matches prior API schedule)
 [triggers]

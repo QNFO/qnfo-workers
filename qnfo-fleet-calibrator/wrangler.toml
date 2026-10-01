@@ -32,6 +32,9 @@ index_name = "qnfo-calibration"
 [[services]]
 binding = "SVC_QNFO_AI"
 service = "qnfo-ai"
+# INTERNAL-CALLER-PROPS-1 (#1703): qnfo-ai authenticates this binding by ctx.props.caller, so a router key
+# rotation no longer strands this worker. Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
+props = { caller = "qnfo-fleet-calibrator" }
 
 [[services]]
 binding = "SVC_QNFO_INFRA"
