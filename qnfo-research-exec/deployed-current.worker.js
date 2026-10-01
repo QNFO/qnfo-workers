@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.36-zenodo-version-requests";
+var VERSION = "0.9.37-ai-text-timeout";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1514,12 +1514,13 @@ var GH_API = "https://api.github.com";
 var GH_OWNER = "QNFO";
 var GH_REPO = "qnfo-ensemble-research";
 var PIPELINE_VERSION = "0.8.0-artifact-deposit";
-// AI-TEXT-REASONING-BUDGET-1 (2026-10-01, #1620/#1504): every MODELS entry is a reasoning model whose
-// reasoning tokens count against max_tokens. A flat 8192 cap left a paper-length rewrite (6-9k content
-// tokens on top of the reasoning over a 22k-char input) truncated: all 8 glm-5.3-flash calls on
-// 2026-10-01 ended at exactly 8192 output tokens, and every revise and reconcile came back under the
-// 10000-char floor. The caps match qnfo-ai MAX_OUT for the same Workers AI ids.
-var AI_TEXT_MAX_OUT = { "@cf/zai-org/glm-5.3-flash": 32768, "@cf/zai-org/glm-5.3": 32768, "@cf/openai/gpt-oss-120b": 32768 };
+// AI-TEXT-REASONING-BUDGET-1 (2026-10-01, #1620/#1504), REVERTED to 8192 by AI-TEXT-TIMEOUT-1 the same day: every MODELS
+// entry is a reasoning model, and a paper-length output does not fit 8192 tokens of reasoning plus content (revise and
+// reconcile returned 0 chars). Raising the cap to 32768 (0.9.34) did not help: Workers AI ends a call at about 240 s with
+// "3046: Request timeout", and at 32768 every ensemble primary leg (0/3, 11:34-11:38Z), every reconcile and every full
+// revise hit it. 8192 is the measured-safe budget (ensemble legs return 11-23k chars inside it). Long rewrites are no
+// longer needed on the hot path: revise uses patch mode (REVISE-PATCH-1) and reconcile degrades to the best leg.
+var AI_TEXT_MAX_OUT = { "@cf/zai-org/glm-5.3-flash": 8192, "@cf/zai-org/glm-5.3": 8192, "@cf/openai/gpt-oss-120b": 8192 };
 async function aiText(env, model, prompt, maxTokens) {
   const cappedTokens = Math.min(maxTokens, AI_TEXT_MAX_OUT[model] || 8192);
   try {
