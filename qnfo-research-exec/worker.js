@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.25-evolve-c115";
+var VERSION = "0.9.26-dlf-hold";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -467,9 +467,12 @@ async function publishStage(env, row) {
     return { ok: false, stage: "publish" };
   }
   // DLF-ZENODO-PUBLISH-BLOCKED-1: do not publish qnf-DLF-001 until a direct safe Zenodo deposit path is exposed and the Zenodo v2 deposit contamination in #979 is fixed.
+  // DLF-HOLD-NOT-REQUEUE-1 (0.9.26): the evolve-c115 version called markError(), which re-queues the row to stage
+  // 'ground' (3 recoveries + 2 terminal re-arms), so a deliberately held paper would be re-researched ~5 times at full
+  // model cost before stopping. Park it instead: status 'held' is never claimed (the claim queries select 'queued').
   if (slug === 'qnf-DLF-001') {
-    await markError(env, row, 'DLF-ZENODO-PUBLISH-BLOCKED-1: publish blocked pending safe Zenodo path and #979 fix');
-    return { ok: false, stage: 'publish' };
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='held', error=?, claimed_at=NULL WHERE id=?").bind('DLF-ZENODO-PUBLISH-BLOCKED-1: publish held pending a safe Zenodo path and the #979 fix (agent_issue 1091)', row.id).run();
+    return { ok: false, stage: 'publish', held: true };
   }
   const pub = await publishToZenodo(env, paper.title, paper.abstract, paper.body_md, slug);
   if (!pub.ok) {

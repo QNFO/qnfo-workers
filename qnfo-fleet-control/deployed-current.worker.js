@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.47-autopilot-fold";
+var VERSION = "0.4.48-evolve-guardrails";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2576,6 +2576,13 @@ var EVOLVE_GAP_H = 6;
 var EVOLVE_REQUIRED = ["gate", "guard", "mirror-guard", "comparator"];
 var EVOLVE_DENY = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot", "qnfo-gateway", "qnfo-ai", "qnfo-autonomy-scorer"];
 var EVOLVE_OPEN_STATES = ["pr-open", "merged", "deployed"];
+// EVOLVE-GUARDRAILS-2 (2026-10-01, from the first live cycle, candidate 115 / PR 180): the loop picked agent_issue 1091
+// (a publication HOLD, category 'publication') and added a guard that called markError(), which re-queues the row for
+// full re-research; neither model saw markError's body. (1) Only code-defect categories are targeted. (2) The reviewer
+// receives the definitions of every file-local function the edit calls and must check their side effects.
+// (3) Verification compares the live audit with the DEPLOY time and accepts a healthy later deploy of the same worker
+// (exact-version equality turned any follow-up deploy into a false failure and an unwanted auto-revert).
+var EVOLVE_CATEGORIES = ["reliability", "observability", "automation", "cost", "self-heal", "integrity", "data-integrity", "correctness", "monitoring", "optimization", "integration", "remediation", "email"];
 var EVOLVE_FAIL_STATES = ["no-context", "model-skip", "invalid", "review-rejected", "ci-rejected", "ci-timeout", "pr-failed"];
 function evGh(env) {
   return { "Authorization": "Bearer " + env.GITHUB_TOKEN, "User-Agent": "qnfo-fleet-control/evolve", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" };
@@ -2595,7 +2602,7 @@ __name(evDecode, "evDecode");
 async function evSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS evolve_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT NOT NULL, ts TEXT, status TEXT DEFAULT 'proposed', proposal TEXT, sha256 TEXT)").run();
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_rewrite_state (id INTEGER PRIMARY KEY AUTOINCREMENT, worker TEXT, ts TEXT, action TEXT, status TEXT, detail TEXT)").run();
-  var cols = ["kind TEXT", "issue_id INTEGER", "pr_number INTEGER", "branch TEXT", "head_sha TEXT", "merged_sha TEXT", "version_from TEXT", "version_to TEXT", "path TEXT", "note TEXT", "updated_at TEXT", "parent_id INTEGER"];
+  var cols = ["deployed_at TEXT", "kind TEXT", "issue_id INTEGER", "pr_number INTEGER", "branch TEXT", "head_sha TEXT", "merged_sha TEXT", "version_from TEXT", "version_to TEXT", "path TEXT", "note TEXT", "updated_at TEXT", "parent_id INTEGER"];
   for (var i = 0; i < cols.length; i++) {
     try { await env.AUDIT.prepare("ALTER TABLE evolve_candidates ADD COLUMN " + cols[i]).run(); } catch (e) {}
   }
@@ -2649,6 +2656,20 @@ async function evModelJson(env, model, system, user) {
   try { return JSON.parse(m[0]); } catch (e) { return null; }
 }
 __name(evModelJson, "evModelJson");
+function evDefs(content, text, max) {
+  var skip = { "if": 1, "for": 1, "while": 1, "switch": 1, "catch": 1, "function": 1, "return": 1, "typeof": 1, "new": 1, "await": 1, "String": 1, "Number": 1, "JSON": 1, "Math": 1, "Date": 1, "Object": 1, "Array": 1, "Promise": 1 };
+  var seen = {}, out = [], re = /\b([A-Za-z_$][\w$]*)\s*\(/g, m;
+  while ((m = re.exec(text)) && out.length < (max || 4)) {
+    var n = m[1];
+    if (seen[n] || skip[n]) continue;
+    seen[n] = 1;
+    var at = content.search(new RegExp("(^|\\n)(async\\s+)?function\\s+" + n.replace(/\$/g, "\\$") + "\\s*\\("));
+    if (at < 0) continue;
+    out.push(content.slice(at).replace(/^\n/, "").split("\n").slice(0, 40).join("\n"));
+  }
+  return out;
+}
+__name(evDefs, "evDefs");
 async function evReadFile(env, path, ref) {
   var r = await evApi(env, "GET", "/contents/" + path.split("/").map(encodeURIComponent).join("/") + "?ref=" + (ref || "main"));
   if (!r.ok || !r.j || !r.j.content) return null;
@@ -2713,7 +2734,7 @@ __name(evLand, "evLand");
 async function evPropose(env) {
   var model = env.EVOLVE_MODEL || "@cf/moonshotai/kimi-k2.7-code";
   var reviewer = env.REVIEW_MODEL || "@cf/openai/gpt-oss-120b";
-  var cands = (await env.AUDIT.prepare("SELECT a.id, a.title, substr(a.description,1,1500) d, t.owner FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND a.priority IN ('high','medium','low') AND a.title NOT LIKE 'SEC-%' AND a.id NOT IN (SELECT issue_id FROM evolve_candidates WHERE issue_id IS NOT NULL AND ts > datetime('now','-14 day')) ORDER BY CASE a.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, a.id LIMIT 40").all()).results || [];
+  var cands = (await env.AUDIT.prepare("SELECT a.id, a.title, substr(a.description,1,1500) d, t.owner FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND a.priority IN ('high','medium','low') AND a.title NOT LIKE 'SEC-%' AND a.category IN (" + EVOLVE_CATEGORIES.map(function(c) { return "'" + c + "'"; }).join(",") + ") AND a.id NOT IN (SELECT issue_id FROM evolve_candidates WHERE issue_id IS NOT NULL AND ts > datetime('now','-14 day')) ORDER BY CASE a.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, a.id LIMIT 40").all()).results || [];
   for (var i = 0; i < cands.length; i++) {
     var iss = cands[i], worker = String(iss.owner || "");
     if (!/^[a-z0-9-]+$/.test(worker) || EVOLVE_DENY.indexOf(worker) >= 0) continue;
@@ -2741,7 +2762,8 @@ async function evPropose(env) {
     var proposal = JSON.stringify({ anchor: anchor, replacement: repl, rationale: String(p.rationale || "").slice(0, 300), confidence: p.confidence, model: model });
     await env.AUDIT.prepare("UPDATE evolve_candidates SET proposal=?1 WHERE id=?2").bind(proposal, cid).run();
     if (why) { await evSet(env, cid, "invalid", why); return { ok: true, cid: cid, status: "invalid" }; }
-    var rv = await evModelJson(env, reviewer, "You review a proposed code edit to a production Cloudflare Worker. Approve only if it plausibly fixes the issue, is syntactically valid in context, and leaves unrelated behaviour unchanged. Output strict JSON only: {\"approve\": true|false, \"reason\": \"<=200 chars\"}.", "ISSUE #" + iss.id + ": " + iss.title + "\n" + iss.d + "\n\nCONTEXT:\n" + excerpt + "\n\nREPLACE:\n" + anchor + "\n\nWITH:\n" + repl + "\n\nRATIONALE: " + String(p.rationale || "")).catch(function() { return null; });
+    var defs = evDefs(content, repl + "\n" + anchor, 4);
+    var rv = await evModelJson(env, reviewer, "You review a proposed code edit to a production Cloudflare Worker. Approve only if it plausibly fixes the issue, is syntactically valid in context, and leaves unrelated behaviour unchanged. Read the DEFINITIONS of the functions the edit calls and reject the edit if a helper has a side effect that contradicts the intent (for example re-queuing, retrying, re-processing or writing where the edit means to stop). Reject if the issue is a hold, policy or owner decision rather than a code defect. Output strict JSON only: {\"approve\": true|false, \"reason\": \"<=200 chars\"}.", "ISSUE #" + iss.id + ": " + iss.title + "\n" + iss.d + "\n\nCONTEXT:\n" + excerpt + "\n\nREPLACE:\n" + anchor + "\n\nWITH:\n" + repl + "\n\nRATIONALE: " + String(p.rationale || "") + (defs.length ? "\n\nDEFINITIONS OF CALLED FUNCTIONS:\n" + defs.join("\n\n") : "")).catch(function() { return null; });
     if (!rv || rv.approve !== true) { await evSet(env, cid, "review-rejected", rv ? String(rv.reason || "") : "reviewer returned no JSON"); return { ok: true, cid: cid, status: "review-rejected" }; }
     var title = "evolve(" + worker + "): agent_issue " + iss.id + " (candidate " + cid + ")";
     var land = await evLand(env, cid, worker, worker, anchor, repl, title, ["Automated fix proposal for agent_issue #" + iss.id + ": " + iss.title, "", "Rationale (" + model + "): " + String(p.rationale || ""), "Review (" + reviewer + "): approved - " + String(rv.reason || "")]);
@@ -2795,15 +2817,19 @@ async function evAdvance(env, c) {
   }
   if (c.status === "merged") {
     var dep = await env.AUDIT.prepare("SELECT ts FROM fleet_deploys WHERE worker=?1 AND to_sha=?2 AND ok=1 ORDER BY id DESC LIMIT 1").bind(c.worker, c.version_to).first();
-    if (dep) { await evSet(env, c.id, "deployed", "canonical deploy " + dep.ts); return { cid: c.id, status: "deployed" }; }
+    if (dep) { await evSet(env, c.id, "deployed", "canonical deploy " + dep.ts, { deployed_at: dep.ts }); return { cid: c.id, status: "deployed" }; }
     if (ageH > 3) { await evSet(env, c.id, "deploy-missing", "no fleet_deploys row for " + c.version_to + " 3h after merge"); return { cid: c.id, status: "deploy-missing" }; }
     return { cid: c.id, status: "merged", note: "waiting on canonical deploy" };
   }
   if (c.status === "deployed") {
     var la = await env.AUDIT.prepare("SELECT http, live_version, probed_at FROM worker_live_audit WHERE worker=?1").bind(c.worker).first();
-    var probedAfter = la && la.probed_at && Date.parse(String(la.probed_at).replace(" ", "T") + (/[zZ]$/.test(la.probed_at) ? "" : "Z")) > Date.parse(c.updated_at);
+    var since = Date.parse(c.deployed_at || c.updated_at);
+    var probedAfter = la && la.probed_at && Date.parse(String(la.probed_at).replace(" ", "T") + (/[zZ]$/.test(la.probed_at) ? "" : "Z")) > since;
     if (!probedAfter) return { cid: c.id, status: "deployed", note: "waiting on a live audit after deploy" };
-    if (la.http === 200 && la.live_version === c.version_to) {
+    var mine = await env.AUDIT.prepare("SELECT MAX(id) id FROM fleet_deploys WHERE worker=?1 AND to_sha=?2 AND ok=1").bind(c.worker, c.version_to).first();
+    var later = mine && mine.id ? await env.AUDIT.prepare("SELECT COUNT(*) n FROM fleet_deploys WHERE worker=?1 AND ok=1 AND to_sha IS NOT NULL AND to_sha != ?2 AND id > ?3").bind(c.worker, c.version_to, mine.id).first() : null;
+    var superseded = !!(later && Number(later.n) > 0);
+    if (la.http === 200 && (la.live_version === c.version_to || superseded)) {
       await evSet(env, c.id, c.kind === "revert" ? "reverted-verified" : "verified", "live " + la.live_version + " http 200");
       if (c.kind === "revert" && c.parent_id) await evSet(env, c.parent_id, "reverted", "revert candidate " + c.id + " verified live");
       if (c.kind !== "revert" && c.issue_id) { try { await env.AUDIT.prepare("UPDATE agent_issues SET description = description || ?1, updated_at=?2 WHERE id=?3").bind(" | EVOLVE-PR-1: candidate " + c.id + " merged as PR " + c.pr_number + " and verified live as " + c.version_to + "; close against this issue's own DoD.", Date.now(), c.issue_id).run(); } catch (e) {} }
