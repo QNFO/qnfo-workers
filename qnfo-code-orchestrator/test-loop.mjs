@@ -285,7 +285,7 @@ function fakeLoader(spinMs) {
   const { env } = envWith([]);
   const r = await worker.fetch(new Request("https://x/health"), env);
   const h = await r.json();
-  check("/health reports 0.2.6 + task-loop + the ladder + js_verify off by default", h.version === "0.2.6" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
+  check("/health reports 0.3.0 + task-loop + the ladder + js_verify off by default", h.version === "0.3.0" && h.capabilities.includes("task-loop") && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
 }
 
 // ===== 12. scheduled() drives the loop with no HTTP request =====
@@ -405,6 +405,99 @@ function fakeLoader(spinMs) {
   await call(env5, "POST", "/v1/tick", {});
   const r5 = await env5.AUDIT_DB.prepare("SELECT status, ctx, last_error FROM code_tasks WHERE id=?").bind(e5.body.id).first();
   check("fence-in-file: a proposal containing an inner fenced block is not cut at that block", r5.status === "ready_to_publish" && /a\n```\ncode\n```\nb\nc/.test(JSON.parse(r5.ctx).patch.replace(/^\+/gm, "")), { st: r5.status, err: r5.last_error });
+}
+
+// ===== PATCH-MODE-1: large worker source, anchor window, SEARCH/REPLACE edits, version bump, mirror, hunk diff =====
+{
+  const lines = ["// big worker", 'var VERSION = "1.2.3-x";'];
+  for (let i = 0; i < 4000; i++) lines.push("function f" + i + "() { return " + i + "; }");
+  lines.push("export default { async fetch() { return new Response('ok'); } };");
+  const big = lines.join("\n") + "\n";
+  const edit = (a, b) => "<<<<<<< SEARCH\n" + a + "\n=======\n" + b + "\n>>>>>>> REPLACE";
+  const want = big.replace("function f1500() { return 1500; }", "function f1500() { return 42; }").replace('"1.2.3-x"', '"1.2.4-codeagent"');
+  const applyIn = (files, patch) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pm-"));
+    for (const [f, c] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), c); }
+    fs.writeFileSync(path.join(dir, "p.diff"), patch);
+    const ap = spawnSync("git", ["apply", "p.diff"], { cwd: dir, encoding: "utf8" });
+    return { ap, read: (f) => fs.readFileSync(path.join(dir, f), "utf8") };
+  };
+  check("patch mode fixture is larger than the whole-file cap", big.length > 60000, big.length);
+
+  // happy path: anchor + one edit; JS verified; VERSION bumped; mirror carried; small hunk patch applies to both files
+  installCodeAgent({ "qnfo-workers/w/worker.js": big, "qnfo-workers/w/deployed-current.worker.js": big });
+  let seenPrompt = "";
+  const { env } = envWith([(input) => { seenPrompt = input.messages[1].content; return edit("function f1500() { return 1500; }", "function f1500() { return 42; }"); }], { PR_PUBLISH_MODE: "pull", JS_VERIFY: "dynamic", LOADER: fakeLoader() });
+  const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "w/worker.js", goal: "make f1500 return 42", anchor: "function f1500()" });
+  await call(env, "POST", "/v1/tick", {});
+  const row = await env.AUDIT_DB.prepare("SELECT status, ctx, last_error FROM code_tasks WHERE id=?").bind(enq.body.id).first();
+  const cx = JSON.parse(row.ctx || "{}");
+  check("patch mode: large worker.js reaches ready_to_publish", row.status === "ready_to_publish", { st: row.status, err: row.last_error });
+  check("patch mode: the model saw a window, not the whole file", seenPrompt.length < 40000 && seenPrompt.includes("function f1500()") && !seenPrompt.includes("function f10()") && seenPrompt.includes("Only part of the file"), seenPrompt.length);
+  check("patch mode: the stored patch is a small hunk diff for the source and its mirror", cx.patch && cx.patch.length < 4000 && cx.mirror === "w/deployed-current.worker.js" && (cx.patch.match(/^diff --git /gm) || []).length === 2, cx.patch && cx.patch.length);
+  const r1 = applyIn({ "w/worker.js": big, "w/deployed-current.worker.js": big }, cx.patch || "");
+  check("patch mode: git apply yields the edit plus a VERSION bump in both files", r1.ap.status === 0 && r1.read("w/worker.js") === want && r1.read("w/deployed-current.worker.js") === want, r1.ap.stderr);
+  // the hunk patch still applies after an unrelated part of the file changed on main
+  const moved = big.replace("function f10() { return 10; }", "function f10() { return 10; } // touched on main");
+  const r2 = applyIn({ "w/worker.js": moved, "w/deployed-current.worker.js": moved }, cx.patch || "");
+  check("patch mode: the hunk patch survives an unrelated change elsewhere in the file", r2.ap.status === 0 && r2.read("w/worker.js").includes("return 42") && r2.read("w/worker.js").includes("touched on main"), r2.ap.stderr);
+
+  // a large file without an anchor is refused with the reason
+  installCodeAgent({ "qnfo-workers/w/worker.js": big });
+  const { env: e2 } = envWith([], { PR_PUBLISH_MODE: "pull" });
+  const q2 = await call(e2, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "w/worker.js", goal: "g" });
+  await call(e2, "POST", "/v1/tick", {});
+  const w2 = await e2.AUDIT_DB.prepare("SELECT status, last_error FROM code_tasks WHERE id=?").bind(q2.body.id).first();
+  check("patch mode: a large file without an anchor ends needs_human naming the anchor", w2.status === "needs_human" && /needs an anchor/.test(w2.last_error || ""), w2);
+
+  // an anchor that is not unique is refused
+  const { env: e3 } = envWith([], { PR_PUBLISH_MODE: "pull" });
+  const q3 = await call(e3, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "w/worker.js", goal: "g", anchor: "{ return " });
+  await call(e3, "POST", "/v1/tick", {});
+  const w3 = await e3.AUDIT_DB.prepare("SELECT status, last_error FROM code_tasks WHERE id=?").bind(q3.body.id).first();
+  check("patch mode: a non-unique anchor ends needs_human", w3.status === "needs_human" && /must occur exactly once/.test(w3.last_error || ""), w3);
+
+  // a SEARCH that is not verbatim is fed back and the next rung fixes it (markdown, no JS verifier needed)
+  const doc = Array.from({ length: 300 }, (_, i) => "line " + i + " of the document, padded to make the file long enough").join("\n") + "\n";
+  installCodeAgent({ "qnfo-workers/docs/d.md": doc });
+  let second = "";
+  const { env: e4, modelsCalled: mc4 } = envWith([edit("line 7 of the docment", "x"), (input) => { second = input.messages[1].content; return edit("line 7 of the document, padded to make the file long enough", "line seven, changed"); }], { PR_PUBLISH_MODE: "pull" });
+  const q4 = await call(e4, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "docs/d.md", goal: "change line 7" });
+  await call(e4, "POST", "/v1/tick", {});
+  const w4 = await e4.AUDIT_DB.prepare("SELECT status, attempts, ctx, last_error FROM code_tasks WHERE id=?").bind(q4.body.id).first();
+  check("patch mode: a non-verbatim SEARCH is fed back and the next model lands the edit", w4.status === "ready_to_publish" && w4.attempts === 1 && mc4.join() === "cheap-model,strong-model" && /occurs 0 times/.test(second), { st: w4.status, a: w4.attempts, err: w4.last_error });
+  const r4 = applyIn({ "docs/d.md": doc }, JSON.parse(w4.ctx).patch);
+  check("patch mode: mid-size markdown is edited by hunk patch", r4.ap.status === 0 && r4.read("docs/d.md") === doc.replace("line 7 of the document, padded to make the file long enough", "line seven, changed"), r4.ap.stderr);
+
+  // an anchor that is too long is refused at enqueue
+  const q5 = await call(e4, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "docs/d.md", goal: "g", anchor: "x".repeat(301) });
+  check("patch mode: an over-long anchor is a 400", q5.status === 400, q5.body);
+}
+// ===== JS-VERIFY-AUTO-1: the JS verifier follows the worker's own stored measurement =====
+{
+  const src = "export default { async fetch(){ return new Response('1'); } }\n";
+  installCodeAgent({ "qnfo-workers/a/x.mjs": src });
+  const mk = async (seed) => {
+    const { env } = envWith([fileBlock("export default { async fetch(){ return new Response('2'); } }")], { PR_PUBLISH_MODE: "pull", JS_VERIFY: "auto", LOADER: fakeLoader(30) });
+    await env.AUDIT_DB.prepare("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT)").run();
+    if (seed) await env.AUDIT_DB.prepare("INSERT INTO ops_config (key, value) VALUES ('code_orchestrator_dynamic_cpu', ?)").bind(JSON.stringify(seed)).run();
+    const q = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "a/x.mjs", goal: "g" });
+    await call(env, "POST", "/v1/tick", {});
+    return { env, row: await env.AUDIT_DB.prepare("SELECT status, last_error FROM code_tasks WHERE id=?").bind(q.body.id).first() };
+  };
+  const a = await mk(null);
+  check("js auto: with no measurement the JS verifier stays off", a.row.status === "needs_human" && /verification/.test(a.row.last_error || ""), a.row);
+  const b = await mk({ enforced: true, ts: new Date().toISOString() });
+  check("js auto: a fresh enforced measurement turns the JS verifier on", b.row.status === "ready_to_publish", b.row);
+  const c = await mk({ enforced: true, ts: new Date(Date.now() - 9 * 86400000).toISOString() });
+  check("js auto: a measurement older than 8 days turns it off again", c.row.status === "needs_human", c.row);
+  const d = await mk({ enforced: false, ts: new Date().toISOString() });
+  check("js auto: a not-enforced measurement keeps it off", d.row.status === "needs_human", d.row);
+  // the cron writes the measurement itself
+  await worker.scheduled({}, a.env, { waitUntil: (p) => { a.env.__p = (a.env.__p || []).concat([p]); } });
+  await Promise.all(a.env.__p || []);
+  const m = await a.env.AUDIT_DB.prepare("SELECT value FROM ops_config WHERE key='code_orchestrator_dynamic_cpu'").first();
+  check("js auto: the cron stores its own CPU-limit measurement", !!m && JSON.parse(m.value).enforced === true && !!JSON.parse(m.value).ts, m);
 }
 
 console.log("\n" + failures + " failure(s)");

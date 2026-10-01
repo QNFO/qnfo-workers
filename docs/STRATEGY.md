@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.3, 2026-10-01 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.4, 2026-10-01 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -171,6 +171,27 @@ gates. LinkedIn, X and Mastodon are connected in Buffer and post from its queue 
 unconnected until the account holder signs in to Buffer once, Facebook has no API for a
 personal profile, and an application that asks for the applicant's own writing is not drafted. Those items stay in the
 owner queue with the default in effect stated, and are not re-asked.
+
+**Owner queue delegation (2026-10-01, OWNER-QUEUE-DELEGATION-1):** the owner then directed "manage the rest of my owner
+queue automatically too". Each card was decided on the evidence the fleet can read, and the decision is the card's
+resolution. Standing decisions:
+- No application is submitted in the owner's name: each commits the owner's own work, accountability or presence. FRI is
+  not applied to (its form forbids AI help). Grant drafts (NLnet Restack; the 31 October Corrigibility Fund and Foresight
+  nodes legs) may be prepared by the fleet and kept in `funding/`, but are submitted only after the owner's own review;
+  NLnet also requires a full GenAI prompt log. Maryland teaming and the arXiv endorsement are not pursued.
+- The 13 US provisional patent applications are not converted: conversion needs the inventor's signed declaration and
+  USPTO fees. Public copy makes no patent claim; where a form asks, "13 US provisional patent applications (2025)".
+- Empowering Change is shown as a prior nonprofit (2023-2024), not a current entity, so leads that need an active
+  501(c)(3) stay off the shortlist.
+- CV facts: QNFO since 2024 (OSF, ORCID, Zenodo agree); public email rowan.quni@qnfo.org; PMP and AICP shown with the
+  year earned and never called active; Amsterdam; no work-authorization line in the public CV.
+- Profile fields that only the owner's own sign-in can edit (LinkedIn profile, ORCID, Google Scholar, ResearchGate, SSRN,
+  the X profile, Facebook) stay as they are; posting through Buffer is section 4. Reach is measured with Cloudflare Web
+  Analytics (GA4 and Search Console are retired as fleet sources, 1.3).
+- The Cloudflare API token is not rotated by the fleet: the exposure review (agent_issues 1676) found it only in private
+  configs, and the publicly exposed endpoint keys were rotated and return 401.
+- The weekly identity review keeps recording findings but files no re-ask card while `pipeline_flags.owner_queue_delegated`
+  is `1` (qnfo-fleet-dashboard IDENTITY-WEEKLY-DELEGATED-1). Other loops still file a card for a need that is genuinely new.
 
 **Never automatic (draft only, or not at all):**
 - any change to the owner's name, CV or public profiles (exception below: bios on accounts the fleet holds credentials for);

@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-01 21:21:26",
+  "audited_at": "2026-10-01 21:25:47",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-dashboard"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -579,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.24-social-gates",
+        "version": "0.7.25-linkedin-delegated",
         "worker": "qnfo-social"
       },
       {
@@ -1423,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.24-social-gates",
+      "before": "0.7.25-linkedin-delegated",
       "http": 200,
-      "live": "0.7.24-social-gates",
+      "live": "0.7.25-linkedin-delegated",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"

@@ -195,7 +195,9 @@ def publish_one(task, repo_dir, base, pr):
             return "publish_failed", None, "task repo is not " + REPO_NAME
         # The patch may only touch the task's declared path.
         files = set(re.findall(r"^\+\+\+ b/(.+)$", patch, re.M)) | set(re.findall(r"^--- a/(.+)$", patch, re.M))
-        if files != {path}:
+        # PATCH-MODE-1: a worker source may carry its deployed-current mirror in the same patch (mirror-guard), nothing else.
+        mirror = path[: -len("worker.js")] + "deployed-current.worker.js" if path.endswith("/worker.js") or path == "worker.js" else None
+        if files != {path} and not (mirror and files == {path, mirror}):
             return "publish_failed", None, "patch touches files other than the task path: " + ",".join(sorted(files))[:150]
 
         have = pr.existing(branch)  # idempotency: a crashed earlier run may already have opened the PR
@@ -213,7 +215,7 @@ def publish_one(task, repo_dir, base, pr):
         if chk.returncode != 0:
             return "publish_failed", None, "patch does not apply to " + base + ": " + (chk.stderr or "").strip()[:250]
         git(repo_dir, "apply", pf)
-        git(repo_dir, "add", "--", path)
+        git(repo_dir, "add", "--", *sorted(files))
         git(repo_dir, "commit", "-q", "-m", "code-task " + task["id"] + ": " + str(task.get("goal") or "")[:60])
         git(repo_dir, "push", "origin", "refs/heads/" + branch + ":refs/heads/" + branch)
         body = ("Opened by code-task-publish from verified code-task `" + task["id"] + "`.\n\nGoal: " + str(task.get("goal") or "")[:500] +

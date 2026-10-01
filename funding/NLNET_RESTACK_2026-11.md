@@ -1,5 +1,9 @@
 # NLnet Restack Fund proposal, ready to paste (deadline 2026-11-03, 12:00 CET)
 
+**Status (2026-10-01, OWNER-QUEUE-DELEGATION-1): not submitted.** Under the owner's queue delegation the fleet does not
+submit it: the budget is the applicant's own 500 hours of work, which the owner has said they will not do, and NLnet's
+GenAI policy requires a log of every prompt and unedited output used to draft it. It stays here as a draft.
+
 Prepared 2026-10-01 for the owner to review and submit (Identity doc tracker items 7 and 8). It replaces the August "QOKI"
 draft (`funding/NLNET_PROPOSAL.md`), which led with an AI-assisted pipeline: Restack excludes "AI-related projects ...
 unless they are already widely used throughout society (> 1 million active human users)" and names "reproducibility and trust

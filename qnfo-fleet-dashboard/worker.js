@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.15.1-capability-contract"; /* 1.15.1 /health capabilities and limitations (#1735); 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.15.2-capability-contract"; /* 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -5140,11 +5140,16 @@ function idwDeadline(text, now) {
   return { text: s, date: new Date(d).toISOString().slice(0, 10), days_left: Math.floor((d - now) / 864e5) };
 }
 __name(idwDeadline, "idwDeadline");
+// IDENTITY-WEEKLY-DELEGATED-1 (2026-10-01): a lead the owner (or the owner's standing delegation) has decided against
+// carries "Not pursued", "Declined" or "Closed" in its deadline cell; it is no longer a lead, so it gets no deadline
+// arithmetic, no page probe and no queue card.
+var IDW_DECIDED_RX = /^\**\s*(not pursued|declined|closed)\b/i;
 function idwOpportunities(md, now) {
   const rows = [];
   for (const line of idwSection(md, "Opportunities").split(IDW_NL)) {
     if (!/^\|\s*\d+\s*\|/.test(line)) continue;
     const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    if (IDW_DECIDED_RX.test(cells[3] || "")) continue;
     const link = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/.exec(cells[1] || "");
     rows.push({ n: +cells[0], lead: link ? link[1] : (cells[1] || "").slice(0, 80), url: link ? link[2] : null, deadline: idwDeadline(cells[3], now) });
   }
@@ -5284,8 +5289,20 @@ async function jobIdentityWeekly(env) {
   const actions = { profiles, opportunities: opps, replies, gaps, canonical_found: { short_bio: !!canon.short_bio, gh_org: !!canon.gh_org_description, gh_user: !!canon.gh_user_bio }, doc_updated_at: doc && doc.updated_at || null };
   await env.AUDIT.prepare("INSERT INTO portfolio_runs (run_date, kind, session, summary, scorecard_json, actions_json, needs_owner) VALUES (?1,'identity-weekly',?2,?3,?4,?5,?6)").bind(today, NAME + "/" + VERSION, summary, JSON.stringify(metrics), JSON.stringify(actions).slice(0, 6e4), needs.join(IDW_NL)).run();
   // Urgent items become ONE owner queue card per run (fleet.qnfo.org is where the owner decides; never an email to a session).
+  // IDENTITY-WEEKLY-DELEGATED-1: when the owner has delegated the queue (pipeline_flags.owner_queue_delegated = '1', set
+  // 2026-10-01 on the owner's directive "manage the rest of my owner queue automatically ... I will not provide any manual
+  // action"), the review still records every finding in portfolio_runs (needs_owner) but files no card: a card would only
+  // re-ask what the delegation already decided.
   let card = null;
-  if (urgent.length) {
+  let delegated = false;
+  try {
+    const f = await env.AUDIT.prepare("SELECT value FROM pipeline_flags WHERE key='owner_queue_delegated'").first();
+    delegated = !!f && String(f.value) === "1";
+  } catch (e) {
+    delegated = false;
+  }
+  if (urgent.length && delegated) card = "delegated: " + urgent.length + " urgent item(s) recorded, no card";
+  else if (urgent.length) {
     try {
       await env.AUDIT.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1,?2,?3,?4,?5,'/owner','urgent',?6,'identity-weekly') ON CONFLICT(slug) DO UPDATE SET title=excluded.title, why=excluded.why, updated_at=datetime('now')").bind("identity-weekly-" + today, "Identity review: " + urgent.length + " urgent item(s)", urgent.join("; ").slice(0, 400), "Nothing changes on any profile until you act.", "Open the owner page, read this week's identity review and act on each item.", today).run();
       card = "identity-weekly-" + today;
