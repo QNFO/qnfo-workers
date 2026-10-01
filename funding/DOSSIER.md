@@ -3,7 +3,7 @@
 > Aligned to docs/STRATEGY.md (STRATEGY-1, 2026-10-01). Where they differ, STRATEGY.md wins.
 
 **Applicant:** Rowan Brad Quni-Gudzinas · ORCID 0009-0002-4317-5604 · github.com/QNFO · qnfo.org
-**Location:** Amsterdam, Netherlands (Europe; phone +44 07846873917)
+**Location:** Amsterdam, Netherlands (Europe; phone removed 2026-10-01, public repo)
 **Imprint:** QNFO, the independent research imprint that publishes the work of Rowan Brad Quni-Gudzinas (one researcher with
 an AI-assisted pipeline; no legal entity), written `QNFO` with no organisation suffix. QWAV is a parked commercial label
 and is not part of the application. (Changed 2026-10-01, STRATEGY-1 section 2.1; v2 read "QNFO (open AI-assisted research
@@ -76,4 +76,4 @@ Two converging gaps:
 
 ## 7. Contact
 
-Rowan Brad Quni-Gudzinas · rowan.quni@qwav.tech · +44 07846873917 · Amsterdam, Netherlands · ORCID 0009-0002-4317-5604
+Rowan Brad Quni-Gudzinas · rowan.quni@qwav.tech · Amsterdam, Netherlands · ORCID 0009-0002-4317-5604

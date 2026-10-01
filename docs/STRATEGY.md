@@ -41,8 +41,9 @@ measurement loop**.
 | Tool | **ipatent** (ipatent.qnfo.org) | free experimental patent-drafting assistant | not promoted; `ipatent.me` has no DNS and is not cited |
 
 ### 2.2 Positioning
-**Canonical profile copy lives in the owner's Identity doc**, not here:
-[Rowan Brad Quni-Gudzinas: Identity, Brand and Opportunities](https://claude.ai/code/artifact/553e4316-5725-4601-bf41-e5fd7102c96b)
+**Canonical profile copy lives in the owner's Identity doc**, not here. Since 2026-10-01 it is stored in Cloudflare D1
+(`qnfo-audit.owner_docs`, key `identity`, private) and served behind the owner's login; it holds personal data, so it is
+never committed to this public repo. Owner directive 2026-10-01: all data on Cloudflare, nothing dependent on claude.ai
 (sections "Your brand", "Profile copy, ready to paste", "Updated CV"). It is the owner's approval surface (tracker item 1,
 due 2026-10-07) and the owner's edits win. This file keeps only what the fleet needs, and must not drift from it.
 
@@ -317,7 +318,7 @@ pages (fleet work, weeks 2-4).
 | q08 on the owner's Bluesky | removed (2.1, 7) |
 | `ipatent.me` sold in the business plan | not cited; ipatent.qnfo.org is the tool (2.1) |
 | Shutdown on 2026-10-25 with data deletion on 2026-11-01 | review gate 2026-12-31; no automatic deletion (9) |
-| Two identity workstreams: this file vs the Identity doc (other session, 2026-10-01) | the Identity doc holds the canonical profile copy, CV, opportunities and the owner's approvals; this file holds fleet strategy and points to it (2.2) |
+| Two identity workstreams: this file vs the Identity doc (other session, 2026-10-01; moved to D1 owner_docs the same day) | the Identity doc holds the canonical profile copy, CV, opportunities and the owner's approvals; this file holds fleet strategy and points to it (2.2) |
 | Bluesky up to 1/day (this file) vs 1-2 curated posts/week (Identity doc) | 1-2/week |
 | Messages to named people: automatic (this file) vs always ask (Identity doc) | research-author outreach automatic under consent rules; funders, employers and applications drafted for the owner (5) |
 | "94 Cloudflare Workers" (Identity doc, repo directory count) | 44 deployed workers on 2026-10-01 |
