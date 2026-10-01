@@ -106,7 +106,11 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # VERSION-PRECEDENCE-1: capture the prefix so the plain VERSION constant can win.
 # VERSION-QUOTE-1 (2026-09-29): accept single OR double quoted VERSION constants.
-CONST = re.compile(r'(?:var|let|const)\s+(QNFO_)?VERSION\s*=\s*[\'"]([^\'"]+)[\'"]')
+# REGEX-LITERAL-VERSION-1 (2026-10-01): a declaration must not be preceded by ^ / \\ or a quote. qnfo-fleet-control embeds
+# the TEXT of a VERSION declaration inside a regex literal (`/^var VERSION = "(\d+)\.(\d+)...`) and a match() call, and the
+# last-wins rule below picked that fragment as the repo version: worker_live_audit.registry_before read
+# `\d+\.\d+\.\d+[^` and the worker showed DRIFT against a correct live 0.4.51 for as long as the code existed.
+CONST = re.compile(r'(?<![\^/\\\'"`])(?:var|let|const)\s+(QNFO_)?VERSION\s*=\s*[\'"]([^\'"]+)[\'"]')
 # VERSION-QUOTE-1 (2026-09-29): SERVER_VERSION fallback. PROTOCOL_VERSION is a
 # different fact and is deliberately NOT matched (see the module docstring).
 SERVER_CONST = re.compile(r'(?:var|let|const)\s+SERVER_VERSION\s*=\s*[\'"]([^\'"]+)[\'"]')
