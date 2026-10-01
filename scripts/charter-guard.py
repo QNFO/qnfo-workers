@@ -21,6 +21,7 @@ WHAT IT CHECKS (fail closed; exit 1 on any violation)
                             declares `# charter-pillar: <key>` in its wrangler.toml, with a key
                             from C2, unless it carries a RETIRED or FOLDED marker. A worker that
                             cannot name the pillar it serves is parked, not built.
+  C5 CHARTER-VERSION-PARITY-1 the "Charter X.Y.Z," header line equals CHARTER_VERSION in the worker.
   C4 PORTFOLIO-DOC-SHAPE-1 docs/PORTFOLIO.md exists and carries exactly one PORTFOLIO-LIVE:BEGIN and one
                             PORTFOLIO-LIVE:END marker in that order (PORTFOLIO-LOOP-1 splices between them).
   A1 (advisory, never fails) count of existing deployable directories still missing the line.
@@ -160,6 +161,14 @@ def main(argv: list[str]) -> int:
         errs.append("C2 no pillar table between CHARTER-PILLARS markers in the charter")
     if wp and dp and wp != dp:
         errs.append(f"C2 pillar keys differ: worker.js {wp} vs charter {dp}")
+    # C5 CHARTER-VERSION-PARITY-1: the version line in the document equals CHARTER_VERSION in the kernel, so the
+    # snapshots, the live block and the Cloudflare mirror never report a version the document does not carry (#1727).
+    dv = re.search(r"^Charter (\d+\.\d+\.\d+),", doc, flags=re.M)
+    wv = re.search(r'var CHARTER_VERSION = "(\d+\.\d+\.\d+)";', src)
+    if not dv or not wv:
+        errs.append("C5 cannot read the charter version from the document header or CHARTER_VERSION in worker.js")
+    elif dv.group(1) != wv.group(1):
+        errs.append(f"C5 charter version differs: document {dv.group(1)} vs worker.js CHARTER_VERSION {wv.group(1)}")
     keys = set(wp) | set(dp)
 
     if len(argv) >= 3:

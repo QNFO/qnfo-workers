@@ -1,25 +1,12 @@
 {
-  "audited_at": "2026-10-01 11:58:12",
-  "d1_write_failures": [
-    [
-      "personal-companion",
-      "<urlopen error [Errno 104] Connection reset by peer>"
-    ],
-    [
-      "personal-life-maintain",
-      "<urlopen error [Errno 104] Connection reset by peer>"
-    ],
-    [
-      "qnfo-agent-orchestrator-legacy-dup",
-      "<urlopen error [Errno 104] Connection reset by peer>"
-    ]
-  ],
-  "d1_writes_ok": 110,
+  "audited_at": "2026-10-01 12:28:46",
+  "d1_write_failures": [],
+  "d1_writes_ok": 113,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-gateway",
-        "qnfo-outreach"
+        "qnfo-cloud-ops",
+        "qnfo-fleet-dashboard"
       ],
       "refreshed": true,
       "second_pass": []
@@ -55,18 +42,7 @@
     ],
     "cron_only_count": 3,
     "drift": [],
-    "live_err": [
-      {
-        "dir": "qnfo-gateway",
-        "err": "ERR:<urlopen error [Errno 104] Connection reset by pee",
-        "worker": "qnfo-gateway"
-      },
-      {
-        "dir": "qnfo-register-guard",
-        "err": "ERR:<urlopen error [Errno 104] Connection reset by pee",
-        "worker": "qnfo-register-guard"
-      }
-    ],
+    "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
     "name_resolution": true,
@@ -164,6 +140,7 @@
       "qnfo-pipeline-ops",
       "qnfo-proof",
       "qnfo-qwav",
+      "qnfo-register-guard",
       "qnfo-research-radar",
       "qnfo-research-supervisor",
       "qnfo-scorecard",
@@ -173,7 +150,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 59,
+    "not_deployed_notdrift": 60,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -380,6 +357,10 @@
         "worker": "qnfo-qwav"
       },
       {
+        "dir": "qnfo-register-guard",
+        "worker": "qnfo-register-guard"
+      },
+      {
         "dir": "qnfo-research-radar",
         "worker": "qnfo-research-radar"
       },
@@ -415,7 +396,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 40,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -489,7 +470,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.15.9-outreach-shared-cap",
+        "version": "1.16.0-identity-weekly",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -519,8 +500,13 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.9.1-invest-spend-basis",
+        "version": "1.11.1-owner-edit",
         "worker": "qnfo-fleet-dashboard"
+      },
+      {
+        "dir": "qnfo-gateway",
+        "version": "3.7.22-scholar-pdf-rendered",
+        "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-infra",
@@ -584,7 +570,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.36-zenodo-version-requests",
+        "version": "0.9.38-reasoning-effort-low",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1038,9 +1024,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.15.9-outreach-shared-cap",
+      "before": "1.16.0-identity-weekly",
       "http": 200,
-      "live": "1.15.9-outreach-shared-cap",
+      "live": "1.16.0-identity-weekly",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1174,9 +1160,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.9.1-invest-spend-basis",
+      "before": "1.11.1-owner-edit",
       "http": 200,
-      "live": "1.9.1-invest-spend-basis",
+      "live": "1.11.1-owner-edit",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1198,11 +1184,11 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": null,
-      "http": 0,
-      "live": null,
-      "match": 0,
-      "note": "LIVE_ERR",
+      "before": "3.7.22-scholar-pdf-rendered",
+      "http": 200,
+      "live": "3.7.22-scholar-pdf-rendered",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-idea-factory": {
@@ -1375,16 +1361,16 @@
     },
     "qnfo-register-guard": {
       "before": null,
-      "http": 0,
+      "http": 404,
       "live": null,
       "match": 0,
-      "note": "LIVE_ERR",
+      "note": "NOT_DEPLOYED",
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.36-zenodo-version-requests",
+      "before": "0.9.38-reasoning-effort-low",
       "http": 200,
-      "live": "0.9.36-zenodo-version-requests",
+      "live": "0.9.38-reasoning-effort-low",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1526,5 +1512,5 @@
       "worker": "vault-indexer"
     }
   },
-  "stale_rows_purged": 3
+  "stale_rows_purged": 0
 }

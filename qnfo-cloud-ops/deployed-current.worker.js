@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.10-sent-as-you"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1 */
+var VERSION = "1.16.1-sent-as-you"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, IDENTITY-WEEKLY-1, SENT-AS-YOU-DIGEST-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2297,6 +2297,229 @@ async function jobGtdOverdueGuard(env) {
   return { status: "ok", today, overdue: out.overdue, no_executor: out.no_executor, agent_uncited: out.agent_uncited, alerted: alert, mail };
 }
 __name(jobGtdOverdueGuard, "jobGtdOverdueGuard");
+// IDENTITY-WEEKLY-1 (2026-10-01, owner directive CLOUDFLARE-ONLY-HOST-1: "all data, dashboards and UI hosted by
+// Cloudflare, never claude.ai"). The weekly identity review used to be a claude.ai Routine that edited a claude.ai doc.
+// The doc now lives in D1 (qnfo-audit.owner_docs key 'identity') and the review runs here, deterministically, on the
+// existing Monday 07:30 Amsterdam tick (it rides the "visibility" job, so no cron is added). Every number comes from a
+// live public API or a D1 read in this run; a fetch that fails is recorded as a gap, never filled. It never edits the
+// owner's doc or any public profile: it writes one portfolio_runs row (kind 'identity-weekly') and an event digest, and
+// emails the owner only when something is urgent (a deadline within 7 days, a lead page gone, a banned claim live).
+var IDW_ORCID = "0009-0002-4317-5604";
+var IDW_PORTFOLIO_RECORD = "21806274";
+var IDW_NAME = "Rowan Brad Quni-Gudzinas";
+var IDW_MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+// docs/STRATEGY.md 2.2 "Claims we never make": a background check fails on these.
+var IDW_BANNED = [
+  [/patent portfolio|foundational (?:us )?patents|patents developed/i, "patent claim without application numbers"],
+  [/clearance[- ]eligible/i, "clearance-eligible"],
+  [/featured in national media/i, "unlinked media feature"],
+  [/\b\d{2,}\+\s*(?:publications|papers)\b/i, "inflated publication count"],
+  [/thermodynamic dead end/i, "physics headline claim"],
+  [/research foundation|research collective/i, "organisation label that overclaims"]
+];
+async function idwJson(url, headers, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms || 8e3);
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION + " (+https://qnfo.org)", Accept: "application/json", ...headers || {} }, signal: ctl.signal });
+    if (!r.ok) return { error: "HTTP " + r.status };
+    return { body: await r.json() };
+  } catch (e) {
+    return { error: String(e && e.message || e).slice(0, 120) };
+  } finally {
+    clearTimeout(t);
+  }
+}
+__name(idwJson, "idwJson");
+function idwGh(env) {
+  return env.GH_TOKEN ? { Authorization: "Bearer " + env.GH_TOKEN, Accept: "application/vnd.github+json" } : { Accept: "application/vnd.github+json" };
+}
+__name(idwGh, "idwGh");
+function idwSection(md, heading) {
+  const i = md.indexOf("## " + heading);
+  if (i < 0) return "";
+  const j = md.indexOf(NL + "## ", i + 3);
+  return j < 0 ? md.slice(i) : md.slice(i, j);
+}
+__name(idwSection, "idwSection");
+function idwNorm(s) {
+  return String(s || "").replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ").replace(/&amp;/g, "&").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim().toLowerCase();
+}
+__name(idwNorm, "idwNorm");
+function idwDeadline(text, now) {
+  const s = String(text || "");
+  let d = null;
+  let m = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(s);
+  if (m) d = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  if (d == null && (m = /\b([A-Z][a-z]{2})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/.exec(s)) && IDW_MONTHS[m[1].toLowerCase()] != null) d = Date.UTC(+m[3], IDW_MONTHS[m[1].toLowerCase()], +m[2]);
+  if (d == null && (m = /\b(\d{1,2})\s+([A-Z][a-z]{2})[a-z]*\.?\s+(\d{4})\b/.exec(s)) && IDW_MONTHS[m[2].toLowerCase()] != null) d = Date.UTC(+m[3], IDW_MONTHS[m[2].toLowerCase()], +m[1]);
+  if (d == null) return { text: s, date: null, days_left: null };
+  return { text: s, date: new Date(d).toISOString().slice(0, 10), days_left: Math.floor((d - now) / 864e5) };
+}
+__name(idwDeadline, "idwDeadline");
+function idwOpportunities(md, now) {
+  const rows = [];
+  for (const line of idwSection(md, "Opportunities").split(NL)) {
+    if (!/^\|\s*\d+\s*\|/.test(line)) continue;
+    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    const link = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/.exec(cells[1] || "");
+    rows.push({ n: +cells[0], lead: link ? link[1] : (cells[1] || "").slice(0, 80), url: link ? link[2] : null, deadline: idwDeadline(cells[3], now) });
+  }
+  return rows;
+}
+__name(idwOpportunities, "idwOpportunities");
+function idwCanonical(md) {
+  const sb = /\*\*Short bio\*\*[^\n]*\n+>\s*([^\n]+)/.exec(md);
+  const cell = (label) => {
+    const m = new RegExp("^\\|\\s*" + label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\|[^|]*\\|([^|]+)\\|", "m").exec(md);
+    return m ? m[1].trim() : null;
+  };
+  const ghUser = cell("GitHub user rwnq8");
+  return {
+    short_bio: sb ? sb[1].trim() : null,
+    gh_org_description: cell("GitHub org QNFO"),
+    gh_user_bio: ghUser && ghUser.indexOf(";") >= 0 ? ghUser.slice(ghUser.indexOf(";") + 1).trim() : null
+  };
+}
+__name(idwCanonical, "idwCanonical");
+function idwProfileCheck(platform, live, canonicalBio) {
+  const text = [live.name || "", live.bio || ""].join(" | ");
+  const claims = IDW_BANNED.filter(([rx]) => rx.test(text)).map(([, label]) => label);
+  const out = { platform, name: live.name || null, bio: (live.bio || "").slice(0, 300) || null, name_ok: live.name == null ? null : idwNorm(live.name).indexOf(idwNorm(IDW_NAME)) >= 0, banned_claims: claims };
+  if (canonicalBio) out.bio_matches_canonical = idwNorm(live.bio) === idwNorm(canonicalBio);
+  return out;
+}
+__name(idwProfileCheck, "idwProfileCheck");
+async function jobIdentityWeekly(env) {
+  const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+  const gaps = [];
+  const doc = await env.AUDIT.prepare("SELECT body_md, updated_at FROM owner_docs WHERE key='identity'").first().catch(() => null);
+  const md = doc && doc.body_md || "";
+  if (!md) gaps.push("owner_docs 'identity' missing");
+  const canon = idwCanonical(md);
+  const [bsky, ghUser, ghOrg, orcid, zCount, zRec, masto] = await Promise.all([
+    idwJson("https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=qnfo.bsky.social"),
+    idwJson("https://api.github.com/users/rwnq8", idwGh(env)),
+    idwJson("https://api.github.com/orgs/QNFO", idwGh(env)),
+    idwJson("https://pub.orcid.org/v3.0/" + IDW_ORCID + "/person"),
+    idwJson("https://zenodo.org/api/records?q=" + encodeURIComponent("creators.orcid:" + IDW_ORCID) + "&size=1"),
+    idwJson("https://zenodo.org/api/records/" + IDW_PORTFOLIO_RECORD),
+    idwJson("https://mstdn.science/api/v1/accounts/lookup?acct=QNFO")
+  ]);
+  const metrics = { as_of: today };
+  const profiles = [];
+  if (bsky.body) {
+    metrics.bluesky_followers = bsky.body.followersCount ?? null;
+    metrics.bluesky_posts = bsky.body.postsCount ?? null;
+    profiles.push(idwProfileCheck("bluesky qnfo.bsky.social", { name: bsky.body.displayName, bio: bsky.body.description }, canon.short_bio));
+  } else gaps.push("bluesky: " + bsky.error);
+  if (ghUser.body) profiles.push(idwProfileCheck("github rwnq8", { name: ghUser.body.name, bio: ghUser.body.bio }, canon.gh_user_bio));
+  else gaps.push("github user: " + ghUser.error);
+  if (ghOrg.body) profiles.push(idwProfileCheck("github org QNFO", { name: null, bio: ghOrg.body.description }, canon.gh_org_description));
+  else gaps.push("github org: " + ghOrg.error);
+  if (orcid.body) {
+    const nm = orcid.body.name || {};
+    const full = [nm["given-names"] && nm["given-names"].value, nm["family-name"] && nm["family-name"].value].filter(Boolean).join(" ");
+    const bio = orcid.body.biography && orcid.body.biography.content || "";
+    const aka = (orcid.body["other-names"] && orcid.body["other-names"]["other-name"] || []).map((o) => o.content).filter(Boolean);
+    const p = idwProfileCheck("orcid " + IDW_ORCID, { name: full || null, bio }, null);
+    p.also_known_as = aka.slice(0, 8);
+    profiles.push(p);
+  } else gaps.push("orcid: " + orcid.error);
+  if (masto.body) {
+    metrics.mastodon_followers = masto.body.followers_count ?? null;
+    metrics.mastodon_posts = masto.body.statuses_count ?? null;
+    profiles.push(idwProfileCheck("mastodon @QNFO@mstdn.science", { name: masto.body.display_name, bio: masto.body.note }, canon.short_bio));
+  } else gaps.push("mastodon: " + masto.error);
+  if (zCount.body && zCount.body.hits) metrics.zenodo_records_orcid = typeof zCount.body.hits.total === "object" ? zCount.body.hits.total.value : zCount.body.hits.total;
+  else gaps.push("zenodo count: " + (zCount.error || "no hits"));
+  if (zRec.body && zRec.body.stats) {
+    metrics.portfolio_record = { id: IDW_PORTFOLIO_RECORD, version: zRec.body.metadata && zRec.body.metadata.version || null, views: zRec.body.stats.views ?? null, unique_views: zRec.body.stats.unique_views ?? null, downloads: zRec.body.stats.downloads ?? null };
+  } else gaps.push("zenodo record " + IDW_PORTFOLIO_RECORD + ": " + (zRec.error || "no stats"));
+  try {
+    const c = await env.AUDIT.prepare("SELECT COUNT(*) dois, COALESCE(SUM(value),0) cites, COALESCE(SUM(CASE WHEN value>0 THEN 1 ELSE 0 END),0) cited FROM (SELECT doi, value, ROW_NUMBER() OVER (PARTITION BY doi ORDER BY collected_at DESC) rn FROM citation_stats WHERE source='openalex' AND metric='cited_by_count') WHERE rn=1").first();
+    metrics.openalex = { dois: c.dois, citations: c.cites, cited_dois: c.cited };
+  } catch (e) {
+    gaps.push("citation_stats: " + String(e && e.message || e).slice(0, 80));
+  }
+  // Replies from funders, employers and programmes: outcome only (sender domain + subject), never the body.
+  let replies = [];
+  try {
+    const since = new Date(now - 8 * 864e5).toISOString().slice(0, 19).replace("T", " ");
+    const rs = await env.AUDIT.prepare("SELECT sender, subject, received_at FROM emails WHERE received_at >= ?1 AND lower(sender) NOT LIKE '%qnfo.org%' AND lower(sender) NOT LIKE '%qwav.tech%' AND lower(sender) NOT LIKE '%noreply%' AND lower(sender) NOT LIKE '%no-reply%' AND lower(sender) NOT LIKE '%alert%' AND lower(sender) NOT LIKE '%notification%' AND lower(sender) NOT LIKE '%mailer-daemon%' AND (lower(subject) LIKE '%application%' OR lower(subject) LIKE '%grant%' OR lower(subject) LIKE '%proposal%' OR lower(subject) LIKE '%position%' OR lower(subject) LIKE '%interview%' OR lower(subject) LIKE '%fellow%' OR lower(subject) LIKE '%funding%' OR lower(subject) LIKE '%offer%') ORDER BY received_at DESC LIMIT 15").bind(since).all();
+    replies = (rs.results || []).map((r) => ({ from_domain: String(r.sender || "").replace(/^.*@/, "").replace(/[>\s].*$/, "").toLowerCase(), subject: String(r.subject || "").slice(0, 120), received_at: r.received_at }));
+  } catch (e) {
+    gaps.push("emails: " + String(e && e.message || e).slice(0, 80));
+  }
+  // Opportunities: deadline arithmetic from the doc, then each lead's own page (HTTP status only).
+  const opps = idwOpportunities(md, now);
+  await Promise.all(opps.filter((o) => o.url).slice(0, 20).map(async (o) => {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8e3);
+    try {
+      const r = await fetch(o.url, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops identity review)" }, redirect: "follow", signal: ctl.signal });
+      o.page_status = r.status;
+    } catch (e) {
+      o.page_status = "fetch-error";
+    } finally {
+      clearTimeout(t);
+    }
+  }));
+  const prev = await env.AUDIT.prepare("SELECT scorecard_json FROM portfolio_runs WHERE kind='identity-weekly' ORDER BY id DESC LIMIT 1").first().catch(() => null);
+  const deltas = {};
+  try {
+    const p = prev && JSON.parse(prev.scorecard_json || "{}") || {};
+    for (const k of ["bluesky_followers", "bluesky_posts", "mastodon_followers", "zenodo_records_orcid"]) if (typeof metrics[k] === "number" && typeof p[k] === "number") deltas[k] = metrics[k] - p[k];
+    if (metrics.openalex && p.openalex) deltas.openalex_citations = metrics.openalex.citations - p.openalex.citations;
+    if (metrics.portfolio_record && p.portfolio_record) deltas.portfolio_views = (metrics.portfolio_record.views || 0) - (p.portfolio_record.views || 0);
+  } catch (e) {}
+  metrics.deltas = deltas;
+  const needs = [];
+  const urgent = [];
+  for (const p of profiles) {
+    if (p.banned_claims.length) {
+      needs.push(p.platform + ": remove " + p.banned_claims.join(", "));
+      urgent.push(p.platform + " shows " + p.banned_claims.join(", "));
+    }
+    if (p.name_ok === false) needs.push(p.platform + ": name reads \"" + p.name + "\", canonical is \"" + IDW_NAME + "\"");
+    if (p.bio_matches_canonical === false) needs.push(p.platform + ": bio differs from the canonical copy in the Identity doc");
+  }
+  for (const o of opps) {
+    const dl = o.deadline.days_left;
+    if (dl != null && dl < 0) needs.push("lead " + o.n + " (" + o.lead + "): deadline " + o.deadline.date + " has passed; close or update it");
+    else if (dl != null && dl <= 14) needs.push("lead " + o.n + " (" + o.lead + "): deadline " + o.deadline.date + " in " + dl + " days");
+    if (dl != null && dl >= 0 && dl <= 7) urgent.push("lead " + o.n + " due " + o.deadline.date);
+    if (o.page_status === 404 || o.page_status === 410) {
+      needs.push("lead " + o.n + " (" + o.lead + "): its page returns " + o.page_status);
+      urgent.push("lead " + o.n + " page " + o.page_status);
+    }
+  }
+  if (replies.length) needs.push(replies.length + " possible funder/employer replies in the last 8 days (see actions_json.replies)");
+  const fmt = (v) => v == null ? "gap" : String(v);
+  const summary = ["Identity weekly " + today + ":", "Bluesky " + fmt(metrics.bluesky_followers) + " followers" + (deltas.bluesky_followers != null ? " (" + (deltas.bluesky_followers >= 0 ? "+" : "") + deltas.bluesky_followers + ")" : "") + ";", "Zenodo " + fmt(metrics.zenodo_records_orcid) + " records;", "OpenAlex " + fmt(metrics.openalex && metrics.openalex.citations) + " citations;", profiles.length + " profiles checked, " + needs.length + " owner items, " + gaps.length + " gaps."].join(" ");
+  const actions = { profiles, opportunities: opps, replies, gaps, canonical_found: { short_bio: !!canon.short_bio, gh_org: !!canon.gh_org_description, gh_user: !!canon.gh_user_bio }, doc_updated_at: doc && doc.updated_at || null };
+  await env.AUDIT.prepare("INSERT INTO portfolio_runs (run_date, kind, session, summary, scorecard_json, actions_json, needs_owner) VALUES (?1,'identity-weekly',?2,?3,?4,?5,?6)").bind(today, "qnfo-cloud-ops/" + VERSION, summary, JSON.stringify(metrics), JSON.stringify(actions).slice(0, 6e4), needs.join(NL)).run();
+  await storeDigest(env, "identity-weekly", "QNFO identity weekly — " + today, summary + NL + needs.map((n) => "- " + n).join(NL));
+  let mail = null;
+  if (urgent.length) {
+    try {
+      mail = await sendDigest(env, "QNFO identity: " + urgent.length + " urgent item(s) — " + today, summary + NL + NL + needs.map((n) => "- " + n).join(NL) + NL + NL + "Full row: qnfo-audit.portfolio_runs kind='identity-weekly' run_date=" + today);
+    } catch (e) {
+      mail = { error: String(e && e.message || e).slice(0, 120) };
+    }
+  }
+  return { status: gaps.length > 4 ? "degraded" : "ok", notes: { metrics: Object.keys(metrics).length, profiles: profiles.length, opportunities: opps.length, owner_items: needs.length, urgent: urgent.length, gaps: gaps.length, mailed: !!(mail && !mail.error) } };
+}
+__name(jobIdentityWeekly, "jobIdentityWeekly");
+// The Monday "visibility" tick also runs the identity review (IDENTITY-WEEKLY-1); a failure in one never blocks the other.
+async function jobVisibilityAndIdentity(env) {
+  const vis = await jobVisibility(env).catch((e) => ({ status: "error", notes: { error: String(e && e.message || e) } }));
+  const idn = await jobIdentityWeekly(env).catch((e) => ({ status: "error", notes: { error: String(e && e.message || e).slice(0, 200) } }));
+  const status = vis.status === "ok" && idn.status === "ok" ? "ok" : vis.status === "error" && idn.status === "error" ? "error" : "degraded";
+  return { status, notes: { visibility: vis.status, identity: idn.status, identity_notes: idn.notes } };
+}
+__name(jobVisibilityAndIdentity, "jobVisibilityAndIdentity");
 var JOBS = {
   "gtd-reconcile": jobGtdReconcile,
   "overdue-guard": jobGtdOverdueGuard,
@@ -2317,7 +2540,8 @@ var JOBS = {
   "worker-health": jobWorkerHealth,
   "sitemap-ping": jobSitemapPing,
   "loose-threads-sweep": jobLooseThreadsSweep,
-  "visibility": jobVisibility,
+  "visibility": jobVisibilityAndIdentity,
+  "identity-weekly": jobIdentityWeekly,
   "engagement": jobEngagement,
   "owner-voice-stop": jobOwnerVoiceStop,
   "owner-voice-resume": jobOwnerVoiceResume,
