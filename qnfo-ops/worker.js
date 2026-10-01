@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.32-ai-attr";
+var VERSION = "2.38.33-cache-no-tool-answers";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -515,6 +515,7 @@ async function deterministicOpsAnswer(env, text) {
 }
 __name(deterministicOpsAnswer, "deterministicOpsAnswer");
 // L1 CACHE: exact KV (1h TTL) + semantic Vectorize (cosine >= 0.93) for the chat class.
+var CHAT_CACHE_EPOCH = "e2-no-tool-answers";
 async function chatCacheLookup(env, prompt, modelId) {
   try {
     if (env.OPS_CACHE_KV) {
@@ -533,7 +534,9 @@ async function chatCacheLookup(env, prompt, modelId) {
       if (vec) {
         const hits = await env.SEMCACHE_VZ.query(vec, { topK: 1, returnMetadata: "all" });
         const mm = hits && hits.matches && hits.matches[0];
-        if (mm && mm.score >= 0.93 && mm.metadata && typeof mm.metadata.answer === "string" && mm.metadata.answer.length >= 40) return { kind: "semantic", answer: mm.metadata.answer, score: mm.score };
+        // OPS-CACHE-TOOL-ANSWER-1: only entries stored under the current epoch (pure chat answers, no tool
+        // calls) are served; pre-epoch entries may replay a tool result or an action outcome.
+        if (mm && mm.score >= 0.93 && mm.metadata && mm.metadata.epoch === CHAT_CACHE_EPOCH && typeof mm.metadata.answer === "string" && mm.metadata.answer.length >= 40) return { kind: "semantic", answer: mm.metadata.answer, score: mm.score };
       }
     }
   } catch (e) { console.log("semantic cache lookup failed:", e && e.message || e); }
@@ -552,7 +555,7 @@ async function chatCacheStore(env, prompt, answer, modelId) {
     if (env.SEMCACHE_VZ && env.WAI) {
       const emb = await env.WAI.run("@cf/baai/bge-base-en-v1.5", { text: [String(prompt || "").slice(0, 500)] });
       const vec = emb && emb.data && emb.data[0] || (Array.isArray(emb) ? emb[0] : null);
-      if (vec) await env.SEMCACHE_VZ.upsert([{ id: "c:" + fnv32(String(prompt || "")), values: vec, metadata: { answer: String(answer).slice(0, 2000), model: String(modelId || "").slice(0, 60), ts: iso() } }]);
+      if (vec) await env.SEMCACHE_VZ.upsert([{ id: "c:" + fnv32(String(prompt || "")), values: vec, metadata: { answer: String(answer).slice(0, 2000), model: String(modelId || "").slice(0, 60), ts: iso(), epoch: CHAT_CACHE_EPOCH } }]);
     }
   } catch (e) { console.log("semantic cache store failed:", e && e.message || e); }
 }
@@ -5000,7 +5003,10 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       const _parts = String(servedBy || "").split("->").map(function(s) { return s.trim(); }).filter(Boolean);
       ctx.waitUntil(logEscalation(env, strategy, _parts[0] || UPSTREAM_MODEL, _parts[_parts.length - 1] || UPSTREAM_MODEL, "cascade-fallback", "servedBy chain: " + String(servedBy || "").slice(0, 200)));
     }
-    if (cacheHit === 0 && !execUpstream && !clientTools && okFlag && String(content || "").trim().length >= 40 && String(content || "").trim().length < 4000 && String(prompt || "").length < 2000) {
+    // OPS-CACHE-TOOL-ANSWER-1: an answer built from server-side tool calls reflects live state or an action
+    // outcome (e.g. research_queue), so it is never cached; a semantic neighbour would replay it without
+    // running the tool.
+    if (cacheHit === 0 && !execUpstream && !clientTools && toolLog.length === 0 && okFlag && String(content || "").trim().length >= 40 && String(content || "").trim().length < 4000 && String(prompt || "").length < 2000) {
       ctx.waitUntil(chatCacheStore(env, prompt, String(content || "").trim(), wanted));
     }
     ctx.waitUntil(logOps(env, logRec));
