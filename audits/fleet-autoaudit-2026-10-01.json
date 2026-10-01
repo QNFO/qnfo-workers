@@ -1,18 +1,10 @@
 {
-  "audited_at": "2026-10-01 07:47:24",
+  "audited_at": "2026-10-01 08:06:34",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-ops/deployed-current.worker.js",
-        "dir": "qnfo-ops",
-        "live": "2.38.21-research-intake-truth",
-        "repo": "2.38.22-unified-open-work",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -43,16 +35,10 @@
     "cron_only_count": 3,
     "drift": [
       {
-        "dir": "personal-companion",
-        "live": "1.7.2-vault-indexer-fold",
-        "repo": "0.1.21-folded",
-        "worker": "personal-companion"
-      },
-      {
-        "dir": "qnfo-ops",
-        "live": "2.38.21-research-intake-truth",
-        "repo": "2.38.22-unified-open-work",
-        "worker": "qnfo-ops"
+        "dir": "qnfo-fleet-control",
+        "live": "0.4.58-census-dod-upsert",
+        "repo": "0.4.57-census-self-schedule",
+        "worker": "qnfo-fleet-control"
       }
     ],
     "live_err": [],
@@ -422,7 +408,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -446,8 +432,13 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.1.15-aig-caller-meta",
+        "version": "4.1.16-event-profile-guard",
         "worker": "personal-api"
+      },
+      {
+        "dir": "personal-companion",
+        "version": "1.7.2-vault-indexer-fold",
+        "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
@@ -510,11 +501,6 @@
         "worker": "qnfo-email"
       },
       {
-        "dir": "qnfo-fleet-control",
-        "version": "0.4.55-publication-preflight",
-        "worker": "qnfo-fleet-control"
-      },
-      {
         "dir": "qnfo-fleet-dashboard",
         "version": "1.7.43-scheduled-no-run-handler",
         "worker": "qnfo-fleet-dashboard"
@@ -558,6 +544,11 @@
         "dir": "qnfo-observability",
         "version": "1.2.12-chain-draining",
         "worker": "qnfo-observability"
+      },
+      {
+        "dir": "qnfo-ops",
+        "version": "2.38.23-fleet-1042-unknown",
+        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -809,19 +800,19 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.1.15-aig-caller-meta",
+      "before": "4.1.16-event-profile-guard",
       "http": 200,
-      "live": "4.1.15-aig-caller-meta",
+      "live": "4.1.16-event-profile-guard",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "0.1.21-folded",
+      "before": "1.7.2-vault-indexer-fold",
       "http": 200,
       "live": "1.7.2-vault-indexer-fold",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "personal-companion"
     },
     "personal-events-radar": {
@@ -1153,11 +1144,11 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.55-publication-preflight",
+      "before": "0.4.57-census-self-schedule",
       "http": 200,
-      "live": "0.4.55-publication-preflight",
-      "match": 1,
-      "note": "SYNC",
+      "live": "0.4.58-census-dod-upsert",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
@@ -1289,11 +1280,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.22-unified-open-work",
+      "before": "2.38.23-fleet-1042-unknown",
       "http": 200,
-      "live": "2.38.21-research-intake-truth",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "2.38.23-fleet-1042-unknown",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {

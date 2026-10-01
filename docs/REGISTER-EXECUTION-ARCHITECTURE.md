@@ -46,3 +46,30 @@ qnfo-ipatent, qnfo-email, qnfo-ai-search, personal-life-search, obsidian-writer
 Classify every worker: **executor** (owns a queue/state, closes rows) | **detector** (cron ->
 digest/alert/event) | **display/gateway** (serves data/UI) | **self-serving** (no downstream
 consumer). Deprecate or probe-cover the self-serving/zero-probe set.
+
+## Taxonomy sweep result (REGISTER-TAXONOMY-SWEEP-1, #1623, 2026-10-01)
+Executed against the 41 live scripts (Cloudflare workers list). The result is recorded in
+`worker_output_contracts.worker_class` and `class_disposition` (migration
+`2026-10-01-worker-taxonomy-sweep.sql`). The consumer evidence for each worker came from four sources:
+- live workers that bind it as a service;
+- live workers that call its URL;
+- a public route or MCP client;
+- live workers that read the tables it writes.
+
+| Class | n | Workers |
+|---|---|---|
+| executor | 21 | qnfo-signal-loop, errata-hub, qnfo-email-orchestrator, qnfo-agent-orchestrator, qnfo-social, qnfo-outreach, q08-signal-engine, qnfo-deploy-guard, personal-companion, idea-hub, fleet-exec, qnfo-fleet-control, qnfo-paper-reviser, qnfo-research-exec, qnfo-backlog-exec, qnfo-intent-orchestrator, qnfo-ops, qnfo-skill-sync, qnfo-paper-indexer, qnfo-email, qnfo-lifecycle |
+| detector | 6 | qnfo-autonomy-scorer, ai-health-prober, qnfo-ai-calibration, qnfo-observability, qnfo-cloud-ops, qnfo-kaizen |
+| display/gateway | 14 | qnfo-subscribers, qnfo-fleet-dashboard, calendar-api, qnfo-infra, qnfo-tools-mcp, personal-api, qnfo-ai-search, qnfo-memory-mcp, qnfo-archive, qnfo-gateway, qnfo-ai, qnfo-ipatent, qnfo-pdf, qnfo-containers-pilot |
+| self-serving | 0 | none: every live worker has at least one consumer |
+| retired | 2 | qnfo-fleet-feed, qnfo-proof (contracts kept, scripts not deployed) |
+
+Two workers have no in-fleet consumer. Both are kept on external-consumer evidence:
+- **qnfo-tools-mcp:** external MCP clients. It took 904 requests in 24h against a health-probe baseline of about 480.
+- **qnfo-ipatent:** the public route ipatent.qnfo.org. Its 24h traffic is at the probe baseline, so it is re-evaluated
+  if 30-day external traffic stays there.
+
+Of the 15 zero-probe deprecation candidates above, all 5 that are still live now answer `/health` with 200 (probe-covered):
+qnfo-containers-pilot, qnfo-agent-orchestrator, qnfo-ipatent, qnfo-email and qnfo-ai-search. The other 10 are no longer
+deployed: 9 return 404, and qnfo-container-executor is absent from the account. The daily census (WORKER-CENSUS-DISCRIMINATING-1, qnfo-fleet-control) turns each contract's
+`output_sql` into a productivity verdict.

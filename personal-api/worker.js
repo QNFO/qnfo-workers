@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.15-aig-caller-meta";
+var VERSION = "4.1.16-event-profile-guard";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -466,6 +466,49 @@ async function budgetSummary(env, args) {
   return { ok: true, period_days: days, grand_total: total && total.grand_total || 0, by_category: rows.results || [] };
 }
 __name(budgetSummary, "budgetSummary");
+// EVENT-REC-PROFILE-FILTER-1 (2026-10-01, #970 EVENT-REC-NO-PROFILE-FILTER-JOIN-1): both event-suggestion paths
+// (suggestEvents and the cron proactive signal) used to read only likes, wants and hobbies, so they could surface topics
+// the standing filters exclude, and in-person events after the energy budget was spent. Every candidate now passes this
+// guard, which joins three profile sources:
+//   - Excluded topics: acronyms named by standing-filters that govern recommendations (reading-list-only filters are
+//     out of scope), and by dislikes about tournaments, conferences, events, venues or crowds. Example: "No QPL/CWI
+//     topics" excludes QPL and CWI; "status-currency tournaments" excludes QPL, TSC and CCS.
+//   - Energy budget: "Max N in-person events per half-year" from filters, counted against the attendance ledger
+//     (events in category conference / workshop / school / program in the current half-year, venue not online). When
+//     the budget is spent, professional in-person candidates (conference, workshop, symposium, school, ...) are dropped.
+//     Leisure events stay.
+async function eventRecGuard(env, nowMs) {
+  var g = { exclude: [], inPersonMax: null, inPersonUsed: 0, budgetSpent: false, half: null };
+  var rows = [];
+  try { rows = (await env.PERSONAL.prepare("SELECT facet, label, statement FROM profile WHERE facet IN ('dislikes','filters','standing-filters') AND confidence >= 0.7").all()).results || []; } catch (e) {}
+  var stop = ["AI", "UI", "UX", "OK", "API", "PDF", "URL"];
+  rows.forEach(function(r) {
+    var txt = String(r.label || "") + " " + String(r.statement || "");
+    var applies = r.facet === "standing-filters" ? /recommend|reminder/i.test(txt) && !/reading/i.test(txt) : r.facet === "dislikes" ? /tournament|conference|event|venue|crowd/i.test(txt) : false;
+    if (applies) (txt.match(/\b[A-Z][A-Z0-9]{1,5}\b/g) || []).forEach(function(t) { if (stop.indexOf(t) < 0 && g.exclude.indexOf(t) < 0) g.exclude.push(t); });
+    if (r.facet === "filters") { var m = /max\s+(\d+)\s+in-person/i.exec(txt); if (m) g.inPersonMax = Number(m[1]); }
+  });
+  if (g.inPersonMax != null) {
+    var d = new Date(nowMs || Date.now()), y = d.getUTCFullYear(), h1 = d.getUTCMonth() < 6;
+    var from = h1 ? y + "-01-01" : y + "-07-01", to = h1 ? y + "-07-01" : (y + 1) + "-01-01";
+    g.half = (h1 ? "H1 " : "H2 ") + y;
+    try {
+      var ev = (await env.PERSONAL.prepare("SELECT venue, start_date FROM events WHERE start_date >= ?1 AND start_date < ?2 AND category IN ('conference','workshop','school','program')").bind(from, to).all()).results || [];
+      var seen = {};
+      ev.forEach(function(e) { var v = String(e.venue || ""); if (/online|virtual|remote|zoom|webinar/i.test(v)) return; var k = v.toLowerCase() + "|" + String(e.start_date || "").slice(0, 10); if (!seen[k]) { seen[k] = 1; g.inPersonUsed++; } });
+    } catch (e) {}
+    g.budgetSpent = g.inPersonUsed >= g.inPersonMax;
+  }
+  return g;
+}
+__name(eventRecGuard, "eventRecGuard");
+function eventRecAllowed(g, r) {
+  var txt = String(r && r.title || "") + " " + String(r && r.snippet || "") + " " + String(r && r.url || "");
+  for (var i = 0; i < g.exclude.length; i++) if (new RegExp("\\b" + g.exclude[i] + "\\b", "i").test(txt)) return { ok: false, reason: "standing-filter:" + g.exclude[i] };
+  if (g.budgetSpent && /\b(conference|workshop|symposium|summer school|school on|congress|colloquium|seminar|hackathon)\b/i.test(txt) && !/\b(online|virtual|webinar|livestream)\b/i.test(txt)) return { ok: false, reason: "energy-budget:" + g.half + "-spent" };
+  return { ok: true };
+}
+__name(eventRecAllowed, "eventRecAllowed");
 async function suggestEvents(env, args) {
   const limit = Math.min(Math.max(Number(args && args.limit || 5), 1), 10);
   const loc = await getLastLocation(env);
@@ -475,17 +518,20 @@ async function suggestEvents(env, args) {
     return r.label || r.statement;
   }).slice(0, 5).join(", ");
   const query = "upcoming events " + city + " " + interests + " " + isoDateNow();
-  const searchResult = await webSearch(query, limit + 2);
-  const suggestions = [];
+  const guard = await eventRecGuard(env);
+  const searchResult = await webSearch(query, limit + 4);
+  const suggestions = [], filtered = [];
   if (searchResult.results) {
-    for (let i = 0; i < Math.min(searchResult.results.length, limit); i++) {
+    for (let i = 0; i < searchResult.results.length && suggestions.length < limit; i++) {
       const r = searchResult.results[i];
+      const v = eventRecAllowed(guard, r);
+      if (!v.ok) { filtered.push({ title: r.title, reason: v.reason }); continue; }
       suggestions.push({ title: r.title, url: r.url, snippet: r.snippet, source: "web_search", query });
     }
   }
   let upcoming = [];
   try { const cl = await calList(env, isoDateNow(), isoDatePlus(30), 5); if (cl && cl.ok && cl.events) upcoming = cl.events.map(function(e) { return { title: e.title, dtstart: e.dtstart, venue: e.location, source: e.source, domain: e.domain }; }); } catch (e) {}
-  return { ok: true, city, interests, suggestions, upcoming_in_archive: upcoming };
+  return { ok: true, city, interests, suggestions, filtered, profile_guard: { excluded_topics: guard.exclude, in_person_budget: guard.inPersonMax, in_person_used: guard.inPersonUsed, half: guard.half, budget_spent: guard.budgetSpent }, upcoming_in_archive: upcoming };
 }
 __name(suggestEvents, "suggestEvents");
 async function predictWeek(env, args) {
@@ -1165,12 +1211,14 @@ async function generateProactiveSignals(env, brief) {
     }).join(", ");
     if (interests) {
       const query = "weekend events " + city + " " + interests + " " + isoDateNow();
-      const sr = await webSearch(query, 3);
-      if (sr.results && sr.results.length) {
+      const sr = await webSearch(query, 5);
+      const guard = await eventRecGuard(env);
+      const kept = (sr.results || []).filter(function(r2) { return eventRecAllowed(guard, r2).ok; });
+      if (kept.length) {
         const id = "sig-" + Math.random().toString(16).slice(2, 10);
-        await env.PERSONAL.prepare("INSERT OR IGNORE INTO proactive_signals (id, ts, kind, payload, shown, acted) VALUES (?1,?2,'event_suggestion',?3,0,0)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), JSON.stringify({ title: "Upcoming events matching your interests", summary: sr.results.slice(0, 2).map(function(r2) {
+        await env.PERSONAL.prepare("INSERT OR IGNORE INTO proactive_signals (id, ts, kind, payload, shown, acted) VALUES (?1,?2,'event_suggestion',?3,0,0)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), JSON.stringify({ title: "Upcoming events matching your interests", summary: kept.slice(0, 2).map(function(r2) {
           return r2.title;
-        }).join("; "), results: sr.results.slice(0, 2) })).run();
+        }).join("; "), results: kept.slice(0, 2), profile_guard: { excluded_topics: guard.exclude, dropped: (sr.results || []).length - kept.length, budget_spent: guard.budgetSpent, half: guard.half } })).run();
       }
     }
     if (brief && brief.weather && brief.weather.precip_prob_pct != null) {
