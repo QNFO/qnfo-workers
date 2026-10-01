@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { EmailMessage } from "cloudflare:email";
-var VERSION = "0.3.5-shared-cap-notes";
+var VERSION = "0.3.6-api-auth";
 var ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 var WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 var GLOBAL_DAILY_CAP = 8;
@@ -289,6 +289,16 @@ var worker_default = {
         mode: Date.now() >= ACTIVATION_AT_MS ? "external-enabled" : "draft+warmup",
         day: utcDay()
       });
+    }
+    // API-AUTH-1 (2026-10-01): /api/* returns contact PII and message bodies and can mine or send,
+    // so it needs Bearer OUTREACH_TOKEN. Fails closed when the secret is unset. The cron is unaffected.
+    if (path.startsWith("/api/")) {
+      const exp = env.OUTREACH_TOKEN;
+      if (!exp) return json({ ok: false, err: "OUTREACH_TOKEN not configured" }, 503);
+      const got = String(req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      let d = got.length === exp.length ? 0 : 1;
+      for (let i = 0; i < exp.length; i++) d |= (got.charCodeAt(i) || 0) ^ exp.charCodeAt(i);
+      if (d !== 0) return json({ ok: false, err: "unauthorized" }, 401);
     }
     if (path === "/api/contacts" && method === "GET") {
       const rows = await env.OUTREACH_D1.prepare("SELECT * FROM contacts ORDER BY first_seen DESC LIMIT 50").all();

@@ -79,6 +79,16 @@ because each one was broken at least once; the linked issue holds the evidence.
   and queued tasks no Cloudflare loop read (now `agent_issues` rows, OWNER-NOTES-ROUTE-1); the qnfo-ops `claude-sonnet-4.5` route (2.38.34: no Anthropic upstream anywhere in
   the fleet; a `claude-*` model id routes to the ops model).
 
+## Open access (OPEN-ACCESS-1)
+- Owner directive 2026-10-01: favor free, open access. The more people see the fleet's data, the more impact the owner makes.
+  Do not put reads behind a token, key, login or "owner key", and do not ask the owner to set or enter one. The dashboard
+  (https://fleet.qnfo.org, its JSON and its Ask panel) is open to everyone; a card or doc that tells the owner to create a
+  token is a defect.
+- The narrow exception is what changes the fleet or spends its money: notes and tasks that become `agent_issues` the loops act on,
+  ratifying an objective, editing the private owner documents, and unbounded AI calls. Those stay off the public page (they take
+  `x-loop-token`) and public AI use is capped per anonymous visitor and globally. Never open them silently: say what a stranger
+  could then do, and let the owner decide. Prefer a tokenless identity (Cloudflare Access) over a secret the owner must manage.
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
