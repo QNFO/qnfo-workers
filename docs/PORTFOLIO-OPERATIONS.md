@@ -2,7 +2,8 @@
 
 How docs/STRATEGY.md is run, every day, as an ongoing project. Owner directive 2026-10-01: manage the entire fleet and
 portfolio (programmes, projects, products) and its performance, reach, reputation and ROI, on the system's own authority.
-The daily Routine **"QNFO portfolio management"** (07:51 Europe/Amsterdam, a fresh session each day) executes this file.
+The daily Routine **"QNFO portfolio management"** (`trig_01KNd7qpeeLwKdWAoKCmDSTt`, 07:51 Europe/Amsterdam, a fresh session
+each day, push notification on finish) executes this file.
 Any run may improve this file through a pull request; the improvement is part of the job.
 
 ## 1. The system of record
@@ -79,7 +80,10 @@ Other routines on the account, and the split of work so nothing runs twice:
 2. Connect LinkedIn (and optionally Mastodon, Threads, X) in Buffer; then approve each LinkedIn draft with one tap.
 3. Google Analytics 4: add the fleet's service account as Viewer; share the property ID. Search Console: verify qnfo.org
    and add the same account as a Full user.
-4. Add the Claude Docs and Cloudflare connectors to the Monday identity routine (Identity doc tracker item 3).
+4. In claude.ai Routines, add the **Cloudflare Developer Platform** and **Claude Docs** connectors to both "QNFO portfolio
+   management" (trigger `trig_01KNd7qpeeLwKdWAoKCmDSTt`) and "Identity and brand weekly review" (Identity doc tracker
+   item 3). Routines created from a session store no connectors in this organisation; without them a run falls back to
+   the repo's workflows and the dashboard API, and cannot read D1 or the Identity doc directly.
 5. Ask one established arXiv author in the field for a personal endorsement (not a mass request).
 6. Add the selected works (STRATEGY 2.4) to ORCID with "Search & link".
 
