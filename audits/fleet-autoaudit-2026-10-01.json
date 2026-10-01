@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 07:38:43",
+  "audited_at": "2026-10-01 07:41:53",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -39,12 +39,6 @@
         "live": "1.7.2-vault-indexer-fold",
         "repo": "0.1.21-folded",
         "worker": "personal-companion"
-      },
-      {
-        "dir": "qnfo-fleet-control",
-        "live": "0.4.55-publication-preflight",
-        "repo": "0.4.54-version-regex-safe",
-        "worker": "qnfo-fleet-control"
       }
     ],
     "live_err": [],
@@ -414,7 +408,7 @@
       }
     ],
     "scope": "all",
-    "sync": 36,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -500,6 +494,11 @@
         "dir": "qnfo-email",
         "version": "2.2.0-handoff-notify",
         "worker": "qnfo-email"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.55-publication-preflight",
+        "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -1145,11 +1144,11 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.54-version-regex-safe",
+      "before": "0.4.55-publication-preflight",
       "http": 200,
       "live": "0.4.55-publication-preflight",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
