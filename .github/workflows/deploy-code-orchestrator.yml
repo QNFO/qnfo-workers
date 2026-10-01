@@ -85,6 +85,30 @@ jobs:
           set -o pipefail
           npx --yes wrangler@4 deploy 2>&1 | tee /tmp/wrangler.log
 
+      # WRANGLER-CONTAINER-LEDGER-1 (#1708/#1709): qnfo-deploy-guard decides whether a worker mutation was logged by looking for a
+      # fleet_deploys row within 3 minutes of the worker's modified_on. This workflow only wrote cloud_ops_events, so every wrangler
+      # deploy of this worker was filed as an unlogged mutation and an uncoordinated deploy. The row is written right after the
+      # wrangler step, before the health gate (which can wait up to two minutes), so it lands inside the guard's window.
+      - name: Record the deploy in the guard ledger fleet_deploys
+        if: always() && steps.wrangler.outcome != 'skipped'
+        env:
+          WR: ${{ steps.wrangler.outcome }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then echo "::error::no credentials, guard ledger unwritten"; exit 1; fi
+          dbid="$(grep -m1 -E '^database_id' qnfo-code-orchestrator/wrangler.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          ok=1
+          if [ "$WR" != "success" ]; then ok=0; fi
+          ts="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+          note="wrangler deploy (deploy-code-orchestrator.yml run ${GITHUB_RUN_ID}, container worker): wrangler=$WR"
+          body="$(jq -cn --arg actor "github-actions/deploy-code-orchestrator" --arg sha "$GITHUB_SHA" --arg src "qnfo-code-orchestrator/worker.js" --argjson ok "$ok" --arg note "$note" --arg ts "$ts" --arg sess "run-${GITHUB_RUN_ID}" \
+            '{sql:"INSERT INTO fleet_deploys (worker, actor, from_sha, to_sha, source_path, ok, note, ts, session_id) VALUES (?,?,?,?,?,?,?,?,?)",params:["qnfo-code-orchestrator",$actor,null,$sha,$src,$ok,$note,$ts,$sess]}')"
+          code="$(curl -s -o /tmp/ledger.json -w '%{http_code}' --max-time 30 -X POST \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database/$dbid/query" --data "$body")"
+          echo "guard ledger write HTTP $code success=$(jq -r '.success' /tmp/ledger.json 2>/dev/null)"
+          if [ "$code" != "200" ]; then echo "::error::guard ledger write failed"; exit 1; fi
+
       - name: Gate on live health VERSION (fail closed)
         id: health
         env:
