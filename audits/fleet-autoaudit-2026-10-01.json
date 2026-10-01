@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 10:42:04",
+  "audited_at": "2026-10-01 10:54:21",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -33,44 +33,7 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [
-      {
-        "dir": "q08-signal-engine",
-        "live": "0.7.36-personal-channel-hold-ascii",
-        "repo": "0.7.35-ai-attr",
-        "worker": "q08-signal-engine"
-      },
-      {
-        "dir": "qnfo-autonomy-scorer",
-        "live": "1.1.3-retired-gates",
-        "repo": "1.1.2-alert-undigested",
-        "worker": "qnfo-autonomy-scorer"
-      },
-      {
-        "dir": "qnfo-cloud-ops",
-        "live": "1.15.8-outreach-consent",
-        "repo": "1.15.7-radar-truthful",
-        "worker": "qnfo-cloud-ops"
-      },
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "live": "1.7.47-noindex-review-gate",
-        "repo": "1.7.46-obs-lastobserved",
-        "worker": "qnfo-fleet-dashboard"
-      },
-      {
-        "dir": "qnfo-gateway",
-        "live": "3.7.17-paper-page-seo",
-        "repo": "3.7.16-utf8-escape",
-        "worker": "qnfo-gateway"
-      },
-      {
-        "dir": "qnfo-outreach",
-        "live": "0.3.3-reply-stop",
-        "repo": "0.3.2",
-        "worker": "qnfo-outreach"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -425,7 +388,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 35,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -458,6 +421,11 @@
         "worker": "personal-companion"
       },
       {
+        "dir": "q08-signal-engine",
+        "version": "0.7.36-personal-channel-hold-ascii",
+        "worker": "q08-signal-engine"
+      },
+      {
         "dir": "qnfo-agent-orchestrator",
         "version": "1.1.0",
         "worker": "qnfo-agent-orchestrator"
@@ -483,9 +451,19 @@
         "worker": "qnfo-archive"
       },
       {
+        "dir": "qnfo-autonomy-scorer",
+        "version": "1.1.3-retired-gates",
+        "worker": "qnfo-autonomy-scorer"
+      },
+      {
         "dir": "qnfo-backlog-exec",
         "version": "2.0.1-health-probe-budget",
         "worker": "qnfo-backlog-exec"
+      },
+      {
+        "dir": "qnfo-cloud-ops",
+        "version": "1.15.8-outreach-consent",
+        "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
@@ -511,6 +489,16 @@
         "dir": "qnfo-fleet-control",
         "version": "0.4.68-remediation-tick",
         "worker": "qnfo-fleet-control"
+      },
+      {
+        "dir": "qnfo-fleet-dashboard",
+        "version": "1.7.47-noindex-review-gate",
+        "worker": "qnfo-fleet-dashboard"
+      },
+      {
+        "dir": "qnfo-gateway",
+        "version": "3.7.17-paper-page-seo",
+        "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-infra",
@@ -551,6 +539,11 @@
         "dir": "qnfo-ops",
         "version": "2.38.32-ai-attr",
         "worker": "qnfo-ops"
+      },
+      {
+        "dir": "qnfo-outreach",
+        "version": "0.3.3-reply-stop",
+        "worker": "qnfo-outreach"
       },
       {
         "dir": "qnfo-paper-indexer",
@@ -855,11 +848,11 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.7.35-ai-attr",
+      "before": "0.7.36-personal-channel-hold-ascii",
       "http": 200,
       "live": "0.7.36-personal-channel-hold-ascii",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "q08-signal-engine"
     },
     "qnfo-agent-orchestrator": {
@@ -959,11 +952,11 @@
       "worker": "qnfo-auditor"
     },
     "qnfo-autonomy-scorer": {
-      "before": "1.1.2-alert-undigested",
+      "before": "1.1.3-retired-gates",
       "http": 200,
       "live": "1.1.3-retired-gates",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-autonomy-scorer"
     },
     "qnfo-autopilot": {
@@ -1023,11 +1016,11 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.15.7-radar-truthful",
+      "before": "1.15.8-outreach-consent",
       "http": 200,
       "live": "1.15.8-outreach-consent",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-cloud-ops"
     },
     "qnfo-code-agent": {
@@ -1159,11 +1152,11 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.46-obs-lastobserved",
+      "before": "1.7.47-noindex-review-gate",
       "http": 200,
       "live": "1.7.47-noindex-review-gate",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
@@ -1183,11 +1176,11 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.16-utf8-escape",
+      "before": "3.7.17-paper-page-seo",
       "http": 200,
       "live": "3.7.17-paper-page-seo",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-gateway"
     },
     "qnfo-idea-factory": {
@@ -1295,11 +1288,11 @@
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
-      "before": "0.3.2",
+      "before": "0.3.3-reply-stop",
       "http": 200,
       "live": "0.3.3-reply-stop",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-outreach"
     },
     "qnfo-paper-explainer": {
