@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.58-census-dod-upsert";
+var VERSION = "0.4.59-census-uncontracted";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3497,10 +3497,16 @@ async function workerCensus(env) {
   var req = {}; (await rows("SELECT worker, requests FROM analytics_dash_workers")).forEach(function (r) { req[r.worker] = Number(r.requests) || 0; });
   var contracts = await rows("SELECT worker, output_sql, state FROM worker_output_contracts WHERE COALESCE(state,'ACTIVE') = 'ACTIVE'");
   var dailyOrSlower = function (list) { return list.length > 0 && list.every(function (c) { var f = String(c).trim().split(/\s+/); return f.length === 5 && /^\d+$/.test(f[0]) && /^\d+$/.test(f[1]); }); };
+  // WORKER-CENSUS-UNCONTRACTED-1: a scheduled worker with no ACTIVE output contract (a new or redeployed worker, e.g.
+  // radar-hub on 2026-10-01) is reported as UNMEASURED instead of being skipped, so it cannot sit outside the census.
+  var contracted = {};
+  contracts.forEach(function(x) { contracted[x.worker] = 1; });
+  Object.keys(crons).forEach(function(n) { if (!contracted[n]) contracts.push({ worker: n, output_sql: null, uncontracted: true }); });
   for (var i = 0; i < contracts.length; i++) {
     var c = contracts[i], w = c.worker, cl = crons[w] || [], verdict, reason;
     var httpBad = live[w] != null && Number(live[w]) !== 200 && cl.length === 0;
     if (httpBad || hb[w] === 0) { verdict = "DEGRADED"; reason = httpBad ? "live /health http " + live[w] : "latest heartbeat ok=0"; }
+    else if (c.uncontracted) { verdict = "UNMEASURED"; reason = "no output contract (worker_output_contracts) for a scheduled worker"; }
     else if (!c.output_sql) { verdict = "UNMEASURED"; reason = "no executable output probe (worker_output_contracts.output_sql)"; }
     else {
       var r24 = await all(fill(c.output_sql, w24)), r7 = await all(fill(c.output_sql, w7));
@@ -3519,7 +3525,7 @@ async function workerCensus(env) {
       await db.prepare("INSERT INTO worker_dod (worker, req24, measured, verdict, evidence, updated_at) VALUES (?5, ?2, 1, ?1, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET verdict=excluded.verdict, req24=excluded.req24, measured=1, evidence=excluded.evidence, updated_at=excluded.updated_at").bind(verdict, req[w] != null ? req[w] : null, ("WORKER-CENSUS-DISCRIMINATING-1: " + reasonFull).slice(0, 400), nowIso, w).run();
     } catch (e) {}
   }
-  try { await db.prepare("DELETE FROM fleet_worker_census WHERE worker NOT IN (SELECT worker FROM worker_output_contracts WHERE COALESCE(state,'ACTIVE') = 'ACTIVE')").run(); } catch (e) {}
+  try { await db.prepare("DELETE FROM fleet_worker_census WHERE worker NOT IN (SELECT worker FROM worker_output_contracts WHERE COALESCE(state,'ACTIVE') = 'ACTIVE') AND worker NOT IN (SELECT name FROM worker_schedules)").run(); } catch (e) {}
   return out;
 }
 __name(workerCensus, "workerCensus");
