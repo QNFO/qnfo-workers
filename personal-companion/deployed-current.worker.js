@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.7.2-vault-indexer-fold";
+var VERSION = "1.7.3-vault-indexer-version-scope";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -1856,7 +1856,7 @@ var worker_default = {
 // index the personal twin retrieves from. It now runs here on the hourly cron, namespaced so its helpers cannot
 // collide with this worker's own. Its unauthenticated /run and /drain routes were not carried over.
 var VaultIndexer = (function() {
-  var VERSION = "0.1.21-folded";
+  var INDEXER_VERSION = "0.1.21-folded";
   var WORKER = "personal-companion:vault-indexer";
   var MAX_LIST_PAGES = 100;
   var MAX_DOCS = 250;
@@ -2095,7 +2095,7 @@ var VaultIndexer = (function() {
     s.elapsedMs = Date.now() - t0;
     return s;
   }
-  return { run: run, VERSION: VERSION };
+  return { run: run, VERSION: INDEXER_VERSION };
 })();
 async function sendMorningBrief(env) {
   try {
