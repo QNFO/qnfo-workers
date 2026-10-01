@@ -1,8 +1,25 @@
 {
-  "audited_at": "2026-10-01 10:02:20",
+  "audited_at": "2026-10-01 10:09:04",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_deploy_settle": {
+      "settled": [
+        "qnfo-ops"
+      ],
+      "waited_for": [
+        "qnfo-ops"
+      ]
+    },
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-ops"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "qnfo-ops"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -26,48 +43,14 @@
       },
       {
         "crons": [
-          "0 3 * * *",
-          "30 3 * * 1",
-          "0 4 1 * *"
-        ],
-        "dir": "qnfo-fleet-calibrator",
-        "worker": "qnfo-fleet-calibrator"
-      },
-      {
-        "crons": [
           "0 * * * *"
         ],
         "dir": "qnfo-signal-loop",
         "worker": "qnfo-signal-loop"
       }
     ],
-    "cron_only_count": 4,
-    "drift": [
-      {
-        "dir": "personal-companion",
-        "live": "1.7.3-ai-attribution",
-        "repo": "1.7.2-vault-indexer-fold",
-        "worker": "personal-companion"
-      },
-      {
-        "dir": "qnfo-ai",
-        "live": "5.29.10-ensemble-stage-share-ai-attribution",
-        "repo": "5.29.9-ensemble-stage-share",
-        "worker": "qnfo-ai"
-      },
-      {
-        "dir": "qnfo-fleet-control",
-        "live": "0.4.65-retired-present",
-        "repo": "0.4.64-resurrection-signal",
-        "worker": "qnfo-fleet-control"
-      },
-      {
-        "dir": "qnfo-social",
-        "live": "0.7.18-ai-attribution",
-        "repo": "0.7.17-distribution-reconcile",
-        "worker": "qnfo-social"
-      }
-    ],
+    "cron_only_count": 3,
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -155,6 +138,7 @@
       "qnfo-error-selfheal",
       "qnfo-events",
       "qnfo-fleet-advisor",
+      "qnfo-fleet-calibrator",
       "qnfo-fleet-deploy",
       "qnfo-fleet-feed",
       "qnfo-idea-factory",
@@ -175,7 +159,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 59,
+    "not_deployed_notdrift": 60,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -338,6 +322,10 @@
         "worker": "qnfo-fleet-advisor"
       },
       {
+        "dir": "qnfo-fleet-calibrator",
+        "worker": "qnfo-fleet-calibrator"
+      },
+      {
         "dir": "qnfo-fleet-deploy",
         "worker": "qnfo-fleet-deploy"
       },
@@ -414,8 +402,10 @@
         "worker": "vault-indexer"
       }
     ],
+    "retired_present": [],
+    "retired_present_count": 0,
     "scope": "all",
-    "sync": 37,
+    "sync": 40,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -443,6 +433,11 @@
         "worker": "personal-api"
       },
       {
+        "dir": "personal-companion",
+        "version": "1.7.3-ai-attribution",
+        "worker": "personal-companion"
+      },
+      {
         "dir": "q08-signal-engine",
         "version": "0.7.34-alert-undigested",
         "worker": "q08-signal-engine"
@@ -451,6 +446,11 @@
         "dir": "qnfo-agent-orchestrator",
         "version": "1.1.0",
         "worker": "qnfo-agent-orchestrator"
+      },
+      {
+        "dir": "qnfo-ai",
+        "version": "5.29.10-ensemble-stage-share-ai-attribution",
+        "worker": "qnfo-ai"
       },
       {
         "dir": "qnfo-ai-calibration",
@@ -503,6 +503,11 @@
         "worker": "qnfo-email"
       },
       {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.65-retired-present",
+        "worker": "qnfo-fleet-control"
+      },
+      {
         "dir": "qnfo-fleet-dashboard",
         "version": "1.7.46-obs-lastobserved",
         "worker": "qnfo-fleet-dashboard"
@@ -548,11 +553,6 @@
         "worker": "qnfo-observability"
       },
       {
-        "dir": "qnfo-ops",
-        "version": "2.38.28-intake-idempotent",
-        "worker": "qnfo-ops"
-      },
-      {
         "dir": "qnfo-outreach",
         "version": "0.3.2",
         "worker": "qnfo-outreach"
@@ -583,6 +583,11 @@
         "worker": "qnfo-skill-sync"
       },
       {
+        "dir": "qnfo-social",
+        "version": "0.7.18-ai-attribution",
+        "worker": "qnfo-social"
+      },
+      {
         "dir": "qnfo-subscribers",
         "version": "1.1.2-suppression-gate",
         "worker": "qnfo-subscribers"
@@ -601,6 +606,10 @@
         "dir": "radar-hub",
         "version": "1.0.9",
         "worker": "radar-hub"
+      },
+      {
+        "version": "2.38.31-phase-a-frontier-routing",
+        "worker": "qnfo-ops"
       }
     ]
   },
@@ -815,11 +824,11 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.7.2-vault-indexer-fold",
+      "before": "1.7.3-ai-attribution",
       "http": 200,
       "live": "1.7.3-ai-attribution",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "personal-companion"
     },
     "personal-events-radar": {
@@ -887,11 +896,11 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.29.9-ensemble-stage-share",
+      "before": "5.29.10-ensemble-stage-share-ai-attribution",
       "http": 200,
       "live": "5.29.10-ensemble-stage-share-ai-attribution",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
@@ -1144,18 +1153,18 @@
     },
     "qnfo-fleet-calibrator": {
       "before": null,
-      "http": null,
+      "http": 404,
       "live": null,
       "match": 0,
-      "note": "CRON_ONLY",
+      "note": "NOT_DEPLOYED",
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.64-resurrection-signal",
+      "before": "0.4.65-retired-present",
       "http": 200,
       "live": "0.4.65-retired-present",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
@@ -1287,9 +1296,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.28-intake-idempotent",
+      "before": "2.38.31-phase-a-frontier-routing",
       "http": 200,
-      "live": "2.38.28-intake-idempotent",
+      "live": "2.38.31-phase-a-frontier-routing",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1423,11 +1432,11 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.17-distribution-reconcile",
+      "before": "0.7.18-ai-attribution",
       "http": 200,
       "live": "0.7.18-ai-attribution",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
