@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-01 11:07:25",
+  "audited_at": "2026-10-01 11:12:04",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-ops"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -537,7 +544,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.32-ai-attr",
+        "version": "2.38.33-cache-no-tool-answers",
         "worker": "qnfo-ops"
       },
       {
@@ -1280,9 +1287,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.32-ai-attr",
+      "before": "2.38.33-cache-no-tool-answers",
       "http": 200,
-      "live": "2.38.32-ai-attr",
+      "live": "2.38.33-cache-no-tool-answers",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
