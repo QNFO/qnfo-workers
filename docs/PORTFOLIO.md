@@ -1,6 +1,6 @@
 # The QNFO portfolio (QNFO-PORTFOLIO-1)
 
-Portfolio policy 1.0.0, 2026-10-01. The QNFO GitHub organisation is the public face of everything the Quniverse
+Portfolio policy 1.0.1, 2026-10-01 (1.0.1: the loop repairs hygiene itself, PORTFOLIO-HYGIENE-1). The QNFO GitHub organisation is the public face of everything the Quniverse
 produces: the fleet, the research programs, the papers' source, the demos, the licence and the organisation profile.
 This document is the policy half of the portfolio; the live half (section 5, between the `PORTFOLIO-LIVE` markers) is
 regenerated daily by `qnfo-fleet-control` (PORTFOLIO-LOOP-1) from the live organisation and the program registry.
@@ -61,11 +61,17 @@ than 120 days). The hygiene score is the share of graded repositories with none 
 ## 4. Portfolio rules (binding on every session and worker)
 
 1. **A repository is a portfolio item or it does not exist.** A new QNFO repository names its tier (by the rules above)
-   and, if it is research, a WBS code in `program_registry` within one sync. The loop lists unlinked research
-   repositories every day until they are registered.
-2. **Fewer, linked, described.** Every active public repository carries a description, topics and a licence
-   (`QNFO/license`, the Content License Agreement, for research and demos; a code licence for platform repositories).
-   The loop lists the gaps daily; sessions fix them when they touch the repository.
+   and, if it is research, a WBS code in `program_registry` within one sync. The loop fills an empty `github_repo`
+   itself when the registry row's slug equals the repository name or the repository's description names the code
+   (PORTFOLIO-HYGIENE-1); it lists the rest every day until a session registers them.
+2. **Fewer, linked, described.** Every active public repository carries a description, topics and a licence. The
+   licence is the QNFO Unified License Agreement v2.0 (`QNFO/license`, SPDX `LicenseRef-QNFO-ULA-2.0`), which applies
+   by its own scope to every repository of the organisation, code included; GitHub reports it as `NOASSERTION`, which
+   counts as licensed. The loop repairs the gaps itself, at most 12 actions per sync: a missing LICENSE file is created
+   from `QNFO/license` (never replaced), an empty description is taken from the README's first paragraph, missing
+   topics are the tier baseline plus the slugs of the programs served. Every action is a `portfolio_actions` row
+   (`GET /portfolio` lists the last forty) and the next sync measures it; `portfolio_hygiene` is graded in the charter
+   under the autonomy pillar (target >= 0.9).
 3. **Archive, do not delete.** A research repository that is dormant for 120+ days and has no WBS code is an archive
    candidate. The loop proposes; a session archives (reversible); nothing is ever deleted.
 4. **Private stays private.** Private repositories are counted in every surface and named in none.
