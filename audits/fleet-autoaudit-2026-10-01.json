@@ -1,8 +1,32 @@
 {
-  "audited_at": "2026-10-01 11:16:06",
+  "audited_at": "2026-10-01 11:22:29",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_deploy_settle": {
+      "settled": [
+        "qnfo-fleet-dashboard",
+        "qnfo-gateway",
+        "qnfo-social"
+      ],
+      "waited_for": [
+        "qnfo-fleet-dashboard",
+        "qnfo-gateway",
+        "qnfo-social"
+      ]
+    },
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-code-orchestrator",
+        "qnfo-fleet-control"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "qnfo-fleet-dashboard",
+        "qnfo-gateway",
+        "qnfo-social"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -388,7 +412,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 41,
+    "sync": 38,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -467,7 +491,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.2.2",
+        "version": "0.2.3",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -482,23 +506,13 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.2.0-handoff-notify",
+        "version": "2.2.1-email-id-returning",
         "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.68-remediation-tick",
+        "version": "0.4.69-charter-loop",
         "worker": "qnfo-fleet-control"
-      },
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.47-noindex-review-gate",
-        "worker": "qnfo-fleet-dashboard"
-      },
-      {
-        "dir": "qnfo-gateway",
-        "version": "3.7.17-paper-page-seo",
-        "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-infra",
@@ -571,11 +585,6 @@
         "worker": "qnfo-skill-sync"
       },
       {
-        "dir": "qnfo-social",
-        "version": "0.7.18-ai-attribution",
-        "worker": "qnfo-social"
-      },
-      {
         "dir": "qnfo-subscribers",
         "version": "1.1.2-suppression-gate",
         "worker": "qnfo-subscribers"
@@ -594,6 +603,18 @@
         "dir": "radar-hub",
         "version": "1.0.9",
         "worker": "radar-hub"
+      },
+      {
+        "version": "1.7.48-reach-signals-prior-window",
+        "worker": "qnfo-fleet-dashboard"
+      },
+      {
+        "version": "0.7.19-post-id-utm",
+        "worker": "qnfo-social"
+      },
+      {
+        "version": "3.7.18-org-label",
+        "worker": "qnfo-gateway"
       }
     ]
   },
@@ -1032,9 +1053,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.2.2",
+      "before": "0.2.3",
       "http": 200,
-      "live": "0.2.2",
+      "live": "0.2.3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1064,9 +1085,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.2.0-handoff-notify",
+      "before": "2.2.1-email-id-returning",
       "http": 200,
-      "live": "2.2.0-handoff-notify",
+      "live": "2.2.1-email-id-returning",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1144,17 +1165,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.68-remediation-tick",
+      "before": "0.4.69-charter-loop",
       "http": 200,
-      "live": "0.4.68-remediation-tick",
+      "live": "0.4.69-charter-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.47-noindex-review-gate",
+      "before": "1.7.48-reach-signals-prior-window",
       "http": 200,
-      "live": "1.7.47-noindex-review-gate",
+      "live": "1.7.48-reach-signals-prior-window",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1176,9 +1197,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.17-paper-page-seo",
+      "before": "3.7.18-org-label",
       "http": 200,
-      "live": "3.7.17-paper-page-seo",
+      "live": "3.7.18-org-label",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1416,9 +1437,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.18-ai-attribution",
+      "before": "0.7.19-post-id-utm",
       "http": 200,
-      "live": "0.7.18-ai-attribution",
+      "live": "0.7.19-post-id-utm",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
