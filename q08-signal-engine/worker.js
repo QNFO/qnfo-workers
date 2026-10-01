@@ -33,7 +33,7 @@
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.33-run-lifecycle"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.34-alert-undigested"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -991,7 +991,7 @@ async function stallDetector(env) {
     var desc = "Filed automatically by q08-signal-engine " + VERSION + " stallDetector. Last 3 finished runs: " + causes + ". Check the quality-gate sub-causes above (engine_runs.error) and GET https://q08.org/api/runs. Closes when a run publishes (piece_published=1).";
     var now = Date.now();
     await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'q08-signal-engine', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status='open' AND title LIKE 'Q08-PUBLISH-STALL-AUTO-1:%')").bind(title, desc, now).run().catch(function () {});
-    await env.AUDIT.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('q08-signal-engine', 'warn', ?1, 0)").bind(title).run().catch(function () {});
+    await env.AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES ('q08-signal-engine', 'warn', ?1)").bind(title).run().catch(function () {});
   } catch (e) {}
 }
 export default {

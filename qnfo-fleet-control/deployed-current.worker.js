@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.49-graphql-usage";
+var VERSION = "0.4.50-sla-escalate";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2923,6 +2923,7 @@ var worker_default2 = {
     ctx.waitUntil(reassertObservability(env).catch((e) => console.error("reassertObservability error:", e && e.message || e)));
     ctx.waitUntil(refreshOwnedMetrics(env).catch((e) => console.error("refreshOwnedMetrics error:", e && e.message || e)));
     ctx.waitUntil(evolveTick(env, false).catch((e) => console.error("evolveTick error:", e && e.message || e)));
+    ctx.waitUntil(slaEscalate(env).catch((e) => console.error("slaEscalate error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -3033,6 +3034,23 @@ async function scriptUsage7d(env, name) {
   }
 }
 __name(scriptUsage7d, "scriptUsage7d");
+// SLA-BREACH-ESCALATE-1 (2026-10-01, issue 1619): the SLA plane detected breaches (v_sla_breaches) and never
+// escalated them, so a breached issue looked like any other backlog row. Each hourly run raises one alert per
+// breached issue per day (digested IS NULL, so qnfo-social's alertDigest consumes it and qnfo-observability shows it).
+async function slaEscalate(env) {
+  var db = env.AUDIT_DB || env.AUDIT;
+  var rows = (await db.prepare("SELECT b.id, b.priority, b.owner, b.sla_due_at, substr(a.title,1,120) title FROM v_sla_breaches b JOIN agent_issues a ON a.id=b.id LIMIT 50").all()).results || [];
+  var raised = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i], key = "SLA-BREACH #" + r.id + ":";
+    var seen = await db.prepare("SELECT 1 FROM alerts WHERE source='sla-breach' AND message LIKE ?1 AND created_at > datetime('now','-1 day') LIMIT 1").bind(key + "%").first();
+    if (seen) continue;
+    await db.prepare("INSERT INTO alerts (source, level, message) VALUES ('sla-breach', ?1, ?2)").bind(r.priority === "critical" || r.priority === "high" ? "error" : "warn", key + " " + r.title + " (owner " + r.owner + ", SLA due " + r.sla_due_at + ")").run();
+    raised++;
+  }
+  return { breaches: rows.length, raised: raised };
+}
+__name(slaEscalate, "slaEscalate");
 async function disposeRetired(env) {
   try {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";
