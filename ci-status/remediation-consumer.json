@@ -1,12 +1,21 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@adfc8ae4b310",
- "due": 0,
+ "verifier": "remediation-consumer@99c7811de66a",
+ "due": 1,
  "pass": 0,
- "fail": 0,
+ "fail": 1,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "EVID-1710-RESUME",
+   "issue_id": 1710,
+   "verdict": "fail",
+   "expected": "sent-after-resume",
+   "observed": "pending",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -22,7 +31,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 2355,
- "head": "adfc8ae4b31078548e9454a43b8fff0291f82402",
+ "spent_ms": 3819,
+ "head": "99c7811de66a0a2391b315c853d7036e75d66e6c",
  "job_status": "success"
 }
