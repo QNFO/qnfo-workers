@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.2, 2026-10-01 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.3, 2026-10-01 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -115,7 +115,7 @@ the funding strategy's own "volume trap" warning applies.
 |---|---|---|---|---|---|
 | qnfo.org + papers.qnfo.org | home of record; every post links here | QNFO | continuous | owned (qnfo-gateway) | live; SEO fixes in PAPER-PAGE-SEO-1 |
 | Email digest | the owned audience | Rowan | monthly research note (replaces weekly auto-digest once 10+ subscribers) | qnfo-subscribers | live, 1 subscriber |
-| LinkedIn (personal profile) | primary professional channel | Rowan | 2-3 posts/week; flagship document posts | the fleet writes each post into Buffer as a draft; **the owner approves it with one tap** (LinkedIn API Terms 3.1 forbid using the APIs "to automate posting") | not connected |
+| LinkedIn (personal profile) | primary professional channel | Rowan | 2-3 posts/week; flagship document posts | the fleet writes each post into the Buffer queue and Buffer, the account's authorised publishing app, publishes it (owner delegation 2026-10-01, section 5); `pipeline_flags.linkedin_mode=draft` switches back to one-tap approval | connected in Buffer; checked daily in `social_channels` |
 | Bluesky | research community | Rowan | 1-2 curated posts/week (Identity doc tracker item 10), research only | direct AT Protocol, automatic once the owner approves the voice | live; q08 removed from it |
 | Mastodon | academic mirror | Rowan | mirror of Bluesky | via Buffer, automatic | not connected |
 | Threads | general-audience mirror | Rowan | mirror of Bluesky | Threads API (free; per-post views) or Buffer, automatic | not connected |
@@ -155,16 +155,20 @@ The 2026-10-01 directive authorises the system to publish and send **as the owne
 - first-contact research emails and one follow-up under the consent rules below;
 - the subscriber digest/research note.
 
-**Platform rule that overrides this section:** LinkedIn's API Terms (3.1) forbid automated posting, so LinkedIn posts are
-drafted automatically and published only after the owner's one-tap approval in Buffer. Bluesky (bots and scheduled posts are
-welcome if interactions stay opt-in), Mastodon and Threads allow automatic posting inside the gates below.
+**LinkedIn (LINKEDIN-OWNER-DELEGATED-1, owner direction 2026-10-01 21:35Z, "fix permanently on your own"):** the fleet
+never calls LinkedIn's API. It adds each post to the Buffer queue, and Buffer, the app the account holder authorised for
+this account, publishes it, inside the same cadence cap, pause flag and content gates as every other channel. LinkedIn's
+API Terms 3.1 bind developers of LinkedIn API apps; the residual risk (LinkedIn may still limit an account it judges
+automated) is held down by the 2-3/week cadence and the content gates, and `pipeline_flags.linkedin_mode=draft` restores
+one-tap approval at once. Bluesky (bots and scheduled posts are welcome if interactions stay opt-in), Mastodon and Threads
+allow automatic posting inside the gates below.
 
 **Owner delegation of social accounts (2026-10-01, OWNER-DELEGATION-SOCIAL-1):** the owner directed "automatically manage
 all my social media accounts, including LinkedIn ... I will not provide any manual action or intervention". Inside the
 platform rules above that means: the Bluesky bio follows the approved short bio automatically (qnfo-social PROFILE-SYNC-1;
 a later hand edit the fleet does not list as superseded is still left alone), and Bluesky posting runs inside the cadence
-gates. It does not override a third party's rules: LinkedIn posts stay one-tap drafts (API Terms 3.1(26)), LinkedIn,
-X, Mastodon and Threads stay unconnected until the account holder signs in to Buffer once, Facebook has no API for a
+gates. LinkedIn, X and Mastodon are connected in Buffer and post from its queue (LinkedIn: see above); Threads stays
+unconnected until the account holder signs in to Buffer once, Facebook has no API for a
 personal profile, and an application that asks for the applicant's own writing is not drafted. Those items stay in the
 owner queue with the default in effect stated, and are not re-asked.
 
@@ -202,8 +206,8 @@ message; suppression list honoured by both engines; one honest follow-up (`Follo
 |---|---|---|---|
 | Cloudflare Web Analytics (RUM) | pageviews by path, referrer, country, device | CF GraphQL (have) | totals only; **add path and referrer dimensions** |
 | Cloudflare zone analytics | requests, bot share | CF GraphQL (have) | read weekly by qnfo-cloud-ops |
-| Google Analytics 4 | engaged sessions, engagement time, source/medium/UTM campaign, subscribe conversions | GA4 Data API, service account | **owner grants Viewer** |
-| Google Search Console | search impressions, clicks, CTR, position per page and query: the real "impressions" | Search Console API, service account | **owner verifies domain and adds the account** |
+| Google Analytics 4 | engaged sessions, engagement time, source/medium/UTM campaign | tag `G-LV7RHRVW6R` keeps collecting for the owner's own viewing; the fleet does not read it | **retired as a fleet source (2026-10-01):** the fleet holds no Google API credential (only a Gmail app password, which reaches mail only), and Cloudflare Web Analytics (RUM: pageviews, paths, referrers, UTM landing paths) covers the same traffic signal without one |
+| Google Search Console | search impressions, clicks, CTR, position | not read | **retired as a fleet source (2026-10-01)** for the same reason; search reach is measured by RUM referrers (google.*) and the mention radar |
 | LinkedIn / X / Mastodon via Buffer | post reach and engagement | Buffer API, personal key (token present); Buffer marks its metrics "experimental" and gives only basic LinkedIn-profile metrics. LinkedIn's own member post analytics (`r_member_postAnalytics`) are limited to registered organisations, so **UTM clicks into GA4 are the reliable LinkedIn signal** | channels not connected |
 | Threads | views, likes, replies, reposts, quotes per post | Threads insights API (free) | not connected |
 | Bluesky | likes, reposts, replies, quotes (no views); mentions via `searchPosts` | AT Protocol (have) | last 30 posts only; extend and add mention search |
@@ -223,7 +227,7 @@ message; suppression list honoured by both engines; one honest follow-up (`Follo
 | KPI | Definition | Why |
 |---|---|---|
 | Search impressions (28d) | GSC impressions, qnfo.org properties | the honest "impressions" |
-| Engaged human sessions (28d) | GA4 engaged sessions, bot-filtered | attention, not hits |
+| Engaged human sessions (28d) | Cloudflare RUM pageviews, bot-filtered (GA4 retired as a fleet source) | attention, not hits |
 | Social reach and engagement rate | impressions and (reactions + comments + reposts) / impressions, per channel | channel quality |
 | Confirmed subscribers (net new, 30d) | both lists, reported separately | owned audience |
 | Warm conversations | positive replies + inbound contacts | relationships |
@@ -299,17 +303,16 @@ traffic volume, which is the wrong objective, and its implementation reported a 
 ## 10. Plan
 **Week 1 (to 2026-10-08):** streams paused (done 2026-10-01); code fixes (Q08-PERSONAL-CHANNEL-HOLD-1, OUTREACH-CONSENT-1,
 PAPER-PAGE-SEO-1, DASHBOARD-NOINDEX-1) deployed; outreach resumed under consent rules; identity lexicon applied to qnfo.org,
-about, profile and paper pages; selected-works section on qnfo.org; owner connects LinkedIn in Buffer and grants GA4 and
-Search Console; post IDs and UTM tags recorded on every post.
+about, profile and paper pages; selected-works section on qnfo.org; LinkedIn publishing through the Buffer queue; post IDs
+and UTM tags recorded on every post.
 **Weeks 2-4:** `reach_signals` ingestion and the daily scorecard on the dashboard; LinkedIn cadence live with a flagship
 document-post series (works 1, 2, 4); arXiv package for work 1; NLnet submission; impressions metric fixed.
 **Weeks 5-12:** bandit allocation, search loop, monthly research note, assessment offer to warm contacts, review gate on 12-31.
 
-**Owner-only actions (everything else is automatic):** connect LinkedIn (and optionally Mastodon, Threads, X) in Buffer
-once; approve each LinkedIn draft with one tap; add the service account to GA4 (Viewer) and Search Console (Full user);
-ask one established arXiv author for a personal endorsement; add the selected works to ORCID; paste the headline and bio
-(section 2.2) into LinkedIn, which cannot be edited by API. Google Scholar intake also needs `citation_pdf_url` on paper
-pages (fleet work, weeks 2-4).
+**Owner-only actions (everything else is automatic):** ask one established arXiv author for a personal endorsement; add the
+selected works to ORCID; paste the headline and bio (section 2.2) into LinkedIn, which cannot be edited by API. Connecting
+LinkedIn in Buffer, approving each LinkedIn draft and granting GA4 and Search Console are no longer owner actions
+(2026-10-01: LinkedIn is connected and publishes from the Buffer queue; GA4 and Search Console are retired as fleet sources).
 
 ### 10.1 Status at closeout (measured 2026-10-01 21:15Z)
 Done items have live evidence in `qnfo-audit.issue_triage.close_evidence`; open items close only on the live event named.
@@ -326,8 +329,8 @@ Done items have live evidence in `qnfo-audit.issue_triage.close_evidence`; open 
 | Outreach resumed under consent rules (#1710) | live, open | first post-resume send (2026-10-02; today's cap was spent before the pause) carries the opt-out line |
 | Post ids and UTM on every post (#1712) | live, open | 138 of 141 historical posts backfilled; next post (~2026-10-08, weekly cap) stores `post_uri` and a UTM link |
 | Engagement collection (#1647) | live, open | qnfo-social daily 07:00Z collector writes `social_engagements` on 2026-10-02 |
-| LinkedIn as Buffer drafts (#1713) | live, open | first owner-approved draft; owner confirms the LinkedIn channel in Buffer |
-| Reach scorecard, 5+ sources for 7 days (#1711) | live, open | 5 sources on 2026-09-30; earliest close about 2026-10-07; GA4 and Search Console need the owner's service-account grant |
+| LinkedIn through Buffer (#1713) | live, open | qnfo-social 0.7.25: `social_channels` shows LinkedIn connected (daily audit) and the next post carries a `buffer:` LinkedIn id |
+| Reach scorecard, 5+ sources for 7 days (#1711) | live, open | 6 Cloudflare-native and public sources (cf-rum, zenodo, openalex, email, subscribers, mention-radar); closes after 7 consecutive days with 5+, about 2026-10-07; no owner grant needed |
 | AI spend under cap (#1683) | partial | qnfo-ai 5.30.0 governor caps router spend at $60/30d (`GET /spend`); account-wide $448/30d is mostly the owner's desktop client on the BYOK DeepSeek key: owner decision (route it through qnfo-ai or add a gateway rate limit) |
 | q08 keep-or-retire (#1716) | scheduled | decision on 2026-10-31 from bot-filtered human reads |
 
