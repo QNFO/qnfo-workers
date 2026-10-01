@@ -1,0 +1,8 @@
+qnfo-fleet-calibrator is FOLDED into qnfo-fleet-control (MERGE WAVE A, 2026-09-11; see qnfo-fleet-control/wrangler.toml). Do not redeploy this directory.
+
+qnfo-fleet-control dispatches /cal/* and the calibrator crons ("0 3 * * *", "30 3 * * 1", "0 4 1 * *") to the embedded calibrator subsystem.
+The standalone worker is not deployed (worker_live_audit NOT_DEPLOYED) and cannot be: its VEC_CAL binding references the Vectorize
+index 'qnfo-calibration', which no longer exists (CF API error 10160), so every canonical deploy of this directory failed with HTTP 400
+(ci-watchdog issue 254, triggered when #253 touched its wrangler.toml).
+
+canonical-deploy.yml skips any directory containing a FOLDED file. This source is kept for reference only.
