@@ -35,6 +35,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WORKER: qnfo-code-orchestrator
+      GUARD: https://qnfo-deploy-guard.q08.workers.dev
+      GUARD_UA: "QNFO-fleet-ci/1.0 (+https://qnfo.org; deploy-code-orchestrator)"
     steps:
       - uses: actions/checkout@v4
 
@@ -77,6 +79,26 @@ jobs:
           [ -n "$want" ] || { echo "::error::could not read VERSION from worker.js"; exit 1; }
           echo "want=$want" >> "$GITHUB_OUTPUT"
           echo "repo VERSION=$want"
+
+      - name: Acquire the deploy-guard lock and read the previous live VERSION
+        id: lock
+        run: |
+          set -uo pipefail
+          # DEPLOY-GUARD-COORDINATION-1 (issues 1708 and 1709): a wrangler deploy is a mutation like any other. Without a
+          # deploy_locks lease the guard classifies it uncoordinated-deploy, and without a fleet_deploys row
+          # unlogged-mutation. Same endpoints scripts/raw_put.py and the canonical route use.
+          sub="$(curl -s --max-time 30 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -r '.result.subdomain // empty')"
+          prev=""
+          if [ -n "$sub" ]; then prev="$(curl -s --max-time 20 "https://$WORKER.$sub.workers.dev/health" | jq -r '.version // empty' 2>/dev/null || true)"; fi
+          echo "prev=$prev" >> "$GITHUB_OUTPUT"
+          body="$(jq -cn --arg w "$WORKER" --arg s "gha-$GITHUB_RUN_ID" '{worker:$w,owner:"ci/deploy-code-orchestrator",actor:"deploy-code-orchestrator.yml",session_id:$s,ttl_sec:900}')"
+          res="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/lock/acquire" --data "$body")"
+          echo "lock response: $res"
+          if [ "$(echo "$res" | jq -r '.acquired // false' 2>/dev/null)" != "true" ]; then
+            echo "::error::deploy-guard lock not acquired - another deploy of $WORKER holds it, refusing to deploy"
+            exit 1
+          fi
+          echo "token=$(echo "$res" | jq -r '.token')" >> "$GITHUB_OUTPUT"
 
       - name: Deploy with wrangler (this worker only)
         id: wrangler
@@ -136,6 +158,30 @@ jobs:
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database/$dbid/query" --data "$body")"
           echo "D1 ledger write HTTP $code success=$(jq -r '.success' /tmp/d1.json 2>/dev/null)"
           if [ "$code" != "200" ]; then echo "::error::deploy ledger write failed"; exit 1; fi
+
+      - name: Write the fleet_deploys ledger row and release the lock
+        if: always()
+        env:
+          WANT: ${{ steps.ver.outputs.want }}
+          PREV: ${{ steps.lock.outputs.prev }}
+          TOKEN: ${{ steps.lock.outputs.token }}
+          WR: ${{ steps.wrangler.outcome }}
+          HC: ${{ steps.health.outcome }}
+        run: |
+          set -uo pipefail
+          rc=0
+          ok=false
+          if [ "$WR" = "success" ] && [ "$HC" = "success" ]; then ok=true; fi
+          body="$(jq -cn --arg w "$WORKER" --arg from "$PREV" --arg to "$WANT" --argjson ok "$ok" --arg note "wrangler deploy run $GITHUB_RUN_ID sha ${GITHUB_SHA::12}" \
+            '{worker:$w,actor:"deploy-code-orchestrator.yml",from:$from,to:$to,source_path:"qnfo-code-orchestrator/worker.js",ok:$ok,note:$note}')"
+          res="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/ledger" --data "$body")"
+          echo "ledger response: $res"
+          if [ "$(echo "$res" | jq -r '.logged // false' 2>/dev/null)" != "true" ]; then echo "::error::fleet_deploys ledger row not written"; rc=1; fi
+          if [ -n "${TOKEN:-}" ]; then
+            rel="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/lock/release" --data "$(jq -cn --arg w "$WORKER" --arg t "$TOKEN" '{worker:$w,token:$t}')")"
+            echo "lock release: $rel"
+          fi
+          exit $rc
 
       - name: Upload the wrangler log
         if: always()
