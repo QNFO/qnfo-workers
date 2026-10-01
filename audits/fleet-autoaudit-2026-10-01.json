@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 09:07:44",
+  "audited_at": "2026-10-01 09:12:08",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -490,7 +490,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.7.45-device-staleness",
+        "version": "1.7.46-obs-lastobserved",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -530,7 +530,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.2.12-chain-draining",
+        "version": "1.2.13-chain-cadence",
         "worker": "qnfo-observability"
       },
       {
@@ -1150,9 +1150,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.7.45-device-staleness",
+      "before": "1.7.46-obs-lastobserved",
       "http": 200,
-      "live": "1.7.45-device-staleness",
+      "live": "1.7.46-obs-lastobserved",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1270,9 +1270,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.2.12-chain-draining",
+      "before": "1.2.13-chain-cadence",
       "http": 200,
-      "live": "1.2.12-chain-draining",
+      "live": "1.2.13-chain-cadence",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
