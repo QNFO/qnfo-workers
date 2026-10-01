@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.38-reasoning-effort-low";
+var VERSION = "0.9.39-revise-wall";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1953,8 +1953,11 @@ async function stageReconcile(env, row) {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "reconcile->review", len: solo.length, solo: true };
   }
+  const _rc0 = Date.now();
   let reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
-  if (!reconciled || reconciled.length < 1e4) {
+  // REVISE-WALL-1: a first attempt that ran past 120 s hit the timeout class (Workers AI 3046 at about 240 s, or the gateway's
+  // 240 s abort); an identical retry would too and costs the stage's wall budget, so degrade to the best leg directly.
+  if ((!reconciled || reconciled.length < 1e4) && Date.now() - _rc0 < 12e4) {
     // RECONCILE-RETRY-1 (2026-09-29): one bounded retry before the best-leg degrade.
     let _rc2 = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n") + "\n\nIMPORTANT: output the COMPLETE reconciled paper in full. Do not summarize and do not truncate.", 3e4);
     if (_rc2 && _rc2.length > (reconciled ? reconciled.length : 0)) reconciled = _rc2;
@@ -2041,6 +2044,13 @@ async function stageRevise(env, row) {
       const _c2 = (ctx.cycles || 0) + 1;
       await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: _c2, patch: _p.applied }).slice(0, 6e3), row.id).run();
       return { ok: true, stage: "revise->review", cycle: _c2, patch: _p.applied };
+    }
+    // REVISE-WALL-1 (2026-10-01): a full rewrite of a paper this long cannot fit the 8192-token budget next to the reasoning
+    // (0 chars on every attempt, 09:07Z-12:24Z) and its four 240 s calls pushed the stage past the 15-minute scheduled wall
+    // limit (internalError, 12:00Z hour). Fail fast with the patch outcome instead; the recover loop re-arms the row.
+    if (paper.length >= 1.2e4) {
+      await markError(env, row, "revise: no applicable patch edit (proposed=" + _p.proposed + ", applied=" + _p.applied + ", raw=" + String(_praw || "").length + " chars)");
+      return { ok: false, stage: "revise", patch: 0 };
     }
   }
   let revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
