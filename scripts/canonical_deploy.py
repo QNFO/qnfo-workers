@@ -242,6 +242,18 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"    {key}: {json.dumps(res[key])[:400]}")
         # ROUTE-LOG-VISIBLE-1: print the route's own per-step log for the declared-config steps, so a skipped or
         # failed schedules / workers_dev apply is visible in CI instead of silently absent (SCHEDULES-PATH-OFF-BY-ONE-1).
+        # DEPLOY-ERROR-VISIBLE-1: a failed route returns the Cloudflare error inside res["error"] as an escaped JSON
+        # string, and the 400-char cap above cut it before the actual error code and message (run 36842708566,
+        # qnfo-fleet-calibrator: "CF API 400: {"result":null,...errors":[{"code"" and nothing after). Decode the
+        # failing step and print its error unescaped so the cause is readable in the CI log.
+        if not ok:
+            try:
+                _body = json.loads(res["error"]) if isinstance(res.get("error"), str) else res
+            except Exception:
+                _body = res
+            for step in (_body.get("log") or []) if isinstance(_body, dict) else []:
+                if isinstance(step, dict) and step.get("ok") is False and step.get("error"):
+                    print(f"    deploy-error[{step.get('step')}]: {str(step['error'])[:2000]}")
         for step in res.get("log") or []:
             if isinstance(step, dict) and step.get("step") in ("crons", "workers_dev", "verify", "lock"):
                 print(f"    log.{step.get('step')}: {json.dumps(step)[:300]}")
