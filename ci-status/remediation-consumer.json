@@ -1,53 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@5bc312c565ea",
- "due": 5,
+ "verifier": "remediation-consumer@2db7c4191fd8",
+ "due": 0,
  "pass": 0,
- "fail": 5,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "EVID-1647-ENGAGEMENT",
-   "issue_id": 1647,
-   "verdict": "fail",
-   "expected": "collected",
-   "observed": "none",
-   "written": true
-  },
-  {
-   "class": "EVID-1710-RESUME",
-   "issue_id": 1710,
-   "verdict": "fail",
-   "expected": "sent-after-resume",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
-   "verdict": "fail",
-   "expected": "all-sources-ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
-   "verdict": "fail",
-   "expected": "seven-days",
-   "observed": "pending",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -64,7 +23,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 14429,
- "head": "5bc312c565ea80c3add316102aca139c45cce772",
+ "spent_ms": 1845,
+ "head": "2db7c4191fd84bc148dae6a5986fa9b31a9211e3",
  "job_status": "success"
 }
