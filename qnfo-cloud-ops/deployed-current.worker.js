@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.10-register-relabel"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1 */
+var VERSION = "1.16.2-register-relabel"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, IDENTITY-WEEKLY-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2053,9 +2053,145 @@ async function jobEngagement(env) {
   } catch (e) {
     out.write_error = String(e && e.message || e);
   }
+  // SENT-AS-YOU-DIGEST-1 (#1713): the daily owner-voice ledger rides this daily tick (no new cron; the fleet is over
+  // its 50-schedule cap). Independent of the collectors above: a Bluesky or Buffer failure never suppresses it.
+  try {
+    out.sent_as_you = await sentAsYouDigest(env);
+  } catch (e) {
+    out.sent_as_you = "error: " + String(e && e.message || e).slice(0, 160);
+  }
   return { status: "ok", notes: out };
 }
 __name(jobEngagement, "jobEngagement");
+// SENT-AS-YOU-DIGEST-1 (2026-10-01, agent_issues #1713, docs/STRATEGY.md s5 gate 7): once a day, every item the fleet
+// sent in the owner's name in the last 24h (Bluesky threads and cross-posts, dissemination posts, cold-outreach emails
+// from both engines, replies sent by qnfo-email) plus the LinkedIn drafts waiting in Buffer and the state of both kill
+// switches, delivered to the owner's alerts channel through qnfo-email /send as an owner notice (HANDOFF-ALLOWLIST-1
+// lets owner notices past the general digest opt-out) and stored as a cloud_ops_events digest. The one-line stop
+// command names the owner-voice-stop job below.
+var OWNER_VOICE_TO = "rwnquni@outlook.com";
+var OWNER_VOICE_STOP_LINE = "STOP everything sent as you: run cloud-ops job owner-voice-stop (POST https://qnfo-cloud-ops.q08.workers.dev/run?job=owner-voice-stop with the ops admin token), or reply to this email with 'pause outreach and social' (owner sender; the ops agent executes). Resume with owner-voice-resume.";
+async function ownerVoiceFlags(env) {
+  const f = { social_paused: "0", external_sends_enabled: "?" };
+  try {
+    const r = await env.AUDIT.prepare("SELECT value FROM pipeline_flags WHERE key='social_paused'").first();
+    f.social_paused = r && r.value != null ? String(r.value) : "0";
+  } catch (e) {
+    f.social_paused = "?";
+  }
+  try {
+    if (env.OUTREACH) {
+      const r = await env.OUTREACH.prepare("SELECT value FROM pipeline_state WHERE key='external_sends_enabled'").first();
+      f.external_sends_enabled = r && r.value != null ? String(r.value) : "1";
+    }
+  } catch (e) {
+  }
+  return f;
+}
+__name(ownerVoiceFlags, "ownerVoiceFlags");
+async function sentAsYouDigest(env) {
+  const now = /* @__PURE__ */ new Date();
+  const today = now.toISOString().slice(0, 10);
+  const since = new Date(now.getTime() - 24 * 36e5).toISOString().slice(0, 19).replace("T", " ");
+  const items = [];
+  const errs = {};
+  const q = /* @__PURE__ */ __name(async (label, db, sql, map) => {
+    if (!db) { errs[label] = "no binding"; return; }
+    try {
+      const r = await db.prepare(sql).bind(since).all();
+      for (const row of r.results || []) items.push(map(row));
+    } catch (e) {
+      errs[label] = String(e && e.message || e).slice(0, 120);
+    }
+  }, "q");
+  // social_threads.post_uri is added lazily by qnfo-social (POST-ID-UTM-1); fall back when the column is absent.
+  try {
+    const r = await env.AUDIT.prepare("SELECT slug, title, posted_at, post_uri FROM social_threads WHERE status='posted' AND datetime(posted_at) >= datetime(?1) ORDER BY posted_at").bind(since).all();
+    for (const row of r.results || []) items.push({ kind: "social-thread", when: row.posted_at, what: String(row.title || row.slug || "").slice(0, 120), where: String(row.post_uri || "") });
+  } catch (e) {
+    await q("social_threads", env.AUDIT, "SELECT slug, title, posted_at FROM social_threads WHERE status='posted' AND datetime(posted_at) >= datetime(?1) ORDER BY posted_at", (row) => ({ kind: "social-thread", when: row.posted_at, what: String(row.title || row.slug || "").slice(0, 120), where: "" }));
+  }
+  await q("dissemination", env.AUDIT, "SELECT channel, paper_slug, post_url, posted_at FROM dissemination_tracker WHERE action='posted' AND datetime(posted_at) >= datetime(?1) ORDER BY posted_at", (row) => ({ kind: "post:" + row.channel, when: row.posted_at, what: String(row.paper_slug || "").slice(0, 120), where: String(row.post_url || "") }));
+  await q("outreach_log", env.AUDIT, "SELECT email, subject, sent_at, status FROM outreach_log WHERE datetime(sent_at) >= datetime(?1) ORDER BY sent_at", (row) => ({ kind: "email:cloud-ops" + (row.status && row.status !== "sent" && row.status !== "ok" ? ":" + row.status : ""), when: row.sent_at, what: String(row.subject || "").slice(0, 120), where: String(row.email || "") }));
+  await q("outreach_sends", env.OUTREACH, "SELECT s.kind, s.subject, s.sent_at, c.email FROM sends s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.status='sent' AND datetime(s.sent_at) >= datetime(?1) ORDER BY s.sent_at", (row) => ({ kind: "email:qnfo-outreach/" + row.kind, when: row.sent_at, what: String(row.subject || "").slice(0, 120), where: String(row.email || "") }));
+  await q("email_replies", env.AUDIT, "SELECT sender, subject, sent_at FROM email_reply_queue WHERE sent_at IS NOT NULL AND datetime(sent_at) >= datetime(?1) ORDER BY sent_at", (row) => ({ kind: "reply:qnfo-email", when: row.sent_at, what: String(row.subject || "").slice(0, 120), where: String(row.sender || "") }));
+  let drafts = "unavailable";
+  if (env.BUFFER_TOKEN) {
+    try {
+      const gql = /* @__PURE__ */ __name(async (query) => {
+        const r = await fetch("https://api.buffer.com", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.BUFFER_TOKEN, "User-Agent": "qnfo-cloud-ops/" + VERSION }, body: JSON.stringify({ query }) });
+        if (!r.ok) throw new Error("buffer http " + r.status);
+        return r.json();
+      }, "gql");
+      const orgR = await gql("{ account { organizations { id } } }");
+      const orgs = orgR && orgR.data && orgR.data.account && orgR.data.account.organizations || [];
+      if (!orgs.length) drafts = "no organization";
+      else {
+        const pR = await gql('query { posts(first: 20, input: { organizationId: "' + orgs[0].id + '", filter: { status: [draft] } }) { edges { node { id channelId } } } }');
+        if (pR && pR.errors && pR.errors.length) drafts = "error: " + String(pR.errors[0].message || "").slice(0, 80);
+        else drafts = String((pR && pR.data && pR.data.posts && pR.data.posts.edges || []).length);
+      }
+    } catch (e) {
+      drafts = "error: " + String(e && e.message || e).slice(0, 80);
+    }
+  } else drafts = "no token";
+  const flags = await ownerVoiceFlags(env);
+  // Sources mix 'YYYY-MM-DD HH:MM:SS' and ISO 'YYYY-MM-DDTHH:MM:SS.sssZ'; normalise before sorting or ' ' sorts before 'T'.
+  for (const it of items) it.when = String(it.when || "").replace("T", " ").slice(0, 16);
+  items.sort((a, b) => a.when.localeCompare(b.when));
+  const subject = "QNFO sent as you — " + today + " (" + items.length + " item" + (items.length === 1 ? "" : "s") + ")";
+  const L = [subject, "", "Everything the fleet sent in your name since " + since + " UTC:"];
+  if (!items.length) L.push("- nothing");
+  for (const it of items.slice(0, 80)) L.push("- " + it.when + "  " + it.kind + "  " + it.what + (it.where ? "  -> " + it.where : ""));
+  if (items.length > 80) L.push("- ... and " + (items.length - 80) + " more");
+  L.push("", "LinkedIn drafts waiting for your approval in Buffer: " + drafts);
+  L.push("Kill switches: social_paused=" + flags.social_paused + " (qnfo-social), external_sends_enabled=" + flags.external_sends_enabled + " (both email engines)");
+  const ek = Object.keys(errs);
+  if (ek.length) L.push("Sources not read: " + ek.map((k) => k + " (" + errs[k] + ")").join("; "));
+  L.push("", OWNER_VOICE_STOP_LINE);
+  const text = L.join(NL);
+  const stored = await storeDigest(env, "sent-as-you", subject, text);
+  let delivered = null;
+  try {
+    if (env.EMAIL && env.EMAIL_API_KEY) {
+      const r = await cfEmail(env, "/send", { method: "POST", body: { to: env.OWNER_VOICE_TO || OWNER_VOICE_TO, subject, body: text, notify: true, classification: "handoff" } });
+      delivered = r && !r.error ? "ok" : "error: " + String(r && r.error || "unknown").slice(0, 120);
+    } else delivered = "skipped: no EMAIL binding or key";
+  } catch (e) {
+    delivered = "error: " + String(e && e.message || e).slice(0, 120);
+  }
+  return { items: items.length, drafts, flags, delivered, stored: !!(stored && stored.stored), errors: ek.length ? errs : void 0 };
+}
+__name(sentAsYouDigest, "sentAsYouDigest");
+// OWNER-VOICE-STOP-1 (#1713): one deterministic switch for both streams. Not scheduled; run on demand (/run?job=...).
+async function setOwnerVoice(env, paused) {
+  const out = { social_paused: null, external_sends_enabled: null };
+  try {
+    await env.AUDIT.prepare("INSERT INTO pipeline_flags (key, value, updated_at) VALUES ('social_paused', ?1, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at").bind(paused ? "1" : "0").run();
+    out.social_paused = paused ? "1" : "0";
+  } catch (e) {
+    out.social_paused = "error: " + String(e && e.message || e).slice(0, 120);
+  }
+  try {
+    if (!env.OUTREACH) throw new Error("no OUTREACH binding");
+    await env.OUTREACH.prepare("INSERT INTO pipeline_state (key, value, updated_at) VALUES ('external_sends_enabled', ?1, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at").bind(paused ? "0" : "1").run();
+    out.external_sends_enabled = paused ? "0" : "1";
+  } catch (e) {
+    out.external_sends_enabled = "error: " + String(e && e.message || e).slice(0, 120);
+  }
+  const ok = !/^error/.test(String(out.social_paused)) && !/^error/.test(String(out.external_sends_enabled));
+  await recordEvent(env, "owner-voice", "ov-" + (paused ? "stop" : "resume") + "-" + Date.now().toString(36), "owner voice " + (paused ? "STOPPED" : "resumed") + " " + JSON.stringify(out), { job: paused ? "owner-voice-stop" : "owner-voice-resume", status: ok ? "ok" : "partial" });
+  return { status: ok ? "ok" : "partial", notes: out };
+}
+__name(setOwnerVoice, "setOwnerVoice");
+async function jobOwnerVoiceStop(env) {
+  return setOwnerVoice(env, true);
+}
+__name(jobOwnerVoiceStop, "jobOwnerVoiceStop");
+async function jobOwnerVoiceResume(env) {
+  return setOwnerVoice(env, false);
+}
+__name(jobOwnerVoiceResume, "jobOwnerVoiceResume");
 async function jobGtdReconcile(env) {
   try {
     const open = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM v_fleet_open_work").first();
@@ -2176,6 +2312,229 @@ async function jobGtdOverdueGuard(env) {
   return { status: "ok", today, overdue: out.overdue, no_executor: out.no_executor, relabeled, agent_uncited: out.agent_uncited, alerted: alert, mail };
 }
 __name(jobGtdOverdueGuard, "jobGtdOverdueGuard");
+// IDENTITY-WEEKLY-1 (2026-10-01, owner directive CLOUDFLARE-ONLY-HOST-1: "all data, dashboards and UI hosted by
+// Cloudflare, never claude.ai"). The weekly identity review used to be a claude.ai Routine that edited a claude.ai doc.
+// The doc now lives in D1 (qnfo-audit.owner_docs key 'identity') and the review runs here, deterministically, on the
+// existing Monday 07:30 Amsterdam tick (it rides the "visibility" job, so no cron is added). Every number comes from a
+// live public API or a D1 read in this run; a fetch that fails is recorded as a gap, never filled. It never edits the
+// owner's doc or any public profile: it writes one portfolio_runs row (kind 'identity-weekly') and an event digest, and
+// emails the owner only when something is urgent (a deadline within 7 days, a lead page gone, a banned claim live).
+var IDW_ORCID = "0009-0002-4317-5604";
+var IDW_PORTFOLIO_RECORD = "21806274";
+var IDW_NAME = "Rowan Brad Quni-Gudzinas";
+var IDW_MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+// docs/STRATEGY.md 2.2 "Claims we never make": a background check fails on these.
+var IDW_BANNED = [
+  [/patent portfolio|foundational (?:us )?patents|patents developed/i, "patent claim without application numbers"],
+  [/clearance[- ]eligible/i, "clearance-eligible"],
+  [/featured in national media/i, "unlinked media feature"],
+  [/\b\d{2,}\+\s*(?:publications|papers)\b/i, "inflated publication count"],
+  [/thermodynamic dead end/i, "physics headline claim"],
+  [/research foundation|research collective/i, "organisation label that overclaims"]
+];
+async function idwJson(url, headers, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms || 8e3);
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION + " (+https://qnfo.org)", Accept: "application/json", ...headers || {} }, signal: ctl.signal });
+    if (!r.ok) return { error: "HTTP " + r.status };
+    return { body: await r.json() };
+  } catch (e) {
+    return { error: String(e && e.message || e).slice(0, 120) };
+  } finally {
+    clearTimeout(t);
+  }
+}
+__name(idwJson, "idwJson");
+function idwGh(env) {
+  return env.GH_TOKEN ? { Authorization: "Bearer " + env.GH_TOKEN, Accept: "application/vnd.github+json" } : { Accept: "application/vnd.github+json" };
+}
+__name(idwGh, "idwGh");
+function idwSection(md, heading) {
+  const i = md.indexOf("## " + heading);
+  if (i < 0) return "";
+  const j = md.indexOf(NL + "## ", i + 3);
+  return j < 0 ? md.slice(i) : md.slice(i, j);
+}
+__name(idwSection, "idwSection");
+function idwNorm(s) {
+  return String(s || "").replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ").replace(/&amp;/g, "&").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim().toLowerCase();
+}
+__name(idwNorm, "idwNorm");
+function idwDeadline(text, now) {
+  const s = String(text || "");
+  let d = null;
+  let m = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(s);
+  if (m) d = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  if (d == null && (m = /\b([A-Z][a-z]{2})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/.exec(s)) && IDW_MONTHS[m[1].toLowerCase()] != null) d = Date.UTC(+m[3], IDW_MONTHS[m[1].toLowerCase()], +m[2]);
+  if (d == null && (m = /\b(\d{1,2})\s+([A-Z][a-z]{2})[a-z]*\.?\s+(\d{4})\b/.exec(s)) && IDW_MONTHS[m[2].toLowerCase()] != null) d = Date.UTC(+m[3], IDW_MONTHS[m[2].toLowerCase()], +m[1]);
+  if (d == null) return { text: s, date: null, days_left: null };
+  return { text: s, date: new Date(d).toISOString().slice(0, 10), days_left: Math.floor((d - now) / 864e5) };
+}
+__name(idwDeadline, "idwDeadline");
+function idwOpportunities(md, now) {
+  const rows = [];
+  for (const line of idwSection(md, "Opportunities").split(NL)) {
+    if (!/^\|\s*\d+\s*\|/.test(line)) continue;
+    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    const link = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/.exec(cells[1] || "");
+    rows.push({ n: +cells[0], lead: link ? link[1] : (cells[1] || "").slice(0, 80), url: link ? link[2] : null, deadline: idwDeadline(cells[3], now) });
+  }
+  return rows;
+}
+__name(idwOpportunities, "idwOpportunities");
+function idwCanonical(md) {
+  const sb = /\*\*Short bio\*\*[^\n]*\n+>\s*([^\n]+)/.exec(md);
+  const cell = (label) => {
+    const m = new RegExp("^\\|\\s*" + label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\|[^|]*\\|([^|]+)\\|", "m").exec(md);
+    return m ? m[1].trim() : null;
+  };
+  const ghUser = cell("GitHub user rwnq8");
+  return {
+    short_bio: sb ? sb[1].trim() : null,
+    gh_org_description: cell("GitHub org QNFO"),
+    gh_user_bio: ghUser && ghUser.indexOf(";") >= 0 ? ghUser.slice(ghUser.indexOf(";") + 1).trim() : null
+  };
+}
+__name(idwCanonical, "idwCanonical");
+function idwProfileCheck(platform, live, canonicalBio) {
+  const text = [live.name || "", live.bio || ""].join(" | ");
+  const claims = IDW_BANNED.filter(([rx]) => rx.test(text)).map(([, label]) => label);
+  const out = { platform, name: live.name || null, bio: (live.bio || "").slice(0, 300) || null, name_ok: live.name == null ? null : idwNorm(live.name).indexOf(idwNorm(IDW_NAME)) >= 0, banned_claims: claims };
+  if (canonicalBio) out.bio_matches_canonical = idwNorm(live.bio) === idwNorm(canonicalBio);
+  return out;
+}
+__name(idwProfileCheck, "idwProfileCheck");
+async function jobIdentityWeekly(env) {
+  const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+  const gaps = [];
+  const doc = await env.AUDIT.prepare("SELECT body_md, updated_at FROM owner_docs WHERE key='identity'").first().catch(() => null);
+  const md = doc && doc.body_md || "";
+  if (!md) gaps.push("owner_docs 'identity' missing");
+  const canon = idwCanonical(md);
+  const [bsky, ghUser, ghOrg, orcid, zCount, zRec, masto] = await Promise.all([
+    idwJson("https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=qnfo.bsky.social"),
+    idwJson("https://api.github.com/users/rwnq8", idwGh(env)),
+    idwJson("https://api.github.com/orgs/QNFO", idwGh(env)),
+    idwJson("https://pub.orcid.org/v3.0/" + IDW_ORCID + "/person"),
+    idwJson("https://zenodo.org/api/records?q=" + encodeURIComponent("creators.orcid:" + IDW_ORCID) + "&size=1"),
+    idwJson("https://zenodo.org/api/records/" + IDW_PORTFOLIO_RECORD),
+    idwJson("https://mstdn.science/api/v1/accounts/lookup?acct=QNFO")
+  ]);
+  const metrics = { as_of: today };
+  const profiles = [];
+  if (bsky.body) {
+    metrics.bluesky_followers = bsky.body.followersCount ?? null;
+    metrics.bluesky_posts = bsky.body.postsCount ?? null;
+    profiles.push(idwProfileCheck("bluesky qnfo.bsky.social", { name: bsky.body.displayName, bio: bsky.body.description }, canon.short_bio));
+  } else gaps.push("bluesky: " + bsky.error);
+  if (ghUser.body) profiles.push(idwProfileCheck("github rwnq8", { name: ghUser.body.name, bio: ghUser.body.bio }, canon.gh_user_bio));
+  else gaps.push("github user: " + ghUser.error);
+  if (ghOrg.body) profiles.push(idwProfileCheck("github org QNFO", { name: null, bio: ghOrg.body.description }, canon.gh_org_description));
+  else gaps.push("github org: " + ghOrg.error);
+  if (orcid.body) {
+    const nm = orcid.body.name || {};
+    const full = [nm["given-names"] && nm["given-names"].value, nm["family-name"] && nm["family-name"].value].filter(Boolean).join(" ");
+    const bio = orcid.body.biography && orcid.body.biography.content || "";
+    const aka = (orcid.body["other-names"] && orcid.body["other-names"]["other-name"] || []).map((o) => o.content).filter(Boolean);
+    const p = idwProfileCheck("orcid " + IDW_ORCID, { name: full || null, bio }, null);
+    p.also_known_as = aka.slice(0, 8);
+    profiles.push(p);
+  } else gaps.push("orcid: " + orcid.error);
+  if (masto.body) {
+    metrics.mastodon_followers = masto.body.followers_count ?? null;
+    metrics.mastodon_posts = masto.body.statuses_count ?? null;
+    profiles.push(idwProfileCheck("mastodon @QNFO@mstdn.science", { name: masto.body.display_name, bio: masto.body.note }, canon.short_bio));
+  } else gaps.push("mastodon: " + masto.error);
+  if (zCount.body && zCount.body.hits) metrics.zenodo_records_orcid = typeof zCount.body.hits.total === "object" ? zCount.body.hits.total.value : zCount.body.hits.total;
+  else gaps.push("zenodo count: " + (zCount.error || "no hits"));
+  if (zRec.body && zRec.body.stats) {
+    metrics.portfolio_record = { id: IDW_PORTFOLIO_RECORD, version: zRec.body.metadata && zRec.body.metadata.version || null, views: zRec.body.stats.views ?? null, unique_views: zRec.body.stats.unique_views ?? null, downloads: zRec.body.stats.downloads ?? null };
+  } else gaps.push("zenodo record " + IDW_PORTFOLIO_RECORD + ": " + (zRec.error || "no stats"));
+  try {
+    const c = await env.AUDIT.prepare("SELECT COUNT(*) dois, COALESCE(SUM(value),0) cites, COALESCE(SUM(CASE WHEN value>0 THEN 1 ELSE 0 END),0) cited FROM (SELECT doi, value, ROW_NUMBER() OVER (PARTITION BY doi ORDER BY collected_at DESC) rn FROM citation_stats WHERE source='openalex' AND metric='cited_by_count') WHERE rn=1").first();
+    metrics.openalex = { dois: c.dois, citations: c.cites, cited_dois: c.cited };
+  } catch (e) {
+    gaps.push("citation_stats: " + String(e && e.message || e).slice(0, 80));
+  }
+  // Replies from funders, employers and programmes: outcome only (sender domain + subject), never the body.
+  let replies = [];
+  try {
+    const since = new Date(now - 8 * 864e5).toISOString().slice(0, 19).replace("T", " ");
+    const rs = await env.AUDIT.prepare("SELECT sender, subject, received_at FROM emails WHERE received_at >= ?1 AND lower(sender) NOT LIKE '%qnfo.org%' AND lower(sender) NOT LIKE '%qwav.tech%' AND lower(sender) NOT LIKE '%noreply%' AND lower(sender) NOT LIKE '%no-reply%' AND lower(sender) NOT LIKE '%alert%' AND lower(sender) NOT LIKE '%notification%' AND lower(sender) NOT LIKE '%mailer-daemon%' AND (lower(subject) LIKE '%application%' OR lower(subject) LIKE '%grant%' OR lower(subject) LIKE '%proposal%' OR lower(subject) LIKE '%position%' OR lower(subject) LIKE '%interview%' OR lower(subject) LIKE '%fellow%' OR lower(subject) LIKE '%funding%' OR lower(subject) LIKE '%offer%') ORDER BY received_at DESC LIMIT 15").bind(since).all();
+    replies = (rs.results || []).map((r) => ({ from_domain: String(r.sender || "").replace(/^.*@/, "").replace(/[>\s].*$/, "").toLowerCase(), subject: String(r.subject || "").slice(0, 120), received_at: r.received_at }));
+  } catch (e) {
+    gaps.push("emails: " + String(e && e.message || e).slice(0, 80));
+  }
+  // Opportunities: deadline arithmetic from the doc, then each lead's own page (HTTP status only).
+  const opps = idwOpportunities(md, now);
+  await Promise.all(opps.filter((o) => o.url).slice(0, 20).map(async (o) => {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8e3);
+    try {
+      const r = await fetch(o.url, { headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops identity review)" }, redirect: "follow", signal: ctl.signal });
+      o.page_status = r.status;
+    } catch (e) {
+      o.page_status = "fetch-error";
+    } finally {
+      clearTimeout(t);
+    }
+  }));
+  const prev = await env.AUDIT.prepare("SELECT scorecard_json FROM portfolio_runs WHERE kind='identity-weekly' ORDER BY id DESC LIMIT 1").first().catch(() => null);
+  const deltas = {};
+  try {
+    const p = prev && JSON.parse(prev.scorecard_json || "{}") || {};
+    for (const k of ["bluesky_followers", "bluesky_posts", "mastodon_followers", "zenodo_records_orcid"]) if (typeof metrics[k] === "number" && typeof p[k] === "number") deltas[k] = metrics[k] - p[k];
+    if (metrics.openalex && p.openalex) deltas.openalex_citations = metrics.openalex.citations - p.openalex.citations;
+    if (metrics.portfolio_record && p.portfolio_record) deltas.portfolio_views = (metrics.portfolio_record.views || 0) - (p.portfolio_record.views || 0);
+  } catch (e) {}
+  metrics.deltas = deltas;
+  const needs = [];
+  const urgent = [];
+  for (const p of profiles) {
+    if (p.banned_claims.length) {
+      needs.push(p.platform + ": remove " + p.banned_claims.join(", "));
+      urgent.push(p.platform + " shows " + p.banned_claims.join(", "));
+    }
+    if (p.name_ok === false) needs.push(p.platform + ": name reads \"" + p.name + "\", canonical is \"" + IDW_NAME + "\"");
+    if (p.bio_matches_canonical === false) needs.push(p.platform + ": bio differs from the canonical copy in the Identity doc");
+  }
+  for (const o of opps) {
+    const dl = o.deadline.days_left;
+    if (dl != null && dl < 0) needs.push("lead " + o.n + " (" + o.lead + "): deadline " + o.deadline.date + " has passed; close or update it");
+    else if (dl != null && dl <= 14) needs.push("lead " + o.n + " (" + o.lead + "): deadline " + o.deadline.date + " in " + dl + " days");
+    if (dl != null && dl >= 0 && dl <= 7) urgent.push("lead " + o.n + " due " + o.deadline.date);
+    if (o.page_status === 404 || o.page_status === 410) {
+      needs.push("lead " + o.n + " (" + o.lead + "): its page returns " + o.page_status);
+      urgent.push("lead " + o.n + " page " + o.page_status);
+    }
+  }
+  if (replies.length) needs.push(replies.length + " possible funder/employer replies in the last 8 days (see actions_json.replies)");
+  const fmt = (v) => v == null ? "gap" : String(v);
+  const summary = ["Identity weekly " + today + ":", "Bluesky " + fmt(metrics.bluesky_followers) + " followers" + (deltas.bluesky_followers != null ? " (" + (deltas.bluesky_followers >= 0 ? "+" : "") + deltas.bluesky_followers + ")" : "") + ";", "Zenodo " + fmt(metrics.zenodo_records_orcid) + " records;", "OpenAlex " + fmt(metrics.openalex && metrics.openalex.citations) + " citations;", profiles.length + " profiles checked, " + needs.length + " owner items, " + gaps.length + " gaps."].join(" ");
+  const actions = { profiles, opportunities: opps, replies, gaps, canonical_found: { short_bio: !!canon.short_bio, gh_org: !!canon.gh_org_description, gh_user: !!canon.gh_user_bio }, doc_updated_at: doc && doc.updated_at || null };
+  await env.AUDIT.prepare("INSERT INTO portfolio_runs (run_date, kind, session, summary, scorecard_json, actions_json, needs_owner) VALUES (?1,'identity-weekly',?2,?3,?4,?5,?6)").bind(today, "qnfo-cloud-ops/" + VERSION, summary, JSON.stringify(metrics), JSON.stringify(actions).slice(0, 6e4), needs.join(NL)).run();
+  await storeDigest(env, "identity-weekly", "QNFO identity weekly — " + today, summary + NL + needs.map((n) => "- " + n).join(NL));
+  let mail = null;
+  if (urgent.length) {
+    try {
+      mail = await sendDigest(env, "QNFO identity: " + urgent.length + " urgent item(s) — " + today, summary + NL + NL + needs.map((n) => "- " + n).join(NL) + NL + NL + "Full row: qnfo-audit.portfolio_runs kind='identity-weekly' run_date=" + today);
+    } catch (e) {
+      mail = { error: String(e && e.message || e).slice(0, 120) };
+    }
+  }
+  return { status: gaps.length > 4 ? "degraded" : "ok", notes: { metrics: Object.keys(metrics).length, profiles: profiles.length, opportunities: opps.length, owner_items: needs.length, urgent: urgent.length, gaps: gaps.length, mailed: !!(mail && !mail.error) } };
+}
+__name(jobIdentityWeekly, "jobIdentityWeekly");
+// The Monday "visibility" tick also runs the identity review (IDENTITY-WEEKLY-1); a failure in one never blocks the other.
+async function jobVisibilityAndIdentity(env) {
+  const vis = await jobVisibility(env).catch((e) => ({ status: "error", notes: { error: String(e && e.message || e) } }));
+  const idn = await jobIdentityWeekly(env).catch((e) => ({ status: "error", notes: { error: String(e && e.message || e).slice(0, 200) } }));
+  const status = vis.status === "ok" && idn.status === "ok" ? "ok" : vis.status === "error" && idn.status === "error" ? "error" : "degraded";
+  return { status, notes: { visibility: vis.status, identity: idn.status, identity_notes: idn.notes } };
+}
+__name(jobVisibilityAndIdentity, "jobVisibilityAndIdentity");
 var JOBS = {
   "gtd-reconcile": jobGtdReconcile,
   "overdue-guard": jobGtdOverdueGuard,
@@ -2196,8 +2555,11 @@ var JOBS = {
   "worker-health": jobWorkerHealth,
   "sitemap-ping": jobSitemapPing,
   "loose-threads-sweep": jobLooseThreadsSweep,
-  "visibility": jobVisibility,
+  "visibility": jobVisibilityAndIdentity,
+  "identity-weekly": jobIdentityWeekly,
   "engagement": jobEngagement,
+  "owner-voice-stop": jobOwnerVoiceStop,
+  "owner-voice-resume": jobOwnerVoiceResume,
   "radar": jobRadar
 };
 function cfDowToIso(spec) {

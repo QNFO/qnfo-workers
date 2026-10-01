@@ -77,6 +77,14 @@ jobs:
           echo "$out" | grep -q "0 failed" \
             || { echo "::error::portfolio loop suite reported failures"; exit 1; }
 
+      - name: Replay the loop watchdog offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/loopwatch.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "0 failed" \
+            || { echo "::error::loop watchdog suite reported failures"; exit 1; }
+
       - name: Resolve the diff range
         id: range
         run: |

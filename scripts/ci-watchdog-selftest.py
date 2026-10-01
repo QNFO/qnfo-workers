@@ -133,6 +133,27 @@ def main() -> int:
     check("a recovered push is not a finding", cw.classify(recovered, "canonical-deploy")[0] == "unknown")
     check("git CONFLICT is still push-race", cw.classify("CONFLICT (content): Merge conflict in a.json", "w")[0] == "push-race")
 
+    # SUPERSEDED-FAILURE-SKIP-1 (issues #332/#333): shapes taken from the live 2026-10-01 12:10-12:13Z ping-pong.
+    failed = {"id": 36860029746, "workflow_id": 370301307, "name": "version-bump-guard", "head_branch": "claude/ecstatic-davinci-dnfa45",
+              "conclusion": "failure", "created_at": "2026-10-01T12:10:39Z"}
+    green_later = {"id": 36860215928, "workflow_id": 370301307, "name": "version-bump-guard", "head_branch": "claude/ecstatic-davinci-dnfa45",
+                   "conclusion": "success", "created_at": "2026-10-01T12:12:22Z"}
+    green_earlier = dict(green_later, id=1, created_at="2026-10-01T11:48:00Z")
+    green_other_branch = dict(green_later, id=2, head_branch="main")
+    green_other_wf = dict(green_later, id=3, workflow_id=1, name="mirror-guard")
+    failed_later = dict(failed, id=4, created_at="2026-10-01T12:14:00Z")
+    g = cw.superseded_by_green(failed, [failed_later, green_later, failed, green_earlier])
+    check("later green run on the same branch supersedes the failure", bool(g) and g["id"] == 36860215928, g and g.get("id"))
+    check("an earlier green run does not", cw.superseded_by_green(failed, [failed, green_earlier]) is None)
+    check("a green run on another branch does not", cw.superseded_by_green(failed, [failed, green_other_branch]) is None)
+    check("a green run of another workflow does not", cw.superseded_by_green(failed, [failed, green_other_wf]) is None)
+    check("a later FAILED run does not", cw.superseded_by_green(failed, [failed, failed_later]) is None)
+    check("the run never supersedes itself", cw.superseded_by_green(failed, [failed, dict(failed, conclusion="success")]) is None)
+    ids = cw.run_ids_in_bodies([{"number": 332, "body": "2026-10-01T12:10:38 version-bump-guard [push/x] run=36860029746 retired=False"},
+                                {"number": 7, "body": "no run here"}, {"number": 8, "body": None}])
+    check("closed finding bodies yield run id -> issue number", ids == {36860029746: 332}, ids)
+    check("branch_runs without a workflow id makes no call", cw.branch_runs(None, "main") == [])
+
     print("\n%d failure(s)" % len(fails))
     return 1 if fails else 0
 

@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.36-zenodo-version-requests";
+var VERSION = "0.9.39-revise-wall";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1514,16 +1514,31 @@ var GH_API = "https://api.github.com";
 var GH_OWNER = "QNFO";
 var GH_REPO = "qnfo-ensemble-research";
 var PIPELINE_VERSION = "0.8.0-artifact-deposit";
-// AI-TEXT-REASONING-BUDGET-1 (2026-10-01, #1620/#1504): every MODELS entry is a reasoning model whose
-// reasoning tokens count against max_tokens. A flat 8192 cap left a paper-length rewrite (6-9k content
-// tokens on top of the reasoning over a 22k-char input) truncated: all 8 glm-5.3-flash calls on
-// 2026-10-01 ended at exactly 8192 output tokens, and every revise and reconcile came back under the
-// 10000-char floor. The caps match qnfo-ai MAX_OUT for the same Workers AI ids.
-var AI_TEXT_MAX_OUT = { "@cf/zai-org/glm-5.3-flash": 32768, "@cf/zai-org/glm-5.3": 32768, "@cf/openai/gpt-oss-120b": 32768 };
-async function aiText(env, model, prompt, maxTokens) {
+// AI-TEXT-REASONING-BUDGET-1 (2026-10-01, #1620/#1504), REVERTED to 8192 by AI-TEXT-TIMEOUT-1 the same day: every MODELS
+// entry is a reasoning model, and a paper-length output does not fit 8192 tokens of reasoning plus content (revise and
+// reconcile returned 0 chars). Raising the cap to 32768 (0.9.34) did not help: Workers AI ends a call at about 240 s with
+// "3046: Request timeout", and at 32768 every ensemble primary leg (0/3, 11:34-11:38Z), every reconcile and every full
+// revise hit it. 8192 is the measured-safe budget (ensemble legs return 11-23k chars inside it). Long rewrites are no
+// longer needed on the hot path: revise uses patch mode (REVISE-PATCH-1) and reconcile degrades to the best leg.
+var AI_TEXT_MAX_OUT = { "@cf/zai-org/glm-5.3-flash": 8192, "@cf/zai-org/glm-5.3": 8192, "@cf/openai/gpt-oss-120b": 8192 };
+// REASONING-EFFORT-LOW-1 (2026-10-01, #1504): glm-5.3 models on Workers AI take reasoning_effort (low|high|max; reasoning
+// cannot be disabled) and default to the maximum, so a short structured answer (the revise patch JSON) spent the whole
+// 8192-token budget reasoning and returned 0 chars (12:12Z). Callers that need a short answer pass effort "low". If the
+// API rejects the field (anything but a timeout), the call is retried once without it.
+async function aiText(env, model, prompt, maxTokens, effort) {
   const cappedTokens = Math.min(maxTokens, AI_TEXT_MAX_OUT[model] || 8192);
   try {
-    const r = await env.AI.run(model, { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 });
+    const _opts = { messages: [{ role: "user", content: prompt }], max_tokens: cappedTokens, temperature: 0.3 };
+    if (effort && /^@cf\/zai-org\/glm-/.test(model)) _opts.reasoning_effort = effort;
+    let r;
+    try {
+      r = await env.AI.run(model, _opts);
+    } catch (e0) {
+      if (!_opts.reasoning_effort || /3046|timeout/i.test(String(e0 && e0.message || e0))) throw e0;
+      await logEvent(env, "ai-warn", "aiText model=" + model + " rejected reasoning_effort, retrying without: " + String(e0 && e0.message || e0).slice(0, 160));
+      delete _opts.reasoning_effort;
+      r = await env.AI.run(model, _opts);
+    }
     if (typeof r === "string") return r;
     if (r && typeof r.response === "string" && r.response) return r.response;
     if (r && r.choices && r.choices[0] && r.choices[0].message) return String(r.choices[0].message.content || "");
@@ -1938,8 +1953,11 @@ async function stageReconcile(env, row) {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, solo: true }).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "reconcile->review", len: solo.length, solo: true };
   }
+  const _rc0 = Date.now();
   let reconciled = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n"), 3e4);
-  if (!reconciled || reconciled.length < 1e4) {
+  // REVISE-WALL-1: a first attempt that ran past 120 s hit the timeout class (Workers AI 3046 at about 240 s, or the gateway's
+  // 240 s abort); an identical retry would too and costs the stage's wall budget, so degrade to the best leg directly.
+  if ((!reconciled || reconciled.length < 1e4) && Date.now() - _rc0 < 12e4) {
     // RECONCILE-RETRY-1 (2026-09-29): one bounded retry before the best-leg degrade.
     let _rc2 = await gwCall(env, RECONCILE_PROMPT + "\n\n" + parts.join("\n\n") + "\n\nIMPORTANT: output the COMPLETE reconciled paper in full. Do not summarize and do not truncate.", 3e4);
     if (_rc2 && _rc2.length > (reconciled ? reconciled.length : 0)) reconciled = _rc2;
@@ -2014,7 +2032,11 @@ async function stageRevise(env, row) {
   } catch (e) {
   }
   if (paper.length >= 1e4) {
-    const _praw = await gwCall(env, REVISE_PATCH_PROMPT + "\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 12e3);
+    // Workers AI directly at low reasoning effort: the gateway path ran the same model at default effort and aborted at
+    // its 240 s budget (12:08Z), and a short JSON answer does not need deep reasoning.
+    const _pprompt = REVISE_PATCH_PROMPT + "\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3);
+    let _praw = await aiText(env, MODELS[0], _pprompt, 8192, "low");
+    if (!_praw || _praw.indexOf("[") < 0) _praw = await aiText(env, MODELS[1], _pprompt, 8192, "low");
     const _p = applyRevisePatch(paper, _praw);
     await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length, _p.applied ? "ok" : "warn");
     if (_p.applied > 0 && _p.text.length >= 1e4) {
@@ -2022,6 +2044,13 @@ async function stageRevise(env, row) {
       const _c2 = (ctx.cycles || 0) + 1;
       await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: _c2, patch: _p.applied }).slice(0, 6e3), row.id).run();
       return { ok: true, stage: "revise->review", cycle: _c2, patch: _p.applied };
+    }
+    // REVISE-WALL-1 (2026-10-01): a full rewrite of a paper this long cannot fit the 8192-token budget next to the reasoning
+    // (0 chars on every attempt, 09:07Z-12:24Z) and its four 240 s calls pushed the stage past the 15-minute scheduled wall
+    // limit (internalError, 12:00Z hour). Fail fast with the patch outcome instead; the recover loop re-arms the row.
+    if (paper.length >= 1.2e4) {
+      await markError(env, row, "revise: no applicable patch edit (proposed=" + _p.proposed + ", applied=" + _p.applied + ", raw=" + String(_praw || "").length + " chars)");
+      return { ok: false, stage: "revise", patch: 0 };
     }
   }
   let revised = await gwCall(env, REVISE_PROMPT + "\n\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3), 3e4);
