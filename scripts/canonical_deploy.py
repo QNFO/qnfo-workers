@@ -199,6 +199,20 @@ def read_manifest(path: str) -> list[tuple[str, str]]:
     return targets
 
 
+def is_resurrection_refusal(res: dict) -> bool:
+    """WORKER-RESURRECTION-GUARD-1: the route refused to CREATE an absent worker because creation was not requested.
+
+    That is the guard working, not a deploy failure: in push-diff mode any edit to a repo directory whose worker is absent from the
+    account (39+ unmarked directories at 2026-10-01) would otherwise turn canonical-deploy red. Only this exact refusal is a skip;
+    every other failure still fails the run.
+    """
+    try:
+        txt = json.dumps(res, default=str)
+    except Exception:
+        txt = str(res)
+    return "WORKER-RESURRECTION-GUARD-1" in txt and not bool(res.get("ok"))
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Deploy workers via the canonical /ops/deploy route.")
     ap.add_argument("--worker", help="single worker script name")
@@ -238,8 +252,11 @@ def main(argv: list[str] | None = None) -> int:
         res = deploy_with_contention(worker, path, args.ref, token, args.timeout, args.allow_create)
         dt = time.time() - t0
         ok = bool(res.get("ok"))
+        skipped = (not ok) and (not args.allow_create) and is_resurrection_refusal(res)
+        if skipped:
+            ok = True  # a refused creation is a skip, not a failure (see is_resurrection_refusal)
         results.append((worker, ok, res))
-        verdict = "OK" if ok else "FAIL"
+        verdict = "SKIP (absent worker; creation refused by WORKER-RESURRECTION-GUARD-1, not requested)" if skipped else ("OK" if ok else "FAIL")
         print(f"    {verdict} in {dt:.1f}s  status={res.get('status')}")
         # Surface the route's own fields without assuming a fixed schema.
         for key in ("converged", "version", "version_id", "modified_on", "ledger", "lock", "schedules", "crons", "error", "detail"):
