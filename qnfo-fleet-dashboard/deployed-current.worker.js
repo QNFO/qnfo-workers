@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.43-scheduled-no-run-handler";
+var VERSION = "1.7.44-lineage-truth";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -1502,9 +1502,14 @@ async function buildState(env, ctx) {
     push({ key: "ai_queries", label: "AI queries (24h)", state: "info", detail: r.c + " queries", ts: r.latest });
   });
   await safeAudit("living_paper", "Living paper store", async function() {
-    const g = await d1all(env.LIVING, "SELECT (SELECT COUNT(*) FROM papers) AS papers, (SELECT COUNT(*) FROM paper_versions) AS versions, (SELECT COUNT(*) FROM citations) AS citations");
-    const r = g && g.length ? g[0] : {};
-    push({ key: "living_paper", label: "Living paper store", state: "info", detail: "papers=" + r.papers + " versions=" + r.versions + " citations=" + r.citations, ts: null });
+    // LINEAGE-TRUTH-1 (2026-10-01, #1651): living-paper paper_versions (1 row) and citations (0 rows) have no writer, so
+    // "versions=1 citations=0" understated lineage. Revisions come from paper_revision_log; Zenodo version counts and
+    // OpenAlex citations come from citation_stats (qnfo-paper-indexer, daily).
+    const g = await d1all(env.LIVING, "SELECT COUNT(*) AS papers FROM papers");
+    const since = new Date(Date.now() - 3 * 864e5).toISOString();
+    const a = await d1all(env.AUDIT, "SELECT (SELECT COUNT(DISTINCT slug) FROM paper_revision_log WHERE status='published' AND new_doi IS NOT NULL) AS revised, (SELECT COUNT(*) FROM (SELECT doi FROM citation_stats WHERE source='zenodo' AND metric='versions' AND collected_at >= ?1 GROUP BY doi HAVING MAX(value) >= 2)) AS multi_version, (SELECT COALESCE(SUM(v),0) FROM (SELECT MAX(value) AS v FROM citation_stats WHERE source='openalex' AND metric='cited_by_count' AND collected_at >= ?1 GROUP BY doi)) AS citations", [since]);
+    const r = g && g.length ? g[0] : {}, q = a && a.length ? a[0] : {};
+    push({ key: "living_paper", label: "Living paper store", state: "info", detail: "papers=" + r.papers + " revised(published new version)=" + q.revised + " multi-version(Zenodo)=" + q.multi_version + " citations(OpenAlex)=" + q.citations, ts: null });
   });
   await safeAudit("outreach_state", "Outreach pipeline state", async function() {
     const rows = await d1all(env.OUTREACH, "SELECT * FROM pipeline_state LIMIT 8");
