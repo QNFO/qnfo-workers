@@ -1,10 +1,33 @@
 {
-  "audited_at": "2026-10-01 09:34:36",
+  "audited_at": "2026-10-01 09:48:26",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_deploy_settle": {
+      "settled": [],
+      "waited_for": [
+        "qnfo-fleet-control"
+      ]
+    },
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-ai"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "qnfo-fleet-control"
+      ]
+    },
     "_guard_rc": 0,
-    "ahead": [],
+    "ahead": [
+      {
+        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-fleet-control/deployed-current.worker.js",
+        "dir": "qnfo-fleet-control",
+        "live": "0.4.61-budget-billing-split-ai-attrib",
+        "repo": "0.4.62-usage-snapshot-hourly",
+        "worker": "qnfo-fleet-control"
+      }
+    ],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -26,14 +49,30 @@
       },
       {
         "crons": [
+          "0 3 * * *",
+          "30 3 * * 1",
+          "0 4 1 * *"
+        ],
+        "dir": "qnfo-fleet-calibrator",
+        "worker": "qnfo-fleet-calibrator"
+      },
+      {
+        "crons": [
           "0 * * * *"
         ],
         "dir": "qnfo-signal-loop",
         "worker": "qnfo-signal-loop"
       }
     ],
-    "cron_only_count": 3,
-    "drift": [],
+    "cron_only_count": 4,
+    "drift": [
+      {
+        "dir": "qnfo-fleet-control",
+        "live": "0.4.61-budget-billing-split-ai-attrib",
+        "repo": "0.4.62-usage-snapshot-hourly",
+        "worker": "qnfo-fleet-control"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -42,10 +81,6 @@
       {
         "dir": "qnfo-agent-ws",
         "worker": "qnfo-agent-ws"
-      },
-      {
-        "dir": "qnfo-code-orchestrator",
-        "worker": "qnfo-code-orchestrator"
       }
     ],
     "no_live_version": [],
@@ -129,7 +164,6 @@
       "qnfo-error-selfheal",
       "qnfo-events",
       "qnfo-fleet-advisor",
-      "qnfo-fleet-calibrator",
       "qnfo-fleet-deploy",
       "qnfo-fleet-feed",
       "qnfo-idea-factory",
@@ -150,7 +184,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 59,
+    "not_deployed_notdrift": 58,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -309,10 +343,6 @@
         "worker": "qnfo-fleet-advisor"
       },
       {
-        "dir": "qnfo-fleet-calibrator",
-        "worker": "qnfo-fleet-calibrator"
-      },
-      {
         "dir": "qnfo-fleet-deploy",
         "worker": "qnfo-fleet-deploy"
       },
@@ -434,7 +464,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.29.7-internal-caller-props",
+        "version": "5.29.8-roster-ctx-catalog",
         "worker": "qnfo-ai"
       },
       {
@@ -468,6 +498,11 @@
         "worker": "qnfo-cloud-ops"
       },
       {
+        "dir": "qnfo-code-orchestrator",
+        "version": "0.2.1",
+        "worker": "qnfo-code-orchestrator"
+      },
+      {
         "dir": "qnfo-containers-pilot",
         "version": "1.0.8-public-exec-closed",
         "worker": "qnfo-containers-pilot"
@@ -481,11 +516,6 @@
         "dir": "qnfo-email",
         "version": "2.2.0-handoff-notify",
         "worker": "qnfo-email"
-      },
-      {
-        "dir": "qnfo-fleet-control",
-        "version": "0.4.61-budget-billing-split-ai-attrib",
-        "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -534,7 +564,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.26-selfheal-sum-null",
+        "version": "2.38.27-resurrection-guard",
         "worker": "qnfo-ops"
       },
       {
@@ -877,9 +907,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.29.7-internal-caller-props",
+      "before": "5.29.8-roster-ctx-catalog",
       "http": 200,
-      "live": "5.29.7-internal-caller-props",
+      "live": "5.29.8-roster-ctx-catalog",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1029,11 +1059,11 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": null,
-      "http": 404,
-      "live": null,
-      "match": 0,
-      "note": "NO_HEALTH_ROUTE",
+      "before": "0.2.1",
+      "http": 200,
+      "live": "0.2.1",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
@@ -1134,18 +1164,18 @@
     },
     "qnfo-fleet-calibrator": {
       "before": null,
-      "http": 404,
+      "http": null,
       "live": null,
       "match": 0,
-      "note": "NOT_DEPLOYED",
+      "note": "CRON_ONLY",
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.61-budget-billing-split-ai-attrib",
+      "before": "0.4.62-usage-snapshot-hourly",
       "http": 200,
       "live": "0.4.61-budget-billing-split-ai-attrib",
-      "match": 1,
-      "note": "SYNC",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
@@ -1277,9 +1307,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.26-selfheal-sum-null",
+      "before": "2.38.27-resurrection-guard",
       "http": 200,
-      "live": "2.38.26-selfheal-sum-null",
+      "live": "2.38.27-resurrection-guard",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
