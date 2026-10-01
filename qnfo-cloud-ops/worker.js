@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.15.8-outreach-consent"; /* OUTREACH-CONSENT-1 */
+var VERSION = "1.15.9-outreach-shared-cap"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1 */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -1545,6 +1545,20 @@ async function outreachSuppressed(env, email) {
   return !!(c && Number(c.suppress) === 1);
 }
 __name(outreachSuppressed, "outreachSuppressed");
+// OUTREACH-SHARED-CAP-1 (2026-10-01, #1718): docs/STRATEGY.md s5 caps cold outreach at 8/day in total and 3/day per
+// recipient domain across BOTH engines (this job and qnfo-outreach). Each engine counted only its own sends, so together
+// they could send 16/day, and this job had no per-domain cap. The shared count reads both ledgers for the UTC day:
+// qnfo-audit outreach_log (this job) and the qnfo-outreach D1 sends table (bound here as OUTREACH). It throws on a read
+// error; the caller then stops sending for the run (fail closed).
+var OUTREACH_SHARED_DAILY_CAP = 8;
+var OUTREACH_SHARED_DOMAIN_CAP = 3;
+async function outreachSharedCount(env, day, email) {
+  const dom = "%@" + String(email || "").toLowerCase().split("@").pop();
+  const a = await env.AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN lower(email) LIKE ?2 THEN 1 ELSE 0 END),0) AS d FROM outreach_log WHERE sent_at LIKE ?1 AND status IN ('sent','followup','replied')").bind(day + "%", dom).first();
+  const b = await env.OUTREACH.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN lower(c.email) LIKE ?2 THEN 1 ELSE 0 END),0) AS d FROM sends s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.status = 'sent' AND s.sent_at LIKE ?1 AND COALESCE(s.kind,'') <> 'selfcheck'").bind(day + "%", dom).first();
+  return { n: Number(a && a.n || 0) + Number(b && b.n || 0), d: Number(a && a.d || 0) + Number(b && b.d || 0) };
+}
+__name(outreachSharedCount, "outreachSharedCount");
 async function jobOutreach(env) {
   const out = { pending: 0, sent: 0, followups: 0, skipped_no_email: 0, skipped_dupe: 0, skipped_suppressed: 0, errors: [], capped: false };
   if (!env.SEND_EMAIL) return { status: "error", notes: { error: "SEND_EMAIL binding missing" } };
@@ -1629,6 +1643,23 @@ async function jobOutreach(env) {
         });
         continue;
       }
+      let shared;
+      try {
+        shared = await outreachSharedCount(env, today, email);
+      } catch (e) {
+        out.errors.push({ id: r.id, error: "shared cap read failed, send skipped: " + String(e && e.message || e) });
+        break;
+      }
+      if (shared.n >= OUTREACH_SHARED_DAILY_CAP) {
+        out.capped = true;
+        out.cap = OUTREACH_SHARED_DAILY_CAP;
+        out.shared_today = shared.n;
+        break;
+      }
+      if (shared.d >= OUTREACH_SHARED_DOMAIN_CAP) {
+        out.skipped_domain_cap = (out.skipped_domain_cap || 0) + 1;
+        continue;
+      }
       const subject = "QNFO \u2014 the energy-efficiency benchmark for quantum computing";
       const body = [
         "Hello,",
@@ -1682,6 +1713,23 @@ async function jobOutreach(env) {
           out.skipped_suppressed++;
           await env.AUDIT.prepare("UPDATE outreach_log SET status='rejected' WHERE id=?1").bind(f.id).run().catch(function() {
           });
+          continue;
+        }
+        let fuShared;
+        try {
+          fuShared = await outreachSharedCount(env, today, f.email);
+        } catch (e) {
+          out.errors.push({ id: "fu-" + f.email, error: "shared cap read failed, follow-up skipped: " + String(e && e.message || e) });
+          break;
+        }
+        if (fuShared.n >= OUTREACH_SHARED_DAILY_CAP) {
+          out.capped = true;
+          out.cap = OUTREACH_SHARED_DAILY_CAP;
+          out.shared_today = fuShared.n;
+          break;
+        }
+        if (fuShared.d >= OUTREACH_SHARED_DOMAIN_CAP) {
+          out.skipped_domain_cap = (out.skipped_domain_cap || 0) + 1;
           continue;
         }
         try {

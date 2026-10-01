@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { EmailMessage } from "cloudflare:email";
-var VERSION = "0.3.3-reply-stop";
+var VERSION = "0.3.4-shared-cap";
 var ACTIVATION_AT_MS = Date.parse("2026-09-13T00:00:00Z");
 var WARMUP_FROM_MS = Date.parse("2026-09-08T00:00:00Z");
 var GLOBAL_DAILY_CAP = 8;
@@ -187,6 +187,16 @@ async function scanReplies(env) {
   } catch (e) {}
   return { scanned: rows.length, suppressed: n, watermark: maxId };
 }
+// OUTREACH-SHARED-CAP-1 (2026-10-01, #1718): the 8/day total and 3/day per-domain caps (docs/STRATEGY.md s5) span BOTH
+// engines. This engine counted only its own sends table, and qnfo-cloud-ops jobOutreach sends from qnfo-audit
+// outreach_log, so together they could send 16/day. The shared count reads both ledgers for the UTC day; it throws on a
+// read error and the caller stops sending for the run (fail closed). Self-checks to the owner's address are not counted.
+async function sharedOutreachCount(env, day, email) {
+  const dom = "%@" + String(email || "").toLowerCase().split("@").pop();
+  const a = await env.OUTREACH_D1.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN lower(c.email) LIKE ?2 THEN 1 ELSE 0 END),0) AS d FROM sends s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.status = 'sent' AND s.sent_at LIKE ?1 AND COALESCE(s.kind,'') <> 'selfcheck'").bind(day + "%", dom).first();
+  const b = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN lower(email) LIKE ?2 THEN 1 ELSE 0 END),0) AS d FROM outreach_log WHERE sent_at LIKE ?1 AND status IN ('sent','followup','replied')").bind(day + "%", dom).first();
+  return { n: Number(a && a.n || 0) + Number(b && b.n || 0), d: Number(a && a.d || 0) + Number(b && b.d || 0) };
+}
 async function sendGated(env) {
   const now = Date.now();
   const day = utcDay();
@@ -232,11 +242,14 @@ async function sendGated(env) {
       await env.OUTREACH_D1.prepare("UPDATE sends SET status = 'suppressed' WHERE id = ?1").bind(row.id).run();
       continue;
     }
-    const domain = to.split("@")[1];
-    const domToday = await env.OUTREACH_D1.prepare(
-      "SELECT COUNT(*) n FROM sends WHERE status='sent' AND sent_at LIKE ?1 AND contact_id IN (SELECT id FROM contacts WHERE email LIKE ?2)"
-    ).bind(day + "%", "%@" + domain).first();
-    if ((domToday && domToday.n || 0) >= PER_DOMAIN_DAILY_CAP) continue;
+    let shared;
+    try {
+      shared = await sharedOutreachCount(env, day, to);
+    } catch (e) {
+      break;
+    }
+    if (shared.n >= GLOBAL_DAILY_CAP) break;
+    if (shared.d >= PER_DOMAIN_DAILY_CAP) continue;
     const finalBody = await compliant(row.body, to);
     const res = await sendRaw(env, FROM_ACADEMIC, to, row.subject, finalBody);
     if (res.ok) {
