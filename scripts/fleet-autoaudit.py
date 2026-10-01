@@ -87,7 +87,7 @@ def env(name, required=True):
 
 
 # ---------------------------------------------------------------- guard
-def run_guard():
+def _run_guard_once():
     cmd = [sys.executable, os.path.join(ROOT, "scripts", "deploy-drift-guard.py"),
            "--all", "--content", "--json", "--ahead"]
     p = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
@@ -99,6 +99,45 @@ def run_guard():
     except json.JSONDecodeError as e:
         die(f"deploy-drift-guard JSON parse failed: {e}")
     data["_guard_rc"] = p.returncode
+    return data
+
+
+def _has_drift(data):
+    return bool(data.get("drift") or data.get("content_drift"))
+
+
+def _refresh_repo():
+    """Fast-forward the checkout to the CURRENT origin/main. True only if HEAD actually moved.
+
+    DRIFT-CONFIRM-1 (2026-10-01): the checkout is fixed when the job STARTS, but the live probes run later, and
+    main receives a push every few minutes. Four false DRIFT/repo-ahead rows in one hour (qnfo-fleet-control,
+    personal-companion's sibling race, qnfo-fleet-dashboard/ops, qnfo-cloud-ops) were all an old tree compared
+    against a live worker that had already been deployed from a newer commit. Never raises: any git failure
+    leaves the first result standing.
+    """
+    def git(*a):
+        return subprocess.run(["git"] + list(a), capture_output=True, text=True, cwd=ROOT)
+    try:
+        before = git("rev-parse", "HEAD").stdout.strip()
+        if git("fetch", "-q", "origin", "main").returncode != 0:
+            return False
+        if git("merge", "-q", "--ff-only", "origin/main").returncode != 0:
+            return False
+        return git("rev-parse", "HEAD").stdout.strip() != before
+    except Exception:
+        return False
+
+
+def run_guard():
+    data = _run_guard_once()
+    # Confirm before reporting: a drift row must survive a fresh checkout to be real. One extra pass, only when drift
+    # was seen, so a clean audit costs nothing and the result converges on the newest main rather than flapping.
+    if _has_drift(data) and _refresh_repo():
+        first = sorted(_w(i) for i in (data.get("drift", []) + data.get("content_drift", [])))
+        data = _run_guard_once()
+        data["_drift_confirm"] = {"first_pass": first, "refreshed": True,
+                                  "second_pass": sorted(_w(i) for i in (data.get("drift", []) + data.get("content_drift", [])))}
+        print("DRIFT-CONFIRM-1: first pass %s; after fast-forwarding to origin/main: %s" % (first, data["_drift_confirm"]["second_pass"]))
     # DEAD-STATE-FILE-1 (2026-09-29): apply_ahead() reads STATE and NOTHING in this
     # repository ever wrote it, so `--apply` always reached die() and exited rc=3.
     # Measured: every fleet-autodeploy run failed at the apply step, so the automatic
