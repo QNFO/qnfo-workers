@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.24-publication-preflight-gate";
+var VERSION = "2.38.25-selfheal-sum-null";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -1727,7 +1727,8 @@ async function telemetryAnalyze(env, hours) {
         const okRow = await env.QNFO_AUDIT.prepare("SELECT SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) e, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) s FROM cloud_ops_events WHERE ts >= ?1 AND kind = 'ops_ai_tool' AND job = 'qnfo-ops' AND text = ?2 /* SELFHEAL-EXCLUSION-TABLE-1 */ AND NOT EXISTS (SELECT 1 FROM tool_error_exclusions x WHERE instr(COALESCE(meta,''), x.pattern) > 0 OR instr(COALESCE(text,''), x.pattern) > 0)").bind(since, toolKey).first();
         // ISSUE-LEDGER-EXCLUSION-BLIND-1 (#1484): `okRow.e || r.n` treated an exclusion-filtered count of 0 as
         // "missing" and fell back to the RAW count, so a tool whose every error is an excluded class still filed.
-        _errs = okRow && okRow.e != null ? Number(okRow.e) : (r.n || 0);
+        // SELFHEAL-SUM-NULL-1: SUM() over zero surviving rows is NULL; a successful census with NULL e means every error was excluded (0), not "missing".
+        _errs = okRow ? (Number(okRow.e) || 0) : (r.n || 0);
         _oks = (okRow && okRow.s) || 0;
         _rate = _errs / Math.max(1, _errs + _oks);
         _fresh = String(r.last_ts || "") >= new Date(Date.now() - h * 1800 * 1e3).toISOString();
