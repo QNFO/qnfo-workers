@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 15:16:50",
+  "audited_at": "2026-10-01 15:21:52",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -437,7 +437,7 @@
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.2.6-authblind",
+        "version": "1.2.7-auth-fail-closed",
         "worker": "qnfo-ai-calibration"
       },
       {
@@ -562,7 +562,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.42-ensemble-fresh",
+        "version": "0.9.44-gw-props-auth",
         "worker": "qnfo-research-exec"
       },
       {
@@ -592,7 +592,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.0.9",
+        "version": "1.0.10",
         "worker": "radar-hub"
       }
     ]
@@ -888,9 +888,9 @@
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.2.6-authblind",
+      "before": "1.2.7-auth-fail-closed",
       "http": 200,
-      "live": "1.2.6-authblind",
+      "live": "1.2.7-auth-fail-closed",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
@@ -1360,9 +1360,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.42-ensemble-fresh",
+      "before": "0.9.44-gw-props-auth",
       "http": 200,
-      "live": "0.9.42-ensemble-fresh",
+      "live": "0.9.44-gw-props-auth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1472,9 +1472,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.0.9",
+      "before": "1.0.10",
       "http": 200,
-      "live": "1.0.9",
+      "live": "1.0.10",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
