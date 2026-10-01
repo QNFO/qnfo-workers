@@ -12,3 +12,4 @@
 fleet-exec fleet-exec/worker.js
 qnfo-social qnfo-social/worker.js
 qnfo-signal-loop qnfo-signal-loop/worker.js
+vault-indexer vault-indexer/worker.js
