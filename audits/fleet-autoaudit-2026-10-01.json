@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 08:00:37",
+  "audited_at": "2026-10-01 08:06:34",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -33,7 +33,14 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-fleet-control",
+        "live": "0.4.58-census-dod-upsert",
+        "repo": "0.4.57-census-self-schedule",
+        "worker": "qnfo-fleet-control"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -401,7 +408,7 @@
       }
     ],
     "scope": "all",
-    "sync": 38,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -425,7 +432,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.1.15-aig-caller-meta",
+        "version": "4.1.16-event-profile-guard",
         "worker": "personal-api"
       },
       {
@@ -492,11 +499,6 @@
         "dir": "qnfo-email",
         "version": "2.2.0-handoff-notify",
         "worker": "qnfo-email"
-      },
-      {
-        "dir": "qnfo-fleet-control",
-        "version": "0.4.57-census-self-schedule",
-        "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
@@ -798,9 +800,9 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.1.15-aig-caller-meta",
+      "before": "4.1.16-event-profile-guard",
       "http": 200,
-      "live": "4.1.15-aig-caller-meta",
+      "live": "4.1.16-event-profile-guard",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -1144,9 +1146,9 @@
     "qnfo-fleet-control": {
       "before": "0.4.57-census-self-schedule",
       "http": 200,
-      "live": "0.4.57-census-self-schedule",
-      "match": 1,
-      "note": "SYNC",
+      "live": "0.4.58-census-dod-upsert",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
