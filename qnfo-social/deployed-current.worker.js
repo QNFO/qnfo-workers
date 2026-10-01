@@ -10,7 +10,7 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // D1: DB (qnfo-audit.social_threads). AI: env.AI.
 
-var VERSION = '0.7.16-dissem-reply-arity';
+var VERSION = "0.7.17-distribution-reconcile";
 const BSKY = 'https://bsky.social/xrpc';
 const COMPOSE_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731';
 const CHECKER_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // non-reasoning for strict JSON extraction (deepseek-v4-flash emits reasoning prose)
@@ -340,7 +340,12 @@ async function alertDigest(env) {
 async function autoScan(env) {
   try {
     const q = 'metadata.creators.person_or_org.name:"Quni-Gudzinas"';
-    const r = await fetch('https://zenodo.org/api/records?q=' + encodeURIComponent(q) + '&sort=mostrecent&size=15', {
+    // DISTRIBUTION-RECONCILE-1 (#1692, 2026-10-01): the scan used to read only the 15 newest records
+    // past the last_scanned cursor, so a batch of publications larger than 15 (or a record indexed late)
+    // was skipped for good: 3 of the 10 papers published in the 30 days to 2026-10-01 had no post on
+    // any channel. It now reads 50 records and also composes for any record from the last 30 days that
+    // has no thread and no posted dissemination row (at most RECONCILE_PER_RUN per run).
+    const r = await fetch('https://zenodo.org/api/records?q=' + encodeURIComponent(q) + '&sort=mostrecent&size=50', {
       headers: { 'User-Agent': 'Mozilla/5.0 (qnfo-social)' }
     });
     if (!r.ok) { console.error('auto-scan zenodo fetch failed', r.status); return; }
@@ -350,9 +355,15 @@ async function autoScan(env) {
     const lastScanned = (st && st.value) || '2000-01-01T00:00:00.000000+00:00';
     let newest = lastScanned;
     let drafted = 0;
+    let reconciled = 0;
+    const RECONCILE_PER_RUN = 3;
+    const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
+    let pubs30 = 0;
     for (const h of hits) {
       const created = h.created || '';
-      if (created <= lastScanned) continue;
+      if (created >= since30) pubs30++;
+      const isNew = created > lastScanned;
+      if (!isNew && (created < since30 || reconciled >= RECONCILE_PER_RUN)) continue;
       const md = h.metadata || {};
       const title = String(md.title || '').slice(0, 300);
       const abstract = String(md.description || '').replace(/<[^>]+>/g, '').slice(0, 4000);
@@ -360,6 +371,11 @@ async function autoScan(env) {
       if (!title || !abstract || !doi) continue;
       const dup = await env.DB.prepare("SELECT id FROM social_threads WHERE doi=?").bind(doi).first();
       if (dup) continue;
+      if (!isNew) {
+        const disseminated = await env.DB.prepare("SELECT id FROM dissemination_tracker WHERE paper_doi=? AND action='posted' LIMIT 1").bind(doi).first();
+        if (disseminated) continue;
+        reconciled++;
+      }
       const prompt = [
         "Write a 5-post Bluesky thread that amplifies a research paper accurately.",
         "Rules:",
@@ -389,7 +405,13 @@ async function autoScan(env) {
       if (created > newest) newest = created;
     }
     await env.DB.prepare("INSERT INTO scan_state (key, value) VALUES ('last_scanned', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(newest).run();
-    console.log('auto-scan: drafted', drafted, 'draft threads; last_scanned', newest);
+    // Monitor: posts in the last 30 days must keep up with publications in the last 30 days.
+    try {
+      const pc = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM social_threads WHERE status='posted' AND posted_at >= datetime('now','-30 days')) + (SELECT COUNT(*) FROM dissemination_tracker WHERE action='posted' AND posted_at >= datetime('now','-30 days')) AS n").first();
+      const posts30 = pc ? Number(pc.n || 0) : 0;
+      if (posts30 < pubs30) await logAlert(env, 'scan', 'warning', 'DISTRIBUTION-RECONCILE-1: posts_30d=' + posts30 + ' < publications_30d=' + pubs30 + ' (Zenodo); distribution is not keeping up');
+    } catch (e) {}
+    console.log('auto-scan: drafted', drafted, '(reconciled', reconciled + ') draft threads; last_scanned', newest, 'publications_30d', pubs30);
   } catch (e) {
     await logAlert(env, 'scan', 'error', String(e));
     console.error('auto-scan failed', String(e));

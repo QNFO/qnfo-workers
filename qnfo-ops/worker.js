@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.17-empty-final-guard";
+var VERSION = "2.38.18-budget-auto-promote";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -179,6 +179,68 @@ function opsToolBudgetBail(env, scope, iter, maxIters, deadlineHit) {
   } catch (e) { return null; }
 }
 __name(opsToolBudgetBail, "opsToolBudgetBail");
+// BUDGET-AUTO-PROMOTE-1 (#1680, 2026-10-01): an owner turn that hits the interactive tool budget
+// (300 s wall clock or the round cap) used to end with "INCOMPLETE: ..." and the remaining work was
+// dropped; measured 514 of 950 mobile agent-tools turns on 2026-09-24..30. At the first bail the loop
+// now hands the conversation, including every tool result gathered so far, to the existing durable
+// job path (ops_jobs + OPS_JOBS_QUEUE -> OpsExecWorkflow, no wall clock, per-job cost cap). The final
+// round tells the owner which job carries the rest, and the job's result is surfaced at the start of
+// the owner's next turn (opsSurfacePromoted). Guards: owner-facing sources only, no client tools, at
+// least 3 tool calls already spent, one promotion per turn, OPS_AUTO_PROMOTE_DAILY_CAP per UTC day,
+// and a continuation is never promoted again (jobs do not run through handleChat).
+var BUDGET_PROMOTE_MARKER = "[BUDGET-AUTO-PROMOTE-1]";
+var BUDGET_PROMOTED_DIRECTIVE = "The unfinished part of this task has been handed to durable job {job}, which continues server-side with the tool results gathered so far and has no wall-clock limit. In this final answer: deliver everything already completed, then list the remaining steps under the heading 'Continuing in job {job}'. Do NOT write an 'INCOMPLETE:' line for work the job now owns.";
+async function opsBudgetPromote(env, work, toolLog, iter, deadlineHit) {
+  try {
+    if (String(env.OPS_AUTO_PROMOTE || "1") === "0") return null;
+    if (!env.QNFO_AUDIT || !env.OPS_JOBS_QUEUE) return null;
+    for (const m of work) if (m && typeof m.content === "string" && m.content.indexOf(BUDGET_PROMOTE_MARKER) >= 0) return null;
+    const cap = envInt(env, "OPS_AUTO_PROMOTE_DAILY_CAP", 25);
+    const today = new Date().toISOString().slice(0, 10);
+    const used = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM cloud_ops_events WHERE kind = 'ops_budget_promote' AND ts >= ?1").bind(today).first();
+    if (used && Number(used.c) >= cap) return null;
+    // Carry the transcript without our system prompt (the workflow adds its own). Shrink tool results
+    // until the payload fits comfortably under createJobFromBody's ~900 KB limit.
+    // Drop this endpoint's own per-turn directives: the job must not inherit "FINAL round, no tools".
+    let msgs = work.slice(1).filter(function(m) {
+      if (!m || m.role !== "system") return true;
+      const c = String(m.content || "");
+      return c !== BUDGET_EXHAUSTED_DIRECTIVE && c !== CONTINUE_DIRECTIVE && c.indexOf("BACKGROUND RESULTS (BUDGET-AUTO-PROMOTE-1)") !== 0;
+    }).map(function(m) { return Object.assign({}, m); });
+    for (const lim of [12e3, 4e3, 1500, 600]) {
+      if (JSON.stringify(msgs).length < 6e5) break;
+      msgs = msgs.map(function(m) { return m.role === "tool" && String(m.content || "").length > lim ? Object.assign({}, m, { content: String(m.content).slice(0, lim) + " ...[truncated for continuation]" }) : m; });
+    }
+    const done = toolLog.filter(function(t) { return t && t.name && t.name !== "(budget-exhausted)"; }).length;
+    msgs.push({ role: "user", content: BUDGET_PROMOTE_MARKER + " The interactive turn above ran " + done + " tool call(s) and hit its " + (deadlineHit ? "wall-clock deadline" : "round cap") + " at round " + iter + ". Continue the ORIGINAL task from exactly where it stopped, using the tool results above; do not repeat steps that already succeeded. Deliver the completed result with evidence." });
+    const created = await createJobFromBody(env, { model: "ops-exec", messages: msgs });
+    if (!created || created.error || !created.id) return null;
+    try { await env.QNFO_AUDIT.prepare("UPDATE ops_jobs SET origin = 'budget-promote' WHERE id = ?1").bind(created.id).run(); } catch (e) { }
+    try { await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ops_budget_promote', ?3, ?4, 'qnfo-ops', 'ok')").bind(randId("evt-"), iso(), "promoted to " + created.id, snippet({ iter: iter, tools: done, deadlineHit: !!deadlineHit, version: VERSION }, 400)).run(); } catch (e) { }
+    return { id: created.id };
+  } catch (e) {
+    return null;
+  }
+}
+__name(opsBudgetPromote, "opsBudgetPromote");
+// Returns a system note with finished promoted-job results not yet shown to the owner, and marks them shown.
+async function opsSurfacePromoted(env) {
+  try {
+    if (!env.QNFO_AUDIT) return "";
+    const since = new Date(Date.now() - 72 * 3600e3).toISOString();
+    const rs = await env.QNFO_AUDIT.prepare("SELECT id, status, substr(COALESCE(response, ''), 1, 5000) AS response, substr(COALESCE(error, ''), 1, 300) AS error, updated_at FROM ops_jobs WHERE origin = 'budget-promote' AND surfaced_at IS NULL AND status IN ('succeeded', 'failed') AND created_at >= ?1 ORDER BY created_at ASC LIMIT 3").bind(since).all();
+    const rows = rs && rs.results || [];
+    if (!rows.length) return "";
+    const ids = rows.map(function(r) { return r.id; });
+    await env.QNFO_AUDIT.prepare("UPDATE ops_jobs SET surfaced_at = ?1 WHERE id IN (" + ids.map(function(_, i) { return "?" + (i + 2); }).join(",") + ")").bind(iso(), ...ids).run();
+    return "BACKGROUND RESULTS (BUDGET-AUTO-PROMOTE-1): durable job(s) that continued earlier owner turns past the interactive budget have finished. Open this answer with one short section summarising each result for the owner (job id, outcome, key evidence), then handle the new message.\n\n" + rows.map(function(r) {
+      return "[" + r.id + " | " + r.status + " | " + r.updated_at + "]\n" + (r.response || "") + (r.error ? "\nerror: " + r.error : "");
+    }).join("\n\n---\n\n");
+  } catch (e) {
+    return "";
+  }
+}
+__name(opsSurfacePromoted, "opsSurfacePromoted");
 var BUDGET_EXHAUSTED_DIRECTIVE = "TOOL BUDGET EXHAUSTED for this turn: no further tool calls are available and this is your FINAL round. Produce the COMPLETED deliverable NOW from the tool results already gathered above. Never narrate or promise future work - banned endings include 'then I will', 'next I will', 'now I will', 'I will run', 'remains to', 'the next batch', 'saving the report', 'before touching'. Never end with a progress update or a plan for what you would do next. If part of the task genuinely remains unfinished, still deliver everything you completed, then append exactly one final line: 'INCOMPLETE: <what remains and why>'. A promise of future work is a failed answer.";
 var FUTURE_WORK_RE = /(?:then|next|now)\s+(?:i|we)\s*(?:'|\u2019)?\s*ll\b|(?:then|next|now)\s+(?:i|we)\s+will\b|\bi\s+will\s+(?:now\s+)?(?:run|save|write|fetch|pull|proceed|continue|build|generate|open|check|verify)\b|remains?\s+to\b|before\s+(?:i|we)\s+(?:touch|proceed|publish|write)\b|the\s+next\s+(?:batch|step|round|pass)\b|saving\s+the\s+(?:report|findings|artifact)\b|then\s+the\s+(?:report|artifact|answer|results?)\b/i;
 var CONTINUE_DIRECTIVE = "You ended your turn with a PROGRESS REPORT and a promise of future work instead of a finished deliverable. That is a contract violation. Do the promised work NOW in this same turn: call the next tool(s) immediately and keep going until the task is fully complete. Do NOT narrate what you are about to do. Only end your turn when you are delivering the final completed result (or an explicit 'INCOMPLETE: <what remains and why>' line when genuinely blocked).";
@@ -4547,6 +4609,12 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   } else {
     work.unshift({ role: "system", content: (codeMode ? CODE_ONLY_SYSTEM_PROMPT : OPS_SYSTEM_PROMPT) + sysDate });
   }
+  if (!clientTools && !execUpstream && (source === "mobile" || source === "deepchat")) {
+    const _bg = await opsSurfacePromoted(env);
+    if (_bg) work.splice(1, 0, { role: "system", content: _bg });
+  }
+  let promotedJobId = null;
+  let promoteNoteStreamed = false;
   const prompt = lastUserText(messages).slice(0, 4e3);
   const respId = randId("chatcmpl-");
   const created = Math.floor(Date.now() / 1e3);
@@ -4808,8 +4876,16 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         const toolsNow = withTools ? roundTools : null;
         const capNow = toolsNow ? toolRoundCap : answerCap;
         if (!withTools) {
-          if (!work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; })) opsToolBudgetBail(env, "chat", iter, maxIters, deadlineHit);
+          const _firstBail = !work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; });
+          if (_firstBail) opsToolBudgetBail(env, "chat", iter, maxIters, deadlineHit);
           work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
+          if (_firstBail && !promotedJobId && !clientTools && !execUpstream && (source === "mobile" || source === "deepchat") && toolLog.length >= 3) {
+            const _pj = await opsBudgetPromote(env, work, toolLog, iter, deadlineHit);
+            if (_pj && _pj.id) {
+              promotedJobId = _pj.id;
+              work.push({ role: "system", content: BUDGET_PROMOTED_DIRECTIVE.replace(/\{job\}/g, _pj.id) });
+            }
+          }
         }
         const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: _t2Blocked };
         let _r1 = null;
@@ -4891,6 +4967,11 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         }
         content = String(msg0 && msg0.content || "");
         if (pendingToolCalls.length) content = (String(content || "").trim() + PENDING_TOOLCALLS_NOTE.replace("{n}", String(pendingToolCalls.length))).trim();
+        if (promotedJobId && content.indexOf("durable job " + promotedJobId + " (") < 0) {
+          const _pn = "\n\n[budget-auto-promote] The rest of this task continues in durable job " + promotedJobId + " (GET /v1/jobs/" + promotedJobId + "); its result is shown at the start of your next message.";
+          content = (String(content || "").trim() + _pn).trim();
+          if (isStream && streamedTokens && !promoteNoteStreamed) { promoteNoteStreamed = true; emitChunk({ role: "assistant", content: _pn }, null); }
+        }
         if (!String(content || "").trim() && !toolCalls && withTools && !cacheHit) {
           escalations++;
           ctx.waitUntil(logEscalation(env, strategy, servedBy || UPSTREAM_MODEL, UPSTREAM_MODEL_FB, "empty-content-with-tools", "model returned empty content while tools were available"));
@@ -5411,7 +5492,7 @@ __name222222(registryDelete, "registryDelete");
 async function ensureJobsSchema(env) {
   if (!env.QNFO_AUDIT) return;
   try {
-    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ops_jobs (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'queued', model TEXT, strategy TEXT, payload TEXT, response TEXT, tool_log TEXT, error TEXT, created_at TEXT, updated_at TEXT)").run();
+    await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS ops_jobs (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'queued', model TEXT, strategy TEXT, payload TEXT, response TEXT, tool_log TEXT, error TEXT, created_at TEXT, updated_at TEXT, origin TEXT, surfaced_at TEXT)").run();
   } catch (e) {
   }
 }

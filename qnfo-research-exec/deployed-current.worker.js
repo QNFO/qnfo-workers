@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.26-dlf-hold";
+var VERSION = "0.9.27-gw-breaker";
 var WORKER = "qnfo-research-exec";
 var NL = String.fromCharCode(10);
 var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"];
@@ -1487,8 +1487,43 @@ __name2(aiText, "aiText");
 __name22(aiText, "aiText");
 __name222(aiText, "aiText");
 __name2222(aiText, "aiText");
+// GW-BREAKER-1 (2026-10-01, #1620/#1504): the gateway's ensemble cannot produce paper-length
+// output inside its 120 s budget, so every gwCall spent ~2-4 min before returning the canned
+// FALLBACK_TEXT (or aborting) and then re-ran the same prompt on Workers AI. That doubled each
+// stage's wall time and held the hourly cron to ~1 stage per run. The breaker remembers the
+// latest gateway outcome in cloud_ops_events: after a failure the gateway is skipped (straight to
+// Workers AI) until GW_BREAKER_PROBE_MS has passed, then one call probes it again. A success logs
+// gw-ok and closes the breaker.
+var GW_BREAKER_PROBE_MS = 3 * 60 * 60 * 1e3;
+var GW_BREAKER_KINDS = ["gw-canned", "gw-error", "gw-fallback", "gw-ok"];
+var _gwBreaker = null;
+var _gwBreakerLoad = null;
+async function gwBreakerOpen(env) {
+  if (_gwBreaker === null) {
+    // One D1 read per isolate; concurrent ensemble legs share the same pending load.
+    if (!_gwBreakerLoad) _gwBreakerLoad = (async function() {
+      const st = { failTs: 0 };
+      try {
+        const row = await env.QNFO_AUDIT.prepare("SELECT kind, ts FROM cloud_ops_events WHERE job = ? AND ts > ? AND kind IN (?,?,?,?) ORDER BY ts DESC LIMIT 1").bind(WORKER, new Date(Date.now() - GW_BREAKER_PROBE_MS).toISOString(), GW_BREAKER_KINDS[0], GW_BREAKER_KINDS[1], GW_BREAKER_KINDS[2], GW_BREAKER_KINDS[3]).first();
+        if (row && row.kind !== "gw-ok") st.failTs = Date.parse(row.ts) || 0;
+      } catch (e) {
+      }
+      return st;
+    })();
+    const st = await _gwBreakerLoad;
+    if (_gwBreaker === null) _gwBreaker = st;
+  }
+  return _gwBreaker.failTs > 0 && Date.now() - _gwBreaker.failTs < GW_BREAKER_PROBE_MS;
+}
+__name(gwBreakerOpen, "gwBreakerOpen");
+function gwBreakerTrip(ok) {
+  if (_gwBreaker === null) _gwBreaker = { failTs: 0 };
+  _gwBreaker.failTs = ok ? 0 : Date.now();
+}
+__name(gwBreakerTrip, "gwBreakerTrip");
 async function gwCall(env, prompt, maxTokens) {
   if (!env.ROUTER_TOKEN) return "";
+  if (await gwBreakerOpen(env)) return await aiText(env, MODELS[0], prompt, maxTokens);
   const ctrl = new AbortController();
   const t = setTimeout(function() {
     ctrl.abort();
@@ -1503,6 +1538,7 @@ async function gwCall(env, prompt, maxTokens) {
       } catch (e) {
         _eb = "(body unreadable)";
       }
+      gwBreakerTrip(false);
       await logEvent(env, "gw-fallback", "gateway HTTP " + r.status + " host=" + _lastRouterHost + " body=" + _eb + "; falling back to Workers AI", "warn");
       return await aiText(env, MODELS[0], prompt, maxTokens);
     }
@@ -1513,11 +1549,17 @@ async function gwCall(env, prompt, maxTokens) {
     // answer, so stageReconcile/stageRevise (>= 10000 chars) terminalised every row. Detect the
     // canned signature and degrade to the Workers AI path instead of feeding it downstream.
     const _canned = typeof c === "string" && /I do not have a reliable answer for that right now|ensemble mode \(model=ensemble\) cross-checks answers across models/i.test(c);
-    if (typeof c === "string" && c && !_canned) return c;
+    if (typeof c === "string" && c && !_canned) {
+      if (_gwBreaker && _gwBreaker.failTs > 0) await logEvent(env, "gw-ok", "gateway answered (len=" + c.length + "); breaker closed", "ok");
+      gwBreakerTrip(true);
+      return c;
+    }
+    gwBreakerTrip(false);
     await logEvent(env, _canned ? "gw-canned" : "gw-fallback", _canned ? "gateway returned canned FALLBACK_TEXT (len=" + String(c).trim().length + "); falling back to Workers AI" : "gateway empty content; falling back to Workers AI", "warn");
     return await aiText(env, MODELS[0], prompt, maxTokens);
   } catch (e) {
     clearTimeout(t);
+    gwBreakerTrip(false);
     await logEvent(env, "gw-error", "gwCall failed: " + String(e && e.message || e).slice(0, 150), "warn");
     return await aiText(env, MODELS[0], prompt, maxTokens);
   }
