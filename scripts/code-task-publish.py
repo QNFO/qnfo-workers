@@ -34,6 +34,7 @@ import urllib.request
 
 AUDIT_DB = os.environ.get("AUDIT_D1_ID", "35e2e573-92f3-46ac-83c6-22f6429fc5e5")
 REPO_NAME = "qnfo-workers"
+REPO_NAME_FULL = "QNFO/qnfo-workers"
 MAX_PATCH = 200_000
 STALE_PUBLISHING_MIN = 30
 # Mirror of the worker's DENY_PATH: the loop must never publish edits to workflows, wrangler config, deploy targets, env files.
@@ -184,7 +185,15 @@ def publish_one(task, repo_dir, base, pr):
         git(repo_dir, "push", "origin", "refs/heads/" + branch + ":refs/heads/" + branch)
         body = ("Opened by code-task-publish from verified code-task `" + task["id"] + "`.\n\nGoal: " + str(task.get("goal") or "")[:500] +
                 "\n\nThe patch passed the orchestrator's deterministic verifier. Review, then merge by hand; this workflow never merges.")
-        url = pr.create(branch, base, "code-task: " + str(task.get("goal") or "")[:70], body)
+        try:
+            url = pr.create(branch, base, "code-task: " + str(task.get("goal") or "")[:70], body)
+        except RuntimeError as e:
+            # Repo setting "Allow GitHub Actions to create pull requests" may be off. The branch is already
+            # pushed, so record it as branch_pushed with the compare URL instead of failing the task; any
+            # session or the next run with a PR-capable token can open the PR from that branch.
+            if "not permitted to create or approve pull requests" in str(e) or "createPullRequest" in str(e):
+                return "branch_pushed", "https://github.com/" + REPO_NAME_FULL + "/compare/" + base + "..." + branch + "?expand=1", None
+            raise
         return "published", url, None
     except Exception as e:  # noqa: BLE001 - a failure must become a recorded status, not a crash
         return "publish_failed", None, str(e)[:300]
@@ -207,7 +216,10 @@ def publish_all(store, repo_dir, base, pr, log=print):
             continue
         st, url, err = publish_one(t, repo_dir, base, pr)
         finish(store, t["id"], st, url, err)
-        if st == "published":
+        if st == "branch_pushed":
+            out["published"] += 1
+            log(f"::warning::branch_pushed {t['id']} -> {url} (PR creation refused by repo setting)")
+        elif st == "published":
             out["published"] += 1
             log(f"published {t['id']} -> {url}")
         else:
@@ -218,13 +230,15 @@ def publish_all(store, repo_dir, base, pr, log=print):
 
 # ------------------------------------------------------------------ selftest
 class FakePR:
-    def __init__(self):
-        self.by_branch, self.created = {}, []
+    def __init__(self, refuse=False):
+        self.by_branch, self.created, self.refuse = {}, [], refuse
 
     def existing(self, branch):
         return self.by_branch.get(branch)
 
     def create(self, branch, base, title, body):
+        if self.refuse:
+            raise RuntimeError("gh pr create failed: GitHub Actions is not permitted to create or approve pull requests")
         url = f"https://github.com/QNFO/{REPO_NAME}/pull/{len(self.created) + 1}"
         self.by_branch[branch] = url
         self.created.append(branch)
@@ -337,6 +351,18 @@ def selftest():
     publish_all(store, work, "main", pr, quiet)
     check("tasks for other repos are skipped, not failed", row(store, "ct_otherrepo001")["status"] == "ready_to_publish")
     check("a lost claim race is detected", claim(store, row(store, "ct_idem00000001")) is False)
+
+    # 5. PR creation refused by the repo setting -> branch stays pushed, recorded as branch_pushed with a compare URL, not a failure
+    remote, work, store = fixture()
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    pr = FakePR(refuse=True)
+    add(store, "ct_nopr00000001", good)
+    r = publish_all(store, work, "main", pr, quiet)
+    t = row(store, "ct_nopr00000001")
+    check("PR creation refused: branch_pushed with compare URL, not publish_failed",
+          t["status"] == "branch_pushed" and "/compare/main...codeagent-nopr00000001" in (t["pr_url"] or "") and r["failed"] == 0, t)
+    shown = subprocess.run(["git", "--git-dir", remote, "show", "codeagent-nopr00000001:scripts/x.py"], capture_output=True, text=True)
+    check("PR creation refused: the branch still carries the change", shown.stdout == "def f():\n    return 2\n", shown.stderr)
 
     print(f"\nselftest: {len(fails)} failure(s)")
     return 1 if fails else 0
