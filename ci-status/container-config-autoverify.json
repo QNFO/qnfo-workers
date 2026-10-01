@@ -11,24 +11,22 @@
     "tail": "",
     "gate": {
       "need_restore": false,
-      "reason": "newest container event is container.sh at 2026-09-30T23:49:43.521Z: container healthy, nothing to restore",
+      "reason": "newest container event is container.sh at 2026-10-01T07:57:38.717Z: container healthy, nothing to restore",
       "evidence": {
         "health_http": 200,
         "newest_container_event": [
           "container.sh",
-          "2026-09-30T23:49:43.521Z",
-          6.152175832539797
+          "2026-10-01T07:57:38.717Z",
+          2.068033330142498
         ]
       }
     }
   },
   "post_containers": null,
   "post_bindings": [
-    "AUDIT",
-    "PILOT_TOKEN",
-    "SHELL_CONTAINER"
+    "PILOT_TOKEN"
   ],
   "closed": false,
-  "head": "881a6f138281595a141d514ab5e6a9e6c30abf69",
-  "ts": "2026-10-01T05:58:51Z"
+  "head": "2bd51fdbf8a15ce8d2b03a2745fdf13312bd4231",
+  "ts": "2026-10-01T10:01:43Z"
 }
