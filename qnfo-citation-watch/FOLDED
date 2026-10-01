@@ -1,0 +1,5 @@
+qnfo-citation-watch is FOLDED (2026-10-01, FOOTPRINT-MARKERS-1, charter decision rule 2). Do not redeploy this directory.
+
+Measured 2026-10-01T14:50Z: the Cloudflare account runs 44 workers (workers list) and this name is not one of them. Its duties live in radar-hub: its code is embedded verbatim as radar-hub's `citationMod` module (qnfo-citation-watch/fabric-20260910) and radar-hub routes the `0 11 1,15 * *` cron to it.
+
+canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. This source is kept for reference only.
