@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.77-deploy-sync";
+var VERSION = "0.4.78-hint-link";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3430,12 +3430,20 @@ function pfHygiene(r, tier, nowMs) {
 // Pure: org repositories + WBS rows -> the portfolio's measured state. No I/O.
 function pfEvaluate(repos, wbsRows, nowIso) {
   var nowMs = Date.parse(nowIso || new Date().toISOString());
-  var wbsByRepo = {};
+  var wbsByRepo = {}, codeKnown = {};
   (wbsRows || []).forEach(function(w) {
+    if (w && w.wbs_code) codeKnown[w.wbs_code] = true;
     var key = String(w.github_repo || "").replace(/^QNFO\//, "");
     if (!key) return;
     (wbsByRepo[key] = wbsByRepo[key] || []).push({ wbs: w.wbs_code, level: w.level, status: w.status, name: w.name });
   });
+  // HINT-LINK-1: a repository whose description names a registry code is linked to that program even when the code's
+  // own github_repo is another repository (a paper's artifact repo next to the program repo); unknown codes are not.
+  function wbsOf(r) {
+    var linked = (wbsByRepo[r.name] || []).map(function(w) { return w.wbs; });
+    pfWbsHint(r.description).forEach(function(c) { if (codeKnown[c] && linked.indexOf(c) < 0) linked.push(c); });
+    return linked;
+  }
   var rows = (repos || []).map(function(r) {
     var tier = pfTier(r);
     var isPrivate = r.visibility === "private" || r.private === true;
@@ -3444,7 +3452,7 @@ function pfEvaluate(repos, wbsRows, nowIso) {
       archived: !!r.archived, fork: !!r.fork, description: r.description || "", license: r.license || null, topics: r.topics || [],
       homepage: r.homepage || null, language: r.language || null, pushed_at: r.pushed_at || null, has_pages: !!r.has_pages,
       open_issues: Number(r.open_issues_count || r.open_issues || 0), stars: Number(r.stargazers_count || r.stars || 0),
-      wbs: (wbsByRepo[r.name] || []).map(function(w) { return w.wbs; }), flags: pfHygiene(r, tier, nowMs), days_since_push: pfDays(r.pushed_at, nowMs)
+      wbs: wbsOf(r), flags: pfHygiene(r, tier, nowMs), days_since_push: pfDays(r.pushed_at, nowMs)
     };
   });
   rows.sort(function(a, b) { return PF_TIER_ORDER.indexOf(a.tier) - PF_TIER_ORDER.indexOf(b.tier) || String(b.pushed_at || "").localeCompare(String(a.pushed_at || "")); });
@@ -3777,7 +3785,7 @@ function pfHygienePlan(ev, wbsRows) {
   (wbsRows || []).forEach(function(w) { if (!w) return; byCode[w.wbs_code] = w; if (w.slug) bySlug[String(w.slug).toLowerCase()] = w; });
   (ev.rows || []).forEach(function(r) {
     if (r.visibility !== "public" || r.archived || r.fork || r.tier === "client-config") return;
-    if (r.tier === "research" && !r.wbs.length) {
+    if (r.tier === "research") {
       var cand = null, s = bySlug[String(r.name).toLowerCase()];
       if (s && !s.github_repo) cand = s;
       if (!cand) pfWbsHint(r.description).forEach(function(c) { var w = byCode[c]; if (!cand && w && !w.github_repo) cand = w; });
