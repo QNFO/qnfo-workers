@@ -43,16 +43,27 @@ def _call(path, payload):
 
 
 def acquire(worker, ttl_sec=DEFAULT_TTL, owner="ci/secret-mutation", call=None):
+    """Returns a lease token, or None when the lock SERVICE is unavailable.
+
+    DENIED (the service answered and said another holder has the lease) raises SecretLockError: that is the whole
+    point of the lock. UNAVAILABLE (unreachable, 404/5xx, unparseable body) degrades to a loud warning and proceeds
+    without a lease, because the lock service had never been exercised live when this shipped and a broken
+    advisory lock must not be able to stop every deploy and rotation (including the deploy of its own fix).
+    """
     call = call or _call
     st, j = call("/secret-lock/acquire", {"worker": worker, "owner": owner, "actor": owner,
                                           "session_id": uuid.uuid4().hex, "ttl_sec": ttl_sec})
-    if st == 200 and j and j.get("acquired") and j.get("token"):
+    if st == 200 and isinstance(j, dict) and j.get("acquired") and j.get("token"):
         return j["token"]
-    raise SecretLockError("secret-lock NOT acquired for %s (HTTP %s) %s - refusing to mutate (fail-closed)"
-                          % (worker, st, str(j)[:160]))
+    if isinstance(j, dict) and j.get("acquired") is False and st in (200, 409, 423):
+        raise SecretLockError("secret-lock DENIED for %s (HTTP %s) %s - another holder has the lease" % (worker, st, str(j)[:160]))
+    print("::warning::SECRET-LOCK-UNAVAILABLE for %s (HTTP %s) %s - proceeding WITHOUT a lease" % (worker, st, str(j)[:160]))
+    return None
 
 
 def release(worker, token, call=None):
+    if not token:
+        return True
     call = call or _call
     try:
         st, j = call("/secret-lock/release", {"worker": worker, "token": token})

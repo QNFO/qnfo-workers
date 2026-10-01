@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.28-secret-lock-budget-checkpoint";
+var VERSION = "2.38.29-secret-lock-budget-checkpoint";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -6058,17 +6058,24 @@ async function opsDeploy(env, args) {
     // CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (#1701): the deploy PUT rewrites bindings, so also hold the
     // secrets:<worker> lease (deploy-guard /secret-lock/*), fail-closed, released in the finally below.
     let sLock = null;
+    let sDenied = false;
     try {
       const slr = await dg(DG + "/secret-lock/acquire", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, owner: "qnfo-ops/ops-deploy", ttl_sec: 900 }) });
       const _slt = await slr.text();
       try { sLock = JSON.parse(_slt); } catch (_e2) { sLock = {}; }
-      log.push({ step: "secret-lock", http: slr.status, acquired: !!(sLock && sLock.acquired) });
+      sDenied = !!(sLock && sLock.acquired === false && (slr.status === 200 || slr.status === 409 || slr.status === 423));
+      log.push({ step: "secret-lock", http: slr.status, acquired: !!(sLock && sLock.acquired), denied: sDenied });
     } catch (_e3) {
       sLock = { acquired: false, error: String(_e3 && _e3.message || _e3).slice(0, 120) };
     }
-    if (!sLock || !sLock.acquired || !sLock.token) {
+    if (sDenied) {
       try { await dg(DG + "/lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: lock.token }) }); } catch (_e4) {}
-      return { ok: false, error: "secret-lock not acquired (fail-closed)", secret_lock: sLock, log };
+      return { ok: false, error: "secret-lock DENIED (another holder has secrets:" + worker + ")", secret_lock: sLock, log };
+    }
+    if (!sLock || !sLock.acquired || !sLock.token) {
+      // lock SERVICE unavailable (unreachable / non-JSON / error): degrade, never brick the deploy route
+      log.push({ step: "secret-lock", unavailable: true, note: "proceeding without a secrets lease" });
+      sLock = null;
     }
     let ok = false;
     let result = null;
@@ -6194,7 +6201,7 @@ async function opsDeploy(env, args) {
       } catch (e) {
       }
       try {
-        await dg(DG + "/secret-lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: sLock.token }) });
+        if (sLock && sLock.token) await dg(DG + "/secret-lock/release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker, token: sLock.token }) });
       } catch (e) {
       }
       try {

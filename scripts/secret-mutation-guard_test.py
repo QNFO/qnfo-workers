@@ -71,10 +71,17 @@ class GuardTests(unittest.TestCase):
 
 
 class LockTests(unittest.TestCase):
-    def test_acquire_fail_closed(self):
-        for resp in [(409, {"acquired": False}), (0, {"error": "x"}), (200, {"acquired": True}), (500, None)]:
+    def test_denied_raises_unavailable_degrades(self):
+        for resp in [(409, {"acquired": False}), (200, {"acquired": False}), (423, {"acquired": False, "holder": "x"})]:
             with self.assertRaises(L.SecretLockError):
                 L.acquire("w", call=lambda p, b, r=resp: r)
+        for resp in [(0, {"error": "x"}), (404, None), (500, None), (200, {"acquired": True}), (502, {"error": "bad"})]:
+            self.assertIsNone(L.acquire("w", call=lambda p, b, r=resp: r))
+
+    def test_release_of_no_token_is_a_noop(self):
+        calls = []
+        self.assertTrue(L.release("w", None, call=lambda p, b: calls.append(p) or (200, {})))
+        self.assertEqual(calls, [])
 
     def test_context_releases_on_exception(self):
         calls = []
@@ -89,7 +96,7 @@ class LockTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["ttl_sec"], 120)
         self.assertEqual(calls[1][1]["token"], "t1")
 
-    def test_body_not_run_when_lock_denied(self):
+    def test_body_not_run_when_lock_denied(self):  # denied, not unavailable
         ran = []
         with self.assertRaises(L.SecretLockError):
             with L.secret_lock("w", call=lambda p, b: (409, {"acquired": False})):
