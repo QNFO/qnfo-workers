@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.7.44-lineage-truth";
+var VERSION = "1.7.45-device-staleness";
 var NAME = "qnfo-fleet-dashboard";
 var PROBE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -500,7 +500,12 @@ async function liveDevice(env) {
       if (r.plane === "windows") win.push(it);
       else loc.push(it);
     }
-    return { captured_at: cap, note: "live from device_tasks (D1), " + rows.length + " rows", windows_tasks: win, local_crons: loc };
+    // DEVICE-PLANE-STALENESS-1 (2026-10-01, #1637): device_tasks is written only by the owner's local device reporter,
+    // last on 2026-09-12. It was labelled "live" regardless of age. Past 48h it is now marked stale and unverifiable,
+    // so client-side task state cannot pass for current fleet state.
+    const ageH = cap ? (Date.now() - Date.parse(String(cap).replace(" ", "T") + (/Z|[+-]\d\d:?\d\d$/.test(String(cap)) ? "" : "Z"))) / 36e5 : null;
+    const stale = ageH == null || !isFinite(ageH) || ageH > 48;
+    return { captured_at: cap, stale, age_hours: ageH == null || !isFinite(ageH) ? null : Math.round(ageH), note: stale ? "STALE: device last self-reported " + cap + " (" + (ageH == null || !isFinite(ageH) ? "unknown age" : Math.round(ageH / 24) + "d ago") + "); device task state is unverifiable until the local reporter runs again" : "live from device_tasks (D1), " + rows.length + " rows", windows_tasks: win, local_crons: loc };
   } catch (e) {
     return { captured_at: null, note: "device_tasks unavailable: " + String(e && e.message || e).slice(0, 80), windows_tasks: [], local_crons: [] };
   }
