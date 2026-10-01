@@ -182,6 +182,11 @@ jobs:
             echo "no d1guard battery in this revision; skipping"
           fi
 
+      # DRIFT-CONFIRM-1: the audit's own confirm-before-report logic is exercised offline first, so a regression in it
+      # cannot silently turn the audit into a source of false DRIFT (or hide a real one).
+      - name: audit self-test (offline)
+        run: python scripts/fleet-autoaudit-selftest.py
+
       - name: fleet self-audit (all workers, version + content) -> worker_live_audit
         run: python scripts/fleet-autoaudit.py --audit
 
