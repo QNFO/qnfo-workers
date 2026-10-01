@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "report | delete-worker | gateway-logs | ai-neurons | gateway-cost | access-probe | r2-get"
+        description: "report | delete-worker | delete-vectorize-index | gateway-logs | ai-neurons | gateway-cost | access-probe | r2-get"
         required: true
         type: choice
         options:
@@ -22,8 +22,9 @@ on:
           - gateway-logs
           - access-probe
           - delete-worker
+          - delete-vectorize-index
       target:
-        description: "worker name (delete-worker) or ops-workspace path (r2-get)"
+        description: "worker name (delete-worker), index name (delete-vectorize-index) or ops-workspace path (r2-get)"
         required: false
         default: ""
       model:
