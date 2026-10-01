@@ -1,16 +1,8 @@
 {
-  "audited_at": "2026-10-01 12:54:55",
+  "audited_at": "2026-10-01 13:01:11",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-cloud-ops",
-        "qnfo-social"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -470,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.16.1-sent-as-you",
+        "version": "1.16.2-register-relabel",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -1024,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.16.1-sent-as-you",
+      "before": "1.16.2-register-relabel",
       "http": 200,
-      "live": "1.16.1-sent-as-you",
+      "live": "1.16.2-register-relabel",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
