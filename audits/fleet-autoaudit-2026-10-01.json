@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 04:35:50",
+  "audited_at": "2026-10-01 04:39:29",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -32,12 +32,6 @@
         "live": "0.4.49-graphql-usage",
         "repo": "\\d+\\.\\d+\\.\\d+[^",
         "worker": "qnfo-fleet-control"
-      },
-      {
-        "dir": "qnfo-ops",
-        "live": "2.38.17-empty-final-guard",
-        "repo": "2.38.16-aig-caller-meta",
-        "worker": "qnfo-ops"
       }
     ],
     "live_err": [],
@@ -417,7 +411,7 @@
       }
     ],
     "scope": "all",
-    "sync": 35,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -548,6 +542,11 @@
         "dir": "qnfo-observability",
         "version": "1.2.12-chain-draining",
         "worker": "qnfo-observability"
+      },
+      {
+        "dir": "qnfo-ops",
+        "version": "2.38.17-empty-final-guard",
+        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-outreach",
@@ -1279,11 +1278,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.16-aig-caller-meta",
+      "before": "2.38.17-empty-final-guard",
       "http": 200,
       "live": "2.38.17-empty-final-guard",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
