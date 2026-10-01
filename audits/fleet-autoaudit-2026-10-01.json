@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 14:41:33",
+  "audited_at": "2026-10-01 14:46:10",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -492,7 +492,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.12.1-identity-sync",
+        "version": "1.13.1-owner-requests",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -537,7 +537,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.33-cache-no-tool-answers",
+        "version": "2.38.34-no-anthropic-upstream",
         "worker": "qnfo-ops"
       },
       {
@@ -562,7 +562,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.41-zenodo-identity",
+        "version": "0.9.42-ensemble-fresh",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1152,9 +1152,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.12.1-identity-sync",
+      "before": "1.13.1-owner-requests",
       "http": 200,
-      "live": "1.12.1-identity-sync",
+      "live": "1.13.1-owner-requests",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1280,9 +1280,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.33-cache-no-tool-answers",
+      "before": "2.38.34-no-anthropic-upstream",
       "http": 200,
-      "live": "2.38.33-cache-no-tool-answers",
+      "live": "2.38.34-no-anthropic-upstream",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1360,9 +1360,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.41-zenodo-identity",
+      "before": "0.9.42-ensemble-fresh",
       "http": 200,
-      "live": "0.9.41-zenodo-identity",
+      "live": "0.9.42-ensemble-fresh",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
