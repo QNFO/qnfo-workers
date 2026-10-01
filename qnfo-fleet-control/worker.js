@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.54-version-regex-safe";
+var VERSION = "0.4.55-publication-preflight";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2904,6 +2904,9 @@ var worker_default2 = {
       if (!mok) return json({ error: "unauthorized" }, 401);
       return json(await refreshOwnedMetrics(env));
     }
+    if (p === "/publication/preflight" && request.method === "GET") {
+      return json(await publicationPreflight(env));
+    }
     if (p === "/metrics/triggers" && request.method === "POST") {
       var tah = request.headers.get("Authorization") || "";
       var tat = tah.indexOf("Bearer ") === 0 ? tah.slice(7) : tah;
@@ -2949,6 +2952,7 @@ var worker_default2 = {
     ctx.waitUntil(evolveTick(env, false).catch((e) => console.error("evolveTick error:", e && e.message || e)));
     ctx.waitUntil(slaEscalate(env).catch((e) => console.error("slaEscalate error:", e && e.message || e)));
     ctx.waitUntil(evaluateMetricTriggers(env).catch((e) => console.error("evaluateMetricTriggers error:", e && e.message || e)));
+    ctx.waitUntil(publicationPreflight(env).catch((e) => console.error("publicationPreflight error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
   }
 };
@@ -3417,6 +3421,50 @@ async function metricTriggerValue(db, t) {
   return v;
 }
 __name(metricTriggerValue, "metricTriggerValue");
+// PUBLICATION-PREFLIGHT-1 (2026-10-01, #1118 OPS-PUBLICATION-PROCEDURE-GAP-20260926): a Q08 publication was once
+// promised while q08.org served the QNFO homepage for every Q08 path (fallback false-200) and the worker did not exist.
+// scripts/q08_publication_preflight.mjs encoded the checks but nothing ran it (GitHub schedule events never fire here).
+// This hourly check runs them from the fleet: each publication surface must be served by its own worker (health JSON
+// naming it), expose a machine-readable listing, and serve a real feed. A failure raises a digest alert and one open
+// agent_issue (deduped); recovery is recorded. qnfo-ops reads the latest result before promising a publication SLA.
+var PUBLICATION_SURFACES = [
+  { name: "q08", health: "https://q08.org/health", worker: "q08-signal-engine", listing: "https://q08.org/api/pieces", feed: "https://q08.org/feed.xml" }
+];
+async function publicationPreflight(env) {
+  var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
+  var out = { ok: true, surfaces: [] };
+  for (var i = 0; i < PUBLICATION_SURFACES.length; i++) {
+    var sf = PUBLICATION_SURFACES[i], checks = [];
+    var get = async function (u) {
+      try { var r = await fetch(u, { headers: { "User-Agent": "qnfo-fleet-control-preflight/" + VERSION }, signal: AbortSignal.timeout(15e3) }); return { status: r.status, ct: r.headers.get("content-type") || "", text: (await r.text()).slice(0, 4000) }; }
+      catch (e) { return { status: 0, ct: "", text: String(e && e.message || e).slice(0, 200) }; }
+    };
+    var h = await get(sf.health), l = await get(sf.listing), f = await get(sf.feed);
+    var hj = null; try { hj = JSON.parse(h.text); } catch (e) {}
+    var fallback = /QNFO\s+\u2014\s+Research Foundation|Latest papers/.test(h.text + l.text);
+    checks.push({ check: "health served by " + sf.worker, ok: h.status === 200 && !!hj && hj.worker === sf.worker, detail: "http " + h.status + " worker=" + (hj && hj.worker) + " version=" + (hj && hj.version) });
+    checks.push({ check: "listing is JSON, not fallback homepage", ok: l.status === 200 && /json/i.test(l.ct) && !fallback, detail: "http " + l.status + " ct=" + l.ct });
+    checks.push({ check: "feed is RSS/Atom", ok: f.status === 200 && /<rss|<feed/i.test(f.text), detail: "http " + f.status + " ct=" + f.ct });
+    var sok = checks.every(function (c) { return c.ok; });
+    if (!sok) out.ok = false;
+    out.surfaces.push({ name: sf.name, ok: sok, checks: checks });
+    if (!db) continue;
+    try { await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'publication_preflight', ?3, ?4, 'qnfo-fleet-control', ?5)").bind("pp-" + Date.now().toString(36) + "-" + sf.name, new Date().toISOString(), sf.name + (sok ? " ok" : " FAIL"), JSON.stringify(checks).slice(0, 1500), sok ? "ok" : "error").run(); } catch (e) {}
+    var title = "PUBLICATION-PREFLIGHT-FAIL-" + sf.name.toUpperCase() + ": " + sf.name + " publication surface is not served by " + sf.worker;
+    try {
+      var open = await db.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' LIMIT 1").bind(title).first();
+      if (!sok && !open) {
+        var nowMs = Date.now();
+        await db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3)").bind(title, "PUBLICATION-PREFLIGHT-1 failed checks: " + JSON.stringify(checks.filter(function (c) { return !c.ok; })).slice(0, 1500) + ". Do not promise publication on this surface until the preflight passes.", nowMs).run();
+        await db.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('qnfo-fleet-control', 'error', ?1, NULL)").bind(title.slice(0, 400)).run();
+      } else if (sok && open) {
+        await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'publication_preflight_recovered', ?3, '{}', 'qnfo-fleet-control', 'ok')").bind("ppr-" + Date.now().toString(36), new Date().toISOString(), sf.name + " recovered; open issue " + open.id).run();
+      }
+    } catch (e) {}
+  }
+  return out;
+}
+__name(publicationPreflight, "publicationPreflight");
 async function reassertObservability(env) {
   try {
     var acct = env.CF_ACCOUNT_ID || "edb167b78c9fb901ea5bca3ce58ccc4b";

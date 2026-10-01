@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-01 07:34:25",
+  "audited_at": "2026-10-01 07:38:43",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -39,6 +39,12 @@
         "live": "1.7.2-vault-indexer-fold",
         "repo": "0.1.21-folded",
         "worker": "personal-companion"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "live": "0.4.55-publication-preflight",
+        "repo": "0.4.54-version-regex-safe",
+        "worker": "qnfo-fleet-control"
       }
     ],
     "live_err": [],
@@ -408,7 +414,7 @@
       }
     ],
     "scope": "all",
-    "sync": 37,
+    "sync": 36,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -496,11 +502,6 @@
         "worker": "qnfo-email"
       },
       {
-        "dir": "qnfo-fleet-control",
-        "version": "0.4.54-version-regex-safe",
-        "worker": "qnfo-fleet-control"
-      },
-      {
         "dir": "qnfo-fleet-dashboard",
         "version": "1.7.43-scheduled-no-run-handler",
         "worker": "qnfo-fleet-dashboard"
@@ -547,7 +548,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.20-selffetch-inproc",
+        "version": "2.38.21-research-intake-truth",
         "worker": "qnfo-ops"
       },
       {
@@ -1146,9 +1147,9 @@
     "qnfo-fleet-control": {
       "before": "0.4.54-version-regex-safe",
       "http": 200,
-      "live": "0.4.54-version-regex-safe",
-      "match": 1,
-      "note": "SYNC",
+      "live": "0.4.55-publication-preflight",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
@@ -1280,9 +1281,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.20-selffetch-inproc",
+      "before": "2.38.21-research-intake-truth",
       "http": 200,
-      "live": "2.38.20-selffetch-inproc",
+      "live": "2.38.21-research-intake-truth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
