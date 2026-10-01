@@ -111,6 +111,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # last-wins rule below picked that fragment as the repo version: worker_live_audit.registry_before read
 # `\d+\.\d+\.\d+[^` and the worker showed DRIFT against a correct live 0.4.51 for as long as the code existed.
 CONST = re.compile(r'(?<![\^/\\\'"`])(?:var|let|const)\s+(QNFO_)?VERSION\s*=\s*[\'"]([^\'"]+)[\'"]')
+# TOP-LEVEL-VERSION-1 (2026-10-01): same declaration, but only at column 0. A folded-in module keeps its own indented
+# `var VERSION` inside an IIFE (personal-companion's VaultIndexer, "0.1.21-folded"); it is NOT what /health serves, yet
+# it comes LATER in the file, so the last-wins rule below reported it as the repo version and the worker showed DRIFT
+# against a correct live 1.7.2. Top-level declarations are preferred; with none, behaviour is unchanged.
+CONST_TOP = re.compile(r'(?m)^(?<![\^/\\\'"`])(?:var|let|const)\s+(QNFO_)?VERSION\s*=\s*[\'"]([^\'"]+)[\'"]')
 # VERSION-QUOTE-1 (2026-09-29): SERVER_VERSION fallback. PROTOCOL_VERSION is a
 # different fact and is deliberately NOT matched (see the module docstring).
 SERVER_CONST = re.compile(r'(?:var|let|const)\s+SERVER_VERSION\s*=\s*[\'"]([^\'"]+)[\'"]')
@@ -280,6 +285,9 @@ def _repo_version(text):
     and a corrupted numeric direction comparison for --ahead. The plain constant wins;
     QNFO_VERSION remains a fallback so no worker becomes invisible to the drift check.
     """
+    top_plain = [val for prefix, val in CONST_TOP.findall(text) if not prefix]
+    if top_plain:
+        return top_plain[-1]
     hits = CONST.findall(text)
     if hits:
         # VERSION-PRECEDENCE-2-MULTI-DECLARATION-1 (2026-09-29, issue #1388): a
