@@ -1,5 +1,5 @@
 /**
- * q08-signal-engine — v0.7.0
+ * q08-signal-engine \u2014 v0.7.0
  *
  * What it is
  *   The external signal engine for q08.org. Scrapes high-friction technical
@@ -16,24 +16,26 @@
  * Register (the reading.q08.org signature, applied to external signals)
  *   Systemic, not specific: the signal incident opens the essay; the essay
  *   itself names the general structural pattern it instantiates. Cold structural
- *   objectivity — no management-consulting abstractions. Structures vary per
+ *   objectivity \u2014 no management-consulting abstractions. Structures vary per
  *   piece; section skeletons of recent pieces are injected as banned patterns.
  *   Each draft must carry a 'worth your time' self-verdict that gates
  *   publication, and readers vote yes/flat/no, which ranks the few-shot pool.
  *   Timeless and name-free. NO bullet lists. NO tables.
  *
  * Bindings
- *   DB          — D1 q08-signal (signal_log, published_pieces, prompt_pool, engine_runs)
- *   QNFO_AI     — service binding to qnfo-ai (OpenAI-compat router)
- *   EMAIL       — service binding to qnfo-email (alerts on publish)
+ *   DB          \u2014 D1 q08-signal (signal_log, published_pieces, prompt_pool, engine_runs)
+ *   QNFO_AI     \u2014 service binding to qnfo-ai (OpenAI-compat router)
+ *   EMAIL       \u2014 service binding to qnfo-email (alerts on publish)
  *
  * Secrets
- *   ROUTER_TOKEN — bearer token for qnfo-ai
+ *   ROUTER_TOKEN \u2014 bearer token for qnfo-ai
  *
  * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
  */
 
-var VERSION = "0.7.34-alert-undigested"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+// Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
+// double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
+var VERSION = "0.7.35-personal-channel-hold-ascii"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
@@ -69,7 +71,7 @@ function escHtml(s) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Ingestion — Hacker News front page
+// 1. Ingestion \u2014 Hacker News front page
 // ---------------------------------------------------------------------------
 async function scrapeHN() {
   const resp = await fetch(HN_SEARCH, { headers: { "User-Agent": UA } });
@@ -91,7 +93,7 @@ async function scrapeHN() {
     }
     const ratio = pts > 0 ? nc / pts : 0;
     const vel   = age_h != null ? Math.max(0.05, 1 / (1 + age_h / 6)) : 0.5;
-    // Priority Score = (Engagements × Velocity) + Controversy Modifier
+    // Priority Score = (Engagements \u00d7 Velocity) + Controversy Modifier
     const score = (nc * vel) + (10 * ratio);
     stories.push({
       id:        h.story_id || h.objectID,
@@ -109,7 +111,7 @@ async function scrapeHN() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Friction extraction — top-level comments ranked by length (content proxy)
+// 2. Friction extraction \u2014 top-level comments ranked by length (content proxy)
 // ---------------------------------------------------------------------------
 function cleanHtml(s) {
   return (s || "")
@@ -200,18 +202,18 @@ async function extractGitHubFriction(fullName, description) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Prompt construction — q08 register
+// 3. Prompt construction \u2014 q08 register
 // ---------------------------------------------------------------------------
 // The register problem: LLMs default to management-consulting prose when asked
-// for "systems-level critique" — producing capitalized nominalizations like
+// for "systems-level critique" \u2014 producing capitalized nominalizations like
 // "Knowledge Work", "Systemic Vulnerability", "Architectural Context".
 // These are jargon placeholders, not analysis. The prompt must name and ban
 // this failure mode explicitly, and model the correct register with contrast examples.
 var Q08_DIRECTIVE = [
-  "You are the writer for q08.org — long-form essays on the recurring systems that make things break, for a reader who wants to see a present incident as one instance of a larger, connected picture. The proper nouns of today are the lead-in, not the destination; the bigger system is the story. Not about technology or history per se — about the connected world they are part of.",
+  "You are the writer for q08.org \u2014 long-form essays on the recurring systems that make things break, for a reader who wants to see a present incident as one instance of a larger, connected picture. The proper nouns of today are the lead-in, not the destination; the bigger system is the story. Not about technology or history per se \u2014 about the connected world they are part of.",
   "Your input is a friction signal from a technical community debate. Your output is a self-contained essay that a reader with no knowledge of the source thread can follow.",
   "",
-  "SYSTEMIC, NOT SPECIFIC — HISTORY RHYMES: the incident is a probe, never the subject. Extract the universal system the incident instantiates — the specific mechanism that would produce the same breakdown in any domain and any century. Then show it is universal by connecting it across domains and, where a real recurrence fits, across history. Historical precedent is a suggestion, not a requirement — use a well-known recurrence when it genuinely illuminates the system, but never force a rhyme, never fabricate a historical event to create one, and never let the search for a precedent crowd out the argument itself. The nouns change — a guild\u2019s quality mark becomes a verification badge, a patent-medicine advertisement becomes a sponsored result — the system does not. Your central claim must survive the disappearance of this specific incident. An essay that stays inside its incident, or that reaches for a metaphor instead of a true historical recurrence, is rejected.",
+  "SYSTEMIC, NOT SPECIFIC \u2014 HISTORY RHYMES: the incident is a probe, never the subject. Extract the universal system the incident instantiates \u2014 the specific mechanism that would produce the same breakdown in any domain and any century. Then show it is universal by connecting it across domains and, where a real recurrence fits, across history. Historical precedent is a suggestion, not a requirement \u2014 use a well-known recurrence when it genuinely illuminates the system, but never force a rhyme, never fabricate a historical event to create one, and never let the search for a precedent crowd out the argument itself. The nouns change \u2014 a guild\u2019s quality mark becomes a verification badge, a patent-medicine advertisement becomes a sponsored result \u2014 the system does not. Your central claim must survive the disappearance of this specific incident. An essay that stays inside its incident, or that reaches for a metaphor instead of a true historical recurrence, is rejected.",
   "",
   "REGISTER: cold structural objectivity. An engineer describing a mechanism, not a consultant describing a market. Write the way a precise bug report reads: specific, unimpressed, exact.",
   "",
@@ -219,32 +221,32 @@ var Q08_DIRECTIVE = [
   "",
   "OPENING: in one or two sentences name the incident, then pivot immediately to the system it reveals. The incident earns at most one paragraph; the reader should know within the first paragraph what universal dynamic is at stake, not merely what specific product broke. Never open on an aphorism or a general claim; never dwell on the incident.",
   "",
-  "CONCRETENESS ACROSS ERAS: name the real things — but across history, not only in the present. The signal\u2019s particulars are one instance; the essay earns its length by naming the OTHER eras and institutions where the same system operated (a medieval guild\u2019s forged marks, a nineteenth-century patent-medicine boom, a twentieth-century ratings failure). Anonymizing the material is a register failure; refusing to leave the present is a depth failure. A sentence without a specific referent is a sentence to rewrite.",
+  "CONCRETENESS ACROSS ERAS: name the real things \u2014 but across history, not only in the present. The signal\u2019s particulars are one instance; the essay earns its length by naming the OTHER eras and institutions where the same system operated (a medieval guild\u2019s forged marks, a nineteenth-century patent-medicine boom, a twentieth-century ratings failure). Anonymizing the material is a register failure; refusing to leave the present is a depth failure. A sentence without a specific referent is a sentence to rewrite.",
   "",
-  "FACTS (hard, non-negotiable): every specific fact — number, price, percentage, count, identifier, channel ID, database schema, SQL query, or log excerpt — must come from the SIGNAL, verbatim or as a direct paraphrase. The signal is your only source of specifics about the incident; historical precedents are drawn from real, verifiable history. If the signal gives no figure, write the claim in general terms ('the score is computed from static signals') and never supply a value. Inventing a number, a channel ID, a dollar amount, a database schema, or a log excerpt to sound concrete is the single worst failure this publication can commit — a reader who checks will find nothing behind it. A general honest sentence always beats a specific fabricated one. Before writing any number, ask: is this exact figure in the signal? If not, write the general claim instead.",
+  "FACTS (hard, non-negotiable): every specific fact \u2014 number, price, percentage, count, identifier, channel ID, database schema, SQL query, or log excerpt \u2014 must come from the SIGNAL, verbatim or as a direct paraphrase. The signal is your only source of specifics about the incident; historical precedents are drawn from real, verifiable history. If the signal gives no figure, write the claim in general terms ('the score is computed from static signals') and never supply a value. Inventing a number, a channel ID, a dollar amount, a database schema, or a log excerpt to sound concrete is the single worst failure this publication can commit \u2014 a reader who checks will find nothing behind it. A general honest sentence always beats a specific fabricated one. Before writing any number, ask: is this exact figure in the signal? If not, write the general claim instead.",
   "",
   "PROSE, NOT SCHEME: write prose, not a specification. Never enumerate with '(1) ... (2) ...' in running text, and never write like a design document; the reader is a person, not a reviewer.",
   "",
-  "NO SECTION HEADERS: the essay is continuous prose. Do not use Markdown section headers (## or ###) anywhere in the body — paragraph breaks only. A header is a crutch; if you need one, the prose has failed to carry the argument.",
+  "NO SECTION HEADERS: the essay is continuous prose. Do not use Markdown section headers (## or ###) anywhere in the body \u2014 paragraph breaks only. A header is a crutch; if you need one, the prose has failed to carry the argument.",
   "",
-  "PRECEDENT, NOT METAPHOR: a historical precedent is a real, well-known recurrence of the same system — a named era and institution where the identical incentive or structural dynamic operated. Never fabricate a historical event or date to force a rhyme; a reader who checks must find it. A vague \u2018throughout history\u2019 with no named instance is not a precedent. A metaphor (\u2018it is like a telescope\u2019) is decorative and banned.",
+  "PRECEDENT, NOT METAPHOR: a historical precedent is a real, well-known recurrence of the same system \u2014 a named era and institution where the identical incentive or structural dynamic operated. Never fabricate a historical event or date to force a rhyme; a reader who checks must find it. A vague \u2018throughout history\u2019 with no named instance is not a precedent. A metaphor (\u2018it is like a telescope\u2019) is decorative and banned.",
   "",
-  "CROSS-DOMAIN SYNTHESIS: the essay\u2019s spine is the universal system, and you must show it operating in genuinely different domains — engineering, economics, biology, law, politics, infrastructure, finance, military history — not as a list of analogies but as evidence the system is domain-independent. A decorative stock prop is banned; a historical recurrence of the same mechanism is required. Breadth is the point: an essay that never leaves its source domain has not found the signal.",
+  "CROSS-DOMAIN SYNTHESIS: the essay\u2019s spine is the universal system, and you must show it operating in genuinely different domains \u2014 engineering, economics, biology, law, politics, infrastructure, finance, military history \u2014 not as a list of analogies but as evidence the system is domain-independent. A decorative stock prop is banned; a historical recurrence of the same mechanism is required. Breadth is the point: an essay that never leaves its source domain has not found the signal.",
   "",
-  "ENDING: end at the point of maximum implication. A closing paragraph that describes a healed system is forbidden. If a fix exists, fold it into the argument; the final sentences leave the reader with the sharpest unresolved fact — not a summary, not a resolution, not a flourish.",
+  "ENDING: end at the point of maximum implication. A closing paragraph that describes a healed system is forbidden. If a fix exists, fold it into the argument; the final sentences leave the reader with the sharpest unresolved fact \u2014 not a summary, not a resolution, not a flourish.",
   "",
-  "VERDICT (mandatory final line, this is the last line of your output, after the essay): write exactly 'worth your time: yes|flat|no — one clause of justification'. State honestly whether a reader gains something by reading the essay that they would not get from the source thread itself. 'no' rejects the essay; 'flat' means it barely clears the bar. Omitting this line is a rejection on its own.",
+  "VERDICT (mandatory final line, this is the last line of your output, after the essay): write exactly 'worth your time: yes|flat|no \u2014 one clause of justification'. State honestly whether a reader gains something by reading the essay that they would not get from the source thread itself. 'no' rejects the essay; 'flat' means it barely clears the bar. Omitting this line is a rejection on its own.",
   "",
-    "MECHANISM, NOT LABEL: name the causal process — who is incentivised to do what, which information is missing, where the coupling breaks — as actors doing something, never as an abstract noun. 'Incentive structure', 'information asymmetry', 'coupling failure', 'structural dynamic' and 'systemic failure' are labels, not mechanisms: if a sentence reduces to one of them, the mechanism has not been found yet. The words 'structural', 'systemic' and 'dynamic' are permitted only as a precise description of a named mechanism, never as a summary of your own argument.",
-    "BANNED FRAMING (automatic rejection — the tells of a banal essay): 'illustrates a broader structural dynamic', 'exposes a structural dynamic', 'reveals a structural dynamic', 'a recurring institutional dynamic', 'a systemic failure in which', 'a structural gap between', 'what this reveals about', 'the deeper pattern', 'the broader lesson'. Never tell the reader what the essay 'reveals'; demonstrate it and stop. A sentence that announces the significance of the essay instead of adding a fact is a sentence to delete.",
-    "SIGNIFICANCE ANNOUNCEMENT (banned): never write \"the incident illustrates / exposes / reveals / foregrounds / underscores a <noun phrase>\". Those verbs, applied to the incident, are the banality signature — they announce that the essay has a point instead of making it. State the causal chain directly: who does what to whom, and what breaks as a result. If a draft contains any of these verbs, rewrite the sentence as a mechanism.",
-    "TITLE: name the mechanism, not the category. A good title names a specific causal process or its actors — e.g. 'The clearinghouse that paid itself first' or 'Why the map outlives the territory it describes'. Banned title shapes: the bare '[Adjective]-[Noun] [Preposition] [Abstract Noun]' stack ('Scale-Induced Professional Displacement'); 'The X of Y' ('The Incentive-Driven Misalignment of Threat Models'); 'X as Y' ('Formal Guarantees as Market Signal'); and any title opening with Structural, Systemic, Implicit, Opaque, Formal, Abstract, Externalized, Statistical or a similar nominalisation. If the title would work as a category label in a management deck, it is the wrong title.",
+    "MECHANISM, NOT LABEL: name the causal process \u2014 who is incentivised to do what, which information is missing, where the coupling breaks \u2014 as actors doing something, never as an abstract noun. 'Incentive structure', 'information asymmetry', 'coupling failure', 'structural dynamic' and 'systemic failure' are labels, not mechanisms: if a sentence reduces to one of them, the mechanism has not been found yet. The words 'structural', 'systemic' and 'dynamic' are permitted only as a precise description of a named mechanism, never as a summary of your own argument.",
+    "BANNED FRAMING (automatic rejection \u2014 the tells of a banal essay): 'illustrates a broader structural dynamic', 'exposes a structural dynamic', 'reveals a structural dynamic', 'a recurring institutional dynamic', 'a systemic failure in which', 'a structural gap between', 'what this reveals about', 'the deeper pattern', 'the broader lesson'. Never tell the reader what the essay 'reveals'; demonstrate it and stop. A sentence that announces the significance of the essay instead of adding a fact is a sentence to delete.",
+    "SIGNIFICANCE ANNOUNCEMENT (banned): never write \"the incident illustrates / exposes / reveals / foregrounds / underscores a <noun phrase>\". Those verbs, applied to the incident, are the banality signature \u2014 they announce that the essay has a point instead of making it. State the causal chain directly: who does what to whom, and what breaks as a result. If a draft contains any of these verbs, rewrite the sentence as a mechanism.",
+    "TITLE: name the mechanism, not the category. A good title names a specific causal process or its actors \u2014 e.g. 'The clearinghouse that paid itself first' or 'Why the map outlives the territory it describes'. Banned title shapes: the bare '[Adjective]-[Noun] [Preposition] [Abstract Noun]' stack ('Scale-Induced Professional Displacement'); 'The X of Y' ('The Incentive-Driven Misalignment of Threat Models'); 'X as Y' ('Formal Guarantees as Market Signal'); and any title opening with Structural, Systemic, Implicit, Opaque, Formal, Abstract, Externalized, Statistical or a similar nominalisation. If the title would work as a category label in a management deck, it is the wrong title.",
   "CONSTRAINTS (hard):",
   "- The structural claim must outlive the incident: dates may appear in the material, but the argument must not depend on them.",
   "- No @handles, no marketing register, no promotional language. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
   "- No first person. No preamble, no meta-commentary about the essay itself.",
   "- 1200-1800 words. This is a requirement, not a suggestion: essays under this length are rejected. Complete sentences only: the essay ends on a full stop, never mid-sentence.",
-  "- Output: valid Markdown, H1 title first, then the essay. The title must name the system, not the incident — concrete but general, surviving the disappearance of this particular signal. Banned title forms: 'When X Meets Y', 'X: The Hidden Z', 'An Analysis of X', 'A Critique of Y'.",
+  "- Output: valid Markdown, H1 title first, then the essay. The title must name the system, not the incident \u2014 concrete but general, surviving the disappearance of this particular signal. Banned title forms: 'When X Meets Y', 'X: The Hidden Z', 'An Analysis of X', 'A Critique of Y'.",
   "- Mathematical notation: inline math as \\(...\\), display math as \\[...\\]. Use only these delimiters; never single-dollar signs.",
 ].join("\n");
 
@@ -278,7 +280,7 @@ function exemplarOk(md) {
 
 function buildPrompt(friction, fewShot, recentStructures) {
   var parts = [Q08_DIRECTIVE];
-  parts.push("Remember: your final output line must be the verdict: 'worth your time: yes|flat|no — justification'.");
+  parts.push("Remember: your final output line must be the verdict: 'worth your time: yes|flat|no \u2014 justification'.");
   if (fewShot && fewShot.length > 0) {
     parts.push("\n--- PROVEN EXEMPLAR STRUCTURES (quality floor, not templates to copy) ---");
     for (var ex of fewShot.slice(0, 2)) {
@@ -290,7 +292,7 @@ function buildPrompt(friction, fewShot, recentStructures) {
     parts.push(REGISTER_EXEMPLAR);
   }
   if (recentStructures && recentStructures.length > 0) {
-    parts.push("\n--- RECENT SECTION SKELETONS ON THIS SITE (BANNED PATTERNS — diverge from every one; these are H2/H3 heading shapes, never title shapes) ---");
+    parts.push("\n--- RECENT SECTION SKELETONS ON THIS SITE (BANNED PATTERNS \u2014 diverge from every one; these are H2/H3 heading shapes, never title shapes) ---");
     for (var s of recentStructures.slice(0, 6)) {
       parts.push(s.slice(0, 200));
     }
@@ -343,7 +345,7 @@ async function compose(env, prompt) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Gate — structural validation (no names, no handles, minimum length)
+// 5. Gate \u2014 structural validation (no names, no handles, minimum length)
 // ---------------------------------------------------------------------------
 // Personal name detection: two capitalized words where BOTH are common given/surname patterns.
 // Excludes structural/technical compound nouns (e.g. "Knowledge Work", "System Design").
@@ -379,7 +381,7 @@ var STOCK_PROPS_RE = /\b(telescopes?|galileo|alchem|philosopher.s stone|sonar|ap
 var HISTORICAL_RE = /\b([0-9]+th century|\d{3,4}0s|19[0-9]{2}|18[0-9]{2}|1[0-7][0-9]{2}|medieval|renaissance|enlightenment|industrial revolution|gilded age|antiquity|ancient|roman|greek|victorian|edwardian|byzantine|feudal|dynast\w*|pharaoh|mesopotamia|bronze age|iron age|middle ages|mongol|ottoman|colonial|belle ?poque|preindustrial|great depression|south sea|tulip|dot-com|dotcom|hanseatic|medici|silk road|printing press|gutenberg|panic of|railway mania)\b/i;
 var SOFT_REGISTER_RE = /\b(expectation gap|collective anxiety|vibe|democratiz\w*|future-proof|self-sustaining|path forward|healthy ecosystem|walks farther|ecosystem of)\b/i;
 // ANTI-BANAL-1 (v0.7.16). The observed failure mode is not a weak argument but a
-// banal *register*: the stock framing sentence ("…illustrates a broader structural
+// banal *register*: the stock framing sentence ("\u2026illustrates a broader structural
 // dynamic") and nominalised label titles ("Scale-Induced Professional Displacement").
 // These are category names and significance-summaries, not mechanisms. The mandate
 // forbids management-consulting abstractions; these patterns ARE that failure.
@@ -455,18 +457,18 @@ function gate(text) {
   if (sr) problems.push("soft register: '" + sr[1] + "'");
   // ANTI-BANAL-1: reject the significance-summary framing and label titles.
   var sf = text.match(STOCK_FRAMING_RE);
-  if (sf) problems.push("stock framing tell: '" + sf[0].replace(/\s+/g, " ").slice(0, 80) + "' — name the mechanism, do not summarise the essay's significance");
+  if (sf) problems.push("stock framing tell: '" + sf[0].replace(/\s+/g, " ").slice(0, 80) + "' \u2014 name the mechanism, do not summarise the essay's significance");
   var absN = (text.match(ABSTRACT_SUMMARY_RE) || []).length;
   var lp = text.match(LABEL_PHRASE_RE);
   if (lp && lp.length >= 2) problems.push("abstraction labels x" + lp.length + " ('" + lp.slice(0, 3).join("', '") + "') - state the mechanisms instead of labelling them");
-  if (absN >= 3) problems.push("abstraction-summary phrases x" + absN + " (e.g. 'structural dynamic') — state the mechanism instead of labelling it");
+  if (absN >= 3) problems.push("abstraction-summary phrases x" + absN + " (e.g. 'structural dynamic') \u2014 state the mechanism instead of labelling it");
   for (var lt of LABEL_TITLE_RES) {
-    if (lt.test(title)) { problems.push("label title — names a category, not a mechanism: '" + title.slice(0, 60) + "'"); break; }
+    if (lt.test(title)) { problems.push("label title \u2014 names a category, not a mechanism: '" + title.slice(0, 60) + "'"); break; }
   }
-  if (/\b(?:score|rating|ratio|reputation) of \d+\.\d+\b/i.test(body)) problems.push("invented decimal metric — no fabricated scores");
-  if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier — no fabricated IDs");
+  if (/\b(?:score|rating|ratio|reputation) of \d+\.\d+\b/i.test(body)) problems.push("invented decimal metric \u2014 no fabricated scores");
+  if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier \u2014 no fabricated IDs");
   var curAmt = text.match(/\$\s?\d{1,3}(,\d{3})+/g);
-  if (curAmt && curAmt.length) problems.push("large currency amount(s) " + curAmt.slice(0, 3).join(", ") + " — likely fabricated; use the signal's figures or none");
+  if (curAmt && curAmt.length) problems.push("large currency amount(s) " + curAmt.slice(0, 3).join(", ") + " \u2014 likely fabricated; use the signal's figures or none");
 
   var lines = text.split("\n");
   var bulletLines = 0, tableLines = 0, paraLines = 0;
@@ -476,16 +478,16 @@ function gate(text) {
     else if (t.startsWith("|")) tableLines++;
     else if (t.length > 45) paraLines++;
   }
-  if (bulletLines > 0) problems.push("bullet lists (" + bulletLines + " lines) — long-form prose required");
-  if (tableLines > 0) problems.push("tables (" + tableLines + " lines) — prose required");
+  if (bulletLines > 0) problems.push("bullet lists (" + bulletLines + " lines) \u2014 long-form prose required");
+  if (tableLines > 0) problems.push("tables (" + tableLines + " lines) \u2014 prose required");
   if (paraLines < 6) problems.push("insufficient prose (" + paraLines + " substantial paragraphs)");
 
   var verdictMatch = text.match(/worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-]\s*\S[^\n]*$/im);
   if (!verdictMatch) problems.push("missing or malformed 'worth your time' verdict line");
-  else if (verdictMatch[1] === "no") problems.push("self-verdict 'no' — essay does not clear the worth-reading bar");
+  else if (verdictMatch[1] === "no") problems.push("self-verdict 'no' \u2014 essay does not clear the worth-reading bar");
   var essayText = text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
   var lastCh = essayText.slice(-1);
-  if (lastCh !== "." && lastCh !== "!" && lastCh !== "?" && lastCh !== "\u201d" && lastCh !== "\u2019") problems.push("truncated ending — essay must end on a full stop");
+  if (lastCh !== "." && lastCh !== "!" && lastCh !== "?" && lastCh !== "\u201d" && lastCh !== "\u2019") problems.push("truncated ending \u2014 essay must end on a full stop");
 
   return { ok: problems.length === 0, problems };
 }
@@ -538,10 +540,10 @@ async function persistPiece(env, piece, signal, story, model) {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Feedback loop — promote top 15%, purge bottom 15%
+// 7. Feedback loop \u2014 promote top 15%, purge bottom 15%
 // ---------------------------------------------------------------------------
 async function feedbackScan(env) {
-  // Rank prompt_pool by READER VERDICTS (worth your time?) — votes, not views.
+  // Rank prompt_pool by READER VERDICTS (worth your time?) \u2014 votes, not views.
   var rows = await env.DB.prepare(
     "SELECT pp.id, pp.piece_id, pp.structure_md, p.slug, p.reads, " +
     "(SELECT COUNT(*) FROM q08_feedback f WHERE f.slug = p.slug AND f.signal = 'good') AS g, " +
@@ -620,7 +622,7 @@ async function generate(env) {
   if (todayN >= MAX_PER_DAY) {
     return { ok: false, reason: "daily cap reached (" + todayN + "/" + MAX_PER_DAY + ")" };
   }
-  // Scrape + rank — three sources (break the filter bubble)
+  // Scrape + rank \u2014 three sources (break the filter bubble)
   var stories = [];
   try { stories = stories.concat(await scrapeHN()); } catch (e) {}
   try { stories = stories.concat(await scrapeGitHub()); } catch (e) {}
@@ -666,10 +668,10 @@ async function generate(env) {
   // Compose
   var prompt = buildPrompt(friction, fewShot, recentStructures);
   var piece  = await compose(env, prompt);
-  // Gate — one corrective retry on failure
+  // Gate \u2014 one corrective retry on failure
   var gateResult = gate(piece.text);
   if (!gateResult.ok) {
-    var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure — continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay — fixing only these issues ---\n" + gateResult.problems.join("; ");
+    var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure \u2014 continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay \u2014 fixing only these issues ---\n" + gateResult.problems.join("; ");
     var retryPiece = null;
     try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
     if (retryPiece && retryPiece.text) {
@@ -678,7 +680,7 @@ async function generate(env) {
       else if (retryGate.problems.length === 1 && /verdict/i.test(retryGate.problems[0]) && retryGate.problems[0].indexOf("self-verdict") < 0) {
         // Verdict-only micro-call: one cheap compose asking for exactly the verdict line.
         try {
-          var vp = await compose(env, "You have written an essay that passed all editorial checks. Output exactly one line, nothing else, in this form:\nworth your time: yes|flat|no — one clause of justification\nUse flat only if a reader gains little beyond the source material; use no if the piece is not worth publishing.");
+          var vp = await compose(env, "You have written an essay that passed all editorial checks. Output exactly one line, nothing else, in this form:\nworth your time: yes|flat|no \u2014 one clause of justification\nUse flat only if a reader gains little beyond the source material; use no if the piece is not worth publishing.");
           var vm2 = (vp && vp.text || "").match(/worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-]\s*\S[^\n]*$/im);
           if (vm2) {
             retryPiece.text = retryPiece.text.replace(/\s*$/, "") + "\n\n" + vm2[0];
@@ -852,7 +854,7 @@ function renderPiece(p) {
   var refs = renderSources(p.sources_json);
   var fb = '<div class="fb">Was this worth your time? <a href="/api/f?slug=' + escHtml(p.slug) + '&s=good">yes</a><a href="/api/f?slug=' + escHtml(p.slug) + '&s=flat">flat</a><a href="/api/f?slug=' + escHtml(p.slug) + '&s=no">no</a></div>';
   var date = (p.published_at || "").slice(0, 10);
-  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>' + escHtml(p.title) + ' — q08</title><meta name=description content="' + escHtml((p.body_md||"").replace(/[#*_`\n]/g," ").trim().slice(0,160)) + '"><style>' + CSS + '</style>' + MATH_HEAD + '</head><body><div class=wrap><header><h1><a href="/" style="color:inherit;text-decoration:none">q08</a></h1><nav><a href="/">← Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a></nav></header><div class=piece><h1>' + escHtml(p.title) + '</h1><div class="meta" style="margin-bottom:1.5rem">' + date + (p.core_concept ? ' &middot; <span class="chip">' + escHtml(p.core_concept.slice(0,40)) + '</span>' : '') + '</div>' + body + fb + refs + '</div><footer>q08 &mdash; autonomous signal engine</footer></div></body></html>';
+  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>' + escHtml(p.title) + ' \u2014 q08</title><meta name=description content="' + escHtml((p.body_md||"").replace(/[#*_`\n]/g," ").trim().slice(0,160)) + '"><style>' + CSS + '</style>' + MATH_HEAD + '</head><body><div class=wrap><header><h1><a href="/" style="color:inherit;text-decoration:none">q08</a></h1><nav><a href="/">\u2190 Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a></nav></header><div class=piece><h1>' + escHtml(p.title) + '</h1><div class="meta" style="margin-bottom:1.5rem">' + date + (p.core_concept ? ' &middot; <span class="chip">' + escHtml(p.core_concept.slice(0,40)) + '</span>' : '') + '</div>' + body + fb + refs + '</div><footer>q08 &mdash; autonomous signal engine</footer></div></body></html>';
 }
 
 function renderFeed(pieces) {
@@ -924,12 +926,18 @@ async function pingIndexNow(env, url) {
 // write to the shared social_threads queue in qnfo-audit; qnfo-social's cron
 // picks it up and cross-posts. Buffer covers Mastodon + LinkedIn + X.
 async function queueForDistribution(env, title, slug) {
+  // Q08-PERSONAL-CHANNEL-HOLD-1 (2026-10-01): social_threads is drained by qnfo-social onto the
+  // owner's PERSONAL Bluesky account, so every q08 essay posted under the owner's name. Off by default;
+  // set the plain var Q08_SOCIAL_QUEUE="1" to re-enable once q08 has its own channel.
+  if (env.Q08_SOCIAL_QUEUE !== "1") return { ok: false, skip: "Q08-PERSONAL-CHANNEL-HOLD-1" };
   if (!env.AUDIT) return { ok: false, skip: "no audit binding" };
   try {
     // NO-TRUNCATED-LINK-1 (2026-09-27): never slice the URL. A long title used to
     // truncate the permalink (e.g. ".../p/2026-09-18-...-the-lar") -> 404 -> link-dead.
     var _u = "https://q08.org/p/" + slug;
-    var _s = " — ";
+    // Q08-PERSONAL-CHANNEL-HOLD-1: escape, not a literal em-dash; deployed revisions double-encoded
+    // the literal, so live posts carried the mojibake "\xe2\x80\x94" (UTF-8 bytes read as Latin-1).
+    var _s = " \u2014 ";
     var _t = String(title || "");
     var text = (_t.length + _s.length + _u.length <= 280) ? (_t + _s + _u) : (_t.slice(0, Math.max(0, 280 - _u.length - _s.length)) + _s + _u);
     var id = "q08-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -949,7 +957,7 @@ async function handleSubscribe(req, env, url) {
   email = String(email || url.searchParams.get("email") || "").trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     var bad = req.method === "POST";
-    return html('<h2>Subscribe</h2><form method=post action=/subscribe><input type=email name=email required><button>Subscribe</button></form>' + (bad ? '<p>Enter a valid email address.</p>' : '<p>One email a day — the daily digest. No spam.</p>'), bad ? 400 : 200);
+    return html('<h2>Subscribe</h2><form method=post action=/subscribe><input type=email name=email required><button>Subscribe</button></form>' + (bad ? '<p>Enter a valid email address.</p>' : '<p>One email a day \u2014 the daily digest. No spam.</p>'), bad ? 400 : 200);
   }
   var token = await sha16(email + ":q08:sub");
   await env.DB.prepare("INSERT INTO subscribers(email, status, token, created_at) VALUES(?, 'pending', ?, ?) ON CONFLICT(email) DO UPDATE SET token=excluded.token, status=CASE WHEN status='confirmed' THEN 'confirmed' ELSE 'pending' END").bind(email, token, nowIso()).run();
@@ -1060,7 +1068,7 @@ export default {
       var piece = await compose(env, prompt);
       var gateResult = gate(piece.text);
       if (!gateResult.ok) {
-        var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure — continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay — fixing only these issues ---\n" + gateResult.problems.join("; ");
+        var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure \u2014 continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay \u2014 fixing only these issues ---\n" + gateResult.problems.join("; ");
         var retryPiece = null;
         try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
         if (retryPiece && retryPiece.text) {
