@@ -216,5 +216,16 @@ def main():
     return 0
 
 
+def _locked_main():
+    # CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (#1701): bindings PUT holds secrets:<worker>, fail-closed.
+    from secret_lock import secret_lock, SecretLockError
+    try:
+        with secret_lock(WORKER, ttl_sec=900, owner="scripts/restore_container_config_exports.py"):
+            return main()
+    except SecretLockError as e:
+        print("FAIL (fail-closed): %s" % e)
+        return 3
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_locked_main())

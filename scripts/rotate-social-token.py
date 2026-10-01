@@ -90,4 +90,10 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="verify the three stores agree; do not rotate")
     a = ap.parse_args()
-    check() if a.check else rotate()
+    if a.check:
+        check()
+    else:
+        # CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (#1701): hold secrets:qnfo-social across the rotation (fail-closed).
+        from secret_lock import secret_lock
+        with secret_lock("qnfo-social", ttl_sec=600, owner="scripts/rotate-social-token.py"):
+            rotate()

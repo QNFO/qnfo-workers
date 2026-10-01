@@ -17,11 +17,17 @@ on:
     paths:
       - '.github/workflows/**'
       - 'scripts/workflow-lint.py'
+      - 'scripts/secret-mutation-guard.py'
+      - 'scripts/secret-mutation-allowlist.txt'
+      - 'scripts/secret_lock.py'
+      - 'scripts/*.py'
       - 'scripts/status_unchanged.py'
       - 'scripts/status_unchanged_test.py'
   pull_request:
     paths:
       - '.github/workflows/**'
+      - 'scripts/*.py'
+      - 'scripts/secret-mutation-allowlist.txt'
       - 'scripts/status_unchanged.py'
       - 'scripts/status_unchanged_test.py'
   workflow_dispatch:
@@ -47,3 +53,9 @@ jobs:
 
       - name: STATUS-NOOP-SKIP-1 self-test (skip stamp-only status commits, never an outcome change)
         run: python3 scripts/status_unchanged_test.py
+
+      - name: SECRET-LOCK-ENFORCE-1 guard (fail CI when a secrets or bindings mutation skips the secret-lock)
+        run: python3 scripts/secret-mutation-guard.py
+
+      - name: SECRET-LOCK-ENFORCE-1 offline tests
+        run: python3 scripts/secret-mutation-guard_test.py

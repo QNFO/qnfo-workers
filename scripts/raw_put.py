@@ -464,6 +464,15 @@ def main(argv):
     tok = token()
     guard_lock(worker)
     atexit.register(guard_unlock)
+    # CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (#1701): the script PUT rewrites bindings; hold secrets:<worker>
+    # (fail-closed, released in finally via atexit-safe wrapper below).
+    from secret_lock import acquire as _sl_acquire, release as _sl_release, SecretLockError
+    try:
+        _sl_token = _sl_acquire(worker, 900, "ci/raw_put")
+    except SecretLockError as e:
+        print("FAIL (fail-closed): %s" % e)
+        return 3
+    atexit.register(_sl_release, worker, _sl_token)
     code = open(path, encoding="utf-8").read()
     if not code.strip():
         print("REFUSING: artifact is empty")
