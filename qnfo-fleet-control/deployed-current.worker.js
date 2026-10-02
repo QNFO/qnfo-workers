@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.99-reach-priority"; /* 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.100-trigger-parse"; /* 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -6824,9 +6824,25 @@ async function evaluateMetricTriggers(env) {
   return out;
 }
 __name(evaluateMetricTriggers, "evaluateMetricTriggers");
+// ---- TRIGGER-PARSE-1:BEGIN (pure; replayed by trigger-parse.test.mjs)
+// TRIGGER-PARSE-1 (2026-10-02): the value a trigger is judged on. The old reader stripped characters with the class
+// [^0-9.+-eE], in which "+-e" is a RANGE (0x2B to 0x65) that keeps every capital letter and most punctuation and drops
+// spaces, so "12 of 20" read as 1220 and "3 (of 7 works)" as 37. A value is a number only when the whole string is one:
+// an optional sign, digits, an optional decimal part and an optional trailing % ("+348.89%" is 348.89). Anything else
+// ("n/a", a sentence, a date) is unreadable, the same verdict v_metric_trigger_state gives
+// (migrations/2026-10-02-trigger-parse.sql), so the evaluator and the judge cannot disagree.
+function triggerNum(x) {
+  if (x === null || x === void 0) return null;
+  if (typeof x === "number") return isFinite(x) ? x : null;
+  var m = /^\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*%?\s*$/.exec(String(x));
+  if (!m) return null;
+  var n = Number(m[1]);
+  return isFinite(n) ? n : null;
+}
+// ---- TRIGGER-PARSE-1:END
 async function metricTriggerValue(db, t) {
   var key = String(t.metric_key || ""), src = String(t.source_table || "meta");
-  var num = function (r, f) { if (!r || r[f] == null || r[f] === "") return null; var n = Number(String(r[f]).replace(/[^0-9.+-eE]/g, "")); return isFinite(n) ? n : null; };
+  var num = function (r, f) { return r ? triggerNum(r[f]) : null; };
   var v = null;
   if (src === "records") v = num(await db.prepare("SELECT value FROM analytics_dash_records WHERE metric = ?1").bind(key).first().catch(function () { return null; }), "value");
   if (v == null) v = num(await db.prepare("SELECT value FROM analytics_dash_meta WHERE key = ?1").bind(key).first().catch(function () { return null; }), "value");
