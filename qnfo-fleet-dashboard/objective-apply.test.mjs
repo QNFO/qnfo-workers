@@ -83,8 +83,10 @@ ok(r.status === 200 && j.ok && j.outcome === "applied", "a balanced weight chang
 ok(w("w_autonomy") === 0.15 && w("w_self_improv") === 0.2 && w("w_thinking") === 0.15, "sai_config holds the new weights, others untouched");
 const o = obj();
 ok(o.version === 3 && o.statement.includes("SAI = 0.15*autonomy + 0.15*thinking + 0.15*decision + 0.20*self_improv + 0.10*reliability") && o.statement.endsWith("subject to the autonomy-ladder cap. RATIFIED 2026-09-26."), "the objective-function formula is rewritten in place and the version bumped");
-ok(/goals\.id=58/.test(o.source) && o.ratified_by === "owner (fleet.qnfo.org)", "the objective row names the ratified goal and the owner");
-ok(g(58) === "adopted" && log(58).outcome === "applied" && log(58).via === "owner-route", "the goal is adopted and the apply logged");
+// OBJECTIVE-AUTHORITY-TRUTH-1 (1.17.8): this suite signs in with the legacy OWNER_TOKEN cookie, so the stamp names that
+// credential, not "the owner" (owner-surface.test.mjs covers the emailed-code session, the loop token and no record).
+ok(/goals\.id=58/.test(o.source) && o.ratified_by === "owner-key cookie (fleet.qnfo.org, OWNER_TOKEN holder)", "the objective row names the ratified goal and the credential that ratified it");
+ok(g(58) === "adopted" && log(58).outcome === "applied" && log(58).via === "route:owner-key", "the goal is adopted and the apply logged with its credential");
 ok(db.prepare("SELECT COUNT(*) n FROM human_responses WHERE key = 'goals:objective-revision:58' AND kind = 'ratify'").get().n === 1, "the decision is recorded in human_responses");
 const sum = Object.keys(W).reduce((n, k) => n + w(k), 0);
 ok(Math.abs(sum - 1) < 1e-9, "weights still sum to 1.00");
@@ -116,7 +118,7 @@ const api = cx.__api;
 db.prepare("UPDATE goals SET status = 'ratified' WHERE id = 61").run();
 db.prepare("UPDATE goals SET status = 'ratified' WHERE id = 42").run();
 let sw = await api.objectiveRevisionSweep({ AUDIT });
-ok(sw.length === 2 && w("w_governance") === 0.03 && w("w_reliability") === 0.12 && g(61) === "adopted" && log(61).via === "cron" && obj().version === 4, "the sweep applies a revision ratified elsewhere");
+ok(sw.length === 2 && w("w_governance") === 0.03 && w("w_reliability") === 0.12 && g(61) === "adopted" && log(61).via === "cron:unknown" && obj().version === 4 && obj().ratified_by === "unknown credential", "the sweep applies a revision ratified elsewhere and, with no recorded credential, never names the owner");
 ok(log(42).outcome === "not-applicable" && g(42) === "ratified", "the sweep logs a stale ratified revision as not applicable");
 sw = await api.objectiveRevisionSweep({ AUDIT });
 ok(sw.length === 0 && obj().version === 4, "the sweep never applies or retries twice");
