@@ -2,8 +2,13 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.4-digest-exclude"; // DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
+var VERSION = "1.1.5-fleet-link"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
 var SITE = "https://qnfo.org";
+// FLEET-CTL-STATIC-1 (issue 1778; owner request 1757): the owner's fleet command-line link on the subscribe, confirm and
+// unsubscribe pages, as static HTML scoped to the subscribe surface. Not fleet.qnfo.org/ctl.js: it scopes the link with
+// location.href, and these pages are opened at /api/confirm?token=... and /api/unsubscribe?token=..., so a click would carry
+// the subscriber's token to another site.
+var FLEET_CTL_LINK = '<a id="fleet-ctl" href="https://fleet.qnfo.org/cmd?from=' + encodeURIComponent(SITE + "/subscribe") + '" rel="noopener noreferrer" title="Fleet command line for this page (owner controls need an email code)" aria-label="Fleet command line" style="position:fixed;right:10px;bottom:8px;z-index:2147483000;font:12px/1 system-ui,sans-serif;padding:5px 8px;border-radius:7px;color:#5b6472;background:rgba(127,127,127,.12);text-decoration:none;opacity:.45">&#8984; fleet</a><style>@media print{#fleet-ctl{display:none!important}}</style>';
 var FROM = { email: "qnfo@qnfo.org", name: "QNFO" };
 var MAX_RECIPIENTS = 1e3;
 var RATE_LIMIT_PER_HOUR = 5;
@@ -17,7 +22,7 @@ function json(data, status) {
 }
 __name(json, "json");
 function html(body, status) {
-  const page = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>QNFO</title><style>body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#faf7f2;color:#1b1915;display:flex;min-height:100vh;align-items:center;justify-content:center}main{max-width:560px;padding:2.5rem 1.6rem;text-align:center}h1{font-family:Georgia,serif;font-size:1.6rem;font-weight:600}p{color:#8a8376;line-height:1.7}a{color:#24315e}</style></head><body><main>' + body + '<p style="margin-top:2rem"><a href="' + SITE + '">\u2190 qnfo.org</a></p></main></body></html>';
+  const page = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>QNFO</title><style>body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#faf7f2;color:#1b1915;display:flex;min-height:100vh;align-items:center;justify-content:center}main{max-width:560px;padding:2.5rem 1.6rem;text-align:center}h1{font-family:Georgia,serif;font-size:1.6rem;font-weight:600}p{color:#8a8376;line-height:1.7}a{color:#24315e}</style></head><body><main>' + body + '<p style="margin-top:2rem"><a href="' + SITE + '">\u2190 qnfo.org</a></p></main>' + FLEET_CTL_LINK + '</body></html>';
   return new Response(page, { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
 }
 __name(html, "html");
