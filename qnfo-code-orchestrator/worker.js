@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.2-hunk-no-eol";
+var VERSION = "0.3.3-frontier-rungs";
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -143,7 +143,14 @@ const MAX_ANCHOR_CHARS = 300;
 const MAX_EDITS = 8;
 const DIFF_MAX_D = 600;
 const MAX_PY_CHARS = 80000; // base64 of this fits one exec argv (MAX_ARG_STRLEN 131072)
-const DEFAULT_LADDER = ["@cf/qwen/qwen2.5-coder-32b-instruct", "@cf/meta/llama-3.3-70b-instruct-fp8-fast"];
+// LADDER-FRONTIER-1 (0.3.3, ACT-BRIDGE-1, pillar autonomy): cheapest first is kept, but the rungs a failed attempt climbs to
+// are now frontier coders. With the old two-rung ladder the loop's one non-trivial edit (ct_readme20261001b) failed on both
+// models and was finished by hand; the fleet's metric remedies need edits of that size.
+const DEFAULT_LADDER = ["@cf/qwen/qwen2.5-coder-32b-instruct", "@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3"];
+// Reasoning models spend output tokens on thought before the file; give them room. Neurons per 1M tokens [in, out]
+// price each call into ai_spend_ledger (caller qnfo-code-orchestrator), so the code loop's cost is graded like any other.
+const REASONING_OUT = { "@cf/moonshotai/kimi-k2.7-code": 32768, "@cf/zai-org/glm-5.3": 32768 };
+const LADDER_RATES = { "@cf/qwen/qwen2.5-coder-32b-instruct": [60000, 90000], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805] };
 const DENY_PATH = /^(\.github\/|\.git\/)|(^|\/)(wrangler\.toml|deploy-targets\.txt|\.env[^/]*)$/i;
 const VERIFIABLE = ["py", "json", "md", "txt"];
 const _schemaDbs = new WeakSet(); // schema is ensured once per D1 binding object, not once per module
@@ -388,9 +395,19 @@ async function jsVerifyProbeTick(env) {
   return { ran: true, enforced: pr.enforced === true };
 }
 async function ai(env, model, messages) {
-  const out = await env.AI.run(model, { messages: messages, max_tokens: 8192 });
+  const out = await env.AI.run(model, { messages: messages, max_tokens: REASONING_OUT[model] || 8192 });
   const t = out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content));
-  return String(t || "");
+  const text = String(t || "").replace(/<think>[\s\S]*?<\/think>/g, "");
+  try {
+    const u = (out && (out.usage || (out.result && out.result.usage))) || {};
+    const inTok = Number(u.prompt_tokens || u.input_tokens) || Math.ceil(JSON.stringify(messages).length / 3.5);
+    const outTok = Number(u.completion_tokens || u.output_tokens) || Math.ceil(text.length / 3.5);
+    const r = LADDER_RATES[model] || [127273, 400000];
+    const usd = ((inTok * r[0] + outTok * r[1]) / 1e6) * (0.011 / 1000);
+    if (env.AUDIT_DB) await env.AUDIT_DB.prepare("INSERT INTO ai_spend_ledger (day, provider, caller, model, calls, in_tok, out_tok, usd, downgraded, refused) VALUES (?1,'workers-ai','qnfo-code-orchestrator',?2,1,?3,?4,?5,0,0) ON CONFLICT(day, provider, caller, model) DO UPDATE SET calls=calls+1, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, usd=usd+excluded.usd")
+      .bind(new Date().toISOString().slice(0, 10), String(model).slice(0, 120), Math.round(inTok), Math.round(outTok), usd).run();
+  } catch (e) {}
+  return text;
 }
 async function codeAgent(env, route, body) {
   const r = await fetch(CODE_AGENT + route, { method: "POST",

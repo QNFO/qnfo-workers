@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.88-surface-metrics";
+var VERSION = "0.4.89-act-bridge";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -6020,6 +6020,24 @@ __name(aiSpendCaps, "aiSpendCaps");
 // compares it with the threshold, and fires at most once per cooldown_hours. A firing is written to
 // analytics_action_log and dispatched: queue_target 'agent_issues' files a deduped open issue; every other target
 // raises a digest alert naming the target and the action. A trigger whose value cannot be read is reported, never fired.
+// ---- ACT-BRIDGE-1:BEGIN (2026-10-02, pillar autonomy; owner directive: "filing an issue is not fixing it") ----
+// A metric trigger's remedy reaches the code loop only through an agent_issue whose description carries a line of its own
+//   code-task: repo=<repo> path=<file>        (and optionally)   code-anchor: <verbatim text near the edit>
+// (qnfo-code-orchestrator ISSUE-INTAKE-1 matches that line anchored at the start of a line). evaluateMetricTriggers used to
+// file one line, "METRIC-TRIGGER #id ... -> <action sliced to 300 chars> (owner, target)", so a code-task line written into
+// analytics_metric_triggers.action could never be picked up: it was inlined after a prefix and usually cut off. Measured
+// 2026-10-02: 0 of 37 enabled triggers carried one, and the code loop had run 3 tasks in its life, all smoke tests.
+// This keeps the one-line summary (prose only, without the markers) and appends the marker lines verbatim.
+var ACT_BRIDGE_MARK = /^[ \t]*(code-task:[ \t]*repo=[A-Za-z0-9._-]{1,100}[ \t]+path=\S{1,300}|code-anchor:[ \t]*.{1,300}?)[ \t]*$/gm;
+function triggerIssueDescription(summaryHead, action, summaryTail) {
+  var a = String(action || "");
+  var marks = a.match(ACT_BRIDGE_MARK) || [];
+  var prose = a.replace(ACT_BRIDGE_MARK, " ").replace(/\s+/g, " ").trim();
+  var task = marks.filter(function (l) { return /code-task:/.test(l); }).slice(0, 1).map(function (l) { return l.trim(); });
+  var anchor = task.length ? marks.filter(function (l) { return /code-anchor:/.test(l); }).slice(0, 1).map(function (l) { return l.trim(); }) : [];
+  return summaryHead + prose.slice(0, 300) + summaryTail + (task.length ? "\n" + task.concat(anchor).join("\n") : "");
+}
+// ---- ACT-BRIDGE-1:END ----
 async function evaluateMetricTriggers(env) {
   var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
   var out = { ok: true, evaluated: 0, fired: [], unreadable: [] };
@@ -6038,7 +6056,7 @@ async function evaluateMetricTriggers(env) {
     var recent = await db.prepare("SELECT id FROM analytics_action_log WHERE trigger_id = ?1 AND fired_at > datetime('now', ?2) LIMIT 1").bind(t.id, "-" + cd + " hours").first().catch(function () { return null; });
     if (recent) continue;
     var target = String(t.queue_target || "none");
-    var summary = "METRIC-TRIGGER #" + t.id + " " + t.metric_key + "=" + v + " " + op + " " + thr + " -> " + String(t.action || "").slice(0, 300) + " (owner " + (t.owner || "-") + ", target " + target + ")";
+    var summary = triggerIssueDescription("METRIC-TRIGGER #" + t.id + " " + t.metric_key + "=" + v + " " + op + " " + thr + " -> ", t.action, " (owner " + (t.owner || "-") + ", target " + target + ")");
     var status = "dispatched", note = null;
     try {
       if (target === "agent_issues") {

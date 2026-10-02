@@ -109,6 +109,16 @@ jobs:
           echo "$out" | grep -q "0 failed" \
             || { echo "::error::improvement loop suite reported failures"; exit 1; }
 
+      # ACT-BRIDGE-1: a metric trigger's code-task and code-anchor lines reach the issue on their own lines, where the code
+      # loop's ISSUE-INTAKE-1 pattern (read from qnfo-code-orchestrator/worker.js) picks them up.
+      - name: Replay the act bridge offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/act-bridge.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "0 failure(s)" \
+            || { echo "::error::act bridge suite reported failures"; exit 1; }
+
       - name: Resolve the diff range
         id: range
         run: |
