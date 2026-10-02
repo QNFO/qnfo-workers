@@ -89,6 +89,20 @@ because each one was broken at least once; the linked issue holds the evidence.
   `x-loop-token`) and public AI use is capped per anonymous visitor and globally. Never open them silently: say what a stranger
   could then do, and let the owner decide. Prefer a tokenless identity (Cloudflare Access) over a secret the owner must manage.
 
+## Measuring and improving effectiveness (METRIC-CLOSED-LOOP-1, SESSION-RECORD-1)
+- Owner directive 2026-10-02: the fleet measures and improves its own internal and external effectiveness automatically
+  and continuously. The loop is on Cloudflare, not in a session: `metric_registry` (measure, hourly) ->
+  `v_metric_trigger_state` (judge) -> `analytics_metric_triggers` + qnfo-fleet-control evaluateMetricTriggers (act: one
+  deduped `agent_issues` row per breach) -> `remedy_efficacy_30d` (learn: did the remedy move the metric?).
+  `metrics_in_breach` is the headline (target 0). See migrations/2026-10-02-metric-closed-loop.sql.
+- A change that registers a metric also adds its trigger (threshold, owner, concrete lever, definition of done), or names
+  its exemption in the same migration. `metric_registry.state` is not a verdict; `v_metric_trigger_state.hit` is.
+- A remedy that did not move its metric within 7 days is replaced, not repeated: write a different lever into
+  `analytics_metric_triggers.action` (with a code-task if it needs code) or correct a wrong target with evidence.
+- Every agent session writes one `qnfo-audit.session_records` row at closeout (wbs_code, summary, decisions_made,
+  handoff_notes, total_tasks, completed_tasks, execution_ratio, started_at, completed_at): what it was asked, what it
+  finished, what it left and why. `session_execution_ratio_30d` and `session_records_30d` are graded from these rows.
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
