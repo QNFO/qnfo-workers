@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.91-performance-loop";
+var VERSION = "0.4.92-performance-loop"; /* 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3677,6 +3677,9 @@ var CHARTER_HORIZON = { broken: "H0", violated: "H0", "gate-verify": "H0", parti
 function charterNum(v) {
   if (v === null || v === void 0) return null;
   if (typeof v === "number") return isFinite(v) ? v : null;
+  // An unreadable marker is never a number, even when its reason text carries digits ("n/a: prior window has 27 of
+  // 30 days" is not 27): PERFORMANCE-LOOP-1 found IMPROVEMENT-LOOP-1 writing such reasons into metric_history.
+  if (/^\s*(n\/a|na\b|unmeasured|unknown|unreadable|pending|error|not (yet )?measured)/i.test(String(v))) return null;
   var m = String(v).replace(/,/g, "").match(/-?\d+(\.\d+)?/);
   return m ? Number(m[0]) : null;
 }
