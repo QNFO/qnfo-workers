@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.7-capability-contract";
+var VERSION = "3.0.8-flagship-measure";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -68,7 +68,19 @@ async function runImpact(env, commit, limit) {
   const n = Math.min(limit || 50, 100);
   const papers = await env.LIVING_PAPER.prepare("SELECT slug, doi, zenodo_doi FROM papers WHERE doi IS NOT NULL OR zenodo_doi IS NOT NULL ORDER BY created_at DESC LIMIT ?1").bind(n).all();
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  for (const p of papers.results || []) {
+  // FLAGSHIP-MEASURE-1 (2026-10-02, agent_issues #1754): zenodo_versions_per_flagship = min(versions) over the 10
+  // most-downloaded DOIs, and "no versions row counts as 1". This run only measured the newest n papers, so an older
+  // flagship fell out of the window and the metric read 1 while that record has 5 versions (10.5281/zenodo.21979060,
+  // last measured 2026-09-30). The flagship set is now always measured, whatever its age.
+  const list = (papers.results || []).slice();
+  try {
+    const have = new Set(list.map((p) => p.zenodo_doi || p.doi));
+    const fl = await env.QNFO_AUDIT.prepare("SELECT doi FROM citation_stats WHERE source='zenodo' AND metric='downloads' GROUP BY doi ORDER BY MAX(value) DESC LIMIT 10").all();
+    for (const f of fl.results || []) if (f.doi && !have.has(f.doi)) { have.add(f.doi); list.push({ slug: "flagship:" + f.doi, doi: f.doi, zenodo_doi: f.doi }); }
+  } catch (e) {
+    out.errors.push({ slug: "flagship-set", error: String(e && e.message || e).slice(0, 200) });
+  }
+  for (const p of list) {
     const doi = p.zenodo_doi || p.doi;
     if (!doi) continue;
     out.papers++;
@@ -83,7 +95,10 @@ async function runImpact(env, commit, limit) {
     const oa = await fetchJson("https://api.openalex.org/works/doi:" + encodeURIComponent(doi));
     const oaCited = oa?.cited_by_count;
     if (typeof oaCited === "number") entry.sources.openalex = oaCited;
-    const zn = await fetchJson("https://zenodo.org/api/records?q=doi:" + encodeURIComponent('"' + doi + '"') + "&size=1");
+    const zn = await fetchJson("https://zenodo.org/api/records?q=doi:" + encodeURIComponent('"' + doi + '"') + "&size=1&all_versions=true");
+    // SUPERSEDED-DOI-LOOKUP-1: without all_versions=true Zenodo returns 0 hits for a DOI that has a newer version
+    // (measured 2026-10-02 on 10.5281/zenodo.22073477: 0 hits, 1 with the flag), so a superseded flagship had no
+    // Zenodo rows at all.
     const rec = zn && zn.hits && zn.hits.hits && zn.hits.hits[0];
     if (rec) {
       let views = 0, downloads = 0;
@@ -102,7 +117,8 @@ async function runImpact(env, commit, limit) {
       // when is_last). zenodo_versions_per_flagship read a stale 1 because nothing measured versions, while the top
       // papers carry 5 to 9.
       const rv = rec.metadata && rec.metadata.relations && rec.metadata.relations.version && rec.metadata.relations.version[0];
-      if (rv && typeof rv.index === "number") entry.sources.zenodoVersions = rv.index + 1;
+      // A superseded record (is_last false) has at least one newer version: index + 2 is a lower bound, never an overcount.
+      if (rv && typeof rv.index === "number") entry.sources.zenodoVersions = rv.index + (rv.is_last === false ? 2 : 1);
     }
     const cited = (entry.sources.openalex || 0) + (entry.sources.crossref || 0);
     const dls = entry.sources.zenodo && entry.sources.zenodo.downloads || 0;
