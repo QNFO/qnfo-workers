@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-02 05:13:34",
+  "audited_at": "2026-10-02 06:11:11",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-research-exec"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -562,7 +569,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.50-ground-or-slot",
+        "version": "0.9.51-terminal-selfclose",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1360,9 +1367,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.50-ground-or-slot",
+      "before": "0.9.51-terminal-selfclose",
       "http": 200,
-      "live": "0.9.50-ground-or-slot",
+      "live": "0.9.51-terminal-selfclose",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
