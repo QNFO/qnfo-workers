@@ -90,6 +90,11 @@ const sse = (t, ev) => t.split("\n\n").filter((b) => b.startsWith("event: " + ev
 const h = (await call("/health")).json();
 ok(/^2\./.test(h.version) && h.capabilities.includes("ai-search-query") && h.limitations.length >= 4, "health keeps the 1.x capabilities and states limitations");
 ok((await call("/")).text.includes("Ask the QNFO research corpus"), "GET / serves the ask page");
+// FLEET-CTL-ROLLOUT-1.6 (#1775) and ASK-GRAPH-ELLIPSIS-1 (#1769), as the browser receives the page.
+const page = (await call("/")).text;
+ok(page.split('<script src="https://fleet.qnfo.org/ctl.js" defer></script>').length === 2 && /<script src="https:\/\/fleet\.qnfo\.org\/ctl\.js" defer><\/script>\s*<\/body>/.test(page), "the ask page loads the fleet command-line link once, just before </body>");
+const label = (page.split("\n").find((l) => l.includes("d.name.length > 26")) || "");
+ok(label.includes('d.name.slice(0, 24) + "..."') && !label.includes("…"), "graph labels are truncated with ASCII dots, not U+2026 (no glyph in the label font)");
 ok((await call("/?q=%3Cscript%3E")).text.includes("&lt;script&gt; | Ask QWAV"), "deep-link title is escaped");
 // 2. one answer end to end
 const a1 = await call("/api/ask", { query: "What does JPCUB measure?" });

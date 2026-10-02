@@ -1,0 +1,34 @@
+name: backlog-exec-test
+
+# BACKLOG-EXEC-EVIDENCE-1 (#1808): qnfo-backlog-exec closes agent_issues on its own predicates, so a regression closes
+# issues without evidence. This runs its offline suite (the drain over the live qnfo-audit schemas and close triggers,
+# node:sqlite) on every PR/push that touches the worker.
+
+on:
+  pull_request:
+    paths:
+      - "qnfo-backlog-exec/**"
+      - ".github/workflows/backlog-exec-test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "qnfo-backlog-exec/**"
+      - ".github/workflows/backlog-exec-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax check
+        run: node --check qnfo-backlog-exec/worker.js
+      - name: Exception-class closes need a measured recurrence and a passing probe
+        run: node --no-warnings qnfo-backlog-exec/exception-close.test.mjs

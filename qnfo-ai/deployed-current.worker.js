@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.31.0-aig-embed"; // 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.31.1-aig-metadata"; // 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3450,8 +3450,11 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   // AIG-BINDING-1 (2026-10-02, #1784): embedding calls are deterministic, so they go through the AI Gateway (logged there,
   // served from its cache for 24h). A gateway error falls back to the plain binding once, so the gateway can never take
   // search down. Chat calls are unchanged: they have their own semantic cache and a fallback here would double their wait.
+  // 5.31.1: each gateway log entry carries metadata {worker, purpose} (Workers AI binding gateway.metadata), so the gateway
+  // log attributes these requests to qnfo-ai, the second half of #1784's definition of done.
   var viaGw = !opts && String(purpose).indexOf("embed") === 0;
-  try { try { res = await env.AI.run(model, input, viaGw ? { gateway: { id: "default", cacheTtl: 86400 } } : opts); } catch (eg) { if (!viaGw) throw eg; res = await env.AI.run(model, input); } return res; } catch (e) { ok = 0; throw e; }
+  var gwOpts = viaGw ? { gateway: { id: "default", cacheTtl: 86400, metadata: { worker: String(worker || "qnfo-ai"), purpose: String(purpose) } } } : opts;
+  try { try { res = await env.AI.run(model, input, gwOpts); } catch (eg) { if (!viaGw) throw eg; res = await env.AI.run(model, input); } return res; } catch (e) { ok = 0; throw e; }
   finally {
     // SPEND-GOVERNOR-1: price every binding call into ai_spend_ledger (fail-soft, not awaited).
     try {

@@ -135,6 +135,14 @@ jobs:
       # the real handler and cron with stubbed AI Search, gateway, idea-hub and Workers AI over in-memory SQLite.
       - name: ASK-LOOP-1 offline suite (qnfo-ai-search)
         run: node qnfo-ai-search/ask-loop.test.mjs
+      # SELECTED-WORKS-OPENALEX-1 (#1786) + IMPACT-FAILCLOSED-2 (#1782): the daily citation pass measures all seven selected
+      # works (STRATEGY s2.4) whatever their age, and /run?commit=1 refuses callers while IMPACT_TOKEN is unset.
+      - name: SELECTED-WORKS-OPENALEX-1 offline suite (qnfo-paper-indexer)
+        run: node qnfo-paper-indexer/impact.test.mjs
+      # AIG-BINDING-1 (#1784): qnfo-ai embedding calls go through AI Gateway default (24h cache, metadata worker/purpose on
+      # the log entry, one plain-binding retry on a gateway error); chat calls and caller options are unchanged.
+      - name: AIG-BINDING-1 offline suite (qnfo-ai)
+        run: node qnfo-ai/aig-binding.test.mjs
       # UTF8-DEPLOY-1: worker source fetched from GitHub reaches the upload as the same UTF-8 text (no double encoding).
       - name: UTF8-DEPLOY-1 offline suite (qnfo-ops)
         run: node qnfo-ops/utf8-deploy.test.mjs
@@ -142,6 +150,10 @@ jobs:
       # (radar-hub, qnfo-cloud-ops and qnfo-fleet-dashboard schedules were never applied); sweeps every live wrangler.toml.
       - name: CRON-APPLY-PARSE-1 offline suite (qnfo-ops)
         run: node qnfo-ops/cron-apply-parse.test.mjs
+      # REVISER-FLAGGED-DEADEND-1 (#1812): a HIGH reviser finding becomes an unconfirmed internal_errata row (with the model
+      # confidence and the reviser run id) plus an internal-open errata_queue row; nothing is queued or shown to readers.
+      - name: REVISER-FLAGGED-DEADEND-1 offline suite (qnfo-paper-reviser)
+        run: node --no-warnings qnfo-paper-reviser/flagged-errata.test.mjs
       # MATH-DELIM-1 / TABLE-SEP-1: paper renderer regressions from the 2026-10-02 full-corpus sweep (qnfo-gateway).
       - name: Paper renderer suite (qnfo-gateway)
         run: node qnfo-gateway/render.test.mjs
@@ -313,3 +325,7 @@ jobs:
       # RUN-INTERNAL-1 (#1783): research-exec's inline run and drain-v2 refuse public hostnames; service bindings still reach them.
       - name: RUN-INTERNAL-1 offline suite (qnfo-research-exec)
         run: node qnfo-research-exec/run-internal.test.mjs
+      # IDEA-CHAIN-SINGLE-PRODUCER-1: qnfo-signal-loop proposes at most 2 signals x 3 questions a run and never pushes the
+      # idea backlog above the 30 ceiling (it wrote 55 rows in one run on 2026-10-02 and flooded triage).
+      - name: IDEA-CHAIN-SINGLE-PRODUCER-1 offline suite (qnfo-signal-loop)
+        run: node qnfo-signal-loop/consume-bound.test.mjs

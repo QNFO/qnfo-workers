@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.6-license-one"; // CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
+var VERSION = "1.2.7-flagged-errata"; // 1.2.7 REVISER-FLAGGED-DEADEND-1 (#1812): high findings become internal_errata rows (unconfirmed until a second model confirms); 1.2.6 LICENSE-ONE-1 (#517): new deposits under QNFO-ULA v2.0; 1.2.5 CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -225,7 +225,8 @@ function auditPrompt(paper) {
     "Review categories: 1. overclaim/unsupported (a claim stated as fact without support, or a conclusion that does not follow). 2. missing-limitations (a quantitative/empirical claim with no scope or uncertainty disclosure). 3. terminology-isolation (domain terms with no cross-domain bridge). 4. citation/attribution (miscited reference or missing attribution). 5. prose (grammar, typos, unclear sentences). 6. meta/branded-language (meta-narration, virtue labels, internal gate/tool names). 7. literature-coverage (no engagement with prior/related work, or statements about the literature with no citations). 8. quantitative-justification (a quantitative or empirical claim with no computation, simulation, derivation, or citation support). 9. computational-verification (results presented without a reproducible computation artifact: code block, table, or explicit derivation).",
     "Severity: 'low' = prose/format/terminology-bridge/missing-changelog (safe to auto-fix); 'high' = any change to a number, equation, data, result, conclusion, or attribution, OR a literature-coverage / quantitative-justification / computational-verification gap (these require a full revision cycle, never a surgical edit).",
     "For each issue provide a SURGICAL edit: 'location' must be an EXACT verbatim substring copied from the paper; 'fix' is the replacement (for insertion, fix = location + inserted text; for deletion, fix = ''). If you cannot quote an exact substring, do NOT propose an edit.",
-    'Output JSON only: {"issues":[{"severity":"low|high","category":"...","location":"exact verbatim substring","fix":"replacement","reason":"1 sentence"}]}. If no genuine issues, return {"issues":[]}.',
+    "'confidence' is your probability (0 to 1) that the issue is real and would survive a second independent reviewer.",
+    'Output JSON only: {"issues":[{"severity":"low|high","category":"...","location":"exact verbatim substring","fix":"replacement","reason":"1 sentence","confidence":0.0}]}. If no genuine issues, return {"issues":[]}.',
     "PAPER TITLE: " + (paper.title || ""),
     "PAPER (markdown, may be truncated):",
     (paper.body_md || "").slice(0, 11e3)
@@ -327,7 +328,59 @@ function addChangelog(md, versionTo, changelog) {
   return md + block;
 }
 __name(addChangelog, "addChangelog");
-async function processPaper(env, paper, mode) {
+// REVISER-FLAGGED-DEADEND-1 (#1812): a HIGH finding on a published paper becomes an internal_errata row plus an
+// errata_queue row in status 'internal-open', the same two rows errata-hub's POST /internal-errata writes. Both workers
+// bind the same qnfo-audit D1, so this needs no copy of errata-hub's ERRATA_TOKEN. internal-open items are never
+// auto-answered or auto-published by errata-hub, and idea-hub's public gate reads only target_kind 'chat_log', so a
+// single-model finding reaches no reader: a second model must confirm it first. The row id is derived from the paper and
+// the finding, so a rescan of the same paper adds nothing (INSERT OR IGNORE), and the queue row is written only for a
+// new erratum.
+var ERRATA_MAX_PER_PAPER = 8;
+function findingHash(s) {
+  let h = 2166136261;
+  const t = String(s || "");
+  for (let i = 0; i < t.length; i++) {
+    h ^= t.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h.toString(36);
+}
+__name(findingHash, "findingHash");
+function clampConfidence(c) {
+  const n = Number(c);
+  if (!isFinite(n)) return null;
+  return Math.max(0, Math.min(1, n > 1 && n <= 100 ? n / 100 : n));
+}
+__name(clampConfidence, "clampConfidence");
+async function recordFlaggedErrata(env, paper, doi, high, meta) {
+  meta = meta || {};
+  const ref = doi || paper.slug;
+  const key = (recIdOf(doi) || String(paper.slug || "")).slice(0, 40);
+  const now = new Date().toISOString();
+  const ids = [];
+  let recorded = 0;
+  for (const f of (high || []).slice(0, ERRATA_MAX_PER_PAPER)) {
+    const reason = String(f && f.reason || "").trim();
+    const location = String(f && f.location || "").trim();
+    const category = String(f && f.category || "unspecified").trim().slice(0, 64);
+    if (!reason && !location) continue;
+    const confidence = clampConfidence(f && f.confidence);
+    const id = "rev-" + key + "-" + findingHash(category + "|" + location + "|" + reason);
+    const claim = ("[" + category + "] " + (reason || "high-severity finding") + (location ? ' At: "' + location.slice(0, 600) + '"' : "")).slice(0, 4e3);
+    const evidence = JSON.stringify({ source: "qnfo-paper-reviser", version: VERSION, model: MODEL, confidence, run_id: meta.runId || null, log_id: meta.logId == null ? null : meta.logId, slug: paper.slug, doi: doi || null, paper_version: paper.version || null, category, location: location.slice(0, 1500), proposed_fix: String(f && f.fix || "").slice(0, 1500) });
+    const remediation = "Unconfirmed single-model finding (REVISER-FLAGGED-DEADEND-1): a second model must confirm it before any reader-facing notice or correction. Proposed fix: " + String(f && f.fix || "(none given)").slice(0, 1200);
+    const r = await env.WATCH_DB.prepare("INSERT OR IGNORE INTO internal_errata (id, target_kind, target_ref, detected_at, detected_by, severity, claim_text, falsification, evidence, remediation, status, owner, updated_at) VALUES (?1, 'paper', ?2, ?3, ?4, 'high', ?5, NULL, ?6, ?7, 'open', 'errata-hub', ?3)").bind(id, ref, now, "qnfo-paper-reviser/" + VERSION, claim, evidence, remediation).run();
+    const fresh = r && r.meta ? Number(r.meta.changes || 0) > 0 : false;
+    if (fresh) {
+      await env.WATCH_DB.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status) VALUES (NULL, 'internal_audit', 'qnfo-paper-reviser', ?1, ?2, ?3, ?4, 'internal-open')").bind(id, doi || null, claim, confidence).run();
+      recorded++;
+    }
+    ids.push(id);
+  }
+  return { recorded, ids };
+}
+__name(recordFlaggedErrata, "recordFlaggedErrata");
+async function processPaper(env, paper, mode, runId) {
   const dry = mode === "dry";
   const doi = paper.zenodo_doi || paper.doi || "";
   const recId = recIdOf(doi);
@@ -367,10 +420,18 @@ async function processPaper(env, paper, mode) {
     return i.category;
   }), parsed: auditParsed, rawLen: rawAuditLen };
   if (high.length) {
+    let errata = null;
     if (!dry) {
-      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, findings_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'flagged', ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify(auditSummary), JSON.stringify(issues).slice(0, 4e3)).run();
+      const lr = await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, findings_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'flagged', ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify(auditSummary), JSON.stringify(issues).slice(0, 4e3)).run();
+      // REVISER-FLAGGED-DEADEND-1 (#1812): 'flagged' is terminal for this loop and nothing else read it, so every HIGH
+      // finding is also recorded as an internal erratum for errata-hub (fail-soft: the scan never fails on this).
+      try {
+        errata = await recordFlaggedErrata(env, paper, doi, high, { runId, logId: lr && lr.meta ? lr.meta.last_row_id : null });
+      } catch (eE) {
+        errata = { recorded: 0, error: String(eE && eE.message || eE).slice(0, 200) };
+      }
     }
-    return { slug: paper.slug, flagged: true, high: high.length, low: low.length, doi };
+    return { slug: paper.slug, flagged: true, high: high.length, low: low.length, doi, errata };
   }
   // SUBSTANCE GATE (2026-09-06, row 84): never publish a v2.0.0 for content the audit
   // found no genuine issues in, or for near-empty stub/fragment bodies. Log and skip.
@@ -436,14 +497,15 @@ async function runOnce(env, mode) {
   const dry = mode === "dry";
   const candidates = await selectCandidates(env, BATCH);
   const results = [];
+  const runId = "rv-" + Date.now().toString(36);
   for (const p of candidates) {
     try {
-      results.push(await processPaper(env, p, mode));
+      results.push(await processPaper(env, p, mode, runId));
     } catch (e) {
       results.push({ slug: p.slug, error: String(e && e.message || e).slice(0, 200) });
     }
   }
-  return { ok: true, worker: "qnfo-paper-reviser", version: VERSION, dry, model: MODEL, candidates: candidates.length, results };
+  return { ok: true, worker: "qnfo-paper-reviser", version: VERSION, dry, model: MODEL, run_id: runId, candidates: candidates.length, results };
 }
 __name(runOnce, "runOnce");
 async function statusSweep(env) {
@@ -457,7 +519,7 @@ var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if ((url.pathname.startsWith("/run/") || url.pathname.startsWith("/debug/")) && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
-    if (url.pathname === "/health") return json({ ok: true, worker: "qnfo-paper-reviser", version: VERSION, model: MODEL, capabilities: ["paper-revision-scan", "revision-audit", "version-queue"], limitations: ["/run/* and /debug/* require X-Reviser-Token", "/run/scan defaults to a dry run", "scheduled scans run every 4 hours (37 */4)", "one model per run: " + MODEL], bindings: { ai: !!env.AI, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, auth: !!env.REVISER_TOKEN } });
+    if (url.pathname === "/health") return json({ ok: true, worker: "qnfo-paper-reviser", version: VERSION, model: MODEL, capabilities: ["paper-revision-scan", "revision-audit", "version-queue", "flagged-to-internal-errata"], limitations: ["/run/* and /debug/* require X-Reviser-Token", "/run/scan defaults to a dry run", "scheduled scans run every 4 hours (37 */4)", "one model per run: " + MODEL, "a HIGH finding is recorded as an unconfirmed internal erratum (internal-open, never shown to readers) until a second model confirms it (REVISER-FLAGGED-DEADEND-1)"], bindings: { ai: !!env.AI, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, auth: !!env.REVISER_TOKEN } });
     if (url.pathname === "/run/scan") {
       const mode = url.searchParams.get("mode") || "dry";
       try {
@@ -500,7 +562,7 @@ var worker_default = {
     try {
       const r = await runOnce(env, "live");
       console.log("[qnfo-paper-reviser] cron done:", JSON.stringify({ candidates: r.candidates, results: r.results.map(function(x) {
-        return { slug: x.slug, queued: x.queued, flagged: x.flagged, skipped: x.skipped, error: x.error };
+        return { slug: x.slug, queued: x.queued, flagged: x.flagged, errata: x.errata ? x.errata.recorded : void 0, skipped: x.skipped, error: x.error };
       }) }));
     } catch (e) {
       console.error("[qnfo-paper-reviser] cron error:", e.message);
@@ -508,6 +570,7 @@ var worker_default = {
   }
 };
 export {
-  worker_default as default
+  worker_default as default,
+  recordFlaggedErrata
 };
 //# sourceMappingURL=worker.js.map
