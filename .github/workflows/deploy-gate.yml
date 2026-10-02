@@ -152,6 +152,10 @@ jobs:
       - name: Job market, mention radar ledger and events cron offline suite (radar-hub)
         run: node radar-hub/radar-hub.test.mjs
 
+      # HANDOFF-CLAIM-SHEET-1 (qnfo-email 2.2.4): every handoffs insert carries the claim_sheet the qnfo-audit trigger requires.
+      - name: HANDOFF-CLAIM-SHEET-1 check (qnfo-email)
+        run: node qnfo-email/handoff-claim-sheet.test.mjs
+
       # ERRATA-HUB-CRONS-UNDECLARED-1 + ERRATA-PUBLISH-GATE-1 (#1747): errata-hub's hourly members run, record a tick, and
       # make no Zenodo call, store re-point or mail from the publish member while pipeline_flags.errata_publish_enabled is off.
       - name: ERRATA-PUBLISH-GATE-1 offline suite (errata-hub)
