@@ -158,6 +158,18 @@ jobs:
           echo "$out" | grep -q "^0 failure(s)" \
             || { echo "::error::self-repair reply reader suite reported failures"; exit 1; }
 
+      # COST-PER-TASK-WINDOW-1 + ADVISOR-SPEND-1 (0.4.107): the per-task cost reads one 30-day window of the ladder ledger;
+      # the 20-minute advisor reuses its advice while the finding set is unchanged and counts only written issues.
+      - name: Replay the cost-per-task window and advisor spend offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/cost-per-task.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q " 0 failed" || { echo "::error::cost-per-task suite reported failures"; exit 1; }
+          out=$(node qnfo-fleet-control/advisor-spend.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q " 0 failed" || { echo "::error::advisor spend suite reported failures"; exit 1; }
+
       # PERFORMANCE-LOOP-1: lever experiments driven by hit metric triggers (bounds, STRATEGY caps, keep or revert on
       # metric_history, kill switch) and the five KPIs, replayed against an in-memory SQLite D1 with the live guards and both
       # 2026-10-02 metric migrations applied (remedy_efficacy_30d counts the experiments).
