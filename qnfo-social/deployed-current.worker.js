@@ -13,7 +13,13 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.7.30-cap-epoch";
+var VERSION = "0.7.31-sent-text";
+// 0.7.31 (2026-10-02, #1712 POST-ID-UTM-1, pillar: reach): POST-SENT-TEXT-1 + POST-UTM-SUBDOMAIN-1. The UTM tag was
+// applied at send time only and social_threads.posts kept the untagged draft, so D1 had no record that any posted link
+// carried a UTM and the issue's probe could never pass. A posted row now stores the text exactly as posted (tagged and
+// fitted) in social_threads.posts, and a dissemination post stores it in dissemination_tracker.post_text_snippet; the
+// /post, /thread, /cross and /broadcast routes record the same. Every *.qnfo.org host is tagged (was qnfo.org, www and
+// papers only, so the ipatent.qnfo.org launch post would have gone out untagged).
 // 0.7.29 (2026-10-02): GET /learner names an unavailable part ("posterior unavailable") and never echoes exception text
 // (CodeQL js/stack-trace-exposure); the detail goes to the worker log.
 // 0.7.28 (2026-10-02, pillar: reach): SOCIAL-DISTRIBUTION-LEARNER-1 (STRATEGY 6.4 "distribution allocation (weekly)",
@@ -120,12 +126,18 @@ function applyLink(text, link, max) {
 // utm_source=<channel>&utm_medium=social&utm_campaign=<slug>, so a post joins to the visits it caused (STRATEGY 6.2).
 // Links to other domains (doi.org, zenodo.org, q08.org) are left untouched; a link that already has a utm_ parameter
 // is never re-tagged. Without a slug the campaign is the link's last path segment (the paper slug on papers.qnfo.org).
-var UTM_HOSTS = { 'qnfo.org': 1, 'www.qnfo.org': 1, 'papers.qnfo.org': 1 };
+// POST-UTM-SUBDOMAIN-1 (0.7.31, #1712): every qnfo.org host is the owner's own site, so every one is tagged. The list
+// was qnfo.org, www and papers only, so the 2026-10-02 launch post for https://ipatent.qnfo.org/example (social_threads
+// 153) would have gone out untagged and could never be joined to the visits it caused.
+function utmHost(host) {
+  const h = String(host || '').toLowerCase();
+  return h === 'qnfo.org' || /^[a-z0-9-]+(\.[a-z0-9-]+)*\.qnfo\.org$/.test(h);
+}
 var BUFFER_UTM_SOURCE = { mastodon: 'mastodon', linkedin: 'linkedin', twitter: 'x', threads: 'threads' };
 function utmTag(url, source, campaign) {
   const u = String(url || '');
   const hm = u.match(/^https?:\/\/([^\/?#:]+)/i);
-  if (!hm || !UTM_HOSTS[hm[1].toLowerCase()]) return u;
+  if (!hm || !utmHost(hm[1])) return u;
   if (/[?&]utm_(source|medium|campaign)=/i.test(u)) return u;
   const hashAt = u.indexOf('#');
   const base = hashAt < 0 ? u : u.slice(0, hashAt);
@@ -372,7 +384,11 @@ async function postText(s, text, reply, opts) {
       continue;
     }
     if (!r.ok) throw new Error('post ' + r.status + ' ' + (await r.text()).slice(0, 200));
-    return r.json();
+    // POST-SENT-TEXT-1 (0.7.31, #1712): hand back the text exactly as posted (tagged and fitted), so the caller can store
+    // it. Before this the tagged text lived only on Bluesky and D1 kept the untagged draft, so no probe could see a UTM.
+    const out = await r.json();
+    if (out && typeof out === 'object') out.text = record.text;
+    return out;
   }
   throw lastErr || new Error('post retries exhausted');
 }
@@ -402,6 +418,8 @@ async function postThread(s, posts, threadOpts) {
     }
     const res = await postText(s, text, reply, opts);
     uris.push(res.uri);
+    // POST-SENT-TEXT-1: a caller that passes threadOpts.sent = [] gets the posted texts, in order.
+    if (Array.isArray(threadOpts.sent)) threadOpts.sent.push(typeof res.text === 'string' ? res.text : text);
     if (i === 0) root = { uri: res.uri, cid: res.cid };
     parent = { uri: res.uri, cid: res.cid };
   }
@@ -667,7 +685,7 @@ async function bufferPost(env, text, campaign) {
         if (cp && cp.post && draft && cp.post.status && String(cp.post.status).toLowerCase() !== "draft") {
           await logAlert(env, "linkedin-draft", "error", "LINKEDIN-BUFFER-DRAFTS-1: Buffer post " + cp.post.id + " came back with status " + cp.post.status + ", not draft");
           results.push({ platform: svc, status: "error", post_id: cp.post.id, error: "not-draft:" + cp.post.status });
-        } else if (cp && cp.post) results.push({ platform: svc, status: draft ? "draft" : queued ? "queued" : "ok", post_id: cp.post.id });
+        } else if (cp && cp.post) results.push({ platform: svc, status: draft ? "draft" : queued ? "queued" : "ok", post_id: cp.post.id, text: svcText });
         else results.push({ platform: svc, status: "error", error: (cp && cp.message) || JSON.stringify(r).slice(0, 120) });
       } catch (e) { results.push({ platform: svc, status: "error", error: String(e && e.message || e) }); }
     }
@@ -800,13 +818,19 @@ async function recordPostUriBySlug(env, slug, value) {
 }
 // POST-ID-UTM-1 (0.7.21): status='posted' and post_uri land in ONE statement, so a posted row can no longer exist without
 // its platform id because a second write was lost. Fallback (column missing): mark posted, then the fail-soft id write.
-async function markPosted(env, id, uriValue) {
+// POST-SENT-TEXT-1 (0.7.31, #1712): `sent` (the texts as posted, from postThread's collector) replaces `posts`, so a posted
+// row records what went out, UTM tags included; without it the row keeps its draft text.
+function sentPostsJson(sent) {
+  return Array.isArray(sent) && sent.length && sent.every(function(t) { return typeof t === 'string' && t; }) ? JSON.stringify(sent) : null;
+}
+async function markPosted(env, id, uriValue, sent) {
   await ensureSocialSchema(env);
+  const postsJson = sentPostsJson(sent);
   try {
-    await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL, post_uri=COALESCE(?, post_uri), updated_at=datetime('now') WHERE id=?").bind(uriValue || null, id).run();
+    await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL, post_uri=COALESCE(?1, post_uri), posts=COALESCE(?3, posts), updated_at=datetime('now') WHERE id=?2").bind(uriValue || null, id, postsJson).run();
   } catch (e) {
     console.log('POST-ID-UTM-1 combined posted write failed for thread ' + id + ', falling back: ' + String(e).slice(0, 120));
-    await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL WHERE id=?").bind(id).run();
+    await env.DB.prepare("UPDATE social_threads SET status='posted', posted_at=datetime('now'), error=NULL, posts=COALESCE(?2, posts) WHERE id=?1").bind(id, postsJson).run();
     await recordPostUri(env, id, uriValue);
   }
 }
@@ -976,7 +1000,8 @@ async function drainDissemination(env, opts) {
       const rkey = String(r.uri || '').split('/').pop();
       const handle = String((s && s.handle) || env.BSKY_HANDLE || '');
       const postUrl = handle && rkey ? 'https://bsky.app/profile/' + handle + '/post/' + rkey : r.uri;
-      await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, updated_at=datetime('now') WHERE id=?").bind(postUrl, r.uri, row.id).run();
+      // POST-SENT-TEXT-1 (0.7.31, #1712): post_text_snippet holds the text as posted (UTM tag included) on success.
+      await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, post_text_snippet=COALESCE(?, post_text_snippet), updated_at=datetime('now') WHERE id=?").bind(postUrl, r.uri, typeof r.text === 'string' && r.text ? r.text : null, row.id).run();
       posted++;
       if (decision) learner = await learnerRecordPost(env, decision, r.uri, opts.nowMs);
     } catch (e) {
@@ -1092,7 +1117,8 @@ async function drainQueue(env, opts) {
         }
         if (p.verdict === "transient") { continue; }
       }
-      const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: repairMojibake(String(row.title || 'QNFO')), desc: 'QNFO research' } : undefined, campaign: row.slug ? String(row.slug) : undefined });
+      const sent = [];
+      const uris = await postThread(s, posts, { link: threadLink, embed: threadLink ? { title: repairMojibake(String(row.title || 'QNFO')), desc: 'QNFO research' } : undefined, campaign: row.slug ? String(row.slug) : undefined, sent: sent });
       // Buffer (Mastodon/LinkedIn/X) posts plain text with no facet/embed support - the
       // link MUST be applied to the text itself here, mirroring what postThread() does
       // internally for Bluesky's post 1. Previously this sent the raw linkless posts[0].
@@ -1101,8 +1127,9 @@ async function drainQueue(env, opts) {
         const bufText = pickBufferText(posts, threadLink, row.title, 280);
         bufferResult = await bufferPost(env, bufText, row.slug ? String(row.slug) : undefined);
       } catch (e) { bufferResult = { error: String(e && e.message || e) }; }
-      // POST-ID-UTM-1 (#1712): status and platform ids in one write (markPosted falls back if the column is missing).
-      await markPosted(env, row.id, postUriValue(uris[0], bufferResult));
+      // POST-ID-UTM-1 (#1712): status, platform ids and (POST-SENT-TEXT-1) the posted text in one write (markPosted falls
+      // back if the column is missing).
+      await markPosted(env, row.id, postUriValue(uris[0], bufferResult), sent);
       posted++;
       if (decision) learner = await learnerRecordPost(env, decision, uris[0], opts.nowMs);
       // SOCIAL-RUN-LEDGER-1: what Buffer did with this post, per platform, for the run record.
@@ -1792,7 +1819,7 @@ export default {
         if (g.status) return json(g.body, g.status);
         const s = await session(env);
         const r = await postText(s, g.texts[0], null, { campaign: b.slug ? String(b.slug) : undefined });
-        const slug = await recordAdhoc(env, 'post', b.title || g.texts[0].slice(0, 120), g.texts, r.uri);
+        const slug = await recordAdhoc(env, 'post', b.title || g.texts[0].slice(0, 120), typeof r.text === 'string' && r.text ? [r.text] : g.texts, r.uri);
         return json({ ok: true, uri: r.uri, slug: slug });
       }
       if (p === '/cross' && m === 'POST') {
@@ -1803,7 +1830,9 @@ export default {
         const bufText = link ? applyLink(g.texts[0], link, 280) : truncate(g.texts[0], 280);
         const res = await bufferPost(env, bufText, b.slug ? String(b.slug) : undefined);
         const uriVal = postUriValue(null, res);
-        const slug = uriVal ? await recordAdhoc(env, 'cross', b.title || bufText.slice(0, 120), [bufText], uriVal) : null;
+        // POST-SENT-TEXT-1: record the first channel's text as Buffer received it (tagged), not the untagged draft.
+        const sentBuf = ((res && res.results) || []).filter(function(x) { return x && x.post_id && typeof x.text === 'string' && x.text; }).map(function(x) { return x.text; })[0];
+        const slug = uriVal ? await recordAdhoc(env, 'cross', b.title || bufText.slice(0, 120), [sentBuf || bufText], uriVal) : null;
         return json({ ok: true, buffer: res, text_sent: bufText, post_uri: uriVal, slug: slug });
       }
       // Buffer admin proxy: Buffer posts are plain text with no facet/embed model, so a bad
@@ -1823,8 +1852,9 @@ export default {
         const g = await routeGate(env, '/thread', posts);
         if (g.status) return json(g.body, g.status);
         const s = await session(env);
-        const uris = await postThread(s, g.texts, { campaign: b.slug ? String(b.slug) : undefined });
-        const slug = await recordAdhoc(env, 'thread', b.title || g.texts[0].slice(0, 120), g.texts, uris[0]);
+        const sent = [];
+        const uris = await postThread(s, g.texts, { campaign: b.slug ? String(b.slug) : undefined, sent: sent });
+        const slug = await recordAdhoc(env, 'thread', b.title || g.texts[0].slice(0, 120), sentPostsJson(sent) ? sent : g.texts, uris[0]);
         return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris, slug: slug }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
       if (p === '/threads' && m === 'GET') {
@@ -1888,8 +1918,9 @@ export default {
         const g = await routeGate(env, '/broadcast', posts);
         if (g.status) return json(g.body, g.status);
         const s = await session(env);
-        const uris = await postThread(s, g.texts, { campaign: row.slug ? String(row.slug) : undefined });
-        await markPosted(env, row.id, postUriValue(uris[0], null));
+        const sent = [];
+        const uris = await postThread(s, g.texts, { campaign: row.slug ? String(row.slug) : undefined, sent: sent });
+        await markPosted(env, row.id, postUriValue(uris[0], null), sent);
         return new Response(JSON.stringify({ ok: true, root: uris[0], count: uris.length, uris: uris }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
 
@@ -1980,7 +2011,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
+export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick,
   learnerEngagementRate, learnerReport, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF };

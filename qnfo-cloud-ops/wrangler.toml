@@ -74,6 +74,15 @@ database_id = "d80fdf2a-0a60-45a3-968b-2907ce806dcd"
 binding = "QNFO_INFRA"
 service = "qnfo-infra"
 
+# WORKER-HEALTH-PROBE-AUTH-1 (1.18.2): the worker-health chat probe calls qnfo-ai through this binding. INTERNAL-CALLER-PROPS-1
+# (#1703): qnfo-ai authenticates it by ctx.props.caller, so no copy of ROUTER_AUTH_KEY is needed (the probe's old reference
+# to one is retired with this binding; the secret was never re-set after the 2026-09-26 recreation, #1468). Installed by
+# qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+props = { caller = "qnfo-cloud-ops" }
+
 # v1.13.1 - self-registration to the qnfo-ops service registry (cross-service discovery).
 # Secret: REGISTRY_TOKEN (shared with qnfo-ops /registry/register) - set via wrangler secret put.
 [[services]]
@@ -111,5 +120,9 @@ bucket_name = "d-drive"
 # Issue 1500 (CLOUD-OPS-CRON-DISPATCH-NOOP-1) remains open for its own distinct
 # defect (stale worker_schedules row vs the internal dispatch map), which this
 # comment correction does not address.
+# CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE trigger. worker.js (TICK_CRON) works out which AMS_SCHEDULE jobs are
+# due in Amsterdam local time on each tick, so this list no longer changes with the schedule or with daylight saving.
+# Every 10 minutes is the fastest CRON-RATE-CEILING-1 allows; a job on a :05 or :15 mark runs on the next tick.
+# The comments above describe the 21-trigger list this replaced.
 [triggers]
-crons = ["15 4 * * *", "0 6,12 * * 2-6", "30 6 * * 2-6", "0 7,13 * * 2-6", "0 8 * * 2-6", "0 15 * * 6", "0 4 * * 1", "0 6 * * 2", "0 7 * * 1", "0 6 * * 7", "0 9 * * 2-6", "0 9 3 9 *", "5 3,15 * * *", "0 4 1 * *", "0 5 * * 2", "30 5 * * 2", "15 5 * * *", "30 7 * * 2-6", "30 3 * * 2", "20 4 * * *", "10 3 * * *"]
+crons = ["*/10 * * * *"]

@@ -5,6 +5,10 @@
 > backlog and privacy-safe datasets only, capped per visitor and per day; the response carries
 > `x-ops-access: public-read`). The steps below remain for machine callers of the full agent; do not ask the owner to
 > create or enter a key (OPEN-ACCESS-1). Owner actions go through https://fleet.qnfo.org/cmd.
+>
+> **`OPS_CLIENT_KEY` no longer exists on qnfo-ops.** The credential rotation of 2026-10-01 07:32-07:45Z (#1676, #1701)
+> left only `OPS_ROUTER_AUTH_KEY` and `OPS_ROUTER_AUTH_KEY_2` (secret names read 2026-10-02 with
+> `cf-ops-actions worker-history qnfo-ops`). A client still holding a pre-rotation key gets public read-only mode.
 
 ## Problem (FIX-6, 2026-09-14)
 ops-exec returned 401 Unauthorized for ChatBox and SannaBot because

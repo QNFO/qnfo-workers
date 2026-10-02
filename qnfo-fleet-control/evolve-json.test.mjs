@@ -1,0 +1,25 @@
+// EVOLVE-JSON-1: the self-repair loop's reader of a model reply (code inside a JSON string).
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+const here = dirname(fileURLToPath(import.meta.url));
+const src = readFileSync(join(here, "worker.js"), "utf8");
+const block = src.slice(src.indexOf("// ---- EVOLVE-JSON-1:BEGIN"), src.indexOf("// ---- EVOLVE-JSON-1:END"));
+const sb = {};
+vm.createContext(sb);
+vm.runInContext(block + "\n__export = { evFirstObject, evEscapeControlsInStrings, evParseJson };", sb);
+const { evParseJson } = sb.__export;
+let fails = 0;
+const check = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fails++; };
+const good = '{"anchor": "var a = 1;", "replacement": "var a = 2;", "rationale": "x", "confidence": 0.8}';
+check(evParseJson(good).replacement === "var a = 2;", "a clean object parses");
+check(evParseJson("Here is the fix:\n```json\n" + good + "\n```\nDone.").confidence === 0.8, "fences and prose around the object are ignored");
+const raw = '{"anchor": "function f() {\n\treturn 1;\n}", "replacement": "function f() {\n\treturn 2;\n}", "confidence": 0.7}';
+check(evParseJson(raw) && evParseJson(raw).replacement === "function f() {\n\treturn 2;\n}", "real line breaks and tabs inside a string are read as written");
+check(evParseJson('{"anchor": "if (a) { b(\\"}\\"); }", "replacement": "x", "confidence": 1}').anchor === 'if (a) { b("}"); }', "braces and escaped quotes inside a string do not end the object");
+check(evParseJson('{"skip": "the excerpt lacks the code"} trailing {"other": 1}').skip === "the excerpt lacks the code", "the first balanced object is taken");
+check(evParseJson("") === null && evParseJson("no json here") === null && evParseJson('{"anchor": "cut off') === null && evParseJson("{anchor: 1}") === null, "an empty, truncated or non-JSON reply is null, never a guess");
+check(/EV_LAST_RAW \? " \(" \+ EV_LAST_RAW \+ "\)"/.test(src), "a model-skip row carries the head of the reply");
+console.log(fails + " failure(s)");
+process.exit(fails ? 1 : 0);

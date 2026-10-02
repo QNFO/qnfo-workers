@@ -191,14 +191,21 @@ jobs:
           echo "deploy_fail=$fail"
           exit $fail
 
+      # STATUS-THROTTLE-1 (ACTIONS-QUOTA-1, 2026-10-02): the file held only head and ts, so it carried no outcome, and
+      # it was committed on every run (127 of main's 648 commits in the 24h to 2026-10-02 09Z), each one starting a
+      # CodeQL analysis. It now records the outcome (job_status, deploy = the deploy step's outcome, targets = how many
+      # workers this run resolved) and the commit-back below batches same-outcome runs. Per-worker deploys stay in
+      # the qnfo-ops fleet_deploys ledger, and every run's copy is the uploaded artifact.
       - name: Write the ci-status artifact
         if: always()
         continue-on-error: true
         run: |
           set -uo pipefail
           mkdir -p ci-status
-          printf '{"workflow":"canonical-deploy","issue":"1406 1442 1443 1390","head":"%s","ts":"%s"}\n' \
-            "${GITHUB_SHA}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/canonical-deploy.json
+          n=0
+          if [ -f /tmp/targets.txt ]; then n=$(wc -l < /tmp/targets.txt | tr -d ' '); fi
+          printf '{"workflow":"canonical-deploy","issue":"1406 1442 1443 1390","head":"%s","ts":"%s","job_status":"%s","deploy":"%s","targets":%s}\n' \
+            "${GITHUB_SHA}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${{ job.status }}" "${{ steps.deploy.outcome }}" "${n:-0}" > ci-status/canonical-deploy.json
           cat ci-status/canonical-deploy.json
 
       - name: Upload the ci-status artifact
@@ -217,6 +224,13 @@ jobs:
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
           git config user.email "bot@qnfo.org"
+          # STATUS-THROTTLE-1: commit when job_status or deploy differs from main's copy, or when main's copy is 30 min
+          # old (a heartbeat; --ignore "" makes head and ts count). Otherwise this run's copy is the uploaded artifact.
+          git fetch -q origin main || true
+          if python3 scripts/status_unchanged.py ci-status/canonical-deploy.json --ref origin/main --ignore "" --throttle-min 30 --outcome job_status,deploy; then
+            echo "same outcome as main's copy, which is younger than 30 min - not committing (the artifact above holds this run)"
+            exit 0
+          fi
           # ARTIFACT-PUSH-CONFLICT-1: snapshot re-apply, never a rebase conflict (was: run 36760796833).
           git add ci-status/canonical-deploy.json
           bash scripts/push_artifact.sh "ci(status): canonical-deploy [skip ci]" ci-status/canonical-deploy.json || true

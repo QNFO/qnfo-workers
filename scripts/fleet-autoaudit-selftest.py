@@ -148,6 +148,29 @@ try:
 finally:
     fa.ROOT = _real_root
 
+# DRIFT-CONFIRM-DIRTY-1: the refresh still fast-forwards when this run's audit artifact is modified in the working tree and
+# main carries a newer copy of the same file; this run's copy is kept (the artifact step writes it from this run's data).
+_r = os.path.join(_tmp, "remote"); _sp.run(["git", "clone", "-q", "--bare", _o, _r], check=True)
+_c = os.path.join(_tmp, "ci"); _sp.run(["git", "clone", "-q", _r, _c], check=True)
+_p = os.path.join(_tmp, "pusher"); _sp.run(["git", "clone", "-q", _r, _p], check=True)
+for _d in (_c, _p):
+    _g(_d, "config", "user.email", "a@b"); _g(_d, "config", "user.name", "t")
+os.makedirs(os.path.join(_p, "audits")); open(os.path.join(_p, "audits", "a.json"), "w").write("v1")
+_g(_p, "add", "."); _g(_p, "commit", "-qm", "artifact v1"); _g(_p, "push", "-q", "origin", "HEAD:main")
+_g(_c, "pull", "-q", "--ff-only", "origin", "main")
+open(os.path.join(_p, "audits", "a.json"), "w").write("v2-other-run"); open(os.path.join(_p, "new", "f"), "w").write("worker 0.4.99")
+_g(_p, "add", "."); _g(_p, "commit", "-qm", "newer artifact and a worker bump"); _g(_p, "push", "-q", "origin", "HEAD:main")
+open(os.path.join(_c, "audits", "a.json"), "w").write("this-run")
+# a fresh module: the scenario tests above replace fa._refresh_repo with a stub and never put the real one back
+_fa2 = importlib.util.module_from_spec(spec); spec.loader.exec_module(_fa2)
+_fa2.ROOT = _c
+moved = _fa2._refresh_repo()
+check("refresh fast-forwards past a newer audit artifact on main while this run's artifact is modified",
+      moved and open(os.path.join(_c, "new", "f")).read() == "worker 0.4.99", moved)
+check("this run's artifact is kept after the refresh", open(os.path.join(_c, "audits", "a.json")).read() == "this-run")
+check("a refresh with nothing new returns False and keeps the artifact",
+      _fa2._refresh_repo() is False and open(os.path.join(_c, "audits", "a.json")).read() == "this-run")
+
 
 # ---------------------------------------------------------------- RATELIMIT-RETRY-1
 import io, json as _json, urllib.error as _ue, urllib.request as _ur
@@ -198,6 +221,57 @@ res, n, slept = run_gh([("err", 403, {}, b'{"message":"Resource not accessible b
 check("a non-rate-limit 403 is NOT retried (one attempt, no sleep)", "_error" in res and n == 1 and slept == [], (n, slept))
 res, n, slept = run_gh([("ok", [1, 2])])
 check("a normal success makes exactly one call", res == [1, 2] and n == 1 and slept == [], (n, slept))
+
+# RATELIMIT-FAILFAST-1: a quota that GitHub says resets after the retry budget is not slept on (was: 240 s, then fail)
+_far = {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(int(_t.time()) + 2400)}
+res, n, slept = run_gh([("err", 403, _far, RL)] * 5)
+check("quota resets beyond the budget: one attempt, no sleep, an honest error naming the reset", "_error" in res and n == 1 and slept == [] and "quota resets in" in res["_error"] and "not waiting" in res["_error"], (res, n, slept))
+res, n, slept = run_gh([("err", 403, {"Retry-After": "9999"}, RL)] * 5)
+check("a Retry-After beyond the budget is not slept on either", "_error" in res and n == 1 and slept == [], (n, slept))
+_near = {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(int(_t.time()) + 20)}
+res, n, slept = run_gh([("err", 403, _near, RL), ("ok", {"number": 52})])
+check("a reset inside the budget is still waited out and the call recovers", res == {"number": 52} and n == 2 and len(slept) == 1 and 15 <= slept[0] <= 30, (res, n, slept))
+res, n, slept = run_gh([("err", 403, {"x-ratelimit-remaining": "12", "x-ratelimit-reset": _far["x-ratelimit-reset"]}, b'{"message":"Resource not accessible by integration"}')])
+check("a non-rate-limit 403 (quota left) still fails as itself, with no quota message", "_error" in res and n == 1 and slept == [] and "quota resets" not in res["_error"] and "rate-limited" not in res["_error"], res)
+
+# APPLY-NO-REPUBLISH-1: in one fleet-autodeploy job only the --audit step refreshes the tracking issue
+check("--audit publishes the report", fa.should_publish("--audit") is True)
+check("--apply does not publish it again", fa.should_publish("--apply") is False)
+
+def run_main(argv):
+    calls = {"publish": 0, "apply": 0, "failure_events": 0}
+    saved = {k: getattr(fa, k) for k in ("run_guard", "classify", "write_audit_rows", "purge_stale", "publish_issue", "apply_ahead", "_record_publish_failure", "ROOT")}
+    saved_argv = sys.argv
+    fa.run_guard = lambda: {"scope": "subset", "ahead": [], "_guard_rc": 0}
+    fa.classify = lambda d: {"w": {"note": "SYNC"}}
+    fa.write_audit_rows = lambda rows: (1, [], "2026-10-02 09:00:00")
+    fa.purge_stale = lambda now: (0, None)
+    def _pub(body):
+        calls["publish"] += 1
+        return "updated", 52, "HTTP 403: rate limit"
+    def _apply(d):
+        calls["apply"] += 1
+        return []
+    def _rec(*a):
+        calls["failure_events"] += 1
+    fa.publish_issue, fa.apply_ahead, fa._record_publish_failure = _pub, _apply, _rec
+    fa.ROOT = tempfile.mkdtemp()
+    sys.argv = ["fleet-autoaudit.py", argv]
+    rc = None
+    try:
+        fa.main()
+    except SystemExit as e:
+        rc = e.code
+    finally:
+        for k, v in saved.items():
+            setattr(fa, k, v)
+        sys.argv = saved_argv
+    return rc, calls
+
+rc, calls = run_main("--audit")
+check("main --audit: publishes once and records the failed publish as an event", calls == {"publish": 1, "apply": 0, "failure_events": 1} and rc == 0, (rc, calls))
+rc, calls = run_main("--apply")
+check("main --apply: deploys, makes no GitHub issue call and writes no publish-failed row", calls == {"publish": 0, "apply": 1, "failure_events": 0} and rc == 0, (rc, calls))
 
 
 # a publish that fails after retries leaves a fleet-visible event, and a broken D1 can never break the audit

@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.8.2-usage-topics"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.1-error-json"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -246,6 +246,10 @@ var LLMS_TXT = [
   "- [Draft a disclosure](https://ipatent.qnfo.org/): no account; nothing is stored unless the user opts in to a private copy",
   "- [A real run and what it got wrong](https://ipatent.qnfo.org/example): unedited output, the claim-support map, and five invented facts",
   "- [Provisional patent guide](https://ipatent.qnfo.org/guide): what a provisional protects (35 U.S.C. 112(a)), what to include, drawings, fees, why not to publish before filing",
+  "- [Before you publish](https://ipatent.qnfo.org/guide/before-you-publish): US grace period vs European absolute novelty, what counts as public",
+  "- [Claims in a provisional](https://ipatent.qnfo.org/guide/claims-in-a-provisional): optional, and why the description is what secures the date",
+  "- [Drawings](https://ipatent.qnfo.org/guide/drawings): when they are required, what each figure shows, reference numerals",
+  "- [Provisional vs nonprovisional](https://ipatent.qnfo.org/guide/provisional-vs-nonprovisional): what each does, costs, and the 12-month link",
   "",
   "## What it does",
   "- Drafts field, background, summary, detailed description (numbered paragraphs), optional claims and abstract",
@@ -872,6 +876,93 @@ async function handleSuggest(env, url) {
   return json(out);
 }
 __name(handleSuggest, "handleSuggest");
+// GUIDE-PAGES-1 (3.9.0): the iPatent guide family as data, rendered by one template. Attribution, dates, licence, share
+// card, canonical and structured data come from renderGuidePage, never from a page entry, so an automated edit cannot
+// invent an author, an ORCID, a date or a copyright line (2026-10-02: a code-agent draft did all four and replaced
+// /guide; it was stopped before merge). Every legal statement cites its source; when unsure, a page says less.
+// routes.test.mjs (deploy-gate) fails CI if any page here, /guide, /example or the sitemap stops answering 200, or if a
+// page carries any ORCID but the author's.
+var GUIDE_AUTHOR = { name: "Rowan Brad Quni-Gudzinas", orcid: "0009-0002-4317-5604" };
+var GUIDE_PAGES = [
+  { slug: "before-you-publish", title: "Before you publish: grace periods, pitches and preprints", updated: "2026-10-02",
+    description: "Why a blog post, talk, preprint or pitch can cost you a patent: the US one-year grace period, Europe's absolute novelty rule, and what to file first.",
+    sections: [
+      ["The short answer", "<p>File first, then talk. A provisional application costs little and fixes a filing date; anything you make public before that date can be used against you, and outside the US it usually cannot be undone.</p>"],
+      ["The United States: a one-year grace period, with limits", "<p>Your own public disclosure made one year or less before your effective filing date is not prior art against you (35 U.S.C. 102(b)(1)(A)). Relying on it is still risky: you must be able to prove the disclosure was yours, a third party may build on what you published and file first, and the grace period does not carry over to most other countries.</p>"],
+      ["Europe and most other countries: absolute novelty", "<p>Under the European Patent Convention, anything made available to the public before the filing date is prior art (Art. 54 EPC), including your own talk, preprint, demo or post. The exceptions are narrow: an evident abuse against you, or display at an officially recognised international exhibition, each within six months (Art. 55 EPC). A few countries offer limited grace periods with conditions; check before relying on one.</p>"],
+      ["What counts as making it public", "<ul><li>a preprint, paper, thesis, blog post or social post;</li><li>a conference talk, poster or public demo;</li><li>a crowdfunding page, a product listing or a sale. In the US an offer for sale can bar a patent even when the sale is confidential (<i>Helsinn v. Teva</i>, U.S. 2019).</li></ul><p>A pitch to a small group under a written confidentiality agreement is generally not a public disclosure. A pitch deck sent around freely, or posted, may be.</p>"],
+      ["What to file first", "<p>A provisional that describes the invention fully, with drawings, before any disclosure. It secures priority only for what it describes (35 U.S.C. 112(a)), so a thin one written in a hurry protects little. Within twelve months, file the nonprovisional or an international (PCT) application that claims its benefit.</p>"]
+    ] },
+  { slug: "claims-in-a-provisional", title: "Claims in a provisional: optional, and still useful", updated: "2026-10-02",
+    description: "A US provisional needs no claims. Why drafting some anyway helps, and why what the description supports matters more than the claims themselves.",
+    sections: [
+      ["Not required", "<p>A provisional application does not need claims (35 U.S.C. 111(b)(2)). It is never examined, so nothing in it is allowed or rejected.</p>"],
+      ["What actually secures the date", "<p>A later claim gets the provisional's filing date only if the provisional describes and enables what that claim covers (35 U.S.C. 119(e)(1), which applies the requirements of 112(a); see <i>New Railhead Mfg. v. Vermeer Mfg.</i>, Fed. Cir. 2002). The description is what counts, not the claims.</p>"],
+      ["Why draft claims anyway", "<p>A draft claim set is a checklist. Each element of each claim names something the description must explain well enough for a skilled person to make and use it. If you cannot point to the paragraph that supports an element, the provisional does not yet protect it.</p><p>That is what iPatent's support map does: it matches every claim element to the numbered paragraph that shares its terms, and flags any element, or any number in a claim, that the description never supports. <a href=\"/example\">See it catch an invented torque range and material.</a></p>"],
+      ["Write broad and narrow", "<p>Describe the general idea and every variant you may later want to claim: other materials, ranges, configurations and orders of steps. A variant that is not described cannot be added later with the original date.</p>"]
+    ] },
+  { slug: "drawings", title: "Drawings in a provisional patent application", updated: "2026-10-02",
+    description: "When a provisional needs drawings, what each figure should show, and how reference numerals tie figures to the description.",
+    sections: [
+      ["When drawings are required", "<p>An application must include drawings wherever they are necessary to understand the invention (35 U.S.C. 113). For a mechanical or electrical invention that is almost always. A method can be shown as a flowchart.</p>"],
+      ["What each figure should show", "<ul><li>the whole invention, and each part that matters, from the views a reader needs (perspective, side, section, exploded);</li><li>every embodiment and alternative you describe, not only the preferred one;</li><li>for methods and software, a flowchart of the steps and a block diagram of the components.</li></ul>"],
+      ["Reference numerals", "<p>Give each part a number and use the same number for the same part in every figure and in the text (\"the pivot pin (14)\"). Add a short description of each figure (\"FIG. 2 is a side view of the hinge folded flat\"). This is how the drawings support the written description.</p>"],
+      ["Format", "<p>Use clear black-and-white line drawings. Photographs are accepted only in narrow cases, where they are the only practical way to show the invention (37 CFR 1.84(b)). The formal drawing rules (37 CFR 1.84) govern the nonprovisional; preparing the provisional's figures to that standard now saves rework later.</p>"]
+    ] },
+  { slug: "provisional-vs-nonprovisional", title: "Provisional vs nonprovisional patent applications", updated: "2026-10-02",
+    description: "What each US application does, what it costs, the 12-month link between them, and which to file first.",
+    sections: [
+      ["Provisional", "<ul><li>gives an effective filing date for what it describes;</li><li>needs no claims, oath or declaration, and is never examined (35 U.S.C. 111(b));</li><li>lapses twelve months after filing and cannot itself become a patent;</li><li>filing fee $325, $130 for small entities, $65 for micro entities (USPTO fee schedule since 19 January 2025).</li></ul>"],
+      ["Nonprovisional", "<ul><li>is examined and can become a patent;</li><li>needs claims, a full specification, drawings where necessary and an inventor's oath or declaration (35 U.S.C. 111(a), 115);</li><li>costs several times as much in USPTO fees (filing, search and examination), before any attorney's fees: see the <a href=\"https://www.uspto.gov/learning-and-resources/fees-and-payment/uspto-fee-schedule\" rel=\"noopener\">USPTO fee schedule</a>.</li></ul>"],
+      ["The link between them", "<p>To keep the provisional's date, file a nonprovisional (or an international PCT application) that claims its benefit within twelve months (35 U.S.C. 119(e)). If that deadline is missed unintentionally, the USPTO can restore the right of priority on a petition filed within fourteen months (37 CFR 1.78(b)). Plan on twelve.</p>"],
+      ["Which to file first", "<p>A provisional, when you need a date quickly, are still developing the invention, or need time to judge its commercial value, provided it describes the invention fully. File a nonprovisional directly when the invention is settled and you want examination to start.</p>"]
+    ] },
+  // GUIDE-PAGES-APPEND: keep this line unchanged; a new page is one object inserted above it, with sources for every legal statement.
+];
+function renderGuidePage(page) {
+  const esc = escapeHtml;
+  const url = CANONICAL_ORIGIN + "/guide/" + page.slug;
+  const ld = { "@context": "https://schema.org", "@type": "Article", headline: page.title, url: url, dateModified: page.updated, inLanguage: "en",
+    author: { "@type": "Person", name: GUIDE_AUTHOR.name, sameAs: ["https://orcid.org/" + GUIDE_AUTHOR.orcid] },
+    publisher: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org" }, isPartOf: { "@type": "WebSite", name: "iPatent", url: CANONICAL_ORIGIN + "/" } };
+  const others = GUIDE_PAGES.filter((p) => p.slug !== page.slug).map((p) => '<li><a href="/guide/' + p.slug + '">' + esc(p.title) + "</a></li>").join("");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc(page.title)} \u00b7 iPatent</title>
+<meta name="description" content="${esc(page.description)}">
+<link rel="canonical" href="${url}">
+<meta name="author" content="${esc(GUIDE_AUTHOR.name)}">
+<meta property="og:type" content="article"><meta property="og:site_name" content="QNFO">
+<meta property="og:title" content="${esc(page.title)}"><meta property="og:description" content="${esc(page.description)}">
+<meta property="og:url" content="${url}"><meta property="og:image" content="${CANONICAL_ORIGIN}/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}<\/script>
+<style>
+  :root{--paper:#f6f3ea;--ink:#16181d;--ink-soft:#4a4d55;--green:#0e5c3f;--amber:#a97b1d;--line:#d8d2c2;--white:#fffdf8}
+  *{box-sizing:border-box} body{margin:0;font-family:Georgia,'Fraunces',serif;background:var(--paper);color:var(--ink);line-height:1.7}
+  .wrap{max-width:740px;margin:0 auto;padding:0 18px 60px} header{display:flex;justify-content:space-between;gap:10px;padding:20px 0;border-bottom:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:12px}
+  a{color:var(--green)} h1{font-size:clamp(28px,6vw,40px);line-height:1.12;margin:36px 0 12px} h2{font-size:22px;margin:34px 0 6px}
+  .lede{font-size:18px;color:var(--ink-soft)} li{margin:6px 0} .mono{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
+  .cta{display:inline-block;margin:10px 10px 0 0;background:var(--green);color:var(--white);text-decoration:none;padding:12px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em}
+  footer{border-top:1px solid var(--line);margin-top:48px;padding-top:16px}
+</style>
+</head>
+<body><div class="wrap">
+<header><a href="/">iPatent \u00b7 ipatent.qnfo.org</a><span>GUIDE \u00b7 UPDATED ${esc(page.updated)}</span></header>
+<h1>${esc(page.title)}</h1>
+<p class="lede">${esc(page.description)}</p>
+${page.sections.map(([h, body]) => "<h2>" + esc(h) + "</h2>" + body).join("\n")}
+<p><a class="cta" href="/#draft">Draft a disclosure, free</a><a class="cta" style="background:var(--white);color:var(--green);border:1px solid var(--green)" href="/example">See a real run</a></p>
+<h2>More guides</h2><ul><li><a href="/guide">What a provisional protects, and how to draft one</a></li>${others}</ul>
+<footer><p class="mono">By ${esc(GUIDE_AUTHOR.name)} (<a href="https://orcid.org/${GUIDE_AUTHOR.orcid}">ORCID</a>) at <a href="https://qnfo.org">QNFO</a>. General information about US law and USPTO practice as of ${esc(page.updated)}, not legal advice: have a registered patent attorney or agent review your filing. Licensed under <a href="https://qnfo.org/legal">QNFO-ULA</a>. <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-guide">Work with me</a> \u00b7 <a href="/#subscribe">Get the benchmark results</a></p>
+<p class="mono">Share: ${shareLinks(url + "?utm_source=share&utm_medium=social&utm_campaign=ipatent-guide", page.title)}</p></footer>
+</div></body></html>`;
+}
+__name(renderGuidePage, "renderGuidePage");
+
 var GUIDE_UPDATED = "2026-10-02";
 var GUIDE_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -971,6 +1062,9 @@ var GUIDE_HTML = `<!DOCTYPE html>
   <li><b>Inventors are people.</b> US law names only natural persons as inventors (<i>Thaler v. Vidal</i>, Fed. Cir. 2022). The invention has to be yours; the tool only helps you write it down.</li>
 </ul>
 <a class="cta" href="/#draft">Draft a disclosure</a>
+
+<h2><span class="n">07</span>More guides</h2>
+<ul>${GUIDE_PAGES.map((p) => '<li><a href="/guide/' + p.slug + '">' + escapeHtml(p.title) + "</a></li>").join("")}</ul>
 
 <footer>
 iPatent is a free, open experiment from <a href="https://qnfo.org">QNFO</a> by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID</a>). <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-guide">Work with me</a> · <a href="/example">See a real run</a>. Source code is public at <a href="https://github.com/QNFO/qnfo-workers/tree/main/qnfo-ipatent">github.com/QNFO/qnfo-workers</a>. This guide is general information, not legal advice, and reflects US law and USPTO fees as of 2 October 2026.
@@ -1658,6 +1752,20 @@ var LANDING_HTML = `<!DOCTYPE html>
     var el = document.getElementById(id);
     if(el) el.addEventListener('input', function(){ if(guideTimer) clearTimeout(guideTimer); guideTimer = setTimeout(loadGuidance, 400); });
   });
+  // The friendly failure: the form keeps everything the visitor typed, and Retry resubmits the same input.
+  function showRetry(){
+    status.className = 'status err';
+    status.textContent = 'The drafting model did not answer in time. Your text is still here; try again in a minute. ';
+    var rb = document.createElement('button');
+    rb.type = 'button';
+    rb.id = 'retryBtn';
+    rb.textContent = 'Retry';
+    rb.style.cssText = 'margin-left:6px;padding:2px 10px;font:inherit;cursor:pointer';
+    rb.addEventListener('click', function(){
+      if(form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', {cancelable:true}));
+    });
+    status.appendChild(rb);
+  }
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     btn.disabled = true;
@@ -1678,10 +1786,18 @@ var LANDING_HTML = `<!DOCTYPE html>
           save: !!(document.getElementById('keepCopy') && document.getElementById('keepCopy').checked)
         })
       });
-      const data = await resp.json();
-      if(!resp.ok){
-        status.className = 'status err';
-        status.textContent = 'Error: ' + (data.error || resp.status);
+      // IPATENT-ERROR-JSON-1: an edge 502/504 arrives as text/plain ('upstream request failed'); read text first and parse
+      // JSON only when the server says it is JSON, so a slow model never surfaces as 'Unexpected token u'.
+      const raw = await resp.text();
+      let data = null;
+      if(/json/i.test(resp.headers.get('content-type') || '')){ try{ data = JSON.parse(raw); }catch(_){ data = null; } }
+      if(!resp.ok || !data){
+        if(resp.status >= 400 && resp.status < 500 && data && data.error){
+          status.className = 'status err';
+          status.textContent = 'Error: ' + data.error;
+        } else {
+          showRetry();
+        }
         return;
       }
       result.style.display = 'block';
@@ -1703,8 +1819,7 @@ var LANDING_HTML = `<!DOCTYPE html>
         : 'Draft generated \xB7 not stored \u2014 download or print it now';
       document.getElementById('result').scrollIntoView({behavior:'smooth'});
     }catch(err){
-      status.className = 'status err';
-      status.textContent = 'Network error: ' + err.message;
+      showRetry();
     }finally{
       btn.disabled = false;
       btn.textContent = 'Draft Disclosure';
@@ -1788,6 +1903,13 @@ var qnfo_ipatent_default = {
         const bin = Uint8Array.from(atob(OG_JPEG_B64), (c) => c.charCodeAt(0));
         return new Response(bin, { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=86400" } });
       }
+      if (path.startsWith("/guide/") && path.length > 7 && isRead) {
+        const gslug = path.slice(7).replace(/\/+$/, "");
+        const gpage = GUIDE_PAGES.find((x) => x.slug === gslug);
+        if (!gpage) return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+        if (request.method === "GET") ctx?.waitUntil?.(countPageView(env, "/guide/" + gslug, pageSource(request)));
+        return html(renderGuidePage(gpage));
+      }
       if ((path === "/guide" || path === "/guide/") && isRead) {
         if (request.method === "GET") ctx?.waitUntil?.(countPageView(env, "/guide", pageSource(request)));
         return html(GUIDE_HTML);
@@ -1800,7 +1922,7 @@ var qnfo_ipatent_default = {
         return new Response("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /d/\nSitemap: " + CANONICAL_ORIGIN + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       }
       if (path === "/sitemap.xml" && isRead) {
-        const urls = ["/", "/guide", "/example"].map((p) => "<url><loc>" + CANONICAL_ORIGIN + p + "</loc><lastmod>" + GUIDE_UPDATED + "</lastmod></url>").join("");
+        const urls = ["/", "/guide", "/example"].concat(GUIDE_PAGES.map((x) => "/guide/" + x.slug)).map((p) => "<url><loc>" + CANONICAL_ORIGIN + p + "</loc><lastmod>" + GUIDE_UPDATED + "</lastmod></url>").join("");
         return new Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls + "</urlset>", { headers: { "Content-Type": "application/xml; charset=utf-8" } });
       }
       if (path.startsWith("/d/") && isRead) {

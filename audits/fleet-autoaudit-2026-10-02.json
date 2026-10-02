@@ -1,25 +1,8 @@
 {
-  "audited_at": "2026-10-02 09:26:32",
+  "audited_at": "2026-10-02 10:46:04",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [
-        "qnfo-fleet-control"
-      ],
-      "waited_for": [
-        "qnfo-fleet-control"
-      ]
-    },
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-deploy-guard"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "qnfo-fleet-control"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -405,7 +388,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 40,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -429,7 +412,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.2.0-vision-toolleak",
+        "version": "4.3.1-gcal-mcp",
         "worker": "personal-api"
       },
       {
@@ -449,7 +432,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.30.1-fleet-ctl",
+        "version": "5.31.0-aig-embed",
         "worker": "qnfo-ai"
       },
       {
@@ -479,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.18.2-utf8-github",
+        "version": "1.18.4-worker-health-auth",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -489,7 +472,7 @@
       },
       {
         "dir": "qnfo-containers-pilot",
-        "version": "1.0.10-props-caller",
+        "version": "1.0.11-command-exit-honest",
         "worker": "qnfo-containers-pilot"
       },
       {
@@ -503,13 +486,18 @@
         "worker": "qnfo-email"
       },
       {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.104-reach-policy-no-form",
+        "worker": "qnfo-fleet-control"
+      },
+      {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.18.5-ask-truncated-json",
+        "version": "1.18.8-pageviews-human",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.8.4-ask-model",
+        "version": "3.8.6-reach-layer",
         "worker": "qnfo-gateway"
       },
       {
@@ -524,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.8.1-utf8-redeploy",
+        "version": "3.9.0-guide-pages",
         "worker": "qnfo-ipatent"
       },
       {
@@ -549,7 +537,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.36-utf8-deploy",
+        "version": "2.38.37-core-prompt",
         "worker": "qnfo-ops"
       },
       {
@@ -584,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.30-cap-epoch",
+        "version": "0.7.31-sent-text",
         "worker": "qnfo-social"
       },
       {
@@ -606,10 +594,6 @@
         "dir": "radar-hub",
         "version": "1.1.3",
         "worker": "radar-hub"
-      },
-      {
-        "version": "0.4.97-budget-live",
-        "worker": "qnfo-fleet-control"
       }
     ]
   },
@@ -816,9 +800,9 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.2.0-vision-toolleak",
+      "before": "4.3.1-gcal-mcp",
       "http": 200,
-      "live": "4.2.0-vision-toolleak",
+      "live": "4.3.1-gcal-mcp",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -896,9 +880,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.30.1-fleet-ctl",
+      "before": "5.31.0-aig-embed",
       "http": 200,
-      "live": "5.30.1-fleet-ctl",
+      "live": "5.31.0-aig-embed",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1032,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.18.2-utf8-github",
+      "before": "1.18.4-worker-health-auth",
       "http": 200,
-      "live": "1.18.2-utf8-github",
+      "live": "1.18.4-worker-health-auth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1056,9 +1040,9 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.10-props-caller",
+      "before": "1.0.11-command-exit-honest",
       "http": 200,
-      "live": "1.0.10-props-caller",
+      "live": "1.0.11-command-exit-honest",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-containers-pilot"
@@ -1160,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.97-budget-live",
+      "before": "0.4.104-reach-policy-no-form",
       "http": 200,
-      "live": "0.4.97-budget-live",
+      "live": "0.4.104-reach-policy-no-form",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.18.5-ask-truncated-json",
+      "before": "1.18.8-pageviews-human",
       "http": 200,
-      "live": "1.18.5-ask-truncated-json",
+      "live": "1.18.8-pageviews-human",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1192,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.8.4-ask-model",
+      "before": "3.8.6-reach-layer",
       "http": 200,
-      "live": "3.8.4-ask-model",
+      "live": "3.8.6-reach-layer",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1248,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.8.1-utf8-redeploy",
+      "before": "3.9.0-guide-pages",
       "http": 200,
-      "live": "3.8.1-utf8-redeploy",
+      "live": "3.9.0-guide-pages",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1296,9 +1280,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.36-utf8-deploy",
+      "before": "2.38.37-core-prompt",
       "http": 200,
-      "live": "2.38.36-utf8-deploy",
+      "live": "2.38.37-core-prompt",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1432,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.30-cap-epoch",
+      "before": "0.7.31-sent-text",
       "http": 200,
-      "live": "0.7.30-cap-epoch",
+      "live": "0.7.31-sent-text",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"

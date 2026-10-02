@@ -6,14 +6,14 @@
   "pre_rc": "ok",
   "restore_exit": "",
   "gate_need_restore": "false",
-  "gate_reason": "newest container event is container.exec at 2026-10-02T08:19:25.792Z: container healthy, nothing to restore",
+  "gate_reason": "newest container event is container.exec at 2026-10-02T10:17:43.788Z: container healthy, nothing to restore",
   "settings_readback_rc": "containers-null-at-settings-advisory",
   "probe_rc": "health-ok-no-pilot-token",
   "verdict": "AMBER",
-  "head": "8d2587dd47d5cec0359295aa755bc6fc97e322d3",
-  "ts": "2026-10-02T08:31:08Z",
+  "head": "8c78f2085634979f41c301ef9b4d594f4e3bf2e0",
+  "ts": "2026-10-02T10:54:34Z",
   "pre_settings": "{\n  \"success\": true,\n  \"containers\": null,\n  \"bindings\": [\n    \"AUDIT\",\n    \"PILOT_TOKEN\",\n    \"SHELL_CONTAINER\"\n  ],\n  \"compatibility_date\": \"2026-08-01\",\n  \"compatibility_flags\": [\n    \"nodejs_compat\"\n  ]\n}\n",
   "restore_log": "UNREADABLE: [Errno 2] No such file or directory: '/tmp/restore.log'",
   "post_settings": "{\n  \"containers\": null,\n  \"bindings\": [\n    \"AUDIT\",\n    \"PILOT_TOKEN\",\n    \"SHELL_CONTAINER\"\n  ]\n}\n",
-  "health": "{\n  \"ok\": true,\n  \"worker\": \"qnfo-containers-pilot\",\n  \"version\": \"1.0.10-props-caller\",\n  \"capabilities\": [\n    \"bash\",\n    \"python3.12\",\n    \"node22\",\n    \"npm\",\n    \"pip\",\n    \"git\",\n    \"ripgrep\",\n    \"workspace-fs\",\n    \"git-clone\",\n    \"full-shell\"\n  ],\n  \"limitations\": [\n    \"command paths only via an internal service binding (qnfo-ops bearer, or a qnfo-* caller authenticated by binding props)\",\n    \"PILOT-RATE-LIMIT-1: 429 above the limits below\",\n    \"one shared container instance\",\n    \"stdout/stderr capped at 131072 bytes\"\n  ],\n  \"limits\": {\n    \"per_minute\": 60,\n    \"per_hour\": 600,\n    \"inflight\": 8\n  },\n  \"public_exec\": false\n}"
+  "health": "{\n  \"ok\": true,\n  \"worker\": \"qnfo-containers-pilot\",\n  \"version\": \"1.0.11-command-exit-honest\",\n  \"capabilities\": [\n    \"bash\",\n    \"python3.12\",\n    \"node22\",\n    \"npm\",\n    \"pip\",\n    \"git\",\n    \"ripgrep\",\n    \"workspace-fs\",\n    \"git-clone\",\n    \"full-shell\"\n  ],\n  \"limitations\": [\n    \"command paths only via an internal service binding (qnfo-ops bearer, or a qnfo-* caller authenticated by binding props)\",\n    \"PILOT-RATE-LIMIT-1: 429 above the limits below\",\n    \"one shared container instance\",\n    \"stdout/stderr capped at 131072 bytes\"\n  ],\n  \"limits\": {\n    \"per_minute\": 60,\n    \"per_hour\": 600,\n    \"inflight\": 8\n  },\n  \"public_exec\": false\n}"
 }

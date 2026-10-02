@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.36-utf8-deploy";
+var VERSION = "2.38.39-secret-change-watch";
 // ---- UTF8-DEPLOY-1:BEGIN (2.38.36, 2026-10-02, pillar core) ----
 // The GitHub contents API returns base64 of the file's UTF-8 bytes. atob() alone gives one character per BYTE
 // (Latin-1), and fetch() then encodes that string as UTF-8 again, so every non-ASCII character in a worker was
@@ -42,6 +42,40 @@ function b64Utf8(b64) {
   return new TextDecoder("utf-8").decode(u);
 }
 // ---- UTF8-DEPLOY-1:END ----
+// ---- CRON-APPLY-PARSE-1:BEGIN (2.38.38, 2026-10-02, pillar core) ----
+// The canonical deploy found the cron list by searching for the word "crons": its first occurrence anywhere in the
+// file, comments included. qnfo-cloud-ops ("returns 21 crons"), qnfo-fleet-dashboard and radar-hub ("Same count of
+// crons") mention the word in a comment above [triggers], so the parse read the next "[...]" (a section header such as
+// [triggers]), found no quoted strings, logged "wrangler.toml declares no crons" and never applied their schedules:
+// radar-hub kept "0 5 * * 1" (Sunday in Cloudflare's numbering) after its wrangler.toml moved the events radar to
+// "0 5 * * 2" (#403). Read the `crons = [...]` assignment itself, on a line of its own, inside [triggers]; a comment
+// inside a multi-line array is skipped. Returns null when the file declares no crons key (nothing to apply), [] for an
+// explicit empty list.
+function tomlDeclaredCrons(wt) {
+  var lines = String(wt || "").split(/\r?\n/);
+  var section = "";
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].replace(/^\s+/, "");
+    if (line.charAt(0) === "#") continue;
+    var sec = /^\[\[?([^\]]+)\]\]?\s*(#.*)?$/.exec(line);
+    if (sec) { section = sec[1].trim(); continue; }
+    if (section !== "triggers") continue;
+    var m = /^crons\s*=\s*\[(.*)$/.exec(line);
+    if (!m) continue;
+    var body = m[1];
+    var j = i;
+    while (body.indexOf("]") < 0 && j + 1 < lines.length) { j++; body += "\n" + lines[j]; }
+    var close = body.indexOf("]");
+    if (close < 0) return null;
+    var seg = body.slice(0, close).split("\n").map(function (l) { return l.replace(/#.*$/, ""); }).join("\n");
+    var out = [];
+    var rx = /"([^"]*)"|'([^']*)'/g, q;
+    while ((q = rx.exec(seg)) !== null) { var v = q[1] != null ? q[1] : q[2]; if (v) out.push(v); }
+    return out;
+  }
+  return null;
+}
+// ---- CRON-APPLY-PARSE-1:END ----
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -806,7 +840,8 @@ var OPS_SYSTEM_PROMPT = [
   "11. SERVER-SIDE-EXECUTION GUARANTEE (binding): the client you serve may be a mobile/Android LLM client (e.g. ChatBox Android) with NO native ability to run code, open files, execute shell commands, or invoke tools on-device - ALL code and tool calls MUST execute server-side on Cloudflare, never on the client device. You are the SOLE executor of every code/tool operation. NEVER emit code, shell commands, SQL, or tool-call syntax FOR the client to run locally, and NEVER ask the user to run/paste/open/install anything on their device (the client cannot do it). For every request involving compute, data, files, web, mail, fleet, or repos, execute it YOURSELF server-side via run_code / ops_d1_query / workspace_* / r2_* / web_fetch / web_search / email_* / fleet_status / github_* and return the COMPLETED result with evidence.",
   "12. OPS-SETTINGS-IMMUTABLE-1 (binding systemwide, 2026-09-09): this endpoint uses canonical settings that are IMMUTABLE across every client (DeepChat, ChatBox, SannaBot): context window 1048576, max output 393216, tool-loop soft budget 300s, Workflow step timeout 15 minutes, CPU ceiling 300s. They MUST NEVER be lowered by any agent, session, process, or env override. The ops-settings-guard.py drift gate enforces them every 30 min; long or CPU-heavy work goes through the durable async path (x-ops-async:1 / POST /v1/jobs), never by reducing these ceilings. Report drift; do not change settings.",
   "13. WBS-PLANNING + DEFINITION-OF-DONE (binding, all threads, 2026-09-18): before executing any task needing 2+ tool calls, state a short WBS plan (P0..Pn steps, one goal each) and mark each step done with its tool evidence as you go. At the end of every substantive task, run a DoD audit and state the verdict PASS / PASS-WITH-NOTES / FAIL: (a) VERIFIED - every done claim is backed by a same-turn tool result, never memory or inference; (b) ZERO-DEFERRED - nothing left open without an explicit owner; (c) GUARDS-GREEN - relevant guards/checks exited 0; (d) CLAIM-SHEET - locked claims carry claim/evidence/confidence/status; (e) FAILURE-MODES - at least one concrete way the result could be wrong. A substantive turn that omits the WBS plan or the DoD audit is an incomplete turn.",
-  "14. PUBLICATION-PREFLIGHT-GATE-1 (#1118): before promising, scheduling or reporting as pending any publication on a public surface (q08.org pieces, feeds), read the latest result with ops_d1_query db=audit: SELECT ts, status, text FROM cloud_ops_events WHERE kind = 'publication_preflight' ORDER BY ts DESC LIMIT 1 (qnfo-fleet-control runs it hourly: health served by the surface worker, JSON listing not the fallback homepage, real RSS/Atom feed). Promise the publication only if status=ok and ts is under 2h old. Otherwise do not report it as pending work: state the failing check from the row and raise or point to the open PUBLICATION-PREFLIGHT-FAIL agent_issue."
+  "14. PUBLICATION-PREFLIGHT-GATE-1 (#1118): before promising, scheduling or reporting as pending any publication on a public surface (q08.org pieces, feeds), read the latest result with ops_d1_query db=audit: SELECT ts, status, text FROM cloud_ops_events WHERE kind = 'publication_preflight' ORDER BY ts DESC LIMIT 1 (qnfo-fleet-control runs it hourly: health served by the surface worker, JSON listing not the fallback homepage, real RSS/Atom feed). Promise the publication only if status=ok and ts is under 2h old. Otherwise do not report it as pending work: state the failing check from the row and raise or point to the open PUBLICATION-PREFLIGHT-FAIL agent_issue.",
+  "15. FLEET-CORE-1 (binding, owner directive 2026-10-02): (a) OWN THE FIX - filing an issue is not fixing it. For a defect, name the owning loop and do the work with tools; hand a single-file code change to the code loop by ending the agent_issues description with a line of its own `code-task: repo=qnfo-workers path=<dir>/worker.js`. Close an issue only with a live measurement in issue_triage.close_evidence, never as wontfix to shrink the backlog. (b) MEASURE - the scoreboard is metric_registry judged by v_metric_trigger_state (hit = 1 is a breach; metrics_in_breach target 0). Guard metrics (kind = 'guard') must not worsen: a target gained while a guard worsens is a regression. (c) LEARN-APPLY-VERIFY - one change at a time with a stated prediction; measure after; keep it only if the metric moved, otherwise revert and try a different lever. (d) HARD LIMITS - never raise a budget cap, delete a failing verification row, weaken a guard or probe, or delete data that has no backup; when a step would, stop that step, record the exact blocker in agent_issues, and continue with other work. (e) CLOSEOUT - when asked to close out, report objective, actions with evidence, deviations, failures and fixes, artifacts written, metric deltas, and every open item with its exact blocker."
 ].join(String.fromCharCode(10));
 var OPS_TOOLS = [
   { name: "fleet_status", description: "Probe /health of the internal fleet services via service bindings (qnfo-lifecycle, qnfo-email, qnfo-email-orchestrator, qnfo-paper-indexer, qnfo-kaizen, qnfo-gateway, qnfo-archive, qnfo-ai, qnfo-ai-search, qnfo-memory-mcp, qnfo-skill-sync, qnfo-backlog-exec). Returns ok/http/version per service.", parameters: { type: "object", properties: {}, additionalProperties: false } },
@@ -5530,6 +5565,84 @@ __name222(cfAnalytics, "cfAnalytics");
 __name2222(cfAnalytics, "cfAnalytics");
 __name22222(cfAnalytics, "cfAnalytics");
 __name222222(cfAnalytics, "cfAnalytics");
+// SECRET-CHANGE-WATCH-1 (2026-10-02): a worker secret PUT or delete creates a Cloudflare version annotated
+// workers/triggered_by = "secret", but nothing in the fleet watched for it. On 2026-10-01 07:32-07:45Z nine such versions
+// rotated qnfo-ops's keys (#1676, raced by concurrent sessions, #1701) with no ledger row, deploy-guard read them as
+// covered by nearby code deploys, and the owner's clients were left on the old key until ChatBox got 401 a day later.
+// Every */30 tick this lists the account's scripts, reads each one's recent versions, records every secret-triggered
+// version once in cloud_ops_events (kind secret-change; worker, version number and time only, never a value), and opens
+// one agent_issues row per worker per day whose definition of done is that every consumer of the changed secret works
+// with the current value. It writes a secret-watch-tick heartbeat that WATCHMAKER_OPS reads.
+async function secretChangeWatch(env, lookbackMs) {
+  if (!env.CF_API_TOKEN || !env.QNFO_AUDIT) return { ran: false, reason: "CF_API_TOKEN or QNFO_AUDIT missing" };
+  const H = { "Authorization": "Bearer " + env.CF_API_TOKEN };
+  const base = "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts";
+  const since = Date.now() - (lookbackMs || 3 * 3600e3);
+  const out = { ran: true, scripts: 0, read_errors: 0, changes: 0, new_events: 0, issues: [] };
+  let names = [];
+  try {
+    const lr = await fetch(base, { headers: H });
+    const lj = await lr.json().catch(function() { return {}; });
+    names = (lj && lj.result || []).map(function(x) { return x && x.id; }).filter(Boolean).slice(0, 200);
+  } catch (e) {
+    out.error = "script list failed: " + String(e && e.message || e).slice(0, 160);
+  }
+  out.scripts = names.length;
+  const found = {};
+  for (let i = 0; i < names.length; i += 8) {
+    await Promise.all(names.slice(i, i + 8).map(async function(name) {
+      try {
+        const vr = await fetch(base + "/" + encodeURIComponent(name) + "/versions?per_page=10", { headers: H });
+        if (!vr.ok) { out.read_errors++; return; }
+        const vj = await vr.json().catch(function() { return {}; });
+        const items = vj && vj.result && (Array.isArray(vj.result) ? vj.result : vj.result.items) || [];
+        for (const v of items) {
+          const md = v && v.metadata || {}, an = v && v.annotations || {};
+          const at = Date.parse(md.created_on || "");
+          if (String(an["workers/triggered_by"] || "").toLowerCase() !== "secret" || !(at >= since)) continue;
+          (found[name] = found[name] || []).push({ number: v.number, created_on: md.created_on, source: md.source || null });
+        }
+      } catch (e) {
+        out.read_errors++;
+      }
+    }));
+  }
+  for (const name of Object.keys(found)) {
+    const vs = found[name].sort(function(a, b) { return String(a.created_on).localeCompare(String(b.created_on)); });
+    out.changes += vs.length;
+    let fresh = 0;
+    for (const v of vs) {
+      try {
+        const r = await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'secret-change', ?3, ?4, 'qnfo-ops', 'observed')").bind("secret-change-" + name + "-" + v.number, String(v.created_on), name + " secrets changed (version " + v.number + ")", JSON.stringify({ worker: name, version: v.number, created_on: v.created_on, source: v.source })).run();
+        if (r && r.meta && r.meta.changes) { out.new_events++; fresh++; }
+      } catch (e) { }
+    }
+    // One issue per worker per change day (the day of the first change, not of the scan), filed on first sight only.
+    if (!fresh) continue;
+    const title = "SECRET-CHANGE-OBSERVED: " + name + " " + String(vs[0].created_on).slice(0, 10);
+    try {
+      const open = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 LIMIT 1").bind(title).first();
+      if (open) continue;
+      let secretNames = [];
+      try {
+        const sr = await fetch(base + "/" + encodeURIComponent(name) + "/secrets", { headers: H });
+        const sj = await sr.json().catch(function() { return {}; });
+        secretNames = (sj && sj.result || []).map(function(x) { return x && x.name; }).filter(Boolean);
+      } catch (e) { }
+      const desc = "SECRET-CHANGE-WATCH-1 (qnfo-ops " + VERSION + "): Cloudflare recorded " + vs.length + " secret-triggered version(s) of " + name + " between " + vs[0].created_on + " and " + vs[vs.length - 1].created_on + " (versions " + vs.map(function(v) { return v.number; }).join(", ") + "). Current secret names: " + (secretNames.join(", ") || "unreadable") + ". Values are never read. Definition of done: every consumer of each changed secret (workers holding a copy, GitHub Actions secrets, the owner's clients; see audits/2026-10-01-credential-rotation-runbook.md) works with the current value, a rotated-out value is not re-accepted, and the evidence is in issue_triage.close_evidence. Next time take the secret-lock first (CLAUDE.md, #1701).";
+      const now = Date.now();
+      await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?1, ?2, 'qnfo-ops', 'security', 'medium', 'open', ?3, ?4, ?4)").bind(title, desc.slice(0, 4000), "qnfo-ops/" + VERSION, now).run();
+      out.issues.push(title);
+    } catch (e) {
+      out.issue_error = String(e && e.message || e).slice(0, 160);
+    }
+  }
+  try {
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'secret-watch-tick', ?3, ?4, 'qnfo-ops', ?5)").bind(randId("evt-"), iso(), "secret watch: " + out.scripts + " scripts, " + out.changes + " secret change(s)", JSON.stringify(out).slice(0, 1500), out.scripts > 0 ? "ok" : "error").run();
+  } catch (e) { }
+  return out;
+}
+__name(secretChangeWatch, "secretChangeWatch");
 async function backlogStatus(env) {
   if (!env.BACKLOG) return { ok: false, error: "backlog binding missing" };
   const h = await probeService(env, { binding: "BACKLOG", name: "qnfo-backlog-exec", timeoutMs: 15e3 }, "/health");
@@ -6402,15 +6515,8 @@ async function opsDeploy(env, args) {
           if (wr.ok) {
             var wj = await wr.json();
             var wt = b64Utf8(wj.content);
-            var ci = wt.indexOf("crons");
-            var arrStart = ci >= 0 ? wt.indexOf("[", ci) : -1;
-            var arrEnd = arrStart >= 0 ? wt.indexOf("]", arrStart) : -1;
-            var crons = [];
-            if (arrStart >= 0 && arrEnd > arrStart) {
-              var seg = wt.slice(arrStart + 1, arrEnd);
-              var qparts = seg.split(String.fromCharCode(34));
-              for (var qi = 1; qi < qparts.length; qi += 2) { if (qparts[qi]) crons.push(qparts[qi]); }
-            }
+            // CRON-APPLY-PARSE-1: the [triggers] crons assignment itself, not the first "crons" in a comment.
+            var crons = tomlDeclaredCrons(wt) || [];
             if (crons.length) {
               var sr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/schedules", { method: "PUT", headers: { "Authorization": "Bearer " + (env.CF_API_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify(crons.map(function(c3) { return { cron: c3 }; })) });
               log.push({ step: "crons", http: sr.status, count: crons.length, crons });
@@ -6902,6 +7008,11 @@ var worker_default = {
       await telemetryAnalyze(env, 6);
     } catch (e) {
       console.log("telemetry cron failed:", e && e.message || e);
+    }
+    try {
+      await secretChangeWatch(env);
+    } catch (e) {
+      console.log("secret watch failed:", e && e.message || e);
     }
     try {
       if (env.QNFO_AUDIT) {

@@ -43,6 +43,9 @@ on:
       - adversarial-workers-guard
       - code-loop-test
     types: [completed]
+    # MAIN-ONLY-FINDINGS-1: a pull-request run's red check belongs to that PR (scripts/ci_watchdog.py skips it), so
+    # it no longer starts a sweep either.
+    branches: [main]
   workflow_dispatch:
   repository_dispatch:
     types: [ci-watchdog]
@@ -56,12 +59,30 @@ permissions:
   # never pass: an unauthorized probe is not evidence.
   security-events: read
 
+# ACTIONS-QUOTA-1 (2026-10-02): ONE group for the whole repository. The group used to be keyed on the
+# TRIGGERING run's branch, so every PR branch got its own lane and a merge burst ran up to 19 sweeps at
+# once. A sweep reads repository-wide state (all workflows, the newest 100 runs) and never looks at which run
+# triggered it, so parallel sweeps were pure duplicates: measured 2026-10-01/02, 2,031 watchdog runs in 24h,
+# ~745 executed at ~150 REST calls each, ~4,600 calls an hour from the bucket CodeQL's SARIF upload also
+# draws on ("API rate limit exceeded for installation" on PRs 435, 441, 466 and most Push-on-main runs).
+# With one group at most one sweep runs and one waits; a newer trigger replaces the waiting one.
 concurrency:
-  group: ci-watchdog-${{ github.event.workflow_run.head_branch || 'main' }}
+  group: ci-watchdog
   cancel-in-progress: false
 
 jobs:
   watch:
+    # ACTIONS-QUOTA-1: sweep when there is something new to look at. A sweep runs on
+    #   * every dispatch (workflow_dispatch / repository_dispatch);
+    #   * every mirror-sync completion: mirror-sync runs once per push to main, so the periodic sweep keeps
+    #     the cadence of main (it was 4 sweeps per push: mirror-guard, version-compare, deploy-gate, mirror-sync);
+    #   * every watched run on main that did not succeed (failure, timed_out, startup_failure, ...).
+    # A green PR check no longer starts a repository-wide sweep on its own; a failure anywhere in the newest 100
+    # runs is still picked up by the next sweep (6h window, unchanged). A skipped job costs no API call.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.name == 'mirror-sync' ||
+      !contains(fromJSON('["success", "cancelled", "skipped", "neutral"]'), github.event.workflow_run.conclusion)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -82,6 +103,9 @@ jobs:
           # fleet ledger when the ops key is present, and no-ops when it is not,
           # so the watchdog still gates on its own exit code either way.
           OPS_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+          # ACTIONS-QUOTA-1: a sweep samples only the workflows that declare a schedule (13 run listings
+          # instead of 80 plus ~65 contents reads). A manual dispatch samples every workflow, as before.
+          CI_WD_FULL_INVENTORY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         run: |
           set +e
           python scripts/ci_watchdog.py | tee /tmp/wd.log

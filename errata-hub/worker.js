@@ -1,6 +1,6 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.2.1-utf8-redeploy"; // 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.3.0-single-trigger"; // 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
@@ -21696,6 +21696,49 @@ async function internalErrataIntake(request, env) {
   } catch (e) { console.error("[errata-hub] internal-errata intake failed:", e && e.message); return j({ ok: false, error: "intake failed" }, 500); }
   return j({ ok: true, id, source });
 }
+// ---- CRON-SINGLE-TRIGGER-1:BEGIN (pure; replayed by scripts/cron-single-trigger.test.mjs)
+// CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785, pillar: core). The account held 84 cron expressions against the fleet budget
+// of 50. This worker now registers ONE hourly trigger; each tick runs every entry of CRON_TABLE (the former trigger list,
+// unchanged) that fired in the hour ending at the tick, through the same dispatcher as before. An entry on the hour runs
+// at its minute; one at :15 or :30 runs at the next full hour. Hourly keeps the 15-minute CPU limit of a cron trigger.
+var TICK_CRON = "0 * * * *";
+var CRON_TABLE = ["0 * * * *", "15 * * * *", "30 * * * *"];
+var TICK_PARALLEL = false;
+function cronFieldMatch(spec, v) {
+  return String(spec).split(",").some(function (part) {
+    var st = /^(.+)\/(\d+)$/.exec(part), step = st ? Number(st[2]) : 1, base = st ? st[1] : part;
+    var r = /^(\d+)-(\d+)$/.exec(base), lo, hi;
+    if (base === "*") { lo = 0; hi = 1e9; } else if (r) { lo = Number(r[1]); hi = Number(r[2]); } else { lo = Number(base); hi = st ? 1e9 : lo; }
+    return v >= lo && v <= hi && (v - (base === "*" ? 0 : lo)) % step === 0;
+  });
+}
+// Cloudflare cron fields in UTC; day of week 1 = Sunday .. 7 = Saturday.
+function cronMatchesAt(expr, ms) {
+  var f = String(expr).trim().split(/\s+/), d = new Date(ms);
+  return f.length === 5 && cronFieldMatch(f[0], d.getUTCMinutes()) && cronFieldMatch(f[1], d.getUTCHours()) && cronFieldMatch(f[2], d.getUTCDate()) && cronFieldMatch(f[3], d.getUTCMonth() + 1) && cronFieldMatch(f[4], d.getUTCDay() + 1);
+}
+// The table entries that fired in the 60 minutes ending at the tick (tick minute included), in table order.
+function cronDueAtTick(table, tickMs) {
+  var t = Math.floor(tickMs / 60000) * 60000;
+  return table.filter(function (expr) {
+    for (var k = 0; k < 60; k++) if (cronMatchesAt(expr, t - k * 60000)) return true;
+    return false;
+  });
+}
+// ---- CRON-SINGLE-TRIGGER-1:END
+// `one` is the dispatcher this worker always had (one cron expression in, its job run). A trigger other than the tick
+// (a former per-job trigger still registered) goes straight to it, and so does an event marked tickEntry: that is how
+// the tick hands each table entry on, and how a test runs one entry whose expression equals the tick's.
+async function cronTickDispatch(event, one) {
+  if (!event || event.cron !== TICK_CRON || event.tickEntry) return one(event);
+  var at = Number(event.scheduledTime) || Date.now();
+  var due = cronDueAtTick(CRON_TABLE, at);
+  var run = function (expr) {
+    return Promise.resolve().then(function () { return one({ cron: expr, scheduledTime: at, type: "scheduled", tickEntry: true }); }).catch(function (e) { console.error("cron " + expr + ": " + String(e && e.message || e)); });
+  };
+  if (TICK_PARALLEL) { await Promise.all(due.map(run)); return; }
+  for (var i = 0; i < due.length; i++) await run(due[i]);
+}
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
@@ -21707,9 +21750,11 @@ export default {
     return new Response("errata-hub", { status: 200 });
   },
   async scheduled(event, env, ctx) {
+    return cronTickDispatch(event, async function (event) {
     const c = event.cron;
     if (c === "0 * * * *") return erratawatchMod.default.scheduled(event, env, ctx);
     if (c === "15 * * * *") return erratarespondMod.default.scheduled(event, env, ctx);
     if (c === "30 * * * *") return erratapublishMod.default.scheduled(event, env, ctx);
+    });
   },
 };

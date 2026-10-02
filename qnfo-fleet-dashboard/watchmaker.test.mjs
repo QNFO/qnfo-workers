@@ -11,6 +11,8 @@
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
 // stale zenodo_stats and job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
 // WORK-WITH-ME-METRIC-1: the work-with-me contacts op reads its own reach_signals rows (stalled after 48h, never ran).
+// GRANT-FOLLOWUP-HONEST-1: a grant-followup run that left a mailbox unread is dated as a run and counted with its reason
+// (gmail_pass_unset, errors) until a full read; only no run at all reads "never ran".
 // Run: node qnfo-fleet-dashboard/watchmaker.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -55,6 +57,8 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('reach-ingest-
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jo-qnfo-backlog-exec-abc', ?, 'ok')").run(ago(7));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-grant-followup-ok1', ?, 'ok')").run(ago(4));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
+// SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39): the */30 heartbeat.
+db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('evt-secret-watch-1', ?, 'secret-watch-tick', 'qnfo-ops', 'ok')").run(ago(0.3));
 db.prepare("INSERT INTO portfolio_runs (run_date, kind, created_at) VALUES ('2026-10-05', 'identity-weekly', ?)").run(new Date(NOW - 26 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO charter_snapshots (ts) VALUES (?)").run(ago(5));
 db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(ago(1));
@@ -216,6 +220,13 @@ db.prepare("UPDATE errata_watch SET value = ? WHERE key = 'tick:errata-respond'"
 m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "errata-respond").counted && /stalled: last run 3h ago, cadence 1h/.test(op(m, "errata-respond").state) && m.index === 1, "an errata member with no successful tick for over 2h counts as stalled");
 db.prepare("UPDATE errata_watch SET value = ? WHERE key = 'tick:errata-respond'").run(JSON.stringify({ ts: ago(0.2), ok: true, last_ok: ago(0.2) }));
+// SECRET-CHANGE-WATCH-1: an error tick does not prove the run; no ok heartbeat for over 2h counts the watcher as stalled.
+db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'evt-secret-watch-1'").run(ago(3));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('evt-secret-watch-err', ?, 'secret-watch-tick', 'qnfo-ops', 'error')").run(ago(0.1));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "secret-change-watch").counted && /stalled: last run 3h ago, cadence 1h/.test(op(m, "secret-change-watch").state) && op(m, "secret-change-watch").runner === "cron:qnfo-ops" && m.index === 1, "a secret watcher with no ok heartbeat for over 2h counts as stalled (an error tick does not prove it)");
+db.exec("DELETE FROM cloud_ops_events WHERE id = 'evt-secret-watch-err'");
+db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'evt-secret-watch-1'").run(ago(0.3));
 ok(op(m, "objective-constraints").state.startsWith("ok") && op(m, "objective-constraints").runner === "cron:qnfo-fleet-control", "OBJECTIVE-CONSTRAINTS-1 is listed with its hourly kernel ledger");
 
 // PERFORMANCE-LOOP-1: the experiment evaluator (daily perf_runs row) and its five hourly KPIs (MIN(last_refreshed)).
@@ -244,16 +255,31 @@ m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "task-intent-intake").counted && /^1 pending task intents older than 48h with no consumer/.test(op(m, "task-intent-intake").state) && m.index === 1, "task intents nobody reads count once 48h old");
 db.exec("DELETE FROM intents WHERE id IN ('t1', 't2')");
 
-// GRANT-FOLLOWUP-1: only a run that read both mailboxes proves the op; a 'degraded' run (no GMAIL_PASS) does not.
-db.exec("UPDATE cloud_ops_events SET status = 'degraded' WHERE id = 'jr-grant-followup-ok1'");
+// GRANT-FOLLOWUP-1: only a run that read both mailboxes clears the op; a 'degraded' run (no GMAIL_PASS) does not.
+// GRANT-FOLLOWUP-HONEST-1 (1.18.6): such a run is a run, so the state says why the op counts instead of "never ran".
+// The row is what qnfo-cloud-ops 1.18.3 writes (meta.reason, JOB-REASON-1); 1.18.2's rows carry the reason only in text.
+const gfRow = (id, h, status, meta, text) => db.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, 'job-run', ?, ?, 'grant-followup', ?)").run(id, ago(h), text || "grant-followup " + status, meta ? JSON.stringify(meta) : null, status);
+gfRow("jr-grant-followup-ok1", 16, "ok", { job: "grant-followup", status: "ok" });
+gfRow("jr-grant-followup-d1", 4, "degraded", { job: "grant-followup", status: "degraded", reason: "Gmail not read: the GMAIL_PASS secret is unset" }, 'grant-followup degraded {"channels":{"qnfo_email":"ok:0","gmail":"no-credential: GMAIL_PASS unset"}}');
 m = await api.watchmakerMeasure(env, NOW);
-ok(op(m, "grant-followup").counted && op(m, "grant-followup").state === "never ran" && m.index === 1, "a grant-followup run that missed Gmail does not prove the op");
-db.prepare("UPDATE cloud_ops_events SET status = 'ok', ts = ? WHERE id = 'jr-grant-followup-ok1'").run(ago(25));
+let gf = op(m, "grant-followup");
+ok(gf.counted && gf.age_h === 4 && gf.state === "1 grant-followup runs since the last full read that left a mailbox unread (gmail_pass_unset 1)" && m.index === 1, "a run that missed Gmail is dated as a run and counted with its reason (" + gf.state + ")");
+gfRow("jr-grant-followup-d0", 10, "degraded", { job: "grant-followup", status: "degraded" }, 'grant-followup degraded {"channels":{"qnfo_email":"ok:0","gmail":"no-credential: GMAIL_PASS unset"}}');
+gfRow("jr-grant-followup-e1", 8, "error", { job: "grant-followup", status: "error" }, "grant-followup error D1_ERROR: no such table: emails");
 m = await api.watchmakerMeasure(env, NOW);
-ok(op(m, "grant-followup").counted && /stalled: last run 25h ago, cadence 12h/.test(op(m, "grant-followup").state), "grant-followup silent for over 24h counts as stalled");
-db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'jr-grant-followup-ok1'").run(ago(4));
+gf = op(m, "grant-followup");
+ok(gf.counted && /^3 grant-followup runs since the last full read that left a mailbox unread \(gmail_pass_unset 2, errors 1\)$/.test(gf.state), "every run since the last full read counts, the reason read from meta or text (" + gf.state + ")");
+db.exec("DELETE FROM cloud_ops_events WHERE id LIKE 'jr-grant-followup-%'");
 m = await api.watchmakerMeasure(env, NOW);
-ok(!op(m, "grant-followup").counted && m.index === 0, "a fresh full grant-followup run is not counted");
+ok(op(m, "grant-followup").counted && op(m, "grant-followup").state === "never ran", "no run at all still reads never ran");
+gfRow("jr-grant-followup-d1", 25, "degraded", { job: "grant-followup", status: "degraded", reason: "Gmail not read: the GMAIL_PASS secret is unset" });
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "grant-followup").counted && op(m, "grant-followup").state === "runner degraded; stalled: last run 25h ago, cadence 12h", "a runner silent for over 24h counts as stalled, with its last status (" + op(m, "grant-followup").state + ")");
+db.exec("DELETE FROM cloud_ops_events WHERE id LIKE 'jr-grant-followup-%'");
+gfRow("jr-grant-followup-d1", 16, "degraded", { job: "grant-followup", status: "degraded", reason: "Gmail not read: the GMAIL_PASS secret is unset" });
+gfRow("jr-grant-followup-ok1", 4, "ok", { job: "grant-followup", status: "ok" });
+m = await api.watchmakerMeasure(env, NOW);
+ok(!op(m, "grant-followup").counted && /^ok, last run 4h ago$/.test(op(m, "grant-followup").state) && m.index === 0, "a fresh full grant-followup run clears the op, earlier degraded runs included");
 
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops.
 const REACH = ["social-profile-sync", "social-posting", "social-scan", "buffer-channel-audit", "social-engagement", "social-learner", "engagement-feed", "zenodo-stats", "email-triage", "mention-radar", "cloud-ops-radar", "job-market-watch", "events-radar"];
