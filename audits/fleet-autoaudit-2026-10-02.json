@@ -1,8 +1,16 @@
 {
-  "audited_at": "2026-10-02 06:34:12",
+  "audited_at": "2026-10-02 06:38:02",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-control",
+        "qnfo-fleet-dashboard"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -487,12 +495,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.86-code-merge-runner",
+        "version": "0.4.87-improvement-loop",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.17.0-fleet-cmd",
+        "version": "1.17.1-watchmaker-improvement-loop",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1144,17 +1152,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.86-code-merge-runner",
+      "before": "0.4.87-improvement-loop",
       "http": 200,
-      "live": "0.4.86-code-merge-runner",
+      "live": "0.4.87-improvement-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.17.0-fleet-cmd",
+      "before": "1.17.1-watchmaker-improvement-loop",
       "http": 200,
-      "live": "1.17.0-fleet-cmd",
+      "live": "1.17.1-watchmaker-improvement-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
