@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.8.2-metrics"; // v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health (#1759); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.8.2-metrics"; // v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -436,7 +436,22 @@ var COMPOSE_MODELS = [
   // serve as fallbacks at this token budget. Re-add only with a raised reasoning floor.
 ];
 
+// Q08-SELF-TUNE-1 (#1760): the compose temperature is a tunable for PERFORMANCE-LOOP-1 (lever on q08_gate_pass_rate_7d).
+// ops_config q08_compose_temperature, clamped to 0.4..0.8; absent or unreadable means 0.65, the value before this knob.
+// The gate, the FACTS rule, Q08_SOCIAL_QUEUE and MAX_PER_DAY are invariants and have no ops_config knob.
+var TEMP_KEY = "q08_compose_temperature", TEMP_DEFAULT = 0.65;
+function parseTemperature(v) {
+  var n = Number(String(v == null ? "" : v).trim());
+  if (!String(v == null ? "" : v).trim() || !isFinite(n)) return TEMP_DEFAULT;
+  return Math.min(0.8, Math.max(0.4, n));
+}
+async function composeTemperature(env) {
+  if (!env || !env.AUDIT) return TEMP_DEFAULT;
+  try { var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(TEMP_KEY).first(); return parseTemperature(r && r.value); }
+  catch (e) { return TEMP_DEFAULT; }
+}
 async function compose(env, prompt) {
+  var temperature = await composeTemperature(env);
   var lastErr;
   // TITLE-PROMOTE-1: compliance-driven fallback -- keep the best draft across
   // models rather than returning the first long-enough one gate-unchecked.
@@ -446,7 +461,7 @@ async function compose(env, prompt) {
       var resp = await env.AI.run(modelId, {
         messages: [{ role: "user", content: prompt }],
         max_tokens: 6000,
-        temperature: 0.65,
+        temperature: temperature,
       }, { signal: AbortSignal.timeout(120000) });
       // Workers AI returns {response: string} for chat models
       var text = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
