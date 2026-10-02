@@ -27,8 +27,9 @@ on:
           - delete-worker
           - delete-vectorize-index
           - zaraz-remove-tool
+          - paper-body-from-zenodo
       target:
-        description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) ops-workspace path (r2-get) or zone (zaraz-remove-tool)"
+        description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) ops-workspace path (r2-get) or zone (zaraz-remove-tool) or slug|record|file.md (paper-body-from-zenodo)"
         required: false
         default: ""
       model:
