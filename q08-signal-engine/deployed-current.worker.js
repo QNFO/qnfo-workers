@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.7.37-cadence-cap"; // v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.38-codeagent"; // v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -882,7 +882,7 @@ function renderIndex(pieces) {
       '</article>',
     ].join("\n");
   }).join("\n");
-  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>q08</title><meta name=description content="Systems-level critique of technical industry friction. Cold, structural, timeless."><style>' + CSS + '</style>' + MATH_HEAD + '</head><body><div class=wrap><header><h1>q08</h1><p>Systems-level critique. Structural. Timeless.</p><nav><a href="/">Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a><a href="/health">Status</a></nav></header>' + (items || '<p style="color:var(--mut)">No pieces published yet. Check back soon.</p>') + '<footer>q08 &mdash; autonomous signal engine &mdash; updated continuously</footer></div></body></html>';
+  return '<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>q08</title><meta name=description content="Systems-level critique of technical industry friction. Cold, structural, timeless."><style>' + CSS + '</style>' + MATH_HEAD + '</head><body><div class=wrap><header><h1>q08</h1><p>Systems-level critique. Structural. Timeless.</p><nav><a href="/">Index</a><a href="/feed.xml">RSS</a><a href="/subscribe">Subscribe</a><a href="/health">Status</a></nav></header>' + (items || '<p style="color:var(--mut)">No pieces published yet. Check back soon.</p>') + '<footer>q08 &mdash; autonomous signal engine &mdash; updated continuously</footer></div><script src="https://fleet.qnfo.org/ctl.js" defer></script></body></html>';
 }
 
 function mdToHtml(md) {
