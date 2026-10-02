@@ -22,3 +22,38 @@ When PORTFOLIO-LOOP-1 writes `QNFO/.github/profile/README.md`, it first applies 
 Change as QNFO's current 501(c)(3), "scientific research incubator", stale record counts, a duplicated ledger row) and
 swap the theory-first publication list for the STRATEGY-1 s2.4 selected works. Each pair is a no-op once applied;
 drifted text is left alone. Tests: `portfolio.test.mjs` (scrub section).
+
+## CODE-TASK-MERGE-RUNNER-1 (0.4.86, 2026-10-02, pillar autonomy, agent_issues 1726)
+
+The hourly cron (`0 * * * *`) runs `codeMergeTick`: it opens and merges the code loop's pull requests
+(qnfo-code-orchestrator + `scripts/code-task-publish.py`, table `code_tasks`), so no person sits between a verified patch
+and main. It reuses EVOLVE-PR-1's GitHub token, squash merge pinned to the tested head (`evMergePr`), deploy ledger
+(`evDeployRow`), live check (`evLiveCheck`) and revert pipeline (a revert is an evolve `revert` candidate that `evAdvance`
+merges and verifies).
+
+- **Opening**: a PR opened with the Actions `GITHUB_TOKEN` starts no `pull_request` workflow, and `code-task-publish.yml`
+  holds no other GitHub credential. So the workflow pushes the branch and stops at `branch_pushed`
+  (`CODE_TASK_PR_OPENER=qnfo-fleet-control`), and the runner opens the PR with the fleet token, so CI starts by itself. It
+  opens only a branch that passes the verify, scope, provenance and integrity gates (CI runs the PR's code); an existing
+  PR for the branch is adopted; a branch that fails a gate is `needs_human` with the compare URL kept.
+- **Merge candidates**: `code_tasks` rows with status `published` or `pr_open`, branch `codeagent-<id[3:15]>`, and a
+  `QNFO/qnfo-workers` pull URL whose head is that branch, based on `main`.
+- **Merges only when all hold**: the orchestrator's verify passed (`step='done'`, `attempts<3`, no `last_error`, patch or
+  proposal stored); the PR changes exactly the task path (plus the deployed-current mirror for a `worker.js`); the path is
+  a `worker.js` outside `CM_DENY` without `[[containers]]`, or a Markdown doc; the source issue is a trusted origin
+  (`CM_TRUSTED_SOURCES`, overridable by `ops_config.code_merge_trusted_sources`); each file at the head equals the
+  verified patch applied to the merge base; a `worker.js` is auto-revertible; every required check (gate, mirror-guard,
+  comparator, plus guard / charter / test where they run) ended `success` on the head, no other check failed or runs;
+  the PR is open, not draft, mergeable. One merge per tick; never while the same worker has a change in flight.
+- **No checks**: no required check on a head 3h after the runner first saw it is a refusal (for example an older PR
+  opened with the Actions token). Nothing is pushed to start CI.
+- **Refusal**: status `needs_human`, `last_error` `merge-runner: <reason>`, and a comment on the PR when there is one.
+- **After a merge**: `merged_by='qnfo-fleet-control'`; a `worker.js` must show a `fleet_deploys` row for its new VERSION
+  within 3h and a later `worker_live_audit` http 200 with it, otherwise the inverse patch is opened as a revert PR.
+- **Kill switch**: `ops_config.code_merge_runner_enabled` (`0`/`off` stops opening and merging; absent means on).
+  Heartbeat: `cloud_ops_events` `code-merge-tick-<UTC day>`, plus `code-merge-first-ok` written once on the first ok
+  tick; each action is one `cloud_ops_events` row `code-merge.<action>`.
+- **Routes**: `GET /code-merge/status` (public), `POST /code-merge/tick` (admin token).
+- **Watchmaker**: qnfo-fleet-dashboard 1.16.4 counts `code-task-merge` only when the runner is stalled or disabled or
+  leaves work for a person (a person's merge or close counts only after `code-merge-first-ok`). Tests:
+  `code-merge.test.mjs` (deploy-gate, Node 22).
