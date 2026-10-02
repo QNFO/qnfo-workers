@@ -21,10 +21,12 @@ CREATE TABLE portfolio_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, run_date TEXT
 CREATE TABLE charter_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE portfolio_sync_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT);
 CREATE TABLE evolve_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
+CREATE TABLE objective_constraint_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, last_attempt_at TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
 CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
+CREATE TABLE errata_watch (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, layer TEXT NOT NULL, kind TEXT NOT NULL, formula TEXT, source_of_truth TEXT, baseline TEXT, target TEXT,
   owner TEXT, disposition_actor TEXT, refresh_cadence TEXT, warning_band TEXT, kill_band TEXT, last_value TEXT, last_refreshed TEXT, state TEXT);`);
 const NOW = Date.parse("2026-10-06T08:00:00Z");
@@ -33,12 +35,18 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('portfolio-dai
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('portfolio-dailyx', ?, 'ok')").run(ago(1));   // outside the id range
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('reach-ingest-2026-10-06', ?, 'ok')").run(ago(6));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jo-qnfo-backlog-exec-abc', ?, 'ok')").run(ago(7));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-grant-followup-ok1', ?, 'ok')").run(ago(4));
 db.prepare("INSERT INTO portfolio_runs (run_date, kind, created_at) VALUES ('2026-10-05', 'identity-weekly', ?)").run(new Date(NOW - 26 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO charter_snapshots (ts) VALUES (?)").run(ago(5));
 db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(ago(1));
 db.prepare("INSERT INTO evolve_candidates (ts) VALUES (?)").run(ago(9));
+db.prepare("INSERT INTO objective_constraint_runs (ts) VALUES (?)").run(ago(1));
 db.prepare("INSERT INTO remediation_contracts (class, last_attempt_at) VALUES ('EVID-1', ?)").run(new Date(NOW - 2 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pending', 'research', ?)").run(ago(10));
+// errata-hub hourly ticks (#1747): the watchmaker reads $.last_ok, which a failed tick carries forward.
+db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-watch', ?)").run(JSON.stringify({ ts: ago(0.5), ok: true, last_ok: ago(0.5) }));
+db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-respond', ?)").run(JSON.stringify({ ts: ago(0.2), ok: false, last_ok: ago(1.2) }));
+db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-publish', ?)").run(JSON.stringify({ ts: ago(0.1), ok: true, last_ok: ago(0.1) }));
 
 function stmtOn(sql) {
   let args = [];
@@ -70,6 +78,12 @@ ok(!op(m, "linkedin-draft-approval").counted && /by policy/.test(op(m, "linkedin
 ok(!op(m, "code-task-merge").counted && /^0 code tasks/.test(op(m, "code-task-merge").state), "no live code-task PRs: merging is dormant, not counted");
 ok(m.retired.length === 4, "retired claude.ai Routines are listed with what replaced them");
 ok(!op(m, "q08-review").counted && op(m, "q08-review").state === "no backlog", "the one-shot q08 review is not counted before it is 48h overdue (Q08-REVIEW-2026-10-31)");
+ok(op(m, "errata-watch").state.startsWith("ok") && op(m, "errata-respond").age_h === 1.2 && !op(m, "errata-publish").counted, "errata-hub ticks are read from errata_watch $.last_ok");
+db.prepare("UPDATE errata_watch SET value = ? WHERE key = 'tick:errata-respond'").run(JSON.stringify({ ts: ago(0.2), ok: false, last_ok: ago(3) }));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "errata-respond").counted && /stalled: last run 3h ago, cadence 1h/.test(op(m, "errata-respond").state) && m.index === 1, "an errata member with no successful tick for over 2h counts as stalled");
+db.prepare("UPDATE errata_watch SET value = ? WHERE key = 'tick:errata-respond'").run(JSON.stringify({ ts: ago(0.2), ok: true, last_ok: ago(0.2) }));
+ok(op(m, "objective-constraints").state.startsWith("ok") && op(m, "objective-constraints").runner === "cron:qnfo-fleet-control", "OBJECTIVE-CONSTRAINTS-1 is listed with its hourly kernel ledger");
 
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('t1', 'pending', 'task', ?)").run(ago(5));
 m = await api.watchmakerMeasure(env, NOW);
@@ -78,6 +92,17 @@ db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('t2', 'pe
 m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "task-intent-intake").counted && /^1 pending task intents older than 48h with no consumer/.test(op(m, "task-intent-intake").state) && m.index === 1, "task intents nobody reads count once 48h old");
 db.exec("DELETE FROM intents WHERE id IN ('t1', 't2')");
+
+// GRANT-FOLLOWUP-1: only a run that read both mailboxes proves the op; a 'degraded' run (no GMAIL_PASS) does not.
+db.exec("UPDATE cloud_ops_events SET status = 'degraded' WHERE id = 'jr-grant-followup-ok1'");
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "grant-followup").counted && op(m, "grant-followup").state === "never ran" && m.index === 1, "a grant-followup run that missed Gmail does not prove the op");
+db.prepare("UPDATE cloud_ops_events SET status = 'ok', ts = ? WHERE id = 'jr-grant-followup-ok1'").run(ago(25));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "grant-followup").counted && /stalled: last run 25h ago, cadence 12h/.test(op(m, "grant-followup").state), "grant-followup silent for over 24h counts as stalled");
+db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'jr-grant-followup-ok1'").run(ago(4));
+m = await api.watchmakerMeasure(env, NOW);
+ok(!op(m, "grant-followup").counted && m.index === 0, "a fresh full grant-followup run is not counted");
 
 // Stalled, never-run, backlog, live merges, unreadable
 db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'portfolio-daily-2026-10-06'").run(ago(60));

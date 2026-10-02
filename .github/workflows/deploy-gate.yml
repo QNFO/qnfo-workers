@@ -141,3 +141,15 @@ jobs:
         run: node qnfo-cloud-ops/outreach-consent.test.mjs
       - name: OUTREACH-CF-DOW-1 cron weekday check (qnfo-outreach)
         run: node qnfo-outreach/cron-dow.test.mjs
+
+      # ERRATA-HUB-CRONS-UNDECLARED-1 + ERRATA-PUBLISH-GATE-1 (#1747): errata-hub's hourly members run, record a tick, and
+      # make no Zenodo call, store re-point or mail from the publish member while pipeline_flags.errata_publish_enabled is off.
+      - name: ERRATA-PUBLISH-GATE-1 offline suite (errata-hub)
+        run: node errata-hub/errata-crons.test.mjs
+
+      # GROUND-OR-SLOT-1 + GROUND-THIN-FAILFAST-1 (agent_issues 1751): the arXiv OR fallback keeps its query slot, and a
+      # grounding too thin to pass gate-refcount stops at ground instead of running the whole pipeline.
+      - name: Research grounding offline suite (qnfo-research-exec)
+        run: node qnfo-research-exec/grounding.test.mjs
+      - name: Research poison-park offline suite (qnfo-research-exec)
+        run: node qnfo-research-exec/poison-park.test.mjs

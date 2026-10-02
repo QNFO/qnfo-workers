@@ -35,6 +35,19 @@ one of the two cold-email engines (the other is qnfo-outreach); owner-voice send
 - Kill switch: qnfo-outreach D1 `pipeline_state.external_sends_enabled` (shared with qnfo-outreach). Paused 2026-10-01;
   resumes after OUTREACH-CONSENT-1 deploys.
 
+## Grant follow-up job (GRANT-FOLLOWUP-1, 1.17.0, pillar: reach)
+
+`grant-followup` runs first in the `worker-health` slot (05:05 and 17:05 Amsterdam, every day; `CRON_COMPANIONS`, no new
+cron). It reads funder mail for every application in `GRANT_APPLICATIONS` (worker.js) from two places, read-only:
+`qnfo-audit.emails` (qnfo.org and qwav.tech, stored by qnfo-email) and Gmail over IMAP (All Mail opened with EXAMINE,
+headers only, BODY.PEEK; nothing is sent, moved or flagged). Each new message from a funder's domain, dated on or after
+the submission, becomes one `cloud_ops_events` row (`grant-reply-<message-id>`, status reply, message or receipt; no body
+text). Each reply or message without an issue opens or extends `GRANT-REPLY-<APPLICATION>` in `agent_issues`, or notes
+the application's tracking issue while it is open (Lightcone: 1750). The run is `ok` only when both mailboxes were read;
+without the `GMAIL_PASS` secret it is `degraded`, and WATCHMAKER_OPS (`grant-followup`) keeps counting it. Add a new
+application to `GRANT_APPLICATIONS` in the same PR that records its submission in `funding/APPLICATIONS.md`.
+Test: `node qnfo-cloud-ops/grant-followup.test.mjs`.
+
 ## Manual / API trigger (diagnostics only — normal operation is cron-only)
 
 ```
