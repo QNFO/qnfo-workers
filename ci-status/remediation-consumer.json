@@ -1,12 +1,19 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@46a19f624a77",
- "due": 0,
+ "verifier": "remediation-consumer@c4fa89793af6",
+ "due": 1,
  "pass": 0,
  "fail": 0,
- "skipped": 0,
- "contracts": [],
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "CI-WATCHDOG-REAPER-SUBJECT-SHAPE-1",
+   "issue_id": null,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -23,7 +30,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 3115,
- "head": "46a19f624a7766979b9b2c705363ce1cb3180ce9",
+ "spent_ms": 2399,
+ "head": "c4fa89793af6400ec07625014338942cdea4e6ba",
  "job_status": "success"
 }
