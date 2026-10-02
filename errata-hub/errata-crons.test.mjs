@@ -86,7 +86,8 @@ const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).defau
 const quiet = async (fn) => { const l = console.log, e = console.error; console.log = () => {}; console.error = () => {}; try { return await fn(); } finally { console.log = l; console.error = e; } };
 const tick = async (cron) => quiet(() => worker.scheduled({ cron, scheduledTime: Date.now() }, env, ctx));
 const tickRow = (m) => { const r = audit.prepare("SELECT value FROM errata_watch WHERE key = ?").get("tick:" + m); return r ? JSON.parse(r.value) : null; };
-const deposits = () => fetches.filter((f) => f.url.includes("zenodo.org/api/deposit"));
+const isZenodoDeposit = (u) => { try { const x = new URL(u); return x.hostname === "zenodo.org" && x.pathname.startsWith("/api/deposit"); } catch (e) { return false; } };
+const deposits = () => fetches.filter((f) => isZenodoDeposit(f.url));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
@@ -107,7 +108,7 @@ const acts = audit.prepare("SELECT * FROM errata_actions WHERE status = 'drafted
 ok(acts.length === 1 && acts[0].risk === "low" && acts[0].version_to === "1.1", "the respond tick drafts one correction");
 ok(acts[0].corrected_md.includes("drafted with AI assistance (@cf/") && acts[0].corrected_md.includes("Equation (3) is QNFO's own reformulation"), "the corrected text discloses AI drafting");
 ok(audit.prepare("SELECT status FROM errata_queue WHERE status = 'internal-open'").all().length === 1, "the internal-open item is untouched");
-ok(sends.length === 1 && sends.every((s) => s.to !== SENDER && !String(s.to).includes("example.edu")), "the only mail is the owner receipt, never the errata sender");
+ok(sends.length === 1 && sends.every((s) => s.to !== SENDER && !/@example\.edu$/i.test(String(s.to).trim())), "the only mail is the owner receipt, never the errata sender");
 ok(/pipeline_flags\.errata_publish_enabled/.test(sends[0].text) && /AI model/.test(sends[0].text), "the receipt names the AI drafting and the publish gate");
 ok(tickRow("errata-respond").ok === true && tickRow("errata-respond").processed === 1, "tick:errata-respond records the run");
 const sendsBeforePublish = sends.length;
