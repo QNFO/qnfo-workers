@@ -1,4 +1,4 @@
-var VERSION = "1.7.0-single-trigger"; // 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.7.1-ping-hourly"; // 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -116,8 +116,7 @@ var worker_default = {
       else if (cron === "0 0 1 * *") await runGraphSeed(env);
       else if (cron === "0 5 * * *") await runBackup(env);
       else if (cron === "0 8 * * 1") await runSecretsAudit(env);
-      else if (cron === "0 * * * *") { await runSync(env); await runMetricFreshness(env); }
-      else if (cron === "*/30 * * * *") await runPing(env);
+      else if (cron === "0 * * * *") { await runSync(env); await runMetricFreshness(env); await runPing(env); } // LIFECYCLE-PING-DEAD-1 (#1810): runPing folded onto the single live hourly trigger
     } catch (e) {
       console.error("[qnfo-lifecycle] cron error:", e.message);
     }
