@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.17.1-reach-loops"; /* 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.18.0-outreach-learner"; /* 1.18.0 OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -600,6 +600,9 @@ async function jobEmailTriage(env) {
   for (const e of emails) {
     const s = String(e.sender || "");
     const subj = String(e.subject || "");
+    // SENT-AS-YOU-DELIVERY-1: the fleet's own daily notice to the owner arrives from the Email Service bounce envelope
+    // (bounces@cf-bounce.qnfo.org, often SRS-wrapped), which SYS_PAT would mark spam. It is neither noise nor actionable.
+    if (/^QNFO sent as you\b/i.test(subj) && /qnfo\.org/i.test(s)) continue;
     if (SPAM_SENDERS.some((x) => s.includes(x))) {
       noise.push(e);
       continue;
@@ -1610,14 +1613,33 @@ async function jobOutreach(env) {
   const sentKey = "outreach_sent_" + today;
   let sentToday = Number(await stateGet(env, sentKey, "0")) || 0;
   const CAP = 8; // OUTREACH-THROUGHPUT-1: aligned to fleet GLOBAL_DAILY_CAP=8 (qnfo-outreach/worker.js)
+  /* OUTREACH-LEARNER-1: the learner only chooses the ORDER in which eligible rows meet the unchanged caps below (and holds
+     rows of a stopped segment). Off, unreadable or failing, this job keeps its oldest-first order over 25 rows. */
+  const lcfg = await learnerConfig(env);
+  let L = null;
   let rows;
   try {
-    rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason, COALESCE(attempts,0) AS attempts FROM outreach_queue WHERE status IN ('pending','needs-email','needs-contact') ORDER BY created_at ASC LIMIT 25").all();
+    rows = await env.AUDIT.prepare("SELECT id, paper_id, author, email, reason, COALESCE(attempts,0) AS attempts FROM outreach_queue WHERE status IN ('pending','needs-email','needs-contact') ORDER BY created_at ASC LIMIT ?1").bind(lcfg.enabled ? LEARNER_WINDOW_ROWS : 25).all();
   } catch (e) {
     return { status: "error", notes: { error: String(e && e.message || e) } };
   }
-  const pending = (rows.results || []).filter((r) => r.email || r.paper_id);
+  let pending = (rows.results || []).filter((r) => r.email || r.paper_id);
   out.pending = pending.length;
+  if (lcfg.enabled && sentToday < CAP) {
+    try {
+      L = await learnerPrepare(env, lcfg, pending, today);
+      pending = L.plan.ordered;
+    } catch (e) {
+      L = null;
+      pending = pending.slice(0, 25);
+      out.learner_error = "learner failed, oldest-first used: " + String(e && e.message || e).slice(0, 160);
+    }
+    if (L) {
+      for (const h of L.plan.held) {
+        if (await learnerHold(env, h.row, h.segment, L.arms[h.segment])) L.held.push(h.segment);
+      }
+    }
+  }
   for (const r of pending) {
     if (sentToday >= CAP) {
       /* OUTREACH-CAP-STATUS-1 (#1662): hitting the daily cap is the EXPECTED terminal
@@ -1680,6 +1702,13 @@ async function jobOutreach(env) {
         });
         continue;
       }
+      /* OUTREACH-LEARNER-1: a row whose address was only found now (arXiv lookup) learns its segment here; a stopped
+         segment holds it instead of sending. */
+      const seg = learnerSegment(r.reason, email);
+      if (L && L.stopped.has(seg)) {
+        if (await learnerHold(env, r, seg, L.arms[seg])) L.held.push(seg);
+        continue;
+      }
       let shared;
       try {
         shared = await outreachSharedCount(env, today, email);
@@ -1721,16 +1750,28 @@ async function jobOutreach(env) {
       sentToday++;
       await stateSet(env, sentKey, String(sentToday));
       out.sent++;
+      if (L) {
+        L.picks.push(seg);
+        await learnerRecordSend(env, r, email, seg, res && res.messageId || "", "live");
+      }
     } catch (e) {
       out.errors.push({ id: r.id, error: String(e && e.message || e) });
     }
   }
   if (sentToday < CAP) {
     try {
+      /* OUTREACH-LEARNER-1: with the learner on, a follow-up to a stopped segment is held (the row stays 'sent', so it
+         still counts as contacted everywhere) and up to 12 rows are read so held ones cannot starve the 3 follow-ups. */
       const fu = await env.AUDIT.prepare(
-        "SELECT id, email, subject FROM outreach_log WHERE status='sent' AND sent_at < datetime('now','-14 days') AND email NOT IN (SELECT email FROM outreach_log WHERE status IN ('replied','followup')) ORDER BY sent_at ASC LIMIT 3"
-      ).all();
+        "SELECT id, email, subject FROM outreach_log WHERE status='sent' AND sent_at < datetime('now','-14 days') AND email NOT IN (SELECT email FROM outreach_log WHERE status IN ('replied','followup')) ORDER BY sent_at ASC LIMIT ?1"
+      ).bind(L ? 12 : 3).all();
+      let fuSeen = 0;
       for (const f of fu.results || []) {
+        if (L && L.stoppedEmails.has(String(f.email || "").toLowerCase())) {
+          out.learner_followups_held = (out.learner_followups_held || 0) + 1;
+          continue;
+        }
+        if (++fuSeen > 3) break;
         if (!validEmail(f.email)) {
           await env.AUDIT.prepare("UPDATE outreach_log SET status='rejected' WHERE id=?1").bind(f.id).run().catch(function() {
           });
@@ -1799,10 +1840,657 @@ async function jobOutreach(env) {
   /* OUTREACH-CAP-STATUS-1 (#1662): reserve "error" for genuine failures; report a
      cap-limited drain as "capped" so it is visible without being an alarm. */
   const _outStatus = out.errors.length ? "error" : out.capped ? "capped" : "ok";
+  out.learner = await learnerLogAllocation(env, lcfg, L, out, today, sentToday);
   await recordEvent(env, "job-run", "jr-outreach-" + Date.now().toString(36), "outreach run: " + JSON.stringify(out), { job: "outreach", status: out.errors.length ? "partial" : _outStatus });
   return { status: _outStatus, notes: out };
 }
 __name(jobOutreach, "jobOutreach");
+// OUTREACH-LEARNER-1 begin
+/* OUTREACH-LEARNER-1 (2026-10-02, pillar: reach; owner directive 2026-10-02: the fleet measures its external
+   effectiveness and changes itself to improve it; docs/STRATEGY.md s6.4 outreach loop and s6.3 "warm conversations").
+   The loop the strategy specified ("reply rate by segment and template moves the daily cap toward the segments that
+   answer; any segment under 1% after 50 sends stops") was not built: jobOutreach drained outreach_queue oldest first.
+   - Segment = topic x recipient type, 6 arms, from data every candidate carries. Topic comes from the paper title in
+     outreach_queue.reason (radar-hub's keyword classes): "energy" (thermodynamics, Landauer, batteries, heat: pillar 1
+     directly), "qec" (error correction without energy), "other". Recipient type comes from the address domain:
+     "personal" (webmail) or "institutional". The first-contact template is fixed (LEARNER_TEMPLATE, recorded per send),
+     so it is not a dimension until a second variant exists.
+   - Outcome per first-contact send (outreach_learner_sends, one row per outreach_queue id, backfilled from history):
+     a reply is an inbound qnfo-audit.emails row from the same address (SRS and BATV wrappers removed) or carrying our
+     Message-ID in In-Reply-To/References, received after the send. Auto-replies are ignored (Auto-Submitted, X-Autoreply,
+     out-of-office wording). "optout" = a STOP / unsubscribe reply (also written to email_suppression); "negative" = a
+     decline ("not interested", "I don't see any connection"); "positive" = any other human reply; "bounce" = a delivery
+     failure naming the address (also suppressed); "no-reply" after 21 days (a later reply still upgrades it).
+   - Posterior per segment: Beta(1 + positives, 1 + optout + negative + bounce + no-reply), persisted in
+     outreach_learner_arms and recomputed from the ledger on every update (idempotent); every change is logged as a
+     cloud_ops_events 'ol-post-*' row with the sends that moved it.
+   - Allocation: per slot, a Thompson draw for every segment with candidates picks the segment, its oldest candidate takes
+     the slot. A row whose address is not known yet (arXiv lookup pending) draws the best of its topic's live arms. The
+     caps are untouched: the existing loop still applies 8/day shared, 3/day per domain, suppression and dedupe to
+     whatever order it receives, so the learner can change who is mailed, never how many. Each run logs 'ol-alloc-*'.
+   - Stop rule: a segment with >= 50 sends and positives < 1% of sends is stopped; its candidates are held
+     (outreach_queue status 'held-segment-stopped', out of the drain selector, reversible) and its follow-ups skipped.
+     ops_config 'outreach_learner_resume:<segment>' = 1 overrides it; held rows are released when a segment runs again.
+   - Kill switch: ops_config 'outreach_learner_enabled' (absent = on; 0/off = the previous oldest-first order over 25
+     rows, and held rows are released). An unreadable ops_config also falls back to oldest-first and changes no hold.
+   - Daily tick (job outreach-learner, a companion in the daily engagement slot; no new cron): backfill, outcomes,
+     posteriors, stop rule, metrics outreach_reply_rate_30d and warm_conversations_30d into metric_registry, and a
+     heartbeat 'ol-tick-<day>' that WATCHMAKER_OPS (qnfo-fleet-dashboard, key outreach-learner) reads. */
+var LEARNER_SWITCH_KEY = "outreach_learner_enabled";
+var LEARNER_RESUME_PREFIX = "outreach_learner_resume:";
+var LEARNER_OFF_RX = /^(0|off|false|no|disabled?)$/;
+var LEARNER_ON_RX = /^(1|on|true|yes|resume)$/;
+var LEARNER_STOP_MIN_SENDS = 50;
+var LEARNER_STOP_RATE = 0.01;
+var LEARNER_NO_REPLY_DAYS = 21;
+var LEARNER_LATE_DAYS = 60;
+var LEARNER_SCAN_MAX_DAYS = 90;
+var LEARNER_WINDOW_ROWS = 40;
+var LEARNER_RATE_MIN_SENDS = 20;
+var LEARNER_DAY_MS = 864e5;
+var LEARNER_METRIC_ACTOR = "OUTREACH-LEARNER-1 (qnfo-cloud-ops): Thompson allocation of the shared 8/day cold-email cap toward segments that answer; a segment under 1% after 50 sends stops";
+// [metric, kind, formula, source_of_truth, baseline, target, warning_band, kill_band]; identical in
+// migrations/2026-10-02-outreach-learner-metrics.sql, which also carries their analytics_metric_triggers rows.
+var LEARNER_METRICS = [
+  ["outreach_reply_rate_30d", "lagging", "percent of first-contact cold emails sent in the last 30 days by both engines (qnfo-audit.outreach_log, qnfo-outreach.sends; one per address) that drew a positive reply: a human reply from the same address or thread that is not an auto-reply, an opt-out or a decline; n/a under 20 first contacts (OUTREACH-LEARNER-1)", "qnfo-audit.outreach_log + qnfo-outreach.sends + qnfo-audit.emails (qnfo-cloud-ops outreach-learner, daily)", "4.1 (13 replies of any kind to 318 cold emails up to 2026-10-01, docs/STRATEGY.md s1)", ">= 2 overall; every live segment >= 1% (a segment under 1% after 50 sends stops, docs/STRATEGY.md s6.4)", "< 2", "< 1"],
+  ["warm_conversations_30d", "leading", "distinct people in the last 30 days who replied positively to mail the fleet sent, plus inbound contacts: a first non-automated, non-bulk, non-solicitation message to rowan.quni@qnfo.org from an address the fleet never wrote to, that is not a reply, and any mail tagged [work-with-me:<offer>] (inbound_contacts_30d counts those alone) (OUTREACH-LEARNER-1)", "qnfo-audit.emails + outreach_log + contact_ledger + qnfo-outreach.contacts (qnfo-cloud-ops outreach-learner, daily)", "13 replies to date on 2026-10-01 (docs/STRATEGY.md s9)", ">= 4 per 30 days (10 new by 2026-12-31, docs/STRATEGY.md s9)", "< 2", "< 1"]
+];
+var LEARNER_TEMPLATE = "jpcub-first-v1";
+var LEARNER_HELD = "held-segment-stopped";
+var LEARNER_TOPICS = ["energy", "qec", "other"];
+var LEARNER_RTYPES = ["institutional", "personal"];
+var LEARNER_SEGMENTS = LEARNER_TOPICS.flatMap((t) => LEARNER_RTYPES.map((r) => t + ":" + r));
+var LEARNER_RNG = { fn: Math.random };
+var LEARNER_ENERGY_RX = /thermodynam|landauer|joules?\b|energ(y|ies|etic)|batter(y|ies)|\bheat\b|thermal|entropy|cryogen|margolus|bremermann|\botto\b|\bengines?\b|work extraction|mpemba/i;
+var LEARNER_QEC_RX = /error[- ]correct|logical qubits?|\bq?ldpc\b|surface codes?|colou?r codes?|fault[- ]toleran|stabili[sz]er|decod(er|ers|ing)\b|\bthreshold\b|\bgkp\b|quantum codes?|syndrome|magic states?|distillation|\bqec\b/i;
+var LEARNER_PERSONAL_DOMAINS = new Set([...HUMAN_DOMAINS, "googlemail.com", "qq.com", "163.com", "126.com", "yeah.net", "foxmail.com", "sina.com", "naver.com", "daum.net", "hanmail.net", "yandex.ru", "yandex.com", "mail.ru", "rediffmail.com", "web.de", "t-online.de", "libero.it", "orange.fr", "free.fr", "laposte.net", "seznam.cz", "wp.pl", "o2.pl", "interia.pl"]);
+var LEARNER_PERSONAL_RX = /^(hotmail|outlook|live|yahoo|ymail|gmx|aol|icloud|protonmail|proton|zoho)\.[a-z.]{2,6}$/;
+var LEARNER_OWNER_ADDRS = /* @__PURE__ */ new Set(["rowan.quni@qnfo.org", "rwnquni@outlook.com", "rowan.quni@outlook.com", "rwnqni@outlook.com", "rwnquni@gmail.com"]);
+var LEARNER_INTERNAL_RX = /@([a-z0-9-]+\.)*(qnfo\.(org|io|net|uk)|qwav\.(org|tech|net|uk)|q08\.org|q-wave\.tech|qwave\.tech|empoweringchange\.today)$/;
+var LEARNER_MACHINE_RX = /^(mailer-daemon|postmaster|bounces?|bounce[+.-].*|.*no-?reply.*|do-?not-?reply|notifications?|notify|dmarc.*|.*-dmarc.*)$/;
+var LEARNER_ROLE_RX = /^(info|news|newsletters?|alerts?|support|help|helpdesk|service|services|admin|system|mail|mailer|marketing|sales|hello|hi|team|contact|office|events?|registration|conference|webinars?|community|feedback|survey|digest|updates|billing|accounts?|grants|submissions?|editorial|editor|journals?|networking|press|media|jobs|careers|recruit(ing|ment)?)([._+-].*)?$/;
+var LEARNER_BOUNCE_SUBJ_RX = /undeliver|delivery status|failure notice|returned mail|delivery (has )?failed|mail delivery|unzustellbar|non remis|niet afgeleverd|could not be delivered/i;
+var LEARNER_AUTO_SUBJ_RX = /^(\s*(re|aw|sv|antw)\s*:\s*)*(auto(matic|matische|matisch)?[ -]?(reply|response|antwort|antwoord|svar)|autoreply|out of (the )?office|abwesen|absence|absent\b|r[ée]ponse automatique|vacation|on leave|away from|niet aanwezig|afwezig|fuera de la oficina|respuesta autom)/i;
+var LEARNER_AUTO_BODY_RX = /out of (the )?office|automatic reply|auto-?reply|i am currently away|i('m| am| will be) away (from|until)|limited access to (my )?e-?mail/i;
+var LEARNER_STOP_RX = /\b(unsubscribe|opt[\s-]?out|remove me|stop (e-?mailing|writing|sending|contacting)|do not (contact|e-?mail|write)|don'?t (contact|e-?mail|write)|take me off|no further (e-?mails?|contact|messages?)|leave me alone|(do not|don'?t) (wish|want) to (hear|receive)|never (contact|e-?mail|write)|remove (my|this) (e-?mail|address))\b/i;
+var LEARNER_DECLINE_RX = /\b(not interested|no thanks|no,? thank you|not relevant|irrelevant|(don'?t|do not|can'?t|cannot) see (any|the|a|much) (connection|relevance|link|overlap)|no (real )?connection between|not (really )?(the )?right person|not my (area|field|topic)|outside (of )?my (area|field|expertise|research)|(cannot|can'?t|unable to|not able to) (help|assist|contribute)|not (in a position|able) to (help|assist|collaborate|engage)|(must|have to|will) (politely )?decline)\b/i;
+var LEARNER_WWM_RX = /\[work-with-me(?::\s*[a-z0-9-]{1,40})?\s*\]/i;
+var LEARNER_REPLY_SUBJ_RX =/^\s*(re|aw|sv|antw|r|vs|fw|fwd|wg|tr)\s*(\[\d+\])?\s*:/i;
+var LEARNER_SOLICIT_RX = /call for (papers|abstracts|submissions?|proposals)|(article|manuscript|paper|abstract|preprint|research) submission|submit your|invit(e|ation) to (submit|publish|review|speak|join|contribute)|publish(ing)? your|special issue|editorial board|review (a |the )?(paper|manuscript)|conference|congress|summit|symposium|webinar|newsletter|unsubscribe|limited time|discount|% off|promotion|partnership opportunit|guest post|backlink|\bseo\b|sponsor|careers? in|we are hiring|job (alert|opening)|crypto|web3|final reminder|reminder mail/i;
+function learnerTopic(reason) {
+  const t = String(reason || "").replace(/^\s*arxiv-radar widened:\s*/i, "");
+  if (LEARNER_ENERGY_RX.test(t)) return "energy";
+  if (LEARNER_QEC_RX.test(t)) return "qec";
+  return "other";
+}
+function learnerRtype(email) {
+  const dom = String(email || "").trim().toLowerCase().split("@").pop() || "";
+  if (!dom) return null;
+  return domIn(dom, LEARNER_PERSONAL_DOMAINS) || LEARNER_PERSONAL_RX.test(dom) ? "personal" : "institutional";
+}
+function learnerSegment(reason, email) {
+  return learnerTopic(reason) + ":" + (learnerRtype(email) || "institutional");
+}
+// One normalised address: display names, mailto:, BATV (prvs=tag=local@dom) and SRS0 (SRS0=h=tt=dom=local@fwd) undone.
+function learnerAddr(s) {
+  let a = String(s || "").trim().toLowerCase();
+  const m = a.match(/<([^>]+)>/);
+  if (m) a = m[1].trim();
+  a = a.replace(/^mailto:/, "");
+  const batv = /^prvs=[0-9a-z]+=(.+@.+)$/.exec(a);
+  if (batv) a = batv[1];
+  const srs = /^srs0=[^=]*=[^=]*=([^=@]+)=([^@]+)@.+$/.exec(a);
+  if (srs) a = srs[2] + "@" + srs[1];
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a) ? a : "";
+}
+function learnerMid(s) {
+  const t = String(s || "").trim().toLowerCase();
+  if (!t) return "";
+  const m = t.match(/<[^>]+>/);
+  return m ? m[0] : "<" + t.replace(/^<|>$/g, "") + ">";
+}
+function learnerRowMids(row) {
+  const out = [];
+  for (const v of [row.in_reply_to, row.refs]) {
+    const ms = String(v || "").toLowerCase().match(/<[^>]+>/g) || [];
+    for (const m of ms) out.push(m);
+  }
+  return out;
+}
+function learnerIso(v) {
+  if (v == null || v === "") return null;
+  let s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) s = s.replace(" ", "T") + "Z";
+  const t = Date.parse(s);
+  return isNaN(t) ? null : new Date(t).toISOString();
+}
+function learnerInternal(addr) {
+  return LEARNER_INTERNAL_RX.test(addr) || LEARNER_OWNER_ADDRS.has(addr);
+}
+function learnerMachine(addr) {
+  const local = String(addr || "").split("@")[0];
+  return LEARNER_MACHINE_RX.test(local) || /bounce/.test(local);
+}
+function learnerStripQuoted(s) {
+  let t = String(s || "");
+  t = t.split(/\r?\n/).filter((l) => !/^\s*>/.test(l)).join("\n");
+  t = t.split(/(?:^|\r?\n|\s)(?:On .{0,160}?wrote:|Am .{0,160}?schrieb|Le .{0,160}?écrit|Op .{0,160}?schreef|(?:From|Von|De|Van|Da|Fra|Från|Od):\s.{0,240}?(?:Sent|Gesendet|Envoyé|Verzonden|Inviato|Date|Datum):|_{8,}|-{2,}\s*Original Message\s*-{2,})/i)[0];
+  t = t.split(OUTREACH_OPT_OUT).join(" ");
+  t = t.replace(/https?:\/\/\S*unsubscribe\S*/gi, " ").replace(/This was sent once, to one person[\s\S]*$/i, " ");
+  return t;
+}
+// auto | optout | negative | positive. Undecodable bodies (base64 MIME stored raw) read as a human reply: positive.
+function learnerClassify(m) {
+  const subject = decodeHeader(String(m.subject || ""));
+  const body = String(m.body || "");
+  const stripped = learnerStripQuoted(body);
+  if (m.auto || LEARNER_AUTO_SUBJ_RX.test(subject) || LEARNER_AUTO_BODY_RX.test(stripped.slice(0, 400))) return "auto";
+  const first = (stripped.split(/\r?\n/).map((l) => l.trim()).find((l) => l && !/^(--|content-|mime-)/i.test(l)) || "");
+  const bareStop = /^\W*(please\s+)?stop\W*$/i.test(first) || /^(re:\s*)*\W*stop\W*$/i.test(subject.trim());
+  if (bareStop || LEARNER_STOP_RX.test(subject + " " + stripped)) return "optout";
+  if (LEARNER_DECLINE_RX.test(stripped)) return "negative";
+  return "positive";
+}
+function learnerGamma(k, rng) {
+  const d = k - 1 / 3, c = 1 / Math.sqrt(9 * d);
+  for (let i = 0; i < 1e4; i++) {
+    let x, v;
+    do {
+      const u1 = rng() || 1e-12, u2 = rng();
+      x = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      v = 1 + c * x;
+    } while (v <= 0);
+    v = v * v * v;
+    const u = rng() || 1e-12;
+    if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+  }
+  return d;
+}
+function learnerBeta(a, b, rng) {
+  const x = learnerGamma(Math.max(1, Number(a) || 1), rng), y = learnerGamma(Math.max(1, Number(b) || 1), rng);
+  return x / (x + y);
+}
+// Pure: the order in which jobOutreach offers candidates to its unchanged caps, and the rows a stopped segment holds.
+function learnerPlan(rows, arms, rng) {
+  const groups = new Map(), held = [], counts = {};
+  for (const r of rows) {
+    const topic = learnerTopic(r.reason);
+    const seg = r.email ? topic + ":" + learnerRtype(r.email) : null;
+    if (seg && arms[seg] && arms[seg].stopped) {
+      held.push({ row: r, segment: seg });
+      continue;
+    }
+    const g = seg || topic + ":?";
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(r);
+    counts[g] = (counts[g] || 0) + 1;
+  }
+  const draw = (g) => {
+    if (!g.endsWith(":?")) {
+      const a = arms[g] || { alpha: 1, beta: 1 };
+      return learnerBeta(a.alpha, a.beta, rng);
+    }
+    let best = -1;
+    for (const rt of LEARNER_RTYPES) {
+      const a = arms[g.slice(0, -1) + rt] || { alpha: 1, beta: 1, stopped: 0 };
+      if (a.stopped) continue;
+      best = Math.max(best, learnerBeta(a.alpha, a.beta, rng));
+    }
+    return best;
+  };
+  const ordered = [], first_draw = {};
+  while (groups.size) {
+    let bestG = null, bestT = -Infinity;
+    for (const g of groups.keys()) {
+      const t = draw(g);
+      if (!(g in first_draw)) first_draw[g] = Math.round(t * 1e3) / 1e3;
+      if (t > bestT) {
+        bestT = t;
+        bestG = g;
+      }
+    }
+    const list = groups.get(bestG);
+    ordered.push(list.shift());
+    if (!list.length) groups.delete(bestG);
+  }
+  return { ordered, held, groups: counts, first_draw };
+}
+async function learnerConfig(env) {
+  const cfg = { enabled: true, raw: null, resume: /* @__PURE__ */ new Set(), error: null };
+  try {
+    const r = await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key = ?1 OR substr(key, 1, ?3) = ?2").bind(LEARNER_SWITCH_KEY, LEARNER_RESUME_PREFIX, LEARNER_RESUME_PREFIX.length).all();
+    for (const row of r.results || []) {
+      const k = String(row.key || ""), v = String(row.value == null ? "" : row.value).trim().toLowerCase();
+      if (k === LEARNER_SWITCH_KEY) {
+        cfg.raw = v;
+        cfg.enabled = !LEARNER_OFF_RX.test(v);
+      } else if (LEARNER_ON_RX.test(v)) cfg.resume.add(k.slice(LEARNER_RESUME_PREFIX.length));
+    }
+  } catch (e) {
+    cfg.enabled = false;
+    cfg.error = "ops_config unreadable: " + String(e && e.message || e).slice(0, 120);
+  }
+  return cfg;
+}
+async function learnerEnsure(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS outreach_learner_sends (queue_id TEXT PRIMARY KEY, email TEXT NOT NULL, segment TEXT NOT NULL, topic TEXT, rtype TEXT, template TEXT, paper_id TEXT, sent_at TEXT NOT NULL, message_id TEXT, source TEXT, outcome TEXT, outcome_at TEXT, evidence_email_id INTEGER, updated_at TEXT)").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS outreach_learner_arms (segment TEXT PRIMARY KEY, topic TEXT, rtype TEXT, alpha REAL NOT NULL DEFAULT 1, beta REAL NOT NULL DEFAULT 1, sends INTEGER NOT NULL DEFAULT 0, positives INTEGER NOT NULL DEFAULT 0, failures INTEGER NOT NULL DEFAULT 0, optouts INTEGER NOT NULL DEFAULT 0, unresolved INTEGER NOT NULL DEFAULT 0, rule_stop INTEGER NOT NULL DEFAULT 0, override INTEGER NOT NULL DEFAULT 0, stopped INTEGER NOT NULL DEFAULT 0, stopped_at TEXT, updated_at TEXT)").run();
+  const vals = LEARNER_SEGMENTS.map((s) => "('" + s + "', '" + s.split(":")[0] + "', '" + s.split(":")[1] + "', datetime('now'))").join(", ");
+  await env.AUDIT.prepare("INSERT OR IGNORE INTO outreach_learner_arms (segment, topic, rtype, updated_at) VALUES " + vals).run();
+}
+async function learnerEvent(env, id, text, meta, status, replace) {
+  try {
+    await env.AUDIT.prepare("INSERT OR " + (replace ? "REPLACE" : "IGNORE") + " INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'outreach-learner', ?3, ?4, 'outreach-learner', ?5)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), String(text).slice(0, 2e3), JSON.stringify(meta || {}), status || "ok").run();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+function learnerTag() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+async function learnerLoadArms(env) {
+  const arms = {};
+  const r = await env.AUDIT.prepare("SELECT * FROM outreach_learner_arms").all();
+  for (const a of r.results || []) arms[a.segment] = a;
+  return arms;
+}
+async function learnerRecordSend(env, row, email, seg, mid, source, sentAt) {
+  try {
+    const [topic, rtype] = seg.split(":");
+    const r = await env.AUDIT.prepare("INSERT OR IGNORE INTO outreach_learner_sends (queue_id, email, segment, topic, rtype, template, paper_id, sent_at, message_id, source, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)").bind(String(row.id), String(email).toLowerCase(), seg, topic, rtype, LEARNER_TEMPLATE, row.paper_id || null, sentAt || (/* @__PURE__ */ new Date()).toISOString(), mid || null, source, (/* @__PURE__ */ new Date()).toISOString()).run();
+    return !!(r && r.meta && Number(r.meta.changes) > 0);
+  } catch (e) {
+    return false;
+  }
+}
+// History in: every outreach_queue row this engine sent, with its first-contact Message-ID from outreach_log.
+async function learnerReconcile(env) {
+  const r = await env.AUDIT.prepare("SELECT q.id, q.paper_id, q.reason, q.email, q.sent_at, (SELECT o.message_id FROM outreach_log o WHERE lower(o.email) = lower(q.email) AND COALESCE(o.subject, '') NOT LIKE 'Following up:%' AND COALESCE(o.subject, '') NOT LIKE 'Re:%' ORDER BY o.id LIMIT 1) AS mid, (SELECT o.sent_at FROM outreach_log o WHERE lower(o.email) = lower(q.email) AND COALESCE(o.subject, '') NOT LIKE 'Following up:%' AND COALESCE(o.subject, '') NOT LIKE 'Re:%' ORDER BY o.id LIMIT 1) AS osent FROM outreach_queue q WHERE q.status = 'sent' AND COALESCE(q.email, '') <> '' AND NOT EXISTS (SELECT 1 FROM outreach_learner_sends l WHERE l.queue_id = q.id) ORDER BY q.sent_at LIMIT 200").all();
+  let n = 0;
+  for (const q of r.results || []) {
+    const email = String(q.email || "").toLowerCase();
+    const at = learnerIso(q.sent_at) || learnerIso(q.osent);
+    if (!validEmail(email) || !at) continue;
+    if (await learnerRecordSend(env, q, email, learnerSegment(q.reason, email), q.mid || "", "backfill", at)) n++;
+  }
+  return n;
+}
+async function learnerEmailRows(env, sinceIso) {
+  const r = await env.AUDIT.prepare("SELECT id, sender, recipient, subject, status, received_at, in_reply_to, substr(COALESCE(references_hdr, ''), 1, 2000) AS refs FROM emails WHERE datetime(received_at) >= datetime(?1) AND COALESCE(status, '') <> 'sent' ORDER BY id LIMIT 3000").bind(sinceIso).all();
+  return r.results || [];
+}
+async function learnerDetail(env, id, cache) {
+  if (cache.has(id)) return cache.get(id);
+  const r = await env.AUDIT.prepare("SELECT substr(COALESCE(body_text, ''), 1, 4000) AS body, lower(substr(COALESCE(headers_json, ''), 1, 8000)) AS h FROM emails WHERE id = ?1").bind(id).first();
+  const h = String(r && r.h || "");
+  const d = {
+    body: String(r && r.body || ""),
+    auto: /"auto-submitted"\s*:\s*"auto|"x-autoreply"|"x-autorespond"|"precedence"\s*:\s*"auto_reply"/.test(h),
+    bulk: /"list-unsubscribe"|"list-id"|"precedence"\s*:\s*"(bulk|list|junk)"/.test(h)
+  };
+  cache.set(id, d);
+  return d;
+}
+// sends: [{ key, email, message_id | message_ids, sent_at }] -> Map key -> { outcome, email_id, at, addr }.
+async function learnerOutcomes(env, sends, rows, cache) {
+  cache = cache || /* @__PURE__ */ new Map();
+  const byAddr = /* @__PURE__ */ new Map(), byMid = /* @__PURE__ */ new Map(), all = [];
+  for (const s of sends) {
+    const a = learnerAddr(s.email);
+    const t = Date.parse(learnerIso(s.sent_at) || "");
+    if (!a || !isFinite(t)) continue;
+    const x = { key: s.key, addr: a, t };
+    all.push(x);
+    if (!byAddr.has(a)) byAddr.set(a, []);
+    byAddr.get(a).push(x);
+    for (const m of [].concat(s.message_ids || s.message_id || [])) {
+      const k = learnerMid(m);
+      if (k && k !== "<>") byMid.set(k, x);
+    }
+  }
+  const res = /* @__PURE__ */ new Map();
+  const rank = { optout: 4, positive: 3, negative: 2, bounce: 1 };
+  const put = (x, outcome, row, from) => {
+    const cur = res.get(x.key);
+    if (!cur || rank[outcome] > rank[cur.outcome]) res.set(x.key, { outcome, email_id: row.id, at: learnerIso(row.received_at), addr: from });
+  };
+  for (const row of rows) {
+    const addr = learnerAddr(row.sender);
+    const at = Date.parse(learnerIso(row.received_at) || "");
+    if (!addr || !isFinite(at)) continue;
+    const local = addr.split("@")[0];
+    if ((local === "mailer-daemon" || local === "postmaster") && LEARNER_BOUNCE_SUBJ_RX.test(decodeHeader(String(row.subject || "")))) {
+      const body = (await learnerDetail(env, row.id, cache)).body.toLowerCase();
+      for (const x of all) if (at >= x.t && at - x.t <= 7 * LEARNER_DAY_MS && body.indexOf(x.addr) >= 0) put(x, "bounce", row, addr);
+      continue;
+    }
+    if (learnerInternal(addr) || learnerMachine(addr)) continue;
+    let targets = [];
+    for (const m of learnerRowMids(row)) if (byMid.has(m)) targets.push(byMid.get(m));
+    if (!targets.length && byAddr.has(addr)) targets = byAddr.get(addr);
+    targets = targets.filter((x) => at >= x.t);
+    if (!targets.length) continue;
+    const d = await learnerDetail(env, row.id, cache);
+    if (d.bulk && !learnerRowMids(row).length) continue;
+    const cls = learnerClassify({ subject: row.subject, body: d.body, auto: d.auto });
+    if (cls === "auto") continue;
+    for (const x of targets) put(x, cls, row, addr);
+  }
+  return res;
+}
+async function learnerConsequence(env, s, outcome, replier) {
+  const email = String(s.email || "").toLowerCase();
+  const notes = [];
+  if (outcome === "optout" || outcome === "bounce") {
+    for (const a of [...new Set([email, replier].filter((x) => x && !learnerInternal(x)))]) {
+      try {
+        await env.AUDIT.prepare("INSERT INTO email_suppression (email, reason, source) VALUES (?1, ?2, 'outreach-learner') ON CONFLICT(email) DO NOTHING").bind(a, outcome === "optout" ? "reply-stop" : "bounce").run();
+        notes.push("suppressed " + a);
+      } catch (e) {
+        notes.push("suppression write failed: " + String(e && e.message || e).slice(0, 80));
+      }
+    }
+  }
+  if (outcome === "positive" || outcome === "negative" || outcome === "optout") {
+    try {
+      await env.AUDIT.prepare("UPDATE outreach_log SET status = 'replied' WHERE lower(email) = ?1 AND status IN ('sent', 'followup')").bind(email).run();
+    } catch (e) {
+      notes.push("outreach_log replied write failed");
+    }
+  }
+  return notes;
+}
+async function learnerRecomputeArms(env, cfg, before, resolved, nowIso) {
+  const agg = {};
+  const r = await env.AUDIT.prepare("SELECT segment, COUNT(*) AS sends, SUM(CASE WHEN outcome = 'positive' THEN 1 ELSE 0 END) AS pos, SUM(CASE WHEN outcome IN ('negative', 'optout', 'no-reply', 'bounce') THEN 1 ELSE 0 END) AS fail, SUM(CASE WHEN outcome = 'optout' THEN 1 ELSE 0 END) AS optouts, SUM(CASE WHEN outcome IS NULL THEN 1 ELSE 0 END) AS unresolved FROM outreach_learner_sends GROUP BY segment").all();
+  for (const a of r.results || []) agg[a.segment] = a;
+  const arms = {}, stopped = [], updates = [];
+  for (const seg of [.../* @__PURE__ */ new Set([...LEARNER_SEGMENTS, ...Object.keys(agg)])]) {
+    const a = agg[seg] || {};
+    const sends = Number(a.sends || 0), pos = Number(a.pos || 0), fail = Number(a.fail || 0);
+    const alpha = 1 + pos, beta = 1 + fail;
+    const prev = before[seg] || null;
+    const rule = sends >= LEARNER_STOP_MIN_SENDS && pos < LEARNER_STOP_RATE * sends ? 1 : 0;
+    const override = cfg.resume.has(seg) ? 1 : 0;
+    // An unreadable ops_config keeps the previous stop state: it can neither stop nor resume a segment.
+    const stop = cfg.error ? (prev && Number(prev.stopped) ? 1 : 0) : (rule && !override ? 1 : 0);
+    const stoppedAt = stop ? (prev && Number(prev.stopped) && prev.stopped_at ? prev.stopped_at : nowIso) : null;
+    await env.AUDIT.prepare("INSERT INTO outreach_learner_arms (segment, topic, rtype, alpha, beta, sends, positives, failures, optouts, unresolved, rule_stop, override, stopped, stopped_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15) ON CONFLICT(segment) DO UPDATE SET alpha = excluded.alpha, beta = excluded.beta, sends = excluded.sends, positives = excluded.positives, failures = excluded.failures, optouts = excluded.optouts, unresolved = excluded.unresolved, rule_stop = excluded.rule_stop, override = excluded.override, stopped = excluded.stopped, stopped_at = excluded.stopped_at, updated_at = excluded.updated_at").bind(seg, seg.split(":")[0], seg.split(":")[1] || "", alpha, beta, sends, pos, fail, Number(a.optouts || 0), Number(a.unresolved || 0), rule, override, stop, stoppedAt, nowIso).run();
+    arms[seg] = { segment: seg, alpha, beta, sends, positives: pos, failures: fail, rule_stop: rule, override, stopped: stop, stopped_at: stoppedAt };
+    if (stop) stopped.push(seg);
+    const pa = prev ? Number(prev.alpha) : 1, pb = prev ? Number(prev.beta) : 1;
+    if (pa !== alpha || pb !== beta) {
+      const moved = resolved.filter((x) => x.segment === seg).map((x) => x.queue_id + ":" + (x.from || "open") + ">" + x.to);
+      const u = { segment: seg, from: [pa, pb], to: [alpha, beta], sends, moved: moved.slice(0, 40) };
+      updates.push(u);
+      await learnerEvent(env, "ol-post-" + seg + "-" + learnerTag(), "OUTREACH-LEARNER-1 posterior " + seg + " Beta(" + pa + "," + pb + ") -> Beta(" + alpha + "," + beta + ") after " + moved.length + " resolution(s)", u, "ok");
+    }
+    const was = prev && Number(prev.stopped) ? 1 : 0;
+    if (was !== stop) {
+      const why = stop ? sends + " sends, " + pos + " positive (< " + LEARNER_STOP_RATE * 100 + "% after " + LEARNER_STOP_MIN_SENDS + ")" : override ? "ops_config " + LEARNER_RESUME_PREFIX + seg + " override" : "rule no longer met (" + sends + " sends, " + pos + " positive)";
+      await learnerEvent(env, "ol-" + (stop ? "stop" : "resume") + "-" + seg + "-" + learnerTag(), "OUTREACH-LEARNER-1 segment " + seg + (stop ? " STOPPED: " : " resumed: ") + why, { segment: seg, stopped: stop, sends, positives: pos, override, rule_stop: rule }, "ok");
+    }
+  }
+  return { arms, stopped, updates };
+}
+async function learnerRelease(env, cfg, stoppedSet, nowIso) {
+  if (cfg.error) return 0;
+  const r = await env.AUDIT.prepare("SELECT id, error FROM outreach_queue WHERE status = ?1 LIMIT 500").bind(LEARNER_HELD).all();
+  let n = 0;
+  const segs = {};
+  for (const q of r.results || []) {
+    const seg = (/\[seg=([^\]]+)\]/.exec(String(q.error || "")) || [])[1] || "";
+    if (cfg.enabled && seg && stoppedSet.has(seg)) continue;
+    const note = "OUTREACH-LEARNER-1 released " + nowIso + ": " + (cfg.enabled ? "segment " + seg + " is not stopped" : "learner off (ops_config " + LEARNER_SWITCH_KEY + ")");
+    const u = await env.AUDIT.prepare("UPDATE outreach_queue SET status = 'pending', error = ?2 WHERE id = ?1 AND status = ?3").bind(q.id, note, LEARNER_HELD).run();
+    if (u && u.meta && Number(u.meta.changes) > 0) {
+      n++;
+      segs[seg] = (segs[seg] || 0) + 1;
+    }
+  }
+  if (n) await learnerEvent(env, "ol-release-" + learnerTag(), "OUTREACH-LEARNER-1 released " + n + " held candidate(s)", { released: n, by_segment: segs, learner_enabled: cfg.enabled }, "ok");
+  return n;
+}
+async function learnerHold(env, row, seg, arm) {
+  try {
+    const note = "OUTREACH-LEARNER-1 held [seg=" + seg + "]: " + (arm ? Number(arm.sends) + " sends, " + Number(arm.positives) + " positive, " : "") + "under " + LEARNER_STOP_RATE * 100 + "% after " + LEARNER_STOP_MIN_SENDS + " sends; resume with ops_config " + LEARNER_RESUME_PREFIX + seg + " = 1, or " + LEARNER_SWITCH_KEY + " = 0";
+    const r = await env.AUDIT.prepare("UPDATE outreach_queue SET status = ?2, error = ?3 WHERE id = ?1 AND status IN ('pending', 'needs-email', 'needs-contact')").bind(row.id, LEARNER_HELD, note).run();
+    return !!(r && r.meta && Number(r.meta.changes) > 0);
+  } catch (e) {
+    return false;
+  }
+}
+// Backfill, outcomes, posteriors, stop rule, releases. Idempotent: a second run with no new mail changes nothing.
+async function learnerUpdate(env, cfg, nowMs) {
+  const now = nowMs || Date.now();
+  const nowIso = new Date(now).toISOString();
+  const out = { backfilled: 0, open: 0, resolved: 0, by_outcome: {}, consequences: [] };
+  out.backfilled = await learnerReconcile(env);
+  const before = await learnerLoadArms(env);
+  const open = (await env.AUDIT.prepare("SELECT queue_id, email, segment, sent_at, message_id, outcome FROM outreach_learner_sends WHERE outcome IS NULL OR (outcome = 'no-reply' AND datetime(sent_at) >= datetime(?1))").bind(new Date(now - LEARNER_LATE_DAYS * LEARNER_DAY_MS).toISOString()).all()).results || [];
+  out.open = open.length;
+  const resolved = [];
+  if (open.length) {
+    let since = now;
+    for (const s of open) {
+      const t = Date.parse(learnerIso(s.sent_at) || "");
+      if (isFinite(t) && t < since) since = t;
+    }
+    since = Math.max(since, now - LEARNER_SCAN_MAX_DAYS * LEARNER_DAY_MS);
+    const rows = await learnerEmailRows(env, new Date(since).toISOString());
+    const found = await learnerOutcomes(env, open.map((s) => ({ key: s.queue_id, email: s.email, message_id: s.message_id, sent_at: s.sent_at })), rows);
+    for (const s of open) {
+      const f = found.get(s.queue_id);
+      const age = (now - Date.parse(learnerIso(s.sent_at) || nowIso)) / LEARNER_DAY_MS;
+      const cur = s.outcome || null;
+      let next = cur;
+      if (f) next = f.outcome;
+      else if (!cur && age >= LEARNER_NO_REPLY_DAYS) next = "no-reply";
+      if (!next || next === cur) continue;
+      const u = await env.AUDIT.prepare("UPDATE outreach_learner_sends SET outcome = ?2, outcome_at = ?3, evidence_email_id = ?4, updated_at = ?5 WHERE queue_id = ?1 AND COALESCE(outcome, '') = ?6").bind(s.queue_id, next, f ? f.at : nowIso, f ? f.email_id : null, nowIso, cur || "").run();
+      if (!(u && u.meta && Number(u.meta.changes) > 0)) continue;
+      resolved.push({ queue_id: s.queue_id, segment: s.segment, from: cur, to: next, email_id: f ? f.email_id : null });
+      out.by_outcome[next] = (out.by_outcome[next] || 0) + 1;
+      for (const n of await learnerConsequence(env, s, next, f && f.addr)) out.consequences.push(n);
+    }
+  }
+  out.resolved = resolved.length;
+  const rec = await learnerRecomputeArms(env, cfg, before, resolved, nowIso);
+  out.arms = rec.arms;
+  out.stopped = rec.stopped;
+  out.posterior_updates = rec.updates.length;
+  out.released = await learnerRelease(env, cfg, new Set(rec.stopped), nowIso);
+  out.consequences = out.consequences.slice(0, 20);
+  return out;
+}
+function learnerCompactArms(arms) {
+  const o = {};
+  for (const s of Object.keys(arms || {})) {
+    const a = arms[s];
+    o[s] = [Number(a.alpha), Number(a.beta), Number(a.sends), Number(a.positives), Number(a.stopped) ? "stopped" : "live"];
+  }
+  return o;
+}
+async function learnerPrepare(env, cfg, pending, today) {
+  await learnerEnsure(env);
+  const upd = await learnerUpdate(env, cfg);
+  const arms = upd.arms;
+  const stopped = new Set(upd.stopped);
+  const stoppedEmails = /* @__PURE__ */ new Set();
+  if (stopped.size) {
+    const r = await env.AUDIT.prepare("SELECT lower(email) AS e, segment FROM outreach_learner_sends").all();
+    for (const x of r.results || []) if (stopped.has(x.segment)) stoppedEmails.add(String(x.e));
+  }
+  const plan = learnerPlan(pending, arms, LEARNER_RNG.fn);
+  return { plan, arms, stopped, stoppedEmails, held: [], picks: [], day: today, update: { backfilled: upd.backfilled, resolved: upd.resolved, by_outcome: upd.by_outcome, released: upd.released } };
+}
+async function learnerLogAllocation(env, cfg, L, out, today, sentToday) {
+  const tally = (list) => list.reduce((m, s) => (m[s] = (m[s] || 0) + 1, m), {});
+  const meta = { day: today, mode: L ? "thompson" : "oldest-first", sent: out.sent, followups: out.followups, capped: !!out.capped };
+  if (!L) meta.why = cfg.error || (!cfg.enabled ? "ops_config " + LEARNER_SWITCH_KEY + " = " + cfg.raw : out.learner_error || (sentToday >= 8 ? "daily cap already used" : "learner not run"));
+  else {
+    meta.picks = tally(L.picks);
+    meta.held = tally(L.held);
+    meta.candidates = L.plan.groups;
+    meta.first_draw = L.plan.first_draw;
+    meta.stopped = [...L.stopped];
+    meta.posterior = learnerCompactArms(L.arms);
+    meta.update = L.update;
+    if (out.learner_followups_held) meta.followups_held = out.learner_followups_held;
+  }
+  await learnerEvent(env, "ol-alloc-" + today + "-" + learnerTag(), "OUTREACH-LEARNER-1 allocation " + today + " (" + meta.mode + "): sent " + out.sent + (L ? " " + JSON.stringify(meta.picks) : ""), meta, "ok");
+  return L ? { mode: meta.mode, picks: meta.picks, held: meta.held, stopped: meta.stopped } : { mode: meta.mode, why: meta.why };
+}
+async function learnerContacted(env) {
+  const set = /* @__PURE__ */ new Set();
+  const add = async (db, sql) => {
+    if (!db) return;
+    try {
+      for (const r of (await db.prepare(sql).all()).results || []) {
+        const a = learnerAddr(r.e);
+        if (a) set.add(a);
+      }
+    } catch (e) {
+    }
+  };
+  await add(env.AUDIT, "SELECT DISTINCT email AS e FROM outreach_log");
+  await add(env.AUDIT, "SELECT email AS e FROM contact_ledger");
+  await add(env.AUDIT, "SELECT DISTINCT recipient AS e FROM emails WHERE status = 'sent'");
+  await add(env.OUTREACH, "SELECT email AS e FROM contacts WHERE contact_count > 0 OR status = 'contacted'");
+  return set;
+}
+// A first, non-automated message to the owner's qnfo.org address from someone the fleet never wrote to, not a reply.
+// Mail tagged [work-with-me:<offer>] (qnfo.org/work-with-me mailto buttons, qnfo-gateway WORK-WITH-ME-1) is an inbound
+// contact by construction: it counts whatever its wording, as in the dashboard's inbound_contacts_30d (WORK-WITH-ME-METRIC-1).
+async function learnerInboundContact(env, row, addr, cache) {
+  const st = String(row.status || "").toLowerCase();
+  if (st === "spam" || st === "rejected") return false;
+  const subject = decodeHeader(String(row.subject || ""));
+  if (learnerMachine(addr)) return false;
+  if (LEARNER_WWM_RX.test(subject)) return true;
+  if (String(row.recipient || "").toLowerCase().indexOf(OUTREACH_FROM.email) < 0) return false;
+  const local = addr.split("@")[0];
+  if (LEARNER_ROLE_RX.test(local) || /^[0-9a-f]{12,}-/.test(local)) return false;
+  if (row.in_reply_to || LEARNER_REPLY_SUBJ_RX.test(subject)) return false;
+  if (LEARNER_SOLICIT_RX.test(subject) || GRANT_RECEIPT_RX.test(subject)) return false;
+  for (const k of ["receipt", "waiting", "sysnotice", "someday", "code", "newsletter", "marketing", "security", "jobalert"]) if (RX[k].test(subject)) return false;
+  const d = await learnerDetail(env, row.id, cache);
+  if (d.auto || d.bulk || LEARNER_SOLICIT_RX.test(d.body.slice(0, 1500))) return false;
+  const earlier = await env.AUDIT.prepare("SELECT 1 AS x FROM emails WHERE id < ?1 AND lower(sender) LIKE ?2 LIMIT 1").bind(row.id, "%" + addr + "%").first();
+  return !earlier;
+}
+// outreach_reply_rate_30d and warm_conversations_30d (docs/STRATEGY.md s6.3, s9) into metric_registry.
+async function learnerMetrics(env, nowMs) {
+  const now = nowMs || Date.now();
+  const nowIso = new Date(now).toISOString();
+  const since = new Date(now - 30 * LEARNER_DAY_MS).toISOString();
+  const out = { sources: {} };
+  const sends = /* @__PURE__ */ new Map();
+  const add = (email, sentAt, mid, src) => {
+    const a = learnerAddr(email);
+    const t = learnerIso(sentAt);
+    if (!a || !t || !validEmail(a) || learnerInternal(a)) return;
+    const cur = sends.get(a);
+    if (!cur) sends.set(a, { key: a, email: a, sent_at: t, message_ids: mid ? [mid] : [], src });
+    else {
+      if (t < cur.sent_at) cur.sent_at = t;
+      if (mid) cur.message_ids.push(mid);
+    }
+  };
+  const a = await env.AUDIT.prepare("SELECT email, sent_at, message_id FROM outreach_log WHERE status IN ('sent', 'replied', 'rejected') AND COALESCE(subject, '') NOT LIKE 'Following up:%' AND COALESCE(subject, '') NOT LIKE 'Re:%' AND datetime(sent_at) >= datetime(?1)").bind(since).all();
+  for (const r of a.results || []) add(r.email, r.sent_at, r.message_id, "cloud-ops");
+  out.sources.cloud_ops = (a.results || []).length;
+  try {
+    const b = await env.OUTREACH.prepare("SELECT c.email AS email, s.sent_at AS sent_at, s.message_id AS message_id FROM sends s JOIN contacts c ON c.id = s.contact_id WHERE s.status = 'sent' AND COALESCE(s.kind, '') <> 'selfcheck' AND datetime(s.sent_at) >= datetime(?1)").bind(since).all();
+    for (const r of b.results || []) add(r.email, r.sent_at, r.message_id, "qnfo-outreach");
+    out.sources.qnfo_outreach = (b.results || []).length;
+  } catch (e) {
+    out.sources.qnfo_outreach = "error: " + String(e && e.message || e).slice(0, 80);
+    out.partial = true;
+  }
+  const cache = /* @__PURE__ */ new Map();
+  const rows = await learnerEmailRows(env, since);
+  const found = await learnerOutcomes(env, [...sends.values()], rows, cache);
+  let pos = 0;
+  for (const f of found.values()) if (f.outcome === "positive") pos++;
+  out.sends_30d = sends.size;
+  out.positive_to_sends_30d = pos;
+  // Under LEARNER_RATE_MIN_SENDS first contacts (a pause, a restart) the rate is "n/a": METRIC-CLOSED-LOOP-1 reads a
+  // non-numeric value as unreadable, never as 0, so a paused stream does not fire the reply-rate trigger.
+  out.outreach_reply_rate_30d = sends.size >= LEARNER_RATE_MIN_SENDS ? Math.round(1e3 * pos / sends.size) / 10 : "n/a";
+  const contacted = await learnerContacted(env);
+  const warm = /* @__PURE__ */ new Set(), inbound = /* @__PURE__ */ new Set();
+  for (const row of rows) {
+    const addr = learnerAddr(row.sender);
+    if (!addr || learnerInternal(addr) || warm.has(addr) || inbound.has(addr)) continue;
+    const ours = learnerRowMids(row).some((m) => /@qnfo\.org>$/.test(m));
+    if (contacted.has(addr) || ours) {
+      if (learnerMachine(addr)) continue;
+      const d = await learnerDetail(env, row.id, cache);
+      if (d.auto || (d.bulk && !ours)) continue;
+      if (learnerClassify({ subject: row.subject, body: d.body, auto: d.auto }) === "positive") warm.add(addr);
+      continue;
+    }
+    if (await learnerInboundContact(env, row, addr, cache)) inbound.add(addr);
+  }
+  out.positive_replies_30d = warm.size;
+  out.inbound_contacts_30d = inbound.size;
+  out.warm_conversations_30d = warm.size + inbound.size;
+  // The same rows (and their analytics_metric_triggers) are in migrations/2026-10-02-outreach-learner-metrics.sql; this
+  // INSERT OR IGNORE only covers a fresh database and never overwrites a row registered first elsewhere.
+  out.registry_written = [];
+  out.registry_missing = [];
+  for (const [metric, kind, formula, source, baseline, target, warn, kill, value] of LEARNER_METRICS.map((x) => x.concat([x[0] === "outreach_reply_rate_30d" ? out.outreach_reply_rate_30d : out.warm_conversations_30d]))) {
+    try {
+      await env.AUDIT.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state) VALUES (?1, 'fleet', ?2, ?3, ?4, ?5, ?6, 'qnfo-cloud-ops', ?7, 'daily', ?8, ?9, 'MEASURED')").bind(metric, kind, formula, source, baseline, target, LEARNER_METRIC_ACTOR, warn, kill).run();
+    } catch (e) {
+    }
+    try {
+      const u = await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = ?3").bind(String(value), nowIso, metric).run();
+      (u && u.meta && Number(u.meta.changes) > 0 ? out.registry_written : out.registry_missing).push(metric);
+    } catch (e) {
+      out.registry_missing.push(metric);
+    }
+  }
+  return out;
+}
+// Daily tick (companion in the engagement slot): measure, update, enforce the stop rule, publish metrics, heartbeat.
+async function jobOutreachLearner(env) {
+  const now = Date.now();
+  const day = new Date(now).toISOString().slice(0, 10);
+  const cfg = await learnerConfig(env);
+  const notes = { day, enabled: cfg.enabled };
+  if (cfg.error) notes.config_error = cfg.error;
+  let status = cfg.error ? "degraded" : "ok";
+  try {
+    await learnerEnsure(env);
+    const u = await learnerUpdate(env, cfg, now);
+    notes.backfilled = u.backfilled;
+    notes.open = u.open;
+    notes.resolved = u.resolved;
+    notes.by_outcome = u.by_outcome;
+    notes.posterior_updates = u.posterior_updates;
+    notes.stopped = u.stopped;
+    notes.released = u.released;
+    notes.segments = learnerCompactArms(u.arms);
+  } catch (e) {
+    status = "error";
+    notes.error = String(e && e.message || e).slice(0, 200);
+  }
+  try {
+    const m = await learnerMetrics(env, now);
+    notes.metrics = { outreach_reply_rate_30d: m.outreach_reply_rate_30d, sends_30d: m.sends_30d, positive_to_sends_30d: m.positive_to_sends_30d, warm_conversations_30d: m.warm_conversations_30d, positive_replies_30d: m.positive_replies_30d, inbound_contacts_30d: m.inbound_contacts_30d, sources: m.sources, registry_missing: m.registry_missing };
+    if ((m.registry_missing.length || m.partial) && status === "ok") status = "degraded";
+  } catch (e) {
+    notes.metrics_error = String(e && e.message || e).slice(0, 160);
+    if (status === "ok") status = "degraded";
+  }
+  await learnerEvent(env, "ol-tick-" + day, "OUTREACH-LEARNER-1 tick " + day + " " + status + (notes.metrics ? ": reply rate 30d " + notes.metrics.outreach_reply_rate_30d + "%, warm conversations 30d " + notes.metrics.warm_conversations_30d : ""), notes, status, true);
+  return { status, notes };
+}
+// OUTREACH-LEARNER-1 end
 async function jobWorkerHealth(env) {
   const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
   const endpoints = [
@@ -2104,10 +2792,16 @@ __name(jobEngagement, "jobEngagement");
 // SENT-AS-YOU-DIGEST-1 (2026-10-01, agent_issues #1713, docs/STRATEGY.md s5 gate 7): once a day, every item the fleet
 // sent in the owner's name in the last 24h (Bluesky threads and cross-posts, dissemination posts, cold-outreach emails
 // from both engines, replies sent by qnfo-email) plus the LinkedIn drafts waiting in Buffer and the state of both kill
-// switches, delivered to the owner's alerts channel through qnfo-email /send as an owner notice (HANDOFF-ALLOWLIST-1
-// lets owner notices past the general digest opt-out) and stored as a cloud_ops_events digest. The one-line stop
-// command names the owner-voice-stop job below.
-var OWNER_VOICE_TO = "rwnquni@outlook.com";
+// switches, stored as a cloud_ops_events digest and mailed to the owner. The one-line stop command names the
+// owner-voice-stop job below.
+// SENT-AS-YOU-DELIVERY-1 (1.18.0): delivery went through qnfo-email /send, which needs that worker's API key in this
+// worker's EMAIL_API_KEY secret; the secret is not set, so every run since 1.16.3 stored the digest and logged "skipped: no
+// EMAIL binding or key". This worker already holds a working send path, the SEND_EMAIL Email Service binding that the
+// outreach job mails with; sendDigest uses it from alerts@qnfo.org. The digest now goes through sendDigest to the owner's
+// own qnfo.org address (the only recipient; the 2026-09-02 directive keeps digests off personal-domain mailboxes, and
+// sendDigest refuses those), at most once per UTC day (scheduler_state sent_as_you_delivered_day). No new secret.
+var OWNER_VOICE_TO = "rowan.quni@qnfo.org";
+var OWNER_VOICE_DELIVERED_KEY = "sent_as_you_delivered_day";
 var OWNER_VOICE_STOP_LINE = "STOP everything sent as you: run cloud-ops job owner-voice-stop (POST https://qnfo-cloud-ops.q08.workers.dev/run?job=owner-voice-stop with the ops admin token), or reply to this email with 'pause outreach and social' (owner sender; the ops agent executes). Resume with owner-voice-resume.";
 async function ownerVoiceFlags(env) {
   const f = { social_paused: "0", external_sends_enabled: "?" };
@@ -2177,28 +2871,46 @@ async function sentAsYouDigest(env) {
   // Sources mix 'YYYY-MM-DD HH:MM:SS' and ISO 'YYYY-MM-DDTHH:MM:SS.sssZ'; normalise before sorting or ' ' sorts before 'T'.
   for (const it of items) it.when = String(it.when || "").replace("T", " ").slice(0, 16);
   items.sort((a, b) => a.when.localeCompare(b.when));
-  const subject = "QNFO sent as you — " + today + " (" + items.length + " item" + (items.length === 1 ? "" : "s") + ")";
+  // ASCII separator: the literal dash this subject carried reached D1 as mojibake (docs/STRATEGY.md s5 gate 3).
+  const subject = "QNFO sent as you - " + today + " (" + items.length + " item" + (items.length === 1 ? "" : "s") + ")";
   const L = [subject, "", "Everything the fleet sent in your name since " + since + " UTC:"];
   if (!items.length) L.push("- nothing");
   for (const it of items.slice(0, 80)) L.push("- " + it.when + "  " + it.kind + "  " + it.what + (it.where ? "  -> " + it.where : ""));
   if (items.length > 80) L.push("- ... and " + (items.length - 80) + " more");
   L.push("", "LinkedIn drafts waiting for your approval in Buffer: " + drafts);
   L.push("Kill switches: social_paused=" + flags.social_paused + " (qnfo-social), external_sends_enabled=" + flags.external_sends_enabled + " (both email engines)");
+  // OUTREACH-LEARNER-1: today's learner tick (it runs just before this digest, in the same daily slot).
+  try {
+    const t = await env.AUDIT.prepare("SELECT status, meta FROM cloud_ops_events WHERE id = ?1").bind("ol-tick-" + today).first();
+    if (t && t.meta) {
+      const m = JSON.parse(t.meta);
+      const mm = m.metrics || {};
+      L.push("Outreach learner (" + (m.enabled ? "on" : "off: oldest-first order") + ", " + t.status + "): reply rate 30d " + (mm.outreach_reply_rate_30d == null ? "?" : mm.outreach_reply_rate_30d + "% (" + mm.positive_to_sends_30d + " of " + mm.sends_30d + ")") + ", warm conversations 30d " + (mm.warm_conversations_30d == null ? "?" : mm.warm_conversations_30d) + ", stopped segments: " + ((m.stopped || []).join(", ") || "none") + ". Switch: ops_config " + LEARNER_SWITCH_KEY + ".");
+    } else L.push("Outreach learner: no tick recorded today");
+  } catch (e) {
+    L.push("Outreach learner: tick unreadable");
+  }
   const ek = Object.keys(errs);
   if (ek.length) L.push("Sources not read: " + ek.map((k) => k + " (" + errs[k] + ")").join("; "));
   L.push("", OWNER_VOICE_STOP_LINE);
   const text = L.join(NL);
   const stored = await storeDigest(env, "sent-as-you", subject, text);
-  let delivered = null;
+  let delivered = null, messageId = null;
   try {
-    if (env.EMAIL && env.EMAIL_API_KEY) {
-      const r = await cfEmail(env, "/send", { method: "POST", body: { to: env.OWNER_VOICE_TO || OWNER_VOICE_TO, subject, body: text, notify: true, classification: "handoff" } });
-      delivered = r && !r.error ? "ok" : "error: " + String(r && r.error || "unknown").slice(0, 120);
-    } else delivered = "skipped: no EMAIL binding or key";
+    const last = await stateGet(env, OWNER_VOICE_DELIVERED_KEY, "");
+    if (last === today) delivered = "skipped: already delivered " + today;
+    else {
+      const r = await sendDigest(env, subject, text, OWNER_VOICE_TO);
+      if (r && r.ok) {
+        delivered = "ok";
+        messageId = r.messageId || null;
+        await stateSet(env, OWNER_VOICE_DELIVERED_KEY, today);
+      } else delivered = (r && r.skipped ? "skipped: " + r.skipped : "error: " + String(r && r.error || "unknown")).slice(0, 140);
+    }
   } catch (e) {
     delivered = "error: " + String(e && e.message || e).slice(0, 120);
   }
-  return { items: items.length, drafts, flags, delivered, stored: !!(stored && stored.stored), errors: ek.length ? errs : void 0 };
+  return { items: items.length, drafts, flags, delivered, to: OWNER_VOICE_TO, message_id: messageId, stored: !!(stored && stored.stored), errors: ek.length ? errs : void 0 };
 }
 __name(sentAsYouDigest, "sentAsYouDigest");
 // OWNER-VOICE-STOP-1 (#1713): one deterministic switch for both streams. Not scheduled; run on demand (/run?job=...).
@@ -2375,13 +3087,15 @@ var JOBS = {
   "owner-voice-stop": jobOwnerVoiceStop,
   "owner-voice-resume": jobOwnerVoiceResume,
   "radar": jobRadar,
-  "grant-followup": jobGrantFollowup
+  "grant-followup": jobGrantFollowup,
+  "outreach-learner": jobOutreachLearner
 };
 // GRANT-FOLLOWUP-1: a job that rides another job's cron slot, because the dispatch map holds one job per cron and a new
 // cron would count against the account cap (charter rule 2). Companions run first, each in its own try and logged under
 // its own name, so neither job can stop or hide the other. worker-health fires twice a day, every day (05:05 and 17:05
-// Amsterdam).
-var CRON_COMPANIONS = { "worker-health": ["grant-followup"] };
+// Amsterdam). OUTREACH-LEARNER-1 (1.18.0): outreach-learner rides the daily engagement slot (07:15 Amsterdam, every day)
+// and runs before it, so the sent-as-you digest inside engagement reports that day's learner tick.
+var CRON_COMPANIONS = { "worker-health": ["grant-followup"], "engagement": ["outreach-learner"] };
 async function runCompanion(env, job) {
   try {
     const out = await JOBS[job](env);
@@ -2881,7 +3595,7 @@ var worker_default = {
       // gate below, so it used to disclose binding/secret presence and the
       // full cron map to anonymous callers. Serve a minimal public body; the
       // detailed body requires a valid bearer token.
-      const publicBody = { ok: true, worker: WORKER_NAME, version: VERSION, capabilities: ["weekly-digest", "scorecard", "outreach-send-gate", "ai-endpoint-health", "seo-health", "research-scan", "grant-followup"], limitations: ["every route except this minimal /health needs a bearer token; the job and cron map is served only to authenticated callers", "jobs run only on its crons (Amsterdam-time aware)", "outreach sends are held inside the fleet-wide shared daily and per-domain caps", "grant-followup reads funder mail read-only (never sends, moves or flags it) and watches Gmail only while the GMAIL_PASS secret is set"] };
+      const publicBody = { ok: true, worker: WORKER_NAME, version: VERSION, capabilities: ["weekly-digest", "scorecard", "outreach-send-gate", "outreach-learner", "ai-endpoint-health", "seo-health", "research-scan", "grant-followup"], limitations: ["the outreach learner reorders and holds candidates inside the unchanged shared caps; it never raises a cap", "every route except this minimal /health needs a bearer token; the job and cron map is served only to authenticated callers", "jobs run only on its crons (Amsterdam-time aware)", "outreach sends are held inside the fleet-wide shared daily and per-domain caps", "grant-followup reads funder mail read-only (never sends, moves or flags it) and watches Gmail only while the GMAIL_PASS secret is set"] };
       const healthToken = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
       if (!auth(healthToken, env)) {
         return new Response(JSON.stringify(publicBody), { headers: { "Content-Type": "application/json", ...CORS } });

@@ -81,6 +81,10 @@ db.prepare("INSERT INTO zenodo_stats (doi, updated_at) VALUES ('10.5281/zenodo.1
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-email-triage-t1', ?, 'ok')").run(ago(20));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('mention-radar-2026-10-05', ?, 'mention-radar', 'radar-hub', 'degraded')").run(ago(23.5));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-radar-r1', ?, 'ok')").run(ago(24.5));
+// OUTREACH-LEARNER-1: the learner's daily heartbeat and a weekday outreach run with its logged allocation.
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('ol-tick-2026-10-06', ?, 'ok')").run(ago(2.7));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-outreach-o1', '2026-10-05T09:00:40.000Z', 'capped')").run();
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('ol-alloc-2026-10-05-a1', '2026-10-05T09:00:39.000Z', 'ok')").run();
 db.prepare("INSERT INTO handoffs (session_id, project_id, timestamp, claim_sheet) VALUES ('cloud-workflow', 'job-market-watch-workflow-2026-10-05', ?, '{}')").run(ago(25));
 db.prepare("INSERT INTO handoffs (session_id, project_id, timestamp, claim_sheet) VALUES ('s', 'job-market-watch-2026-10-06', ?, '{}')").run(ago(0.5));   // a session note, outside the id range
 db.prepare("INSERT INTO events_radar (slug, scanned_at) VALUES ('events-radar-2026-10-05', ?)").run(ago(27));
@@ -329,6 +333,32 @@ ok((await sla()).counted && (await sla()).state === "never ran", "with no ledger
 db.exec("DROP TABLE cloud_ops_events; ALTER TABLE coe_full RENAME TO cloud_ops_events");
 m = await api.watchmakerMeasure(env, NOW);
 ok(m.index === 0, "fresh again after the inbound-SLA checks (" + m.counted.join(",") + ")");
+// OUTREACH-LEARNER-1: the daily update step and the allocation inside each outreach run.
+{
+  const ol = async (now) => op(await api.watchmakerMeasure(env, now || NOW), "outreach-learner");
+  let o = await ol();
+  ok(o && !o.counted && o.runner === "cron:qnfo-cloud-ops" && /^ok, last run 2.7h ago$/.test(o.state), "a fresh learner tick with every outreach run's allocation logged is not counted (" + (o && o.state) + ")");
+  db.exec("UPDATE cloud_ops_events SET status = 'degraded' WHERE id = 'ol-tick-2026-10-06'");
+  ok(!(await ol()).counted, "a degraded tick (a metric row refused) still proves the learner ran");
+  db.exec("UPDATE cloud_ops_events SET status = 'error' WHERE id = 'ol-tick-2026-10-06'");
+  o = await ol();
+  ok(!o.counted && /^first run due 2026-10-06T12:00/.test(o.state), "before its first due time a learner with no ok tick is not counted");
+  o = await ol(Date.parse("2026-10-06T13:00:00Z"));
+  ok(o.counted && o.state === "never ran", "an error tick proves nothing once the first run is due");
+  db.prepare("UPDATE cloud_ops_events SET status = 'ok', ts = ? WHERE id = 'ol-tick-2026-10-06'").run(ago(50));
+  o = await ol();
+  ok(o.counted && /stalled: last run 50h ago, cadence 24h/.test(o.state), "a learner silent for over 48h counts as stalled");
+  db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'ol-tick-2026-10-06'").run(ago(2.7));
+  db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-outreach-o2', '2026-10-06T07:00:10.000Z', 'ok')").run();
+  o = await ol();
+  ok(o.counted && /^1 outreach runs in 48h with no logged learner allocation/.test(o.state), "an outreach run with no allocation row that day counts as stuck (" + o.state + ")");
+  db.exec("UPDATE cloud_ops_events SET status = 'gated' WHERE id = 'jr-outreach-o2'");
+  ok(!(await ol()).counted, "a gated outreach run (kill switch off) needs no allocation");
+  db.exec("UPDATE cloud_ops_events SET status = 'ok', id = 'jr-outreach-learner-x1' WHERE id = 'jr-outreach-o2'");
+  ok(!(await ol()).counted, "the learner's own job-run rows are not outreach runs");
+  db.exec("DELETE FROM cloud_ops_events WHERE id = 'jr-outreach-learner-x1'");
+  ok(!(await ol()).counted, "fresh again");
+}
 
 // Stalled, never-run, backlog, live merges, unreadable
 db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'portfolio-daily-2026-10-06'").run(ago(60));

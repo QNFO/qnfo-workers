@@ -4,7 +4,9 @@
 // the follow-up subject is "Following up:", never "Re:"; suppressed addresses (email_suppression, contact_ledger,
 // qnfo-outreach contacts) are never mailed; the shared 8/day and 3/day-per-domain caps hold across both engines; and
 // each send leaves a cloud_ops_events row keyed by message_id whose meta records opt_out, so the #1710 DoD probes
-// (also run here, verbatim) can measure the opt-out line from D1. Synthetic data only.
+// (also run here, verbatim) can measure the opt-out line from D1. OUTREACH-LEARNER-1 (1.18.0): the fixture carries ops_config,
+// so the Thompson learner orders the candidates; every consent and cap assertion holds under that order, a mixed-segment
+// run proves it with the order actually changed, and the kill switch gives the exact oldest-first result. Synthetic data only.
 // Run: node qnfo-cloud-ops/outreach-consent.test.mjs   -> prints "N passed, 0 failed" (Node 22: node:sqlite)
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -13,10 +15,12 @@ const IMPORT = 'import { connect } from "cloudflare:sockets";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: update the loader in this test");
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
-  "\nexport { jobOutreach as __jobOutreach, OUTREACH_OPT_OUT as __OPT_OUT };\n";
+  "\nexport { jobOutreach as __jobOutreach, OUTREACH_OPT_OUT as __OPT_OUT, LEARNER_RNG as __RNG };\n";
 const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
 const jobOutreach = mod.__jobOutreach;
 const OPT_OUT = mod.__OPT_OUT;
+// Seeded RNG for the learner's Thompson draws (mulberry32), so every run of this suite takes the same order.
+mod.__RNG.fn = (function (a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })(1710);
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
@@ -41,7 +45,9 @@ function fresh(killSwitch) {
     CREATE TABLE contact_ledger (email TEXT PRIMARY KEY, name TEXT, affiliation TEXT, first_contact TEXT, last_contact TEXT, contact_count INTEGER DEFAULT 0, status TEXT, suppress_reason TEXT, person_key TEXT, last_reply_at TEXT, suppress INTEGER DEFAULT 0, reply_count INTEGER DEFAULT 0);
     CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')));
     CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
-    CREATE TABLE deployment_history (id INTEGER PRIMARY KEY AUTOINCREMENT, resource_type TEXT, resource_name TEXT, action TEXT, version_id TEXT, deployed_by TEXT, deployed_at TEXT DEFAULT (datetime('now')), status TEXT DEFAULT 'success', notes TEXT);`);
+    CREATE TABLE deployment_history (id INTEGER PRIMARY KEY AUTOINCREMENT, resource_type TEXT, resource_name TEXT, action TEXT, version_id TEXT, deployed_by TEXT, deployed_at TEXT DEFAULT (datetime('now')), status TEXT DEFAULT 'success', notes TEXT);
+    CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
+    CREATE TABLE emails (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT UNIQUE NOT NULL, sender TEXT NOT NULL, recipient TEXT NOT NULL, subject TEXT, body_text TEXT, headers_json TEXT, status TEXT, received_at TEXT, in_reply_to TEXT, references_hdr TEXT);`);
   const outreach = new DatabaseSync(":memory:");
   outreach.exec(`CREATE TABLE pipeline_state (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
     CREATE TABLE contacts (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, name TEXT, suppress INTEGER DEFAULT 0, suppress_reason TEXT);
@@ -53,8 +59,8 @@ function fresh(killSwitch) {
     SEND_EMAIL: { async send(m) { sent.push(m); return { messageId: "<t" + sent.length + "@qnfo.org>" }; } }
   };
   let n = 0;
-  const queue = (email, status) => audit.prepare("INSERT INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES (?, ?, 'A. Author', ?, 'test reason', ?, datetime('now', ?))")
-    .run("aq-" + (++n), "2609." + String(10000 + n) + "v1", email, status || "pending", "-" + (100 - n) + " minutes");
+  const queue = (email, status, reason) => audit.prepare("INSERT INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES (?, ?, 'A. Author', ?, ?, ?, datetime('now', ?))")
+    .run("aq-" + (++n), "2609." + String(10000 + n) + "v1", email, reason || "test reason", status || "pending", "-" + (100 - n) + " minutes");
   return { audit, outreach, env, sent, queue };
 }
 const qStatus = (t, email) => (t.audit.prepare("SELECT status FROM outreach_queue WHERE email = ?").get(email) || {}).status;
@@ -124,6 +130,20 @@ ok(typeof OPT_OUT === "string" && /stop/i.test(OPT_OUT), "OUTREACH_OPT_OUT is a 
   const before = t.sent.length;
   await jobOutreach(t.env);
   ok(t.sent.length === before, "a second run on the same UTC day sends nothing");
+  // OUTREACH-LEARNER-1: one segment here (other:institutional), so the learner's order is the oldest-first order.
+  const alloc = t.audit.prepare("SELECT meta FROM cloud_ops_events WHERE kind = 'outreach-learner' AND id LIKE 'ol-alloc-%' ORDER BY ts").all().map((r) => JSON.parse(r.meta));
+  ok(alloc.length === 2 && alloc[0].mode === "thompson" && alloc[0].picks["other:institutional"] === 8, "the learner ran and logged the day's allocation (" + JSON.stringify(alloc[0] && alloc[0].picks) + ")");
+  ok(t.audit.prepare("SELECT COUNT(*) n FROM outreach_learner_sends WHERE source = 'live' AND segment = 'other:institutional'").get().n === 8, "every send is in the learner ledger with its segment");
+}
+
+// 2b. Learner kill switch: ops_config outreach_learner_enabled = 0 gives the previous oldest-first drain exactly.
+{
+  const t = fresh("1");
+  t.audit.prepare("INSERT INTO ops_config (key, value) VALUES ('outreach_learner_enabled', '0')").run();
+  for (const p of ["k1@a.edu", "k2@b.edu", "k3@c.edu", "k4@d.edu", "k5@e.edu", "k6@f.edu", "k7@g.edu", "k8@h.edu", "k9@i.edu"]) t.queue(p, "pending", p === "k1@a.edu" ? "Surface codes" : "Quantum battery");
+  const r = await jobOutreach(t.env);
+  ok(t.sent.length === 8 && t.sent.map((m) => m.to).join(",") === "k1@a.edu,k2@b.edu,k3@c.edu,k4@d.edu,k5@e.edu,k6@f.edu,k7@g.edu,k8@h.edu" && qStatus(t, "k9@i.edu") === "pending", "learner off: oldest-first, the 9th waits");
+  ok(r.notes.learner && r.notes.learner.mode === "oldest-first", "learner off: the run reports oldest-first");
 }
 
 // 3. Follow-ups: one honest follow-up, opt-out line, suppression, replied excluded, evidence.
@@ -156,6 +176,27 @@ ok(typeof OPT_OUT === "string" && /stop/i.test(OPT_OUT), "OUTREACH_OPT_OUT is a 
   t.queue("late@uni-z.edu");
   const r = await jobOutreach(t.env);
   ok(t.sent.length === 0 && r.status === "capped", "8 sends by qnfo-outreach today leave no room for this engine");
+}
+
+// 5. OUTREACH-LEARNER-1 with the order actually changed: a history that favours one segment reorders the drain, and
+// every consent rule and cap above still holds.
+{
+  const t = fresh("1");
+  t.audit.exec("CREATE TABLE IF NOT EXISTS outreach_learner_sends (queue_id TEXT PRIMARY KEY, email TEXT NOT NULL, segment TEXT NOT NULL, topic TEXT, rtype TEXT, template TEXT, paper_id TEXT, sent_at TEXT NOT NULL, message_id TEXT, source TEXT, outcome TEXT, outcome_at TEXT, evidence_email_id INTEGER, updated_at TEXT)");
+  for (let i = 0; i < 12; i++) t.audit.prepare("INSERT INTO outreach_learner_sends (queue_id, email, segment, topic, rtype, sent_at, source, outcome) VALUES (?, ?, 'energy:personal', 'energy', 'personal', datetime('now', '-40 days'), 'test', ?)").run("h" + i, "h" + i + "@gmail.com", i < 8 ? "positive" : "no-reply");
+  for (const p of ["q1@uni-a.edu", "q2@uni-b.edu", "q3@uni-c.edu", "q4@uni-d.edu", "q5@uni-e.edu", "q6@uni-f.edu"]) t.queue(p, "pending", "Surface codes and decoders");
+  t.queue("opted@gmail.com", "pending", "Quantum battery charging");
+  t.audit.prepare("INSERT INTO email_suppression (email, reason, source) VALUES ('opted@gmail.com', 'reply-stop', 'reply-scan')").run();
+  t.queue("seen@gmail.com", "pending", "Landauer erasure");
+  t.audit.prepare("INSERT INTO outreach_log (email, subject, message_id, sent_at, status) VALUES ('seen@gmail.com', 'x', '<seen@qnfo.org>', '2026-09-20 09:00:00', 'sent')").run();
+  for (const p of ["e1@gmail.com", "e2@gmail.com", "e3@gmail.com", "e4@gmail.com"]) t.queue(p, "pending", "Quantum battery charging");
+  const r = await jobOutreach(t.env);
+  const to = t.sent.map((m) => m.to);
+  ok(t.sent.length === 8 && r.status === "capped", "learner order: still exactly 8 mails (" + to.join(",") + ")");
+  ok(to.filter((x) => x.endsWith("@gmail.com")).length === 3, "learner order: 3/day per domain holds (gmail.com)");
+  ok(to[0] === "e1@gmail.com" && to.filter((x) => /^e\d@gmail\.com$/.test(x)).length === 3, "learner order: the segment that answers is mailed first and gets 3 slots where oldest-first reaches only 2 (" + to.join(",") + ")");
+  ok(!to.includes("opted@gmail.com") && qStatus(t, "opted@gmail.com") === "skipped-suppressed" && !to.includes("seen@gmail.com") && qStatus(t, "seen@gmail.com") === "skipped-dup", "learner order: suppression and no-repeat contact hold");
+  ok(t.sent.every((m) => String(m.text).includes(OPT_OUT) && !isRe(m.subject)), "learner order: every mail carries the opt-out line and no fake Re:");
 }
 
 console.log(pass + " passed, " + fail + " failed");

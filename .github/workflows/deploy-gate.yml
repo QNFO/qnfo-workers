@@ -160,6 +160,11 @@ jobs:
       # honours suppression and the shared caps, and records per-send opt-out evidence the DoD probe reads.
       - name: OUTREACH-CONSENT-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/outreach-consent.test.mjs
+      # OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): reply outcomes and Beta posteriors per segment, Thompson allocation
+      # inside the unchanged shared caps, the stop rule, kill switch, the two reach metrics (and their trigger migration),
+      # and SENT-AS-YOU-DELIVERY-1 (the daily digest mailed once to the owner's qnfo.org address).
+      - name: OUTREACH-LEARNER-1 offline suite (qnfo-cloud-ops)
+        run: node qnfo-cloud-ops/outreach-learner.test.mjs
       - name: OUTREACH-CF-DOW-1 cron weekday check (qnfo-outreach)
         run: node qnfo-outreach/cron-dow.test.mjs
 
