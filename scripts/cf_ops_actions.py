@@ -45,6 +45,13 @@ ACTIONS
                          clearly marked probe idea and return the raw tool JSON, proving the intake envelope reports
                          persistence truthfully. The probe intent is cancelled afterwards from D1, before the 06:00Z
                          triage, so it never becomes research.
+  paper-body-from-zenodo SLUG|RECORD|FILE
+                         PAPER-BODY-FROM-DEPOSIT-1 (#1806): set living-paper.papers.body_md for SLUG to the Markdown file FILE
+                         of Zenodo record RECORD, the paper's own deposit. Refused unless the record lists the owner as a
+                         creator, its DOI or concept DOI is the paper's DOI, and the file is UTF-8 Markdown under 400 KB with
+                         no U+FFFD. The current body is kept first in papers_body_bak_zenodo_sync; the result is read back
+                         and compared by SHA-256. Fixes pages that were imported from a supplementary chat transcript instead
+                         of the deposited paper. Prints hashes and lengths, never the text.
 
 Every action prints one line `RESULT_JSON=<json>` so the job log is machine-readable.
 """
@@ -462,9 +469,63 @@ def zaraz_remove_tool(zone_name: str, match: str, token: str) -> int:
     return 0 if not left else 1
 
 
+LIVING_PAPER_DB = "70a58cb3-b2cd-498d-877f-ecca86859a22"
+
+
+def d1q(acct: str, token: str, sql: str, params: list) -> tuple[bool, list]:
+    st, j = call("POST", f"/accounts/{acct}/d1/database/{LIVING_PAPER_DB}/query", token, {"sql": sql, "params": params}, timeout=90)
+    if st != 200 or not j.get("success"):
+        return False, [str(j.get("errors"))[:300]]
+    res = j.get("result") or [{}]
+    return True, res[0].get("results") or []
+
+
+def paper_body_from_zenodo(acct: str, token: str, target: str) -> int:
+    import hashlib
+    import urllib.parse
+    parts = target.split("|")
+    if len(parts) != 3 or not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,120}", parts[0]) or not parts[1].isdigit() or not parts[2].endswith(".md"):
+        emit({"action": "paper-body-from-zenodo", "ok": False, "error": "target must be slug|record_id|file.md"})
+        return 2
+    slug, rid, key = parts
+    def zget(url: str) -> bytes:
+        req = urllib.request.Request(url, headers={"User-Agent": "qnfo-cf-ops-actions", "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.read()
+    rec = json.loads(zget("https://zenodo.org/api/records/" + rid))
+    md = rec.get("metadata") or {}
+    owner = any(re.search(r"quni|gudzinas", (c.get("name") or ""), re.I) for c in md.get("creators") or [])
+    ok, rows = d1q(acct, token, "SELECT doi, length(body_md) AS n FROM papers WHERE slug = ?1", [slug])
+    if not ok or len(rows) != 1:
+        emit({"action": "paper-body-from-zenodo", "ok": False, "error": "paper not found or not unique", "detail": rows})
+        return 1
+    pdoi = (rows[0].get("doi") or "").lower()
+    rdois = {(rec.get("doi") or "").lower(), (rec.get("conceptdoi") or "").lower(), ("10.5281/zenodo." + rid)}
+    files = {f.get("key"): f for f in rec.get("files") or []}
+    if not owner or pdoi not in rdois or key not in files or int(files[key].get("size") or 0) > 400000:
+        emit({"action": "paper-body-from-zenodo", "ok": False, "error": "refused: owner, DOI or file check failed", "owner": owner, "paper_doi": pdoi, "record_dois": sorted(rdois), "file_found": key in files})
+        return 1
+    raw = zget("https://zenodo.org/api/records/" + rid + "/files/" + urllib.parse.quote(key) + "/content")
+    text = raw.decode("utf-8")
+    if "\ufffd" in text or len(text.strip()) < 200:
+        emit({"action": "paper-body-from-zenodo", "ok": False, "error": "refused: file is empty or carries U+FFFD"})
+        return 1
+    ok, r1 = d1q(acct, token, "CREATE TABLE IF NOT EXISTS papers_body_bak_zenodo_sync (slug TEXT, body_md TEXT, doi TEXT, record_id TEXT, file_key TEXT, backed_up_at TEXT)", [])
+    ok2, r2 = d1q(acct, token, "INSERT INTO papers_body_bak_zenodo_sync (slug, body_md, doi, record_id, file_key, backed_up_at) SELECT slug, body_md, doi, ?2, ?3, datetime('now') FROM papers WHERE slug = ?1", [slug, rid, key])
+    if not (ok and ok2):
+        emit({"action": "paper-body-from-zenodo", "ok": False, "error": "backup failed", "detail": [r1, r2]})
+        return 1
+    ok3, r3 = d1q(acct, token, "UPDATE papers SET body_md = ?1 WHERE slug = ?2", [text, slug])
+    ok4, back = d1q(acct, token, "SELECT body_md FROM papers WHERE slug = ?1", [slug])
+    want = hashlib.sha256(text.encode()).hexdigest()
+    got = hashlib.sha256((back[0].get("body_md") or "").encode()).hexdigest() if ok4 and back else ""
+    emit({"action": "paper-body-from-zenodo", "ok": ok3 and want == got, "slug": slug, "record": rid, "file": key, "old_len": rows[0].get("n"), "new_len": len(text), "sha256": want, "read_back_match": want == got})
+    return 0 if (ok3 and want == got) else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool"])
+    ap.add_argument("action", choices=["paper-body-from-zenodo", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -487,6 +548,8 @@ def main() -> int:
         return zaraz_remove_tool(a.target, a.model, token)
     if a.action == "r2-get":
         return r2_get(acct, token, a.target)
+    if a.action == "paper-body-from-zenodo":
+        return paper_body_from_zenodo(acct, token, a.target)
     if a.action == "worker-history":
         return worker_history(a.target, acct, token)
     if a.action == "kv-secret-scan":
