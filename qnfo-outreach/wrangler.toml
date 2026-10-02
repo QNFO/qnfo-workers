@@ -11,8 +11,11 @@ send_email = [
 enabled = true
 head_sampling_rate = 1
 
+# OUTREACH-CF-DOW-1 (2026-10-02, #1710; same class as qnfo-cloud-ops CF-DOW-1 #1473): Cloudflare numbers weekdays
+# 1=Sunday..7=Saturday, so the old "1-5" ran Sunday-Thursday and never on Friday. "2-6" is Monday-Friday, the
+# weekday cadence /health and docs/STRATEGY.md describe. Same five runs a week; sends stay inside the shared caps.
 [triggers]
-crons = ["0 11 * * 1-5"]
+crons = ["0 11 * * 2-6"]
 
 [[d1_databases]]
 binding = "OUTREACH_D1"

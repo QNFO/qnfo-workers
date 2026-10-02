@@ -11,6 +11,17 @@ Autonomous signal engine serving https://q08.org — systems-level critiques of 
   plain var `Q08_SOCIAL_QUEUE`: off unless set to `"1"`. It is the q08 kill switch in the owner-voice gates (STRATEGY
   section 5) and stays off until q08 has its own channel.
 - Review 2026-10-31 on bot-filtered human reads; q08 is retired if it is under 50 human reads/week (STRATEGY section 7).
+  The measurement and the reversible half of that decision are automated (Q08-REVIEW-2026-10-31, agent_issues 1716):
+  qnfo-fleet-dashboard measures bot-filtered Cloudflare Web Analytics page views on q08.org and www.q08.org for
+  2026-10-24..30, records the decision in qnfo-audit `ops_config.q08_review_2026_10_31` (`GET
+  https://fleet.qnfo.org/api/q08-review`) and, under 50 a week, sets the cadence cap below to 2. Retiring the worker
+  stays the owner's decision.
+
+## Cadence cap (Q08-CADENCE-CAP-1, v0.7.37)
+- Before each generation (cron or `POST /run`) the engine reads qnfo-audit `ops_config` key `q08_max_per_day`: an
+  integer 0..10 caps the essays published per UTC day (0 pauses publishing). Absent, unreadable or invalid means 10, the
+  behaviour before the knob. A run past the cap returns before any scrape or AI call. `/health` shows `daily_cap`.
+- Undo a cut by deleting the row or raising it.
 
 ## Runtime
 - Worker: `q08-signal-engine` (Cloudflare Workers ES module, entry `worker.js`)

@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.4, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.5, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -45,8 +45,8 @@ Cost: about $725 a month in total, of which about $450 is AI spend across four p
 cap that the direct-provider keys bypass. Revenue: $0.
 
 What already works, and is worth protecting: the canonical deploy path (lock, source fetch, binding-preserving upload,
-live verify, ledger, crons) with 1,506 deploys in the last 7 days; measured autonomy scores recomputed daily (composite
-4.1 of 5); an issue system with mandatory close evidence and 88.6% weekly closure; a self-heal ledger with 96% of acted
+live verify, ledger, crons) with 1,506 deploys in the last 7 days; measured autonomy scores recomputed daily (unweighted
+dimension mean 4.1 of 5; the owner-weighted Autonomy composite defined in 3.1 read 3.24 of 5 on 2026-10-02); an issue system with mandatory close evidence and 88.6% weekly closure; a self-heal ledger with 96% of acted
 rows verified; 68 of 68 registered guards verified with a negative test; an evolve loop that has landed one self-authored
 PR through its own gates.
 
@@ -89,12 +89,23 @@ was fun to build. It does not delete research data automatically, ever.
 | Key | Statement (abridged; the row is canonical) |
 |---|---|
 | `mission` v1 | Every recurring function runs in the cloud. The fleet operates, heals, audits, improves, publishes and promotes itself. The human role narrows to policy-setting and exception handling. |
-| `objective-function` v2 | Maximise SAI = 0.20 autonomy + 0.15 thinking + 0.15 decision + 0.15 self-improvement + 0.10 reliability + 0.10 integration + 0.10 external impact + 0.05 governance, subject to the autonomy-ladder cap, the cost ceiling and the residual-consent boundary. |
+| `objective-function` v3 | Maximise SAI = 0.15 autonomy + 0.15 thinking + 0.15 decision + 0.20 self-improvement + 0.10 reliability + 0.10 integration + 0.10 external impact + 0.05 governance, subject to the autonomy-ladder cap, the cost ceiling and the residual-consent boundary. (v3: revision goal 58, ratified by the owner on fleet.qnfo.org and applied 2026-10-01, moved 0.05 from autonomy to self-improvement.) |
 | `cost-ceiling` v2 | Throttle, do not hard-cap, AI spend; one unified monthly cost figure per source; the unmanaged direct-provider spend becomes visible and bounded. |
 | `return-on-spend` v3 | Tie total spend to the reach scorecard (search impressions, engaged human sessions, social engagement rate, confirmed subscribers, warm conversations, credibility events, cost per engaged human). Review gate 2026-12-31: continue the research layer if credibility events >= 2 or confirmed subscribers >= 50 or funding secured, and AI spend is inside the cap; else shrink to the selected-works core. Never delete research data automatically. |
 
 Seven objective-function revisions proposed by the fleet await the owner (`goals` where `goal_type='objective-revision'`).
 They are proposals; this charter does not adopt them.
+
+**Which number is the "Autonomy composite" (SAI-COMPOSITE-WEIGHTS-1, 1.0.5).** The scoreboard's Autonomy composite is
+the objective-function SAI above: its eight terms weighted by the owner-ratified weights in D1 `sai_config` (`w_*`, the
+rows OBJECTIVE-REVISION-APPLY-1 rewrites when the owner ratifies a weight revision), on a 0-5 scale (SAI out of 100,
+divided by 20). `qnfo-autonomy-scorer` computes it on its daily cron with the same formula and inputs as the dashboard's
+SAI (`computeSai` in `qnfo-fleet-dashboard`; an offline parity test keeps the two identical) and publishes it as
+`autonomy_scores.sai_weighted` (dated, with the weights and terms in its evidence) and `survival_state.sai`. A ratified
+weight revision therefore moves it on the next scorer run. The unweighted mean of the measured VSM, OODA and fleet
+dimensions is a different number, `autonomy_scores.overall`, shown as the "Autonomy dimension mean": a health read of the
+dimensions, not the objective, and no weight revision moves it. When the SAI cannot be measured (dashboard state older
+than six hours, a missing weight), `survival_state.sai` is NULL and the composite shows its last scoring date.
 
 ### 3.2 Pillars
 

@@ -30,12 +30,13 @@
  * Secrets
  *   ROUTER_TOKEN \u2014 bearer token for qnfo-ai
  *
- * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code)
+ * Cron: 0 * /2 * * * (every 2 hours; up to 10x/day cap enforced in code, lowered by
+ *   qnfo-audit ops_config q08_max_per_day when set: Q08-CADENCE-CAP-1)
  */
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.7.36-personal-channel-hold-ascii"; // v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.7.37-cadence-cap"; // v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -74,6 +75,26 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
 }
 var WORKER = "q08-signal-engine";
 var MAX_PER_DAY = 10;
+// Q08-CADENCE-CAP-1 (agent_issues 1716, Q08-REVIEW-2026-10-31; charter pillar: cost): the daily cap is the qnfo-audit
+// ops_config value under CAP_KEY, an integer 0..MAX_PER_DAY (0 pauses publishing). Absent, unreadable or not an integer
+// means MAX_PER_DAY, the behaviour before this knob. qnfo-fleet-dashboard sets it to 2 when the 2026-10-31 review measures
+// under 50 human page views a week; delete the row or raise it to undo. The cron still fires every 2 hours; a run past
+// the cap returns before any scrape or AI call.
+var CAP_KEY = "q08_max_per_day";
+function parseDailyCap(v) {
+  var s = v == null ? "" : String(v).trim();
+  if (!/^\d{1,3}$/.test(s)) return MAX_PER_DAY;
+  return Math.min(Number(s), MAX_PER_DAY);
+}
+async function dailyCap(env) {
+  if (!env || !env.AUDIT) return MAX_PER_DAY;
+  try {
+    var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(CAP_KEY).first();
+    return parseDailyCap(r && r.value);
+  } catch (e) {
+    return MAX_PER_DAY;
+  }
+}
 var HN_SEARCH = "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=50";
 var HN_ITEMS  = "https://hn.algolia.com/api/v1/items/";
 var ROUTER    = "https://qnfo-ai.internal/v1/chat/completions";
@@ -655,8 +676,9 @@ async function generate(env) {
     "SELECT COUNT(*) n FROM published_pieces WHERE published_at >= ?1"
   ).bind(utcDay() + "T00:00:00.000Z").first();
   var todayN = (dayCount && dayCount.n) || 0;
-  if (todayN >= MAX_PER_DAY) {
-    return { ok: false, reason: "daily cap reached (" + todayN + "/" + MAX_PER_DAY + ")" };
+  var cap = await dailyCap(env);
+  if (todayN >= cap) {
+    return { ok: false, reason: "daily cap reached (" + todayN + "/" + cap + (cap < MAX_PER_DAY ? ", ops_config " + CAP_KEY : "") + ")" };
   }
   // Scrape + rank \u2014 three sources (break the filter bubble)
   var stories = [];
@@ -1046,7 +1068,7 @@ export default {
       var cnt = await env.DB.prepare("SELECT COUNT(*) n FROM published_pieces").first().catch(() => ({n:0}));
       var last = await env.DB.prepare("SELECT slug, title, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 1").first().catch(() => null);
       var runs = await env.DB.prepare("SELECT status, COUNT(*) n FROM engine_runs GROUP BY status").all().catch(() => ({results:[]}));
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "/run is unauthenticated but rate-limited to 5 per IP per hour", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], pieces: cnt.n, last, runs: runs.results });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "/run is unauthenticated but rate-limited to 5 per IP per hour", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], pieces: cnt.n, daily_cap: await dailyCap(env), daily_cap_key: "ops_config " + CAP_KEY, last, runs: runs.results });
     }
 
     if (path === "/run" && req.method === "POST") {
