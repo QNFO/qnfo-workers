@@ -99,6 +99,14 @@ because each one was broken at least once; the linked issue holds the evidence.
   its exemption in the same migration. `metric_registry.state` is not a verdict; `v_metric_trigger_state.hit` is.
 - A remedy that did not move its metric within 7 days is replaced, not repeated: write a different lever into
   `analytics_metric_triggers.action` (with a code-task if it needs code) or correct a wrong target with evidence.
+- Filing is not fixing (ACT-BRIDGE-1, owner directive 2026-10-02). When a breach's lever is a code change in one file, end the
+  trigger's action with two lines of their own: `code-task: repo=qnfo-workers path=<dir>/worker.js` and
+  `code-anchor: <verbatim text that occurs exactly once in that file near the edit>` (state the edit in the prose above).
+  evaluateMetricTriggers (qnfo-fleet-control 0.4.89+) carries those lines into the issue unchanged, the code loop opens the
+  PR, the merge runner merges on green checks and verifies live. `breach_code_task_pct` grades how many breaches reach a
+  doer; `code_task_success_rate_30d` grades the doer (migrations/2026-10-02-act-bridge-doer-metrics.sql). A loop that acts
+  on its own metrics (ASK-LOOP-1 in qnfo-ai-search: measure, golden-set eval, judged A/B with revert, ASK-FIX-1 code tasks
+  that close themselves on recovery) points its triggers at the digest so a breach is not filed twice.
 - Every agent session writes one `qnfo-audit.session_records` row at closeout (wbs_code, summary, decisions_made,
   handoff_notes, total_tasks, completed_tasks, execution_ratio, started_at, completed_at): what it was asked, what it
   finished, what it left and why. `session_execution_ratio_30d` and `session_records_30d` are graded from these rows.
