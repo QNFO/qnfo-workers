@@ -142,6 +142,16 @@ jobs:
       - name: OUTREACH-CF-DOW-1 cron weekday check (qnfo-outreach)
         run: node qnfo-outreach/cron-dow.test.mjs
 
+      # REACH-LOOPS-WATCH-1: the delegated identity and reach loops record their runs on Cloudflare (WATCHMAKER_OPS reads
+      # them). qnfo-social SOCIAL-RUN-LEDGER-1; qnfo-cloud-ops EMAIL-TRIAGE-D1-1 (triage reads D1, no EMAIL_API_KEY) and
+      # ZENODO-UA-1 (honest User-Agent); radar-hub JOB-MARKET-INLINE-1, MENTION-RADAR-LEDGER-1, EVENTS-RADAR-CF-DOW-1.
+      - name: SOCIAL-RUN-LEDGER-1 offline suite (qnfo-social)
+        run: node qnfo-social/run-ledger.test.mjs
+      - name: EMAIL-TRIAGE-D1-1 and ZENODO-UA-1 offline suite (qnfo-cloud-ops)
+        run: node qnfo-cloud-ops/email-zenodo.test.mjs
+      - name: Job market, mention radar ledger and events cron offline suite (radar-hub)
+        run: node radar-hub/radar-hub.test.mjs
+
       # ERRATA-HUB-CRONS-UNDECLARED-1 + ERRATA-PUBLISH-GATE-1 (#1747): errata-hub's hourly members run, record a tick, and
       # make no Zenodo call, store re-point or mail from the publish member while pipeline_flags.errata_publish_enabled is off.
       - name: ERRATA-PUBLISH-GATE-1 offline suite (errata-hub)
