@@ -36,7 +36,7 @@ measurement loop**.
 | Person (the face) | **Rowan Brad Quni-Gudzinas** | author of record on every work, voice of LinkedIn/Bluesky/email | citation form `Quni-Gudzinas, R. B.`; ORCID `0009-0002-4317-5604` on every page and record |
 | Imprint (publisher) | **QNFO** | the independent research imprint that publishes the work (qnfo.org, papers.qnfo.org) | written `QNFO`. Never "Research Foundation", "Quniverse Research Foundation", "Research Collective", "Research Program" or "QNFO/QWAV open research group": there is no legal entity and the work is one researcher with an AI-assisted pipeline, so those labels overclaim |
 | System | **Quniverse** | the name of the autonomous cloud research system (the worker fleet) | used only when talking *about the system* (e.g. the fleet-lessons paper); never an organisation name |
-| Parked commercial label | **QWAV** | reserved for a future product or service | not used in bios, outreach or paper metadata until a product exists; QWAV sites keep their design (owner decision 2026-08-31) but do not carry the outreach |
+| Parked commercial label | **QWAV** | reserved for a future product or service | not used in bios, outreach or paper metadata until a product exists; QWAV sites use the shared design system with an indigo accent (owner decision 2026-10-02, superseding 2026-08-31) but do not carry the outreach |
 | Separate publication | **q08** | long-form essays on technical-industry friction at q08.org | **not** distributed through the owner's personal accounts; its own RSS/digest only (section 7.3) |
 | Tool | **iPatent** (ipatent.qnfo.org) | the QNFO flagship tool: free, private-by-default US provisional drafting with a claim-support map | **promoted** (owner direction 2026-10-02, section 2.4a); `ipatent.me` has no DNS and is not cited |
 
@@ -96,7 +96,8 @@ The full corpus stays in the library (papers.qnfo.org) for search. Counts are ne
 the funding strategy's own "volume trap" warning applies.
 
 ### 2.5 Visual and editorial
-- Design system: `qnfo-web-unified/README.md` (paper-and-ink palette, accent `#24315e`, Fraunces + Public Sans, Q tile).
+- Design system: QDS-1, `qnfo-web-unified/README.md` (one stylesheet at qnfo.org/qds.css; Newsreader + Familjen Grotesk; accent by brand: QNFO teal, QWAV indigo, q08 rust; light and dark). Owner decision 2026-10-02, superseding the 2026-08-31 paper-and-ink system.
+- Licence (LICENSE-ONE-1, decided 2026-10-02 at the owner's request): every QNFO paper is released under QNFO-ULA v2.0 (https://legal.qnfo.org/: CC BY-NC-SA 4.0 plus the QNFO supplemental terms). Zenodo deposits declare `cc-by-nc-sa-4.0` and carry a LICENSE file naming `LicenseRef-QNFO-ULA-2.0`; a paper's JSON-LD names its own recorded licence. Versions already released under CC BY 4.0 (48 rows on 2026-10-02) keep that grant, which cannot be withdrawn.
 - Every public page: title, description, canonical, viewport, OpenGraph + Twitter card, JSON-LD (Person with ORCID `sameAs`
   on profile pages, ScholarlyArticle with author ORCID on paper pages), GA4 and the Cloudflare beacon, subscribe CTA.
 - No internal jargon on public pages (worker counts, guard names, ticket tags).
