@@ -40,7 +40,9 @@ class_name = "GenerationFlow"
 schedules = ["0 4,8,12,16,20 * * *"]
 
 [triggers]
-crons = ["0 * * * *", "0 21 * * *"]
+# CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
+# (0 * * * *, 0 21 * * *) and runs each entry in the hour it fired.
+crons = ["0 * * * *"]
 
 [observability]
 enabled = true

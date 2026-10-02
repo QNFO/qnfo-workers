@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 09:47:58",
+  "audited_at": "2026-10-02 10:46:04",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -412,7 +412,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.2.0-vision-toolleak",
+        "version": "4.3.1-gcal-mcp",
         "worker": "personal-api"
       },
       {
@@ -432,7 +432,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.30.1-fleet-ctl",
+        "version": "5.31.0-aig-embed",
         "worker": "qnfo-ai"
       },
       {
@@ -487,17 +487,17 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.100-trigger-parse",
+        "version": "0.4.104-reach-policy-no-form",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.18.7-grant-followup-honest",
+        "version": "1.18.8-pageviews-human",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.8.5-pandoc-code",
+        "version": "3.8.6-reach-layer",
         "worker": "qnfo-gateway"
       },
       {
@@ -512,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.8.2-usage-topics",
+        "version": "3.9.0-guide-pages",
         "worker": "qnfo-ipatent"
       },
       {
@@ -537,7 +537,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.36-utf8-deploy",
+        "version": "2.38.37-core-prompt",
         "worker": "qnfo-ops"
       },
       {
@@ -800,9 +800,9 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.2.0-vision-toolleak",
+      "before": "4.3.1-gcal-mcp",
       "http": 200,
-      "live": "4.2.0-vision-toolleak",
+      "live": "4.3.1-gcal-mcp",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -880,9 +880,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.30.1-fleet-ctl",
+      "before": "5.31.0-aig-embed",
       "http": 200,
-      "live": "5.30.1-fleet-ctl",
+      "live": "5.31.0-aig-embed",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.100-trigger-parse",
+      "before": "0.4.104-reach-policy-no-form",
       "http": 200,
-      "live": "0.4.100-trigger-parse",
+      "live": "0.4.104-reach-policy-no-form",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.18.7-grant-followup-honest",
+      "before": "1.18.8-pageviews-human",
       "http": 200,
-      "live": "1.18.7-grant-followup-honest",
+      "live": "1.18.8-pageviews-human",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.8.5-pandoc-code",
+      "before": "3.8.6-reach-layer",
       "http": 200,
-      "live": "3.8.5-pandoc-code",
+      "live": "3.8.6-reach-layer",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1232,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.8.2-usage-topics",
+      "before": "3.9.0-guide-pages",
       "http": 200,
-      "live": "3.8.2-usage-topics",
+      "live": "3.9.0-guide-pages",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1280,9 +1280,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.36-utf8-deploy",
+      "before": "2.38.37-core-prompt",
       "http": 200,
-      "live": "2.38.36-utf8-deploy",
+      "live": "2.38.37-core-prompt",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"

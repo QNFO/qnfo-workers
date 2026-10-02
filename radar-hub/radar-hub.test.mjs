@@ -105,10 +105,12 @@ ok(mproof === null, "the watchmaker proof ignores an error run");
 const NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const cfDays = (field) => { if (field === "*") return NAMES.slice(); const out = []; for (const part of field.split(",")) { const [a, b] = part.split("-").map(Number); for (let n = a; n <= (b || a); n++) out.push(NAMES[n - 1]); } return out; };
 const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
-const m = /\[triggers\][^\[]*?crons\s*=\s*\[([^\]]*)\]/.exec(toml);
+// CRON-SINGLE-TRIGGER-1: wrangler.toml declares the one hourly tick; the nine former crons are CRON_TABLE in worker.js.
+ok(/^crons = \["0 \* \* \* \*"\]$/m.test(toml), "wrangler.toml declares the single hourly tick");
+const m = /var CRON_TABLE = \[([^\]]*)\];/.exec(src);
 const crons = m ? [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]) : [];
-ok(crons.length === 9, "nine declared crons, as before (net-zero; got " + crons.length + ")");
-const sched = src.slice(src.indexOf("  async scheduled(event, env, ctx) {\n    const c = event.cron;"));
+ok(crons.length === 9, "nine table entries, as before (net-zero; got " + crons.length + ")");
+const sched = src.slice(src.indexOf("    return cronTickDispatch(event, async function (event) {\n    const c = event.cron;"));
 ok(crons.every((c) => sched.includes('"' + c + '"')), "every declared cron is routed by the hub's scheduled handler");
 ok(crons.includes("0 5 * * 2") && !crons.includes("0 5 * * 1") && cfDays("2").join() === "MON", "the events radar cron fires Monday, the day it reads its weekly sources");
 ok(cfDays(crons.find((c) => c.startsWith("0 7 ")).split(" ")[4]).join() === "MON", "the job-market cron fires Monday 07:00Z");

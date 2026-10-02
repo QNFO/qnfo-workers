@@ -1,6 +1,17 @@
 # ROTATE-EXPOSED-CREDENTIALS-1 — execution runbook (#1676, CRITICAL)
 
 Window: **2026-10-03** (fixed by the issue; NOT executed early). Owner: qnfo-ops.
+
+> **What actually happened (measured 2026-10-02 with `cf-ops-actions worker-history qnfo-ops`, CF-WORKER-HISTORY-1):**
+> the qnfo-ops leg ran early, on **2026-10-01 between 07:32:04Z and 07:45:21Z**: nine worker versions triggered by
+> `secret` (versions 424 and 428-435), made directly through the Cloudflare API, with no row in `fleet_deploys`,
+> `deployment_history`, `cloud_ops_events` or `agent_issues`. Several agent sessions ran the rotation concurrently and
+> clobbered each other's slots (#1701). Afterwards qnfo-ops holds `OPS_ROUTER_AUTH_KEY` and `OPS_ROUTER_AUTH_KEY_2`
+> only; `OPS_CLIENT_KEY` is gone. Step 3 below (update every non-worker consumer in the same step) was not done for the
+> owner's clients: ChatBox got 401 on 2026-10-02, and canonical-deploy got 401 at 07:45Z until the Actions secret was
+> reset (DEPLOY-AUTH-CLASS-1). The exposed values are dead and must never be re-accepted. Since qnfo-ops 2.38.35
+> (OPS-PUBLIC-READ-1) a client without the current key still gets read-only answers. Next time, take the
+> secret-lock (CLAUDE.md, #1701) and record each secret PUT in `fleet_deploys`.
 Reason for the window: rotating a live endpoint key breaks every consumer not updated in the
 same atomic step. The router-key consumer set is not enumerable at rest (workers store it under
 different secret names — `ROUTER_TOKEN`, `ROUTER_AUTH_KEY`, …), so an early blind rotation would

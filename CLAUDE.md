@@ -11,13 +11,20 @@ because each one was broken at least once; the linked issue holds the evidence.
   a later re-probe confirms it.
 - Never re-accept a rotated-out key, and never commit a secret value.
 
-## Work claims (WORK-CLAIM-1)
-- Before you start an `agent_issues` row or change a worker, take the claim:
-  `POST https://qnfo-deploy-guard.q08.workers.dev/work-lock/acquire {"key":"issue:<id>","owner":"<session>","ttl_sec":3600}`
-  (`file:<worker>/worker.js` for a worker, one claim per worker; `ttl_sec` at most 7200). If `acquired` is false, `holder`
-  is on it until `expires_at`: skip it and take other work. `GET /work-locks` lists every live claim (open, never a token).
-- Acquire again with your `token` to extend it; hold it until your PR merges or you stop, then
-  `POST /work-lock/release {"key":"<key>","token":"<token>"}`. An issue claim records you in `agent_issues.linked_session`.
+## Work claims (WORK-CLAIM-1, one procedure since WORK-CLAIM-UNIFY-1)
+- Before you start an `agent_issues` row or change a file, take the claim:
+  `POST https://qnfo-deploy-guard.q08.workers.dev/work-lock/acquire {"key":"file:<repo path>","owner":"<session>","intent":"<what you will change>","ttl_sec":3600}`
+  (`issue:<id>` for an issue; `ttl_sec` at most 7200). If `acquired` is false, `holder` is on it until `expires_at`
+  (`intent` says what it is doing): skip it and take other work, or review that change instead of writing a second one.
+- `in_flight` in the answer lists the code loop's unfinished tasks on the same path or issue; they do not block you, but a
+  task that fixes the same defect means you review it, not duplicate it. `GET /work-locks` lists every live claim and
+  in-flight task (open, never a token).
+- Acquire again with your `token` (and `pr` once you have one) to extend it; hold it until your PR merges or you stop, then
+  `POST /work-lock/release {"key":"<key>","token":"<token>","pr":<n>,"outcome":"merged|closed|duplicate|abandoned"}`.
+  An issue claim records you in `agent_issues.linked_session`.
+- The claim is written to the D1 ledger `qnfo-audit.work_claims` (WORK-CLAIMS-1, migrations/2026-10-02-work-claims.sql) and
+  released there too; a row another session inserted there directly also refuses your acquire. Do not keep a second claim
+  procedure: the endpoint is the only writer a session needs.
 - Before you bump a worker's VERSION, list what main and the open PRs claim (REST: `gh pr list` is GraphQL, refused in
   sessions) and take a numeric core above the last line. version-bump-guard fails one that is not ahead (VERSION-AHEAD-1).
   ```
@@ -137,16 +144,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   (zenodo_versions_per_flagship read 1 while the true minimum was 3: two flagships were unmeasured, #1754). An action the
   session is refused is handed to the owner with the reason, not retried.
 
-## Claim before you change (WORK-CLAIMS-1)
-- Before changing a file, look for in-flight work on it:
-  `SELECT kind, intent, holder, pr FROM v_work_claims_active WHERE path = '<repo path>'` (D1 `qnfo-audit`; the view also
-  lists the code loop's unfinished tasks). If a row describes the same defect, do not write a second fix: review that
-  change, or add what is missing to it. If the rows are about something else, go ahead and expect a VERSION-line rebase.
-- Then say what you are doing: `INSERT INTO work_claims (path, intent, holder, issue_id) VALUES (...)`. A claim is
-  advisory and expires after two hours; renew it by inserting again. When the PR merges or closes, set `released_at`,
-  `pr` and `outcome` (`merged`, `closed`, `duplicate`). See migrations/2026-10-02-work-claims.sql.
-
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
-- GitHub `schedule` triggers never fire on this repository; periodic work belongs in worker crons.
+- GitHub `schedule` triggers fire rarely and late on this repository (95 schedule runs in total by 2026-10-02; mirror-autosync
+  ran 9 times), so no periodic work may depend on one; periodic work belongs in worker crons.

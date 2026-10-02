@@ -84,7 +84,8 @@ const ctx = { waitUntil() {}, passThroughOnException() {} };
 
 const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
 const quiet = async (fn) => { const l = console.log, e = console.error; console.log = () => {}; console.error = () => {}; try { return await fn(); } finally { console.log = l; console.error = e; } };
-const tick = async (cron) => quiet(() => worker.scheduled({ cron, scheduledTime: Date.now() }, env, ctx));
+// CRON-SINGLE-TRIGGER-1: the worker holds one hourly trigger; tickEntry runs one former cron's member, as the tick does.
+const tick = async (cron) => quiet(() => worker.scheduled({ cron, scheduledTime: Date.now(), tickEntry: true }, env, ctx));
 const tickRow = (m) => { const r = audit.prepare("SELECT value FROM errata_watch WHERE key = ?").get("tick:" + m); return r ? JSON.parse(r.value) : null; };
 const isZenodoDeposit = (u) => { try { const x = new URL(u); return x.hostname === "zenodo.org" && x.pathname.startsWith("/api/deposit"); } catch (e) { return false; } };
 const deposits = () => fetches.filter((f) => isZenodoDeposit(f.url));
@@ -155,6 +156,12 @@ audit.exec("ALTER TABLE emails_gone RENAME TO emails");
 const h = await (await worker.fetch(new Request("https://errata-hub.example/health"), env, ctx)).json();
 const lim = h.limitations.join(" | ");
 ok(/pipeline_flags\.errata_publish_enabled/.test(lim) && /run hourly/.test(lim) && !/no cron is declared/.test(lim), "/health states the hourly crons and the publish gate");
+
+// CRON-SINGLE-TRIGGER-1: the real hourly tick (no tickEntry) runs all three members: watch, then respond, then publish.
+audit.exec("DELETE FROM errata_watch WHERE key LIKE 'tick:%'");
+await quiet(() => worker.scheduled({ cron: "0 * * * *", scheduledTime: Date.UTC(2026, 9, 2, 12, 0) }, env, ctx));
+const tr = ["errata-watch", "errata-respond", "errata-publish"].map(tickRow);
+ok(tr.every((r) => r && r.ts) && tr[0].ts <= tr[1].ts && tr[1].ts <= tr[2].ts, "one hourly tick runs watch, respond and publish in that order (" + tr.map((r) => r && r.ts).join(" <= ") + ")");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

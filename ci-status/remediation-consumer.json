@@ -1,18 +1,26 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@0e33b8af2cef",
- "due": 1,
+ "verifier": "remediation-consumer@ad721400df6a",
+ "due": 2,
  "pass": 0,
- "fail": 1,
+ "fail": 2,
  "skipped": 0,
  "contracts": [
   {
-   "class": "GCAL-CONNECTED-1",
-   "issue_id": 1816,
+   "class": "issue-1827",
+   "issue_id": 1827,
    "verdict": "fail",
-   "expected": "connected",
-   "observed": "not-linked",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1828",
+   "issue_id": 1828,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "62",
    "written": true
   }
  ],
@@ -32,7 +40,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 3976,
- "head": "0e33b8af2ceffae8c07deb62e59f757de08adcef",
- "job_status": "success"
+ "spent_ms": 5804,
+ "head": "ad721400df6a23ba3bbe8216bea3b06c6c964621",
+ "job_status": "success",
+ "ts": "2026-10-02T10:44:31Z"
 }

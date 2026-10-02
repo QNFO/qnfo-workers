@@ -1,3 +1,4 @@
+// idea-hub v1.4.0-qds-20261002: IDEAS-QDS-1 server-rendered public page and thread pages on the QNFO design system.
 // idea-hub v1.3.0-think-loop-20261001
 // AUTOPILOT-FOLD-1 (2026-10-01, issue 1640): qnfo-autopilot vanished unrecorded around 2026-09-25 and is folded into
 //   existing workers instead of being recreated. Its think loop (one novel, falsifiable research question ->
@@ -68,7 +69,95 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.3.3-capability-contract";
+var VERSION = "1.4.0-qds";
+// ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
+var QDS_OWNER_ORCID = "0009-0002-4317-5604";
+// The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
+// https://qnfo.org/qds.css (any gateway host) and linked by every QNFO, QWAV and q08 surface, with qds.js for the theme
+// toggle, sticky header and the article table of contents. Pages declare <html data-brand="qnfo|qwav|q08">. Reading
+// type is Newsreader, interface type Familjen Grotesk; light and dark themes follow the OS unless the visitor picks one.
+// Replaces the 2026-08-31 paper-and-ink system (qnfo-web-unified/README.md, STRATEGY 2.5), owner decision 2026-10-02.
+var QDS_VERSION = "1.0.0";
+var QDS_ORIGIN = "https://qnfo.org";
+var QDS_FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">';
+var QDS_GA = '<!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script>';
+var QDS_MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["$","$"],["\\\\(","\\\\)"]],displayMath:[["$$","$$"],["\\\\[","\\\\]"]],processEscapes:true},svg:{scale:1.05,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" defer onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script>';
+var QDS_MARK = {
+  qnfo: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 16h7M13 16l7-8M13 16l7 8M20 8h6M20 24h6M20 8l4-4M20 24l4 4" stroke="var(--q-accent)" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="6" cy="16" r="3" fill="var(--q-ink)"/></svg>',
+  qwav: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 19c3.2-7 6.4-7 9.6 0s6.4 7 9.6 0c2-4.4 4-5.6 6.8-4" stroke="var(--q-accent)" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="3.5" cy="19" r="2.6" fill="var(--q-ink)"/></svg>'
+};
+var QDS_FAVICON = {
+  qnfo: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23182042'/%3E%3Cpath d='M6 16h7M13 16l7-8M13 16l7 8M20 8h6M20 24h6' stroke='%235FD3C4' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E",
+  qwav: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23182042'/%3E%3Cpath d='M4 18c3-6.5 6-6.5 9 0s6 6.5 9 0c1.8-4 3.6-5 6-3.6' stroke='%239AA6FF' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"
+};
+var QDS_THEME_BTN = '<button class="q-theme" type="button" data-q-theme aria-label="Switch between light and dark theme"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></button>';
+var QDS_MENU_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+// One navigation for the QNFO family. QWAV and q08 are separate labels (STRATEGY 2.1) and are not linked from here.
+var QDS_NAV_QNFO = [
+  { k: "papers", t: "Papers", h: "https://papers.qnfo.org/papers" },
+  { k: "ask", t: "Ask the corpus", h: "https://ask.qwav.tech/" },
+  { k: "ideas", t: "Ideas", h: "https://ideas.qnfo.org/" },
+  { k: "archive", t: "Archive", h: "https://archive.qnfo.org/" },
+  { k: "about", t: "About", h: "https://qnfo.org/about" },
+  { k: "work", t: "Work with me", h: "https://qnfo.org/work-with-me" }
+];
+var QDS_NAV_QWAV = [
+  { k: "jpcub", t: "JPCUB", h: "https://qwav.org/#jpcub" },
+  { k: "stack", t: "Architecture", h: "https://qwav.org/#stack" },
+  { k: "landscape", t: "Landscape", h: "https://qwav.org/#landscape" },
+  { k: "research", t: "Research", h: "https://qwav.org/#research" },
+  { k: "ask", t: "Ask", h: "https://ask.qwav.tech/" }
+];
+function qdsAttr(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+// The <head> every page shares. o: title, description, canonical, brand, ogType, jsonld (string), math (bool), extra (string),
+// rss (bool), robots.
+function qdsHead(o) {
+  const brand = o.brand || "qnfo";
+  const t = qdsAttr(o.title), d = qdsAttr(o.description || "");
+  const site = brand === "qwav" ? "QWAV" : "QNFO";
+  return '<!DOCTYPE html><html lang="en" data-brand="' + brand + '"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' +
+    "<title>" + t + '</title><meta name="description" content="' + d + '">' + (o.canonical ? '<link rel="canonical" href="' + qdsAttr(o.canonical) + '">' : "") +
+    (o.robots ? '<meta name="robots" content="' + qdsAttr(o.robots) + '">' : "") +
+    '<meta name="author" content="Rowan Brad Quni-Gudzinas"><meta property="og:site_name" content="' + site + '"><meta property="og:title" content="' + t + '"><meta property="og:description" content="' + d + '"><meta property="og:type" content="' + (o.ogType || "website") + '">' +
+    (o.canonical ? '<meta property="og:url" content="' + qdsAttr(o.canonical) + '">' : "") + '<meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + t + '"><meta name="twitter:description" content="' + d + '">' +
+    '<meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#121731" media="(prefers-color-scheme: dark)">' +
+    '<link rel="icon" type="image/svg+xml" href="' + QDS_FAVICON[brand === "qwav" ? "qwav" : "qnfo"] + '">' +
+    (o.rss ? '<link rel="alternate" type="application/rss+xml" title="QNFO Papers" href="https://papers.qnfo.org/rss.xml">' : "") +
+    QDS_FONTS + '<link rel="stylesheet" href="' + QDS_ORIGIN + "/qds.css?v=" + QDS_VERSION + '"><script src="' + QDS_ORIGIN + "/qds.js?v=" + QDS_VERSION + '" defer><\/script>' +
+    (o.jsonld || "") + (o.math ? QDS_MATHJAX : "") + (o.extra || "") + QDS_GA + "</head>";
+}
+function qdsHeader(brand, active) {
+  const nav = brand === "qwav" ? QDS_NAV_QWAV : QDS_NAV_QNFO;
+  const home = brand === "qwav" ? "https://qwav.org/" : "https://qnfo.org/";
+  const name = brand === "qwav" ? "QWAV" : "QNFO";
+  const links = nav.map(function(n) {
+    return '<a href="' + n.h + '"' + (n.k === active ? ' aria-current="page"' : "") + ">" + n.t + "</a>";
+  }).join("");
+  return '<a class="q-skip" href="#main">Skip to main content</a><header class="q-top"><div class="q-wrap"><a class="q-brand" href="' + home + '" aria-label="' + name + ' home">' + QDS_MARK[brand === "qwav" ? "qwav" : "qnfo"] + name + "</a>" +
+    '<nav class="q-nav q-nav-wide" aria-label="Main">' + links + "</nav>" +
+    '<details class="q-menu"><summary aria-label="Menu">' + QDS_MENU_ICON + '</summary><nav class="q-nav" aria-label="Main">' + links + "</nav></details>" + QDS_THEME_BTN + "</div></header>";
+}
+function qdsFooter(brand) {
+  if (brand === "qwav") {
+    return '<footer class="q-foot"><div class="q-wrap"><div class="q-foot-grid"><div><a class="q-brand" href="https://qwav.org/">' + QDS_MARK.qwav + 'QWAV</a><p style="margin-top:12px;max-width:36ch">A pre-commercial computing platform concept, benchmarked in joules per correct answer. Research by Rowan Brad Quni-Gudzinas, published by QNFO.</p></div>' +
+      '<div><h2>Platform</h2><ul><li><a href="#jpcub">JPCUB benchmark</a></li><li><a href="#stack">Architecture</a></li><li><a href="#landscape">Landscape</a></li><li><a href="#research">Research</a></li></ul></div>' +
+      '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://doi.org/10.5281/zenodo.21637028">JPCUB P0 protocol</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li></ul></div>' +
+      '<div><h2>Legal</h2><ul><li><a href="https://legal.qnfo.org/">License (QNFO-ULA v2.0)</a></li><li><a href="https://qnfo.org/about">About the author</a></li></ul></div></div>' +
+      '<div class="q-foot-base"><span>\u00a9 2025\u20132026 Rowan Brad Quni-Gudzinas</span><span>Research content under QNFO-ULA v2.0. No commercial product exists yet.</span></div></div></footer>';
+  }
+  return '<footer class="q-foot"><div class="q-wrap"><div class="q-foot-grid"><div><a class="q-brand" href="https://qnfo.org/">' + QDS_MARK.qnfo + 'QNFO</a><p style="margin-top:12px;max-width:38ch">The independent research imprint of Rowan Brad Quni-Gudzinas. Every work carries a DOI, and corrections ship as new versions.</p></div>' +
+    '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://qnfo.org/#selected-works">Selected works</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://ideas.qnfo.org/">Ideas</a></li><li><a href="https://archive.qnfo.org/">Archive</a></li></ul></div>' +
+    '<div><h2>Author</h2><ul><li><a href="https://qnfo.org/about">About</a></li><li><a href="https://qnfo.org/work-with-me">Work with me</a></li><li><a href="https://orcid.org/' + QDS_OWNER_ORCID + '">ORCID ' + QDS_OWNER_ORCID + '</a></li><li><a href="https://qnfo.org/work-with-me#contact">Contact</a></li></ul></div>' +
+    '<div><h2>Follow</h2><ul><li><a href="https://qnfo.org/#subscribe">New papers by email</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li><li><a href="https://legal.qnfo.org/">License (QNFO-ULA v2.0)</a></li><li><a href="https://legal.qnfo.org/privacy">Privacy</a></li></ul></div></div>' +
+    '<div class="q-foot-base"><span>\u00a9 2025\u20132026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><span>Prepared with an AI-assisted research pipeline; the author is responsible for the content.</span></div></div></footer>';
+}
+function qdsPage(o, body) {
+  return qdsHead(o) + "<body>" + qdsHeader(o.brand || "qnfo", o.active) + '<main id="main">' + body + "</main>" + qdsFooter(o.brand || "qnfo") + (o.scripts || "") + "</body></html>";
+}
+// ---- QDS-SHELL:END ----
+
 const BASE='https://ideas.qnfo.org';
 const INTERNAL=['system-reminder','<system-reminder','system prompt','role instructions','respond with the exact first sentence','reply with ok','reply with exactly','write 200 words','write one self-contained python','extract every quantitative claim','you are an adversarial reviewer','you are the revising author','revision round-2 mandate','l8 specification','operator-shared thread','numerical verification sprint','paper-reviser','tool_call','tool result','strict json only','compare paqit','guard-probe','probe-','research and publish','calendar event','email received','attachment_file','file_index','file_key','file_content','read-only context data','working memory','context-data','treat them strictly as data'];
 const OPS=['audit and remediate','remediate all failure modes','failure-mode','failure modes','backlog','open issues','ops_issue_run','fleet_status','backlog_status','ops_d1_query','ops_d1_write','cf_worker_read','cf_worker_deploy','cf_worker_bindings','workspace_write','workspace_read','web_fetch','web_search','github_','r2_','kv_','vectorize_query','telemetry_report','telemetry_analyze','dr_validate_schema','service_discover','shell_exec','exec_python','exec_node','container_status','qnfo-ops','worker deploy','patches not deployed','source drift','canonical source','binding missing','retired health stub','email-orchestrator','schema guard','dod audit','claim sheet','wbs plan','confirm:true','dryrun','incomplete:','ops endpoint','server-side ops','cloudflare worker'];
@@ -107,7 +196,7 @@ async function errataThreads(env){const n=Date.now();if(_eSet&&n-_eAt<60000)retu
 async function blocked(env,id){try{if((await quarantined(env)).has(String(id)))return true;if((await errataThreads(env)).has(String(id)))return true;const r=(await env.QNFO_AUDIT.prepare('SELECT role,content FROM chat WHERE thread=? ORDER BY ts ASC,id ASC LIMIT 200').bind(id).all()).results||[];return r.some(x=>x.role==='system'||has(x.content,INTERNAL)||has(x.content,OPS)||has(x.content,JUNK))}catch(e){return true}}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')}
 async function all(env){const rows=(await env.QNFO_AUDIT.prepare("SELECT c.thread AS id,COUNT(*) AS n,MIN(c.ts) first_ts,MAX(c.ts) last_ts,(SELECT content FROM chat c2 WHERE c2.thread=c.thread AND c2.role='user' ORDER BY c2.ts ASC,c2.id ASC LIMIT 1) title,(SELECT model FROM chat c2 WHERE c2.thread=c.thread ORDER BY c2.ts DESC LIMIT 1) model FROM chat c GROUP BY c.thread ORDER BY last_ts DESC LIMIT 500").all()).results||[];const out=[];for(const r of rows){if(!publicTitle(r.title))continue;if(await blocked(env,r.id))continue;out.push({id:r.id,kind:'thread',source:'live',title:clean(r.title,220),created_at:ts(r.first_ts)||ts(r.last_ts),updated_at:ts(r.last_ts)||ts(r.first_ts),message_count:Number(r.n)||0,model:r.model||null,tags:['conversation','live']})}try{const ar=(await env.QNFO_AUDIT.prepare("SELECT thread_id id,title,created_at,updated_at FROM chat_sessions WHERE category='research' ORDER BY COALESCE(updated_at,created_at) DESC LIMIT 500").all()).results||[];for(const r of ar){if(!publicTitle(r.title))continue;if(await blocked(env,r.id))continue;out.push({id:r.id,kind:'session',source:'archive',title:clean(r.title,220),created_at:ts(r.created_at),updated_at:ts(r.updated_at)||ts(r.created_at),message_count:0,model:null,tags:['conversation','archive']})}}catch(e){}const seen=new Set();return out.sort((a,b)=>Date.parse(b.updated_at||0)-Date.parse(a.updated_at||0)).filter(x=>{const k=x.title.toLowerCase().slice(0,100);if(seen.has(k))return false;seen.add(k);return true})}
-async function rss(env){const it=(await all(env)).slice(0,40);const body='<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>QNFO Idea Factory</title><link>'+BASE+'/</link><description>Public read-only research conversations from QNFO - ideas as they develop.</description><lastBuildDate>'+new Date().toUTCString()+'</lastBuildDate>\n'+it.map(x=>'<item><title>'+esc(x.title)+'</title><link>'+BASE+'/#/s/'+encodeURIComponent(x.id)+'</link><guid isPermaLink="false">'+esc(x.id)+'</guid><description>'+esc(x.title)+'</description><pubDate>'+new Date(x.updated_at||x.created_at||Date.now()).toUTCString()+'</pubDate></item>').join('\n')+'\n</channel></rss>';return new Response(body,{headers:{...cors(),'Content-Type':'application/rss+xml; charset=utf-8','Cache-Control':'no-store'}})}
+async function rss(env){const it=(await all(env)).slice(0,40);const body='<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>QNFO Idea Factory</title><link>'+BASE+'/</link><description>Public read-only research conversations from QNFO - ideas as they develop.</description><lastBuildDate>'+new Date().toUTCString()+'</lastBuildDate>\n'+it.map(x=>'<item><title>'+esc(x.title)+'</title><link>'+BASE+'/s/'+encodeURIComponent(x.id)+'</link><guid isPermaLink="false">'+esc(x.id)+'</guid><description>'+esc(x.title)+'</description><pubDate>'+new Date(x.updated_at||x.created_at||Date.now()).toUTCString()+'</pubDate></item>').join('\n')+'\n</channel></rss>';return new Response(body,{headers:{...cors(),'Content-Type':'application/rss+xml; charset=utf-8','Cache-Control':'no-store'}})}
 async function sessions(url,env){const limit=Math.min(Math.max(parseInt(url.searchParams.get('limit')||'50',10),1),100);return json({sessions:(await all(env)).slice(0,limit),limit})}
 async function session(path,env){const id=decodeURIComponent(path.split('/').slice(3).join('/'));const rows=(await env.QNFO_AUDIT.prepare('SELECT ts,role,content,model FROM chat WHERE thread=? ORDER BY ts ASC,id ASC LIMIT 500').bind(id).all()).results||[];const first=rows.find(r=>r.role==='user');if(!first||!publicTitle(first.content)||await blocked(env,id))return json({error:'Session not found or not public'},404);return json({id,title:clean(first.content,500),messages:rows.filter(r=>r.role!=='system'&&!has(r.content,INTERNAL)&&!has(r.content,OPS)&&!has(r.content,JUNK)).map(r=>({role:r.role,content:clean(r.content,200000),timestamp:ts(r.ts),model:r.model||null}))})}
 function html(){return new Response('<!doctype html><meta charset="utf-8"><title>QNFO Ideas</title><h1>QNFO Ideas</h1><p>Public read-only research conversations as they develop.</p><p><a href="/rss.xml">RSS feed</a></p>',{headers:{...cors(),'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}})}
@@ -301,12 +390,195 @@ async function thinkLoop(env) {
   if (!existing) await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES ('think-loop', ?1, '', 'new', ?2, ?3)").bind(question, qh, now).run();
   return { ok: true, question: question, routed: !existing };
 }
+// ASK-GAP-1 (2026-10-02, autonomy audit; pillars research + autonomy): qnfo-ai-search marks an answer 'uncovered' when the
+// corpus excerpts do not cover the question (ask_events.uncovered), and nothing read that column. Questions readers asked
+// that the corpus cannot answer are the clearest demand signal the fleet has, so each hour the distinct uncovered questions
+// of the last 7 days that pass the same research-domain gate as the public feed (publicTitle) become idea proposals
+// (name 'ask-gap'), at most ASK_GAP_BATCH a run, deduplicated by question hash, paused under PROPOSAL_BACKPRESSURE like
+// re-entry. Triage then scores them with everything else; nothing is published from here.
+var ASK_GAP_BATCH = 5;
+async function runAskGap(env) {
+  var out = { ok: true, candidates: 0, inserted: 0, skipped: 0 };
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status = 'new'").first().catch(function () { return null; });
+  if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) { out.paused = true; return out; }
+  var rows = (await env.QNFO_AUDIT.prepare("SELECT qhash, MIN(query) AS query, COUNT(*) AS n FROM ask_events WHERE uncovered = 1 AND COALESCE(cached, 0) = 0 AND error IS NULL AND query IS NOT NULL AND ts > datetime('now', '-7 days') GROUP BY qhash ORDER BY n DESC, MAX(ts) DESC LIMIT 25").all().catch(function () { return { results: [] }; })).results || [];
+  out.candidates = rows.length;
+  for (var i = 0; i < rows.length && out.inserted < ASK_GAP_BATCH; i++) {
+    var q = clean(String(rows[i].query || "").replace(/^\[paper:[^\]]*\]\s*/, ""), 600);
+    if (!publicTitle(q)) { out.skipped++; continue; }
+    var tag = "ask-gap:" + String(rows[i].qhash || "").slice(0, 32);
+    var seen = await env.QNFO_AUDIT.prepare("SELECT id FROM idea_proposals WHERE ip_hash = ?1 OR idea = ?2 LIMIT 1").bind(tag, q).first().catch(function () { return null; });
+    if (seen) { out.skipped++; continue; }
+    await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES ('ask-gap', ?1, '', 'new', ?2, datetime('now'))").bind(q, tag).run();
+    out.inserted++;
+  }
+  return out;
+}
 async function ideationCycle(env) {
   var r = {};
   try { r.reentry = await runReentry(env); } catch (e) { r.reentry = { error: String(e && e.message || e) }; }
   try { r.consume = await runConsume(env); } catch (e) { r.consume = { error: String(e && e.message || e) }; }
+  try { r.askgap = await runAskGap(env); } catch (e) { r.askgap = { error: String(e && e.message || e) }; }
   if (new Date().getUTCHours() % THINK_EVERY_H === 0) { try { r.think = await thinkLoop(env); } catch (e) { r.think = { error: String(e && e.message || e) }; } }
   r.triage = await triageProposals(env);
   return r;
 }
-export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "rss", "session-pages", "ideation"],limitations:["read-only public surface: /api/ask, /api/proposals and /run answer 503", "only research-domain titles pass the public filter; personal, ops and quarantined threads are never shown", "ideation runs on the hourly :23 cron"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname.startsWith('/#/'))return html();return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
+// ---- IDEAS-QDS-1 (2026-10-02, pillar reach): ideas.qnfo.org as a readable page on the QNFO design system ----
+// The public page was a bare <h1> with an RSS link, and every RSS item pointed at /#/s/<id>, a client route nothing
+// served. "/" now lists the public threads server-side and /s/<id> renders one thread. Both read through exactly the
+// same gates as /api/sessions and /api/session/<id> (publicTitle, blocked, per-message INTERNAL/OPS/JUNK), so nothing
+// becomes visible that the API did not already publish. Pages are cached 5 minutes (all() runs one D1 query per thread).
+function ideaText(s, max) {
+  return String(s || "").replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, " ").replace(/<system-reminder>[\s\S]*$/gi, " ")
+    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[redacted]").replace(/\b[A-Za-z0-9_-]{24,}\b/g, "[redacted]")
+    .replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, max || 200000);
+}
+// Some rows were stored with every newline collapsed to a space. Put back the block breaks markdown needs (headings,
+// table rows, bold-led list items, fences) so those answers read as sections instead of one paragraph.
+function ideaReflow(s) {
+  if (s.indexOf("\n") >= 0 || s.length < 300) return s;
+  s = s.replace(/ (#{1,6}) (?=\S)/g, "\n\n$1 ").replace(/\| \|/g, "|\n|").replace(/ (```)/g, "\n$1")
+    .replace(/ - (?=\*\*)/g, "\n- ").replace(/([.:)]) (\d{1,2}\. )(?=\*\*|[A-Z])/g, "$1\n$2");
+  // A collapsed heading runs into its first sentence; end it before the first "Word word" pair after its first word.
+  return s.split("\n").map(function(l) {
+    const m = /^(#{1,6} )(.*)$/.exec(l);
+    if (!m) return l;
+    const w = m[2].split(" ");
+    for (let k = 1; k < Math.min(w.length - 1, 16); k++) {
+      if (!/[A-Za-z]{2}/.test(w.slice(0, k).join(" "))) continue;
+      const starter = /^(The|This|These|That|A|An|It|Its|Your|Before|After|We|There|Here|Each|Every|Most|What|When|Yes|No|In|For|To|Let|Suppose|Consider|Define|Take|Given|If|Assume|Write|Our|One|Two|Three)$/.test(w[k]);
+      if (/^[A-Z][a-z]+[,;:]?$/.test(w[k]) && (starter || (/^[a-z(]/.test(w[k + 1]) && !/^(and|or|of|the|in|on|for|to|vs\.?|with|as)$/.test(w[k + 1]))) && !/^(and|or|of|the|a|an|in|on|to|for|vs\.?)$/i.test(w[k - 1])) {
+        return m[1] + w.slice(0, k).join(" ") + "\n\n" + w.slice(k).join(" ");
+      }
+    }
+    return m[2].length > 100 ? m[2] : l;
+  }).join("\n").replace(/([^|\n]) (\| [^\n]*\|)\n(\|[-:| ]+\|)/g, "$1\n$2\n$3");
+}
+function ideaShort(t, n) { t = String(t || ""); if (t.length <= n) return t; const cut = t.slice(0, n); const sp = cut.lastIndexOf(" "); return (sp > n * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:.\-]+$/, "") + "\u2026"; }
+function ideaTitle(t) { return String(t || "").replace(/^#+\s*/, "").replace(/^\d+\.\s+/, "").replace(/\*\*/g, ""); }
+function ideaInline(s) {
+  return s.replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>")
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" rel="nofollow noopener">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" rel="nofollow noopener">$2</a>');
+}
+// Small, safe markdown: escape first, then fences, headings, lists, quotes, tables as preformatted text, paragraphs.
+function ideaMd(src) {
+  const lines = esc(ideaReflow(String(src || ""))).split("\n");
+  const out = [];
+  let para = [], list = null, fence = null;
+  const flush = function() {
+    if (para.length) { out.push("<p>" + ideaInline(para.join(" ")) + "</p>"); para = []; }
+    if (list) { out.push("<" + list.t + ">" + list.items.map(function(i) { return "<li>" + ideaInline(i) + "</li>"; }).join("") + "</" + list.t + ">"); list = null; }
+  };
+  for (const raw of lines) {
+    const l = raw.replace(/\s+$/, "");
+    if (fence !== null) { if (/^```/.test(l)) { out.push("<pre><code>" + fence.join("\n") + "</code></pre>"); fence = null; } else fence.push(raw); continue; }
+    if (/^```/.test(l)) { flush(); fence = []; continue; }
+    let m;
+    if (!l.trim()) { flush(); continue; }
+    if ((m = /^(#{1,6})\s+(.*)$/.exec(l))) { flush(); const n = Math.min(4, Math.max(2, m[1].length + 1)); out.push("<h" + n + ">" + ideaInline(m[2]) + "</h" + n + ">"); continue; }
+    if (/^(-{3,}|\*{3,})$/.test(l.trim())) { flush(); out.push("<hr>"); continue; }
+    if ((m = /^\s*(?:[-*\u2022])\s+(.*)$/.exec(l))) { if (para.length) flush(); if (!list || list.t !== "ul") { flush(); list = { t: "ul", items: [] }; } list.items.push(m[1]); continue; }
+    if ((m = /^\s*\d+[.)]\s+(.*)$/.exec(l))) { if (para.length) flush(); if (!list || list.t !== "ol") { flush(); list = { t: "ol", items: [] }; } list.items.push(m[1]); continue; }
+    if ((m = /^&gt;\s?(.*)$/.exec(l))) { flush(); out.push("<blockquote><p>" + ideaInline(m[1]) + "</p></blockquote>"); continue; }
+    if (/^\|.*\|$/.test(l.trim())) { flush(); out.push('<pre class="idea-table">' + l + "</pre>"); continue; }
+    if (list) { list.items[list.items.length - 1] += " " + l.trim(); continue; }
+    para.push(l.trim());
+  }
+  if (fence !== null) out.push("<pre><code>" + fence.join("\n") + "</code></pre>");
+  flush();
+  return out.join("\n").replace(/<\/pre>\n<pre class="idea-table">/g, "\n").replace(/<pre class="idea-table">([\s\S]*?)<\/pre>/g, function(_, body) {
+    const rows = body.split("\n").filter(function(r) { return !/^\|[-:| ]+\|$/.test(r.trim()); }).map(function(r) { return r.trim().replace(/^\||\|$/g, "").split("|").map(function(c) { return ideaInline(c.trim()); }); });
+    if (!rows.length) return "";
+    return '<div class="q-table-wrap"><table class="q-table"><thead><tr>' + rows[0].map(function(c) { return "<th>" + c + "</th>"; }).join("") + "</tr></thead><tbody>" +
+      rows.slice(1).map(function(r) { return "<tr>" + r.map(function(c) { return "<td>" + c + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table></div>";
+  });
+}
+// The ideation scorer stores its verdict as JSON; show it as a scorecard instead of raw JSON.
+function ideaScorecard(content) {
+  const t = String(content || "").trim();
+  if (t.charAt(0) !== "{") return null;
+  let j;
+  try { j = JSON.parse(t); } catch (e) { return null; }
+  if (!j || typeof j !== "object" || !("technical_merit" in j)) return null;
+  const rows = [["Technical merit", j.technical_merit], ["Impact potential", j.impact_potential], ["Novelty", j.novelty], ["Feasibility", j.feasibility]]
+    .filter(function(r) { return typeof r[1] === "number"; });
+  return '<div class="q-panel idea-score"><p class="q-eyebrow">Automated triage score</p>' + (j.question ? '<p class="idea-score-q">' + ideaInline(esc(j.question)) + "</p>" : "") +
+    '<dl class="idea-bars">' + rows.map(function(r) {
+      const v = Math.max(0, Math.min(100, Math.round(r[1])));
+      return "<div><dt>" + r[0] + '</dt><dd><span class="idea-bar"><i style="width:' + v + '%"></i></span><b class="q-num">' + v + "</b></dd></div>";
+    }).join("") + "</dl>" + '<p class="q-meta">Scored 0 to 100 by two models when the question was proposed. A score ranks questions for the research queue; it is not a finding.</p></div>';
+}
+var IDEA_CSS = '<style>.idea-list{list-style:none;margin:0;padding:0}.idea-list li{padding:20px 0;border-bottom:1px solid var(--q-rule)}.idea-list li[hidden]{display:none}.idea-t{font:500 1.22rem/1.35 var(--q-serif);text-decoration:none;color:var(--q-ink);display:block;max-width:70ch}.idea-t:hover{color:var(--q-accent)}.idea-m{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:var(--q-fs-sm);color:var(--q-muted)}.idea-filter{max-width:560px;margin:8px 0 6px}.idea-q{font:500 clamp(1.5rem,2.6vw,2.1rem)/1.25 var(--q-serif);letter-spacing:-.01em;margin:0 0 14px;max-width:34ch;overflow-wrap:anywhere}.idea-q-full{font:400 var(--q-fs-read)/1.6 var(--q-serif);color:var(--q-muted);margin:0 0 24px;max-width:var(--q-measure)}.idea-turn{margin:36px 0 0}.idea-role{font:600 var(--q-fs-sm)/1 var(--q-sans);color:var(--q-accent);margin:0 0 12px;display:flex;gap:10px;align-items:center}.idea-score{margin:24px 0;max-width:640px}.idea-score-q{font:500 1.1rem/1.45 var(--q-serif);margin:6px 0 16px}.idea-bars{display:grid;gap:10px;margin:0 0 14px}.idea-bars div{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center}.idea-bars dt{font-size:var(--q-fs-sm);color:var(--q-muted)}.idea-bars dd{margin:0;display:flex;gap:10px;align-items:center}.idea-bar{flex:1;height:8px;border-radius:99px;background:var(--q-rule);overflow:hidden}.idea-bar i{display:block;height:100%;background:var(--q-accent)}.idea-table{font:400 .8rem/1.5 var(--q-mono)}@media (max-width:560px){.idea-bars div{grid-template-columns:1fr}}</style>';
+function ideaPage(o, body, status) {
+  const html = qdsPage({ title: o.title, description: o.description, canonical: o.canonical, brand: "qnfo", active: "ideas", jsonld: o.jsonld, math: !!o.math, robots: o.robots, extra: IDEA_CSS + (o.head || "") }, body);
+  return new Response(html, { status: status || 200, headers: { ...cors(), "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+}
+function ideaDate(s) { const d = new Date(s || 0); return Number.isNaN(d.getTime()) || !s ? "" : d.toISOString().slice(0, 10); }
+function ideaLd(o) {
+  return '<script type="application/ld+json">' + JSON.stringify(Object.assign({ "@context": "https://schema.org", author: { "@type": "Person", name: "Rowan Brad Quni-Gudzinas", sameAs: ["https://orcid.org/" + QDS_OWNER_ORCID] }, publisher: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org/" } }, o)).replace(/</g, "\\u003c") + "<\/script>";
+}
+async function ideasHome(env) {
+  let items = [];
+  try { items = await all(env); } catch (e) { items = []; }
+  // 2026-08-31 owner mandate (qnfo-web-unified/README.md): only threads asked through the QNFO AI endpoint (the chat
+  // table), not the chat_sessions archive, and only the latest 20.
+  const list = items.filter(function(x) { return x.source === "live"; }).slice(0, 20);
+  const newest = list.length ? ideaDate(list[0].updated_at) : "";
+  const rows = list.map(function(x) {
+    const t = ideaShort(ideaTitle(x.title), 200);
+    return '<li data-t="' + esc(t.toLowerCase()) + '"><a class="idea-t" href="/s/' + encodeURIComponent(x.id) + '">' + esc(t) + '</a><div class="idea-m"><time datetime="' + esc(x.updated_at || "") + '">' + ideaDate(x.updated_at) + "</time>" +
+      (x.message_count ? "<span>" + x.message_count + (x.message_count === 1 ? " message" : " messages") + "</span>" : "") + "</div></li>";
+  }).join("");
+  const body = '<section class="q-hero" style="padding-bottom:16px"><div class="q-wrap"><p class="q-eyebrow">Ideas</p><h1 class="q-display" style="max-width:18ch">Research questions as they develop</h1>' +
+    '<p class="q-lede">Questions put to the QNFO research assistant and the answers it wrote from the corpus, published as they happen. Personal, operational and quarantined conversations never appear here. When a question holds up, it becomes a paper; <a href="https://papers.qnfo.org/papers">the papers</a> are the record.</p></div></section>' +
+    '<section class="q-section" style="padding-top:8px" aria-labelledby="ideas-h"><div class="q-wrap"><div class="q-section-head"><h2 class="q-h2" id="ideas-h">' + (list.length === 20 ? "The latest 20 threads" : list.length + " public threads") + "</h2>" + (newest ? '<span class="q-meta">Newest ' + newest + "</span>" : "") + "</div>" +
+    (list.length ? '<label class="q-field idea-filter"><span class="q-sr">Filter threads</span><input id="idea-f" type="search" placeholder="Filter by words in the question" autocomplete="off"></label><p class="q-meta" id="idea-n" aria-live="polite"></p><ul class="idea-list" id="idea-l">' + rows + "</ul>"
+      : '<div class="q-note">No public threads right now. New questions appear here within five minutes of being asked; <a href="https://ask.qwav.tech/">ask the corpus</a> or read <a href="https://papers.qnfo.org/papers">the papers</a> meanwhile.</div>') +
+    '<div class="q-panel" style="margin-top:40px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between"><div><h2 class="q-h3" style="margin:0 0 4px">Follow new work</h2><p class="q-meta" style="margin:0">New threads by <a href="/rss.xml">RSS</a>; new papers by email.</p></div><a class="q-btn q-btn-accent" href="https://qnfo.org/#subscribe">Get new papers by email</a></div>' +
+    "</div></section>";
+  const js = '<script>(function(){if(/^#\\/s\\//.test(location.hash)){location.replace("/s/"+location.hash.slice(4));return}var f=document.getElementById("idea-f"),l=document.getElementById("idea-l"),n=document.getElementById("idea-n");if(!f||!l)return;f.addEventListener("input",function(){var q=f.value.trim().toLowerCase(),k=0;l.querySelectorAll("li").forEach(function(li){var h=!q||li.getAttribute("data-t").indexOf(q)>=0;li.hidden=!h;if(h)k++});n.textContent=q?k+" of "+l.children.length+" threads":""})})()<\/script>';
+  return ideaPage({ title: "Ideas \u00b7 research questions as they develop \u00b7 QNFO", description: "Public research conversations from the QNFO research assistant: questions, answers written from the paper corpus, and automated triage scores.", canonical: BASE + "/", math: /\$|\\\(|\\\[/.test(rows),
+    jsonld: ideaLd({ "@type": "CollectionPage", name: "QNFO Ideas", url: BASE + "/", description: "Public research conversations from the QNFO research assistant." }), head: "" }, body + js);
+}
+async function ideasThread(env, rawId) {
+  let id = "";
+  try { id = decodeURIComponent(rawId); } catch (e) { id = rawId; }
+  let rows = [];
+  try { rows = (await env.QNFO_AUDIT.prepare("SELECT ts,role,content,model FROM chat WHERE thread=? ORDER BY ts ASC,id ASC LIMIT 500").bind(id).all()).results || []; } catch (e) { rows = []; }
+  const first = rows.find(function(r) { return r.role === "user"; });
+  if (!first || !publicTitle(first.content) || await blocked(env, id)) {
+    return ideaPage({ title: "Thread not found \u00b7 QNFO Ideas", description: "This thread is not public.", robots: "noindex" },
+      '<section class="q-hero"><div class="q-wrap"><p class="q-eyebrow">Ideas</p><h1 class="q-h1">This thread is not public</h1><p class="q-lede">It may have been removed, or it never passed the public filter. <a href="/">See every public thread</a>.</p></div></section>', 404);
+  }
+  const shown = rows.filter(function(r) { return r.role !== "system" && r !== first && !has(r.content, INTERNAL) && !has(r.content, OPS) && !has(r.content, JUNK); });
+  const q = ideaText(first.content, 20000);
+  const qTitle = ideaShort(ideaTitle(clean(first.content, 2000)), 160);
+  const long = q.length > 260;
+  const turns = shown.map(function(r) {
+    const card = r.role === "assistant" ? ideaScorecard(r.content) : null;
+    if (card) return card;
+    const who = r.role === "user" ? "Follow-up" : "Research assistant";
+    return '<div class="idea-turn"><p class="idea-role">' + who + (r.ts ? ' <span class="q-meta" style="font-weight:400">' + ideaDate(ts(r.ts)) + "</span>" : "") + '</p><div class="q-prose">' + ideaMd(ideaText(r.content)) + "</div></div>";
+  }).join("");
+  const updated = ts(rows[rows.length - 1].ts), created = ts(first.ts);
+  const body = '<div class="q-wrap" style="padding-top:36px;padding-bottom:64px"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">\u2190 All threads</a></p>' +
+    '<h1 class="idea-q">' + esc(long ? qTitle : ideaTitle(q)) + "</h1>" + (long ? '<div class="idea-q-full q-prose">' + ideaMd(q) + "</div>" : "") +
+    '<p class="q-meta">Asked ' + ideaDate(created) + (updated && updated !== created ? " \u00b7 updated " + ideaDate(updated) : "") + ' \u00b7 <a href="https://ask.qwav.tech/?q=' + encodeURIComponent(qTitle.slice(0, 300)) + '">Ask it again against the current corpus</a></p>' +
+    (turns || '<div class="q-note" style="margin-top:24px">No public answer yet.</div>') +
+    '<p class="q-note" style="margin-top:40px">Answers here were written by an AI research assistant over the QNFO corpus and have not been reviewed. Cite <a href="https://papers.qnfo.org/papers">the papers</a>, not this thread.</p></div>';
+  return ideaPage({ title: qTitle.slice(0, 90) + " \u00b7 QNFO Ideas", description: ideaTitle(clean(first.content, 300)), canonical: BASE + "/s/" + encodeURIComponent(id), math: /\$|\\\(|\\\[/.test(q + turns),
+    jsonld: ideaLd({ "@type": "DiscussionForumPosting", headline: qTitle.slice(0, 110), url: BASE + "/s/" + encodeURIComponent(id), datePublished: created, dateModified: updated }) }, body);
+}
+async function ideasCached(req, ctx, make) {
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const key = new Request(new URL(req.url).origin + new URL(req.url).pathname, { method: "GET" });
+  if (cache) { try { const hit = await cache.match(key); if (hit) return hit; } catch (e) {} }
+  const res = await make();
+  if (cache && res.status === 200 && ctx && ctx.waitUntil) { try { ctx.waitUntil(cache.put(key, res.clone())); } catch (e) {} }
+  return res;
+}
+// ---- IDEAS-QDS-1:END ----
+
+export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "rss", "session-pages", "ideation", "qds-pages"],limitations:["read-only public surface: /api/ask, /api/proposals and /run answer 503", "only research-domain titles pass the public filter; personal, ops and quarantined threads are never shown", "ideation runs on the hourly :23 cron"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};

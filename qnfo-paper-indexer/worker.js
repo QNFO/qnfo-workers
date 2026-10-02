@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.8-flagship-measure";
+var VERSION = "3.0.9-impact-failclosed";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -32,7 +32,7 @@ var CORPUS_IN = "('published','external_preprint','distributed')";
 var CORPUS_WHERE = "body_md IS NOT NULL AND body_md != '' AND status IN " + CORPUS_IN;
 
 function auth(req, env) {
-  if (!env.IMPACT_TOKEN) return true;
+  if (!env.IMPACT_TOKEN) return false;
   const t = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!t) return false;
   const a = new TextEncoder().encode(t), b = new TextEncoder().encode(env.IMPACT_TOKEN);

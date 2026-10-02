@@ -135,9 +135,18 @@ jobs:
       # UTF8-DEPLOY-1: worker source fetched from GitHub reaches the upload as the same UTF-8 text (no double encoding).
       - name: UTF8-DEPLOY-1 offline suite (qnfo-ops)
         run: node qnfo-ops/utf8-deploy.test.mjs
+      # CRON-APPLY-PARSE-1: the canonical deploy applies the [triggers] crons assignment, not the first "crons" in a comment
+      # (radar-hub, qnfo-cloud-ops and qnfo-fleet-dashboard schedules were never applied); sweeps every live wrangler.toml.
+      - name: CRON-APPLY-PARSE-1 offline suite (qnfo-ops)
+        run: node qnfo-ops/cron-apply-parse.test.mjs
       # MATH-DELIM-1 / TABLE-SEP-1: paper renderer regressions from the 2026-10-02 full-corpus sweep (qnfo-gateway).
       - name: Paper renderer suite (qnfo-gateway)
         run: node qnfo-gateway/render.test.mjs
+      # REACH-LAYER-1 (pillar reach): every qnfo.org / papers.qnfo.org HTML page carries a share image, canonical, JSON-LD
+      # with the owner's ORCID, the author credit, Work with me, the iPatent link and a subscribe box (or the declared
+      # no-form link on work-with-me), and passes the REACH-IDEATION checks copied from qnfo-fleet-control.
+      - name: REACH-LAYER-1 offline suite (qnfo-gateway)
+        run: node qnfo-gateway/reach-layer.test.mjs
       # CODE-TASK-MERGE-RUNNER-1: qnfo-fleet-control merges code-loop PRs itself. The suite replays the merge decision (every
       # refusal), the CI kick, merge, deploy and live verification and the inverse-patch revert against a scripted GitHub and
       # an in-memory D1 (node:sqlite, so it runs here after the Node 22 switch).
@@ -153,6 +162,14 @@ jobs:
       # a duplicate SEARCH, two no-block replies) through to a patch that git-applies, and runs the dashboard's own owner-card query.
       - name: SELF-REPAIR-1 offline suite (qnfo-code-orchestrator)
         run: node --no-warnings qnfo-code-orchestrator/self-repair.test.mjs
+      # QDS-1: qds.css served; HTML 404s for browsers and JSON for API clients; the privacy notice; archive and QWAV hosts;
+      # each paper's JSON-LD names its own licence (LICENSE-ONE-1).
+      - name: QDS-1 gateway pages offline suite (qnfo-gateway)
+        run: node --no-warnings qnfo-gateway/qds-pages.test.mjs
+      # ASK-GAP-1: questions the corpus could not answer become idea proposals once each, through the public research gate,
+      # at most five a run and never while triage is backed up (idea-hub's own runAskGap on an in-memory D1).
+      - name: ASK-GAP-1 offline suite (idea-hub)
+        run: node --no-warnings idea-hub/ask-gap.test.mjs
       - name: OPEN-ACCESS-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/open-access.test.mjs
       # OPS-PUBLIC-READ-1: qnfo-ops answers a chat with no key, or a stale one, in public read-only mode (free tier, only
@@ -160,6 +177,13 @@ jobs:
       # paid upstreams, caches, durable jobs and checkpoints stay behind the key.
       - name: OPS-PUBLIC-READ-1 offline suite (qnfo-ops)
         run: node qnfo-ops/public-read.test.mjs
+      # SECRET-CHANGE-WATCH-1: qnfo-ops records every worker secret change (never a value) and files one consumer check per
+      # worker per change day, with a heartbeat the watchmaker reads.
+      - name: SECRET-CHANGE-WATCH-1 offline suite (qnfo-ops)
+        run: node qnfo-ops/secret-watch.test.mjs
+      # GUARD-RCS-CANCELLED-1: a concurrency-cancelled or skipped guard run is not a guard that failed closed.
+      - name: GUARD-RCS-CANCELLED-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/guard-rcs.test.mjs
       # FLEET-CMD-1: the fleet command line (input outside the 10s refresh, open reads, emailed-code actions, 15-min step-up
       # for destructive ones, validated AI proposals, no hanging asks).
       - name: FLEET-CMD-1 offline suite (qnfo-fleet-dashboard)
@@ -171,6 +195,8 @@ jobs:
       - name: IPATENT-USAGE-1 offline suites (qnfo-ipatent, qnfo-fleet-dashboard)
         run: |
           node qnfo-ipatent/usage.test.mjs
+          node qnfo-ipatent/routes.test.mjs
+          node qnfo-ipatent/error-json.test.mjs
           node qnfo-fleet-dashboard/ipatent-usage.test.mjs
       # Q08-REVIEW-2026-10-31 (#1716): the one-shot q08 decision on bot-filtered RUM page views and the cadence cap
       # q08-signal-engine reads (Q08-CADENCE-CAP-1); a deferral never satisfies the remediation probe.
@@ -222,12 +248,23 @@ jobs:
       # failures still alert, one job-run row per run, and gmail-triage without GMAIL_PASS is skipped rather than an error.
       - name: WORKER-HEALTH-PROBE-AUTH-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/worker-health.test.mjs
+      # CRON-SINGLE-TRIGGER-1 (qnfo-cloud-ops 1.19.0): one 10-minute tick and an in-code due table fire exactly the slots
+      # the 21 per-slot cron triggers fired, once each, in both daylight-saving states and with ticks lost; the second
+      # suite drives the real scheduled handler (tick, lookback, legacy trigger, ZENODO-CATCHUP-1).
+      - name: CRON-SINGLE-TRIGGER-1 offline suite (qnfo-cloud-ops)
+        run: node qnfo-cloud-ops/single-trigger.test.mjs
+      - name: ZENODO-CATCHUP-1 and tick handler offline suite (qnfo-cloud-ops)
+        run: node --no-warnings qnfo-cloud-ops/zenodo-catchup.test.mjs
       # COMMAND-EXIT-HONEST-1 (qnfo-containers-pilot 1.0.11): a caller's command that exits non-zero is recorded as warn
       # with its exit code; a container fault is still container.error with status error.
       - name: COMMAND-EXIT-HONEST-1 offline suite (qnfo-containers-pilot)
         run: node qnfo-containers-pilot/command-exit.test.mjs
       - name: Job market, mention radar ledger and events cron offline suite (radar-hub)
         run: node radar-hub/radar-hub.test.mjs
+      # CRON-SINGLE-TRIGGER-1 (#1785): radar-hub, errata-hub, qnfo-lifecycle and personal-companion hold one hourly trigger
+      # and a CRON_TABLE; every fire of each former trigger list is delivered once, in the hour it fired.
+      - name: CRON-SINGLE-TRIGGER-1 hourly tick offline suite (four workers)
+        run: node scripts/cron-single-trigger.test.mjs
 
       # HANDOFF-CLAIM-SHEET-1 (qnfo-email 2.2.4): every handoffs insert carries the claim_sheet the qnfo-audit trigger requires.
       - name: HANDOFF-CLAIM-SHEET-1 check (qnfo-email)
@@ -240,6 +277,7 @@ jobs:
         run: |
           set -euo pipefail
           node --no-warnings qnfo-deploy-guard/work-lock.test.mjs
+          node --no-warnings qnfo-deploy-guard/work-claim-unify.test.mjs
           node --no-warnings qnfo-deploy-guard/secret-lock.test.mjs
 
       # INBOUND-SLA-1 (qnfo-email-orchestrator 0.5.0, pillar: reach): every human inbound message gets a fleet action within
