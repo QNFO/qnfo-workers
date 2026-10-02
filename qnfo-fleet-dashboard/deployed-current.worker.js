@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.17.6-outreach-learner"; /* 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.17.7-performance-loop"; /* 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2599,6 +2599,14 @@ async function refreshRegistryMetrics(env) {
   } catch (e) {
     out.skipped.push("referral_30d: " + String(e && e.message || e).slice(0, 60));
   }
+  // PERFORMANCE-LOOP-1 (1.17.4): engaged human sessions, the STRATEGY s6.3 reach KPI (bot-filtered RUM page views, 28d).
+  try {
+    const eh = await refreshEngagedHumanSessions(env, Date.now());
+    if (eh.value != null) out.refreshed.push("engaged_human_sessions_28d");
+    else out.skipped.push("engaged_human_sessions_28d: " + eh.why);
+  } catch (e) {
+    out.skipped.push("engaged_human_sessions_28d: " + String(e && e.message || e).slice(0, 80));
+  }
   // guard_rcs: the local guards it named were retired with the local machine's recurring jobs; the
   // same guards now run as CI gates on main. rc = number of those gates whose latest main run failed.
   if (env.GITHUB_TOKEN) {
@@ -2633,6 +2641,51 @@ async function refreshRegistryMetrics(env) {
   }
   return out;
 }
+// ---- ENGAGED-HUMAN-SESSIONS-1:BEGIN (PERFORMANCE-LOOP-1, 1.17.4; STRATEGY s6.3 and s9; pillar reach) ----
+// engaged_human_sessions_28d is the STRATEGY s6.3 reach KPI: Cloudflare Web Analytics (RUM) page views over the last 28 days
+// with the "Exclude bots" filter (bot: 0). It is read through the reach ingest's own GraphQL path (reachGf on CF_TOKEN, which
+// keeps the error text) by date, so a window with missing days is told apart from a quiet one. A failed read, a response at
+// the group limit, or fewer than ENGAGED_MIN_DAYS of the 28 days with data is UNMEASURED: last_value is an 'n/a' text with no
+// digits (no reader can parse a number out of it), never a number. Its STRATEGY s9 target (x2 the week-1 baseline) is
+// relative, so the registry target starts with 'maximize' and IMPROVEMENT-LOOP-1 judges its trend
+// (migrations/2026-10-02-performance-loop.sql names the trigger exemption).
+var ENGAGED_DAYS = 28;
+var ENGAGED_MIN_DAYS = 26;
+function engagedTally(groups) {
+  const days = {};
+  let pageviews = 0;
+  for (const g of groups || []) {
+    const n = Number(g && g.count) || 0;
+    if (n <= 0) continue;
+    pageviews += n;
+    const d = g.dimensions && g.dimensions.date;
+    if (d) days[d] = 1;
+  }
+  return { pageviews, days: Object.keys(days).length };
+}
+function engagedNa(why) {
+  return ("n/a: " + String(why || "unmeasured").replace(/-?\d+(?:\.\d+)?/g, "N")).slice(0, 300);
+}
+async function refreshEngagedHumanSessions(env, nowMs) {
+  const now = nowMs || Date.now();
+  const nowIso = new Date(now).toISOString();
+  const r = await reachGf(env, reachRumQuery("date", new Date(now - ENGAGED_DAYS * DAY_MS).toISOString(), nowIso, "bot: 0"));
+  const groups = r.err ? null : reachRumGroups(r.data);
+  let value = null, why = null, days = null;
+  if (!groups) why = "the bot-filtered RUM read failed: " + (r.err || "rumPageloadEventsAdaptiveGroups missing from response");
+  else if (groups.length >= REACH_RUM_LIMIT) why = "the bot-filtered RUM read hit the group limit, so the total is only a lower bound";
+  else {
+    const t = engagedTally(groups);
+    days = t.days;
+    if (t.days < ENGAGED_MIN_DAYS) why = "bot-filtered RUM holds " + t.days + " of " + ENGAGED_DAYS + " days with data (needs " + ENGAGED_MIN_DAYS + ")";
+    else value = t.pageviews;
+  }
+  const A = env.AUDIT;
+  await A.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES ('engaged_human_sessions_28d', 'fleet', 'leading', 'Cloudflare Web Analytics (RUM) page views over the last 28 days with the Exclude-bots filter (bot: 0), STRATEGY s6.3; unmeasured when fewer than 26 of the 28 days hold data or the read fails (qnfo-fleet-dashboard refreshRegistryMetrics, hourly)', 'CF GraphQL rumPageloadEventsAdaptiveGroups filter bot: 0 (qnfo-fleet-dashboard, CF_TOKEN)', 'n/a', 'maximize (STRATEGY s9: baseline in week 1, then x2 by 2026-12-31; trended by IMPROVEMENT-LOOP-1 until the baseline exists)', 'qnfo-fleet-dashboard', 'IMPROVEMENT-LOOP-1 files METRIC-REGRESSION-1 on a decline (exempt from a threshold trigger, migrations/2026-10-02-performance-loop.sql)', 'hourly', 'falling week on week', 'falling 2 weeks', 'MEASURED', 'computed')").run();
+  await A.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = ?3 WHERE metric = 'engaged_human_sessions_28d'").bind(value == null ? engagedNa(why) : String(value), nowIso, value == null ? "UNMEASURED" : "MEASURED").run();
+  return { value, why, days };
+}
+// ---- ENGAGED-HUMAN-SESSIONS-1:END ----
 async function persistRoiSnapshot(env) {
   try {
     const d = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -3720,6 +3773,12 @@ var WATCHMAKER_OPS = [
   // and dispatches code fixes once a day in the 03:41 tick. Each step writes an ask_loop_runs row.
   { key: "ask-loop-measure", what: "ask.qwav.tech metrics measured into metric_registry (ASK-LOOP-1, qnfo-ai-search hourly)", runner: "cron:qnfo-ai-search", cadence_h: 1, first_due: "2026-10-03T00:00:00Z", sql: "SELECT MAX(ts) AS last FROM ask_loop_runs WHERE kind = 'measure' AND ok = 1" },
   { key: "ask-loop-daily", what: "ask.qwav.tech daily eval, grounding judge, tuning and fix dispatch (ASK-LOOP-1, ASK-TUNE-1, ASK-FIX-1)", runner: "cron:qnfo-ai-search", cadence_h: 24, first_due: "2026-10-04T06:00:00Z", sql: "SELECT MAX(ts) AS last FROM ask_loop_runs WHERE kind = 'fix' AND ok = 1" },
+  // PERFORMANCE-LOOP-1 (1.17.4): qnfo-fleet-control 0.4.91 changes the fleet itself. Its experiment evaluator runs once a UTC
+  // day after 09:00Z on the hourly cron and writes one perf_runs row per day even when nothing starts or ends (a run that
+  // cannot read its inputs writes none, so a broken evaluator goes stale here). Its five KPIs are refreshed every hour; an
+  // unmeasured KPI still stamps last_refreshed, so MIN(last_refreshed) is the stalest of the five.
+  { key: "performance-experiments", what: "Lever experiments driven by hit metric triggers: one bounded ops_config step, then kept or reverted on metric_history (PERFORMANCE-LOOP-1, qnfo-fleet-control, daily after 09:00Z)", runner: "cron:qnfo-fleet-control", cadence_h: 24, first_due: "2026-10-06T12:00:00Z", sql: "SELECT MAX(ts) AS last FROM perf_runs WHERE kind = 'experiments'" },
+  { key: "performance-metrics", what: "Issue MTTR, deploy failure rate, worker health failure rate, credibility events and selected-work citation coverage into metric_registry (PERFORMANCE-LOOP-1, qnfo-fleet-control hourly)", runner: "cron:qnfo-fleet-control", cadence_h: 1, first_due: "2026-10-06T12:00:00Z", sql: "SELECT MIN(last_refreshed) AS last FROM metric_registry WHERE metric IN ('issue_mttr_h_30d', 'deploy_failure_rate_7d', 'worker_health_failure_rate', 'credibility_events_90d', 'selected_works_citation_coverage')" },
   { key: "objective-constraints", what: "Owner-ratified objective constraints measured and enforced, terminal objectives re-evaluated daily (OBJECTIVE-CONSTRAINTS-1, goals 41, 43, 57)", runner: "cron:qnfo-fleet-control", cadence_h: 1, sql: "SELECT MAX(ts) AS last FROM objective_constraint_runs" },
   { key: "backlog-drain", what: "Backlog drain: close or reopen issues with evidence", runner: "cron:qnfo-backlog-exec", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'jo-qnfo-backlog-exec-' AND id < 'jo-qnfo-backlog-exec.'" },
   // ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): errata-hub's hourly members; each tick upserts errata_watch tick:<member>.

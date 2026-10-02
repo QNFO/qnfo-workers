@@ -68,6 +68,9 @@ eq(C.charterTarget("<=144/day each (CRON-MANDATE-1)"), null, "a per-worker cron 
 eq(C.charterNum("+394.17%"), 394.17, "numeric from percent string");
 eq(C.charterNum("$58.15/30d"), 58.15, "numeric from dollar string");
 eq(C.charterNum(null), null, "numeric null");
+eq(C.charterNum("n/a: prior window has 27 of 30 days"), null, "an n/a reason with digits is not a number");
+eq(C.charterNum("UNMEASURED: OpenAlex covers 3 of 7"), null, "an unmeasured marker with digits is not a number");
+eq(C.charterNum("3 of 7"), 3, "a leading count still parses");
 eq(C.charterMeets(45, C.charterTarget("<= 24")), false, "45 workers misses <= 24");
 eq(C.charterMeets(97.8, C.charterTarget(">=95")), true, "97.8 meets >= 95");
 eq(C.charterMeets(null, C.charterTarget(">=95")), null, "unmeasured is null, not false");

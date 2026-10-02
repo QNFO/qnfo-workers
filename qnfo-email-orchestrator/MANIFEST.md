@@ -10,7 +10,7 @@
 ## Current state (read from worker.js and wrangler.toml, 2026-10-01)
 This section resolves the contradiction below between "Monday = autonomous outreach SEND wave ... (cap 5/day)" and
 "Never sends external outreach". **The second is true for the current code: this worker sends no outreach.**
-- Code version `0.5.0-inbound-sla`. wrangler.toml crons: `0 */3 * * *` and `*/15 * * * *` (unchanged).
+- Code version `0.5.1-inbound-sla` (0.5.1: unique failure rows, so two same-millisecond send failures cannot leave a stale claim). wrangler.toml crons: `0 */3 * * *` and `*/15 * * * *` (unchanged).
 - The cron handler runs only the reply drafter and the fleet heartbeat. The reply drafter reads `email_reply_queue`
   (inbound mail), sends a 1-2 sentence acknowledgment from qnfo@qnfo.org to the inbound sender via qnfo-email `/send`
   only for simple logistical messages, and escalates anything technical, scientific, licensing, legal, financial or

@@ -1,5 +1,5 @@
 /**
- * constraints.test.mjs -- offline regression lock for OBJECTIVE-CONSTRAINTS-1 (owner-ratified goals 41, 43, 57).
+ * constraints.test.mjs -- offline regression lock for OBJECTIVE-CONSTRAINTS-1 (goals 41, 43, 57, ratified under the owner's queue delegation).
  * Slices the CHARTER-LOOP-1 block (grader helpers, pillars) and the OBJECTIVE-CONSTRAINTS-1 block out of worker.js,
  * drives the pure half with synthetic facts, then runs the hourly tick against an in-memory SQLite D1 (node:sqlite,
  * Node 22+) with the live triggers that matter: an issue closes only with evidence, a title closed within 24h is not
