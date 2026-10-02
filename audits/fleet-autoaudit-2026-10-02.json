@@ -1,12 +1,12 @@
 {
-  "audited_at": "2026-10-02 07:32:32",
+  "audited_at": "2026-10-02 07:40:34",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-ai",
-        "qnfo-gateway"
+        "qnfo-code-orchestrator",
+        "qnfo-ipatent"
       ],
       "refreshed": true,
       "second_pass": []
@@ -475,7 +475,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.6-codeagent",
+        "version": "0.3.7-self-repair",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -520,7 +520,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.6.0-support-map",
+        "version": "3.6.2-support-map-polish",
         "worker": "qnfo-ipatent"
       },
       {
@@ -1040,9 +1040,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.6-codeagent",
+      "before": "0.3.7-self-repair",
       "http": 200,
-      "live": "0.3.6-codeagent",
+      "live": "0.3.7-self-repair",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1240,9 +1240,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.6.0-support-map",
+      "before": "3.6.2-support-map-polish",
       "http": 200,
-      "live": "3.6.0-support-map",
+      "live": "3.6.2-support-map-polish",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
