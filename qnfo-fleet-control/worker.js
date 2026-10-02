@@ -108,6 +108,20 @@ var advisorMod = (function() {
   __name2(spendGuardAudit, "spendGuardAudit");
   __name3(spendGuardAudit, "spendGuardAudit");
   var MAX_ADVISOR_ITERS = 3;
+  // ---- ADVISOR-SPEND-1:BEGIN (0.4.109, pillar cost) ----
+  // The */20 audit asked a 70B model for advice and a 120B model to review it on every run that had a finding, and the
+  // finding set hardly changes (2026-10-02: 72 runs in 24h, all with advice, every one on OPEN-ISSUES-BACKLOG). The advice
+  // is now reused while the finding titles are unchanged, for at most ADVISOR_REUSE_MS, and asked again when they change.
+  var ADVISOR_REUSE_MS = 24 * 3600 * 1e3;
+  function advisorFindingSig(findings) {
+    return (findings || []).map(function(f) { return String(f && f.title || ""); }).sort().join("|");
+  }
+  function advisorReuse(prior, sig, nowMs) {
+    if (!prior || !prior.prior_suggestion || !prior.prior_sig || !sig || prior.prior_sig !== sig) return false;
+    var t = Date.parse(prior.prior_advice_ts || "");
+    return isFinite(t) && nowMs - t >= 0 && nowMs - t < ADVISOR_REUSE_MS;
+  }
+  // ---- ADVISOR-SPEND-1:END ----
   async function collectFeedback(env) {
     const fb = { prior_findings: 0, prior_filed: 0, prior_suggestion: "", open_advisor_issues: [] };
     try {
@@ -118,6 +132,8 @@ var advisorMod = (function() {
           fb.prior_findings = st.findings || 0;
           fb.prior_filed = st.filed || 0;
           fb.prior_suggestion = st.suggestion || "";
+          fb.prior_sig = st.finding_sig || null;
+          fb.prior_advice_ts = st.advice_ts || null;
         } catch (e) {
         }
       }
@@ -182,9 +198,17 @@ var advisorMod = (function() {
     const modelP = env.ADVISOR_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
     const modelR = env.REVIEW_MODEL || "@cf/openai/gpt-oss-120b";
     const iters = Math.min(parseInt(env.ADVISOR_ITERS || "", 10) || MAX_ADVISOR_ITERS, 5);
-    if (findings.length && env.AI) {
+    const finding_sig = advisorFindingSig(findings);
+    let advice_ts = null;
+    const fb0 = findings.length ? await collectFeedback(env) : null;
+    if (findings.length && advisorReuse(fb0, finding_sig, Date.now())) {
+      suggestion = fb0.prior_suggestion;
+      advice_ts = fb0.prior_advice_ts;
+      ensemble = { reused: true, since: fb0.prior_advice_ts };
+    } else if (findings.length && env.AI) {
       try {
-        const fb = await collectFeedback(env);
+        const fb = fb0;
+        advice_ts = ts;
         const promptLines = ["You are the QNFO fleet advisor (adversarial, evidence-based, no flattery). Audit findings:"];
         findings.forEach((f) => promptLines.push("- [" + f.severity + "] " + f.title));
         if (fb.open_advisor_issues.length) {
@@ -220,6 +244,7 @@ var advisorMod = (function() {
       }
     }
     let filed = 0;
+    let refile_ignored = 0;
     for (const f of findings) {
       try {
         const prefixDedupe = f.kind === "model-health" ? "MODEL-DEGRADED %" : f.kind === "gateway-config" ? "GATEWAY-DRIFT %" : null;
@@ -228,16 +253,19 @@ var advisorMod = (function() {
           await d1Run(env, "UPDATE agent_issues SET description=?, updated_at=? WHERE id=?", ["[advisor] " + f.detail.slice(0, 600), ts, existing[0].id]);
           continue;
         }
-        await d1Run(
+        const ins = await d1Run(
           env,
           "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
           [f.title.slice(0, 240), "[advisor] " + f.detail.slice(0, 600), WORKER, f.kind, f.severity, "open", ts, ts]
         );
-        filed++;
+        // ADVISOR-SPEND-1: issue_refile_guard ignores a title closed in the last 24h (RAISE(IGNORE): no error, no row), so
+        // the audit reported filed=1 every run while writing nothing.
+        if (ins && ins.meta && ins.meta.changes === 0) refile_ignored++;
+        else filed++;
       } catch (e) {
       }
     }
-    const state = { up: PROBES.length - down.length - existenceOnly.length, down: down.length, existence_only: existenceOnly.length, findings: findings.length, filed, suggestion, gateway_drift: gw.skipped ? null : gw.drift, spend_guard, ensemble, ts };
+    const state = { up: PROBES.length - down.length - existenceOnly.length, down: down.length, existence_only: existenceOnly.length, findings: findings.length, filed, refile_ignored, finding_sig, advice_ts, suggestion, gateway_drift: gw.skipped ? null : gw.drift, spend_guard, ensemble, ts };
     try {
       await d1Run(
         env,
@@ -1032,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.108-stale-requeue"; /* 0.4.108 CODE-LOOP-STALE-VERSION-1 (#1835): a code-loop PR that fails a required check or conflicts, on a file main changed after its merge base, is closed and its goal re-queued as a fresh task (max 2 per goal) instead of parked needs_human; 0.4.107 REACH-IDEATION-6H: reach ideation re-probes every 6 hours, not once per UTC day; 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.109-cost-and-advisor"; /* 0.4.109 COST-PER-TASK-WINDOW-1: cost_per_successful_task_by_class reads qnfo-ops' daily ladder ledger over the same 30 days as its task count, not whole calendar months of model_ladder_budget (which also held a one-off tier-0 seed of the account's September gateway spend, $188.10, that no ladder call made); ADVISOR-SPEND-1: the 20-minute advisor reuses its last advice while its finding set is unchanged (it paid a 70B proposal and a 120B review 72 times a day for the same OPEN-ISSUES-BACKLOG advice), and counts an issue as filed only when the insert wrote a row (the 24h refile guard ignores it silently); 0.4.108 CODE-LOOP-STALE-VERSION-1 (#1835): a code-loop PR that fails a required check or conflicts, on a file main changed after its merge base, is closed and its goal re-queued as a fresh task (max 2 per goal) instead of parked needs_human; 0.4.107 REACH-IDEATION-6H: reach ideation re-probes every 6 hours, not once per UTC day; 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -6765,6 +6793,17 @@ async function pollObservability(env) {
   }
 }
 __name(pollObservability, "pollObservability");
+// ---- COST-PER-TASK-WINDOW-1:BEGIN (0.4.109, pillar cost) ----
+var COST_PER_TASK_SPENT_SQL = "SELECT SUM(spent_usd) AS s FROM model_ladder_daily WHERE day >= date('now', '-30 day')";
+var COST_PER_TASK_FORMULA = "SUM(model_ladder_daily.spent_usd, day >= today-30d) / count(ops_ai_log WHERE ok=1 AND ts >= now-30d): qnfo-ops ladder spend per successful ops call over one 30-day window, all job classes together (COST-PER-TASK-WINDOW-1, qnfo-fleet-control hourly); account-wide AI spend is unified_cost_usd_30d";
+// Pure: 30-day ladder spend (USD, null when no ledger row exists) and successful calls -> { value: "0.0000" | null, why }.
+function costPerSuccessfulTask(spent, okN) {
+  if (spent == null || !isFinite(Number(spent))) return { value: null, why: "model_ladder_daily has no row in 30d or is unreadable" };
+  var n = Number(okN) || 0;
+  if (n <= 0) return { value: null, why: "0 successful ops calls in 30d" };
+  return { value: (Number(spent) / n).toFixed(4), why: null };
+}
+// ---- COST-PER-TASK-WINDOW-1:END ----
 /* OWNED-METRICS-WRITER-1 (2026-09-30, agent_issues #1411 METRIC-REGISTRY-STALENESS-1): metric_registry names
    qnfo-fleet-control as the OWNER of drift_total, cost_usd_30d, cost_per_successful_task_by_class and
    gateway_cap_30d_usd, but nothing in the fleet wrote them: they froze at 2026-09-27/29 while declaring hourly/daily
@@ -6782,16 +6821,24 @@ async function refreshOwnedMetrics(env) {
     out.written.push(metric + "=" + value);
   }
   try {
-    var c = await db.prepare("SELECT SUM(spent_usd) AS s FROM model_ladder_budget WHERE month >= strftime('%Y-%m', 'now', '-30 day')").first();
+    // COST-PER-TASK-WINDOW-1 (0.4.109): the numerator was SUM(model_ladder_budget.spent_usd) over every month from
+    // strftime('%Y-%m', now - 30d), i.e. 31 to 61 days of spend over a 30-day task count, and that table also holds a
+    // tier-0 row (2026-09, $188.10) that qnfo-ops never writes (logRouterMetric records tiers > 0 only, and
+    // costTierOfModel has no tier 0): a one-off seed of the account's September gateway burn, mostly agent-session
+    // gpt-5.5 traffic that ran outside the ladder. It made the ratio read 0.1379 where the ladder's own calls cost about
+    // 0.002 per successful task. model_ladder_daily is written by the same logRouterMetric call, per day, so it covers
+    // exactly the window the denominator counts. The account-wide spend stays measured as unified_cost_usd_30d.
+    var c = await db.prepare(COST_PER_TASK_SPENT_SQL).first();
     var spent = c && c.s != null ? Number(c.s) : null;
     var okr = await db.prepare("SELECT COUNT(*) AS n FROM ops_ai_log WHERE ok=1 AND ts >= datetime('now','-30 day')").first();
     var okN = okr ? Number(okr.n || 0) : 0;
-    if (spent != null && isFinite(spent)) {
+    var cpt = costPerSuccessfulTask(spent, okN);
+    if (cpt.value != null) {
       // cost_usd_30d is written by UNIFIED-AI-SPEND-1 below (all providers); the ladder ledger only feeds the per-task ratio.
-      if (okN > 0) await put("cost_per_successful_task_by_class", (spent / okN).toFixed(4));
-      else out.skipped.cost_per_successful_task_by_class = "0 successful ops calls in 30d";
+      await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED', formula=?3, source_of_truth=?4 WHERE metric='cost_per_successful_task_by_class'").bind(cpt.value, nowIso, COST_PER_TASK_FORMULA, "qnfo-audit.model_ladder_daily x qnfo-audit.ops_ai_log (spent $" + spent.toFixed(2) + " over " + okN + " successful calls at refresh)").run();
+      out.written.push("cost_per_successful_task_by_class=" + cpt.value);
     } else {
-      out.skipped.cost_per_successful_task_by_class = "model_ladder_budget unreadable";
+      out.skipped.cost_per_successful_task_by_class = cpt.why;
     }
   } catch (e) {
     out.skipped.cost = String(e && e.message || e).slice(0, 160);
