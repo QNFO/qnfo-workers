@@ -39,12 +39,18 @@ ORIGIN_HEALTH = "https://qnfo.org/health"
 MIN_VERSION = (3, 9)  # 3.9.0-qds is the first gateway that renders these hosts (3.8.x would serve its default page)
 # (zone, hostname). www.qwav.tech is left out: a zone redirect rule already sends it to qwav.tech.
 HOSTS = [("qnfo.org", "archive.qnfo.org"), ("qwav.org", "qwav.org"), ("qwav.org", "www.qwav.org"), ("qwav.tech", "qwav.tech")]
-UA = "qnfo-ops-surface-routes/1.3"
+UA = "qnfo-ops-surface-routes/1.4"
 # SURFACE-ROUTES-PROXY-1 (2026-10-02): qwav.org and www.qwav.org are DNS-only CNAMEs to qwav.pages.dev, so a zone route never
 # runs on them (first run: "no proxied DNS record"). For these hosts only, a single CNAME to *.pages.dev is switched to
 # proxied (Cloudflare serves the Pages site exactly as before until the route takes over), and switched back if the
 # route then fails verification. The report records the record id and its previous state for a manual rollback.
 PROXY_ALLOWED = {"qwav.org", "www.qwav.org"}
+# SURFACE-ROUTES-PAGES-1 (2026-10-02): run 37011936968 proxied qwav.org and routed it, and for 7 minutes /health still
+# answered from Pages: a Pages custom-domain binding (project qwav) takes precedence over zone routes. For these hosts
+# only, when the route is in place and the host still answers from Pages after 3 checks, the Pages binding is detached;
+# if the gateway then does not answer within the verify window, the binding is re-added before the route and DNS are
+# rolled back, so the host is never left without a server.
+PAGES_DETACH = {"qwav.org": "qwav", "www.qwav.org": "qwav"}
 API = "https://api.cloudflare.com/client/v4"
 REPORT_PATH = "ci-status/attach-surface-routes.json"
 RESULT = {"marker": "SURFACE-ROUTES-1", "service": SERVICE, "token_present": bool(TOK), "stage": "start", "status": "unknown",
@@ -169,6 +175,15 @@ def verify(host):
     # those hosts get 7 minutes instead of 2 before the route is judged (run 37011152668 rolled qwav.org back at 2 min).
     tries = 42 if h.get("dns_proxied_from") is False else 12
     for i in range(1, tries + 1):
+        if i == 4 and host in PAGES_DETACH and h.get("status") == "created" and not h.get("pages_detached"):
+            proj = PAGES_DETACH[host]
+            st, dj = req("DELETE", "/accounts/%s/pages/projects/%s/domains/%s" % (ACCT, proj, host))
+            h["pages_detach_http"] = st
+            if st == 200 and dj.get("success", True):
+                h.update(pages_detached=proj)
+                print("pages binding detached: %s from project %s" % (host, proj))
+            else:
+                print("pages detach refused for %s: http=%s %s" % (host, st, json.dumps(dj)[:200]))
         try:
             st, j = get_json("https://%s/health" % host)
             if st == 200 and j.get("worker") == SERVICE:
@@ -212,6 +227,10 @@ def main():
                     ledger(host, RESULT["hosts"][host]["route_id"])
             else:
                 ok = False
+                if RESULT["hosts"][host].get("pages_detached"):
+                    st, j = req("POST", "/accounts/%s/pages/projects/%s/domains" % (ACCT, RESULT["hosts"][host]["pages_detached"]), {"name": host})
+                    RESULT["hosts"][host]["pages_reattached"] = bool(st in (200, 201) and j.get("success", True))
+                    print("pages binding re-added %s http=%s" % (host, st))
                 if RESULT["hosts"][host]["status"] == "created":
                     st, j = req("DELETE", "/zones/%s/workers/routes/%s" % (zones[zone_name], RESULT["hosts"][host]["route_id"]))
                     RESULT["hosts"][host]["rolled_back"] = bool(st == 200 and j.get("success"))
