@@ -110,6 +110,17 @@ ok(writes.filter((w) => /INSERT INTO human_actions/.test(w.sql)).length === 1, "
 ok(out.status === "ok" && out.notes.owner_items >= 5, "job status ok");
 ok(!writes.some((w) => /owner_docs/.test(w.sql) && /UPDATE|INSERT|DELETE/i.test(w.sql)), "never writes the owner's doc");
 
+ok(Array.isArray(act.inbound_held) && act.inbound_held.length === 0 && !/INBOUND-SLA-1/.test(needs), "no INBOUND-SLA-1 decision rows: nothing listed, no owner item");
+
+// INBOUND-SLA-1: inbound mail the fleet held without a substantive answer is listed by category and sender domain only.
+const heldMeta = JSON.stringify({ queue_id: 14, category: "funder", outcome: "held", domain: "fund.example", age_h: 30.5, reason: "a funder", thread_key: "ab" });
+const withHeld = { prepare(sql) { const q = D1.prepare(sql); if (/FROM cloud_ops_events WHERE id >= 'inbound-sla-q-'/.test(sql)) q.all = async () => ({ results: [{ id: "inbound-sla-q-14", ts: "2026-09-30T10:00:00.000Z", meta: heldMeta }] }); return q; } };
+await m.jobIdentityWeekly({ AUDIT: withHeld, IDENTITY: withHeld, GITHUB_TOKEN: "" });
+const hRow = writes.filter((w) => /INSERT INTO portfolio_runs/.test(w.sql)).pop();
+const hAct = JSON.parse(hRow.args[4]);
+ok(hAct.inbound_held.length === 1 && hAct.inbound_held[0].category === "funder" && hAct.inbound_held[0].from_domain === "fund.example" && !("reason" in hAct.inbound_held[0]) && !JSON.stringify(hAct.inbound_held).includes("@"), "held inbound items carry category, domain and age only");
+ok(/1 inbound messages held by INBOUND-SLA-1/.test(hRow.args[5]), "and become one owner item in the weekly review");
+
 // IDENTITY-WEEKLY-DELEGATED-1: under the owner's queue delegation the findings are still recorded, but no card is filed.
 const flagged = { prepare(sql) { const q = D1.prepare(sql); if (/FROM pipeline_flags/.test(sql)) q.first = async () => ({ value: "1" }); return q; } };
 const cardsBefore = writes.filter((w) => /INSERT INTO human_actions/.test(w.sql)).length;

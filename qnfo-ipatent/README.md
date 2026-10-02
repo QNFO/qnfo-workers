@@ -1,6 +1,6 @@
 # qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)
 
-**Version:** 3.5.1 (2026-10-02; page metrics) · 3.5.0 private by default, findable, honest copy · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
+**Version:** 3.7.0 (2026-10-02; reach: example page, share card, byline, value check) · 3.6.x support map, latency · 3.5.1 page metrics · 3.5.0 private by default, findable, honest copy · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
 ## Purpose
 Free experimental US-provisional patent disclosure drafting assistant, grounded in the
 QNFO/QWAV patent corpus (33,500+ semantic segments). Turns an inventor description into
@@ -46,6 +46,26 @@ iPatent had no pageview measurement. Each GET of `/` or `/guide` adds 1 to `page
 referrer URL is stored. `GET /api/metrics` serves 7d and 30d aggregates (views by source, guide views, drafts, saved
 drafts, distinct drafters); qnfo-fleet-control IMPROVEMENT-LOOP-1 (SURFACE-METRICS-1) reads them hourly into
 `metric_registry` as `ipatent_human_views_7d`, `ipatent_search_visits_7d`, `ipatent_crawler_hits_7d`, `ipatent_drafters_7d`.
+
+## What v3.6.0 added (pillar: reach; the audit's phase 2, first slice)
+- **SUPPORT-MAP-1.** Every claim element is matched, deterministically and at no model cost, to the numbered paragraph
+  that shares most of its distinctive terms: supported (>= 60%), weak (>= 35%) or unsupported, with the terms not found.
+  Shown under the draft and in the document. It checks wording, not legal sufficiency.
+- **Numbered paragraphs.** Field, background, summary and detailed description are numbered [0001]... in USPTO style
+  (Patent Center flags specifications without paragraph numbering).
+- **COMPLETENESS-METER-1.** While typing: problem, parts, how it works, concrete values, alternatives, figures, length.
+  Advisory, never blocking.
+- **COST-GUARD-1.** At most 150 drafts in 24 hours across all users (the per-IP limit did not bound the total).
+- **INDEXNOW-1.** `/<key>.txt` proves ownership for IndexNow (Bing, Yandex, Seznam, Naver; not Google).
+
+## What v3.7.0 added (pillar: reach)
+- **EXAMPLE-1:** `/example` renders one real, unedited run (2026-10-02, gpt-oss-120b, 39 s) with the live support map and
+  the five things the run invented. It is the honest demonstration and the page to share.
+- **VALUE-CHECK-1:** a number in a claim element that appears nowhere in the specification makes the element unsupported
+  (the live run's invented 0.5 to 2.0 N·m torque and Shore A 40 to 60 are now caught).
+- **Share card** `/og.jpg` (1200x630) on every page; share links (LinkedIn, Bluesky, X, email) with UTM tags.
+- **Byline and contact:** the author, ORCID and a "Work with me" link (qnfo.org/work-with-me, UTM-tagged) on the landing
+  page, the guide, the example and under every draft.
 
 ## Endpoints
 | Route | Method | Purpose |

@@ -9,7 +9,7 @@ Mirror: https://qnfo-fleet-dashboard.q08.workers.dev/
 - Money and clock: AI spend 30d vs the $150 cap, days to the 2026-12-31 review gate, pageviews vs prior 30d, subscribers.
 - One collapsed line for everything the system handles itself (red flags, drift, probes). It opens by itself only when an error has been unresolved past the 2h SLA.
 - `/ops`, `/roi` and the old 9-panel failure inventory were folded in; `/ops`, `/roi`, `/api/roi` redirect (301) to `/`.
-- The page is public and unauthenticated: third-party mail is shown as domain + count + age only, never an address or subject.
+- The page is public and unauthenticated: third-party mail is shown as sender domain, age, category and authentication verdict, never a subject or an address; the sender's display name, address and the subject are shown only to the signed-in owner (or a loop-token holder), and no message body is ever on the page (1.17.8).
 
 ## Real-time
 The queue is read live from D1 on every request and the page re-fetches `/?frag=1` every 10s (green/amber/red dot = how fresh the last update is, so a frozen page cannot pass as all-clear). System state is rebuilt on demand when >5 min old; money/return inputs are re-measured on demand when >5 min old (throttled to one run per 2 min) and by the */15 cron and the 10-min fleet-exec heartbeat. Cloudflare analytics and billing are themselves minutes behind; the page shows when each was measured.
@@ -59,7 +59,7 @@ Tables (created on first use): `human_responses`, `owner_prompts`. The owner-onl
 | `gtd_register` | open lines owned by user/mixed |
 | `fleet_issue_dispatch` | `exec_state='needs-human'` (issue loop found no safe autonomous action) |
 | `code_tasks` | `status='needs_human'` (code loop could not verify / no PR credential) |
-| `v_email_human_pending_v2` | inbound mail from real people |
+| `v_email_human_pending_v2` | inbound mail that owes you a reply: INBOUND-SLA-1's category when it has decided the message, otherwise the same header and subject rules (automated mail, receipts such as a funder's submission receipt, list mail and solicitations get no card and are listed as handled; OWNER-SURFACE-HONESTY-1) |
 | `shutdown_manifest` | owner-confirm gates after phase 1 fires; gates due within 45 days |
 
 File or clear an action from any worker/session (header `x-loop-token`, secret `LOOP_TOKEN`):

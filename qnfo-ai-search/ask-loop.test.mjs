@@ -103,6 +103,15 @@ const ev = sq.prepare("SELECT * FROM ask_events").get();
 ok(ev.cites === 2 && ev.cites_invalid === 1 && ev.sources >= 1 && ev.usd > 0, "event records citations (1 of 2 invalid), sources and priced cost");
 ok(sq.prepare("SELECT SUM(usd) u FROM ai_spend_ledger WHERE caller='qnfo-ai-search'").get().u > 0, "spend lands in ai_spend_ledger under caller qnfo-ai-search");
 ok(/"cached":true/.test((await call("/api/ask", { query: "What does JPCUB measure?" })).text), "repeat question served from cache");
+// 2b. PAPER-PIN-1 (2.1.0): papers.qnfo.org asks about the paper a visitor is reading
+const ap = await call("/api/ask", { query: "What does it establish about statistics?", paper: "adelic-quantum-statistics" });
+const mp = sse(ap.text, "meta")[0];
+ok(mp && mp.sources[0].slug === "adelic-quantum-statistics" && mp.sources[0].n === 1 && mp.sources.filter((s) => s.slug === "adelic-quantum-statistics").length === 1, "the read paper is pinned as source [1], once");
+ok(/^\[paper:adelic-quantum-statistics\] /.test(sq.prepare("SELECT query FROM ask_events ORDER BY rowid DESC LIMIT 1").get().query), "a pinned ask is labelled in ask_events");
+const ap2 = await call("/api/ask", { query: "What does it establish about statistics?" });
+ok(!/"cached":true/.test(ap2.text), "the pinned answer is cached apart from the unpinned one");
+const bad = await call("/api/ask", { query: "What does JPCUB measure here?", paper: "../etc/passwd" });
+ok(sse(bad.text, "meta")[0].sources.every((s) => !s.pinned), "an invalid paper slug is ignored");
 // 3. feedback
 ok((await call("/api/feedback", { id: done.id, helpful: 1 })).status === 200, "feedback accepted");
 await call("/api/feedback", { id: done.id, helpful: 0 });

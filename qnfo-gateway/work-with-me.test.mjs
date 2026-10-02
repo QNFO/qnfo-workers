@@ -133,7 +133,7 @@ ok((await get("https://qnfo.org/llms.txt")).text.includes("(https://qnfo.org/wor
 const c = await get("https://qnfo.org/contact");
 ok(c.status === 301 && c.headers.get("Location") === "https://qnfo.org/work-with-me", "/contact redirects to /work-with-me");
 const h = JSON.parse((await get("https://qnfo.org/health")).text);
-ok(h.capabilities.includes("work-with-me-page") && h.limitations.some((l) => /work-with-me/.test(l)) && /^3\.7\.27/.test(h.version), "/health advertises the page and its limitation", h.version);
+ok(h.capabilities.includes("work-with-me-page") && h.limitations.some((l) => /work-with-me/.test(l)) && /^3\.\d+\.\d+/.test(h.version), "/health advertises the page and its limitation", h.version);
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

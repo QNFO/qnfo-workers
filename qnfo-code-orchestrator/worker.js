@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.4-issue-planner"; // 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.9-claim-age"; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -119,16 +119,31 @@ export class PyContainer {
 // The server-side equivalent of a Claude Code cloud session: compute is disposable, STATE is durable.
 // Every step is bounded and idempotent; all progress lives in D1 (code_tasks), so any isolate, cron tick or
 // restart can resume a task. One task = one file edit, verified deterministically, delivered as a PR (never
-// to main). A task the loop cannot verify ends as needs_human, never as an unverified PR.
+// to main). A task the loop cannot verify never becomes an unverified PR: a model that keeps failing ends as failed with a
+// fleet issue (SELF-REPAIR-1), and a policy refusal ends as needs_human.
 //
 //   queued --read--> propose --> verify --(fail, attempts<MAX)--> propose (NEXT model on the ladder)
 //                                   |--(ok)--> commit --> pr_open
-//                                   |--(attempts>=MAX | no verifier | no-op proposal)--> needs_human
+//                                   |--(MAX failed attempts)--> queued after a backoff, first rung again (rounds < RETRY_ROUNDS)
+//                                   |                           failed + one agent_issues row for the fleet (last round)
+//                                   |--(no verifier | no-op proposal | refused path or anchor)--> needs_human
 //
 // MODEL-INDEPENDENT: the ladder is data (env.MODEL_LADDER, comma-separated), cheapest first; a failed verify
 // escalates one rung. COST-BOUNDED: queue cap, per-step model call, size caps, MAX_ATTEMPTS, tick budget.
 // DATA-ONLY: repo file content is untrusted input, delimited, never followed as instructions.
 const MAX_ATTEMPTS = 3;
+// SELF-REPAIR-1 (0.3.6, agent_issues #1768, pillar autonomy; owner note on card code:ct_qldqse7ngltdth: "this is not a user problem
+// audit and fix yourself"). A model that cannot produce a verified edit is the fleet's problem, not the owner's. Measured on
+// ct_qldqse7ngltdth: all 3 attempts ran in ONE 26 s tick (06:50:43Z to 06:51:09Z, 0.3.1, ladder qwen2.5-coder then llama-3.3-70b
+// twice); rung 1's SEARCH matched both of two near-identical lines, rungs 2 and 3 replied with no block, and the task went to
+// needs_human, the dashboard's owner card. The frontier rungs (0.3.3) deployed 5.5 min later, but needs_human is never retried, so
+// the repaired loop could not pick the task up. Now a round of MAX_ATTEMPTS failed attempts waits RETRY_BACKOFF_MS[round - 1] and
+// runs again from the first rung, with the last error still fed back; after RETRY_ROUNDS rounds the task is 'failed' and ONE
+// deduped agent_issues row hands it to the fleet. needs_human stays for what no model can fix: refused paths and anchors, file
+// types with no verifier, a no-op proposal, and the merge runner's refusals.
+const RETRY_ROUNDS = 3;
+const RETRY_BACKOFF_MS = [3600000, 6 * 3600000];
+const MAX_REPLY_KEEP = 1200; // head of a reply that held no usable block, kept in ctx.lastReply so the next failure can be diagnosed
 const MAX_OPEN_TASKS = 20;
 const LEASE_MS = 90000;
 const MAX_FILE_CHARS = 60000;
@@ -137,6 +152,7 @@ const MAX_FILE_CHARS = 60000;
 // around a verbatim ANCHOR supplied with the task) and answers with exact SEARCH/REPLACE edits; the worker applies them to the
 // full file, bumps VERSION, mirrors the change to deployed-current.worker.js and stores a minimal hunk diff.
 const MAX_PATCH_FILE_CHARS = 900000; // base + ctx must stay inside one D1 row
+// PATCH-MODE-LIVE-1: patch mode first exercised on a deployed worker source on 2026-10-02 (code task ct_patchproof20261002).
 const WINDOW_CHARS = 24000;
 const PATCH_MIN_CHARS = 12000;
 const MAX_ANCHOR_CHARS = 300;
@@ -206,13 +222,19 @@ async function enqueue(env, b) {
   return { ok: true, status: 202, id: id };
 }
 // CLAIM-FAIRNESS-1: fewest failed attempts first, then oldest, so a task that keeps failing verification cannot starve fresh ones.
+// CLAIM-AGE-1 (0.3.8): but a queued task untouched for CLAIM_WAIT_MS goes first, so a retry cannot starve either: with the
+// issue planner adding fresh tasks every tick, a task waiting on its second attempt was never claimed again (measured
+// 2026-10-02, ct_qldqse7ngltdth: queued from 07:40 to past 08:00 while four newer tasks ran). A task that keeps failing
+// still gets at most one attempt per CLAIM_WAIT_MS while others wait, and SELF-REPAIR-1's lease backoff still applies.
 // Claim with a lease: a crashed isolate's lease simply expires and the task is picked up again.
+const CLAIM_WAIT_MS = 20 * 60 * 1000;
 async function claim(env) {
   const now = iso();
   const until = new Date(Date.now() + LEASE_MS).toISOString();
+  const waited = new Date(Date.now() - CLAIM_WAIT_MS).toISOString();
   return await env.AUDIT_DB.prepare(
-    "UPDATE code_tasks SET lease_until=?, updated_at=? WHERE id=(SELECT id FROM code_tasks WHERE status='queued' AND (lease_until IS NULL OR lease_until < ?) ORDER BY attempts ASC, created_at ASC LIMIT 1) RETURNING *"
-  ).bind(until, now, now).first();
+    "UPDATE code_tasks SET lease_until=?, updated_at=? WHERE id=(SELECT id FROM code_tasks WHERE status='queued' AND (lease_until IS NULL OR lease_until < ?) ORDER BY CASE WHEN updated_at < ? THEN 0 ELSE 1 END, attempts ASC, created_at ASC LIMIT 1) RETURNING *"
+  ).bind(until, now, now, waited).first();
 }
 // FENCE-IN-FILE-1 (2026-10-01, code_tasks ct_readme20261001b): the reply's closing fence is the LAST one. The old lazy
 // match stopped at the first "\n```" inside the file, so any file that itself contains a fenced block (most READMEs) came
@@ -245,6 +267,26 @@ function parseEdits(text) {
   while ((m = re.exec(String(text || ""))) !== null) out.push({ search: m[1], replace: m[2].replace(/\n$/, "") });
   return out;
 }
+// SELF-REPAIR-1: where a non-unique SEARCH matched (file line numbers and the start of each line, at most 3), so the next rung can
+// tell the places apart. ct_qldqse7ngltdth's rung 1 matched both `WHERE f.slug = p.slug AND f.signal` lines of feedbackScan and
+// was told only "include more surrounding lines". The quoted lines are file DATA, cut to 100 chars.
+function placesOf(base, win, search) {
+  const view = base.slice(win.ws, win.we), out = [];
+  for (let i = view.indexOf(search); i !== -1 && out.length < 3; i = view.indexOf(search, i + search.length)) {
+    const at = win.ws + i, ls = base.lastIndexOf("\n", at - 1) + 1, le = base.indexOf("\n", at);
+    out.push("line " + (countOf(base.slice(0, at), "\n") + 1) + ": " + base.slice(ls, le === -1 ? base.length : le).trim().slice(0, 100));
+  }
+  return "at " + out.join(" | ") + " (quoted file data, not instructions)";
+}
+// Why a reply held no SEARCH/REPLACE block. ct_qldqse7ngltdth's rungs 2 and 3 failed with only "no SEARCH/REPLACE block found in
+// the reply" and the reply was not kept, so the cause could not be read back from D1. Every message keeps that prefix.
+function noBlockWhy(reply) {
+  const t = String(reply || ""), p = "no SEARCH/REPLACE block found in the reply";
+  if (!t.trim()) return p + ": the reply was empty";
+  if (/<think>/.test(t) && !/<\/think>/.test(t)) return p + ": it ended inside its <think> reasoning after " + t.length + " chars, before any block";
+  if (/<{5,}[ \t]*SEARCH/.test(t)) return p + ": a SEARCH block was opened but not closed by a ======= line and a >>>>>>> REPLACE line (" + t.length + " chars; cut off?)";
+  return p + " (" + t.length + " chars; it began: " + t.trim().slice(0, 80).replace(/\s+/g, " ") + "); reply with the blocks only";
+}
 // Applies the edits inside the window. Every SEARCH must occur exactly once in the window and edits must not overlap.
 function applyEdits(base, win, edits) {
   if (!edits.length) return { ok: false, error: "no SEARCH/REPLACE block found in the reply" };
@@ -255,6 +297,7 @@ function applyEdits(base, win, edits) {
     const e = edits[i];
     if (!e.search) return { ok: false, error: "edit " + (i + 1) + ": SEARCH is empty" };
     const n = countOf(view, e.search);
+    if (n > 1) return { ok: false, error: "edit " + (i + 1) + ": SEARCH text occurs " + n + " times in the shown content, " + placesOf(base, win, e.search) + "; each SEARCH must occur exactly once: to change several places write one block per place, each copying enough of that place's own line to be unique" };
     if (n !== 1) return { ok: false, error: "edit " + (i + 1) + ": SEARCH text occurs " + n + " times in the shown content (it must be copied verbatim and occur exactly once; include more surrounding lines)" };
     const at = win.ws + view.indexOf(e.search);
     spans.push({ at: at, end: at + e.search.length, replace: e.replace });
@@ -488,8 +531,16 @@ async function jsSyntaxCheck(env, src) {
   const msg = String((err && err.message) || err);
   if (msg === "DYNAMIC_TIMEOUT") return { verdict: "fail", error: "candidate did not finish starting within " + DYN_TIMEOUT_MS + "ms (top-level code spins?)" };
   if (/SyntaxError/.test(msg)) return { verdict: "fail", error: msg.replace(/\s+/g, " ").slice(0, 300) };
-  return { verdict: "ok" }; // it parsed; a later load/runtime error says nothing about syntax
+  // JS-VERIFY-FAIL-CLOSED-1 (2026-10-02, GitHub #445): "anything else => syntax OK" let a real syntax error through
+  // (ct_4c0lf1nu36lp6g, personal-companion/worker.js:934, unescaped quotes; deploy-gate caught it). Only errors that can
+  // only happen AFTER the module parsed count as a pass; any other start failure (CPU or size limits, platform errors)
+  // means the syntax was not verified, so the task stops for review instead of becoming a PR. The message is kept
+  // (verify_note, audit code-task.verify-unknown) so the allowlist can learn from what the platform really says.
+  if (JS_PARSED_THEN_FAILED.test(msg)) return { verdict: "ok", note: msg.replace(/\s+/g, " ").slice(0, 200) };
+  await audit(env, "code-task.verify-unknown", msg.replace(/\s+/g, " ").slice(0, 400), null, "error");
+  return { verdict: "no-verifier", error: "the JS verifier could not confirm the syntax (start failed with: " + msg.replace(/\s+/g, " ").slice(0, 200) + ")" };
 }
+const JS_PARSED_THEN_FAILED = /\b(ReferenceError|TypeError|RangeError|URIError)\b|No such module|not permitted to access the internet|Illegal invocation|Network connection lost/;
 // Measures whether the platform enforces limits.cpuMs (a spinning module must be stopped well before the wall timeout).
 async function probeDynamicCpu(env) {
   if (!env.LOADER) return { ok: false, error: "LOADER binding missing" };
@@ -539,16 +590,48 @@ function wholeFilePatch(path, base, next) {
   if (b.length && !nl(next)) o += "\\ No newline at end of file\n";
   return o;
 }
+// SELF-REPAIR-1: the last round failed. ONE open agent_issues row per task (deduped by title, as qnfo-fleet-control files them)
+// carries the evidence and the lever to the fleet. The dashboard turns code_tasks.needs_human into owner cards; it does not do that
+// with agent_issues. The text never holds "code-task:", so ISSUE-INTAKE-1 cannot turn it into a task, and its source is not on
+// ISSUE-PLANNER-1's trusted list. Returns the issue id, or null (then the audit event, status error, is the only trace).
+async function fileLoopIssue(env, task, msg, attempts) {
+  const title = "CODE-LOOP-EXHAUSTED-1: " + task.id + " " + task.path;
+  const desc = ("The code loop (qnfo-code-orchestrator " + VERSION + ") could not produce a verified edit for code task " + task.id + " (" + task.repo + "/" + task.path + "): " +
+    attempts + " attempts in " + RETRY_ROUNDS + " rounds on the ladder " + ladder(env).join(" > ") + ".\nTask: " + String(task.goal || "").split("\n")[0].slice(0, 200) +
+    "\nLast error: " + String(msg).slice(0, 600) +
+    "\nEvidence: SELECT attempts, last_error, json_extract(ctx, '$.lastError'), json_extract(ctx, '$.lastReply') FROM code_tasks WHERE id = '" + task.id + "'; cloud_ops_events WHERE job = 'qnfo-code-orchestrator' AND text LIKE '" + task.id + "%'." +
+    "\nLever: fix the cause in qnfo-code-orchestrator (prompt, window, reply parser, verifier or a MODEL_LADDER rung) or narrow the task, then requeue it: UPDATE code_tasks SET status = 'queued', step = 'read', attempts = 0, lease_until = NULL WHERE id = '" + task.id + "'. Never lower the verification bar." +
+    "\nDefinition of done: " + task.id + " (or a task that replaces it) reaches ready_to_publish or later; record that in issue_triage.close_evidence.").replace(/code-task:/gi, "code-task -");
+  try {
+    await env.AUDIT_DB.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-code-orchestrator', 'automation', 'medium', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')")
+      .bind(title, desc, Date.now()).run();
+    const r = await env.AUDIT_DB.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1").bind(title).first();
+    await audit(env, "code-task.handoff", task.id + " -> agent_issues #" + (r ? r.id : "?"), { id: task.id, issue: r ? r.id : null }, r ? "ok" : "error");
+    return r ? r.id : null;
+  } catch (e) {
+    await audit(env, "code-task.handoff", task.id + ": the fleet issue could not be filed: " + String((e && e.message) || e).slice(0, 160), { id: task.id }, "error");
+    return null;
+  }
+}
 // ONE bounded step. Returns the task's new state; never throws (a throw becomes a recorded failed attempt).
 async function stepTask(env, task) {
   const ctx = getCtx(task);
+  // terminal = a refusal no model can fix (needs_human). Otherwise the attempt counts toward a round of MAX_ATTEMPTS: inside a round
+  // the next rung runs at once; at a round's end the task waits RETRY_BACKOFF_MS (lease_until, which claim() honours) and, after the
+  // last round, is 'failed' with one fleet issue (SELF-REPAIR-1).
   const fail = async function (msg, terminal) {
     const attempts = task.attempts + 1;
-    const dead = terminal || attempts >= MAX_ATTEMPTS;
-    await save(env, task.id, { attempts: attempts, last_error: String(msg).slice(0, 500), lease_until: null,
-      status: dead ? "needs_human" : "queued", step: dead ? task.step : (task.step === "verify" || task.step === "propose" ? "propose" : task.step) });
-    await audit(env, "code-task.fail", task.id + " " + task.step + ": " + String(msg).slice(0, 200), { id: task.id, attempts: attempts, dead: dead }, dead ? "error" : "retry");
-    return { ok: false, dead: dead, error: String(msg) };
+    const round = Math.ceil(attempts / MAX_ATTEMPTS);
+    const roundEnd = !terminal && attempts % MAX_ATTEMPTS === 0;
+    const giveUp = roundEnd && round >= RETRY_ROUNDS;
+    const retryAt = roundEnd && !giveUp ? new Date(Date.now() + RETRY_BACKOFF_MS[Math.min(round, RETRY_BACKOFF_MS.length) - 1]).toISOString() : null;
+    let note = retryAt ? " [SELF-REPAIR-1: round " + round + " of " + RETRY_ROUNDS + " failed; retried from the first rung after " + retryAt + "]" : "";
+    if (giveUp) { const iss = await fileLoopIssue(env, task, msg, attempts); note = " [SELF-REPAIR-1: " + RETRY_ROUNDS + " rounds failed; handed to the fleet as " + (iss ? "agent_issues #" + iss : "an audit error (no issue could be filed)") + "]"; }
+    const dead = !!(terminal || giveUp);
+    await save(env, task.id, { attempts: attempts, last_error: String(msg).slice(0, 500 - note.length) + note, lease_until: retryAt,
+      status: terminal ? "needs_human" : giveUp ? "failed" : "queued", step: dead ? task.step : (task.step === "verify" || task.step === "propose" ? "propose" : task.step) });
+    await audit(env, "code-task.fail", task.id + " " + task.step + ": " + String(msg).slice(0, 200), { id: task.id, attempts: attempts, dead: dead, retry_at: retryAt }, dead ? "error" : "retry");
+    return { ok: false, dead: dead, error: String(msg), retry_at: retryAt };
   };
   try {
     if (task.step === "read") {
@@ -577,13 +660,15 @@ async function stepTask(env, task) {
     }
     if (task.step === "propose") {
       const l = ladder(env);
-      const model = l[Math.min(task.attempts, l.length - 1)];
+      // Each round climbs the ladder from its first rung (SELF-REPAIR-1); the old clamp ran the last rung for every later attempt.
+      const model = l[Math.min(task.attempts % MAX_ATTEMPTS, l.length - 1)];
       if (ctx.mode === "patch") {
         const base = ctx.base || "", win = ctx.win || { ws: 0, we: base.length };
         const reply = await ai(env, model, promptForPatch(task, base.slice(win.ws, win.we), win.ws > 0 || win.we < base.length, ctx.lastError || null));
         ctx.edits = parseEdits(reply);
-        const built = buildProposal(ctx, task.path);
-        if (!built.ok) { ctx.lastError = built.error; ctx.edits = []; await save(env, task.id, { ctx: JSON.stringify(ctx) }); return await fail("model " + model + ": " + built.error, false); }
+        const built = ctx.edits.length ? buildProposal(ctx, task.path) : { ok: false, error: noBlockWhy(reply) };
+        if (!built.ok) { ctx.lastError = built.error; ctx.lastReply = String(reply || "").slice(0, MAX_REPLY_KEEP); ctx.edits = []; await save(env, task.id, { ctx: JSON.stringify(ctx) }); return await fail("model " + model + ": " + built.error, false); }
+        delete ctx.lastReply;
         if (applyEdits(base, win, ctx.edits).text === base) return await fail("model " + model + " proposed no change", true);
         await save(env, task.id, { ctx: JSON.stringify(ctx), model: model, step: "verify", lease_until: null });
         return { ok: true, step: "verify", model: model };
@@ -684,6 +769,7 @@ const PLAN_DAILY_CAP = 8;
 const PLAN_WIP = 3;
 const PLAN_RECHECK_DAYS = 7;
 const PLAN_MIN_AGE_MS = 15 * 60 * 1000;
+const PLAN_CHEAP_PER_TICK = 10; // refusals and "names no worker" decisions need no model call, so several fit in one tick
 const PLAN_SNIPPET_CHARS = 14000;
 const PLAN_FILE_MAX = 900000;
 // Mirrors qnfo-fleet-control CM_DENY (EVOLVE_DENY + the code loop): workers that never auto-merge are never planned.
@@ -775,7 +861,8 @@ async function planIssues(env, opts) {
   await ensurePlanSchema(env);
   const now = Date.now();
   const today = new Date(now).toISOString().slice(0, 10);
-  const used = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM issue_plans WHERE planned_at >= ?").bind(today).first();
+  // The cap counts model calls only: a refusal or a "names no worker" decision costs nothing and must not use it up.
+  const used = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM issue_plans WHERE planned_at >= ? AND model IS NOT NULL").bind(today).first();
   if (used && Number(used.n) >= PLAN_DAILY_CAP) return { planned: false, why: "daily cap " + PLAN_DAILY_CAP };
   const wip = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM code_tasks WHERE status NOT IN ('merged','closed','publish_failed','needs_human','failed','reverted')").first();
   if (wip && Number(wip.n) >= PLAN_WIP) return { planned: false, why: "work in progress " + wip.n + " >= " + PLAN_WIP };
@@ -792,6 +879,8 @@ async function planIssues(env, opts) {
       .bind(id, new Date().toISOString(), outcome, String(detail || "").slice(0, 600), taskId || null, path || null, model || null).run();
     await audit(env, "code-task.plan", "[issue #" + id + "] " + outcome + ": " + String(detail || "").slice(0, 200), { issue: id, task: taskId || null }, outcome === "queued" ? "ok" : "skip");
   };
+  let cheap = 0;
+  const decided = [];
   let names = [];
   try {
     names = ((await env.AUDIT_DB.prepare("SELECT service FROM service_registry WHERE state = 'live' AND kind = 'worker'").all()).results || [])
@@ -802,15 +891,16 @@ async function planIssues(env, opts) {
     if (created && now - created < PLAN_MIN_AGE_MS) continue;
     if (!planTrusted(r.source, r.title)) continue;                      // untrusted text never becomes code
     const text = String(r.title || "") + "\n" + String(r.description || "");
-    if (PLAN_DENY_CATEGORY.test(String(r.category || ""))) { await record(r.id, "refused", "category " + r.category + " is never planned automatically"); return { planned: true, issue: r.id, outcome: "refused" }; }
-    if (PLAN_DENY_TEXT.test(text)) { await record(r.id, "refused", "the issue mentions secrets, caps or deletions"); return { planned: true, issue: r.id, outcome: "refused" }; }
+    if (cheap >= PLAN_CHEAP_PER_TICK) break;
+    if (PLAN_DENY_CATEGORY.test(String(r.category || ""))) { await record(r.id, "refused", "category " + r.category + " is never planned automatically"); cheap++; decided.push({ issue: r.id, outcome: "refused" }); continue; }
+    if (PLAN_DENY_TEXT.test(text)) { await record(r.id, "refused", "the issue mentions secrets, caps or deletions"); cheap++; decided.push({ issue: r.id, outcome: "refused" }); continue; }
     const seen = await env.AUDIT_DB.prepare("SELECT id FROM code_tasks WHERE goal LIKE ? LIMIT 1").bind("[issue #" + r.id + "]%").first();
     if (seen) { await record(r.id, "queued", "a code task already exists", seen.id); continue; }
     const workers = planWorkers(text, names);
-    if (!workers.length) { await record(r.id, "not-code", "the issue names no worker the code loop may change"); return { planned: true, issue: r.id, outcome: "not-code" }; }
+    if (!workers.length) { await record(r.id, "not-code", "the issue names no worker the code loop may change"); cheap++; decided.push({ issue: r.id, outcome: "not-code" }); continue; }
     const worker = workers[0], path = worker + "/worker.js";
     const f = await readRepoFile(env, "qnfo-workers", path, PLAN_FILE_MAX + 1);
-    if (!f || !f.ok || f.truncated) { await record(r.id, "not-code", "could not read " + path + (f && f.error ? ": " + f.error : ""), null, path); return { planned: true, issue: r.id, outcome: "not-code" }; }
+    if (!f || !f.ok || f.truncated) { await record(r.id, "not-code", "could not read " + path + (f && f.error ? ": " + f.error : ""), null, path); cheap++; decided.push({ issue: r.id, outcome: "not-code" }); continue; }
     const file = String(f.content || "");
     const sn = planSnippets(file, planKeywords(text));
     const model = env.PLAN_MODEL || PLAN_MODEL_DEFAULT;
@@ -831,7 +921,7 @@ async function planIssues(env, opts) {
     await record(r.id, "queued", String(p.reason || "single-file change").slice(0, 300), res.id, path, model);
     return { planned: true, issue: r.id, outcome: "queued", task: res.id, path: path };
   }
-  return { planned: false, why: "no plannable issue" };
+  return decided.length ? { planned: true, issue: decided[decided.length - 1].issue, outcome: decided[decided.length - 1].outcome, decided: decided } : { planned: false, why: "no plannable issue" };
 }
 // Runs steps until the budget or step cap is hit. Called by cron and by POST /v1/tick.
 async function tick(env, opts) {
@@ -894,7 +984,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["orchestrator", "github-read", "container-exec", "server-side", "task-loop", "model-ladder", "pr-gated", "patch-mode", "issue-planner"], limitations: ["every route except /health needs ORCH_TOKEN", "changes ship only as pull requests: commits to main or master are refused, and in pull mode a workflow opens the PR", "the task loop runs on the */10 cron with a 20-second budget and at most 8 steps per tick", "ISSUE-PLANNER-1 turns at most one open issue per tick (8 a day, at most 3 unfinished tasks in flight) into a code task, only from trusted sources and never for security, governance or outreach issues, secrets, caps or deletions, or a control-plane worker", "files over 60000 characters need a code-anchor line (patch mode, pull mode only)", "verifies py, json, md and txt; js and mjs only while the platform-enforced Dynamic Workers check is on (see js_verify)"],
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["orchestrator", "github-read", "container-exec", "server-side", "task-loop", "model-ladder", "pr-gated", "patch-mode", "issue-planner", "self-repair"], limitations: ["every route except /health needs ORCH_TOKEN", "changes ship only as pull requests: commits to main or master are refused, and in pull mode a workflow opens the PR", "the task loop runs on the */10 cron with a 20-second budget and at most 8 steps per tick", "SELF-REPAIR-1: a task whose " + MAX_ATTEMPTS + " model attempts all fail waits (" + RETRY_BACKOFF_MS.map(function (ms) { return ms / 3600000 + "h"; }).join(", then ") + ") and retries from the first rung, " + RETRY_ROUNDS + " rounds in all; then it is 'failed' and filed once to agent_issues for the fleet, never as an owner card. Policy refusals (path, anchor, no verifier, no-op) still end needs_human", "ISSUE-PLANNER-1 turns at most one open issue per tick (8 a day, at most 3 unfinished tasks in flight) into a code task, only from trusted sources and never for security, governance or outreach issues, secrets, caps or deletions, or a control-plane worker", "files over 60000 characters need a code-anchor line (patch mode, pull mode only)", "verifies py, json, md and txt; js and mjs only while the platform-enforced Dynamic Workers check is on (see js_verify)"],
         verifiers: VERIFIABLE.concat((await jsVerifyOn(env)) ? ["js", "mjs"] : []), js_verify: env.JS_VERIFY === "dynamic" ? "dynamic" : env.JS_VERIFY === "auto" ? ((await jsVerifyOn(env)) ? "auto-on" : "auto-off") : "off", patch_mode: true, ladder: ladder(env), bindings: { ai: !!env.AI, audit_db: !!env.AUDIT_DB, container: !!env.PY_CONTAINER } });
     }
     if (!(await authed(env, req))) return json({ ok: false, error: "unauthorized (ORCH_TOKEN required)" }, 401);

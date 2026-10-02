@@ -20,6 +20,8 @@ on:
       - 'docs/QUNIVERSE-CHARTER.md'
       - 'docs/PORTFOLIO.md'
       - 'qnfo-fleet-control/**'
+      - 'migrations/2026-10-02-metric-closed-loop.sql'
+      - 'migrations/2026-10-02-performance-loop.sql'
       - 'scripts/charter-guard.py'
       - '*/wrangler.toml'
       - '.github/workflows/charter-guard.yml'
@@ -29,6 +31,8 @@ on:
       - 'docs/QUNIVERSE-CHARTER.md'
       - 'docs/PORTFOLIO.md'
       - 'qnfo-fleet-control/**'
+      - 'migrations/2026-10-02-metric-closed-loop.sql'
+      - 'migrations/2026-10-02-performance-loop.sql'
       - 'scripts/charter-guard.py'
       - '*/wrangler.toml'
       - '.github/workflows/charter-guard.yml'
@@ -118,6 +122,17 @@ jobs:
           echo "$out"
           echo "$out" | grep -q "0 failure(s)" \
             || { echo "::error::act bridge suite reported failures"; exit 1; }
+
+      # PERFORMANCE-LOOP-1: lever experiments driven by hit metric triggers (bounds, STRATEGY caps, keep or revert on
+      # metric_history, kill switch) and the five KPIs, replayed against an in-memory SQLite D1 with the live guards and both
+      # 2026-10-02 metric migrations applied (remedy_efficacy_30d counts the experiments).
+      - name: Replay the performance loop offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/performance.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "0 failed" \
+            || { echo "::error::performance loop suite reported failures"; exit 1; }
 
       - name: Resolve the diff range
         id: range

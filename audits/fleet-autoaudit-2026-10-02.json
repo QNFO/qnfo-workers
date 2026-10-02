@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 07:10:38",
+  "audited_at": "2026-10-02 08:19:01",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -422,7 +422,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.7.37-cadence-cap",
+        "version": "0.7.38-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -432,7 +432,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.30.0-spend-gov",
+        "version": "5.30.1-fleet-ctl",
         "worker": "qnfo-ai"
       },
       {
@@ -442,7 +442,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.0.1-ask-loop",
+        "version": "2.1.0-paper-pin",
         "worker": "qnfo-ai-search"
       },
       {
@@ -462,12 +462,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.17.1-reach-loops",
+        "version": "1.18.1-outreach-learner",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.4-issue-planner",
+        "version": "0.3.8-verify-fail-closed",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -487,17 +487,17 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.90-fleet-run-rate",
+        "version": "0.4.92-performance-loop",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.17.3-watchmaker-ask-loop",
+        "version": "1.18.0-fleet-ui",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.7.27-work-with-me",
+        "version": "3.8.1-living-papers",
         "worker": "qnfo-gateway"
       },
       {
@@ -512,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.5.1-page-metrics",
+        "version": "3.7.0-reach",
         "worker": "qnfo-ipatent"
       },
       {
@@ -547,7 +547,7 @@
       },
       {
         "dir": "qnfo-paper-indexer",
-        "version": "3.0.7-capability-contract",
+        "version": "3.0.8-flagship-measure",
         "worker": "qnfo-paper-indexer"
       },
       {
@@ -572,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.27-run-ledger",
+        "version": "0.7.30-cap-epoch",
         "worker": "qnfo-social"
       },
       {
@@ -848,9 +848,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.7.37-cadence-cap",
+      "before": "0.7.38-codeagent",
       "http": 200,
-      "live": "0.7.37-cadence-cap",
+      "live": "0.7.38-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -880,9 +880,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.30.0-spend-gov",
+      "before": "5.30.1-fleet-ctl",
       "http": 200,
-      "live": "5.30.0-spend-gov",
+      "live": "5.30.1-fleet-ctl",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -896,9 +896,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.0.1-ask-loop",
+      "before": "2.1.0-paper-pin",
       "http": 200,
-      "live": "2.0.1-ask-loop",
+      "live": "2.1.0-paper-pin",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1016,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.17.1-reach-loops",
+      "before": "1.18.1-outreach-learner",
       "http": 200,
-      "live": "1.17.1-reach-loops",
+      "live": "1.18.1-outreach-learner",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.4-issue-planner",
+      "before": "0.3.8-verify-fail-closed",
       "http": 200,
-      "live": "0.3.4-issue-planner",
+      "live": "0.3.8-verify-fail-closed",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.90-fleet-run-rate",
+      "before": "0.4.92-performance-loop",
       "http": 200,
-      "live": "0.4.90-fleet-run-rate",
+      "live": "0.4.92-performance-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.17.3-watchmaker-ask-loop",
+      "before": "1.18.0-fleet-ui",
       "http": 200,
-      "live": "1.17.3-watchmaker-ask-loop",
+      "live": "1.18.0-fleet-ui",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.27-work-with-me",
+      "before": "3.8.1-living-papers",
       "http": 200,
-      "live": "3.7.27-work-with-me",
+      "live": "3.8.1-living-papers",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1232,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.5.1-page-metrics",
+      "before": "3.7.0-reach",
       "http": 200,
-      "live": "3.5.1-page-metrics",
+      "live": "3.7.0-reach",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1304,9 +1304,9 @@
       "worker": "qnfo-paper-explainer"
     },
     "qnfo-paper-indexer": {
-      "before": "3.0.7-capability-contract",
+      "before": "3.0.8-flagship-measure",
       "http": 200,
-      "live": "3.0.7-capability-contract",
+      "live": "3.0.8-flagship-measure",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-paper-indexer"
@@ -1416,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.27-run-ledger",
+      "before": "0.7.30-cap-epoch",
       "http": 200,
-      "live": "0.7.27-run-ledger",
+      "live": "0.7.30-cap-epoch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"

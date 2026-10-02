@@ -44,3 +44,9 @@ jobs:
       # No-final-newline patches (incl. appending after a final line without newline, 120 seeded random edits) apply via git.
       - name: No-final-newline patch round trips
         run: node --no-warnings qnfo-code-orchestrator/no-eol.test.mjs
+      # JS-VERIFY-FAIL-CLOSED-1 (#445): only post-parse errors pass the Dynamic Workers syntax check.
+      - name: JS verifier fails closed
+        run: node --no-warnings qnfo-code-orchestrator/verify-closed.test.mjs
+      # SELF-REPAIR-1: failed model rounds back off and end as one fleet issue, never a needs_human owner card.
+      - name: Self-repair test (SELF-REPAIR-1)
+        run: node --no-warnings qnfo-code-orchestrator/self-repair.test.mjs
