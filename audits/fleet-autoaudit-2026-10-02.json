@@ -1,24 +1,18 @@
 {
-  "audited_at": "2026-10-02 08:24:58",
+  "audited_at": "2026-10-02 08:31:04",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_deploy_settle": {
-      "settled": [],
+      "settled": [
+        "qnfo-code-orchestrator"
+      ],
       "waited_for": [
         "qnfo-code-orchestrator"
       ]
     },
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-code-orchestrator/deployed-current.worker.js",
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.3.8-verify-fail-closed",
-        "repo": "0.3.9-claim-age",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -47,14 +41,7 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [
-      {
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.3.8-verify-fail-closed",
-        "repo": "0.3.9-claim-age",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -463,7 +450,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.1.0-paper-pin",
+        "version": "2.1.1-ascii",
         "worker": "qnfo-ai-search"
       },
       {
@@ -508,7 +495,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.18.1-owner-surface-honesty",
+        "version": "1.18.2-ascii",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -610,6 +597,10 @@
         "dir": "radar-hub",
         "version": "1.1.3",
         "worker": "radar-hub"
+      },
+      {
+        "version": "0.3.9-claim-age",
+        "worker": "qnfo-code-orchestrator"
       }
     ]
   },
@@ -912,9 +903,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.1.0-paper-pin",
+      "before": "2.1.1-ascii",
       "http": 200,
-      "live": "2.1.0-paper-pin",
+      "live": "2.1.1-ascii",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1050,9 +1041,9 @@
     "qnfo-code-orchestrator": {
       "before": "0.3.9-claim-age",
       "http": 200,
-      "live": "0.3.8-verify-fail-closed",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "0.3.9-claim-age",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
@@ -1168,9 +1159,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.18.1-owner-surface-honesty",
+      "before": "1.18.2-ascii",
       "http": 200,
-      "live": "1.18.1-owner-surface-honesty",
+      "live": "1.18.2-ascii",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
