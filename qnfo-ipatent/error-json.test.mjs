@@ -4,7 +4,9 @@
 const W = (await import("./worker.js")).default;
 const stmt = () => { const s = { bind() { return s; }, async run() { return {}; }, async first() { return null; }, async all() { return { results: [] }; } }; return s; };
 const html = await (await W.fetch(new Request("https://ipatent.qnfo.org/", { headers: { "User-Agent": "t" } }), { IPATENT_DB: { prepare: stmt } }, { waitUntil() {} })).text();
-const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).find((s) => s.includes("draftForm"));
+// Not an HTML filter: the test only locates the page's own inline script by its marker text.
+const parts = html.split(/<\/script\s*>/i).map((x) => x.slice(x.search(/<script\b[^>]*>/i)).replace(/^<script\b[^>]*>/i, ""));
+const script = parts.find((s) => s.includes("draftForm") && s.includes("API_BASE"));
 let passed = 0, failed = 0;
 const ok = (c, l) => { if (c) passed++; else { failed++; console.error("FAIL " + l); } };
 ok(!!script, "landing page carries the draft script");
