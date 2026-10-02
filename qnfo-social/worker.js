@@ -1690,9 +1690,15 @@ async function learnerWriteMetric(env, value, nowMs) {
 }
 
 // ---- public read (OPEN-ACCESS-1): GET /learner ----
+// GET /learner is public (OPEN-ACCESS-1): a failed read says which part is unavailable, never the exception text (CodeQL
+// js/stack-trace-exposure); the detail goes to the worker log.
+function learnerPublicError(part, e) {
+  console.error('SOCIAL-DISTRIBUTION-LEARNER-1 /learner ' + part + ' read failed', e);
+  return part + ' unavailable';
+}
 async function learnerReport(env) {
   const lrn = await learnerEnabled(env);
-  const out = { worker: 'qnfo-social', version: VERSION, learner: 'SOCIAL-DISTRIBUTION-LEARNER-1', enabled: lrn.on, switch: lrn.reason,
+  const out = { worker: 'qnfo-social', version: VERSION, learner: 'SOCIAL-DISTRIBUTION-LEARNER-1', enabled: lrn.on, switch: /^switch unreadable/.test(String(lrn.reason || '')) ? 'switch unreadable, old order' : lrn.reason,
     arms: { topic: LEARNER_TOPICS, format: LEARNER_FORMATS, slot_utc_hours: LEARNER_SLOTS },
     reward: 'r = 1 - exp(-(e + v/' + LEARNER_VISITS_PER_ENGAGEMENT + ')/' + LEARNER_REWARD_SCALE + '); e = 72h Bluesky likes + reposts + quotes + replies from others; v = attributed papers.qnfo.org paper views over baseline (CF RUM), when ingested; credited once per post',
     limits: ['chooses only among queued posts, inside the weekly cap, pause flag and content gates; never posts more', 'learner posts at least 24h apart'] };
@@ -1700,16 +1706,16 @@ async function learnerReport(env) {
   let post;
   try { post = await learnerPosterior(env); } catch (e) {
     if (/no such table/i.test(String(e && e.message || e))) { post = learnerPrior(); out.note = 'no learner rows yet: the posterior is the Beta(1,1) prior'; }
-    else out.posterior_error = String(e && e.message || e).slice(0, 160);
+    else out.posterior_error = learnerPublicError('posterior', e);
   }
   if (post) { out.posterior = learnerPosteriorSummary(post); out.next_week_allocation = learnerPBest(post, 1000, learnerRng); }
-  try { const st = await learnerState(env); out.pending = learnerBrief(st.decision); out.last_post_at = st.last_post_at || null; } catch (e) { out.pending_error = String(e && e.message || e).slice(0, 160); }
+  try { const st = await learnerState(env); out.pending = learnerBrief(st.decision); out.last_post_at = st.last_post_at || null; } catch (e) { out.pending_error = learnerPublicError('pending', e); }
   try {
     const r = await env.DB.prepare("SELECT post_key, slug, topic, format, slot, posted_at, chosen_by, status, engagement, visits, reward, credited_at FROM social_learner_posts ORDER BY posted_at DESC LIMIT 20").all();
     out.recent = (r && r.results) || [];
   } catch (e) {
     if (/no such table/i.test(String(e && e.message || e))) out.recent = [];
-    else out.recent_error = String(e && e.message || e).slice(0, 160);
+    else out.recent_error = learnerPublicError('recent', e);
   }
   return out;
 }
@@ -1759,7 +1765,7 @@ export default {
     // SOCIAL-DISTRIBUTION-LEARNER-1 (OPEN-ACCESS-1): the learner's posterior, next decision and recent rewards, read-only.
     if (p === '/learner' && m === 'GET') {
       let body;
-      try { body = await learnerReport(env); } catch (e) { body = { error: String(e && e.message || e).slice(0, 200) }; }
+      try { body = await learnerReport(env); } catch (e) { console.error('learner report failed', e); body = { error: 'learner report unavailable' }; }
       return new Response(JSON.stringify(body), { status: body.error ? 500 : 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300', ...cors } });
     }
     if (!auth(request, env)) return new Response('unauthorized', { status: 401, headers: cors });

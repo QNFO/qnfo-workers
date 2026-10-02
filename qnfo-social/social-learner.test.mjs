@@ -399,6 +399,13 @@ const bare = new DatabaseSync(":memory:");
 bare.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT)");
 const jb = await (await W.fetch(new Request("https://qnfo-social.q08.workers.dev/learner"), { DB: { prepare: (sql) => stmtOn(bare, sql) } })).json();
 ok(jb.posterior && jb.posterior.slot["us-morning"].a === 1 && /prior/.test(jb.note) && Array.isArray(jb.recent) && jb.recent.length === 0 && !bare.prepare("SELECT name FROM sqlite_master WHERE name = 'social_learner_posts'").get(), "before the first learner run GET /learner shows the prior and creates nothing");
+{
+  const _ce = console.error; console.error = () => {};
+  const er = await W.fetch(new Request("https://qnfo-social.q08.workers.dev/learner"), { DB: { prepare: () => { throw new Error("D1_ERROR secret-internal-detail at stmtOn"); } } });
+  console.error = _ce;
+  const ej = await er.json();
+  ok(er.status === 200 && ej.posterior_error === "posterior unavailable" && ej.pending_error === "pending unavailable" && ej.recent_error === "recent unavailable" && ej.switch === "switch unreadable, old order" && !/secret-internal-detail|D1_ERROR|stmtOn/.test(JSON.stringify(ej)), "GET /learner on a failing D1 names the unavailable parts and exposes no exception text (CodeQL js/stack-trace-exposure)");
+}
 const hj = await (await W.fetch(new Request("https://qnfo-social.q08.workers.dev/health"), env)).json();
 ok(hj.version === "0.7.28-social-learner" && hj.capabilities.includes("distribution-learner"), "/health names the learner");
 reset();
