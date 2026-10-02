@@ -28,6 +28,7 @@ CREATE TABLE charter_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE portfolio_sync_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT);
 CREATE TABLE evolve_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE objective_constraint_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
+CREATE TABLE improvement_loop_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, last_attempt_at TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
 CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merged_by TEXT, merged_at TEXT, merge_state TEXT, green_since TEXT);
@@ -52,6 +53,7 @@ db.prepare("INSERT INTO charter_snapshots (ts) VALUES (?)").run(ago(5));
 db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(ago(1));
 db.prepare("INSERT INTO evolve_candidates (ts) VALUES (?)").run(ago(9));
 db.prepare("INSERT INTO objective_constraint_runs (ts) VALUES (?)").run(ago(1));
+db.prepare("INSERT INTO improvement_loop_runs (ts) VALUES (?)").run(ago(1));
 db.prepare("INSERT INTO remediation_contracts (class, last_attempt_at) VALUES ('EVID-1', ?)").run(new Date(NOW - 2 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pending', 'research', ?)").run(ago(10));
 // errata-hub hourly ticks (#1747): the watchmaker reads $.last_ok, which a failed tick carries forward.
