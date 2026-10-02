@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 03:13:15",
+  "audited_at": "2026-10-02 03:22:16",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -397,7 +397,7 @@
       },
       {
         "dir": "errata-hub",
-        "version": "1.1.5-capability-contract",
+        "version": "1.2.0-crons-gated",
         "worker": "errata-hub"
       },
       {
@@ -462,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.16.5-optout-evidence",
+        "version": "1.17.0-grant-followup",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -487,12 +487,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.84-charter-sai-composite",
+        "version": "0.4.85-objective-constraints",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.16.0-q08-review",
+        "version": "1.16.3-grant-followup-watch",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -562,7 +562,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.49-paper-row-prep",
+        "version": "0.9.50-ground-or-slot",
         "worker": "qnfo-research-exec"
       },
       {
@@ -656,9 +656,9 @@
       "worker": "docs"
     },
     "errata-hub": {
-      "before": "1.1.5-capability-contract",
+      "before": "1.2.0-crons-gated",
       "http": 200,
-      "live": "1.1.5-capability-contract",
+      "live": "1.2.0-crons-gated",
       "match": 1,
       "note": "SYNC",
       "worker": "errata-hub"
@@ -1016,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.16.5-optout-evidence",
+      "before": "1.17.0-grant-followup",
       "http": 200,
-      "live": "1.16.5-optout-evidence",
+      "live": "1.17.0-grant-followup",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.84-charter-sai-composite",
+      "before": "0.4.85-objective-constraints",
       "http": 200,
-      "live": "0.4.84-charter-sai-composite",
+      "live": "0.4.85-objective-constraints",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.16.0-q08-review",
+      "before": "1.16.3-grant-followup-watch",
       "http": 200,
-      "live": "1.16.0-q08-review",
+      "live": "1.16.3-grant-followup-watch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1360,9 +1360,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.49-paper-row-prep",
+      "before": "0.9.50-ground-or-slot",
       "http": 200,
-      "live": "0.9.49-paper-row-prep",
+      "live": "0.9.50-ground-or-slot",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
