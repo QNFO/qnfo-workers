@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.101-reach-ideation-2"; /* 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.102-reach-intake"; /* 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -5476,6 +5476,10 @@ function ideaEfficacyMult(eff) {
   if (!eff || !(eff.n >= 3) || eff.mean == null || !isFinite(eff.mean)) return 1;
   return eff.mean > 0 ? 1.25 : 0.5;
 }
+// REACH-INTAKE-1: catalog ideas whose edit point is known carry an explicit code-task line and a verbatim anchor, so the code
+// loop takes them through ISSUE-INTAKE-1 (no planner model call; the planner's 8 plans a day are shared fleet-wide). The
+// anchor must occur exactly once in the file (patch mode); a missing anchor makes the task needs_human, never a bad edit.
+var IDEA_BUILD_HINT = { "qnfo-ipatent": { path: "qnfo-ipatent/worker.js", anchor: 'if ((path === "/guide" || path === "/guide/") && isRead) {', how: "add one route for this URL just before the /guide route, returning a full HTML page in the same style as GUIDE_HTML (title, meta description, canonical, og:image /og.jpg, JSON-LD Article with the author and ORCID, a link back to / and /example, the Work with me link); content as the Idea says, factual and cautious, US law only, not legal advice; add the URL to the sitemap list" } };
 // Pure: probe results -> findings. probes: [{surface, url, status, ms, html}], content: [{key, url, status}],
 // extra: discovered surfaces (ideaDiscoverSurfaces), efficacy: {check: {n, mean}}. Sorted by score (value first).
 function reachIdeasEvaluate(probes, content, extra, efficacy) {
@@ -5494,8 +5498,9 @@ function reachIdeasEvaluate(probes, content, extra, efficacy) {
   (content || []).forEach(function(c) {
     var cat = IDEA_CONTENT.filter(function(x) { return x.key === c.key; })[0];
     if (!cat || c.status === 200 || !c.status) return;
+    var hint = IDEA_BUILD_HINT[cat.worker] || null;
     out.push({ key: IDEA_PREFIX + "content " + cat.key, check: "content", surface: cat.key, url: cat.url, worker: cat.worker, metric: cat.metric,
-      score: Math.round(cat.weight * 2 * ideaEfficacyMult(eff.content) * 100) / 100, buildable: !IDEA_NOT_BUILDABLE[cat.worker], fix: cat.fix, evidence: "GET " + cat.url + " -> HTTP " + c.status });
+      score: Math.round(cat.weight * 2 * ideaEfficacyMult(eff.content) * 100) / 100, buildable: !IDEA_NOT_BUILDABLE[cat.worker], fix: cat.fix, evidence: "GET " + cat.url + " -> HTTP " + c.status, hint: hint });
   });
   out.sort(function(a, b) { return b.score - a.score || (b.buildable ? 1 : 0) - (a.buildable ? 1 : 0) || (a.key < b.key ? -1 : 1); });
   return out;
@@ -5537,7 +5542,8 @@ function ideaDescription(f) {
   return "AUTO-FILED by qnfo-fleet-control REACH-IDEATION-1 (owner directive 2026-10-02: the fleet ideates and builds reach work itself). " +
     "Surface: " + f.url + " (served by " + f.worker + "/worker.js). Evidence: " + f.evidence + ". Idea: " + f.fix + ". Metric it should move: " + f.metric +
     (f.buildable ? "." : ". NOT AUTO-BUILDABLE: " + f.worker + " is on the code loop's control-plane deny list; a session or the owner builds it.") +
-    " DoD: the live page passes the check; REACH-IDEATION-1 re-probes daily and closes this issue itself with close_evidence. Pillar: reach.";
+    " DoD: the live page passes the check; REACH-IDEATION-1 re-probes daily and closes this issue itself with close_evidence. Pillar: reach." +
+    (f.buildable && f.hint ? "\nBuild it: " + f.hint.how + ".\ncode-task: repo=qnfo-workers path=" + f.hint.path + "\ncode-anchor: " + f.hint.anchor : "");
 }
 async function ideaFetch(url) {
   var t0 = Date.now();

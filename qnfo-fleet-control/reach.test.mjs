@@ -83,5 +83,10 @@ eq(R.ideaPriority({ surface: "guide-drawings", check: "content", buildable: true
 eq(R.ideaPriority({ surface: "ipatent-guide", check: "subscribe-box", buildable: true, score: 4 }), "high", "buildable flagship surface idea is high");
 eq(R.ideaPriority({ surface: "ideas", check: "canonical", buildable: true, score: 2 }), "medium", "other low-score idea stays medium");
 eq(R.ideaPriority({ surface: "qnfo-home", check: "share-image", buildable: false, score: 9 }), "high", "high score stays high");
+const ci = R.reachIdeasEvaluate([], [{ key: "guide-drawings", url: "u", status: 404 }])[0];
+const dsc = R.ideaDescription(ci);
+eq(/^code-task: repo=qnfo-workers path=qnfo-ipatent\/worker\.js$/m.test(dsc), true, "content idea carries an intake code-task line on its own line");
+eq(/^code-anchor: if \(\(path === "\/guide"/m.test(dsc), true, "and a verbatim code-anchor line");
+eq(/code-task:/.test(R.ideaDescription(R.reachIdeasEvaluate([{ surface: "qnfo-home", url: "u", status: 200, ms: 1, html: "<html></html>" }], [])[0])), false, "surface ideas without a known edit point carry no code-task line");
 console.log(`${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
