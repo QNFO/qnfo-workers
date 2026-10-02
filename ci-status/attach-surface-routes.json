@@ -4,7 +4,7 @@
   "token_present": true,
   "stage": "partial",
   "status": "failed",
-  "error": "qwav.org: failed no proxied DNS record; a route would be inert (records: [{\"id\": \"bf15ded6489cd075d294f307eb16a2e5\", \"name\": \"qwav.org\", \"type\": \"CNAME\", \"content\": \"qwav.pages.dev\", \"proxiable\": true, \"proxied\": false, \"ttl\": 1, \"settings\": {\"flatten_cname\": false}, \"meta\": {}, \"comment\": null, \"tags\": [], \"created_on\": \"2026-05-30T05:41:23.041609Z\", \"modified_on\": \"202); www.qwav.org: created unverified",
+  "error": "qwav.org: created unverified; www.qwav.org: created unverified",
   "gateway_version": "3.9.1-render-fix-3",
   "hosts": {
     "archive.qnfo.org": {
@@ -16,13 +16,18 @@
     },
     "qwav.org": {
       "zone": "qwav.org",
-      "route_id": null,
-      "status": "failed",
-      "detail": "no proxied DNS record; a route would be inert (records: [{\"id\": \"bf15ded6489cd075d294f307eb16a2e5\", \"name\": \"qwav.org\", \"type\": \"CNAME\", \"content\": \"qwav.pages.dev\", \"proxiable\": true, \"proxied\": false, \"ttl\": 1, \"settings\": {\"flatten_cname\": false}, \"meta\": {}, \"comment\": null, \"tags\": [], \"created_on\": \"2026-05-30T05:41:23.041609Z\", \"modified_on\": \"202)"
+      "route_id": "1bef2be2670740608dd6a17bd1376744",
+      "status": "created",
+      "detail": null,
+      "dns_record": "bf15ded6489cd075d294f307eb16a2e5",
+      "dns_proxied_from": false,
+      "verified": false,
+      "rolled_back": true,
+      "dns_restored": true
     },
     "www.qwav.org": {
       "zone": "qwav.org",
-      "route_id": "09e1cd4edda746ad8d8605793d93e62b",
+      "route_id": "89f6b800a8984c409b09a0d940eaca1b",
       "status": "created",
       "detail": null,
       "dns_record": "26ff1daa55c154d3a62c0a6ae7400a7d",
@@ -39,5 +44,5 @@
       "verified": true
     }
   },
-  "ts": "2026-10-02T11:24:07Z"
+  "ts": "2026-10-02T13:14:36Z"
 }
