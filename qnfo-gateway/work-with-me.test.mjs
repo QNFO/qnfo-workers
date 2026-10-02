@@ -29,8 +29,9 @@ const get = async (url) => {
 
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra).slice(0, 400) : "")); } };
-const decode = (s) => s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
-const visible = (html) => decode(html.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<style[\s\S]*?<\/style>/g, " ").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
+// &amp; is decoded last, so "&amp;lt;" becomes the literal text "&lt;" and is never decoded twice.
+const decode = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+const visible = (html) => decode(html.replace(/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style[^>]*>/gi, " ").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
 
 const page = await get("https://qnfo.org/work-with-me");
 const html = page.text, text = visible(html);
@@ -99,7 +100,7 @@ ok(blocks.length === 1 && ld && ld["@context"] === "https://schema.org" && Array
 const g = ld ? ld["@graph"] : [];
 const byId = Object.fromEntries(g.filter((n) => n["@id"]).map((n) => [n["@id"], n]));
 const person = g.find((n) => n["@type"] === "Person");
-ok(person && person["@id"] === "https://qnfo.org/#person" && person.name === "Rowan Brad Quni-Gudzinas" && (person.sameAs || []).includes("https://orcid.org/0009-0002-4317-5604"), "Person with the ORCID sameAs");
+ok(person && person["@id"] === "https://qnfo.org/#person" && person.name === "Rowan Brad Quni-Gudzinas" && Array.isArray(person.sameAs) && person.sameAs.some((u) => { try { const x = new URL(u); return x.protocol === "https:" && x.hostname === "orcid.org" && x.pathname === "/0009-0002-4317-5604"; } catch (err) { return false; } }), "Person with the ORCID sameAs");
 ok(person && person.email === "rowan.quni@qnfo.org" && person.contactPoint && person.contactPoint["@type"] === "ContactPoint", "Person contact point is rowan.quni@qnfo.org");
 const offers = (person && person.makesOffer || []).map((o) => byId[o["@id"]]);
 ok(offers.length === 4 && offers.every((o) => o && o["@type"] === "Offer" && o.itemOffered && o.itemOffered["@type"] === "Service" && o.itemOffered.name && o.url.startsWith("https://qnfo.org/work-with-me#")), "makesOffer resolves to four Offer/Service nodes", offers.map((o) => o && o.name));
@@ -118,7 +119,8 @@ ok(/googletagmanager\.com\/gtag\/js\?id=G-LV7RHRVW6R/.test(html) && /gtag\("conf
 ok(!/cloudflareinsights/.test(html), "no hand-added RUM beacon (the zone injects one; two would double count)");
 ok(/prepared with an AI-assisted research pipeline; the author is responsible for the content\./i.test(text), "the STRATEGY 2.5 AI disclosure line");
 ok(/AI agents do much of QNFO's engineering, analysis and drafting under my direction/.test(text), "engagements disclose AI assistance");
-for (const doi of ["10.5281/zenodo.21637028", "10.5281/zenodo.22261547", "10.5281/zenodo.21821767", "10.5281/zenodo.21945415", "10.5281/zenodo.21901984", "10.5281/zenodo.22026592", "10.5281/zenodo.23079905", "10.5281/zenodo.23082080"]) ok(html.includes("https://doi.org/" + doi), "links doi:" + doi);
+const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((m) => decode(m[1]));
+for (const doi of ["10.5281/zenodo.21637028", "10.5281/zenodo.22261547", "10.5281/zenodo.21821767", "10.5281/zenodo.21945415", "10.5281/zenodo.21901984", "10.5281/zenodo.22026592", "10.5281/zenodo.23079905", "10.5281/zenodo.23082080"]) ok(hrefs.some((h) => h === "https://doi.org/" + doi), "links doi:" + doi);
 ok((html.match(/<h1[\s>]/g) || []).length === 1, "one h1");
 // The gateway artifacts stay pure ASCII (scripts/math-sym-escape-patch.py): typographic characters are written as escapes.
 ok(!/[^\x00-\x7f]/.test(readFileSync(join(here, "worker.js"), "utf8")), "qnfo-gateway/worker.js is pure ASCII");
