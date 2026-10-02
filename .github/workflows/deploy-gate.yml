@@ -139,6 +139,10 @@ jobs:
       # (radar-hub, qnfo-cloud-ops and qnfo-fleet-dashboard schedules were never applied); sweeps every live wrangler.toml.
       - name: CRON-APPLY-PARSE-1 offline suite (qnfo-ops)
         run: node qnfo-ops/cron-apply-parse.test.mjs
+      # REVISER-FLAGGED-DEADEND-1 (#1812): a HIGH reviser finding becomes an unconfirmed internal_errata row (with the model
+      # confidence and the reviser run id) plus an internal-open errata_queue row; nothing is queued or shown to readers.
+      - name: REVISER-FLAGGED-DEADEND-1 offline suite (qnfo-paper-reviser)
+        run: node --no-warnings qnfo-paper-reviser/flagged-errata.test.mjs
       # MATH-DELIM-1 / TABLE-SEP-1: paper renderer regressions from the 2026-10-02 full-corpus sweep (qnfo-gateway).
       - name: Paper renderer suite (qnfo-gateway)
         run: node qnfo-gateway/render.test.mjs
