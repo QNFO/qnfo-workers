@@ -124,6 +124,9 @@ jobs:
       # WORK-WITH-ME-1 + WORK-WITH-ME-METRIC-1 (pillar reach): qnfo.org/work-with-me makes no claim STRATEGY s2.2 rules out,
       # every offer mails rowan.quni@qnfo.org with a [work-with-me:<offer>] subject tag and valid JSON-LD; the reach ingest
       # counts those tagged contacts and the page's RUM views over 30 days, idempotently, into reach_signals and metric_registry.
+      # Q08-METRICS-1 (pillar reach): q08 counts human vs crawler reads per day and serves the 7d aggregates on /api/metrics.
+      - name: Q08-METRICS-1 offline suite (q08-signal-engine)
+        run: node q08-signal-engine/metrics.test.mjs
       - name: WORK-WITH-ME-1 page suite (qnfo-gateway)
         run: node qnfo-gateway/work-with-me.test.mjs
       - name: WORK-WITH-ME-METRIC-1 offline suite (qnfo-fleet-dashboard)
