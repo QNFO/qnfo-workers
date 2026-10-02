@@ -26,7 +26,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.0.2-ask-loop";
+var VERSION = "2.0.3-codeagent";
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -1541,7 +1541,7 @@ function drawGraph(el, g){
       .attr("aria-label", function(d){ return kind(d.label).name + ": " + d.name; });
     shape(node);
     node.append("title").text(function(d){ return d.name; });
-    node.append("text").attr("x", 11).attr("y", 4).text(function(d){ var t = d.cite ? "[" + d.cite + "] " : ""; var nm = d.name.length > 26 ? d.name.slice(0, 24) + "…" : d.name; return d.seed || d.cite || nodes.length < 14 ? t + nm : t; });
+    node.append("text").attr("x", 11).attr("y", 4).text(function(d){ var t = d.cite ? "[" + d.cite + "] " : ""; var nm = d.name.length > 26 ? d.name.slice(0, 24) + "..." : d.name; return d.seed || d.cite || nodes.length < 14 ? t + nm : t; });
     node.on("click", function(e, d){ select(d); }).on("keydown", function(e, d){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); select(d); } })
       .on("mouseenter", function(e, d){ if (d.cite) highlight(el, d.cite, true); }).on("mouseleave", function(e, d){ if (d.cite) highlight(el, d.cite, false); });
     node.call(d3.drag().on("start", function(e, d){ if (!e.active) sim.alphaTarget(.25).restart(); d.fx = d.x; d.fy = d.y; })
