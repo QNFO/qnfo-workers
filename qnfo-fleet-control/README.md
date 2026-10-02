@@ -100,3 +100,17 @@ through the merge runner. Ideas on deny-listed control-plane workers (qnfo-gatew
 The next run closes an issue with evidence when the live page passes. Read: `GET /reach-ideas`; run now:
 `POST /reach-ideas/tick` (admin). Ledger: `reach_idea_runs` (WATCHMAKER_OPS `reach-ideation`). Suite: `reach.test.mjs`.
 Dry run on 2026-10-02 against the live pages: 26 ideas (14 buildable, 12 on qnfo-gateway).
+
+## REACH-IDEATION-2 (0.4.101, 2026-10-02, pillars reach, autonomy)
+The first live run (2026-10-02T09:00:45Z: 12 probes, 26 findings, 3 filed) showed four defects. (1) Finite catalog: the
+loop now also probes the busiest pages on owned QNFO hosts by Cloudflare RUM traffic (`reach_signals`, 14 days, at most 3,
+one per host + first path segment, skipping templates the fixed list covers). fleet.qnfo.org is excluded (operations
+dashboard) and so is q08.org (STRATEGY 2.1: a separate publication that never carries the owner's identity). (2) Value
+first: findings sort by score; buildable ideas fill the code loop's slots by score and one slot is kept for the best idea
+on a deny-listed worker (qnfo-gateway) so the largest gap stays visible. (3) Work-in-progress cap: at most 4 open buildable
+and 1 open not-buildable REACH-IDEA issue, and at most 3 new a day. (4) Learning: `reach_idea_outcomes` keeps each idea's
+metric at filing, at close and 7 days after close; a check kind with 3+ measured outcomes is weighted x1.25 if its metric
+rose and x0.5 if not (confounded by everything else that moved that week: a ranking prior, not a causal claim).
+`reach_ideas_shipped_30d` grades the loop end to end (n/a for the first 14 days; trigger in
+`migrations/2026-10-02-reach-ideation-2.sql`). `GET /reach-ideas` also returns `outcomes`, `efficacy` and `limits`.
+No model call, worker, cron or binding is added: all `fleet_budget` AI caps were in breach on 2026-10-02.
