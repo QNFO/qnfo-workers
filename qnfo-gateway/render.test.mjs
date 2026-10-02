@@ -1,0 +1,28 @@
+// MATH-DELIM-1 / TABLE-SEP-1 (qnfo-gateway 3.8.2): renderer regressions found by the full-corpus sweep of 2026-10-02.
+import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+const here = dirname(fileURLToPath(import.meta.url));
+const dir = mkdtempSync(join(tmpdir(), "gwr-"));
+writeFileSync(join(dir, "w.mjs"), readFileSync(join(here, "worker.js"), "utf8") + "\nexport { renderMarkdown, lpStructure };\n");
+const { renderMarkdown, lpStructure } = await import(pathToFileURL(join(dir, "w.mjs")).href);
+let fails = 0;
+const ok = (c, m, x) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) { fails++; if (x) console.log("   ", JSON.stringify(x).slice(0, 400)); } };
+const math = (h) => (h.replace(/<span class="usd">\$<\/span>/g, "\u00a4").replace(/<[^>]+>/g, " ").match(/\$[^$]+\$/g) || []);
+let h = renderMarkdown("The claim: **anyons are not particles in $\\mathbb{R}$$^3$ but patterns.**\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n## Next");
+ok(/<table>/.test(h) && /<h2>Next<\/h2>/.test(h) && math(h).includes("$\\mathbb{R}^3$"), "adjacent inline formulas no longer open display math (the table and heading after them render)", h);
+h = renderMarkdown("Spend: **$1,032.08 total** across 184 days, a mean of $5.61 per day.");
+ok(math(h).length === 0 && /<strong>/.test(h) && (h.match(/<span class="usd">\$<\/span>/g) || []).length === 2, "currency is not math, and literal dollars cannot be paired by MathJax", h);
+h = renderMarkdown("Bound: $\\leq$0.75 and $x$ and $ f: \\mathbb{Z}_p \\to \\mathbb{Q}_p $ and $2^n$ states.");
+ok(math(h).length === 4, "real formulas survive: followed by a digit, spaces inside, starting with a digit", math(h));
+h = renderMarkdown("The ratios $m_\\mu/m_e \\approx\n207$ and $m_\\tau/m_e$ are close.");
+ok(math(h).length === 2, "a formula broken across a line still renders", math(h));
+h = renderMarkdown("| # | Objection | Grade |\n|:--|:----------|:------|\n| 1 | Chronological | Partial |");
+ok(/<table>/.test(h) && /<th>#<\/th>/.test(h) && !/<h1>/.test(h), "short GFM delimiter rows (|:--|) make a table; a '#' header cell is not a heading", h);
+h = renderMarkdown("Price \\$5 and more.");
+ok(!math(h).length && /usd/.test(h), "an escaped dollar stays literal", h);
+const st = lpStructure("<h1>1. What this is</h1><p>x</p><h2>1.1 Part</h2><p>y</p><h1>2. Next</h1>");
+ok(!/<h1/.test(st.html) && st.toc.length === 3 && st.toc[0].lv === 2 && st.toc[1].lv === 3, "papers that use # for sections get h2 sections in the contents", st.toc);
+console.log(fails + " failure(s)");
+process.exit(fails ? 1 : 0);

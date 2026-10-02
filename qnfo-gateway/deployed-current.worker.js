@@ -1,4 +1,10 @@
-var VERSION="3.8.1-living-papers";
+var VERSION="3.8.2-math-delims";
+// MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
+// causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
+// the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
+// $5.61"); a formula that starts with a digit may not close right before another digit ("$1,032 ... $5"; spaces inside stay legal), and a
+// literal dollar is emitted as <span class="usd">$</span>, which MathJax cannot pair. (3) 219 papers use "#" for
+// section headings (and TABLE-SEP-1: short GFM delimiter rows now make tables); their headings are shifted one level down so sections are h2 and appear in the contents.
 // LIVING-PAPERS-1 (3.8.0, 2026-10-02, pillar reach): papers.qnfo.org index and paper pages rebuilt as living papers in the
 // QNFO design system shared with ask.qwav.tech; GET /api/paper-context/<slug>. See the LIVING-PAPERS-1 block.
 // WORK-WITH-ME-1 (3.7.27, 2026-10-02, pillar reach): qnfo.org/work-with-me, the offers and a tagged mailto per offer;
@@ -311,13 +317,14 @@ function _mdInline(t) {
   t = t.replace(/\$\$([^\n$]+?)\$\$/g, function(m, c) {
     return saveMath(c, true);
   });
-  t = t.replace(/\$([^$\n]+?)\$/g, function(m, c) {
+  t = t.replace(/([^\s$])\$\$(?=[\^_])/g, "$1");
+  t = t.replace(/\$((?=\s*\d)[^$\n]+?(?=\$(?!\d))|(?!\s*\d)[^$\n]+?)\$/g, function(m, c) {
     return saveMath(c, false);
   });
   t = t.replace(/\\\(([^\n]*?)\\\)/g, function(m, c) {
     return saveMath(c, false);
   });
-  t = esc(t);
+  t = esc(t).replace(/\$/g, "\u0007");
   t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
   t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
@@ -332,7 +339,7 @@ function _mdInline(t) {
     var disp = c.charAt(0) === "D";
     return (disp ? "$$" : "$") + texSafe(disp ? c.slice(1) : c) + (disp ? "$$" : "$");
   });
-  return t;
+  return t.replace(/\u0007/g, '<span class="usd">$</span>');
 }
 __name(_mdInline, "_mdInline");
 __name2(_mdInline, "_mdInline");
@@ -407,6 +414,7 @@ function renderMarkdown(md) {
     mb.push("<pre" + (l2 ? ' class="lang-' + l2 + '"' : "") + "><code>" + esc(c) + "</code></pre>");
     return "B" + mb.length + "";
   });
+  m = m.replace(/([^\s$])\$\$(?=[\^_])/g, "$1").replace(/([^\s$])\$\$(?=[\\A-Za-z0-9{(])/g, "$1$ $");
   m = m.replace(/\$\$([\s\S]*?)\$\$/g, function(_, c) {
     mb.push('<div class="math-display">$$' + texSafe(c) + "$$</div>");
     return "B" + mb.length + "";
@@ -415,7 +423,7 @@ function renderMarkdown(md) {
     mb.push('<div class="math-display">$$' + texSafe(c) + "$$</div>");
     return "B" + mb.length + "";
   });
-  m = m.replace(/\$([^$\n]+?)\$/g, function(_, c) {
+  m = m.replace(/\$((?=\s*\d)[^$\n]+?(?=\$(?!\d))|(?!\s*\d)[^$\n]+?)\$/g, function(_, c) {
     mi.push(c);
     return "M" + (mi.length - 1) + "";
   });
@@ -425,7 +433,13 @@ function renderMarkdown(md) {
   });
   m = m.replace(/\\\$/g, "\x07");
   function isTableSep(s) {
-    return /^\|?[\s:]*-{3,}[\s:]*\|/.test(s) && /-/.test(s);
+    // TABLE-SEP-1 (3.8.2): any GFM delimiter row, e.g. "|:--|:---|" (the old test needed 3 dashes in the first cell,
+    // so 32 papers printed their tables as raw pipes). Every cell is :?-+:? and the row has at least 3 dashes.
+    var t = String(s || "").trim();
+    if (t.indexOf("|") < 0 || (t.match(/-/g) || []).length < 3) return false;
+    var cells = t.replace(/^\|/, "").replace(/\|$/, "").split("|");
+    for (var c = 0; c < cells.length; c++) if (!/^\s*:?-+:?\s*$/.test(cells[c])) return false;
+    return true;
   }
   __name(isTableSep, "isTableSep");
   __name2(isTableSep, "isTableSep");
@@ -623,7 +637,7 @@ function renderMarkdown(md) {
   o = o.replace(/\u0001M(\d+)\u0001/g, function(mm, n) {
     return "$" + texSafe(mi[+n]) + "$";
   });
-  o = o.replace(/\u0007/g, "$");
+  o = o.replace(/\u0007/g, '<span class="usd">$</span>');
   o = o.replace(/\u0001B(\d+)\u0001/g, function(mm, n) {
     return mb[+n - 1] || "";
   });
@@ -2166,6 +2180,7 @@ function lpStripTitle(md, title) {
 // Section ids + contents list from the rendered HTML; the Abstract section becomes the lede.
 function lpStructure(html) {
   const used = new Set(), toc = [];
+  if (/<h1>/.test(html)) html = html.replace(/<(\/?)h([1-5])>/g, function(m, sl, n) { return "<" + sl + "h" + (Number(n) + 1) + ">"; });
   html = html.replace(/<h([234])>([\s\S]*?)<\/h\1>/g, function(m, lv, inner) {
     const id = lpSlug(inner, used);
     if (lv !== "4") toc.push({ lv: Number(lv), id, html: inner });
