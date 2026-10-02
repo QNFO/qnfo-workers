@@ -1,8 +1,23 @@
-# personal-api - Agentic Personal Twin (v4.2.0)
+# personal-api - Agentic Personal Twin (v4.3.1)
 
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
 RAG + live-web + live-weather over the personal-life D1 + Vectorize archive, now with an
 AGENTIC TOOL LOOP. Never calls the QNFO records oracle (PERSONAL-QNFO-SEPARATION-1).
+
+## v4.3.1 (2026-10-02) - real Google Calendar, MCP for any client (pillar: personal)
+- 4.3.1: /google/* pages HTML-escape all text and send a strict CSP (reflected XSS via ?error= fixed before release).
+- GCAL-1: calendar tools, the brief, the plan and the chat context read Rowan's Google Calendar (primary) and write
+  new events to it. Until now they read only calendar-api's D1 store, so real events never appeared. Rows are labelled
+  `google`, `twin-store` or `suggestion` (radar ideas, not bookings). Times without an offset are Europe/Amsterdam.
+  Setup, once: create a Google Cloud OAuth client (Web application, redirect URI
+  `https://personal-api.q08.workers.dev/google/callback`, scopes calendar.events + calendar.readonly + openid email),
+  publish the consent screen to "In production" (Testing-mode refresh tokens expire after 7 days), store secrets
+  GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then open `/google/connect` and enter the personal API key. The first
+  Google account to connect (or OWNER_GOOGLE_EMAIL) is the only one accepted afterwards. `GET /google/status`
+  (bearer) and `/health` field `google_calendar` report the state. Not connected = store fallback, stated in replies.
+- TWIN-MCP-1: `POST /mcp` is a Streamable-HTTP MCP server (JSON responses) exposing every twin tool plus
+  `daily_brief`, bearer API_KEY. Works in clients that send a header (DeepChat, Chatbox, Claude Code, Cursor, Gemini
+  CLI). OAuth-only connector clients (claude.ai web/mobile, ChatGPT) are not supported yet.
 
 ## v4.2.0 (2026-10-02) - photos work, no tool-call text leaks (pillar: personal)
 - TWIN-VISION-1: image turns go to `VISION_MODELS` = glm-5.3-flash ($0.15/$0.50 per M) then kimi-k2.6. The old path
@@ -62,7 +77,8 @@ glm-5.3-flash, qwen3.8-27b), personal-twin-pro (glm-5.3 first), personal-twin-re
 ## Bindings
 AI (Workers AI), PERSONAL (D1 personal-life e8d6c61a-10b7-4086-b81e-9e6e85afa407),
 VZ (Vectorize personal-life), CAL_API (service: calendar-api, production).
-Secrets: API_KEY (auth), CF_TOKEN (infra/analytics), INFRA_TOKEN, CAL_TOKEN (calendar-api auth since v3.0.3).
+Secrets: API_KEY (auth), CF_TOKEN (infra/analytics), INFRA_TOKEN, CAL_TOKEN (calendar-api auth since v3.0.3),
+GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET (v4.3.0, Google Calendar), optional OWNER_GOOGLE_EMAIL.
 New D1 tables (auto-created): tasks, daily_briefs.
 
 ## Routes (auth-gated except /health and the playground)

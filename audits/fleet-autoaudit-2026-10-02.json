@@ -1,25 +1,8 @@
 {
-  "audited_at": "2026-10-02 09:26:32",
+  "audited_at": "2026-10-02 09:47:58",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [
-        "qnfo-fleet-control"
-      ],
-      "waited_for": [
-        "qnfo-fleet-control"
-      ]
-    },
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-deploy-guard"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "qnfo-fleet-control"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -405,7 +388,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 40,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -479,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.18.2-utf8-github",
+        "version": "1.18.4-worker-health-auth",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -489,7 +472,7 @@
       },
       {
         "dir": "qnfo-containers-pilot",
-        "version": "1.0.10-props-caller",
+        "version": "1.0.11-command-exit-honest",
         "worker": "qnfo-containers-pilot"
       },
       {
@@ -503,13 +486,18 @@
         "worker": "qnfo-email"
       },
       {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.100-trigger-parse",
+        "worker": "qnfo-fleet-control"
+      },
+      {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.18.5-ask-truncated-json",
+        "version": "1.18.7-grant-followup-honest",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.8.4-ask-model",
+        "version": "3.8.5-pandoc-code",
         "worker": "qnfo-gateway"
       },
       {
@@ -524,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.8.1-utf8-redeploy",
+        "version": "3.8.2-usage-topics",
         "worker": "qnfo-ipatent"
       },
       {
@@ -584,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.30-cap-epoch",
+        "version": "0.7.31-sent-text",
         "worker": "qnfo-social"
       },
       {
@@ -606,10 +594,6 @@
         "dir": "radar-hub",
         "version": "1.1.3",
         "worker": "radar-hub"
-      },
-      {
-        "version": "0.4.97-budget-live",
-        "worker": "qnfo-fleet-control"
       }
     ]
   },
@@ -1032,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.18.2-utf8-github",
+      "before": "1.18.4-worker-health-auth",
       "http": 200,
-      "live": "1.18.2-utf8-github",
+      "live": "1.18.4-worker-health-auth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1056,9 +1040,9 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.10-props-caller",
+      "before": "1.0.11-command-exit-honest",
       "http": 200,
-      "live": "1.0.10-props-caller",
+      "live": "1.0.11-command-exit-honest",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-containers-pilot"
@@ -1160,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.97-budget-live",
+      "before": "0.4.100-trigger-parse",
       "http": 200,
-      "live": "0.4.97-budget-live",
+      "live": "0.4.100-trigger-parse",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.18.5-ask-truncated-json",
+      "before": "1.18.7-grant-followup-honest",
       "http": 200,
-      "live": "1.18.5-ask-truncated-json",
+      "live": "1.18.7-grant-followup-honest",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1192,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.8.4-ask-model",
+      "before": "3.8.5-pandoc-code",
       "http": 200,
-      "live": "3.8.4-ask-model",
+      "live": "3.8.5-pandoc-code",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1248,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.8.1-utf8-redeploy",
+      "before": "3.8.2-usage-topics",
       "http": 200,
-      "live": "3.8.1-utf8-redeploy",
+      "live": "3.8.2-usage-topics",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1432,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.30-cap-epoch",
+      "before": "0.7.31-sent-text",
       "http": 200,
-      "live": "0.7.30-cap-epoch",
+      "live": "0.7.31-sent-text",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"

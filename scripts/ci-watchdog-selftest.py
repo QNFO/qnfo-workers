@@ -259,6 +259,57 @@ def main() -> int:
     srv4.shutdown()
     cw.RATE_LIMITED = False
 
+    # API-BUDGET-1 (#480) end to end, on the merged code: a sweep over 41 workflows samples run history only for
+    # the 3 that declare a schedule; a workflow whose file is not in the checkout is not sampled and costs no
+    # contents call when the job runs on main.
+    import tempfile
+    ws = tempfile.mkdtemp(prefix="wd-")
+    os.makedirs(os.path.join(ws, ".github", "workflows"))
+    wf_list = []
+    for i in range(1, 41):
+        rel = ".github/workflows/w%d.yml" % i
+        with open(os.path.join(ws, rel), "w", encoding="utf-8") as fh:
+            fh.write("on:\n  push:\n" + ("  schedule:\n    - cron: '0 6 * * *'\n" if i <= 3 else ""))
+        wf_list.append({"id": i, "name": "w%d" % i, "path": rel, "state": "active"})
+    wf_list.append({"id": 99, "name": "gone", "path": ".github/workflows/gone.yml", "state": "active"})
+    calls: list = []
+
+    def fake_gh(path, method="GET", body=None):
+        calls.append((method, path))
+        if "/actions/workflows?" in path:
+            return 200, {"workflows": wf_list}
+        if "/actions/workflows/" in path and "/runs" in path:
+            return 200, {"workflow_runs": [{"id": 1, "event": "push", "created_at": "2026-10-01T00:00:00Z"}]}
+        return 200, {}
+
+    old_root, old_gh, old_tok, old_ref = cw.ROOT, cw.gh, cw.TOKEN, os.environ.get("GITHUB_REF")
+    cw.ROOT, cw.gh, cw.TOKEN = ws, fake_gh, "t"
+    os.environ["GITHUB_REF"] = "refs/heads/main"
+    try:
+        check("a checked-out workflow with a schedule declares one",
+              cw.declares_schedule(cw.workflow_text(".github/workflows/w1.yml") or "") is True)
+        check("a checked-out workflow without one does not",
+              cw.declares_schedule(cw.workflow_text(".github/workflows/w9.yml") or "") is False)
+        check("a file missing from the checkout reads as None on main, with no call",
+              cw.workflow_text(".github/workflows/gone.yml") is None and not calls, calls)
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            try:
+                cw.main()
+            except SystemExit:
+                pass
+        hist = [c for c in calls if "/actions/workflows/" in c[1] and "/runs" in c[1] and "branch=" not in c[1]]
+        cont = [c for c in calls if "/contents/" in c[1]]
+        check("history is fetched only for the 3 scheduled workflows", len(hist) == 3, len(hist))
+        check("no contents call when every file is read from the checkout", not cont, cont)
+        check("41 workflows cost under 30 API calls in total (was about 2 per workflow)", len(calls) < 30, len(calls))
+    finally:
+        cw.ROOT, cw.gh, cw.TOKEN = old_root, old_gh, old_tok
+        if old_ref is None:
+            os.environ.pop("GITHUB_REF", None)
+        else:
+            os.environ["GITHUB_REF"] = old_ref
+
     print("\n%d failure(s)" % len(fails))
     return 1 if fails else 0
 
