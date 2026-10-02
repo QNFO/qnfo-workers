@@ -228,6 +228,8 @@ function fakeLoader(spinMs) {
           if (/SYNTAXERR/.test(src)) throw new Error("Failed to start Worker:\nUncaught SyntaxError: missing ) after argument list\n  at m.js:1:52");
           if (/IMPORT_MISSING/.test(src)) throw new Error('Failed to start Worker:\nUncaught Error: No such module "missing.js".\n  imported from "m.js"');
           if (/CPU_LIMITED/.test(src)) throw new Error("Worker exceeded CPU time limit");
+          // Live 2026-10-02 (ct_zktgotb2psgjbr): q08's "/" route reads env.DB, unbound in the sandbox; the message carries no type.
+          if (/RUNTIME_TYPEERR/.test(src)) throw new TypeError("Cannot read properties of undefined (reading 'prepare')");
           if (/SPIN/.test(src)) { await new Promise((r) => setTimeout(r, spinMs || 1e9)); }
           return new Response("ok");
         },
@@ -259,6 +261,14 @@ function fakeLoader(spinMs) {
   await call(env, "POST", "/v1/tick", {});
   const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
   check("valid syntax + unresolvable import is NOT a syntax failure -> pr_open", got.body.task.status === "pr_open" && calls.edit.length === 1, got.body.task);
+}
+{
+  const calls = installCodeAgent({ "qnfo-workers/a/q.js": "export default {}\n" });
+  const { env } = envWith([fileBlock("RUNTIME_TYPEERR export default { async fetch(r, env){ return env.DB.prepare('x'); } }\n")], { JS_VERIFY: "dynamic", LOADER: fakeLoader() });
+  const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "a/q.js", goal: "g" });
+  await call(env, "POST", "/v1/tick", {});
+  const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
+  check("a handler TypeError whose message carries no type (live q08 case) is parsed code -> pr_open", got.body.task.status === "pr_open" && calls.edit.length === 1, got.body.task);
 }
 {
   installCodeAgent({ "qnfo-workers/a/s.js": "export default {}\n" });

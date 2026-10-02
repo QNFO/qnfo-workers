@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.10-reach-ideas"; // 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.11-errname"; // 0.3.11 JS-VERIFY-ERRNAME-1: a handler exception that crossed the isolate is classified by err.name (#1762); 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -536,11 +536,16 @@ async function jsSyntaxCheck(env, src) {
   // only happen AFTER the module parsed count as a pass; any other start failure (CPU or size limits, platform errors)
   // means the syntax was not verified, so the task stops for review instead of becoming a PR. The message is kept
   // (verify_note, audit code-task.verify-unknown) so the allowlist can learn from what the platform really says.
-  if (JS_PARSED_THEN_FAILED.test(msg)) return { verdict: "ok", note: msg.replace(/\s+/g, " ").slice(0, 200) };
+  // JS-VERIFY-ERRNAME-1 (#1762): an exception thrown by the handler crosses the isolate with its type in err.name, not in
+  // err.message ("Cannot read properties of undefined (reading 'prepare')" for q08-signal-engine, whose "/" route reads
+  // env.DB, which the sandbox does not bind). The module ran, so it parsed. Classify by name as well as message.
+  const named = (err && typeof err.name === "string" && err.name !== "Error" ? err.name + ": " : "") + msg;
+  if (/^SyntaxError\b/.test(named)) return { verdict: "fail", error: named.replace(/\s+/g, " ").slice(0, 300) };
+  if (JS_PARSED_THEN_FAILED.test(named)) return { verdict: "ok", note: named.replace(/\s+/g, " ").slice(0, 200) };
   await audit(env, "code-task.verify-unknown", msg.replace(/\s+/g, " ").slice(0, 400), null, "error");
   return { verdict: "no-verifier", error: "the JS verifier could not confirm the syntax (start failed with: " + msg.replace(/\s+/g, " ").slice(0, 200) + ")" };
 }
-const JS_PARSED_THEN_FAILED = /\b(ReferenceError|TypeError|RangeError|URIError)\b|No such module|not permitted to access the internet|Illegal invocation|Network connection lost/;
+const JS_PARSED_THEN_FAILED = /\b(ReferenceError|TypeError|RangeError|URIError)\b|^Cannot read properties of (undefined|null)\b|No such module|not permitted to access the internet|Illegal invocation|Network connection lost/;
 // Measures whether the platform enforces limits.cpuMs (a spinning module must be stopped well before the wall timeout).
 async function probeDynamicCpu(env) {
   if (!env.LOADER) return { ok: false, error: "LOADER binding missing" };
