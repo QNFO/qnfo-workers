@@ -31,5 +31,20 @@ for (const [msg, want, label] of cases) {
   ok(r.verdict === want, label, { msg, r });
 }
 ok(audits.length === 2, "each unknown start failure is recorded for learning", audits.length);
+// JS-VERIFY-RUNTIME-SHAPE-1: live, the class name does not cross the sandbox boundary (ct_qldqse7ngltdth, 08:20Z).
+const envThrowingAs = (Ctor, msg) => ({
+  LOADER: { load: () => ({ getEntrypoint: () => ({ fetch: async () => { throw new Ctor(msg); } }) }) },
+  AUDIT_DB: { prepare: (sql) => ({ bind: (...a) => ({ run: async () => { audits.push(a); return {}; } }) }) },
+});
+for (const [Ctor, msg, want, label] of [
+  [TypeError, "Cannot read properties of undefined (reading 'prepare')", "ok", "a TypeError object with the bare live message means it parsed"],
+  [Error, "Cannot read properties of undefined (reading 'prepare')", "ok", "the bare live message with no class name means it parsed"],
+  [Error, "env.DB.prepare is not a function", "ok", "'is not a function' means it parsed"],
+  [Error, "Cannot access 'x' before initialization", "ok", "a TDZ error means it parsed"],
+  [Error, "Failed to start Worker: script too large", "no-verifier", "an unknown start failure is still NOT a pass"],
+]) {
+  const r = await __js(envThrowingAs(Ctor, msg), "export default {}");
+  ok(r.verdict === want, label, { msg, r });
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
