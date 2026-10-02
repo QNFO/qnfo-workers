@@ -5,6 +5,8 @@
 //   GET  /health, GET /instances, POST /search, POST /ingest (X-Sync-Token)      unchanged since 1.0.3
 //   GET  /                     the ask page (ask.qwav.tech; also served on qnfo-ai-search.q08.workers.dev)
 //   POST /api/ask              grounded answer as server-sent events: status, meta, token, done, error
+//                              {query, history?, paper?}: PAPER-PIN-1 (2.1.0, LIVING-PAPERS-1) pins one published paper as
+//                              source [1] with its most relevant sections; the rest of the corpus fills the other sources
 //   POST /api/feedback         {id, helpful: 0|1} for one answer
 //   GET  /api/stats, /api/recent, /api/explore?node=, /api/loop    public reads (OPEN-ACCESS-1)
 //
@@ -26,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.0.2-ask-loop";
+var VERSION = "2.1.0-paper-pin";
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -394,6 +396,24 @@ async function retrieve(env, query, cfg) {
   out.ms = Date.now() - t0;
   return out;
 }
+// PAPER-PIN-1: the paper a visitor is reading on papers.qnfo.org, as source [1]: its abstract plus the sections of its
+// body that share most terms with the question (the gateway's JSON detail route; published papers only).
+async function pinPaper(env, slug, query) {
+  var p = await up(env, "GATEWAY", UP.papers, "/papers/" + encodeURIComponent(slug), null, 8000);
+  if (!p || !p.slug || !p.title) return null;
+  var body = String(p.body_md || "").replace(/^---[\s\S]*?---\s*/, "");
+  var qt = new Set(keywordsAll(query));
+  var secs = body.split(/\n(?=#{2,3}\s)/).map(function (t, i) {
+    var head = (t.match(/^#{2,3}\s+(.+)/) || [])[1] || "";
+    var words = keywordsAll(t.slice(0, 6000)), hit = 0;
+    words.forEach(function (w) { if (qt.has(w)) hit++; });
+    return { i: i, head: head, text: t.trim(), score: hit / Math.sqrt(words.length + 20) + (/abstract|conclusion|summary/i.test(head) ? 0.05 : 0) };
+  }).filter(function (x) { return x.text.length > 80 && !/^(references|bibliography)/i.test(x.head.replace(/^[\d.\s]+/, "")); });
+  var abs = String(p.abstract || "").trim();
+  var pick = secs.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 3).sort(function (a, b) { return a.i - b.i; });
+  var excerpt = (abs ? "Abstract: " + abs.slice(0, 900) + "\n\n" : "") + pick.map(function (x) { return x.text.slice(0, 1600); }).join("\n\n…\n\n");
+  return { slug: p.slug, title: p.title, doi: p.doi || null, url: "https://papers.qnfo.org/papers/" + p.slug, published: true, score: 1, abstract: abs.replace(/\s+/g, " ").slice(0, 320), excerpt: excerpt || abs, cap: 4800, pinned: true, versions: 1 };
+}
 async function relatedThreads(env, q) {
   var s = await sessions(env);
   var qt = new Set(keywordsAll(q));
@@ -476,8 +496,8 @@ var SYSTEM = [
   "- Keep the answer under about 450 words unless the question asks for depth.",
   "- Finish with a line containing only \"FOLLOWUPS:\" followed by exactly three short follow-up questions, one per line, each starting with \"- \". Make them specific to the excerpts.",
 ].join("\n");
-function buildMessages(query, sources, graph, history) {
-  var ex = sources.length ? sources.map(function (s) { return "[" + s.n + "] " + s.title + (s.doi ? " (DOI " + s.doi + ")" : "") + (s.published ? "" : " [unpublished corpus file]") + "\n" + s.excerpt.slice(0, 2600); }).join("\n\n---\n\n") : "(no matching excerpts)";
+function buildMessages(query, sources, graph, history, pinned) {
+  var ex = sources.length ? sources.map(function (s) { return "[" + s.n + "] " + s.title + (s.doi ? " (DOI " + s.doi + ")" : "") + (s.published ? "" : " [unpublished corpus file]") + "\n" + s.excerpt.slice(0, s.cap || 2600); }).join("\n\n---\n\n") : "(no matching excerpts)";
   var byId = {};
   graph.nodes.forEach(function (n) { byId[n.id] = n; });
   var concepts = graph.nodes.filter(function (n) { return n.label !== "Paper"; }).slice(0, 12).map(function (n) { return n.label + ": " + n.name; });
@@ -487,7 +507,7 @@ function buildMessages(query, sources, graph, history) {
   (history || []).slice(-2).forEach(function (h) {
     if (h && h.q && h.a) { msgs.push({ role: "user", content: String(h.q).slice(0, 600) }); msgs.push({ role: "assistant", content: String(h.a).slice(0, 1500) }); }
   });
-  msgs.push({ role: "user", content: "EXCERPTS:\n\n" + ex + kg + "\n\nQUESTION: " + query });
+  msgs.push({ role: "user", content: "EXCERPTS:\n\n" + ex + kg + (pinned ? "\n\nThe visitor is reading source [1] (" + pinned.title + ") and asks about it. Answer from [1] first; use the other sources only to connect it to related work, and say which is which." : "") + "\n\nQUESTION: " + query });
   return msgs;
 }
 function splitFollowups(text) {
@@ -552,15 +572,16 @@ async function ask(request, env, ctx) {
   var query = String(body.query || body.q || "").trim().slice(0, 1000);
   if (query.length < 3) return json({ error: "Write a question of at least 3 characters." }, 400);
   var history = Array.isArray(body.history) ? body.history.slice(-2) : [];
+  var paperSlug = /^[a-z0-9][a-z0-9-]{2,180}$/.test(String(body.paper || "")) ? String(body.paper) : "";
   var t0 = Date.now();
   var id = "a_" + t0.toString(36) + Math.random().toString(36).slice(2, 8);
   var qhash = await sha(query.toLowerCase().replace(/\s+/g, " "));
   var conf = await loadConfig(env);
   var arm = conf.challenger && Math.random() < CHALLENGER_SHARE ? "challenger" : "champion";
   var cfg = arm === "challenger" ? conf.challenger : conf.champion;
-  var ev = { id: id, ts: new Date(t0).toISOString(), qhash: qhash, query: query.slice(0, 300), turn: history.length, cfg: cfg.id, arm: arm };
+  var ev = { id: id, ts: new Date(t0).toISOString(), qhash: qhash, query: ((paperSlug ? "[paper:" + paperSlug + "] " : "") + query).slice(0, 300), turn: history.length, cfg: cfg.id, arm: arm };
 
-  var cacheKey = history.length ? null : new Request("https://ask.qwav.tech/__answer/" + cfg.id + "/" + qhash);
+  var cacheKey = history.length ? null : new Request("https://ask.qwav.tech/__answer/" + cfg.id + "/" + (paperSlug ? "p/" + paperSlug + "/" : "") + qhash);
   if (cacheKey) {
     var hit = await caches.default.match(cacheKey);
     if (hit) {
@@ -578,8 +599,15 @@ async function ask(request, env, ctx) {
     try {
       await send("status", { stage: "retrieving" });
       var rq = history.length ? history[history.length - 1].q + " " + query : query;
+      var pin = paperSlug ? await pinPaper(env, paperSlug, query) : null;
+      if (pin) rq = pin.title + ". " + rq;
       var got = await Promise.all([retrieve(env, rq, cfg), conceptSeeds(env, rq), relatedThreads(env, rq), admit(env, request)]);
       var sources = got[0], concepts = got[1], threads = got[2], adm = got[3];
+      if (pin) {
+        var ms = sources.ms, pn = pin.title.toLowerCase().slice(0, 40);
+        sources = [pin].concat(sources.filter(function (x) { return x.slug !== pin.slug && String(x.title).toLowerCase().slice(0, 40) !== pn; })).slice(0, cfg.max_sources).map(function (x, i) { return Object.assign(x, { n: i + 1 }); });
+        sources.ms = ms;
+      }
       ev.retrieval_ms = sources.ms;
       var graph = await neighborhood(env, sources.map(function (s) { return "paper:" + s.slug; }).concat(concepts.map(function (c) { return c.id; })), concepts, 60);
       graph.nodes.forEach(function (n) { var s = n.slug && sources.find(function (x) { return x.slug === n.slug; }); if (s) n.cite = s.n; });
@@ -590,7 +618,7 @@ async function ask(request, env, ctx) {
       if (!adm.ok) { ev.limited = adm.why; await send("error", { error: adm.note }); return; }
       if (!env.AI) { ev.error = "no AI binding"; await send("error", { error: "Answer generation is not configured on this deployment. Sources are shown above." }); return; }
       await send("status", { stage: "writing" });
-      var messages = buildMessages(query, sources, graph, history);
+      var messages = buildMessages(query, sources, graph, history, pin);
       var inTok = Math.ceil(JSON.stringify(messages).length / 3.5);
       var model = cfg.model, out;
       var budget = function (m) { return Math.max(cfg.max_tokens, REASONING_TOKENS[m] || 0); };
