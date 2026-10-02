@@ -1,4 +1,4 @@
-var VERSION="3.8.2-math-delims";
+var VERSION="3.8.3-doi-hygiene";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
