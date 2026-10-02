@@ -5,7 +5,7 @@
   "stage": "partial",
   "status": "failed",
   "error": "qwav.org: created unverified; www.qwav.org: created unverified",
-  "gateway_version": "3.9.1-render-fix-3",
+  "gateway_version": "3.9.2-reading",
   "hosts": {
     "archive.qnfo.org": {
       "zone": "qnfo.org",
@@ -16,23 +16,29 @@
     },
     "qwav.org": {
       "zone": "qwav.org",
-      "route_id": "f36c57a79cc04956a7431d23fad4c4bf",
+      "route_id": "99da29da63724ea0805f742b4f295fe4",
       "status": "created",
       "detail": null,
       "dns_record": "bf15ded6489cd075d294f307eb16a2e5",
       "dns_proxied_from": false,
+      "pages_detach_http": 200,
+      "pages_detached": "qwav",
       "verified": false,
+      "pages_reattached": true,
       "rolled_back": true,
       "dns_restored": true
     },
     "www.qwav.org": {
       "zone": "qwav.org",
-      "route_id": "cca07fbb40a64cc8af38f98788904a61",
+      "route_id": "5c30031c299a43e2b29f1fc3e72d4a82",
       "status": "created",
       "detail": null,
       "dns_record": "26ff1daa55c154d3a62c0a6ae7400a7d",
       "dns_proxied_from": false,
+      "pages_detach_http": 200,
+      "pages_detached": "qwav",
       "verified": false,
+      "pages_reattached": true,
       "rolled_back": true,
       "dns_restored": true
     },
@@ -44,5 +50,5 @@
       "verified": true
     }
   },
-  "ts": "2026-10-02T13:31:56Z"
+  "ts": "2026-10-02T13:51:18Z"
 }
