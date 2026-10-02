@@ -199,6 +199,57 @@ check("a non-rate-limit 403 is NOT retried (one attempt, no sleep)", "_error" in
 res, n, slept = run_gh([("ok", [1, 2])])
 check("a normal success makes exactly one call", res == [1, 2] and n == 1 and slept == [], (n, slept))
 
+# RATELIMIT-FAILFAST-1: a quota that GitHub says resets after the retry budget is not slept on (was: 240 s, then fail)
+_far = {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(int(_t.time()) + 2400)}
+res, n, slept = run_gh([("err", 403, _far, RL)] * 5)
+check("quota resets beyond the budget: one attempt, no sleep, an honest error naming the reset", "_error" in res and n == 1 and slept == [] and "quota resets in" in res["_error"] and "not waiting" in res["_error"], (res, n, slept))
+res, n, slept = run_gh([("err", 403, {"Retry-After": "9999"}, RL)] * 5)
+check("a Retry-After beyond the budget is not slept on either", "_error" in res and n == 1 and slept == [], (n, slept))
+_near = {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(int(_t.time()) + 20)}
+res, n, slept = run_gh([("err", 403, _near, RL), ("ok", {"number": 52})])
+check("a reset inside the budget is still waited out and the call recovers", res == {"number": 52} and n == 2 and len(slept) == 1 and 15 <= slept[0] <= 30, (res, n, slept))
+res, n, slept = run_gh([("err", 403, {"x-ratelimit-remaining": "12", "x-ratelimit-reset": _far["x-ratelimit-reset"]}, b'{"message":"Resource not accessible by integration"}')])
+check("a non-rate-limit 403 (quota left) still fails as itself, with no quota message", "_error" in res and n == 1 and slept == [] and "quota resets" not in res["_error"] and "rate-limited" not in res["_error"], res)
+
+# APPLY-NO-REPUBLISH-1: in one fleet-autodeploy job only the --audit step refreshes the tracking issue
+check("--audit publishes the report", fa.should_publish("--audit") is True)
+check("--apply does not publish it again", fa.should_publish("--apply") is False)
+
+def run_main(argv):
+    calls = {"publish": 0, "apply": 0, "failure_events": 0}
+    saved = {k: getattr(fa, k) for k in ("run_guard", "classify", "write_audit_rows", "purge_stale", "publish_issue", "apply_ahead", "_record_publish_failure", "ROOT")}
+    saved_argv = sys.argv
+    fa.run_guard = lambda: {"scope": "subset", "ahead": [], "_guard_rc": 0}
+    fa.classify = lambda d: {"w": {"note": "SYNC"}}
+    fa.write_audit_rows = lambda rows: (1, [], "2026-10-02 09:00:00")
+    fa.purge_stale = lambda now: (0, None)
+    def _pub(body):
+        calls["publish"] += 1
+        return "updated", 52, "HTTP 403: rate limit"
+    def _apply(d):
+        calls["apply"] += 1
+        return []
+    def _rec(*a):
+        calls["failure_events"] += 1
+    fa.publish_issue, fa.apply_ahead, fa._record_publish_failure = _pub, _apply, _rec
+    fa.ROOT = tempfile.mkdtemp()
+    sys.argv = ["fleet-autoaudit.py", argv]
+    rc = None
+    try:
+        fa.main()
+    except SystemExit as e:
+        rc = e.code
+    finally:
+        for k, v in saved.items():
+            setattr(fa, k, v)
+        sys.argv = saved_argv
+    return rc, calls
+
+rc, calls = run_main("--audit")
+check("main --audit: publishes once and records the failed publish as an event", calls == {"publish": 1, "apply": 0, "failure_events": 1} and rc == 0, (rc, calls))
+rc, calls = run_main("--apply")
+check("main --apply: deploys, makes no GitHub issue call and writes no publish-failed row", calls == {"publish": 0, "apply": 1, "failure_events": 0} and rc == 0, (rc, calls))
+
 
 # a publish that fails after retries leaves a fleet-visible event, and a broken D1 can never break the audit
 seen = []

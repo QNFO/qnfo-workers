@@ -454,6 +454,23 @@ def _rate_limit_wait(code, headers, body, attempt):
     return min(wait, GH_RETRY_CAP_S)
 
 
+def _indicated_wait_s(headers):
+    """Seconds GitHub itself says the quota stays exhausted (Retry-After, or x-ratelimit-reset when remaining is 0), uncapped.
+
+    RATELIMIT-FAILFAST-1 (2026-10-02): every autoaudit.publish-failed row since 2026-10-01 09:34Z reads "gave up after 3
+    attempts, waited 240s", i.e. both waits hit the 120 s cap of _rate_limit_wait, so GitHub announced a reset at least that
+    far away, and the call still failed at the end of the budget. When the announced reset lies beyond the remaining budget
+    no retry inside it can succeed, so gh_api now fails at once instead of sleeping. None when GitHub gave no reset signal.
+    """
+    get = (lambda k: headers.get(k)) if headers is not None else (lambda k: None)
+    retry_after, remaining, reset = get("Retry-After"), get("x-ratelimit-remaining"), get("x-ratelimit-reset")
+    if retry_after and str(retry_after).isdigit():
+        return int(retry_after)
+    if remaining == "0" and reset and str(reset).isdigit():
+        return max(1, int(reset) - int(time.time())) + 1
+    return None
+
+
 def gh_api(method, path, payload=None):
     token = env("GITHUB_TOKEN")
     repo = env("GITHUB_REPOSITORY")
@@ -472,6 +489,11 @@ def gh_api(method, path, payload=None):
         except urllib.error.HTTPError as e:
             body = e.read()
             wait = _rate_limit_wait(e.code, e.headers, body, attempt)
+            indicated = _indicated_wait_s(e.headers) if wait is not None else None
+            if indicated is not None and waited + indicated > GH_RETRY_BUDGET_S:
+                # RATELIMIT-FAILFAST-1: the quota resets after the budget runs out, so no retry inside it can succeed.
+                return {"_error": f"HTTP {e.code}: {body[:200]!r} (rate-limited; quota resets in {indicated}s, beyond the "
+                                  f"{GH_RETRY_BUDGET_S - waited}s retry budget; not waiting, after {attempt + 1} attempts)"}
             if wait is None or attempt == GH_RETRY_MAX - 1 or waited + wait > GH_RETRY_BUDGET_S:
                 tail = f" (rate-limited; gave up after {attempt + 1} attempts, waited {waited}s)" if wait is not None else ""
                 return {"_error": f"HTTP {e.code}: {body[:200]!r}{tail}"}
@@ -597,6 +619,20 @@ def apply_ahead(d=None):
 
 
 # ---------------------------------------------------------------- main
+def should_publish(mode):
+    """APPLY-NO-REPUBLISH-1 (2026-10-02): only --audit refreshes the tracking issue.
+
+    fleet-autodeploy.yml runs `--audit` and then `--apply` in the same job, and both went through main(), so every run
+    listed the open issues and PATCHed #52 twice (the second copy ~6 minutes later, identical but for the timestamp).
+    Measured 2026-10-02 08:47-09:00Z: an autoaudit.publish-failed row every ~6 minutes (08:47:44, 08:54:10, 09:00:00),
+    each after the full 240 s retry budget, which is the cadence of both steps of each run publishing, against an
+    installation quota the repo's other workflows exhaust (agent_issues #1804; 29 rows 2026-10-01 09:34Z to 10-02 09:00Z).
+    The --apply step re-runs the guard because it deploys from a fresh probe, but its report adds nothing for readers, so
+    it no longer spends quota on it. D1 rows and the audits/ artifact are still written by both.
+    """
+    return mode != "--apply"
+
+
 def main():
     mode = "--apply" if "--apply" in sys.argv else "--audit"
     d = run_guard()
@@ -615,12 +651,15 @@ def main():
                    "d1_writes_ok": ok, "d1_write_failures": failed,
                    "stale_rows_purged": purged, "purge_error": purge_err}, fh, indent=2, sort_keys=True)
     print(body)
-    action, num, err = publish_issue(body)
-    if err:
-        print(f"::warning::issue publish {action} failed: {err}")
-        _record_publish_failure(action, num, err, now)
+    if should_publish(mode):
+        action, num, err = publish_issue(body)
+        if err:
+            print(f"::warning::issue publish {action} failed: {err}")
+            _record_publish_failure(action, num, err, now)
+        else:
+            print(f"self-audit issue {action}: #{num}")
     else:
-        print(f"self-audit issue {action}: #{num}")
+        print("issue publish skipped in --apply: the --audit step of this job published this report (APPLY-NO-REPUBLISH-1)")
 
     rc = 1 if (failed or purge_err) else 0
     if mode == "--apply":

@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.18.3-zenodo-catchup"; /* 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.18.4-worker-health-auth"; /* 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -449,7 +449,11 @@ var F_WAITING = "GTD-Waiting For";
 var F_SOMEDAY = "GTD-Someday Maybe";
 var F_REF = "GTD-Reference";
 async function jobGmailTriage(env) {
-  if (!env.GMAIL_PASS) return { status: "error", notes: { error: "GMAIL_PASS secret missing" } };
+  // GMAIL-TRIAGE-UNCONFIGURED-1 (2026-10-02): GMAIL_PASS (a Gmail app password only the owner can mint, a tier-2 credential
+  // under charter rule 4) is absent on this worker since its 2026-09-26 recreation (#1468). The job cannot log in, knows
+  // it, and stops before any network call; it was recorded as status "error" every weekday run. It is recorded as
+  // "skipped" with the reason (parked with its default: no Gmail triage), and becomes a real run once the secret exists.
+  if (!env.GMAIL_PASS) return { status: "skipped", notes: { reason: "GMAIL_PASS is not set on this worker; Gmail triage needs the account's app password (#1468)" } };
   const out = { checked: 0, counts: { ACTION: 0, WAITING: 0, SOMEDAY: 0, REFERENCE: 0, NOISE: 0 }, moved: 0, actions: [], waiting: [] };
   let imap;
   try {
@@ -2516,18 +2520,43 @@ async function jobOutreachLearner(env) {
   return { status, notes };
 }
 // OUTREACH-LEARNER-1 end
-async function jobWorkerHealth(env) {
-  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
-  const endpoints = [
+// WORKER-HEALTH-PROBE-AUTH-1 (2026-10-02): the two chat probes sent "Bearer " + ROUTER_AUTH_KEY and "Bearer " + PL_API_KEY,
+// and this worker holds neither secret since its 2026-09-26 recreation (agent_issues #1468: live secret_text is CF_TOKEN,
+// DIGEST_TO, OUTREACH_TOKEN, REGISTRY_TOKEN, GH_TOKEN). Every run from 2026-09-30 15:05Z therefore reported both chat
+// endpoints FAILED with 401, raised an alerts row and mailed the owner an "AI endpoint health alert", while the endpoints
+// were up and refusing an empty key as they should. The qnfo-ai chat probe now goes through the QNFO_AI service binding,
+// authenticated by its props caller (INTERNAL-CALLER-PROPS-1, #1703), so the chat route is really checked again. A probe
+// whose credential this worker does not hold is reported as skipped with the reason, never as a failure of the endpoint.
+function workerHealthEndpoints(env, UA) {
+  const chat = (model) => ({ model, messages: [{ role: "user", content: "ping" }], max_tokens: 5 });
+  const aiChat = env.QNFO_AI && typeof env.QNFO_AI.fetch === "function"
+    ? { worker: "qnfo-ai-chat", url: "https://ai.qnfo.org/v1/chat/completions", binding: "QNFO_AI", headers: { "Content-Type": "application/json", "User-Agent": UA }, body: chat("deepseek-v4-flash") }
+    : env.ROUTER_AUTH_KEY
+      ? { worker: "qnfo-ai-chat", url: "https://ai.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_AUTH_KEY, "User-Agent": UA }, body: chat("deepseek-v4-flash") }
+      : { worker: "qnfo-ai-chat", skip: "no QNFO_AI service binding and no ROUTER_AUTH_KEY on this worker" };
+  const personalChat = env.PL_API_KEY
+    ? { worker: "personal-api-chat", url: "https://personal.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.PL_API_KEY, "User-Agent": UA }, body: chat("personal-twin-chat") }
+    : { worker: "personal-api-chat", skip: "PL_API_KEY is not set on this worker; personal-api /health is still probed" };
+  return [
     { worker: "qnfo-ai", url: "https://ai.qnfo.org/health", headers: { "User-Agent": UA } },
     { worker: "personal-api", url: "https://personal.qnfo.org/health", headers: { "User-Agent": UA } },
     { worker: "qnfo-idea-factory", url: "https://ideas.qnfo.org/health", headers: { "User-Agent": UA } },
-    { worker: "qnfo-ai-chat", url: "https://ai.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.ROUTER_AUTH_KEY || ""), "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
-    { worker: "personal-api-chat", url: "https://personal.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.PL_API_KEY || ""), "User-Agent": UA }, body: { model: "personal-twin-chat", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } }
+    aiChat,
+    personalChat
   ];
-  const out = { checks: [], failed: [] };
+}
+__name(workerHealthEndpoints, "workerHealthEndpoints");
+async function jobWorkerHealth(env) {
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+  const endpoints = workerHealthEndpoints(env, UA);
+  // failed and skipped lead the notes: the dispatcher records the first 300 characters of them as the job-run text.
+  const out = { failed: [], skipped: [], checks: [] };
   const now = (/* @__PURE__ */ new Date()).toISOString();
   for (const ep of endpoints) {
+    if (ep.skip) {
+      out.skipped.push({ worker: ep.worker, reason: ep.skip });
+      continue;
+    }
     const t0 = Date.now();
     let status = 0, dur = 0, error = "", body = "";
     try {
@@ -2571,10 +2600,10 @@ async function jobWorkerHealth(env) {
       await env.AUDIT.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('worker-health', 'error', ?1, 1)").bind(L.join(NL).slice(0, 2e3)).run();
     } catch (e) {
     }
-    await recordEvent(env, "job-run", "jr-worker-health-" + Date.now().toString(36), "worker-health FAILED " + JSON.stringify(out.failed), { job: "worker-health", status: "error" });
+    // The caller (scheduled dispatch or POST /run) records the job-run row from this return value; recording it here as
+    // well wrote two rows per run ("worker-health FAILED" and "worker-health error").
     return { status: "error", notes: out };
   }
-  await recordEvent(env, "job-run", "jr-worker-health-" + Date.now().toString(36), "worker-health ok " + out.checks.length + " endpoints", { job: "worker-health", status: "ok" });
   return { status: "ok", notes: out };
 }
 __name(jobWorkerHealth, "jobWorkerHealth");
