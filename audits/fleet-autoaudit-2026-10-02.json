@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 06:29:40",
+  "audited_at": "2026-10-02 06:34:12",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -497,7 +497,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.7.25-capability-contract",
+        "version": "3.7.26-ipatent-link",
         "worker": "qnfo-gateway"
       },
       {
@@ -512,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.4.6-capability-contract",
+        "version": "3.5.0-private-findable",
         "worker": "qnfo-ipatent"
       },
       {
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.25-capability-contract",
+      "before": "3.7.26-ipatent-link",
       "http": 200,
-      "live": "3.7.25-capability-contract",
+      "live": "3.7.26-ipatent-link",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1232,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.4.6-capability-contract",
+      "before": "3.5.0-private-findable",
       "http": 200,
-      "live": "3.4.6-capability-contract",
+      "live": "3.5.0-private-findable",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
