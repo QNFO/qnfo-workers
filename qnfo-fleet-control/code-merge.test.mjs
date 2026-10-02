@@ -4,10 +4,12 @@
  * Slices the EVOLVE-PR-1 block and the runner block out of worker.js and drives them against an in-memory SQLite D1
  * (node:sqlite, Node 22) and a scripted GitHub API. Patches are produced by the code orchestrator's own hunkPatch and
  * wholeFilePatch (sliced from qnfo-code-orchestrator/worker.js), so the parser and applier are tested against the real
- * producer. Proves: the merge decision (every refusal and wait case, and the one green path), the CI kick for a
- * GITHUB_TOKEN-opened PR, the merge with merged_by, post-merge deploy and live verification, the inverse-patch revert
- * through an evolve candidate, the kill switch, provenance, reconciliation of person merges, one merge per tick, and that
- * evAdvance still merges, deploys and verifies its own candidates after the shared-helper refactor.
+ * producer. Proves: the open decision (a pushed branch becomes a PR opened with the fleet token only after the verify,
+ * scope, provenance and integrity gates; an existing PR is adopted), the merge decision (every refusal and wait case, the
+ * 3h refusal when no required check starts, and the one green path), the merge with merged_by, post-merge deploy and live
+ * verification, the inverse-patch revert through an evolve candidate, the kill switch, the first-ok marker, provenance,
+ * reconciliation of person merges and opens, one merge per tick, and that evAdvance still merges, deploys and verifies
+ * its own candidates after the shared-helper refactor.
  * Output MUST contain "0 failed" on success; charter-guard.yml greps for exactly that string.
  *
  *   node qnfo-fleet-control/code-merge.test.mjs
@@ -57,7 +59,7 @@ const one = (sql, ...a) => db.prepare(sql).get(...a);
 const b64 = (s) => Buffer.from(String(s), "utf8").toString("base64");
 let gh;
 function freshGh() {
-  gh = { calls: [], pulls: {}, files: {}, checks: {}, statuses: {}, contents: {}, mergeBase: {}, merges: [], comments: [], commits: [], refs: [], blobs: [], newPulls: [], down: false, mergeStatus: null, seq: 0 };
+  gh = { calls: [], pulls: {}, files: {}, checks: {}, statuses: {}, contents: {}, mergeBase: {}, branches: { main: "main1" }, compareFiles: {}, merges: [], comments: [], commits: [], refs: [], blobs: [], newPulls: [], down: false, mergeStatus: null, seq: 0 };
 }
 function resp(status, j) { return { status, async json() { return j; } }; }
 function ghRoute(method, path, body) {
@@ -65,10 +67,12 @@ function ghRoute(method, path, body) {
   if (gh.down) return resp(503, { message: "down" });
   let m;
   if (method === "GET" && (m = /^\/pulls\/(\d+)$/.exec(path))) return gh.pulls[m[1]] ? resp(200, gh.pulls[m[1]]) : resp(404, {});
+  if (method === "GET" && (m = /^\/pulls\?head=QNFO%3A([^&]+)&state=all&per_page=5$/.exec(path))) return resp(200, Object.values(gh.pulls).filter((p) => p.head.ref === decodeURIComponent(m[1])));
+  if (method === "GET" && (m = /^\/git\/ref\/heads\/(.+)$/.exec(path)) && m[1] !== "main") return gh.branches[m[1]] ? resp(200, { object: { sha: gh.branches[m[1]] } }) : resp(404, { message: "Not Found" });
   if (method === "GET" && (m = /^\/pulls\/(\d+)\/files\?per_page=100$/.exec(path))) return resp(200, gh.files[m[1]] || []);
   if (method === "GET" && (m = /^\/commits\/([^/]+)\/check-runs\?per_page=100$/.exec(path))) return resp(200, { total_count: (gh.checks[m[1]] || []).length, check_runs: gh.checks[m[1]] || [] });
   if (method === "GET" && (m = /^\/commits\/([^/]+)\/status$/.exec(path))) return resp(200, gh.statuses[m[1]] || { state: "pending", total_count: 0, statuses: [] });
-  if (method === "GET" && (m = /^\/compare\/main\.\.\.(.+)$/.exec(path))) return resp(200, { merge_base_commit: { sha: gh.mergeBase[m[1]] || "base0" } });
+  if (method === "GET" && (m = /^\/compare\/main\.\.\.(.+)$/.exec(path))) return resp(200, { merge_base_commit: { sha: gh.mergeBase[m[1]] || "base0" }, files: gh.compareFiles[m[1]] || [] });
   if (method === "GET" && (m = /^\/contents\/(.+)\?ref=(.+)$/.exec(path))) {
     const key = decodeURIComponent(m[2]) + ":" + m[1].split("/").map(decodeURIComponent).join("/");
     return key in gh.contents ? resp(200, { encoding: "base64", content: b64(gh.contents[key]) }) : resp(404, { message: "Not Found" });
@@ -94,7 +98,12 @@ function ghRoute(method, path, body) {
   if (method === "POST" && path === "/git/blobs") { gh.blobs.push(Buffer.from(body.content, "base64").toString("utf8")); return resp(201, { sha: "blob" + gh.blobs.length }); }
   if (method === "POST" && path === "/git/trees") return resp(201, { sha: "tree-new" });
   if (method === "POST" && path === "/git/refs") return resp(201, { ref: body.ref });
-  if (method === "POST" && path === "/pulls") { const number = 900 + gh.newPulls.length; gh.newPulls.push({ number, ...body }); return resp(201, { number }); }
+  if (method === "POST" && path === "/pulls") {
+    const number = 900 + gh.newPulls.length, sha = gh.branches[body.head];
+    gh.newPulls.push({ number, ...body });
+    if (sha) { gh.pulls[number] = prJson({ number, title: body.title, head: { ref: body.head, sha, repo: { full_name: "QNFO/qnfo-workers" } } }); gh.files[number] = gh.compareFiles[sha] || []; }
+    return resp(201, { number });
+  }
   return resp(404, { message: "unscripted " + method + " " + path });
 }
 async function timedFetch(url, opts) {
@@ -109,7 +118,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(src.slice(A, B + END.length) + "\n" + orch.slice(o1, o2) + "\n" + orch.slice(o3, o4) +
-  "\n__export = { cmDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED };", sandbox, { filename: "code-merge-block.js" });
+  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED };", sandbox, { filename: "code-merge-block.js" });
 const W = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -223,13 +232,13 @@ const waits = [
 for (const [label, gg] of waits) ok(act(task(), gg).action === "wait", "wait: " + label, act(task(), gg));
 ok(act(task(), g({ checks: green("h1", ["gate", "mirror-guard", "comparator"]).concat([{ id: 50, name: "guard", status: "completed", conclusion: "cancelled" }, { id: 51, name: "guard", status: "completed", conclusion: "success" }]) })).action === "merge", "the latest run per check decides (a cancelled run superseded by a green one)");
 ok(act(task(), g({ pr: prJson({ mergeable_state: "behind" }) })).action === "merge", "a branch behind main is mergeable (no up-to-date rule on main)");
-const noChecks = g({ checks: [{ id: 9, name: "CodeQL", status: "completed", conclusion: "success" }] });
-ok(act(task(), Object.assign({}, noChecks, { integrity: undefined })).action === "need-integrity", "no required check ran: integrity first, before any CI is started");
-ok(act(task(), noChecks).action === "kick", "no required check ran: kick CI once");
-ok(act(task(), Object.assign({}, noChecks, { integrity: { ok: false, why: "other content" } })).action === "refuse", "a tampered PR is refused before CI is ever started on it");
-ok(act(task({ kicked_sha: "h1", kicked_at: ago(1) }), noChecks).action === "wait", "after the kick: wait for the checks it started");
-ok(act(task({ kicked_sha: "h1", kicked_at: ago(4) }), noChecks).action === "refuse", "required checks still absent 3h after the kick: refuse");
-ok(act(task({ kicked_sha: "h0", kicked_at: ago(4) }), noChecks).action === "kick", "a new head (pushed after the kick) is kicked once more");
+const noChecks = g({ checks: [{ id: 9, name: "CodeQL", status: "completed", conclusion: "success" }], integrity: undefined });
+let nc = act(task(), noChecks);
+ok(nc.action === "wait" && nc.mark && nc.mark.nochecks_sha === "h1" && nc.mark.nochecks_since === new Date(NOW).toISOString(), "no required check on a new head: wait and start the 3h clock (no empty commit, no integrity fetch)", nc);
+ok(act(task({ nochecks_sha: "h1", nochecks_since: ago(2) }), noChecks).action === "wait" && !act(task({ nochecks_sha: "h1", nochecks_since: ago(2) }), noChecks).mark, "inside 3h: keep waiting, the clock is not reset");
+nc = act(task({ nochecks_sha: "h1", nochecks_since: ago(4) }), noChecks);
+ok(nc.action === "refuse" && /within 3h/.test(nc.why) && /GITHUB_TOKEN/.test(nc.why), "no required check 3h after the runner first saw the head: refuse, naming the likely cause", nc);
+ok(act(task({ nochecks_sha: "h0", nochecks_since: ago(4) }), noChecks).mark.nochecks_sha === "h1", "a new head restarts the clock");
 const merged = act(task(), g({ pr: prJson({ merged: true, state: "closed", merged_by: { login: "rwnq8" } }) }));
 ok(merged.action === "reconcile" && merged.status === "merged" && merged.by === "gh:rwnq8", "a PR a person merged is reconciled with who merged it");
 ok(act(task(), g({ pr: prJson({ state: "closed" }) })).status === "closed", "a PR a person closed is reconciled as closed");
@@ -238,46 +247,77 @@ const docG = g({ files: [{ filename: "docs/x.md", status: "modified" }], checks:
 ok(act(docT, docG).action === "merge" && act(docT, docG).kind === "doc", "a doc merges on gate, mirror-guard and comparator");
 ok(act(task({ status: "pr_open", path: "docs/x.md", ctx: JSON.stringify({ proposal: "x\n" }) }), docG).action === "merge", "a code-agent pr_open row with a stored proposal can merge");
 ok(act(task({ status: "pr_open", ctx: JSON.stringify({ proposal: "x" }) }), g({ integrity: { ok: true, revertible: false, revert_why: "a code-agent pull request stores no patch to invert" } })).action === "refuse", "a code-agent worker.js PR is refused (no patch to revert)");
+// ---- opening a pushed branch (status branch_pushed): cmOpenDecide
+const pushedT = (over) => task(Object.assign({ status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" }, over || {}));
+const og = (over) => Object.assign({ pulls: [], head_sha: "h1", files: [{ filename: PATH, status: "modified" }, { filename: MIRROR, status: "modified" }], provenance: { ok: true, origin: "issue #50" }, integrity: { ok: true, revertible: true, containers: false, version_to: "1.2.4-codeagent" } }, over || {});
+const oact = (t, gg) => J(W.cmOpenDecide(t, gg));
+ok(oact(pushedT(), og()).action === "open", "a verified, in-scope, trusted, intact branch is opened as a PR", oact(pushedT(), og()));
+ok(oact(pushedT(), og({ integrity: undefined })).action === "need-integrity", "integrity is checked before a PR (and with it CI) is opened");
+const adopt = oact(pushedT(), og({ pulls: [prJson({ number: 455, state: "closed", merged: true })] }));
+ok(adopt.action === "adopt" && adopt.pr === 455, "an existing PR for the branch (any state) is adopted, never duplicated", adopt);
+ok(oact(pushedT(), og({ pulls: [prJson({ number: 456, head: { ref: BRANCH, sha: "h1", repo: { full_name: "evil/qnfo-workers" } } })] })).action === "open", "a fork's PR with the same branch name is not adopted");
+const orefuses = [
+  ["a branch that is not the loop's own", pushedT({ branch: "feature-x" }), og()],
+  ["a deleted branch", pushedT(), og({ head_sha: null, branch_missing: true })],
+  ["an extra file on the branch", pushedT(), og({ files: [{ filename: PATH, status: "modified" }, { filename: "scripts/deploy_gate.py", status: "modified" }] })],
+  ["a path out of scope", pushedT({ path: "scripts/x.py" }), og({ files: [{ filename: "scripts/x.py", status: "modified" }] })],
+  ["an untrusted origin", pushedT(), og({ provenance: { ok: false, why: "kaizen-ai" } })],
+  ["verify not passed", pushedT({ attempts: 3 }), og()],
+  ["content other than the verified patch", pushedT(), og({ integrity: { ok: false, why: "not the verified patch" } })],
+  ["a worker that cannot be auto-reverted", pushedT(), og({ integrity: { ok: true, revertible: false, revert_why: "const VERSION" } })],
+];
+for (const [label, t, gg] of orefuses) ok(oact(t, gg).action === "refuse", "not opened: " + label, oact(t, gg));
+ok(oact(pushedT(), og({ pulls: undefined })).action === "wait" && oact(pushedT(), og({ provenance: { ok: false, transient: true, why: "d1" } })).action === "wait", "unread pulls or a transient provenance read only wait");
 
-// ================================================================ 4. end to end: kick -> merge -> deploy -> verify
+// ================================================================ 4. end to end: pushed branch -> PR opened by the runner -> merge -> deploy -> verify
 function seedTask(over) {
   const t = task(over);
   db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, pr_url, last_error, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
     .run(t.id, t.repo, t.path, t.goal, t.status, t.step, t.attempts, t.ctx, t.branch, t.pr_url, t.last_error, t.created_at, t.updated_at);
   return t;
 }
-function seedWorkerPr(num, branch, headSha) {
-  gh.pulls[num] = prJson({ number: num, head: { ref: branch, sha: headSha, repo: { full_name: "QNFO/qnfo-workers" } } });
-  gh.files[num] = [{ filename: PATH, status: "modified" }, { filename: MIRROR, status: "modified" }];
+function seedHead(headSha) {
   gh.contents["base0:" + PATH] = BASE; gh.contents["base0:" + MIRROR] = BASE;
   gh.contents[headSha + ":" + PATH] = NEXT; gh.contents[headSha + ":" + MIRROR] = NEXT;
   gh.contents[headSha + ":" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\nmain = "worker.js"\n';
+  gh.compareFiles[headSha] = [{ filename: PATH, status: "modified" }, { filename: MIRROR, status: "modified" }];
+}
+function seedWorkerPr(num, branch, headSha) {
+  gh.pulls[num] = prJson({ number: num, head: { ref: branch, sha: headSha, repo: { full_name: "QNFO/qnfo-workers" } } });
+  gh.files[num] = [{ filename: PATH, status: "modified" }, { filename: MIRROR, status: "modified" }];
+  seedHead(headSha);
 }
 freshDb(); freshGh();
 const env = { AUDIT, GITHUB_TOKEN: "test-token" };
 db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
-seedTask();
-seedWorkerPr(401, BRANCH, "h1");
+seedTask({ status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" });
+gh.branches[BRANCH] = "h1";
+seedHead("h1");
 let r = J(await W.codeMergeTick(env, { now: NOW }));
 const cols = rows("PRAGMA table_info(code_tasks)").map((c) => c.name);
-ok(["merged_by", "merge_state", "green_since", "kicked_sha", "version_to", "revert_cid"].every((c) => cols.includes(c)), "the runner adds its columns to code_tasks");
+ok(["merged_by", "merged_at", "merge_state", "green_since", "nochecks_sha", "pr_opened_by", "version_to", "revert_cid"].every((c) => cols.includes(c)) && !cols.includes("kicked_sha"), "the runner adds its columns to code_tasks");
 ok(W.CM_DEFAULT_ENABLED === true && !r.disabled, "with no ops_config row the runner runs (default on)");
-ok(r.decided[0].action === "kick" && gh.commits.length === 1 && gh.commits[0].tree === "tree-h1" && J(gh.commits[0].parents).join() === "h1", "a PR with no required checks gets one empty commit with the head's own tree", r.decided);
-ok(gh.refs.length === 1 && gh.refs[0].branch === BRANCH && gh.refs[0].force === false && gh.merges.length === 0, "the kick fast-forwards the task branch and merges nothing");
+ok(r.opened[0].action === "open" && gh.newPulls.length === 1 && gh.newPulls[0].head === BRANCH && gh.newPulls[0].base === "main" && !/\n/.test(gh.newPulls[0].title), "a pushed branch is opened as a PR by the runner (fleet token), head = the task branch", r.opened);
 let row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(row.kicked_sha === "k1" && row.status === "published", "the kick is recorded once per head", row);
-ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.ci-kick'").n === 1, "the kick writes one cloud_ops_events row");
+ok(row.status === "published" && row.pr_url === "https://github.com/QNFO/qnfo-workers/pull/900" && row.pr_opened_by === "qnfo-fleet-control" && row.pr_opened_at === new Date(NOW).toISOString(), "the row becomes published with the pull URL and who opened it", row);
+ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.pr-opened'").n === 1 && gh.commits.length === 0 && gh.refs.length === 0, "the open writes one cloud_ops_events row; no commit is pushed");
+ok(r.decided.length === 1 && r.decided[0].action === "wait" && gh.merges.length === 0, "the new PR is a merge candidate in the same tick, but no check has run yet", r.decided);
 const hb = one("SELECT * FROM cloud_ops_events WHERE id = 'code-merge-tick-2026-10-03'");
 ok(hb && hb.status === "ok" && hb.ts === new Date(NOW).toISOString(), "each tick upserts the day's heartbeat, status ok", hb);
-r = J(await W.codeMergeTick(env, { now: NOW + 36e5 }));
-ok(r.decided[0].action === "wait" && gh.commits.length === 1, "the next tick waits for the started checks and does not kick again", r.decided);
-gh.contents["k1:" + PATH] = NEXT; gh.contents["k1:" + MIRROR] = NEXT; gh.contents["k1:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\n';
-gh.checks.k1 = green("k1", ["gate", "mirror-guard", "comparator", "guard"]);
-r = J(await W.codeMergeTick(env, { now: NOW + 2 * 36e5 }));
-ok(r.decided[0].action === "merge" && gh.merges.length === 1 && gh.merges[0].sha === "k1" && gh.merges[0].merge_method === "squash", "green checks on the kicked head: squash-merged, pinned to that head", r.decided);
-ok(/CODE-TASK-MERGE-RUNNER-1/.test(gh.merges[0].commit_message) && !/\n/.test(gh.merges[0].commit_title) && /\(#401\)$/.test(gh.merges[0].commit_title), "the merge commit names the runner; the title is one line", gh.merges[0]);
+const fo = one("SELECT * FROM cloud_ops_events WHERE id = 'code-merge-first-ok'");
+ok(fo && fo.status === "ok" && fo.ts === new Date(NOW).toISOString(), "the first ok tick writes code-merge-first-ok", fo);
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(row.status === "merged" && row.merged_by === "qnfo-fleet-control" && row.merge_state === "deploying" && row.version_to === "1.2.4-codeagent" && row.merged_sha === "merge-401", "D1 records merged_by qnfo-fleet-control, the merge sha and the VERSION to verify", row);
+ok(row.nochecks_sha === "h1" && row.nochecks_since === new Date(NOW).toISOString(), "the no-checks clock starts for the head", row);
+gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator"]).concat([{ id: 400, name: "guard", status: "in_progress", conclusion: null }]);
+r = J(await W.codeMergeTick(env, { now: NOW + 36e5 }));
+ok(r.decided[0].action === "wait" && /running guard/.test(r.decided[0].why) && gh.merges.length === 0, "checks started by the PR the runner opened: wait while one runs", r.decided);
+ok(one("SELECT ts FROM cloud_ops_events WHERE id = 'code-merge-first-ok'").ts === new Date(NOW).toISOString(), "code-merge-first-ok is written once, never moved");
+gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+r = J(await W.codeMergeTick(env, { now: NOW + 2 * 36e5 }));
+ok(r.decided[0].action === "merge" && gh.merges.length === 1 && gh.merges[0].pr === 900 && gh.merges[0].sha === "h1" && gh.merges[0].merge_method === "squash", "green checks: squash-merged, pinned to the tested head", r.decided);
+ok(/CODE-TASK-MERGE-RUNNER-1/.test(gh.merges[0].commit_message) && !/\n/.test(gh.merges[0].commit_title) && /\(#900\)$/.test(gh.merges[0].commit_title), "the merge commit names the runner; the title is one line", gh.merges[0]);
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(row.status === "merged" && row.merged_by === "qnfo-fleet-control" && row.merge_state === "deploying" && row.version_to === "1.2.4-codeagent" && row.merged_sha === "merge-900", "D1 records merged_by qnfo-fleet-control, the merge sha and the VERSION to verify", row);
 ok(gh.calls.includes("DELETE /git/refs/heads/" + BRANCH), "the task branch is deleted after the merge (as evolve does)");
 ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.merged' AND status = 'ok'").n === 1, "the merge writes one cloud_ops_events row");
 r = J(await W.codeMergeTick(env, { now: NOW + 3 * 36e5 }));
@@ -334,7 +374,7 @@ seedWorkerPr(401, BRANCH, "h1");
 gh.files[401].push({ filename: "scripts/x.py", status: "modified" });
 r = J(await W.codeMergeTick(env, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(r.decided[0].action === "refuse" && row.status === "needs_human" && /^merge-runner: the pull request changes/.test(row.last_error) && gh.merges.length === 0 && gh.commits.length === 0, "an extra file: needs_human with the reason, no kick, no merge", row);
+ok(r.decided[0].action === "refuse" && row.status === "needs_human" && /^merge-runner: the branch changes/.test(row.last_error) && gh.merges.length === 0 && gh.commits.length === 0, "an extra file: needs_human with the reason, nothing pushed, no merge", row);
 ok(gh.comments.length === 1 && gh.comments[0].pr === 401 && /did not merge this pull request/.test(gh.comments[0].body), "the refusal is explained on the PR");
 ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.refused' AND status = 'refused'").n === 1, "the refusal writes one cloud_ops_events row");
 r = J(await W.codeMergeTick(env, { now: NOW + 36e5 }));
@@ -365,7 +405,7 @@ db.prepare("INSERT INTO ops_config (key, value) VALUES ('code_merge_runner_enabl
 seedTask();
 seedWorkerPr(401, BRANCH, "h1");
 r = J(await W.codeMergeTick(env, { now: NOW }));
-ok(r.disabled === true && gh.calls.length === 0 && one("SELECT status FROM cloud_ops_events WHERE id = 'code-merge-tick-2026-10-03'").status === "disabled", "kill switch '0': no GitHub call, heartbeat 'disabled'");
+ok(r.disabled === true && gh.calls.length === 0 && one("SELECT status FROM cloud_ops_events WHERE id = 'code-merge-tick-2026-10-03'").status === "disabled" && !one("SELECT id FROM cloud_ops_events WHERE id = 'code-merge-first-ok'"), "kill switch '0': no GitHub call (nothing opened or merged), heartbeat 'disabled', no first-ok marker");
 db.exec("UPDATE ops_config SET value = 'on'");
 r = J(await W.codeMergeTick(env, { now: NOW }));
 ok(!r.disabled && gh.calls.length > 0, "kill switch 'on' resumes the runner");
@@ -403,6 +443,38 @@ gh.mergeStatus = 405;
 db.exec("UPDATE evolve_candidates SET status = 'verified'");
 r = J(await W.codeMergeTick(env, { now: NOW }));
 ok(r.decided[0].action === "merge-failed" && gh.calls.includes("PUT /pulls/401/update-branch") && one("SELECT status FROM code_tasks WHERE id = ?", ID).status === "published" && r.heartbeat === "ok", "a 405 merge asks GitHub to update the branch (evolve's path) and keeps the task waiting");
+
+// a legacy PR opened with the Actions GITHUB_TOKEN: its checks never start, so after 3h it is refused (no empty commit)
+freshDb(); freshGh();
+seedTask({ goal: "direct task" });
+seedWorkerPr(401, BRANCH, "h1");
+r = J(await W.codeMergeTick(env, { now: NOW }));
+ok(r.decided[0].action === "wait" && one("SELECT nochecks_sha FROM code_tasks WHERE id = ?", ID).nochecks_sha === "h1", "a PR with no required check: the runner waits and starts the clock");
+r = J(await W.codeMergeTick(env, { now: NOW + 3.5 * 36e5 }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(r.decided[0].action === "refuse" && row.status === "needs_human" && /no required check .* started on h1 within 3h/.test(row.last_error) && gh.commits.length === 0 && gh.merges.length === 0, "3.5h later: refused with the reason, nothing pushed, nothing merged", row);
+ok(gh.comments.length === 1 && /GITHUB_TOKEN/.test(gh.comments[0].body), "the refusal is explained on the PR");
+
+// a pushed branch the runner will not open: refused, compare URL kept; a person opens and merges it -> reconciled
+freshDb(); freshGh();
+db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (60, 'kaizen idea', 'd', 'kaizen-ai', 'open')").run();
+seedTask({ goal: "[issue #60] kaizen idea", status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" });
+gh.branches[BRANCH] = "h1"; seedHead("h1");
+r = J(await W.codeMergeTick(env, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(r.opened[0].action === "refuse" && row.status === "needs_human" && /not a trusted origin/.test(row.last_error) && /\/compare\//.test(row.pr_url) && gh.newPulls.length === 0, "an untrusted branch is not opened as a PR (CI would run it); needs_human, compare URL kept", row);
+gh.pulls[470] = prJson({ number: 470, state: "closed", merged: true, merged_by: { login: "rwnq8" }, merged_at: ago(-1), merge_commit_sha: "pm470" });
+r = J(await W.codeMergeTick(env, { now: NOW + 2 * 36e5 }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(row.status === "merged" && row.merged_by === "gh:rwnq8" && row.pr_url === "https://github.com/QNFO/qnfo-workers/pull/470", "a refused branch a person opened and merged is reconciled by branch, with who merged it", row);
+
+// an existing PR for a pushed branch is adopted, not duplicated
+freshDb(); freshGh();
+seedTask({ goal: "direct task", status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" });
+seedWorkerPr(480, BRANCH, "h1");
+gh.branches[BRANCH] = "h1";
+r = J(await W.codeMergeTick(env, { now: NOW }));
+ok(r.opened[0].action === "adopt" && gh.newPulls.length === 0 && one("SELECT pr_url FROM code_tasks WHERE id = ?", ID).pr_url === "https://github.com/QNFO/qnfo-workers/pull/480", "a PR that already exists for the branch is adopted");
 
 // ================================================================ 7. evAdvance after the shared-helper refactor
 freshDb(); freshGh();

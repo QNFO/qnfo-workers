@@ -13,6 +13,13 @@ WHAT IT DOES (per ready task of THIS repo)
   push -> open PR -> record status='published' + pr_url.  Any failure records status='publish_failed' with last_error.
   Then (PR-OUTCOME-RECONCILE-1) it reads the state of each published / branch_pushed / pr_open task's PR and records
   status='merged' or 'closed' once a person has merged or closed it.
+
+PR OPENED BY THE FLEET (CODE-TASK-MERGE-RUNNER-1, CODE_TASK_PR_OPENER=qnfo-fleet-control)
+  A PR opened with the Actions GITHUB_TOKEN starts no pull_request workflow, so its required checks never run, and this
+  workflow holds no other GitHub credential. With CODE_TASK_PR_OPENER=qnfo-fleet-control (set in code-task-publish.yml)
+  the script pushes the branch and stops at status='branch_pushed' with the compare URL; qnfo-fleet-control opens the PR
+  with the fleet's own token within the hour (CI then starts by itself) and merges it when the checks and its gates pass.
+  An existing PR for the branch is still adopted. Without the variable the script opens the PR itself, as before.
   It NEVER merges, never force-pushes, never touches main, never deletes rows, and uses no credential other than the
   environment's (CF_ACCOUNT_ID / CLOUDFLARE_API_TOKEN for D1, GH_TOKEN for gh). No secret value is read or printed.
 
@@ -183,8 +190,13 @@ def git(repo_dir, *args, check=True):
     return r
 
 
-def publish_one(task, repo_dir, base, pr):
-    """Returns (status, pr_url, error). Raises nothing: every failure is a returned publish_failed."""
+def compare_url(base, branch):
+    return "https://github.com/" + REPO_NAME_FULL + "/compare/" + base + "..." + branch + "?expand=1"
+
+
+def publish_one(task, repo_dir, base, pr, delegate=False):
+    """Returns (status, pr_url, error). Raises nothing: every failure is a returned publish_failed.
+    delegate=True: push the branch and stop at branch_pushed; qnfo-fleet-control opens the PR with the fleet token."""
     try:
         try:
             ctx = json.loads(task.get("ctx") or "{}")
@@ -227,6 +239,8 @@ def publish_one(task, repo_dir, base, pr):
         git(repo_dir, "add", "--", *sorted(files))
         git(repo_dir, "commit", "-q", "-m", "code-task " + task["id"] + ": " + str(task.get("goal") or "")[:60])
         git(repo_dir, "push", "origin", "refs/heads/" + branch + ":refs/heads/" + branch)
+        if delegate:
+            return "branch_pushed", compare_url(base, branch), None
         body = ("Opened by code-task-publish from verified code-task `" + task["id"] + "`.\n\nGoal: " + str(task.get("goal") or "")[:500] +
                 "\n\nThe patch passed the orchestrator's deterministic verifier. Review and merge it on GitHub (or close it); this workflow never merges.")
         try:
@@ -236,14 +250,14 @@ def publish_one(task, repo_dir, base, pr):
             # pushed, so record it as branch_pushed with the compare URL instead of failing the task; the
             # owner (from the compare URL) or the next run with a PR-capable token opens the PR from that branch.
             if "not permitted to create or approve pull requests" in str(e) or "createPullRequest" in str(e):
-                return "branch_pushed", "https://github.com/" + REPO_NAME_FULL + "/compare/" + base + "..." + branch + "?expand=1", None
+                return "branch_pushed", compare_url(base, branch), None
             raise
         return "published", url, None
     except Exception as e:  # noqa: BLE001 - a failure must become a recorded status, not a crash
         return "publish_failed", None, str(e)[:300]
 
 
-def publish_all(store, repo_dir, base, pr, log=print):
+def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
     ready = list_ready(store)
     if not ready:
         log("no ready_to_publish tasks")
@@ -258,9 +272,12 @@ def publish_all(store, repo_dir, base, pr, log=print):
             log(f"skip {t['id']}: claimed by another run")
             out["skipped"] += 1
             continue
-        st, url, err = publish_one(t, repo_dir, base, pr)
+        st, url, err = publish_one(t, repo_dir, base, pr, delegate)
         finish(store, t["id"], st, url, err)
-        if st == "branch_pushed":
+        if st == "branch_pushed" and delegate:
+            out["published"] += 1
+            log(f"branch_pushed {t['id']} -> {url} (qnfo-fleet-control opens the PR with the fleet token)")
+        elif st == "branch_pushed":
             out["published"] += 1
             log(f"::warning::branch_pushed {t['id']} -> {url} (PR creation refused by repo setting)")
         elif st == "published":
@@ -505,6 +522,22 @@ def selftest():
     r2 = reconcile_outcomes(store, pr, quiet)
     check("reconcile is idempotent", r2["merged"] == 0 and r2["closed"] == 0, r2)
 
+    # 8. CODE-TASK-MERGE-RUNNER-1: with the fleet as PR opener the branch is pushed and no PR is created here
+    remote, work, store = fixture()
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    pr = FakePR()
+    add(store, "ct_delegate0001", good)
+    r = publish_all(store, work, "main", pr, quiet, delegate=True)
+    t = row(store, "ct_delegate0001")
+    check("delegated: branch_pushed with the compare URL, no PR created by the workflow token",
+          t["status"] == "branch_pushed" and "/compare/main...codeagent-delegate0001" in (t["pr_url"] or "") and not pr.created and r["failed"] == 0 and t["last_error"] is None, t)
+    shown = subprocess.run(["git", "--git-dir", remote, "show", "codeagent-delegate0001:scripts/x.py"], capture_output=True, text=True)
+    check("delegated: the pushed branch carries the verified change", shown.stdout == "def f():\n    return 2\n", shown.stderr)
+    add(store, "ct_delegate0002", good, branch="codeagent-delegate0002")
+    pr.by_branch["codeagent-delegate0002"] = "https://github.com/QNFO/qnfo-workers/pull/77"
+    publish_all(store, work, "main", pr, quiet, delegate=True)
+    check("delegated: an existing PR for the branch is still adopted", row(store, "ct_delegate0002")["status"] == "published" and row(store, "ct_delegate0002")["pr_url"].endswith("/pull/77"))
+
     print(f"\nselftest: {len(fails)} failure(s)")
     return 1 if fails else 0
 
@@ -518,9 +551,10 @@ def main():
     if a.selftest:
         return selftest()
     store = D1Store()
+    delegate = os.environ.get("CODE_TASK_PR_OPENER", "").strip() == "qnfo-fleet-control"
     try:
         git(a.repo_dir, "fetch", "-q", "origin", a.base)
-        out = publish_all(store, a.repo_dir, a.base, GhPR())
+        out = publish_all(store, a.repo_dir, a.base, GhPR(), delegate=delegate)
         out["outcomes"] = reconcile_outcomes(store, GhPR())
     except RuntimeError as e:
         print("::error::code-task-publish could not run: " + str(e))

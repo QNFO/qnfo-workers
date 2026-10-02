@@ -2924,11 +2924,18 @@ async function evolveTickHeartbeat(env) {
   return r;
 }
 __name(evolveTickHeartbeat, "evolveTickHeartbeat");
-// ---- CODE-TASK-MERGE-RUNNER-1:BEGIN (0.4.85, agent_issues 1726, pillar autonomy) ----
-// NO-CLAUDE-RUNTIME-DEPENDENCY-1: qnfo-code-orchestrator turns an issue into a verified patch and code-task-publish opens the
-// pull request, but nothing on Cloudflare merged one (PRs 297, 368 and 381 were merged by a person), so the watchmaker op
-// code-task-merge counted. This hourly runner merges a code-loop PR itself, through EVOLVE-PR-1's token, merge call,
-// deploy-ledger and live-audit checks and revert pipeline, and only when every gate holds:
+// ---- CODE-TASK-MERGE-RUNNER-1:BEGIN (0.4.86, agent_issues 1726, pillar autonomy) ----
+// NO-CLAUDE-RUNTIME-DEPENDENCY-1: qnfo-code-orchestrator turns an issue into a verified patch and code-task-publish pushes
+// it as a branch, but nothing on Cloudflare merged a code-loop PR (PRs 297, 368 and 381 were merged by a person), so the
+// watchmaker op code-task-merge counted. This hourly runner opens and merges code-loop PRs itself, through EVOLVE-PR-1's
+// token, merge call, deploy-ledger and live-audit checks and revert pipeline.
+// OPEN: a PR opened with the Actions GITHUB_TOKEN starts no pull_request workflow (PR 368 carries only CodeQL), and the
+// workflow holds no other GitHub credential (its secrets are Cloudflare ones and GITHUB_TOKEN; the fleet token is a worker
+// secret it cannot read). So code-task-publish pushes the branch and stops at 'branch_pushed' (CODE_TASK_PR_OPENER), and
+// this runner opens the PR with the fleet token: a real 'opened' event, so CI starts by itself. It opens only a branch
+// that passes the identity, verify, scope, provenance and integrity gates below (CI on a pull request runs its code); an
+// existing PR for the branch is adopted. A branch that fails a gate is a refusal with the compare URL kept for a person.
+// MERGE, only when every gate holds:
 //   identity    code_tasks status 'published' (pull mode) or 'pr_open' (code-agent path); branch is the loop's own
 //               codeagent-<id[3:15]>; pr_url is a QNFO/qnfo-workers pull whose head is that branch in this repo, base main;
 //   verify      the orchestrator's own verify passed: step 'done', attempts < 3, no last_error, the verified patch (pull
@@ -2945,27 +2952,28 @@ __name(evolveTickHeartbeat, "evolveTickHeartbeat");
 //               completed with success on the head; no other check failed or is running; the commit status is not failing;
 //   mergeable   open, not draft, mergeable; at most CM_MAX_MERGES per tick, and never while the same worker has a change
 //               (code task or evolve candidate) in flight.
-// A PR opened with the Actions GITHUB_TOKEN starts no pull_request workflow. When none of the required checks ran, the
-// runner pushes one empty commit (same tree) with the fleet token, once per head, after the scope and integrity gates;
-// still no required check CM_KICK_WAIT_H later is a refusal. A refusal sets status 'needs_human' with last_error
-// "merge-runner: <reason>" and comments the reason on the PR; a transient gap only waits (merge_note).
+// No required check on a head CM_CHECKS_WAIT_H after the runner first saw it is a refusal (for example an older PR opened
+// with the Actions GITHUB_TOKEN). A refusal sets status 'needs_human' with last_error "merge-runner: <reason>" and
+// comments the reason on the PR; a transient gap only waits (merge_note).
 // After a merge: merged_by 'qnfo-fleet-control'. A worker.js follows evolve's verification (fleet_deploys row for the new
 // VERSION within CM_DEPLOY_WAIT_H, then worker_live_audit http 200 with it or a healthy later deploy); a failed live check
 // opens an inverse-patch revert PR as an evolve 'revert' candidate, merged and verified by evAdvance like evolve's own.
-// Kill switch: ops_config code_merge_runner_enabled ('0' / 'off' stops it; absent = CM_DEFAULT_ENABLED). Each tick upserts
-// cloud_ops_events code-merge-tick-<UTC day> (status ok, disabled or error); every action writes one cloud_ops_events row.
+// Kill switch: ops_config code_merge_runner_enabled ('0' / 'off' stops opening and merging; absent = CM_DEFAULT_ENABLED;
+// pushed branches then wait for a person, compare URL in pr_url). Each tick upserts cloud_ops_events
+// code-merge-tick-<UTC day> (status ok, disabled or error); the first ok tick also writes code-merge-first-ok once (the
+// watchmaker counts person merges only after it); every action writes one cloud_ops_events row.
 var CM_DEFAULT_ENABLED = true;
 var CM_RUNNER = "qnfo-fleet-control";
 var CM_PULL_RE = /^https:\/\/github\.com\/QNFO\/qnfo-workers\/pull\/(\d+)$/;
 var CM_DENY = EVOLVE_DENY.concat(["qnfo-code-orchestrator", "qnfo-code-agent"]);
 var CM_TRUSTED_SOURCES = "qnfo-fleet-dashboard:owner-request|OWNER-TASK-,qnfo-fleet-dashboard:owner-request|OWNER-NOTE-,claude-session*,claude-code-session*";
-var CM_KICK_WAIT_H = 3;
+var CM_CHECKS_WAIT_H = 3;
 var CM_DEPLOY_WAIT_H = 3;
 var CM_MAX_CANDIDATES = 5;
 var CM_MAX_MERGES = 1;
 var CM_OK = ["success", "neutral", "skipped"];
 var CM_INFLIGHT = ["deploying", "deployed", "reverting"];
-var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "kicked_sha TEXT", "kicked_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"];
+var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"];
 var CM_VDECL = /^(?:var|const|let) VERSION = "/;
 function cmCtx(t) {
   try { return t && t.ctx ? JSON.parse(t.ctx) : {}; } catch (e) { return null; }
@@ -3122,10 +3130,62 @@ function cmRevertText(mainText, hunks, tag) {
 }
 __name(cmRevertText, "cmRevertText");
 // ---- the decision (pure: the code_tasks row and what GitHub said -> one action) ----
+function cmRefuse(why) { return { action: "refuse", why: why }; }
+__name(cmRefuse, "cmRefuse");
+function cmWait(why, green) { return { action: "wait", why: why, green: !!green }; }
+__name(cmWait, "cmWait");
+// Gates that hold for the task and its changed files whatever the PR state: verify, scope, provenance (and, last,
+// integrity). Shared by opening (cmOpenDecide) and merging (cmDecide). Returns null when they pass.
+function cmTaskGates(t, files, provenance) {
+  var ctx = cmCtx(t);
+  if (!ctx) return cmRefuse("the code task's ctx is not valid JSON");
+  if (t.step !== "done" || !(Number(t.attempts) < 3) || (t.last_error != null && String(t.last_error).trim() !== "")) return cmRefuse("the code task's own verify is not recorded as passed (step " + t.step + ", attempts " + t.attempts + (t.last_error ? ", last_error set" : "") + ")");
+  var wantPatch = t.status !== "pr_open";
+  var stored = wantPatch ? typeof ctx.patch === "string" && ctx.patch.trim() : typeof ctx.proposal === "string" && ctx.proposal.length > 0;
+  if (!stored) return cmRefuse("the verified " + (wantPatch ? "patch" : "proposal") + " is not stored in the code task");
+  var sc = cmScope(String(t.path || ""));
+  if (!sc.ok) return cmRefuse(sc.why);
+  files = files || [];
+  var names = files.map(function(f) { return f.filename; });
+  var allowed = [t.path].concat(sc.mirror ? [sc.mirror] : []);
+  var bad = files.filter(function(f) { return allowed.indexOf(f.filename) < 0 || ["modified", "changed"].indexOf(f.status) < 0; });
+  if (names.indexOf(t.path) < 0 || bad.length || files.length >= 100) return cmRefuse("the branch changes " + (names.join(", ") || "nothing") + "; only " + allowed.join(" and ") + " may change, as modifications");
+  if (!provenance || provenance.transient) return cmWait(provenance ? provenance.why : "provenance not read");
+  if (!provenance.ok) return cmRefuse(provenance.why);
+  return null;
+}
+__name(cmTaskGates, "cmTaskGates");
+function cmIntegrityGate(t, integ) {
+  var sc = cmScope(String(t.path || ""));
+  if (!integ) return { action: "need-integrity" };
+  if (integ.transient) return cmWait(integ.why);
+  if (!integ.ok) return cmRefuse(integ.why);
+  if (sc.kind === "worker" && integ.containers) return cmRefuse(sc.worker + " declares [[containers]]; the canonical deploy cannot carry it");
+  if (sc.kind === "worker" && !integ.revertible) return cmRefuse("not auto-revertible: " + (integ.revert_why || "unknown"));
+  return null;
+}
+__name(cmIntegrityGate, "cmIntegrityGate");
+// A pushed codeagent branch with no PR yet (status branch_pushed): adopt a PR that exists for it, or open one with the
+// fleet token once the gates pass. g = { pulls, head_sha, branch_missing, files, provenance, integrity }.
+function cmOpenDecide(t, g) {
+  g = g || {};
+  var branch = "codeagent-" + String(t.id || "").slice(3, 15);
+  if (t.repo !== "qnfo-workers" || t.branch !== branch) return cmRefuse("not a code-loop branch (expected " + branch + ")");
+  if (!g.pulls) return cmWait("pull requests for " + branch + " not read");
+  var ex = g.pulls.filter(function(p) { return p && p.head && p.head.ref === branch && p.head.repo && p.head.repo.full_name === EVOLVE_REPO && p.base && p.base.ref === "main"; })[0];
+  if (ex) return { action: "adopt", pr: ex.number, why: "a pull request for " + branch + " already exists (#" + ex.number + ")" };
+  if (g.branch_missing) return cmRefuse("branch " + branch + " no longer exists");
+  if (!g.head_sha) return cmWait("branch " + branch + " not read");
+  var tg = cmTaskGates(t, g.files, g.provenance);
+  if (tg) return tg;
+  var ig = cmIntegrityGate(t, g.integrity);
+  if (ig) return ig;
+  return { action: "open", why: "verified, in scope, trusted and intact on " + String(g.head_sha).slice(0, 7) };
+}
+__name(cmOpenDecide, "cmOpenDecide");
 function cmDecide(t, g, nowMs) {
   g = g || {};
-  var refuse = function(why) { return { action: "refuse", why: why }; };
-  var wait = function(why, green) { return { action: "wait", why: why, green: !!green }; };
+  var refuse = cmRefuse, wait = cmWait;
   var branch = "codeagent-" + String(t.id || "").slice(3, 15);
   var m = CM_PULL_RE.exec(String(t.pr_url || ""));
   if (!m || t.repo !== "qnfo-workers" || t.branch !== branch) return refuse("not a code-loop pull request (expected branch " + branch + " and a QNFO/qnfo-workers pull URL)");
@@ -3136,50 +3196,33 @@ function cmDecide(t, g, nowMs) {
   if (pr.state !== "open") return wait("pull request state " + pr.state);
   var head = pr.head || {}, base = pr.base || {};
   if (head.ref !== branch || !head.repo || head.repo.full_name !== EVOLVE_REPO || base.ref !== "main" || !base.repo || base.repo.full_name !== EVOLVE_REPO) return refuse("the pull request is not " + branch + " -> main inside " + EVOLVE_REPO);
-  var ctx = cmCtx(t);
-  if (!ctx) return refuse("the code task's ctx is not valid JSON");
-  if (t.step !== "done" || !(Number(t.attempts) < 3) || (t.last_error != null && String(t.last_error).trim() !== "")) return refuse("the code task's own verify is not recorded as passed (step " + t.step + ", attempts " + t.attempts + (t.last_error ? ", last_error set" : "") + ")");
-  var stored = t.status === "published" ? typeof ctx.patch === "string" && ctx.patch.trim() : typeof ctx.proposal === "string" && ctx.proposal.length > 0;
-  if (!stored) return refuse("the verified " + (t.status === "published" ? "patch" : "proposal") + " is not stored in the code task");
-  var sc = cmScope(String(t.path || ""));
-  if (!sc.ok) return refuse(sc.why);
-  var files = g.files || [], names = files.map(function(f) { return f.filename; });
-  var allowed = [t.path].concat(sc.mirror ? [sc.mirror] : []);
-  var bad = files.filter(function(f) { return allowed.indexOf(f.filename) < 0 || ["modified", "changed"].indexOf(f.status) < 0; });
-  if (names.indexOf(t.path) < 0 || bad.length || files.length >= 100) return refuse("the pull request changes " + (names.join(", ") || "nothing") + "; only " + allowed.join(" and ") + " may change, as modifications");
-  if (!g.provenance || g.provenance.transient) return wait(g.provenance ? g.provenance.why : "provenance not read");
-  if (!g.provenance.ok) return refuse(g.provenance.why);
+  var tg = cmTaskGates(t, g.files, g.provenance);
+  if (tg) return tg;
+  var sc = cmScope(String(t.path || "")), names = (g.files || []).map(function(f) { return f.filename; });
   if (pr.draft) return wait("the pull request is a draft");
   var req = cmRequired(names), ck = cmChecks(g.checks, g.status, req), sha7 = String(head.sha || "").slice(0, 7);
   if (ck.failed.length) return refuse("required check(s) failed on " + sha7 + ": " + ck.failed.join(", "));
   if (ck.status === "failure" || ck.status === "error") return refuse("the commit status on " + sha7 + " is " + ck.status);
-  var integ = g.integrity;
-  var gateIntegrity = function() {
-    if (!integ) return { action: "need-integrity" };
-    if (integ.transient) return wait(integ.why);
-    if (!integ.ok) return refuse(integ.why);
-    if (sc.kind === "worker" && integ.containers) return refuse(sc.worker + " declares [[containers]]; the canonical deploy cannot carry it");
-    if (sc.kind === "worker" && !integ.revertible) return refuse("not auto-revertible: " + (integ.revert_why || "unknown"));
-    return null;
-  };
   if (ck.missing.length === req.length && !ck.pending.length) {
-    if (t.kicked_sha && t.kicked_sha === head.sha) {
-      var kAge = (nowMs - Date.parse(t.kicked_at || "")) / 36e5;
-      if (kAge > CM_KICK_WAIT_H) return refuse("no required check ran on " + sha7 + " " + Math.round(kAge) + "h after the CI kick (" + req.join(", ") + ")");
-      return wait("waiting for the checks the CI kick started on " + sha7);
+    // No required check started on this head. A PR the runner opened starts them within minutes; one opened with the
+    // Actions GITHUB_TOKEN never does. The clock starts the first time the runner sees this head without checks.
+    if (t.nochecks_sha === head.sha) {
+      var nAge = (nowMs - Date.parse(t.nochecks_since || "")) / 36e5;
+      if (nAge > CM_CHECKS_WAIT_H) return refuse("no required check (" + req.join(", ") + ") started on " + sha7 + " within " + CM_CHECKS_WAIT_H + "h (a pull request opened with the Actions GITHUB_TOKEN starts none; push to the branch or reopen the PR, then set the task back to 'published')");
+      return wait("no required check has started on " + sha7 + " yet");
     }
-    var gi = gateIntegrity();
-    if (gi) return gi;
-    return { action: "kick", why: "none of " + req.join(", ") + " ran on " + sha7 };
+    var w = wait("no required check has started on " + sha7 + " yet");
+    w.mark = { nochecks_sha: head.sha, nochecks_since: new Date(nowMs).toISOString() };
+    return w;
   }
   if (ck.missing.length || ck.pending.length) return wait("waiting on checks" + (ck.missing.length ? "; missing " + ck.missing.join(", ") : "") + (ck.pending.length ? "; running " + ck.pending.join(", ") : ""));
   if (ck.other.length) return wait("a non-required check failed (" + ck.other.join(", ") + "); not merging until it passes");
   if (ck.status === "pending") return wait("the commit status is pending");
   if (pr.mergeable == null) return wait("GitHub is still computing mergeability");
   if (pr.mergeable === false || pr.mergeable_state === "dirty") return refuse("the pull request conflicts with main (mergeable_state " + pr.mergeable_state + ")");
-  var gi2 = gateIntegrity();
-  if (gi2) return gi2;
-  return { action: "merge", why: "required checks " + req.join(", ") + " green on " + sha7, required: req, kind: sc.kind, worker: sc.worker || null, version_to: integ.version_to || null, green: true };
+  var ig = cmIntegrityGate(t, g.integrity);
+  if (ig) return ig;
+  return { action: "merge", why: "required checks " + req.join(", ") + " green on " + sha7, required: req, kind: sc.kind, worker: sc.worker || null, version_to: g.integrity.version_to || null, green: true };
 }
 __name(cmDecide, "cmDecide");
 // ---- I/O ----
@@ -3191,13 +3234,15 @@ async function cmRead(env, path, ref) {
   return { text: evDecode(r.j.content) };
 }
 __name(cmRead, "cmRead");
-async function cmIntegrity(env, t, pr, names, sc) {
-  var head = pr.head.sha, ctx = cmCtx(t) || {};
-  var cmp = await evApi(env, "GET", "/compare/main..." + head);
-  var mb = cmp.j && cmp.j.merge_base_commit && cmp.j.merge_base_commit.sha;
-  if (!mb) return { ok: false, transient: true, why: "compare HTTP " + cmp.status };
-  var hunks = t.status === "published" ? cmParsePatch(ctx.patch) : null;
-  if (t.status === "published") {
+async function cmIntegrity(env, t, head, names, sc, mergeBase) {
+  var ctx = cmCtx(t) || {}, mb = mergeBase || null;
+  if (!mb) {
+    var cmp = await evApi(env, "GET", "/compare/main..." + head);
+    mb = cmp.j && cmp.j.merge_base_commit && cmp.j.merge_base_commit.sha;
+    if (!mb) return { ok: false, transient: true, why: "compare HTTP " + cmp.status };
+  }
+  var hunks = t.status !== "pr_open" ? cmParsePatch(ctx.patch) : null;
+  if (t.status !== "pr_open") {
     if (!hunks) return { ok: false, why: "the stored patch cannot be parsed" };
     if (Object.keys(hunks).sort().join(",") !== names.slice().sort().join(",")) return { ok: false, why: "the pull request files (" + names.join(", ") + ") are not the files of the verified patch (" + Object.keys(hunks).join(", ") + ")" };
   } else if (names.length !== 1) return { ok: false, why: "a code-agent pull request may change only " + t.path };
@@ -3277,6 +3322,11 @@ async function cmEvent(env, cx, action, t, text, status, meta) {
 }
 __name(cmEvent, "cmEvent");
 async function cmHeartbeat(env, cx, status, summary) {
+  // code-merge-first-ok: the first ok tick, written once and never updated (the day rows are upserted, so their ts moves).
+  // The watchmaker counts a person's merge or close of a code-loop PR only after it.
+  if (status === "ok") {
+    try { await env.AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES ('code-merge-first-ok', ?1, 'code-merge-first-ok', 'first ok tick of CODE-TASK-MERGE-RUNNER-1', ?2, 'ok')").bind(cx.iso, CM_RUNNER).run(); } catch (e) {}
+  }
   try {
     await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'code-merge-tick', ?3, ?4, ?5) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, status = excluded.status")
       .bind("code-merge-tick-" + cx.iso.slice(0, 10), cx.iso, JSON.stringify(summary || {}).slice(0, 300), CM_RUNNER, status).run();
@@ -3293,19 +3343,6 @@ async function cmFileIssue(env, title, desc) {
   try { await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind(title, desc, Date.now()).run(); } catch (e) {}
 }
 __name(cmFileIssue, "cmFileIssue");
-// Starts the pull_request workflows a GITHUB_TOKEN-opened PR never started: one empty commit (the head's own tree) pushed
-// with the fleet token is a 'synchronize' by a real actor. The content of the PR does not change.
-async function cmKick(env, branch, head) {
-  var cm = await evApi(env, "GET", "/git/commits/" + head);
-  var tree = cm.j && cm.j.tree && cm.j.tree.sha;
-  if (!tree) return { ok: false, why: "head commit HTTP " + cm.status };
-  var co = await evApi(env, "POST", "/git/commits", { message: "ci: start the required checks (CODE-TASK-MERGE-RUNNER-1)\n\nThis pull request was opened with the Actions GITHUB_TOKEN, which starts no pull_request workflow. This empty commit, pushed by qnfo-fleet-control, starts them. The tree is unchanged.", tree: tree, parents: [head] });
-  if (!co.ok || !co.j || !co.j.sha) return { ok: false, why: "commit HTTP " + co.status };
-  var up = await evApi(env, "PATCH", "/git/refs/heads/" + branch, { sha: co.j.sha, force: false });
-  if (!up.ok) return { ok: false, why: "ref update HTTP " + up.status };
-  return { ok: true, sha: co.j.sha };
-}
-__name(cmKick, "cmKick");
 // A failed live check: open the inverse-patch PR as an evolve 'revert' candidate; evAdvance merges and verifies it.
 async function cmRevert(env, cx, t, why) {
   await evSchema(env);
@@ -3390,7 +3427,7 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
     }
     d = cmDecide(t, g, cx.now);
     if (d.action === "need-integrity") {
-      g.integrity = await cmIntegrity(env, t, g.pr, g.files.map(function(f) { return f.filename; }), cmScope(t.path));
+      g.integrity = await cmIntegrity(env, t, g.pr.head.sha, g.files.map(function(f) { return f.filename; }), cmScope(t.path));
       d = cmDecide(t, g, cx.now);
     }
   }
@@ -3410,10 +3447,6 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
     var f = { status: d.status, merge_checked_at: cx.iso };
     if (d.status === "merged") { f.merged_by = d.by; f.merged_sha = g.pr.merge_commit_sha || null; f.merged_at = g.pr.merged_at || cx.iso; }
     if (await cmSave(env, cx, t.id, f, { touch: true, ifStatus: t.status })) await cmEvent(env, cx, "reconciled", t, t.pr_url + " was " + d.status + (d.by ? " by " + d.by : "") + " outside the runner");
-  } else if (d.action === "kick") {
-    var k = await cmKick(env, t.branch, g.pr.head.sha);
-    if (k.ok) { await cmSave(env, cx, t.id, { kicked_sha: k.sha, kicked_at: cx.iso, merge_note: d.why + "; CI kicked with " + k.sha.slice(0, 7), merge_checked_at: cx.iso }); await cmEvent(env, cx, "ci-kick", t, t.pr_url + ": " + d.why + "; pushed empty commit " + k.sha.slice(0, 7)); }
-    else { out.errors++; res.why += "; kick failed: " + k.why; await cmEvent(env, cx, "ci-kick-failed", t, t.pr_url + ": " + k.why, "error"); }
   } else if (d.action === "merge") {
     var head2 = g.pr.head.sha, names = g.files.map(function(x) { return x.filename; });
     if (!t.green_since) await cmSave(env, cx, t.id, { green_since: greenSince });
@@ -3434,11 +3467,67 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
       await cmEvent(env, cx, "merge-failed", t, t.pr_url + ": merge HTTP " + mg.status + " " + String(mg.j && mg.j.message || "").slice(0, 120), "error");
     }
   } else if (d.action === "wait") {
-    await cmSave(env, cx, t.id, { merge_note: String(d.why || "").slice(0, 500), green_since: greenSince, merge_checked_at: cx.iso });
+    await cmSave(env, cx, t.id, Object.assign({ merge_note: String(d.why || "").slice(0, 500), green_since: greenSince, merge_checked_at: cx.iso }, d.mark || {}));
   }
   return res;
 }
 __name(cmHandle, "cmHandle");
+// Opens the PR for a branch code-task-publish pushed (status branch_pushed), with the fleet token, so pull_request CI
+// starts by itself. Only after the identity, verify, scope, provenance and integrity gates: CI runs the PR's code.
+async function cmOpenHandle(env, cx, t, cfg, out) {
+  var g = {}, d = cmOpenDecide(t, g), branch = t.branch;
+  if (d.action !== "refuse") {
+    var pl = await evApi(env, "GET", "/pulls?head=" + encodeURIComponent("QNFO:" + branch) + "&state=all&per_page=5");
+    if (!pl.ok) { out.errors++; return { id: t.id, action: "error", why: "pulls HTTP " + pl.status }; }
+    g.pulls = Array.isArray(pl.j) ? pl.j : [];
+    d = cmOpenDecide(t, g);
+    if (d.action !== "adopt") {
+      var ref = await evApi(env, "GET", "/git/ref/heads/" + branch);
+      if (ref.status === 404) g.branch_missing = true;
+      else if (!ref.ok || !ref.j || !ref.j.object) { out.errors++; return { id: t.id, action: "error", why: "ref HTTP " + ref.status }; }
+      else {
+        g.head_sha = ref.j.object.sha;
+        var cmp = await evApi(env, "GET", "/compare/main..." + g.head_sha);
+        if (!cmp.ok || !cmp.j) { out.errors++; return { id: t.id, action: "error", why: "compare HTTP " + cmp.status }; }
+        g.files = Array.isArray(cmp.j.files) ? cmp.j.files : [];
+        g.merge_base = cmp.j.merge_base_commit && cmp.j.merge_base_commit.sha;
+        g.provenance = await cmProvenance(env, t, cfg.trusted);
+      }
+      d = cmOpenDecide(t, g);
+      if (d.action === "need-integrity") {
+        g.integrity = await cmIntegrity(env, t, g.head_sha, g.files.map(function(f) { return f.filename; }), cmScope(t.path), g.merge_base);
+        d = cmOpenDecide(t, g);
+      }
+    }
+  }
+  var res = { id: t.id, action: d.action, why: d.why };
+  var pull = function(n) { return "https://github.com/" + EVOLVE_REPO + "/pull/" + n; };
+  if (d.action === "adopt") {
+    if (await cmSave(env, cx, t.id, { status: "published", pr_url: pull(d.pr), merge_note: d.why, merge_checked_at: cx.iso }, { touch: true, ifStatus: "branch_pushed" })) await cmEvent(env, cx, "pr-adopted", t, branch + " -> " + pull(d.pr));
+    res.pr = d.pr;
+  } else if (d.action === "open") {
+    var goal = String(t.goal || "").replace(/\s+/g, " ").trim();
+    var body = "Opened by qnfo-fleet-control CODE-TASK-MERGE-RUNNER-1 from verified code task `" + t.id + "` (branch pushed by code-task-publish).\n\nGoal: " + goal.slice(0, 500) +
+      "\n\nThe patch passed the orchestrator's deterministic verifier. The fleet token opened this pull request, so the pull_request checks start by themselves; the runner merges it when the required checks pass and every merge gate holds, or says here why it will not.";
+    var op = await evApi(env, "POST", "/pulls", { title: ("code-task: " + goal).slice(0, 80), head: branch, base: "main", body: body });
+    if (op.ok && op.j && op.j.number) {
+      res.pr = op.j.number;
+      await cmSave(env, cx, t.id, { status: "published", pr_url: pull(op.j.number), pr_opened_by: CM_RUNNER, pr_opened_at: cx.iso, merge_note: d.why + "; PR opened by " + CM_RUNNER, merge_checked_at: cx.iso }, { touch: true, ifStatus: "branch_pushed" });
+      await cmEvent(env, cx, "pr-opened", t, branch + " -> " + pull(op.j.number) + " opened by " + CM_RUNNER + " (" + d.why + ")");
+    } else {
+      out.errors++;
+      res.action = "open-failed"; res.why = "pull HTTP " + op.status + " " + String(op.j && op.j.message || "").slice(0, 80);
+      await cmSave(env, cx, t.id, { merge_note: res.why, merge_checked_at: cx.iso });
+      await cmEvent(env, cx, "pr-open-failed", t, branch + ": " + res.why, "error");
+    }
+  } else if (d.action === "refuse") {
+    if (await cmSave(env, cx, t.id, { status: "needs_human", last_error: ("merge-runner: " + d.why).slice(0, 500), merge_note: d.why.slice(0, 500), merge_checked_at: cx.iso }, { touch: true, ifStatus: "branch_pushed" })) await cmEvent(env, cx, "refused", t, branch + " not opened as a pull request: " + d.why, "refused");
+  } else {
+    await cmSave(env, cx, t.id, { merge_note: String(d.why || "").slice(0, 500), merge_checked_at: cx.iso });
+  }
+  return res;
+}
+__name(cmOpenHandle, "cmOpenHandle");
 async function cmProvenance(env, t, list) {
   var iid = cmIssueId(t.goal);
   if (!iid) return { ok: true, origin: "direct enqueue" };
@@ -3456,30 +3545,40 @@ async function codeMergeTick(env, opts) {
   var cfg = await cmConfig(env);
   if (!cfg.enabled) { await cmHeartbeat(env, cx, "disabled", { disabled: cfg.raw }); return { ok: true, disabled: true, why: "ops_config code_merge_runner_enabled = " + cfg.raw }; }
   if (!(await cmSchema(env))) { await cmHeartbeat(env, cx, "ok", { idle: "no code_tasks table" }); return { ok: true, idle: "no code_tasks table" }; }
-  var out = { ok: true, ts: cx.iso, advanced: [], decided: [], reconciled: [], merges: 0, merge_failures: 0, errors: 0 };
+  var out = { ok: true, ts: cx.iso, advanced: [], opened: [], decided: [], reconciled: [], merges: 0, merge_failures: 0, errors: 0 };
   var all = function(sql, args) { var st = env.AUDIT.prepare(sql); return (args && args.length ? st.bind.apply(st, args) : st).all().then(function(r) { return r.results || []; }); };
   var inflight = await all("SELECT * FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting') ORDER BY merged_at ASC LIMIT 10", [CM_RUNNER]);
   for (var i = 0; i < inflight.length; i++) out.advanced.push(await cmAdvance(env, cx, inflight[i]));
   var busy = {};
   (await all("SELECT path FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting')", [CM_RUNNER])).forEach(function(r) { var s = cmScope(r.path); if (s.worker) busy[s.worker] = 1; });
   try { (await all("SELECT worker FROM evolve_candidates WHERE status IN ('pr-open', 'merged', 'deployed')")).forEach(function(r) { busy[r.worker] = 1; }); } catch (e) {}
+  // Pushed branches first: open their PRs (CI then starts by itself; they are merge candidates from the next tick).
+  var pushed = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status = 'branch_pushed' AND branch LIKE 'codeagent-%' ORDER BY updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
+  for (var o = 0; o < pushed.length; o++) out.opened.push(await cmOpenHandle(env, cx, pushed[o], cfg, out));
   var cands = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status IN ('published', 'pr_open') AND branch LIKE 'codeagent-%' AND pr_url LIKE 'https://github.com/QNFO/qnfo-workers/pull/%' ORDER BY updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
   for (var j = 0; j < cands.length; j++) out.decided.push(await cmHandle(env, cx, cands[j], cfg, busy, out));
-  // A refused PR a person later merged or closed: record the outcome (code-task-publish reconciles only waiting rows).
-  var refused = await all("SELECT id, pr_url, status FROM code_tasks WHERE status = 'needs_human' AND last_error LIKE 'merge-runner:%' AND pr_url LIKE 'https://github.com/QNFO/qnfo-workers/pull/%' ORDER BY updated_at ASC LIMIT 10");
+  // A refused PR (or a refused branch whose PR a person opened) that a person later merged or closed: record the outcome
+  // (code-task-publish reconciles only waiting rows).
+  var refused = await all("SELECT id, branch, pr_url, status FROM code_tasks WHERE status = 'needs_human' AND last_error LIKE 'merge-runner:%' AND branch LIKE 'codeagent-%' ORDER BY updated_at ASC LIMIT 10");
   for (var q = 0; q < refused.length; q++) {
-    var rt = refused[q], rn = Number((CM_PULL_RE.exec(String(rt.pr_url)) || [])[1] || 0);
-    if (!rn) continue;
+    var rt = refused[q], rn = Number((CM_PULL_RE.exec(String(rt.pr_url || "")) || [])[1] || 0);
+    if (!rn) {
+      var rl = await evApi(env, "GET", "/pulls?head=" + encodeURIComponent("QNFO:" + rt.branch) + "&state=all&per_page=5");
+      var rx = rl.ok && Array.isArray(rl.j) ? rl.j.filter(function(x) { return x && x.head && x.head.ref === rt.branch; })[0] : null;
+      if (!rx) continue;
+      rn = rx.number;
+    }
     var rp = await evApi(env, "GET", "/pulls/" + rn);
     if (!rp.ok || !rp.j || (rp.j.state !== "closed" && !rp.j.merged)) continue;
     var rf = rp.j.merged ? { status: "merged", merged_by: rp.j.merged_by && rp.j.merged_by.login ? "gh:" + rp.j.merged_by.login : "person", merged_sha: rp.j.merge_commit_sha || null, merged_at: rp.j.merged_at || cx.iso, merge_checked_at: cx.iso } : { status: "closed", merge_checked_at: cx.iso };
-    if (await cmSave(env, cx, rt.id, rf, { touch: true, ifStatus: "needs_human" })) { out.reconciled.push({ id: rt.id, status: rf.status }); await cmEvent(env, cx, "reconciled", rt, rt.pr_url + " was " + rf.status + " by a person after a refusal"); }
+    rf.pr_url = "https://github.com/" + EVOLVE_REPO + "/pull/" + rn;
+    if (await cmSave(env, cx, rt.id, rf, { touch: true, ifStatus: "needs_human" })) { out.reconciled.push({ id: rt.id, status: rf.status }); await cmEvent(env, cx, "reconciled", rt, rf.pr_url + " was " + rf.status + " by a person after a refusal"); }
   }
-  // GitHub unreachable for every candidate (a revoked token, an outage): the heartbeat says 'error', so the watchmaker sees
+  // GitHub unreachable for every task (a revoked token, an outage): the heartbeat says 'error', so the watchmaker sees
   // the runner go stale after 2h instead of a healthy loop that merges nothing.
-  var attempted = out.decided.filter(function(x) { return x.action !== "refuse"; }).length;
+  var attempted = out.decided.concat(out.opened).filter(function(x) { return x.action !== "refuse"; }).length;
   out.heartbeat = out.errors && out.errors >= attempted ? "error" : "ok";
-  await cmHeartbeat(env, cx, out.heartbeat, { merges: out.merges, decided: out.decided.length, advanced: out.advanced.length, errors: out.errors, merge_failures: out.merge_failures });
+  await cmHeartbeat(env, cx, out.heartbeat, { merges: out.merges, opened: out.opened.length, decided: out.decided.length, advanced: out.advanced.length, errors: out.errors, merge_failures: out.merge_failures });
   return out;
 }
 __name(codeMergeTick, "codeMergeTick");
@@ -4996,9 +5095,10 @@ var worker_default2 = {
     if (p === "/code-merge/status" && request.method === "GET") {
       var cmc = await cmConfig(env);
       try { await cmSchema(env); } catch (e) {}
-      var cmr = await env.AUDIT.prepare("SELECT id, path, status, merge_state, merged_by, pr_url, green_since, kicked_at, version_to, merge_note, last_error, updated_at FROM code_tasks ORDER BY updated_at DESC LIMIT 20").all().catch(function() { return { results: [] }; });
+      var cmr = await env.AUDIT.prepare("SELECT id, path, status, merge_state, merged_by, pr_url, pr_opened_by, green_since, nochecks_since, version_to, merge_note, last_error, updated_at FROM code_tasks ORDER BY updated_at DESC LIMIT 20").all().catch(function() { return { results: [] }; });
       var cmh = await env.AUDIT.prepare("SELECT id, ts, status, text FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
-      return json({ ok: true, version: VERSION, loop: "CODE-TASK-MERGE-RUNNER-1", enabled: cmc.enabled, switch: "ops_config code_merge_runner_enabled = " + cmc.raw, trusted_sources: cmc.trusted, deny: CM_DENY, max_merges_per_tick: CM_MAX_MERGES, kick_wait_hours: CM_KICK_WAIT_H, deploy_wait_hours: CM_DEPLOY_WAIT_H, last_tick: cmh, tasks: cmr.results || [] });
+      var cmf = await env.AUDIT.prepare("SELECT ts FROM cloud_ops_events WHERE id = 'code-merge-first-ok'").first().catch(function() { return null; });
+      return json({ ok: true, version: VERSION, loop: "CODE-TASK-MERGE-RUNNER-1", enabled: cmc.enabled, switch: "ops_config code_merge_runner_enabled = " + cmc.raw, trusted_sources: cmc.trusted, deny: CM_DENY, max_merges_per_tick: CM_MAX_MERGES, checks_wait_hours: CM_CHECKS_WAIT_H, deploy_wait_hours: CM_DEPLOY_WAIT_H, first_ok_tick: cmf ? cmf.ts : null, last_tick: cmh, tasks: cmr.results || [] });
     }
     if (p === "/code-merge/tick" && request.method === "POST") {
       var cah2 = request.headers.get("Authorization") || "";

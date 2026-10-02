@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.16.5-watchmaker-merge-runner"; /* 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.16.5-watchmaker-merge-runner"; /* 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -3534,25 +3534,28 @@ var WATCHMAKER_OPS = [
   { key: "time-gated-verification", what: "Time-gated issue verification (remediation_contracts)", runner: "workflow:remediation-consumer", cadence_h: 6, sql: "SELECT MAX(last_attempt_at) AS last FROM remediation_contracts", replaces: "13 one-shot claude.ai session check-ins" },
   { key: "research-intent-triage", what: "Research intent triage (qnfo-intent-orchestrator 06:30Z)", runner: "cron:qnfo-intent-orchestrator", cadence_h: 24, stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'research' AND created_at < ?1", stuck_note: "pending research intents older than 48h" },
   { key: "task-intent-intake", what: "Task intents from ChatBox, DeepChat and qnfo-ops feeds, filed as agent_issues (TASK-INTENT-INTAKE-1)", runner: "cron:qnfo-fleet-dashboard", stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'task' AND created_at < ?1", stuck_note: "pending task intents older than 48h with no consumer" },
-  // WATCHMAKER-CODE-MERGE-1 (1.15.3) -> CODE-TASK-MERGE-RUNNER-1 (1.15.5): qnfo-fleet-control 0.4.85 merges code-loop PRs
-  // on an hourly cron and upserts cloud_ops_events code-merge-tick-<day> (status 'ok', 'disabled' by the ops_config kill
-  // switch, or 'error' when GitHub is unreachable). The op is NOT counted while that heartbeat is 'ok' within 2h and nothing
-  // below needs a person. It IS counted when the runner is stalled or disabled, or any of: a PR waiting on the runner with
-  // checks green for more than 6h, or waiting more than 48h at all (stuck_prs); a code task in needs_human (the runner
-  // refused its PR, or the loop could not verify it) or branch_pushed (no PR could be opened) (needs_person); a code-loop
-  // PR merged or closed in the last 30 days by anyone but the runner, i.e. merged_by is not 'qnfo-fleet-control'
-  // (by_person); a failed automatic revert in the last 30 days (revert_failed). Columns come from the runner's schema
-  // step; until it has run, the query fails and the op counts as unmeasured.
-  { key: "code-task-merge", what: "Merging code-loop PRs (CODE-TASK-MERGE-RUNNER-1, qnfo-fleet-control hourly)", runner: "cron:qnfo-fleet-control", cadence_h: 1,
+  // WATCHMAKER-CODE-MERGE-1 (1.15.3) -> CODE-TASK-MERGE-RUNNER-1 (1.16.4): qnfo-fleet-control 0.4.86 opens and merges
+  // code-loop PRs on an hourly cron and upserts cloud_ops_events code-merge-tick-<day> (status 'ok', 'disabled' by the
+  // ops_config kill switch, or 'error' when GitHub is unreachable); its first ok tick also writes code-merge-first-ok once.
+  // The op is NOT counted while that heartbeat is 'ok' within 2h and nothing below needs a person. It IS counted when the
+  // runner is stalled or disabled, or any of: a PR waiting on the runner with checks green for more than 6h, or waiting
+  // more than 48h at all (stuck_prs); a code task in needs_human (the runner refused it, or the loop could not verify it),
+  // or a pushed branch the runner has not opened as a PR within 6h (needs_person); a code-loop PR merged or closed by
+  // anyone but the runner (merged_by is not 'qnfo-fleet-control') in the last 30 days AND after the runner's first ok
+  // tick, by merged_at when the runner recorded it (by_person: a merge from before the runner existed says nothing about
+  // whether the op needs a person now); a failed automatic revert in the last 30 days (revert_failed). Columns come from
+  // the runner's schema step; until it has run, the query fails and the op counts as unmeasured.
+  { key: "code-task-merge", what: "Opening and merging code-loop PRs (CODE-TASK-MERGE-RUNNER-1, qnfo-fleet-control hourly)", runner: "cron:qnfo-fleet-control", cadence_h: 1,
     sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' AND status = 'ok'",
     why_sql: "SELECT status FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' ORDER BY ts DESC LIMIT 1",
     stuck_hours: [6, 720, 48],
     stuck_sql: "SELECT stuck_prs + needs_person + by_person + revert_failed AS stuck, stuck_prs, needs_person, by_person, revert_failed, by_runner FROM (SELECT " +
       "COALESCE(SUM(CASE WHEN status IN ('published', 'pr_open') AND ((green_since IS NOT NULL AND green_since < ?1) OR updated_at < ?3) THEN 1 ELSE 0 END), 0) AS stuck_prs, " +
-      "COALESCE(SUM(CASE WHEN status IN ('needs_human', 'branch_pushed') THEN 1 ELSE 0 END), 0) AS needs_person, " +
-      "COALESCE(SUM(CASE WHEN status IN ('merged', 'closed') AND updated_at > ?2 AND COALESCE(merged_by, '') <> 'qnfo-fleet-control' THEN 1 ELSE 0 END), 0) AS by_person, " +
+      "COALESCE(SUM(CASE WHEN status = 'needs_human' OR (status = 'branch_pushed' AND updated_at < ?1) THEN 1 ELSE 0 END), 0) AS needs_person, " +
+      "COALESCE(SUM(CASE WHEN status IN ('merged', 'closed') AND COALESCE(merged_at, updated_at) > ?2 AND COALESCE(merged_at, updated_at) > f.first_ok AND COALESCE(merged_by, '') <> 'qnfo-fleet-control' THEN 1 ELSE 0 END), 0) AS by_person, " +
       "COALESCE(SUM(CASE WHEN merge_state = 'revert-failed' AND updated_at > ?2 THEN 1 ELSE 0 END), 0) AS revert_failed, " +
-      "COALESCE(SUM(CASE WHEN status = 'merged' AND merged_by = 'qnfo-fleet-control' AND updated_at > ?2 THEN 1 ELSE 0 END), 0) AS by_runner FROM code_tasks)",
+      "COALESCE(SUM(CASE WHEN status = 'merged' AND merged_by = 'qnfo-fleet-control' AND updated_at > ?2 THEN 1 ELSE 0 END), 0) AS by_runner FROM code_tasks, " +
+      "(SELECT MIN(ts) AS first_ok FROM cloud_ops_events WHERE status = 'ok' AND (id = 'code-merge-first-ok' OR (id >= 'code-merge-tick-' AND id < 'code-merge-tick.'))) f)",
     stuck_note: "code-loop PRs or tasks that needed a person" },
   { key: "linkedin-draft-approval", what: "Approving each LinkedIn draft in Buffer (LinkedIn API Terms 3.1; STRATEGY gate 7)", runner: "owner-by-policy" },
   { key: "objective-ratification", what: "Ratifying objective revisions (QUNIVERSE-CHARTER s7)", runner: "owner-by-policy" }

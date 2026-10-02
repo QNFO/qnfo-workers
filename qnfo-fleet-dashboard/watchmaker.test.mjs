@@ -1,9 +1,10 @@
 // WATCHMAKER-INDEX-1 offline suite: replays the watchmaker block from worker.js against an in-memory SQLite D1 with
 // synthetic ledgers and proves: a fully fresh fleet reads 0; a stalled runner, a never-run one, an unreadable ledger,
 // a research backlog, an evolve loop with neither a proposal nor a heartbeat, and the code-task merge runner when it is
-// stalled or disabled or leaves work for a person (a PR green for 6h or waiting 48h, needs_human, branch_pushed, a merge
-// or close outside the runner in 30 days, a failed revert) each count; a first run not yet due, runner merges and the
-// owner's by-policy approvals do not; the daily run writes one row and the metric once per day, never before 07:00Z;
+// stalled or disabled or leaves work for a person (a PR green for 6h or waiting 48h, needs_human, a pushed branch with no
+// PR for 6h, a merge or close outside the runner in 30 days and after its first ok tick, a failed revert) each count; a
+// first run not yet due, runner merges, person merges from before the runner existed and the owner's by-policy approvals
+// do not; the daily run writes one row and the metric once per day, never before 07:00Z;
 // GET /api/watchmaker serves it.
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
 // stale zenodo_stats and job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
@@ -29,7 +30,7 @@ CREATE TABLE evolve_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE objective_constraint_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, last_attempt_at TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
-CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merged_by TEXT, merge_state TEXT, green_since TEXT);
+CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merged_by TEXT, merged_at TEXT, merge_state TEXT, green_since TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
 CREATE TABLE errata_watch (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE social_channels (channel_id TEXT PRIMARY KEY, service TEXT, name TEXT, connected INTEGER, checked_at TEXT, checked_day TEXT);
@@ -102,8 +103,10 @@ ok(op(m, "portfolio-daily").state.startsWith("ok") && op(m, "portfolio-daily").a
 ok(op(m, "identity-weekly").state.startsWith("ok") && op(m, "time-gated-verification").state.startsWith("ok"), "space-format timestamps are read as UTC");
 ok(!op(m, "linkedin-draft-approval").counted && /by policy/.test(op(m, "linkedin-draft-approval").state), "by-policy owner approvals are listed, not counted");
 ok(!op(m, "code-task-merge").counted && op(m, "code-task-merge").runner === "cron:qnfo-fleet-control" && /^ok, last run 0.5h ago$/.test(op(m, "code-task-merge").state), "a fresh merge-runner heartbeat with nothing for a person: not counted");
-// CODE-TASK-MERGE-RUNNER-1: the runner merges; what a person still did or must do counts.
+// CODE-TASK-MERGE-RUNNER-1: the runner merges; what a person still did or must do counts. The runner's first ok tick
+// (code-merge-first-ok, written once) was 5 days ago: a person merge before it is history, not a dependency.
 const cm = async () => op(await api.watchmakerMeasure(env, NOW), "code-task-merge");
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-first-ok', ?, 'ok')").run(ago(5 * 24));
 db.prepare("INSERT INTO code_tasks (id, status, updated_at, merged_by, merge_state) VALUES ('cm0', 'merged', ?, 'qnfo-fleet-control', 'verified')").run(ago(10));
 let c = await cm();
 ok(!c.counted && /\(by_runner 1\)$/.test(c.state), "a PR the runner merged is not person work", c.state);
@@ -114,6 +117,21 @@ db.exec("UPDATE code_tasks SET merged_by = 'gh:rwnq8' WHERE id = 'cm1'");
 ok((await cm()).counted, "a PR merged by a person's GitHub login counts");
 db.exec("UPDATE code_tasks SET status = 'closed', merged_by = NULL WHERE id = 'cm1'");
 ok((await cm()).counted, "a code-loop PR a person closed in the last 30 days counts");
+db.prepare("UPDATE code_tasks SET status = 'merged', updated_at = ? WHERE id = 'cm1'").run(ago(6 * 24));
+c = await cm();
+ok(!c.counted && !/by_person/.test(c.state), "a person merge from before the runner's first ok tick is not counted", c.state);
+db.prepare("UPDATE code_tasks SET updated_at = ?, merged_at = ? WHERE id = 'cm1'").run(ago(1), ago(6 * 24));
+ok(!(await cm()).counted, "the merge time decides (merged_at before the runner existed, recorded later), not when it was recorded");
+db.prepare("UPDATE code_tasks SET merged_at = ? WHERE id = 'cm1'").run(ago(4 * 24));
+ok((await cm()).counted, "a person merge after the runner's first ok tick counts");
+db.prepare("UPDATE code_tasks SET status = 'closed', merged_at = NULL, updated_at = ? WHERE id = 'cm1'").run(ago(6 * 24));
+ok(!(await cm()).counted, "a person close from before the runner existed is not counted");
+db.exec("DELETE FROM cloud_ops_events WHERE id = 'code-merge-first-ok'");
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-tick-2026-09-29', ?, 'ok')").run(ago(7 * 24));
+db.prepare("UPDATE code_tasks SET updated_at = ? WHERE id = 'cm1'").run(ago(6 * 24));
+ok((await cm()).counted, "without the marker the earliest ok day row is the runner's start (a close after it counts)");
+db.exec("DELETE FROM cloud_ops_events WHERE id = 'code-merge-tick-2026-09-29'");
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-first-ok', ?, 'ok')").run(ago(5 * 24));
 db.prepare("UPDATE code_tasks SET status = 'merged', updated_at = ? WHERE id = 'cm1'").run(ago(31 * 24));
 ok(!(await cm()).counted, "a person merge older than 30 days no longer counts");
 db.prepare("INSERT INTO code_tasks (id, status, updated_at, green_since) VALUES ('cm2', 'published', ?, ?)").run(ago(8), ago(5));
@@ -128,8 +146,11 @@ ok(!(await cm()).counted, "a fresh pr_open row (code-agent path) is the runner's
 db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm3', 'needs_human', ?)").run(ago(40 * 24));
 c = await cm();
 ok(c.counted && /needs_person 1/.test(c.state), "a code task in needs_human counts at any age (a refused PR or an unverifiable task)", c.state);
-db.exec("UPDATE code_tasks SET status = 'branch_pushed' WHERE id = 'cm3'");
-ok((await cm()).counted, "a branch with no PR (branch_pushed) counts");
+db.prepare("UPDATE code_tasks SET status = 'branch_pushed', updated_at = ? WHERE id = 'cm3'").run(ago(1));
+ok(!(await cm()).counted, "a freshly pushed branch is the runner's to open as a PR (not counted)");
+db.prepare("UPDATE code_tasks SET updated_at = ? WHERE id = 'cm3'").run(ago(7));
+c = await cm();
+ok(c.counted && /needs_person 1/.test(c.state), "a pushed branch with no PR after 6h counts", c.state);
 db.prepare("UPDATE code_tasks SET status = 'merged', merged_by = 'qnfo-fleet-control', merge_state = 'revert-failed', updated_at = ? WHERE id = 'cm3'").run(ago(3));
 c = await cm();
 ok(c.counted && /revert_failed 1/.test(c.state), "a failed automatic revert counts", c.state);
