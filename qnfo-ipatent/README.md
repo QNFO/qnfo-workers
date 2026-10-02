@@ -1,6 +1,6 @@
 # qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)
 
-**Version:** 3.6.0 (2026-10-02; support map, completeness meter, numbered paragraphs, daily cap, IndexNow) · 3.5.1 page metrics · 3.5.0 private by default, findable, honest copy · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
+**Version:** 3.7.0 (2026-10-02; reach: example page, share card, byline, value check) · 3.6.x support map, latency · 3.5.1 page metrics · 3.5.0 private by default, findable, honest copy · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
 ## Purpose
 Free experimental US-provisional patent disclosure drafting assistant, grounded in the
 QNFO/QWAV patent corpus (33,500+ semantic segments). Turns an inventor description into
@@ -57,6 +57,15 @@ drafts, distinct drafters); qnfo-fleet-control IMPROVEMENT-LOOP-1 (SURFACE-METRI
   Advisory, never blocking.
 - **COST-GUARD-1.** At most 150 drafts in 24 hours across all users (the per-IP limit did not bound the total).
 - **INDEXNOW-1.** `/<key>.txt` proves ownership for IndexNow (Bing, Yandex, Seznam, Naver; not Google).
+
+## What v3.7.0 added (pillar: reach)
+- **EXAMPLE-1:** `/example` renders one real, unedited run (2026-10-02, gpt-oss-120b, 39 s) with the live support map and
+  the five things the run invented. It is the honest demonstration and the page to share.
+- **VALUE-CHECK-1:** a number in a claim element that appears nowhere in the specification makes the element unsupported
+  (the live run's invented 0.5 to 2.0 N·m torque and Shore A 40 to 60 are now caught).
+- **Share card** `/og.jpg` (1200x630) on every page; share links (LinkedIn, Bluesky, X, email) with UTM tags.
+- **Byline and contact:** the author, ORCID and a "Work with me" link (qnfo.org/work-with-me, UTM-tagged) on the landing
+  page, the guide, the example and under every draft.
 
 ## Endpoints
 | Route | Method | Purpose |
