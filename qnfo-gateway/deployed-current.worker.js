@@ -1,4 +1,4 @@
-var VERSION="3.8.6-reach-layer";
+var VERSION="3.8.7-og-head";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -2401,7 +2401,11 @@ function reachOgImage() {
 // ---- REACH-LAYER-1:END ----
 var gateway_worker_default = {
   async fetch(request, env) {
-    if (request.method === "GET" && new URL(request.url).pathname === "/og.jpg" && RL_HOSTS[new URL(request.url).hostname]) return reachOgImage();
+    // HEAD too: some link-preview crawlers check the image with HEAD before fetching it (REACH-LAYER-1 3.8.7).
+    if ((request.method === "GET" || request.method === "HEAD") && new URL(request.url).pathname === "/og.jpg" && RL_HOSTS[new URL(request.url).hostname]) {
+      var ogr = reachOgImage();
+      return request.method === "HEAD" ? new Response(null, { status: 200, headers: ogr.headers }) : ogr;
+    }
     return withFleetCtl(await withReachLayer(await gateway_worker_default.serve(request, env), request));
   },
   async serve(request, env) {
