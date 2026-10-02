@@ -88,3 +88,15 @@ on BYOK DeepSeek (about $167). `fleet_ai_run_rate_30d_usd` is the fleet's own li
 last full days of data (attributed Workers AI neurons above the free 10k/day at $0.011/1k, plus qnfo-ai router spend on
 other providers). Proposed target <= $15; its trigger names the top neuron consumer as the lever. Refreshed by the
 improvement tick; tested in `improvement.test.mjs`.
+
+## REACH-IDEATION-1 (0.4.93, 2026-10-02, pillar reach)
+Owner directive: "the fleet shall ideate and shall build all next automatically". Once a UTC day the hourly tick probes
+QNFO's public surfaces (qnfo.org home and work-with-me, papers index and the latest paper, iPatent home, guide and example,
+ideas.qnfo.org) with nine reach checks (share image, canonical, structured data, description, author credit, contact path,
+flagship link, subscribe box, speed) and a content-gap catalog (planned iPatent guide pages). Each failing check is one
+deduped `REACH-IDEA-1: <check> on <surface>` issue (at most 3 new a day, buildable first), naming the worker file and the
+metric to move. qnfo-code-orchestrator's planner trusts the prefix (0.3.10), so buildable ideas become code tasks and ship
+through the merge runner. Ideas on deny-listed control-plane workers (qnfo-gateway) are filed as "not auto-buildable".
+The next run closes an issue with evidence when the live page passes. Read: `GET /reach-ideas`; run now:
+`POST /reach-ideas/tick` (admin). Ledger: `reach_idea_runs` (WATCHMAKER_OPS `reach-ideation`). Suite: `reach.test.mjs`.
+Dry run on 2026-10-02 against the live pages: 26 ideas (14 buildable, 12 on qnfo-gateway).
