@@ -1,4 +1,4 @@
-var VERSION="3.8.0-living-papers";
+var VERSION="3.8.1-living-papers";
 // LIVING-PAPERS-1 (3.8.0, 2026-10-02, pillar reach): papers.qnfo.org index and paper pages rebuilt as living papers in the
 // QNFO design system shared with ask.qwav.tech; GET /api/paper-context/<slug>. See the LIVING-PAPERS-1 block.
 // WORK-WITH-ME-1 (3.7.27, 2026-10-02, pillar reach): qnfo.org/work-with-me, the offers and a tagged mailto per offer;
@@ -2151,7 +2151,8 @@ function lpSubscribe(source) {
 }
 // ---------------------------------------------------------------- paper
 function lpSlug(t, used) {
-  let s = String(t || "").replace(/<[^>]+>/g, "").replace(/&[a-z#0-9]+;/gi, " ").toLowerCase().replace(/\$[^$]*\$/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "section";
+  // Text between tags only; the slug is then reduced to [a-z0-9-], so it never carries markup.
+  let s = String(t || "").split("<").map(function(part, i) { return i ? part.slice(part.indexOf(">") + 1) : part; }).join("").replace(/&[a-z#0-9]+;/gi, " ").toLowerCase().replace(/\$[^$]*\$/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "section";
   let k = s, i = 2;
   while (used.has(k)) k = s + "-" + i++;
   used.add(k);
