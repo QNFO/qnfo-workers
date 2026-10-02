@@ -1,8 +1,18 @@
 {
-  "audited_at": "2026-10-02 07:14:35",
+  "audited_at": "2026-10-02 07:18:48",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-cloud-ops",
+        "qnfo-fleet-dashboard",
+        "qnfo-paper-indexer",
+        "qnfo-social"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -442,7 +452,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.0.1-ask-loop",
+        "version": "2.0.2-ask-loop",
         "worker": "qnfo-ai-search"
       },
       {
@@ -462,12 +472,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.17.1-reach-loops",
+        "version": "1.18.1-outreach-learner",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.4-issue-planner",
+        "version": "0.3.5-issue-planner",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -492,7 +502,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.17.3-watchmaker-ask-loop",
+        "version": "1.17.6-outreach-learner",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -547,7 +557,7 @@
       },
       {
         "dir": "qnfo-paper-indexer",
-        "version": "3.0.7-capability-contract",
+        "version": "3.0.8-flagship-measure",
         "worker": "qnfo-paper-indexer"
       },
       {
@@ -572,7 +582,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.27-run-ledger",
+        "version": "0.7.29-social-learner",
         "worker": "qnfo-social"
       },
       {
@@ -896,9 +906,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.0.1-ask-loop",
+      "before": "2.0.2-ask-loop",
       "http": 200,
-      "live": "2.0.1-ask-loop",
+      "live": "2.0.2-ask-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1016,9 +1026,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.17.1-reach-loops",
+      "before": "1.18.1-outreach-learner",
       "http": 200,
-      "live": "1.17.1-reach-loops",
+      "live": "1.18.1-outreach-learner",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1032,9 +1042,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.4-issue-planner",
+      "before": "0.3.5-issue-planner",
       "http": 200,
-      "live": "0.3.4-issue-planner",
+      "live": "0.3.5-issue-planner",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1152,9 +1162,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.17.3-watchmaker-ask-loop",
+      "before": "1.17.6-outreach-learner",
       "http": 200,
-      "live": "1.17.3-watchmaker-ask-loop",
+      "live": "1.17.6-outreach-learner",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1304,9 +1314,9 @@
       "worker": "qnfo-paper-explainer"
     },
     "qnfo-paper-indexer": {
-      "before": "3.0.7-capability-contract",
+      "before": "3.0.8-flagship-measure",
       "http": 200,
-      "live": "3.0.7-capability-contract",
+      "live": "3.0.8-flagship-measure",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-paper-indexer"
@@ -1416,9 +1426,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.27-run-ledger",
+      "before": "0.7.29-social-learner",
       "http": 200,
-      "live": "0.7.27-run-ledger",
+      "live": "0.7.29-social-learner",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
