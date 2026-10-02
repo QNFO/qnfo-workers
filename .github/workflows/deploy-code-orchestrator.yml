@@ -61,6 +61,7 @@ jobs:
           set -euo pipefail
           node --check qnfo-code-orchestrator/worker.js
           node --no-warnings qnfo-code-orchestrator/test-loop.mjs
+          node --no-warnings qnfo-code-orchestrator/test-hunk.mjs
           python3 scripts/mirror-guard.py
 
       - name: Assert required bindings are declared

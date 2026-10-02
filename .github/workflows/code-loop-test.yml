@@ -36,3 +36,5 @@ jobs:
         run: node --check qnfo-code-orchestrator/worker.js
       - name: Loop acceptance test
         run: node --no-warnings qnfo-code-orchestrator/test-loop.mjs
+      - name: Hunk patch test (HUNK-NO-EOL-1)
+        run: node --no-warnings qnfo-code-orchestrator/test-hunk.mjs
