@@ -174,7 +174,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   const rx = (src, name) => { const m = new RegExp("var " + name + " = (/.*/[a-z]*);\\n").exec(src); return m ? m[1] : null; };
   for (const [a, b] of [["MAIL_INTERNAL_RX", "SLA_INTERNAL_RX"], ["MAIL_MACHINE_RX", "SLA_MACHINE_RX"], ["MAIL_RECEIPT_RX", "SLA_RECEIPT_RX"], ["MAIL_SOLICIT_RX", "SLA_SOLICIT_RX"]]) ok(rx(dash, a) && rx(dash, a) === rx(orch, b), "M15 " + a + " is the orchestrator's " + b);
   const arr = (src, name) => { const i = src.indexOf("var " + name + " = ["); const j = src.indexOf("];", i); return i < 0 ? null : vm.runInNewContext("(" + src.slice(i + ("var " + name + " = ").length, j + 1) + ")"); };
-  ok(JSON.stringify(arr(dash, "MAIL_FUNDERS")) === JSON.stringify(arr(orch, "SLA_FUNDERS")) && arr(dash, "MAIL_FUNDERS").some((f) => Array.isArray(f.domains) && f.domains.indexOf("foresight.org") >= 0), "M16 the funder list is the orchestrator's SLA_FUNDERS");
+  ok(JSON.stringify(arr(dash, "MAIL_FUNDERS")) === JSON.stringify(arr(orch, "SLA_FUNDERS")) && arr(dash, "MAIL_FUNDERS").some((f) => Array.isArray(f.domains) && f.domains.some((d) => d === "foresight.org")), "M16 the funder list is the orchestrator's SLA_FUNDERS");
 }
 // F. questions the fleet's data answers, failures that still answer
 {
