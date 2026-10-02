@@ -2,10 +2,21 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.3-capability-self-report";
+var VERSION = "1.1.4-bounded-consume";
 var CAPS = ["signal-reentry", "signal-consume"];
-var LIMS = ["cron-only: no public route; re-entry runs on the hourly cron", "consume writes only with commit=1", "publishes this capability row from the cron"];
+var LIMS = ["cron-only: no public route; re-entry runs on the hourly cron", "consume writes only with commit=1", "consume never takes new idea_proposals above 30 (the Idea intake chain ceiling) and proposes at most 2 signals x 3 questions a run (IDEA-CHAIN-SINGLE-PRODUCER-1)", "publishes this capability row from the cron"];
 var WORKER = "qnfo-signal-loop";
+// IDEA-CHAIN-SINGLE-PRODUCER-1 (1.1.4, 2026-10-02, pillar: core): the "Idea intake -> triage" chain went stuck
+// (71 new idea_proposals against its ceiling of 30; the dashboard escalated it to the owner as iss-98d516cd) because this
+// worker's consume leg wrote every open question of up to 25 signals a run with no backpressure (55 auto-reentry rows at
+// 09:03Z, 19 at 10:02Z), while idea-hub (1.2.0+) runs the bounded port of the same leg and its consumer triages 5 an hour.
+// The leg is now bounded: it proposes at most CONSUME_SIGNALS signals x CONSUME_QUESTIONS questions a run (idea-hub's
+// bounds) and never takes the count of new proposals above PROPOSAL_BACKPRESSURE, the chain's ceiling (idea-hub pauses
+// only above it, so one of its batches can still lift the count from 30 to 36). signal_worker_boundary still gates it (the row for
+// qnfo-signal-loop / artifact_reentry was set to permitted=0 the same day, so idea-hub is the single L8 producer).
+var PROPOSAL_BACKPRESSURE = 30;
+var CONSUME_SIGNALS = 2;
+var CONSUME_QUESTIONS = 3;
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
@@ -105,18 +116,27 @@ async function checkBoundary(env, worker, source) {
 __name(checkBoundary, "checkBoundary");
 async function runConsume(env, commit) {
   await ensureSchema(env);
+  // The chain's ceiling is a level, not a gate to step over: a run never takes the count of new proposals above it
+  // (pausing only above it let one batch push it from 30 to 36 and the chain read stuck again).
+  const pending = await env.QNFO_AUDIT.prepare(`SELECT COUNT(*) AS n FROM idea_proposals WHERE status = 'new'`).first();
+  let room = PROPOSAL_BACKPRESSURE - Number(pending && pending.n || 0);
+  if (room <= 0) {
+    return { candidate: 0, consumed: 0, proposals: 0, skipped_no_questions: 0, skipped_boundary: 0, errors: 0, paused: "backpressure: " + Number(pending && pending.n || 0) + " new idea_proposals, ceiling " + PROPOSAL_BACKPRESSURE };
+  }
   const rows = await env.QNFO_AUDIT.prepare(
-    `SELECT * FROM signals WHERE source = 'artifact_reentry' AND status = 'new' AND evidential_weight > 0 ORDER BY created_at LIMIT 25`
-  ).all();
+    `SELECT * FROM signals WHERE source = 'artifact_reentry' AND status = 'new' AND evidential_weight > 0 ORDER BY created_at LIMIT ?`
+  ).bind(CONSUME_SIGNALS).all();
   const out = { candidate: (rows.results || []).length, consumed: 0, proposals: 0, skipped_no_questions: 0, skipped_boundary: 0, errors: 0 };
   for (const s of rows.results || []) {
-    let oq = [];
+    let all = [];
     try {
-      oq = JSON.parse(s.open_questions || "[]");
+      all = JSON.parse(s.open_questions || "[]");
     } catch (e) {
-      oq = [];
+      all = [];
     }
-    if (!Array.isArray(oq) || !oq.length) {
+    const oq = Array.isArray(all) ? all.slice(0, Math.min(CONSUME_QUESTIONS, room)) : [];
+    if (!oq.length) {
+      if (room <= 0) break;
       out.skipped_no_questions++;
       continue;
     }
@@ -127,6 +147,7 @@ async function runConsume(env, commit) {
       out.skipped_boundary++;
       continue;
     }
+    room -= oq.length;
     if (!commit) {
       out.consumed++;
       out.proposals += oq.length;
@@ -144,7 +165,7 @@ async function runConsume(env, commit) {
         ok = false;
       }
     }
-    if (ok) await env.QNFO_AUDIT.prepare(`UPDATE signals SET status = 'consumed' WHERE id = ?`).bind(s.id).run();
+    if (ok) await env.QNFO_AUDIT.prepare(`UPDATE signals SET status = 'consumed', decision = ? WHERE id = ?`).bind(WORKER + " " + VERSION + ": " + oq.length + " of " + all.length + " open questions proposed", s.id).run();
     out.consumed++;
   }
   return out;
