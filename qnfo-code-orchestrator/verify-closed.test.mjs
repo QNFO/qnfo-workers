@@ -31,5 +31,16 @@ for (const [msg, want, label] of cases) {
   ok(r.verdict === want, label, { msg, r });
 }
 ok(audits.length === 2, "each unknown start failure is recorded for learning", audits.length);
+// JS-VERIFY-ERROR-NAME-1: the platform throws a real TypeError whose .message has no class name (live 08:20Z)
+{
+  const env = envThrowing(null);
+  env.LOADER = { load: () => ({ getEntrypoint: () => ({ fetch: async () => { throw new TypeError("Cannot read properties of undefined (reading 'prepare')"); } }) }) };
+  const r = await __js(env, "export default {}");
+  ok(r.verdict === "ok", "a TypeError thrown at runtime passes even though its message has no class name", r);
+  const env2 = envThrowing(null);
+  env2.LOADER = { load: () => ({ getEntrypoint: () => ({ fetch: async () => { const e = new Error("Unexpected identifier 'https'"); e.name = "SyntaxError"; throw e; } }) }) };
+  const r2 = await __js(env2, "export default {}");
+  ok(r2.verdict !== "ok", "a SyntaxError thrown as an error object still fails", r2);
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
