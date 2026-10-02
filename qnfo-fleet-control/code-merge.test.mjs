@@ -514,5 +514,31 @@ db.prepare("INSERT INTO worker_live_audit (worker, http, live_version, probed_at
 a = J(await W.evAdvance(env, one("SELECT * FROM evolve_candidates WHERE id = 1")));
 ok(a.status === "verified", "evAdvance verifies live through evLiveCheck", a);
 
+// ================================================================ 8. CODE-LOOP-STALE-VERSION-1: a stale-base failure is re-proposed, not parked
+async function staleCase(mainText, extraSameGoal, conflict) {
+  freshDb(); freshGh();
+  db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+  seedTask({ ctx: JSON.stringify({ base: BASE, patch: PATCH, anchor: "function a() {" }) });
+  for (let i = 0; i < extraSameGoal; i++) db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?, 'qnfo-workers', ?, '[issue #50] fix a', 'closed', 'done', 0, ?, ?)").run("ct_old" + i + "xxxxxxxxx", PATH, ago(9), ago(9));
+  seedWorkerPr(401, BRANCH, "h1");
+  if (conflict) { gh.pulls[401].mergeable = false; gh.pulls[401].mergeable_state = "dirty"; gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]); }
+  else gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator"]).concat([{ id: 401, name: "guard", status: "completed", conclusion: "failure", head_sha: "h1" }]);
+  gh.contents["main:" + PATH] = mainText;
+  const rr = J(await W.codeMergeTick(env, { now: NOW }));
+  return { rr, old: one("SELECT * FROM code_tasks WHERE id = ?", ID), fresh: rows("SELECT * FROM code_tasks WHERE status = 'queued'") };
+}
+const MOVED = BASE.replace('var VERSION = "1.2.3-demo";', 'var VERSION = "1.2.4-codeagent";').replace("  return 2;", "  return 22;");
+let sc = await staleCase(MOVED, 0, false);
+ok(sc.rr.decided[0].action === "requeued" && sc.old.status === "closed" && /stale base: required check\(s\) failed/.test(sc.old.last_error), "a failed check on a file main changed since the merge base: the task is closed as stale, not needs_human", sc.old);
+ok(sc.fresh.length === 1 && sc.fresh[0].goal === "[issue #50] fix a" && sc.fresh[0].path === PATH && sc.fresh[0].step === "read" && JSON.parse(sc.fresh[0].ctx).anchor === "function a() {" && /^ct_[a-z0-9]{14}$/.test(sc.fresh[0].id), "the same goal is queued as a fresh task (anchor kept) for the orchestrator to propose on current main", sc.fresh);
+ok(gh.calls.includes("PATCH /pulls/401") && gh.comments.some((c) => c.pr === 401 && /CODE-LOOP-STALE-VERSION-1/.test(c.body) && c.body.includes(sc.fresh[0].id)) && gh.merges.length === 0, "the stale PR is closed with a comment naming the new task; nothing is merged");
+ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.requeued'").n === 1, "the re-proposal writes one cloud_ops_events row");
+sc = await staleCase(MOVED, 0, true);
+ok(sc.rr.decided[0].action === "requeued" && sc.fresh.length === 1, "a conflicting PR on a moved file is re-proposed the same way", sc.rr.decided);
+sc = await staleCase(BASE, 0, false);
+ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "needs_human" && sc.fresh.length === 0, "a failed check while main did NOT change the file stays needs_human (a real failure)", sc.old);
+sc = await staleCase(MOVED, 2, false);
+ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "needs_human" && sc.fresh.length === 0, "after two re-proposals of one goal the runner stops and asks a person", sc.rr.decided);
+
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
