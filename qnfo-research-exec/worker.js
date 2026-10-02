@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.49-paper-row-prep";
+var VERSION = "0.9.50-ground-or-slot";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1860,6 +1860,7 @@ var VERIFY_GEN_PROMPT = [
   "CLAIMS (JSON):"
 ].join("\n");
 var GROUND_STOP = new Set("a an and are as at be by can could do does for from has have how in into is it its of on or that the their these this those to via what when where which while who why will with within without would we our us you your re entry reentry address addresses addressing question questions two three work paper papers study studies approach approaches framework frameworks model models theory theories result results show shows new novel use using used possible all any each every cannot uniquely unique determine determines determined classify classifies classification general generally specific based toward towards between among more most less such other also only whether".split(" "));
+var ARXIV_SPACING_MS = 3e3;
 // Phrases are runs of adjacent content words (2-3 words; longer runs give sliding pairs); words are the content words.
 function groundRuns(text) {
   const t = String(text || "").replace(/^\s*re-?entry from[^:]*:\s*/i, " ").replace(/10\.\d{4,9}\/[^\s:]+/g, " | ").replace(/\$[^$]*\$/g, " | ").replace(/\([ivx]+\)/gi, " | ").replace(/[,;:.?!()\[\]{}"]+/g, " | ");
@@ -1906,10 +1907,14 @@ function groundQueries(idea, parentTitle) {
       return x.toLowerCase();
     }).indexOf(w.toLowerCase()) === i;
   }).slice(0, 8);
-  if (ws.length) qs.push(ws.map(function(w) {
+  // GROUND-OR-SLOT-1 (2026-10-02, agent_issues 1751): the OR query was pushed last and then cut by slice(0, 6), so an idea
+  // with two phrases and a parent title with four (4 + 1 + 1 = 6 AND-phrase queries) never ran it. Row 196536e3 grounded
+  // to 2 entries on all four passes (its five AND queries return 0 on arXiv, the dropped OR returns 8), could not reach the
+  // gate-refcount floor of 5 and parked. The OR fallback now always keeps the last slot.
+  if (!ws.length) return qs.slice(0, 6);
+  return qs.slice(0, 5).concat([ws.map(function(w) {
     return "all:" + w;
-  }).join(" OR "));
-  return qs.slice(0, 6);
+  }).join(" OR ")]);
 }
 async function stageGround(env, row) {
   const idea = row.idea || row.summary || "";
@@ -1953,12 +1958,26 @@ async function stageGround(env, row) {
     }
   }
   const _queries = groundQueries(idea, parentTitle);
+  let _arxivErr = 0;
   for (let qi = 0; qi < _queries.length && bib.length < 11; qi++) {
+    // arXiv API terms: at most one request every three seconds. At 1.2 s some passes came back thin (row 3b0e4cbd grounded
+    // to 4 entries twice, then 14 on unchanged queries); a non-200 answer is retried once after the same pause.
     if (qi > 0) await new Promise(function(res) {
-      setTimeout(res, 1200);
+      setTimeout(res, ARXIV_SPACING_MS);
     });
     try {
-      const r = await fetch("https://export.arxiv.org/api/query?search_query=" + encodeURIComponent(_queries[qi]).replace(/%3A/g, ":") + "&start=0&max_results=8&sortBy=relevance", { headers: { "User-Agent": "QNFO-research-exec/0.9" } });
+      const _aurl = "https://export.arxiv.org/api/query?search_query=" + encodeURIComponent(_queries[qi]).replace(/%3A/g, ":") + "&start=0&max_results=8&sortBy=relevance";
+      let r = await fetch(_aurl, { headers: { "User-Agent": "QNFO-research-exec/0.9" } });
+      if (!r.ok) {
+        await new Promise(function(res) {
+          setTimeout(res, ARXIV_SPACING_MS);
+        });
+        r = await fetch(_aurl, { headers: { "User-Agent": "QNFO-research-exec/0.9" } });
+      }
+      if (!r.ok) {
+        _arxivErr++;
+        continue;
+      }
       const t = await r.text();
       const entries = t.split("<entry>").slice(1);
       for (const e of entries) {
@@ -2022,6 +2041,16 @@ async function stageGround(env, row) {
     bibBlock
   ].join("\n\n");
   await r2Put(env, rid + "/grounding.md", grounding);
+  // GROUND-THIN-FAILFAST-1 (2026-10-02, agent_issues 1751): verify renders References only from bibliography entries the
+  // body cites, so a paper grounded on fewer than MIN_GROUND_REFS entries can never pass gate-refcount (refCount <= bibCount
+  // < floor), and with 0 entries the writer's own unverifiable list is what gets counted. Row 196536e3 (bibCount 2) still ran
+  // ensemble, reconcile, review, revise and verify four times (20:31Z-00:19Z) before parking. Stop here instead: markError
+  // spends one recover exactly as the verify failure did, so parking is unchanged, but a thin pass costs HTTP calls only.
+  if (bib.length < MIN_GROUND_REFS) {
+    await logEvent(env, "ground-thin", "row=" + rid + " bibCount=" + bib.length + " < " + MIN_GROUND_REFS + " queries=" + _queries.length + " arxiv_http_errors=" + _arxivErr, "warn");
+    await markError(env, row, "ground: bibliography " + bib.length + " < " + MIN_GROUND_REFS + " entries (gate-refcount cannot pass); arxiv_http_errors=" + _arxivErr);
+    return { ok: false, stage: "ground", bibCount: bib.length, arxivErrors: _arxivErr };
+  }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='ensemble', context=? WHERE id=?").bind(JSON.stringify({ pipeline: PIPELINE_VERSION, bibCount: bib.length, srcFetched: !!srcText }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "ground->ensemble", bibCount: bib.length };
 }
@@ -2983,9 +3012,11 @@ export {
   applyCreatorPatch,
   drainMetadataEdits,
   drainVersionRequests,
+  groundQueries,
   markError,
   parkPoisonRow,
   reclaimStaleResearching,
+  stageGround,
   verifyMetadataBackfill
 };
 //# sourceMappingURL=worker.js.map
