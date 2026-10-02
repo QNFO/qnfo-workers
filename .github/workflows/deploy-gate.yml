@@ -122,6 +122,13 @@ jobs:
       # WATCHMAKER-INDEX-1: the fleet's own daily count of recurring operations that still need a person or a session.
       - name: WATCHMAKER-INDEX-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/watchmaker.test.mjs
+      # WORK-WITH-ME-1 + WORK-WITH-ME-METRIC-1 (pillar reach): qnfo.org/work-with-me makes no claim STRATEGY s2.2 rules out,
+      # every offer mails rowan.quni@qnfo.org with a [work-with-me:<offer>] subject tag and valid JSON-LD; the reach ingest
+      # counts those tagged contacts and the page's RUM views over 30 days, idempotently, into reach_signals and metric_registry.
+      - name: WORK-WITH-ME-1 page suite (qnfo-gateway)
+        run: node qnfo-gateway/work-with-me.test.mjs
+      - name: WORK-WITH-ME-METRIC-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/work-with-me.test.mjs
       # CODE-TASK-MERGE-RUNNER-1: qnfo-fleet-control merges code-loop PRs itself. The suite replays the merge decision (every
       # refusal), the CI kick, merge, deploy and live verification and the inverse-patch revert against a scripted GitHub and
       # an in-memory D1 (node:sqlite, so it runs here after the Node 22 switch).

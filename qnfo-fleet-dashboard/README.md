@@ -78,6 +78,19 @@ File or clear an action from any worker/session (header `x-loop-token`, secret `
 - State cached in qnfo-audit D1 `fleet_dashboard_state`; money snapshot in `fleet_loop_meta` key `human_gov_snapshot`; queue in `human_actions`.
 - Secret `CF_TOKEN` (account analytics read); `LOOP_TOKEN` guards the POST endpoints.
 
+## Work-with-me contacts (WORK-WITH-ME-METRIC-1, v1.17.2, pillar reach)
+- qnfo.org/work-with-me (qnfo-gateway WORK-WITH-ME-1) offers five ways to work with the owner; each button mails
+  rowan.quni@qnfo.org with a subject that starts `[work-with-me:<offer>]` (`jpcub`, `agent-review`, `talk`, `research`, `role`,
+  `general`; `WWM_OFFER_KEYS`, kept in parity with the gateway by its test).
+- Inside the daily reach ingest (same throttle and day), step g counts, over the 30 UTC days ending that day: distinct senders
+  of tagged inbound mail in `qnfo-audit.emails` (`inbound_contacts_30d`), messages, tagged mail marked spam (shown, not
+  counted), and RUM page views of the page from the cf-rum rows with the days covered. Sent mail, the fleet's own domains,
+  bounces and `email_command_senders` (owner and agent test addresses) are excluded. No RUM day in the window writes no
+  page-view row. Rows: `reach_signals` source `work-with-me` (INSERT OR REPLACE per day, so reruns are idempotent); the live run
+  also refreshes `metric_registry` `inbound_contacts_30d` and `work_with_me_pageviews_30d` (daily). `GET /api/reach` serves the
+  latest snapshot as `work_with_me` (counts only, plus `contact_rate`); the portfolio KPIs carry both numbers.
+  `WATCHMAKER_OPS` key `work-with-me-contacts` proves the step ran. Offline suite: `work-with-me.test.mjs` (deploy-gate).
+
 ## Daily portfolio guard and owner page (PORTFOLIO-DAILY-1, OWNER-PAGE-1, v1.10.0)
 - `portfolioDailyRun` (cron, once per UTC day after 05:00Z, throttled on `cloud_ops_events` id `portfolio-daily-<day>`): OWNER-VOICE-GUARD-1 over Bluesky (last 24h: mojibake, q08.org links; 7-day cadence vs `SOCIAL_WEEKLY_CAP`, default 2) and `outreach_log` (last 24h: `Re:` follow-ups, more than 8 sends). A violation sets `pipeline_flags.social_paused='1'` (qnfo-audit) and/or `pipeline_state.external_sends_enabled='0'` (qnfo-outreach) and files one deduped `OWNER-VOICE-GUARD-1` agent_issue. It never re-enables a stream. Then one `portfolio_runs` row (`daily-cron`, `weekly-cron` on Mondays, `monthly-cron` on the 1st with KPI deltas vs the rows 7 and 28 days earlier); `needs_owner` comes from `owner_actions`. A source that fails is `null` and listed in `skipped`.
 - `/owner` and `/owner/doc/<key>`: private owner page (owner_actions, last 7 portfolio_runs, `owner_docs.identity` rendered as escaped markdown). Gated by `LOOP_TOKEN` (`Authorization: Bearer`, `x-loop-token`, or the page's POST form; never a query string). 401 without it; no-store, noindex, no scripts.

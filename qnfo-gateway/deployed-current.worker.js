@@ -1,4 +1,6 @@
-var VERSION="3.7.26-ipatent-link";
+var VERSION="3.7.27-work-with-me";
+// WORK-WITH-ME-1 (3.7.27, 2026-10-02, pillar reach): qnfo.org/work-with-me, the offers and a tagged mailto per offer;
+// linked from the home page, /about, the sitemap and llms.txt. /contact redirects to it.
 // ORG-LABEL-1 (2026-10-01, docs/STRATEGY.md s2.1): there is no legal entity and the work is one researcher with an
 // AI-assisted pipeline, so "Research Foundation" and "research collective" overclaim. Labels only; the positioning copy
 // waits for the owner's approval in the Identity doc. ABOUT-GA-1: /about was the one gateway page without the GA4 tag.
@@ -695,12 +697,15 @@ var SELECTED_WORKS = [
   { t: "Epistemic Legibility in AI-Assisted Science", doi: "10.5281/zenodo.22026592", pillar: "Epistemics of AI-assisted science" },
   { t: "Operating the Quniverse Fleet: Objectives, Successes, Failures, Roadmap", doi: "10.5281/zenodo.23079905", pillar: "Autonomous research operations" }
 ];
-function identityJsonLd(pageUrl) {
+// opts (WORK-WITH-ME-1): person/page add properties to those nodes, nodes appends more @graph entries.
+function identityJsonLd(pageUrl, opts) {
+  opts = opts || {};
   const person = { "@type": "Person", "@id": "https://qnfo.org/#person", name: "Rowan Brad Quni-Gudzinas", alternateName: ["Brad Gudzinas", "Bradley Gudzinas", "Rowan Quni"], url: "https://qnfo.org/about", identifier: "https://orcid.org/" + OWNER_ORCID, sameAs: ["https://orcid.org/" + OWNER_ORCID], affiliation: { "@id": "https://qnfo.org/#org" }, jobTitle: "Research systems builder" };
+  Object.assign(person, opts.person || {});
   const org = { "@type": "Organization", "@id": "https://qnfo.org/#org", name: "QNFO", url: "https://qnfo.org", description: "QNFO (independent research): the independent research imprint that publishes the work of Rowan Brad Quni-Gudzinas.", founder: { "@id": "https://qnfo.org/#person" } };
   const site = { "@type": "WebSite", "@id": "https://qnfo.org/#site", url: "https://qnfo.org", name: "QNFO", publisher: { "@id": "https://qnfo.org/#org" } };
-  const page = { "@type": "WebPage", url: pageUrl, isPartOf: { "@id": "https://qnfo.org/#site" }, about: { "@id": "https://qnfo.org/#person" } };
-  return '<script type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@graph": [person, org, site, page] }).replace(/</g, "\\u003c") + "<\/script>";
+  const page = Object.assign({ "@type": "WebPage", url: pageUrl, isPartOf: { "@id": "https://qnfo.org/#site" }, about: { "@id": "https://qnfo.org/#person" } }, opts.page || {});
+  return '<script type="application/ld+json">' + JSON.stringify({ "@context": "https://schema.org", "@graph": [person, org, site, page].concat(opts.nodes || []) }).replace(/</g, "\\u003c") + "<\/script>";
 }
 function selectedWorksHTML() {
   return '<section class="ld-latest ld-selected" id="selected-works" aria-labelledby="ld-sel-h"><h2 id="ld-sel-h">Selected works</h2><p class="ld-sel-note">The works QNFO leads with. Each has a permanent DOI; the full library is on <a href="/papers">papers.qnfo.org</a>.</p><ol>' + SELECTED_WORKS.map(
@@ -711,6 +716,7 @@ function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
   const total = paperCount || (recentPapers ? recentPapers.length : 0);
   const kg = nodesCount ? nodesCount.toLocaleString("en-US") + "+" : "\u2014";
   const cards = [
+    { t: "Work with me", d: "Energy-per-correct-answer assessments, reviews of AI agent operations, talks, research collaboration and roles.", go: "See the offers \u2192", h: "/work-with-me" },
     { t: "Research Papers", d: "The full corpus \u2014 number theory, physics, QEC and computer science \u2014 every paper with a Zenodo DOI.", go: "Browse papers \u2192", h: "/papers" },
     { t: "Knowledge Graph", d: kg + " nodes mapping the conceptual structure of the research program.", go: "Explore the graph \u2192", h: "/graph" },
     { t: "Ideas \u2014 Live", d: "Research conversations as they develop, streamed from the QNFO AI worker.", go: "Watch ideas \u2192", h: "https://ideas.qnfo.org" },
@@ -728,7 +734,7 @@ function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
     ).join("") + '</ul><p class="ld-more"><a href="/papers">Browse the full library \u2192</a></p></section>';
   }
   const formScript = '<script>(function(){var f=document.getElementById("ld-sub-form");if(!f)return;var msg=document.getElementById("ld-msg");var btn=document.getElementById("ld-btn");f.addEventListener("submit",function(e){e.preventDefault();var email=(document.getElementById("ld-email").value||"").trim();var hp=(document.getElementById("ld-hp")||{}).value||"";if(!email||email.indexOf("@")<1){msg.className="ld-msg err";msg.textContent="Please enter a valid email address.";return;}btn.disabled=true;msg.className="ld-msg";msg.textContent="Subscribing\u2026";fetch("/api/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,hp:hp,source:"qnfo.org"})}).then(function(r){return r.json().then(function(j){return {s:r.status,j:j};}).catch(function(){return {s:r.status,j:{}};});}).then(function(res){if(res.s===200&&res.j&&res.j.ok){msg.className="ld-msg ok";msg.textContent="Thanks \u2014 check your inbox to confirm your subscription.";f.reset();}else{msg.className="ld-msg err";msg.textContent=(res.j&&res.j.error)||"Something went wrong. Please try again.";}}).catch(function(){msg.className="ld-msg err";msg.textContent="Network error. Please try again.";}).then(function(){btn.disabled=false;});});})();<\/script>';
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas</title><meta name="description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth."><meta name="author" content="Rowan Brad Quni-Gudzinas"><meta property="og:site_name" content="QNFO"><meta property="og:title" content="QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas"><meta property="og:description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth."><meta property="og:type" content="website"><meta property="og:url" content="https://qnfo.org/"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas"><meta name="twitter:description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth."><link rel="canonical" href="https://qnfo.org/">` + identityJsonLd("https://qnfo.org/") + `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='%23faf7f2' font-family='Georgia,serif'>Q</text></svg>"><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3/es5/tex-svg-full.js';document.head.appendChild(s);"><\/script><style>` + COMMON_CSS + LD_CSS + '</style><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><a href="#ld-main" class="skip-link">Skip to main content</a><header class="ld-top"><a class="ld-brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><nav class="ld-nav" aria-label="Main"><a href="/papers">Papers</a><a href="#selected-works">Selected works</a><a href="/about">About</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a></nav></header><main class="ld-main" id="ld-main"><section class="ld-hero"><span class="ld-tag">Independent research</span><h1>QNFO</h1><p>QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. Every work carries a DOI, and corrections ship as new versions.</p><p class="ld-byline">Rowan Brad Quni-Gudzinas \u00b7 <a href="https://orcid.org/0009-0002-4317-5604">ORCID 0009-0002-4317-5604</a> \u00b7 <a href="/about">About</a></p></section>' + selectedWorksHTML() + '<div class="ld-cards">' + cardsHtml + "</div>" + papersHtml + '<section class="ld-sub" id="subscribe" aria-labelledby="ld-sub-h"><h2 id="ld-sub-h">New papers by email</h2><p>QNFO is moving off the social feeds. When new research is published, subscribers get one short weekly digest \u2014 titles, links and DOIs, nothing else.</p><form id="ld-sub-form" novalidate><label class="ld-sr" for="ld-email">Email address</label><input id="ld-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required><input class="ld-hp" type="text" id="ld-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"><button type="submit" id="ld-btn">Subscribe</button></form><p class="ld-msg" id="ld-msg" role="status" aria-live="polite"></p></section></main><footer class="ld-foot"><span>\xA9 2026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><a href="/papers">Papers</a><a href="/about">About</a><a href="https://ipatent.qnfo.org/">iPatent</a><a href="https://orcid.org/0009-0002-4317-5604">ORCID</a><a href="/legal">QNFO-ULA</a></footer>' + formScript + "</body></html>";
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas</title><meta name="description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth."><meta name="author" content="Rowan Brad Quni-Gudzinas"><meta property="og:site_name" content="QNFO"><meta property="og:title" content="QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas"><meta property="og:description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth."><meta property="og:type" content="website"><meta property="og:url" content="https://qnfo.org/"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas"><meta name="twitter:description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth."><link rel="canonical" href="https://qnfo.org/">` + identityJsonLd("https://qnfo.org/") + `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='%23faf7f2' font-family='Georgia,serif'>Q</text></svg>"><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3/es5/tex-svg-full.js';document.head.appendChild(s);"><\/script><style>` + COMMON_CSS + LD_CSS + '</style><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><a href="#ld-main" class="skip-link">Skip to main content</a><header class="ld-top"><a class="ld-brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><nav class="ld-nav" aria-label="Main"><a href="/papers">Papers</a><a href="#selected-works">Selected works</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a></nav></header><main class="ld-main" id="ld-main"><section class="ld-hero"><span class="ld-tag">Independent research</span><h1>QNFO</h1><p>QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. Every work carries a DOI, and corrections ship as new versions.</p><p class="ld-byline">Rowan Brad Quni-Gudzinas \u00b7 <a href="https://orcid.org/0009-0002-4317-5604">ORCID 0009-0002-4317-5604</a> \u00b7 <a href="/about">About</a> \u00b7 <a href="/work-with-me">Work with me</a></p></section>' + selectedWorksHTML() + '<div class="ld-cards">' + cardsHtml + "</div>" + papersHtml + '<section class="ld-sub" id="subscribe" aria-labelledby="ld-sub-h"><h2 id="ld-sub-h">New papers by email</h2><p>QNFO is moving off the social feeds. When new research is published, subscribers get one short weekly digest \u2014 titles, links and DOIs, nothing else.</p><form id="ld-sub-form" novalidate><label class="ld-sr" for="ld-email">Email address</label><input id="ld-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required><input class="ld-hp" type="text" id="ld-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"><button type="submit" id="ld-btn">Subscribe</button></form><p class="ld-msg" id="ld-msg" role="status" aria-live="polite"></p></section></main><footer class="ld-foot"><span>\xA9 2026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><a href="/papers">Papers</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="https://ipatent.qnfo.org/">iPatent</a><a href="https://orcid.org/0009-0002-4317-5604">ORCID</a><a href="/legal">QNFO-ULA</a></footer>' + formScript + "</body></html>";
 }
 __name(renderHubHTML, "renderHubHTML");
 __name2(renderHubHTML, "renderHubHTML");
@@ -1160,13 +1166,210 @@ function renderAboutHTML(stats) {
 .changelog td{padding:.5rem .4rem;border-bottom:1px solid var(--border);vertical-align:top}
 .changelog td:first-child{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;padding-right:1.2rem;width:7.2rem}
 .changelog a{color:var(--accent)}`;
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>About QNFO \u2014 independent research</title><meta name="description" content="About QNFO, the independent research imprint of Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604): the research line, the selected works and how the work is made."><meta property="og:title" content="About QNFO"><meta property="og:description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers."><meta property="og:type" content="website"><meta property="og:url" content="https://qnfo.org/about"><link rel="canonical" href="https://qnfo.org/about"><meta property="og:site_name" content="QNFO"><meta name="twitter:card" content="summary">${identityJsonLd("https://qnfo.org/about")}<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='white' font-family='system-ui'>Q</text></svg>"><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script><style>${pageCSS}</style></head><body><a href="#about-main" class="skip-link">Skip to main content</a><nav class="top-nav" role="navigation" aria-label="Main"><a class="brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/about">About</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a></nav><main id="about-main" class="about-page"><h1>About QNFO</h1><p class="meta-line">established 2025 \xB7 living record \xB7 modified 2026-09-03 \xB7 counts queried live</p><p class="lede">QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: one researcher with an open, auditable, AI-assisted research pipeline. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. The <a href="/#selected-works">selected works</a> are the place to start.</p><h2>What QNFO is</h2><p>Open research in three lines, in this order: energy-honest computing (the Joules-per-Solution metric), the epistemics of AI-assisted science, and autonomous research operations. Publications carry Zenodo DOIs. The corpus is browsable on <a href="/papers">papers.qnfo.org</a> and mapped in the <a href="/graph">knowledge graph</a>.</p><p class="aside">QNFO is not an acronym. The name is the name.</p><h2>The thesis</h2><p>Computational advantage is measured in joules-per-solution, not qubit counts or press releases. The <a href="https://github.com/rwnq8/joules-per-compute-benchmark">joules-per-compute benchmark</a> formalizes the questions the industry prefers to defer: the Landauer floor for cryogenic controllers, the Margolus\u2013Levitin bound as a scheduling constraint, and the energy floor of surface-code error correction at a thousand logical qubits.</p><p class="aside">The current line of work is energy accounting for quantum hardware claims. Recent papers are listed on the front page.</p><h2>The record</h2><table class="record-table"><tbody><tr><td>Papers in the corpus</td><td>${stats.papers} \u2014 counted live</td></tr><tr><td>Knowledge graph</td><td>${stats.nodes} nodes, ${stats.edges} edges \u2014 counted live</td></tr><tr><td>Queries logged (2026-09-03)</td><td>1,983</td></tr><tr><td>Honest daily readership</td><td>~400 requests per day on /papers/*</td></tr></tbody></table><p class="record-note">The first two rows are queried live on every request. Fleet figures were counted by the operations agent on 2026-09-03. Roughly nine in ten requests to the zone are scanner noise; the readership figure excludes it.</p><h2>How QNFO runs</h2><p>A cloud-scheduled pipeline keeps the corpus alive: an arXiv radar at 08:30 UTC, a research brief at 06:00 UTC, an hourly errata watch that turns corrections into new versions of the same record, a citation watch, and a weekly visibility digest. Outreach is capped and opt-out.</p><p class="aside">If the laptop is off, the pipeline does not notice.</p><h2>How QNFO holds itself</h2><p>Every quantitative claim is computationally verified before publication, with the verification artifacts deposited beside the paper. Traffic is never fabricated. Disconfirmation criteria are stated in advance. Corrections ship as new versions of the same record.</p><p class="aside">The record is the record.</p><h2>The operator</h2><p>QNFO is operated by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID 0009-0002-4317-5604</a>). Contact: <a href="mailto:qnfo@qnfo.org">qnfo@qnfo.org</a>.</p><p class="aside">The corpus discloses its own construction. There is nothing else to disclose.</p><h2>Changelog</h2><table class="changelog"><tbody><tr><td>2026-09-03</td><td>This page, with hub record counts rendered live. Model-key guard on a thirty-minute scheduler cadence.</td></tr><tr><td>2026-09-02</td><td>Outreach engine live \u2014 capped and opt-out. Weekly scorecard publishing real traffic deltas. Website-sync gate fixed.</td></tr><tr><td>2026-08-29</td><td>Universal Ignorance Audit re-pointed to v0.4 (<a href="https://doi.org/10.5281/zenodo.22158133">10.5281/zenodo.22158133</a>).</td></tr><tr><td>2026-08-28</td><td>OSF pre-registrations placed; results attached as comments on frozen registrations.</td></tr><tr><td>2026-08-10</td><td>Email deliverability hardened: SPF, DKIM, DMARC at reject on every sending domain.</td></tr></tbody></table><h2>Colophon</h2><p>One design system across every QNFO surface: warm paper, ink, navy. This page is generated by the qnfo-gateway worker. No tracker is added by this page.</p></main><footer class="site-footer" role="contentinfo"><div class="footer-links"><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/about">About</a><a href="/legal">License</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">Privacy</a></div><p>Licensed under <a href="/legal">QNFO-ULA v2.0</a><br>\xA9 2025\u20132026 QNFO</p></footer></body></html>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>About QNFO \u2014 independent research</title><meta name="description" content="About QNFO, the independent research imprint of Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604): the research line, the selected works and how the work is made."><meta property="og:title" content="About QNFO"><meta property="og:description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers."><meta property="og:type" content="website"><meta property="og:url" content="https://qnfo.org/about"><link rel="canonical" href="https://qnfo.org/about"><meta property="og:site_name" content="QNFO"><meta name="twitter:card" content="summary">${identityJsonLd("https://qnfo.org/about")}<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='white' font-family='system-ui'>Q</text></svg>"><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script><style>${pageCSS}</style></head><body><a href="#about-main" class="skip-link">Skip to main content</a><nav class="top-nav" role="navigation" aria-label="Main"><a class="brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a></nav><main id="about-main" class="about-page"><h1>About QNFO</h1><p class="meta-line">established 2025 \xB7 living record \xB7 modified 2026-09-03 \xB7 counts queried live</p><p class="lede">QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: one researcher with an open, auditable, AI-assisted research pipeline. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. The <a href="/#selected-works">selected works</a> are the place to start.</p><h2>What QNFO is</h2><p>Open research in three lines, in this order: energy-honest computing (the Joules-per-Solution metric), the epistemics of AI-assisted science, and autonomous research operations. Publications carry Zenodo DOIs. The corpus is browsable on <a href="/papers">papers.qnfo.org</a> and mapped in the <a href="/graph">knowledge graph</a>.</p><p class="aside">QNFO is not an acronym. The name is the name.</p><h2>The thesis</h2><p>Computational advantage is measured in joules-per-solution, not qubit counts or press releases. The <a href="https://github.com/rwnq8/joules-per-compute-benchmark">joules-per-compute benchmark</a> formalizes the questions the industry prefers to defer: the Landauer floor for cryogenic controllers, the Margolus\u2013Levitin bound as a scheduling constraint, and the energy floor of surface-code error correction at a thousand logical qubits.</p><p class="aside">The current line of work is energy accounting for quantum hardware claims. Recent papers are listed on the front page.</p><h2>The record</h2><table class="record-table"><tbody><tr><td>Papers in the corpus</td><td>${stats.papers} \u2014 counted live</td></tr><tr><td>Knowledge graph</td><td>${stats.nodes} nodes, ${stats.edges} edges \u2014 counted live</td></tr><tr><td>Queries logged (2026-09-03)</td><td>1,983</td></tr><tr><td>Honest daily readership</td><td>~400 requests per day on /papers/*</td></tr></tbody></table><p class="record-note">The first two rows are queried live on every request. Fleet figures were counted by the operations agent on 2026-09-03. Roughly nine in ten requests to the zone are scanner noise; the readership figure excludes it.</p><h2>How QNFO runs</h2><p>A cloud-scheduled pipeline keeps the corpus alive: an arXiv radar at 08:30 UTC, a research brief at 06:00 UTC, an hourly errata watch that turns corrections into new versions of the same record, a citation watch, and a weekly visibility digest. Outreach is capped and opt-out.</p><p class="aside">If the laptop is off, the pipeline does not notice.</p><h2>How QNFO holds itself</h2><p>Every quantitative claim is computationally verified before publication, with the verification artifacts deposited beside the paper. Traffic is never fabricated. Disconfirmation criteria are stated in advance. Corrections ship as new versions of the same record.</p><p class="aside">The record is the record.</p><h2>The operator</h2><p>QNFO is operated by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID 0009-0002-4317-5604</a>). Contact: <a href="mailto:rowan.quni@qnfo.org">rowan.quni@qnfo.org</a>. For assessments, reviews of AI agent operations, talks, research collaboration or roles, see <a href="/work-with-me">Work with me</a>.</p><p class="aside">The corpus discloses its own construction. There is nothing else to disclose.</p><h2>Changelog</h2><table class="changelog"><tbody><tr><td>2026-09-03</td><td>This page, with hub record counts rendered live. Model-key guard on a thirty-minute scheduler cadence.</td></tr><tr><td>2026-09-02</td><td>Outreach engine live \u2014 capped and opt-out. Weekly scorecard publishing real traffic deltas. Website-sync gate fixed.</td></tr><tr><td>2026-08-29</td><td>Universal Ignorance Audit re-pointed to v0.4 (<a href="https://doi.org/10.5281/zenodo.22158133">10.5281/zenodo.22158133</a>).</td></tr><tr><td>2026-08-28</td><td>OSF pre-registrations placed; results attached as comments on frozen registrations.</td></tr><tr><td>2026-08-10</td><td>Email deliverability hardened: SPF, DKIM, DMARC at reject on every sending domain.</td></tr></tbody></table><h2>Colophon</h2><p>One design system across every QNFO surface: warm paper, ink, navy. This page is generated by the qnfo-gateway worker. No tracker is added by this page.</p></main><footer class="site-footer" role="contentinfo"><div class="footer-links"><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="/legal">License</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">Privacy</a></div><p>Licensed under <a href="/legal">QNFO-ULA v2.0</a><br>\xA9 2025\u20132026 QNFO</p></footer></body></html>`;
 }
 __name(renderAboutHTML, "renderAboutHTML");
 __name2(renderAboutHTML, "renderAboutHTML");
 __name22(renderAboutHTML, "renderAboutHTML");
 __name222(renderAboutHTML, "renderAboutHTML");
 __name2222(renderAboutHTML, "renderAboutHTML");
+// WORK-WITH-ME-1 (2026-10-02, charter pillar: reach; docs/STRATEGY.md s2.2, s2.4, s2.5, s3, s7). One public page that
+// says what someone can contact the owner about and how: five offers (JPCUB assessment, review of an AI agent operation,
+// talks, research collaboration, roles), each with who it is for, what they get and how to start. Contact is a mailto to
+// rowan.quni@qnfo.org (the address the fleet reads, qnfo-audit.emails) whose subject starts with [work-with-me:<key>];
+// qnfo-fleet-dashboard WORK-WITH-ME-METRIC-1 counts those messages per key, so the keys below and WWM_OFFER_KEYS there
+// change together (qnfo-gateway/work-with-me.test.mjs checks parity). No form, so the page stores nothing. Claims are the
+// published record only: the CV (10.5281/zenodo.23082080), the selected works and the deployed fleet size.
+var WWM_EMAIL = "rowan.quni@qnfo.org";
+var WWM_URL = "https://qnfo.org/work-with-me";
+var WWM_CV_DOI = "10.5281/zenodo.23082080";
+var WWM_TAG_PREFIX = "[work-with-me:";
+var WWM_OFFERS = [
+  {
+    key: "jpcub",
+    title: "Energy per correct answer (JPCUB) assessment",
+    service: "Energy-per-correct-answer measurement and assessment of a computing platform or data centre, under the published Joules-per-Solution (JPCUB) protocol.",
+    forWho: "Teams building a computing platform (quantum, AI inference or HPC) and data-centre operators who need an energy figure tied to correct results, not to peak throughput.",
+    getLabel: "What you get",
+    get: [
+      "A measurement plan under the published Joules-per-Solution protocol: the task, the check that decides whether an answer is correct, and a whole-system boundary that includes memory, I/O, cooling and power conversion, not only the processor.",
+      "The measured joules per correct answer, with its uncertainty stated and the protocol's anti-gaming provisions (pre-registration, adversarial validation) applied.",
+      "A written report, published only if you agree."
+    ],
+    status: "The protocol is published. The JPCUB figures published so far, including those for 17 quantum platforms, are estimates built from published specifications and third-party data, not metered measurements, so a first engagement is also the protocol's first field test, and the report says so.",
+    start: "Email me the system, the workload you care about, and the metering you already have (rack, facility or wall plug).",
+    subject: "JPCUB energy assessment",
+    body: ["System or site:", "Workload to measure:", "Metering you already have:", "Timeline:"],
+    works: [0, 2, 3]
+  },
+  {
+    key: "agent-review",
+    title: "Review of an AI research or agent operation",
+    service: "Review of an AI research or agent operation: what it costs, what it delivers and what it gets wrong, using a failure-ledger method.",
+    forWho: "Teams running AI agents or an AI-assisted research pipeline in production who want to know what it costs, what it delivers and what it gets wrong.",
+    getLabel: "What you get",
+    get: [
+      "A cost line: what the operation spends per month and per delivered result, from your bills and logs.",
+      "A delivery line: what it actually ships, measured from its outputs rather than from the agents' own reports.",
+      "A failure ledger: each recurring failure with its evidence, and the check or rule that would stop it coming back, ranked by what it costs you."
+    ],
+    status: "This is the method I use on my own system, a fleet of 44 deployed Cloudflare Workers (October 2026), whose objectives, successes and failures are published as a ledger.",
+    start: "Email me what the operation does, its agents and models, roughly what it spends a month, and which logs and bills you can share.",
+    subject: "Review of an AI agent operation",
+    body: ["What the operation does:", "Agents and models:", "Rough monthly spend:", "Logs and bills you can share:"],
+    works: [6]
+  },
+  {
+    key: "talk",
+    title: "Talks and workshops",
+    service: "Talks and workshops on AI-assisted research integrity and energy-honest computing.",
+    forWho: "Conferences, labs, research offices and engineering teams.",
+    getLabel: "Topics",
+    get: [
+      "Joules per correct answer: what computation really costs, and how to measure it without gaming the number.",
+      "Running an autonomous research system: what it delivered, what it cost and what went wrong, from a published failure ledger.",
+      "Reading an AI-assisted claim: ignorance audits and epistemic legibility, as a talk or as a workshop that audits your own AI-assisted work."
+    ],
+    status: "Remote by default. Slides and materials are shared afterwards.",
+    start: "Email me the audience, the date and the format (talk, panel or workshop).",
+    subject: "Talk or workshop request",
+    body: ["Event and audience:", "Date and time zone:", "Format (talk, panel or workshop):"],
+    works: [0, 4, 5, 6]
+  },
+  {
+    key: "research",
+    title: "Research collaboration",
+    service: "Research collaboration on JPCUB measurements, the Universal Ignorance Audit and an open dataset of corrections to AI agents.",
+    forWho: "Researchers in energy-aware computing, metascience and AI oversight.",
+    getLabel: "Three open lines",
+    get: [
+      "JPCUB measurements: run the protocol on hardware you operate, or test its anti-gaming provisions. Status: protocol published; first measurements wanted.",
+      "The ignorance audit: apply the Universal Ignorance Audit to an AI-assisted corpus or pipeline and publish what it finds. Status: method published.",
+      "The agent-correction dataset: an open, de-identified record of the corrections a running AI agent fleet receives (rule changes, blocked changes, owner overrides, reopened false closures) and what happened next. Status: planned; I am looking for researchers in AI oversight and corrigibility to shape it."
+    ],
+    status: "Results are published openly with DOIs, and every contributor is credited.",
+    start: "Email me which line interests you and what you would bring: hardware, data or a method.",
+    subject: "Research collaboration",
+    body: ["Which line (JPCUB, ignorance audit, agent-correction dataset):", "What you would bring:"],
+    works: [0, 4, 6]
+  },
+  {
+    key: "role",
+    title: "Roles in research management and applied AI",
+    service: "",
+    forWho: "Organisations hiring for research management, applied AI, or data and policy research leadership.",
+    getLabel: "What I bring",
+    get: [
+      "Research programme management: a $1.5M+ federal research portfolio managed as a certified Contracting Officer's Representative at the U.S. Federal Highway Administration.",
+      "National data products: I led the AARP Livability Index, which scores U.S. neighborhoods from 50+ data sources across 7 domains.",
+      "AI systems in production: I built and run QNFO's autonomous research system and publish what it costs and where it fails."
+    ],
+    status: "Remote, based in Amsterdam; EU and US hours.",
+    start: "Email me the role and a link to its description. My CV is on Zenodo.",
+    subject: "Role in research management or applied AI",
+    body: ["Role and organisation:", "Link to the description:", "Remote or location:"],
+    works: []
+  }
+];
+// The contact-section button: anything that fits none of the offers. Counted as its own key.
+var WWM_GENERAL = { key: "general", subject: "Hello", body: ["What you have in mind:"] };
+function wwmTag(key) {
+  return WWM_TAG_PREFIX + key + "]";
+}
+function wwmMailto(o) {
+  const body = o.body.join("\n\n") + "\n\n(The tag at the start of the subject tells me which offer you came from. Please keep it.)";
+  return "mailto:" + WWM_EMAIL + "?subject=" + encodeURIComponent(wwmTag(o.key) + " " + o.subject) + "&amp;body=" + encodeURIComponent(body);
+}
+function workWithMeJsonLd() {
+  const person = { "@id": "https://qnfo.org/#person" };
+  const offers = WWM_OFFERS.filter(function(o) {
+    return o.service;
+  }).map(function(o) {
+    return { "@type": "Offer", "@id": WWM_URL + "#offer-" + o.key, url: WWM_URL + "#" + o.key, name: o.title, description: o.service, offeredBy: person, itemOffered: { "@type": "Service", name: o.title, description: o.service, serviceType: o.title, provider: person, areaServed: "Worldwide (remote)", audience: { "@type": "Audience", audienceType: o.forWho } } };
+  });
+  const role = WWM_OFFERS.find(function(o) {
+    return o.key === "role";
+  });
+  return identityJsonLd(WWM_URL, {
+    person: {
+      email: WWM_EMAIL,
+      contactPoint: { "@type": "ContactPoint", email: WWM_EMAIL, contactType: "collaboration and employment", url: WWM_URL + "#contact", availableLanguage: "English" },
+      makesOffer: offers.map(function(o) {
+        return { "@id": o["@id"] };
+      }),
+      seeks: { "@type": "Demand", name: role.title, description: role.forWho + " " + role.status, url: WWM_URL + "#role" },
+      knowsAbout: ["energy cost of computation", "Joules-per-Solution (JPCUB)", "AI-assisted research integrity", "autonomous AI research operations", "research programme management", "travel demand modelling"]
+    },
+    page: { "@type": "ProfilePage", name: "Work with me", mainEntity: person },
+    nodes: offers
+  });
+}
+var WWM_CSS = `
+.ww-hero{text-align:left;padding:3.2rem 0 1.4rem}
+.ww-hero h1{font-family:'Fraunces',Georgia,serif;font-size:2.6rem;font-weight:600;margin:0 0 .9rem;letter-spacing:-.015em}
+.ww-hero p{color:var(--ink);font-size:1.04rem;line-height:1.75;max-width:680px;margin:0 0 .9rem}
+.ww-hero .ww-sub{color:var(--muted);font-size:.96rem}
+.ww-jump{display:flex;flex-wrap:wrap;gap:.45rem;margin:1.2rem 0 0;padding:0;list-style:none}
+.ww-jump a{display:inline-block;font-size:.84rem;color:var(--accent);text-decoration:none;border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:.32rem .8rem}
+.ww-jump a:hover{border-color:var(--accent)}
+.ww-offers{display:grid;gap:1.1rem;margin-top:1.8rem}
+.ww-offer{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem 1.6rem;scroll-margin-top:1rem}
+.ww-offer h2{font-family:'Fraunces',Georgia,serif;font-size:1.3rem;font-weight:600;margin:0 0 .2rem}
+.ww-offer h3{font-family:'Public Sans',system-ui,sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:1.05rem 0 .3rem}
+.ww-offer p,.ww-offer li{font-size:.95rem;line-height:1.65;margin:0}
+.ww-offer ul{margin:.1rem 0 0;padding-left:1.15rem}
+.ww-offer li+li{margin-top:.35rem}
+.ww-note{color:var(--muted);font-size:.88rem!important;border-left:2px solid var(--border);padding-left:.85rem;margin-top:.9rem!important}
+.ww-basis{color:var(--muted);font-size:.82rem!important;margin-top:.75rem!important}
+.ww-basis a{color:var(--muted)}
+.ww-btn{display:inline-block;margin-top:1.1rem;padding:.6rem 1.25rem;border-radius:999px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;text-decoration:none;font-weight:500;font-size:.9rem;transition:all .15s}
+.ww-btn:hover{background:#1a2547;border-color:#1a2547}
+.ww-btn.ww-ghost{background:transparent;color:var(--accent)}
+.ww-btn.ww-ghost:hover{background:var(--accent-soft)}
+.ww-tag{display:block;margin-top:.45rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;color:var(--muted)}
+.ww-sec{margin-top:2.8rem;border-top:1px solid var(--border);padding-top:1.5rem}
+.ww-sec h2{font-family:'Fraunces',Georgia,serif;font-size:1.25rem;font-weight:600;margin:0 0 .6rem}
+.ww-sec p{font-size:.95rem;line-height:1.7;max-width:700px;margin:0 0 .8rem}
+.ww-record{list-style:none;padding:0;margin:.3rem 0 .8rem}
+.ww-record li{display:grid;grid-template-columns:7.5rem 1fr;gap:1rem;padding:.65rem 0;border-bottom:1px solid var(--border);font-size:.94rem;line-height:1.6}
+.ww-record .ww-when{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.86rem}
+.ww-record b{font-weight:600}
+@media(max-width:640px){.ww-hero h1{font-size:2.1rem}.ww-offer{padding:1.2rem 1.15rem}.ww-record li{grid-template-columns:1fr;gap:.15rem}}
+`;
+function wwmWorkLinks(idx) {
+  if (!idx || !idx.length) return "";
+  return '<p class="ww-basis">Based on: ' + idx.map(function(i) {
+    const w = SELECTED_WORKS[i];
+    return '<a href="https://doi.org/' + w.doi + '">' + esc(w.t) + "</a>";
+  }).join("; ") + ".</p>";
+}
+function wwmOfferHTML(o) {
+  const extra = o.key === "role" ? '<p class="ww-basis">CV: <a href="https://doi.org/' + WWM_CV_DOI + '">doi:' + WWM_CV_DOI + "</a>. Earlier work is published under Brad Gudzinas.</p>" : wwmWorkLinks(o.works);
+  return '<section class="ww-offer" id="' + o.key + '" aria-labelledby="ww-h-' + o.key + '"><h2 id="ww-h-' + o.key + '">' + esc(o.title) + "</h2><h3>Who it is for</h3><p>" + esc(o.forWho) + "</p><h3>" + esc(o.getLabel) + "</h3><ul>" + o.get.map(function(g) {
+    return "<li>" + esc(g) + "</li>";
+  }).join("") + '</ul><p class="ww-note">' + esc(o.status) + "</p><h3>How to start</h3><p>" + esc(o.start) + "</p>" + extra + '<a class="ww-btn" data-wwm="' + o.key + '" href="' + wwmMailto(o) + '">Email me about this</a><span class="ww-tag">Subject starts with ' + esc(wwmTag(o.key)) + "</span></section>";
+}
+function renderWorkWithMeHTML() {
+  const title = "Work with me \u00b7 Rowan Brad Quni-Gudzinas \u00b7 QNFO";
+  const desc = "Work with Rowan Brad Quni-Gudzinas: energy-per-correct-answer (JPCUB) assessments, reviews of AI research and agent operations, talks and workshops, research collaboration, and research-management and applied-AI roles.";
+  const ga = '<!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script>';
+  const head = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>' + esc(title) + '</title><meta name="description" content="' + escAttr(desc) + '"><meta name="author" content="Rowan Brad Quni-Gudzinas"><meta property="og:site_name" content="QNFO"><meta property="og:title" content="' + escAttr(title) + '"><meta property="og:description" content="' + escAttr(desc) + '"><meta property="og:type" content="website"><meta property="og:url" content="' + WWM_URL + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + escAttr(title) + '"><meta name="twitter:description" content="' + escAttr(desc) + '"><link rel="canonical" href="' + WWM_URL + '">' + workWithMeJsonLd() + `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='%23faf7f2' font-family='Georgia,serif'>Q</text></svg>"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap"><style>` + COMMON_CSS + LD_CSS + WWM_CSS + "</style>" + ga + "</head>";
+  const nav = '<header class="ld-top"><a class="ld-brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><nav class="ld-nav" aria-label="Main"><a href="/papers">Papers</a><a href="#selected-works">Selected works</a><a href="/about">About</a><a href="/work-with-me" aria-current="page">Work with me</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a></nav></header>';
+  const jump = '<ul class="ww-jump" aria-label="Offers">' + WWM_OFFERS.map(function(o) {
+    return '<li><a href="#' + o.key + '">' + esc(o.title) + "</a></li>";
+  }).join("") + '<li><a href="#contact">Something else</a></li></ul>';
+  const hero = '<section class="ww-hero"><span class="ld-tag">Work with me</span><h1>Work with me</h1><p>I am Rowan Brad Quni-Gudzinas, and I build research systems that people can check. I have spent 15 years turning data into public decisions, including national research programmes at the U.S. Federal Highway Administration and at AARP\'s Public Policy Institute, where I led the Livability Index. Since 2024 I have run QNFO, an independent research imprint that asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth, and what an autonomous research system actually delivers.</p><p class="ww-sub">Five ways to work together. Each says who it is for, what you get and how to start, and each button opens an email to me.</p>' + jump + "</section>";
+  const offers = '<div class="ww-offers">' + WWM_OFFERS.map(wwmOfferHTML).join("") + "</div>";
+  const record = '<section class="ww-sec" id="record" aria-labelledby="ww-rec-h"><h2 id="ww-rec-h">The record</h2><ul class="ww-record"><li><span class="ww-when">2011 to 2015</span><span><b>U.S. Federal Highway Administration</b>, Data Analyst and Research Manager. Managed a $1.5M+ federal research portfolio as a certified Contracting Officer\'s Representative, and led technical components of the national Tour-Based Model System for long-distance passenger travel forecasting.</span></li><li><span class="ww-when">2016 to 2021</span><span><b>AARP Public Policy Institute</b>, Product Manager and Senior Methods Advisor. Led the AARP Livability Index (50+ data sources across 7 domains, scoring U.S. neighborhoods, across multiple public releases) and co-authored its 2018 report.</span></li><li><span class="ww-when">2024 to now</span><span><b>QNFO</b> (independent research), Founder. An open, AI-assisted research pipeline that runs on 44 deployed Cloudflare Workers (October 2026). Every work carries a DOI, and corrections ship as new versions.</span></li></ul><p class="ww-basis">Earlier work is published under Brad Gudzinas. Full CV: <a href="https://doi.org/' + WWM_CV_DOI + '">doi:' + WWM_CV_DOI + '</a> \u00b7 <a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + "</a></p></section>";
+  const how = '<section class="ww-sec" id="how" aria-labelledby="ww-how-h"><h2 id="ww-how-h">How I work</h2><p>AI agents do much of QNFO\'s engineering, analysis and drafting under my direction. I am accountable for every result, and each deliverable says which parts were AI-assisted.</p><p>There is no price list. Scope and fee are agreed for each engagement before any work starts; research collaboration has no fee.</p></section>';
+  const contact = '<section class="ww-sec" id="contact" aria-labelledby="ww-con-h"><h2 id="ww-con-h">Contact</h2><p>Email <a data-wwm="' + WWM_GENERAL.key + '" href="' + wwmMailto(WWM_GENERAL) + '">' + WWM_EMAIL + "</a>. The buttons above start the subject with a tag such as <code>" + esc(wwmTag("jpcub")) + "</code>. Please keep it: it is how I count which offers bring people here. There is no form on this page; your message arrives in my qnfo.org mailbox like any other email.</p>" + '<a class="ww-btn ww-ghost" data-wwm="' + WWM_GENERAL.key + '" href="' + wwmMailto(WWM_GENERAL) + '">Something else? Email me</a><span class="ww-tag">Subject starts with ' + esc(wwmTag(WWM_GENERAL.key)) + '</span><p class="ww-basis">New papers by email: <a href="/#subscribe">subscribe on the home page</a>.</p></section>';
+  const disclosure = '<p class="ww-basis">This page was prepared with an AI-assisted research pipeline; the author is responsible for the content.</p>';
+  const foot = '<footer class="ld-foot"><span>\xA9 2026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><a href="/papers">Papers</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="https://orcid.org/' + OWNER_ORCID + '">ORCID</a><a href="/legal">QNFO-ULA</a></footer>';
+  return head + '<body><a href="#ld-main" class="skip-link">Skip to main content</a>' + nav + '<main class="ld-main" id="ld-main">' + hero + offers + record + how + contact + selectedWorksHTML() + disclosure + "</main>" + foot + "</body></html>";
+}
+function handleWorkWithMe() {
+  return new Response(renderWorkWithMeHTML(), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+}
 async function collectPaperUrls(env, recentDays) {
   // WS-A1 (2026-09-26): the scheduled cron submits ONLY recently-changed papers. A full 460-URL
   // submit (ok on the first, operator-side run) exceeds the IndexNow per-key rate budget when
@@ -1230,6 +1433,7 @@ async function handleSitemap(env, sitemapHost) {
         { loc: "https://qnfo.org/", priority: "1.0" },
         { loc: "https://qnfo.org/papers", priority: "0.9" },
         { loc: "https://qnfo.org/about", priority: "0.8" },
+        { loc: "https://qnfo.org/work-with-me", priority: "0.8" },
         { loc: "https://qnfo.org/graph", priority: "0.7" },
         { loc: "https://ideas.qnfo.org", priority: "0.6" },
         { loc: "https://qwav.org", priority: "0.6" },
@@ -1290,7 +1494,7 @@ async function handleLlmsTxt(env) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 200").all();
     const base = "https://papers.qnfo.org";
-    let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n\n## Papers\n\n";
+    let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n- [Work with me: assessments, reviews, talks, collaboration and roles](https://qnfo.org/work-with-me)\n\n## Papers\n\n";
     body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (p.doi ? " (DOI: " + p.doi + ")" : "")).join("\n");
     return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   } catch (e) {
@@ -1346,7 +1550,7 @@ __name22222222(handleRss, "handleRss");
 __name222222222(handleRss, "handleRss");
 __name2222222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "graph-api", "ask-a-paper", "legal-pages"], limitations: ["Ask-a-paper uses one model (glm-5.3-flash) with a 2048-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
+  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "graph-api", "ask-a-paper", "legal-pages", "work-with-me-page"], limitations: ["qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Ask-a-paper uses one model (glm-5.3-flash) with a 2048-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -1904,6 +2108,8 @@ var gateway_worker_default = {
       if (p === "/graph") return new Response(null, { status: 302, headers: { Location: "https://graph-api.qnfo.org/stats" } });
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
       if (p === "/about") return handleAbout(env);
+      if (p === "/work-with-me") return handleWorkWithMe();
+      if (p === "/contact") return new Response(null, { status: 301, headers: { Location: "https://qnfo.org/work-with-me" } });
       if (p === "/" || p === "") return handleHub(env);
       return json({ error: "Not found", path: p }, 404);
     }

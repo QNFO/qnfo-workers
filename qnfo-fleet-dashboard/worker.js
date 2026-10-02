@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.17.1-watchmaker-improvement-loop"; /* 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.17.2-work-with-me-metric"; /* 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2874,6 +2874,147 @@ function reachOutreachRows(rows, fromDay, toDay) {
   }
   return out;
 }
+// WORK-WITH-ME-METRIC-1 (1.17.2, 2026-10-02, charter pillar: reach; STRATEGY 6.3 "warm conversations"). qnfo.org/work-with-me
+// (qnfo-gateway WORK-WITH-ME-1) offers five ways to work with the owner; every button is a mailto to rowan.quni@qnfo.org
+// whose subject starts with [work-with-me:<offer>]. qnfo-email stores that mail in qnfo-audit.emails. Once a day, inside the
+// reach ingest (same throttle, same day), this counts it over the 30 UTC days ending on the ingest day:
+//   inbound_contacts_30d   distinct senders of tagged inbound mail (status <> 'sent'), per offer and in total
+//   inbound_messages_30d   the messages themselves (a thread of replies is one contact, several messages)
+//   tagged_spam_30d        tagged mail the classifier marked spam: not counted above, shown so a misfiled contact is seen
+//   pageviews_30d          RUM page views of qnfo.org/work-with-me from the cf-rum page rows the ingest wrote, with
+//                          rum_days_30d (days of RUM the window holds); no RUM day in the window writes no row, never a 0
+// Excluded: mail from the fleet's own domains, bounces and auto-mailers, and registered owner/agent senders
+// (email_command_senders), so a test message or a bounce is not a contact. Rows go to reach_signals (source 'work-with-me', date = ingest day, INSERT OR REPLACE, so a
+// rerun of the same day rewrites the same rows); the live run (yesterday) also refreshes metric_registry
+// inbound_contacts_30d and work_with_me_pageviews_30d. The offer keys match qnfo-gateway WWM_OFFERS (checked by
+// qnfo-gateway/work-with-me.test.mjs). Counts only: no address or subject leaves D1.
+var WWM_SOURCE = "work-with-me";
+var WWM_OFFER_KEYS = ["jpcub", "agent-review", "talk", "research", "role", "general"];
+var WWM_WINDOW_DAYS = 30;
+var WWM_PAGE_IDS = ["qnfo.org/work-with-me", "qnfo.org/work-with-me/", "www.qnfo.org/work-with-me", "www.qnfo.org/work-with-me/"];
+var WWM_OWN_SENDER = /@([a-z0-9-]+\.)*(qnfo\.(org|net|uk)|qwav\.(org|tech|net|uk)|q08\.org)$/;
+// Bounces and auto-mailers (an "Undeliverable: Re: [work-with-me:...]" is not a contact); the markers qnfo-audit's
+// email_first_touch_terminal triggers use.
+var WWM_MACHINE_SENDER = /no-?reply|mailer-daemon|postmaster|cf-?bounce|bounces?@|dmarc|^srs0=/;
+var WWM_METRICS = [
+  ["inbound_contacts_30d", "leading", "distinct senders of inbound mail to the qnfo.org mailbox whose subject carries a [work-with-me:<offer>] tag (qnfo.org/work-with-me), received in the 30 UTC days ending yesterday; sent mail, spam, the fleet's own domains and registered owner/agent senders excluded (WORK-WITH-ME-METRIC-1)", "qnfo-audit.emails (qnfo-email) via qnfo-fleet-dashboard reach ingest; per offer in reach_signals source 'work-with-me', entity_id work-with-me:<offer>; https://fleet.qnfo.org/api/reach (work_with_me)", "rising from 0; STRATEGY s9 warm conversations: 10 new by 2026-12-31"],
+  ["work_with_me_pageviews_30d", "leading", "Cloudflare Web Analytics (RUM) page views of qnfo.org/work-with-me in the 30 UTC days ending yesterday, summed from the reach ingest's cf-rum page rows (not bot-filtered; a lower bound on days the page fell into '(other)'); rum_days_30d in reach_signals gives the days covered (WORK-WITH-ME-METRIC-1)", "reach_signals source 'cf-rum' (qnfo-fleet-dashboard reach ingest) -> reach_signals source 'work-with-me', entity_id qnfo.org/work-with-me; https://fleet.qnfo.org/api/reach (work_with_me)", "rising; contact rate = inbound_contacts_30d / work_with_me_pageviews_30d"]
+];
+// null = no tag; a tag without a key is "general"; an unknown key is "other".
+function wwmOfferKey(subject) {
+  const m = /\[work-with-me(?::\s*([a-z0-9-]{1,40}))?\s*\]/i.exec(String(subject || ""));
+  if (!m) return null;
+  const k = String(m[1] || "general").toLowerCase();
+  return WWM_OFFER_KEYS.indexOf(k) >= 0 ? k : "other";
+}
+function wwmExcludedSender(sender, patterns) {
+  const s = String(sender || "").trim().toLowerCase();
+  if (!s || WWM_OWN_SENDER.test(s) || WWM_MACHINE_SENDER.test(s)) return true;
+  for (const p of patterns || []) {
+    if (!p) continue;
+    if (p.charAt(0) === "@" ? s.endsWith(p) : s === p) return true;
+  }
+  return false;
+}
+// Pure: email rows -> totals and per-offer counts (each offer key present, 0 included; "other" only when seen).
+function wwmCount(rows, patterns) {
+  const mk = function() {
+    return { senders: /* @__PURE__ */ new Set(), messages: 0 };
+  };
+  const all = mk(), by = {};
+  for (const k of WWM_OFFER_KEYS) by[k] = mk();
+  let spam = 0;
+  for (const r of rows || []) {
+    const k = wwmOfferKey(r && r.subject);
+    if (!k || String(r.status || "") === "sent" || wwmExcludedSender(r.sender, patterns)) continue;
+    if (String(r.status || "") === "spam") {
+      spam++;
+      continue;
+    }
+    const s = String(r.sender).trim().toLowerCase();
+    if (!by[k]) by[k] = mk();
+    by[k].messages++;
+    by[k].senders.add(s);
+    all.messages++;
+    all.senders.add(s);
+  }
+  const offers = {};
+  for (const k of Object.keys(by)) offers[k] = { contacts: by[k].senders.size, messages: by[k].messages };
+  return { contacts: all.senders.size, messages: all.messages, spam, offers };
+}
+async function workWithMeMeasure(env, day) {
+  const from = reachShiftDay(day, -(WWM_WINDOW_DAYS - 1)), next = reachShiftDay(day, 1);
+  const out = { day, from, rows: [], notes: [], contacts: null, pageviews: null, rum_days: 0 };
+  let patterns = [];
+  try {
+    patterns = (await d1all(env.AUDIT, "SELECT lower(trim(pattern)) AS p FROM email_command_senders WHERE enabled = 1")).map(function(r) {
+      return r.p;
+    });
+  } catch (e) {
+    out.notes.push("work-with-me: email_command_senders unreadable, only own domains excluded");
+  }
+  const mail = await d1all(env.AUDIT, "SELECT sender, subject, status FROM emails WHERE received_at >= ? AND received_at < ? AND status <> 'sent' AND lower(COALESCE(subject, '')) LIKE '%[work-with-me%'", [from, next]);
+  const c = wwmCount(mail, patterns);
+  out.contacts = c.contacts;
+  out.offers = c.offers;
+  const row = function(channel, type, id, metric, v) {
+    return reachRow(day, WWM_SOURCE, channel, type, id, metric, v, "unknown");
+  };
+  out.rows.push(row("email", "campaign", "work-with-me:all", "inbound_contacts_30d", c.contacts), row("email", "campaign", "work-with-me:all", "inbound_messages_30d", c.messages), row("email", "campaign", "work-with-me:all", "tagged_spam_30d", c.spam));
+  for (const k of Object.keys(c.offers)) out.rows.push(row("email", "campaign", "work-with-me:" + k, "inbound_contacts_30d", c.offers[k].contacts), row("email", "campaign", "work-with-me:" + k, "inbound_messages_30d", c.offers[k].messages));
+  const ph = WWM_PAGE_IDS.map(function() {
+    return "?";
+  }).join(",");
+  const site = await d1all(env.AUDIT, "SELECT COUNT(DISTINCT date) AS days FROM reach_signals WHERE source = 'cf-rum' AND entity_type = 'site' AND metric = 'pageviews' AND date >= ? AND date <= ?", [from, day]);
+  out.rum_days = site.length ? Number(site[0].days) || 0 : 0;
+  if (out.rum_days > 0) {
+    const pv = await d1all(env.AUDIT, "SELECT COALESCE(SUM(value), 0) AS v FROM reach_signals WHERE source = 'cf-rum' AND entity_type = 'page' AND metric = 'pageviews' AND entity_id IN (" + ph + ") AND date >= ? AND date <= ?", WWM_PAGE_IDS.concat([from, day]));
+    out.pageviews = pv.length ? Number(pv[0].v) || 0 : 0;
+    out.rows.push(row("web", "page", "qnfo.org/work-with-me", "pageviews_30d", out.pageviews), row("web", "page", "qnfo.org/work-with-me", "rum_days_30d", out.rum_days));
+    if (out.rum_days < WWM_WINDOW_DAYS) out.notes.push("work-with-me: page views cover " + out.rum_days + " of " + WWM_WINDOW_DAYS + " days of RUM");
+  } else out.notes.push("work-with-me: no cf-rum rows " + from + ".." + day + ", page views not written");
+  return out;
+}
+// metric_registry rows (INSERT OR IGNORE, then UPDATE). Returns the metrics actually updated: the registry's D1 triggers
+// can refuse a row, and a refused row is reported, never assumed written.
+async function workWithMePublish(env, m, iso) {
+  const done = [], refused = [];
+  const val = { inbound_contacts_30d: m.contacts, work_with_me_pageviews_30d: m.pageviews };
+  for (const d of WWM_METRICS) {
+    if (val[d[0]] == null) continue;
+    try {
+      await env.AUDIT.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1, 'fleet', ?2, ?3, ?4, ?5, 'qnfo-fleet-dashboard', 'reach: qnfo.org/work-with-me offers and distribution', 'daily', 'MEASURED')").bind(d[0], d[1], d[2], d[3], d[4]).run();
+      const r = await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = ?3").bind(String(val[d[0]]), iso, d[0]).run();
+      if (r && r.meta && Number(r.meta.changes) > 0) done.push(d[0]);
+      else refused.push(d[0] + ": no row");
+    } catch (e) {
+      refused.push(d[0] + ": " + reachErr(e));
+    }
+  }
+  return { done, refused };
+}
+// The latest snapshot on or before `day`, for GET /api/reach (counts only).
+async function workWithMeLatest(env, day) {
+  const rows = await d1all(env.AUDIT, "SELECT date, entity_id, metric, value FROM reach_signals WHERE source = ? AND date = (SELECT MAX(date) FROM reach_signals WHERE source = ? AND date <= ?)", [WWM_SOURCE, WWM_SOURCE, day]);
+  if (!rows.length) return null;
+  const o = { date: rows[0].date, contacts_30d: null, messages_30d: null, tagged_spam_30d: null, pageviews_30d: null, rum_days_30d: null, by_offer: {} };
+  for (const r of rows) {
+    const v = Number(r.value);
+    if (r.entity_id === "work-with-me:all") {
+      if (r.metric === "inbound_contacts_30d") o.contacts_30d = v;
+      else if (r.metric === "inbound_messages_30d") o.messages_30d = v;
+      else if (r.metric === "tagged_spam_30d") o.tagged_spam_30d = v;
+    } else if (String(r.entity_id).indexOf("work-with-me:") === 0) {
+      const k = String(r.entity_id).slice(13);
+      o.by_offer[k] = o.by_offer[k] || {};
+      o.by_offer[k][r.metric === "inbound_contacts_30d" ? "contacts" : "messages"] = v;
+    } else if (r.metric === "pageviews_30d") o.pageviews_30d = v;
+    else if (r.metric === "rum_days_30d") o.rum_days_30d = v;
+  }
+  o.contact_rate = o.contacts_30d != null && o.pageviews_30d ? Math.round(1e4 * o.contacts_30d / o.pageviews_30d) / 1e4 : null;
+  return o;
+}
+// WORK-WITH-ME-METRIC-1 end
 async function ingestReachSignals(env, opts) {
   opts = opts || {};
   const nowMs = opts.nowMs || Date.now();
@@ -2991,6 +3132,19 @@ async function ingestReachSignals(env, opts) {
     await put("email", reachOutreachRows(o, oFrom, day));
   } catch (e) {
     out.skipped.push("email: " + reachErr(e));
+  }
+  // g. WORK-WITH-ME-METRIC-1: tagged inbound contacts and /work-with-me page views over the 30 days ending `day` (reads the
+  // cf-rum rows step a just wrote). metric_registry is refreshed only by the live run, like the subscriber count.
+  try {
+    const w = await workWithMeMeasure(env, day);
+    await put("work-with-me", w.rows);
+    for (const n of w.notes) out.notes.push(n);
+    if (day === yesterday && out.written["work-with-me"] != null) {
+      const pub = await workWithMePublish(env, w, new Date(nowMs).toISOString());
+      for (const r of pub.refused) out.skipped.push("work-with-me registry: " + r);
+    }
+  } catch (e) {
+    out.skipped.push("work-with-me: " + reachErr(e));
   }
   // entity_map from living-paper (binding LIVING). The DOI is zenodo_doi || doi, the key qnfo-paper-indexer writes
   // to citation_stats, lowercased like the reach_signals 'doi' rows. utm_campaign/post_uri/buffer_id are left to
@@ -3258,6 +3412,12 @@ async function reachScorecardData(env, nowMs) {
   }
   sc.windows.d7 = await reachWindow(env, reachShiftDay(end, -6), end);
   sc.windows.d28 = await reachWindow(env, reachShiftDay(end, -27), end);
+  // WORK-WITH-ME-METRIC-1: the latest 30-day snapshot (counts only).
+  try {
+    sc.work_with_me = await workWithMeLatest(env, end);
+  } catch (e) {
+    sc.work_with_me = null;
+  }
   return sc;
 }
 // HUMAN-DASHBOARD-1 (2026-10-01): fleet.qnfo.org is ONE page for the human owner. It answers a single
@@ -3502,6 +3662,9 @@ var WATCHMAKER_OPS = [
   { key: "portfolio-daily", what: "Portfolio daily run: owner-voice guard, scorecard, run log", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'portfolio-daily-' AND id < 'portfolio-daily.' AND status = 'ok'", replaces: "claude.ai Routine 'QNFO portfolio management'" },
   { key: "identity-weekly", what: "Identity weekly review (IDENTITY-WEEKLY-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 168, first_due: "2026-10-05T06:00:00Z", sql: "SELECT MAX(created_at) AS last FROM portfolio_runs WHERE kind = 'identity-weekly'", replaces: "claude.ai Routines 'Identity and brand weekly review', 'Weekly identity and opportunity check'" },
   { key: "reach-ingest", what: "Reach signals ingest (REACH-SIGNALS-INGEST-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'reach-ingest-' AND id < 'reach-ingest.'" },
+  // WORK-WITH-ME-METRIC-1 (1.17.2): runs inside the reach ingest; its own snapshot rows prove it ran (collected_at is
+  // rewritten by every INSERT OR REPLACE).
+  { key: "work-with-me-contacts", what: "Inbound [work-with-me:<offer>] contacts and qnfo.org/work-with-me page views, 30 days, into reach_signals and metric_registry (WORK-WITH-ME-METRIC-1, daily in the reach ingest)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, first_due: "2026-10-05T03:00:00Z", sql: "SELECT MAX(collected_at) AS last FROM reach_signals WHERE source = 'work-with-me'" },
   // One-shot (retried hourly while deferred): it counts only when it is 48h past due with no decision recorded.
   { key: "q08-review", what: "q08 decision on bot-filtered human reads, once from 2026-10-31 (Q08-REVIEW-2026-10-31, agent_issues 1716)", runner: "cron:qnfo-fleet-dashboard", stuck_sql: "SELECT CASE WHEN ?1 >= '2026-10-31T00:00:00.000Z' AND NOT EXISTS (SELECT 1 FROM ops_config WHERE key = 'q08_review_2026_10_31' AND value <> '') THEN 1 ELSE 0 END AS stuck", stuck_note: "q08 review 48h past due with no decision recorded (deferred: see GET /api/q08-review)" },
   // GRANT-FOLLOWUP-1 (qnfo-cloud-ops 1.17.0): only a run that read BOTH mailboxes is 'ok'. A run without the GMAIL_PASS
@@ -5539,6 +5702,8 @@ function portfolioKpis(sc, extra) {
     outreach_sent_7d: portfolioSum(w.d7 && w.d7.outreach, "sent"),
     outreach_sent_28d: portfolioSum(w.d28 && w.d28.outreach, "sent"),
     outreach_replied_28d: portfolioSum(w.d28 && w.d28.outreach, "replied"),
+    work_with_me_contacts_30d: sc && sc.work_with_me && sc.work_with_me.contacts_30d != null ? sc.work_with_me.contacts_30d : null,
+    work_with_me_pageviews_30d: sc && sc.work_with_me && sc.work_with_me.pageviews_30d != null ? sc.work_with_me.pageviews_30d : null,
     bluesky_followers: extra.bluesky_followers,
     confirmed_subscribers_qnfo: extra.confirmed_subscribers.qnfo,
     open_strategy_issues: extra.open_strategy_issues

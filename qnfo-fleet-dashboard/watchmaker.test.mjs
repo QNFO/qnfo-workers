@@ -8,6 +8,7 @@
 // GET /api/watchmaker serves it.
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
 // stale zenodo_stats and job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
+// WORK-WITH-ME-METRIC-1: the work-with-me contacts op reads its own reach_signals rows (stalled after 48h, never ran).
 // Run: node qnfo-fleet-dashboard/watchmaker.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -38,6 +39,7 @@ CREATE TABLE social_channels (channel_id TEXT PRIMARY KEY, service TEXT, name TE
 CREATE TABLE zenodo_stats (doi TEXT PRIMARY KEY, downloads INTEGER, views INTEGER, fetched_at TEXT, updated_at TEXT);
 CREATE TABLE handoffs (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, project_id TEXT NOT NULL, timestamp TEXT NOT NULL, claim_sheet TEXT);
 CREATE TABLE events_radar (slug TEXT PRIMARY KEY, scanned_at TEXT);
+CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, layer TEXT NOT NULL, kind TEXT NOT NULL, formula TEXT, source_of_truth TEXT, baseline TEXT, target TEXT,
   owner TEXT, disposition_actor TEXT, refresh_cadence TEXT, warning_band TEXT, kill_band TEXT, last_value TEXT, last_refreshed TEXT, state TEXT);`);
 const NOW = Date.parse("2026-10-06T08:00:00Z");
@@ -76,6 +78,10 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-radar-r1',
 db.prepare("INSERT INTO handoffs (session_id, project_id, timestamp, claim_sheet) VALUES ('cloud-workflow', 'job-market-watch-workflow-2026-10-05', ?, '{}')").run(ago(25));
 db.prepare("INSERT INTO handoffs (session_id, project_id, timestamp, claim_sheet) VALUES ('s', 'job-market-watch-2026-10-06', ?, '{}')").run(ago(0.5));   // a session note, outside the id range
 db.prepare("INSERT INTO events_radar (slug, scanned_at) VALUES ('events-radar-2026-10-05', ?)").run(ago(27));
+// WORK-WITH-ME-METRIC-1: the snapshot rows the reach ingest writes (collected_at in D1's space format).
+const wwmAt = (h) => new Date(NOW - h * 36e5).toISOString().replace("T", " ").slice(0, 19);
+db.prepare("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES ('2026-10-05', 'cf-rum', 'web', 'site', '(all)', 'pageviews', 90, 'unknown', ?)").run(wwmAt(1));
+db.prepare("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES ('2026-10-05', 'work-with-me', 'email', 'campaign', 'work-with-me:all', 'inbound_contacts_30d', 0, 'unknown', ?)").run(wwmAt(5.5));
 
 function stmtOn(sql) {
   let args = [];
@@ -259,6 +265,17 @@ m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "email-triage").counted && op(m, "email-triage").age_h === 80, "an error triage run (EMAIL_API_KEY 'unauthorized') does not prove the triage");
 db.exec("DELETE FROM cloud_ops_events WHERE id = 'jr-email-triage-unauth'");
 db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'jr-email-triage-t1'").run(ago(20));
+m = await api.watchmakerMeasure(env, NOW);
+// WORK-WITH-ME-METRIC-1: proved by its own reach_signals rows (source 'work-with-me'), not by the ingest's event row.
+ok(!op(m, "work-with-me-contacts").counted && op(m, "work-with-me-contacts").age_h === 5.5 && op(m, "work-with-me-contacts").runner === "cron:qnfo-fleet-dashboard", "work-with-me contacts read their snapshot row (space-format UTC)");
+db.prepare("UPDATE reach_signals SET collected_at = ? WHERE source = 'work-with-me'").run(wwmAt(50));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "work-with-me-contacts").counted && /stalled: last run 50h ago, cadence 24h/.test(op(m, "work-with-me-contacts").state) && m.index === 1, "work-with-me rows older than 48h count as stalled (fresh cf-rum rows do not prove them)");
+db.exec("DELETE FROM reach_signals WHERE source = 'work-with-me'");
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "work-with-me-contacts").counted && op(m, "work-with-me-contacts").state === "never ran", "no work-with-me rows past the first due date counts");
+ok(!op(await api.watchmakerMeasure(env, Date.parse("2026-10-04T08:00:00Z")), "work-with-me-contacts").counted, "before its first due date it is not counted");
+db.prepare("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES ('2026-10-05', 'work-with-me', 'email', 'campaign', 'work-with-me:all', 'inbound_contacts_30d', 0, 'unknown', ?)").run(wwmAt(5.5));
 m = await api.watchmakerMeasure(env, NOW);
 ok(m.index === 0, "the fixture is fresh again before the stall checks (" + m.counted.join(",") + ")");
 
