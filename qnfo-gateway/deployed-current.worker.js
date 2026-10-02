@@ -1,4 +1,4 @@
-var VERSION="3.8.7-og-head";
+var VERSION="3.9.0-qds";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -113,6 +113,424 @@ h3{font-family:'Fraunces',Georgia,serif;font-size:1.12rem;margin-top:1.5rem;marg
 .rendered-md{max-width:820px}
 .rendered-md h1{font-size:1.7rem;border-bottom:1px solid var(--border);padding-bottom:.5rem}
 `;
+// ---- QDS-1:BEGIN (2026-10-02, owner directive: one design system across every QNFO surface; pillars reach + core) ----
+// The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
+// https://qnfo.org/qds.css (any gateway host) and linked by every QNFO, QWAV and q08 surface, with qds.js for the theme
+// toggle, sticky header and the article table of contents. Pages declare <html data-brand="qnfo|qwav|q08">. Reading
+// type is Newsreader, interface type Familjen Grotesk; light and dark themes follow the OS unless the visitor picks one.
+// Replaces the 2026-08-31 paper-and-ink system (qnfo-web-unified/README.md, STRATEGY 2.5), owner decision 2026-10-02.
+var QDS_VERSION = "1.0.0";
+var QDS_ORIGIN = "https://qnfo.org";
+var QDS_CSS = `/* QDS: the QNFO design system. One stylesheet for every QNFO, QWAV and q08 surface.
+   Served by qnfo-gateway at https://qnfo.org/qds.css (versioned with ?v=). Pages set
+   <html data-brand="qnfo|qwav|q08"> and optionally data-density="compact" (operator consoles).
+   Reading: Newsreader. Interface: Familjen Grotesk. Light and dark themes; data-theme overrides the OS. */
+:root{
+  --q-paper:#F5F7FB;--q-surface:#FFFFFF;--q-ink:#182042;--q-ink-2:#2F3A63;--q-muted:#58618A;--q-rule:#D9DEEC;--q-wash:#E9EDF7;
+  --q-accent:#0E7C70;--q-accent-ink:#FFFFFF;--q-accent-wash:#DDF1EE;
+  --q-cite:#8A5300;--q-cite-wash:#FCEFD6;--q-ok:#1D7A46;--q-warn:#9A5B00;--q-bad:#B3261E;--q-bad-wash:#FBE9E7;
+  --q-serif:"Newsreader",Georgia,"Times New Roman",serif;--q-sans:"Familjen Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --q-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --q-fs-xs:.8125rem;--q-fs-sm:.875rem;--q-fs-base:1rem;--q-fs-read:1.125rem;--q-fs-lg:1.3125rem;--q-fs-xl:1.75rem;--q-fs-2xl:2.375rem;--q-fs-3xl:clamp(2.25rem,4.4vw,3.5rem);
+  --q-r-sm:6px;--q-r:10px;--q-r-lg:14px;--q-gutter:24px;--q-wrap:1200px;--q-measure:68ch;
+  --q-shadow:0 1px 2px rgba(24,32,66,.06),0 8px 24px -12px rgba(24,32,66,.18);
+  color-scheme:light;
+}
+[data-brand="qwav"]{--q-accent:#3B4CCA;--q-accent-wash:#E3E6FB}
+[data-brand="q08"]{--q-accent:#B4472A;--q-accent-wash:#FBE7E0}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --q-paper:#121731;--q-surface:#1A2142;--q-ink:#E7E9F4;--q-ink-2:#C7CCE4;--q-muted:#9AA3C6;--q-rule:#2C3561;--q-wash:#212A50;
+    --q-accent:#5FD3C4;--q-accent-ink:#0D1A1E;--q-accent-wash:#163A42;--q-cite:#F2B544;--q-cite-wash:#3A2F1A;--q-ok:#6FD39A;--q-warn:#F2B544;--q-bad:#FF8A80;--q-bad-wash:#3B1E25;
+    --q-shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -12px rgba(0,0,0,.6);color-scheme:dark}
+  :root:not([data-theme="light"])[data-brand="qwav"]{--q-accent:#9AA6FF;--q-accent-wash:#262E66}
+  :root:not([data-theme="light"])[data-brand="q08"]{--q-accent:#F2906A;--q-accent-wash:#43261D}
+}
+:root[data-theme="dark"]{
+  --q-paper:#121731;--q-surface:#1A2142;--q-ink:#E7E9F4;--q-ink-2:#C7CCE4;--q-muted:#9AA3C6;--q-rule:#2C3561;--q-wash:#212A50;
+  --q-accent:#5FD3C4;--q-accent-ink:#0D1A1E;--q-accent-wash:#163A42;--q-cite:#F2B544;--q-cite-wash:#3A2F1A;--q-ok:#6FD39A;--q-warn:#F2B544;--q-bad:#FF8A80;--q-bad-wash:#3B1E25;
+  --q-shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -12px rgba(0,0,0,.6);color-scheme:dark}
+:root[data-theme="dark"][data-brand="qwav"]{--q-accent:#9AA6FF;--q-accent-wash:#262E66}
+:root[data-theme="dark"][data-brand="q08"]{--q-accent:#F2906A;--q-accent-wash:#43261D}
+
+/* base */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;scroll-padding-top:80px}
+body{margin:0;background:var(--q-paper);color:var(--q-ink);font:400 var(--q-fs-base)/1.55 var(--q-sans);font-feature-settings:"kern" 1;-webkit-font-smoothing:antialiased}
+img,svg,video{max-width:100%;height:auto}
+a{color:inherit;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:var(--q-accent)}
+:focus-visible{outline:2px solid var(--q-accent);outline-offset:2px;border-radius:4px}
+::selection{background:var(--q-accent-wash)}
+h1,h2,h3,h4{color:var(--q-ink);margin:0}
+p{margin:0 0 1em}
+hr{border:0;border-top:1px solid var(--q-rule);margin:2rem 0}
+button{font:inherit;color:inherit}
+.q-sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.q-skip{position:absolute;left:12px;top:-60px;background:var(--q-ink);color:var(--q-paper);padding:8px 14px;border-radius:var(--q-r-sm);z-index:100;text-decoration:none}
+.q-skip:focus{top:12px;color:var(--q-paper)}
+.q-wrap{max-width:var(--q-wrap);margin:0 auto;padding:0 var(--q-gutter)}
+.q-measure{max-width:var(--q-measure)}
+
+/* family bar: one line linking every QNFO surface */
+.q-family{border-bottom:1px solid var(--q-rule);font-size:var(--q-fs-xs);color:var(--q-muted)}
+.q-family .q-wrap{display:flex;gap:18px;align-items:center;min-height:32px;overflow-x:auto;scrollbar-width:none;white-space:nowrap}
+.q-family .q-wrap::-webkit-scrollbar{display:none}
+.q-family a{text-decoration:none}
+.q-family a[aria-current]{color:var(--q-ink);font-weight:600}
+.q-family .q-family-label{margin-right:auto}
+
+/* header */
+.q-top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--q-paper) 92%,transparent);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid transparent}
+.q-top.is-stuck{border-bottom-color:var(--q-rule)}
+.q-top .q-wrap{display:flex;align-items:center;gap:24px;min-height:64px}
+.q-brand{display:inline-flex;align-items:center;gap:10px;text-decoration:none;font:600 1.0625rem/1 var(--q-sans);letter-spacing:-.01em;white-space:nowrap}
+.q-brand svg{width:26px;height:26px;flex:none}
+.q-brand small{font:500 var(--q-fs-xs)/1 var(--q-sans);color:var(--q-muted);letter-spacing:0}
+.q-nav{display:flex;gap:4px;margin-left:auto;align-items:center}
+.q-nav a{font-size:var(--q-fs-sm);color:var(--q-muted);text-decoration:none;padding:8px 10px;border-radius:var(--q-r-sm)}
+.q-nav a:hover{color:var(--q-ink);background:var(--q-wash)}
+.q-nav a[aria-current="page"]{color:var(--q-ink);font-weight:600}
+.q-theme{flex:none;width:36px;height:36px;border-radius:999px;border:1px solid var(--q-rule);background:none;display:grid;place-items:center;color:var(--q-muted);cursor:pointer}
+.q-theme:hover{color:var(--q-ink);border-color:var(--q-muted)}
+.q-theme svg{width:16px;height:16px}
+.q-menu{display:none}
+@media (max-width:820px){
+  .q-top .q-wrap{gap:12px}
+  .q-menu{display:block;margin-left:auto}
+  .q-menu summary{list-style:none;cursor:pointer;width:36px;height:36px;border-radius:999px;border:1px solid var(--q-rule);display:grid;place-items:center;color:var(--q-muted)}
+  .q-menu summary::-webkit-details-marker{display:none}
+  .q-menu[open] .q-nav{display:flex}
+  .q-nav{display:none;position:absolute;left:0;right:0;top:100%;flex-direction:column;align-items:stretch;gap:0;background:var(--q-surface);border-bottom:1px solid var(--q-rule);padding:8px var(--q-gutter) 16px;box-shadow:var(--q-shadow)}
+  .q-nav a{padding:12px 6px;font-size:var(--q-fs-base);border-bottom:1px solid var(--q-rule);border-radius:0}
+  .q-theme{margin-left:0}
+}
+
+/* type */
+.q-eyebrow{font:500 var(--q-fs-sm)/1.3 var(--q-sans);color:var(--q-accent);margin:0 0 12px}
+.q-display{font:500 var(--q-fs-3xl)/1.04 var(--q-serif);letter-spacing:-.022em;margin:0 0 20px;text-wrap:balance}
+.q-h1{font:500 var(--q-fs-2xl)/1.12 var(--q-serif);letter-spacing:-.018em;margin:0 0 16px;text-wrap:balance}
+.q-h2{font:500 var(--q-fs-xl)/1.2 var(--q-serif);letter-spacing:-.012em;margin:0 0 14px}
+.q-h3{font:600 var(--q-fs-base)/1.35 var(--q-sans);margin:0 0 10px}
+.q-lede{font:400 1.25rem/1.55 var(--q-serif);color:var(--q-ink-2);max-width:58ch;margin:0 0 24px}
+.q-meta{font-size:var(--q-fs-sm);color:var(--q-muted)}
+.q-meta a{color:var(--q-muted)}
+.q-meta a:hover{color:var(--q-accent)}
+.q-small{font-size:var(--q-fs-xs);color:var(--q-muted)}
+.q-num{font-variant-numeric:tabular-nums}
+
+/* sections */
+.q-section{padding:56px 0}
+.q-section+.q-section{border-top:1px solid var(--q-rule)}
+.q-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.q-section-head .q-h2{margin:0}
+.q-section-head a{font-size:var(--q-fs-sm);color:var(--q-muted)}
+.q-hero{padding:64px 0 48px}
+.q-hero-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:56px;align-items:center}
+@media (max-width:900px){.q-hero-grid{grid-template-columns:minmax(0,1fr);gap:32px}.q-hero{padding:40px 0 32px}}
+.q-grid{display:grid;gap:24px}
+.q-grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.q-grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:900px){.q-grid-3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.q-grid-2,.q-grid-3{grid-template-columns:minmax(0,1fr)}}
+
+/* controls */
+.q-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:0 18px;border-radius:var(--q-r);border:1px solid var(--q-ink);background:var(--q-ink);color:var(--q-paper);font:600 var(--q-fs-sm)/1 var(--q-sans);text-decoration:none;cursor:pointer;white-space:nowrap}
+.q-btn:hover{background:var(--q-ink-2);border-color:var(--q-ink-2);color:var(--q-paper)}
+.q-btn:disabled{opacity:.45;cursor:default}
+.q-btn-accent{background:var(--q-accent);border-color:var(--q-accent);color:var(--q-accent-ink)}
+.q-btn-accent:hover{filter:brightness(1.08);background:var(--q-accent);border-color:var(--q-accent);color:var(--q-accent-ink)}
+.q-btn-ghost{background:transparent;color:var(--q-ink);border-color:var(--q-rule)}
+.q-btn-ghost:hover{background:var(--q-wash);color:var(--q-ink);border-color:var(--q-muted)}
+.q-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.q-input{width:100%;min-height:44px;padding:10px 14px;border-radius:var(--q-r);border:1.5px solid var(--q-rule);background:var(--q-surface);color:var(--q-ink);font:400 var(--q-fs-base)/1.4 var(--q-sans)}
+.q-input:focus{outline:none;border-color:var(--q-accent)}
+.q-input::placeholder{color:var(--q-muted)}
+.q-field{display:flex;gap:8px;align-items:stretch;background:var(--q-surface);border:1.5px solid var(--q-rule);border-radius:var(--q-r-lg);padding:6px 6px 6px 16px}
+.q-field:focus-within{border-color:var(--q-accent)}
+.q-field input,.q-field textarea{flex:1;border:0;background:none;color:var(--q-ink);font:400 1.125rem/1.4 var(--q-serif);padding:8px 0;outline:none;min-width:0}
+.q-chips{display:flex;flex-wrap:wrap;gap:8px}
+.q-chip{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--q-rule);font-size:var(--q-fs-sm);color:var(--q-ink-2);text-decoration:none;background:var(--q-surface)}
+.q-chip:hover{border-color:var(--q-accent);color:var(--q-ink)}
+.q-chip[aria-current="true"],.q-chip.is-active{background:var(--q-ink);border-color:var(--q-ink);color:var(--q-paper)}
+.q-badge{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;background:var(--q-accent-wash);color:var(--q-accent);font:600 var(--q-fs-xs)/1.5 var(--q-sans)}
+.q-badge-muted{background:var(--q-wash);color:var(--q-muted)}
+
+/* lists of works: the main reading index */
+.q-list{list-style:none;margin:0;padding:0}
+.q-item{padding:20px 0;border-bottom:1px solid var(--q-rule);display:grid;gap:6px}
+.q-item:first-child{padding-top:4px}
+.q-item-title{font:500 1.25rem/1.32 var(--q-serif);text-decoration:none;color:var(--q-ink);text-wrap:pretty}
+.q-item-title:hover{color:var(--q-accent)}
+.q-item-meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:var(--q-fs-sm);color:var(--q-muted);align-items:center}
+.q-item-meta a{color:var(--q-muted)}
+.q-item-text{font:400 1rem/1.55 var(--q-serif);color:var(--q-ink-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-width:var(--q-measure)}
+.q-compact .q-item{padding:12px 0}
+.q-compact .q-item-title{font-size:1.0625rem}
+
+/* panels and links-as-cards (used sparingly) */
+.q-panel{background:var(--q-surface);border:1px solid var(--q-rule);border-radius:var(--q-r-lg);padding:24px}
+.q-link-card{display:flex;flex-direction:column;gap:8px;padding:20px 0;border-top:1px solid var(--q-ink);text-decoration:none}
+.q-link-card h3{font:500 var(--q-fs-lg)/1.25 var(--q-serif)}
+.q-link-card p{color:var(--q-muted);margin:0;font-size:var(--q-fs-sm)}
+.q-link-card:hover h3{color:var(--q-accent)}
+.q-note{border-left:3px solid var(--q-accent);background:var(--q-surface);padding:14px 18px;border-radius:0 var(--q-r) var(--q-r) 0;font-size:var(--q-fs-sm);color:var(--q-ink-2)}
+.q-note strong{color:var(--q-ink)}
+.q-note-warn{border-left-color:var(--q-warn)}
+.q-note-bad{border-left-color:var(--q-bad);background:var(--q-bad-wash)}
+
+/* data tables */
+.q-table-wrap{overflow-x:auto;margin:1.25em 0;border:1px solid var(--q-rule);border-radius:var(--q-r)}
+.q-table{border-collapse:collapse;width:100%;font:400 var(--q-fs-sm)/1.45 var(--q-sans)}
+.q-table th,.q-table td{padding:10px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--q-rule)}
+.q-table thead th{background:var(--q-wash);font-weight:600;color:var(--q-ink)}
+.q-table tr:last-child td{border-bottom:0}
+.q-table td.q-num,.q-table th.q-num{text-align:right}
+
+/* long-form reading: papers, legal, about, threads */
+.q-prose{font:400 var(--q-fs-read)/1.68 var(--q-serif);color:var(--q-ink);max-width:var(--q-measure);overflow-wrap:break-word;hyphens:auto}
+.q-prose>*:first-child{margin-top:0}
+.q-prose h1{font:500 var(--q-fs-2xl)/1.15 var(--q-serif);letter-spacing:-.015em;margin:2.2em 0 .5em}
+.q-prose h2{font:500 1.625rem/1.22 var(--q-serif);letter-spacing:-.01em;margin:2em 0 .55em;padding-top:.2em}
+.q-prose h3{font:600 1.1875rem/1.3 var(--q-serif);margin:1.7em 0 .45em}
+.q-prose h4{font:600 var(--q-fs-base)/1.35 var(--q-sans);margin:1.5em 0 .4em;color:var(--q-ink-2)}
+.q-prose p{margin:0 0 1.05em}
+.q-prose ul,.q-prose ol{padding-left:1.4em;margin:0 0 1.1em}
+.q-prose li{margin:.3em 0}
+.q-prose li>ul,.q-prose li>ol{margin:.3em 0}
+.q-prose blockquote{margin:1.3em 0;padding:.2em 0 .2em 1.2em;border-left:3px solid var(--q-rule);color:var(--q-ink-2);font-style:italic}
+.q-prose code{font:500 .86em/1.4 var(--q-mono);background:var(--q-wash);padding:.12em .38em;border-radius:5px}
+.q-prose pre{font:400 .85rem/1.6 var(--q-mono);background:var(--q-surface);border:1px solid var(--q-rule);border-radius:var(--q-r);padding:14px 16px;overflow-x:auto;hyphens:none}
+.q-prose :not(pre)>code{overflow-wrap:anywhere}
+.q-prose a{overflow-wrap:anywhere}
+.q-prose pre code{background:none;padding:0;font-size:inherit}
+.q-prose table{border-collapse:collapse;width:100%;font:400 var(--q-fs-sm)/1.45 var(--q-sans);margin:1.3em 0;display:block;overflow-x:auto}
+.q-prose th,.q-prose td{padding:8px 12px;border-bottom:1px solid var(--q-rule);text-align:left;vertical-align:top}
+.q-prose th{background:var(--q-wash);font-weight:600}
+.q-prose hr{margin:2.4em 0}
+.q-prose a{color:var(--q-ink);text-decoration-color:var(--q-accent)}
+.q-prose a:hover{color:var(--q-accent)}
+.q-prose img,.q-prose figure{margin:1.6em 0}
+.q-prose figcaption{font:400 var(--q-fs-sm)/1.45 var(--q-sans);color:var(--q-muted);margin-top:8px}
+.q-prose mjx-container[display="true"],.q-prose .katex-display{overflow-x:auto;overflow-y:hidden;padding:4px 0;margin:1.2em 0!important}
+.q-prose strong{font-weight:600}
+.q-prose sup a,.q-prose .footnote-ref a{text-decoration:none;color:var(--q-cite)}
+.q-cite{display:inline-grid;place-items:center;min-width:1.45em;height:1.45em;padding:0 .3em;margin:0 1px;border-radius:5px;background:var(--q-cite-wash);color:var(--q-cite);font:600 .68em/1 var(--q-sans);vertical-align:.32em;text-decoration:none}
+
+/* article layout: body + aside (contents, record) */
+.q-article{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:64px;align-items:start;padding:40px 0 72px}
+.q-article-aside{position:sticky;top:88px;font-size:var(--q-fs-sm);display:grid;gap:28px;max-height:calc(100vh - 110px);overflow:auto}
+.q-article-aside h2{font:600 var(--q-fs-sm)/1.3 var(--q-sans);color:var(--q-ink);margin:0 0 10px}
+.q-toc{list-style:none;margin:0;padding:0;border-left:1px solid var(--q-rule)}
+.q-toc a{display:block;padding:4px 0 4px 12px;margin-left:-1px;border-left:2px solid transparent;color:var(--q-muted);text-decoration:none;line-height:1.35}
+.q-toc a:hover{color:var(--q-ink)}
+.q-toc a.is-active{color:var(--q-ink);border-left-color:var(--q-accent)}
+.q-toc .q-toc-3 a{padding-left:24px;font-size:var(--q-fs-xs)}
+.q-record{display:grid;gap:8px}
+.q-record div{display:grid;gap:2px}
+.q-record dt{font-size:var(--q-fs-xs);color:var(--q-muted)}
+.q-record dd{margin:0;overflow-wrap:anywhere}
+@media (max-width:1020px){.q-article{grid-template-columns:minmax(0,1fr);gap:28px}.q-article-aside{position:static;max-height:none}.q-toc-wrap{display:none}}
+.q-article-head{max-width:var(--q-measure);margin-bottom:32px}
+.q-article-head .q-h1{font-size:clamp(1.85rem,3.4vw,2.6rem)}
+.q-abstract{font:400 1.1875rem/1.62 var(--q-serif);color:var(--q-ink-2);border-top:1px solid var(--q-rule);border-bottom:1px solid var(--q-rule);padding:20px 0;margin:24px 0 32px;max-width:var(--q-measure)}
+.q-abstract h2{font:600 var(--q-fs-sm)/1.3 var(--q-sans);color:var(--q-muted);margin:0 0 8px}
+
+/* subscribe strip */
+.q-subscribe{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px;align-items:center;padding:36px 0;border-top:1px solid var(--q-rule)}
+.q-subscribe form{display:flex;gap:8px}
+.q-subscribe .q-msg{grid-column:2;font-size:var(--q-fs-sm);min-height:1.4em;margin:0}
+.q-msg.ok{color:var(--q-ok)}.q-msg.err{color:var(--q-bad)}
+@media (max-width:760px){.q-subscribe{grid-template-columns:minmax(0,1fr);gap:16px}.q-subscribe .q-msg{grid-column:1}.q-subscribe form{flex-direction:column}}
+
+/* footer */
+.q-foot{border-top:1px solid var(--q-rule);padding:40px 0 48px;font-size:var(--q-fs-sm);color:var(--q-muted);margin-top:24px}
+.q-foot-grid{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:32px}
+.q-foot h2{font:600 var(--q-fs-sm)/1.3 var(--q-sans);color:var(--q-ink);margin:0 0 10px}
+.q-foot ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.q-foot a{color:var(--q-muted);text-decoration:none}
+.q-foot a:hover{color:var(--q-ink);text-decoration:underline}
+.q-foot-base{margin-top:32px;padding-top:16px;border-top:1px solid var(--q-rule);display:flex;flex-wrap:wrap;gap:8px 20px;font-size:var(--q-fs-xs)}
+@media (max-width:760px){.q-foot-grid{grid-template-columns:1fr 1fr}.q-foot-grid>:first-child{grid-column:1/-1}}
+
+/* operator density (fleet.qnfo.org) */
+[data-density="compact"] body{font-size:.9375rem}
+[data-density="compact"] .q-top .q-wrap{min-height:52px}
+[data-density="compact"] .q-section{padding:28px 0}
+[data-density="compact"] .q-panel{padding:16px}
+
+/* motion and print */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media print{
+  .q-family,.q-top,.q-foot,.q-article-aside,.q-subscribe,.q-skip,.q-no-print{display:none!important}
+  body{background:#fff;color:#000}
+  .q-article{display:block;padding:0}
+  .q-prose{max-width:none;font-size:11pt}
+  .q-prose a{color:#000}
+  .q-prose a[href^="http"]::after{content:" (" attr(href) ")";font-size:9pt;color:#444}
+}
+`;
+var QDS_JS = `/* QDS behaviour: theme toggle, header state, table of contents, copy buttons. No dependencies; every feature is optional. */
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+  var saved = store("qnfo-theme");
+  if (saved === "light" || saved === "dark") root.setAttribute("data-theme", saved);
+  function isDark() {
+    var t = root.getAttribute("data-theme");
+    return t ? t === "dark" : !!(window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+  }
+  function wire() {
+    document.querySelectorAll("[data-q-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(isDark()));
+      b.addEventListener("click", function () {
+        var next = isDark() ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        store("qnfo-theme", next);
+        document.querySelectorAll("[data-q-theme]").forEach(function (x) { x.setAttribute("aria-pressed", String(next === "dark")); });
+        try { window.dispatchEvent(new CustomEvent("qnfo-theme", { detail: next })); } catch (e) {}
+      });
+    });
+    var top = document.querySelector(".q-top");
+    if (top) {
+      var onScroll = function () { top.classList.toggle("is-stuck", window.scrollY > 4); };
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    }
+    // Close the mobile menu after a choice.
+    document.querySelectorAll(".q-menu a").forEach(function (a) { a.addEventListener("click", function () { var d = a.closest("details"); if (d) d.removeAttribute("open"); }); });
+    // Table of contents: <ol class="q-toc" data-q-toc=".q-prose"> is filled from that article's h2/h3.
+    document.querySelectorAll("[data-q-toc]").forEach(function (toc) {
+      var src = document.querySelector(toc.getAttribute("data-q-toc"));
+      if (!src) return;
+      var hs = Array.prototype.slice.call(src.querySelectorAll("h2, h3"));
+      if (hs.length < 3) { var wrap = toc.closest(".q-toc-wrap"); if (wrap) wrap.hidden = true; return; }
+      var used = {};
+      hs.forEach(function (h) {
+        if (!h.id) {
+          var base = (h.textContent || "section").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "section";
+          var id = base, n = 2;
+          while (used[id] || document.getElementById(id)) id = base + "-" + n++;
+          h.id = id;
+        }
+        used[h.id] = 1;
+        var li = document.createElement("li");
+        if (h.tagName === "H3") li.className = "q-toc-3";
+        var a = document.createElement("a");
+        a.href = "#" + h.id;
+        a.textContent = (h.textContent || "").replace(/\\s+/g, " ").trim();
+        li.appendChild(a);
+        toc.appendChild(li);
+      });
+      if ("IntersectionObserver" in window) {
+        var links = toc.querySelectorAll("a");
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (!e.isIntersecting) return;
+            links.forEach(function (l) { l.classList.toggle("is-active", l.getAttribute("href") === "#" + e.target.id); });
+          });
+        }, { rootMargin: "-80px 0px -70% 0px" });
+        hs.forEach(function (h) { io.observe(h); });
+      }
+    });
+    // Copy buttons: <button data-q-copy="text"> or data-q-copy-from="#id".
+    document.querySelectorAll("[data-q-copy],[data-q-copy-from]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var t = b.getAttribute("data-q-copy");
+        if (t === null) { var el = document.querySelector(b.getAttribute("data-q-copy-from")); t = el ? el.textContent : ""; }
+        var label = b.textContent;
+        var done = function () { b.textContent = "Copied"; setTimeout(function () { b.textContent = label; }, 1600); };
+        if (navigator.clipboard) navigator.clipboard.writeText(t).then(done, function () {});
+      });
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire); else wire();
+})();
+`;
+var QDS_FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">';
+var QDS_GA = '<!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script>';
+var QDS_MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["$","$"],["\\\\(","\\\\)"]],displayMath:[["$$","$$"],["\\\\[","\\\\]"]],processEscapes:true},svg:{scale:1.05,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" defer onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script>';
+var QDS_MARK = {
+  qnfo: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 16h7M13 16l7-8M13 16l7 8M20 8h6M20 24h6M20 8l4-4M20 24l4 4" stroke="var(--q-accent)" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="6" cy="16" r="3" fill="var(--q-ink)"/></svg>',
+  qwav: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 19c3.2-7 6.4-7 9.6 0s6.4 7 9.6 0c2-4.4 4-5.6 6.8-4" stroke="var(--q-accent)" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="3.5" cy="19" r="2.6" fill="var(--q-ink)"/></svg>'
+};
+var QDS_FAVICON = {
+  qnfo: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23182042'/%3E%3Cpath d='M6 16h7M13 16l7-8M13 16l7 8M20 8h6M20 24h6' stroke='%235FD3C4' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E",
+  qwav: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23182042'/%3E%3Cpath d='M4 18c3-6.5 6-6.5 9 0s6 6.5 9 0c1.8-4 3.6-5 6-3.6' stroke='%239AA6FF' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"
+};
+var QDS_THEME_BTN = '<button class="q-theme" type="button" data-q-theme aria-label="Switch between light and dark theme"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></button>';
+var QDS_MENU_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+// One navigation for the QNFO family. QWAV and q08 are separate labels (STRATEGY 2.1) and are not linked from here.
+var QDS_NAV_QNFO = [
+  { k: "papers", t: "Papers", h: "https://papers.qnfo.org/papers" },
+  { k: "ask", t: "Ask the corpus", h: "https://ask.qwav.tech/" },
+  { k: "ideas", t: "Ideas", h: "https://ideas.qnfo.org/" },
+  { k: "archive", t: "Archive", h: "https://archive.qnfo.org/" },
+  { k: "about", t: "About", h: "https://qnfo.org/about" },
+  { k: "work", t: "Work with me", h: "https://qnfo.org/work-with-me" }
+];
+var QDS_NAV_QWAV = [
+  { k: "jpcub", t: "JPCUB", h: "https://qwav.org/#jpcub" },
+  { k: "stack", t: "Architecture", h: "https://qwav.org/#stack" },
+  { k: "landscape", t: "Landscape", h: "https://qwav.org/#landscape" },
+  { k: "research", t: "Research", h: "https://qwav.org/#research" },
+  { k: "ask", t: "Ask", h: "https://ask.qwav.tech/" }
+];
+function qdsAttr(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+// The <head> every page shares. o: title, description, canonical, brand, ogType, jsonld (string), math (bool), extra (string),
+// rss (bool), robots.
+function qdsHead(o) {
+  const brand = o.brand || "qnfo";
+  const t = qdsAttr(o.title), d = qdsAttr(o.description || "");
+  const site = brand === "qwav" ? "QWAV" : "QNFO";
+  return '<!DOCTYPE html><html lang="en" data-brand="' + brand + '"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' +
+    "<title>" + t + '</title><meta name="description" content="' + d + '">' + (o.canonical ? '<link rel="canonical" href="' + qdsAttr(o.canonical) + '">' : "") +
+    (o.robots ? '<meta name="robots" content="' + qdsAttr(o.robots) + '">' : "") +
+    '<meta name="author" content="Rowan Brad Quni-Gudzinas"><meta property="og:site_name" content="' + site + '"><meta property="og:title" content="' + t + '"><meta property="og:description" content="' + d + '"><meta property="og:type" content="' + (o.ogType || "website") + '">' +
+    (o.canonical ? '<meta property="og:url" content="' + qdsAttr(o.canonical) + '">' : "") + '<meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + t + '"><meta name="twitter:description" content="' + d + '">' +
+    '<meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#121731" media="(prefers-color-scheme: dark)">' +
+    '<link rel="icon" type="image/svg+xml" href="' + QDS_FAVICON[brand === "qwav" ? "qwav" : "qnfo"] + '">' +
+    (o.rss ? '<link rel="alternate" type="application/rss+xml" title="QNFO Papers" href="https://papers.qnfo.org/rss.xml">' : "") +
+    QDS_FONTS + '<link rel="stylesheet" href="' + QDS_ORIGIN + "/qds.css?v=" + QDS_VERSION + '"><script src="' + QDS_ORIGIN + "/qds.js?v=" + QDS_VERSION + '" defer><\/script>' +
+    (o.jsonld || "") + (o.math ? QDS_MATHJAX : "") + (o.extra || "") + QDS_GA + "</head>";
+}
+function qdsHeader(brand, active) {
+  const nav = brand === "qwav" ? QDS_NAV_QWAV : QDS_NAV_QNFO;
+  const home = brand === "qwav" ? "https://qwav.org/" : "https://qnfo.org/";
+  const name = brand === "qwav" ? "QWAV" : "QNFO";
+  const links = nav.map(function(n) {
+    return '<a href="' + n.h + '"' + (n.k === active ? ' aria-current="page"' : "") + ">" + n.t + "</a>";
+  }).join("");
+  return '<a class="q-skip" href="#main">Skip to main content</a><header class="q-top"><div class="q-wrap"><a class="q-brand" href="' + home + '" aria-label="' + name + ' home">' + QDS_MARK[brand === "qwav" ? "qwav" : "qnfo"] + name + "</a>" +
+    '<nav class="q-nav q-nav-wide" aria-label="Main">' + links + "</nav>" +
+    '<details class="q-menu"><summary aria-label="Menu">' + QDS_MENU_ICON + '</summary><nav class="q-nav" aria-label="Main">' + links + "</nav></details>" + QDS_THEME_BTN + "</div></header>";
+}
+function qdsFooter(brand) {
+  if (brand === "qwav") {
+    return '<footer class="q-foot"><div class="q-wrap"><div class="q-foot-grid"><div><a class="q-brand" href="https://qwav.org/">' + QDS_MARK.qwav + 'QWAV</a><p style="margin-top:12px;max-width:36ch">A pre-commercial computing platform concept, benchmarked in joules per correct answer. Research by Rowan Brad Quni-Gudzinas, published by QNFO.</p></div>' +
+      '<div><h2>Platform</h2><ul><li><a href="#jpcub">JPCUB benchmark</a></li><li><a href="#stack">Architecture</a></li><li><a href="#landscape">Landscape</a></li><li><a href="#research">Research</a></li></ul></div>' +
+      '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://doi.org/10.5281/zenodo.21637028">JPCUB P0 protocol</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li></ul></div>' +
+      '<div><h2>Legal</h2><ul><li><a href="https://legal.qnfo.org/">License (QNFO-ULA v2.0)</a></li><li><a href="https://qnfo.org/about">About the author</a></li></ul></div></div>' +
+      '<div class="q-foot-base"><span>\u00a9 2025\u20132026 Rowan Brad Quni-Gudzinas</span><span>Research content under QNFO-ULA v2.0. No commercial product exists yet.</span></div></div></footer>';
+  }
+  return '<footer class="q-foot"><div class="q-wrap"><div class="q-foot-grid"><div><a class="q-brand" href="https://qnfo.org/">' + QDS_MARK.qnfo + 'QNFO</a><p style="margin-top:12px;max-width:38ch">The independent research imprint of Rowan Brad Quni-Gudzinas. Every work carries a DOI, and corrections ship as new versions.</p></div>' +
+    '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://qnfo.org/#selected-works">Selected works</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://ideas.qnfo.org/">Ideas</a></li><li><a href="https://archive.qnfo.org/">Archive</a></li><li><a href="https://ipatent.qnfo.org/">Provisional drafting tool</a></li></ul></div>' +
+    '<div><h2>Author</h2><ul><li><a href="https://qnfo.org/about">About</a></li><li><a href="https://qnfo.org/work-with-me">Work with me</a></li><li><a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + '</a></li><li><a href="https://qnfo.org/work-with-me#contact">Contact</a></li></ul></div>' +
+    '<div><h2>Follow</h2><ul><li><a href="https://qnfo.org/#subscribe">New papers by email</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li><li><a href="https://legal.qnfo.org/">License (QNFO-ULA v2.0)</a></li><li><a href="https://legal.qnfo.org/privacy">Privacy</a></li></ul></div></div>' +
+    '<div class="q-foot-base"><span>\u00a9 2025\u20132026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><span>Prepared with an AI-assisted research pipeline; the author is responsible for the content.</span></div></div></footer>';
+}
+function qdsPage(o, body) {
+  return qdsHead(o) + "<body>" + qdsHeader(o.brand || "qnfo", o.active) + '<main id="main">' + body + "</main>" + qdsFooter(o.brand || "qnfo") + (o.scripts || "") + "</body></html>";
+}
+function qdsAsset(kind) {
+  const css = kind === "css";
+  return new Response(css ? QDS_CSS : QDS_JS, { headers: { "Content-Type": css ? "text/css; charset=utf-8" : "text/javascript; charset=utf-8", "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800", "Access-Control-Allow-Origin": "*", "X-QDS-Version": QDS_VERSION } });
+}
+// ---- QDS-1:END ----
+
 function stripFrontmatter(md) {
   if (!md) return "";
   let b = md.trimStart();
@@ -273,7 +691,7 @@ __name2222222(detectCategory, "detectCategory");
 __name22222222(detectCategory, "detectCategory");
 __name222222222(detectCategory, "detectCategory");
 __name2222222222(detectCategory, "detectCategory");
-var CATEGORY_LABELS = { "qec": "QEC", "number-theory": "Number Theory", "physics": "Physics", "computer-science": "CS", "other": "Other" };
+var CATEGORY_LABELS = { "qec": "QEC", "number-theory": "Number theory", "physics": "Physics", "computer-science": "CS", "other": "Other" };
 function texSafe(s) {
   if (!s) return "";
   s = String(s);
@@ -739,28 +1157,42 @@ function selectedWorksHTML() {
   ).join("") + '</ol><p class="ld-sel-note">Quni-Gudzinas, R. B. Published by QNFO. Prepared with an AI-assisted research pipeline; the author is responsible for the content.</p></section>';
 }
 function renderHubHTML(recentPapers, paperCount, nodesCount = 0) {
-  const total = paperCount || (recentPapers ? recentPapers.length : 0);
-  const kg = nodesCount ? nodesCount.toLocaleString("en-US") + "+" : "\u2014";
-  const cards = [
-    { t: "Work with me", d: "Energy-per-correct-answer assessments, reviews of AI agent operations, talks, research collaboration and roles.", go: "See the offers \u2192", h: "/work-with-me" },
-    { t: "Research Papers", d: "The full corpus \u2014 number theory, physics, QEC and computer science \u2014 every paper with a Zenodo DOI.", go: "Browse papers \u2192", h: "/papers" },
-    { t: "Knowledge Graph", d: kg + " nodes mapping the conceptual structure of the research program.", go: "Explore the graph \u2192", h: "/graph" },
-    { t: "Ideas \u2014 Live", d: "Research conversations as they develop, streamed from the QNFO AI worker.", go: "Watch ideas \u2192", h: "https://ideas.qnfo.org" },
-    { t: "iPatent", d: "A free, private-by-default assistant for drafting US provisional patent disclosures, with a plain-language guide to what a provisional protects.", go: "Draft a disclosure \u2192", h: "https://ipatent.qnfo.org/" },
-    { t: "Research Archive", d: "Persistent archival storage with DOI registration and redundant backup.", go: "Open the archive \u2192", h: "https://archive.qnfo.org" },
-    { t: "License", d: "The QNFO Unified License Agreement \u2014 open science with commercial protections.", go: "Read the license \u2192", h: "/legal" }
+  const pillars = [
+    { t: "Energy-honest computing", d: "What a correct answer costs in joules, across quantum processors, HPC and AI inference.", w: [0, 1, 2, 3] },
+    { t: "Epistemics of AI-assisted science", d: "What an AI-assisted claim is worth, and how to audit what a model does not know.", w: [4, 5] },
+    { t: "Autonomous research operations", d: "What an autonomous research system actually delivers, from its own failure ledger.", w: [6] }
   ];
-  const cardsHtml = cards.map(
-    (c) => '<a class="ld-card" href="' + c.h + '"><h3>' + c.t + "</h3><p>" + c.d + '</p><span class="ld-go">' + c.go + "</span></a>"
-  ).join("");
-  let papersHtml = "";
+  const selected = '<section class="q-section" id="selected-works" aria-labelledby="sel-h"><div class="q-wrap"><div class="q-section-head"><h2 class="q-h2" id="sel-h">Selected works</h2><a href="https://papers.qnfo.org/papers">The full library</a></div>' +
+    '<div class="q-grid q-grid-3">' + pillars.map(function(p) {
+      return '<div><p class="q-eyebrow">' + esc(p.t) + '</p><p class="q-meta" style="margin:0 0 8px">' + esc(p.d) + '</p><ol class="q-list">' + p.w.map(function(i) {
+        const w = SELECTED_WORKS[i];
+        return '<li class="q-item"><a class="q-item-title" style="font-size:1.0625rem" href="https://doi.org/' + w.doi + '">' + esc(w.t) + '</a><div class="q-item-meta"><a href="https://doi.org/' + w.doi + '">doi:' + w.doi + "</a></div></li>";
+      }).join("") + "</ol></div>";
+    }).join("") + '</div><p class="q-small" style="margin-top:20px">Quni-Gudzinas, R. B. Published by QNFO. Prepared with an AI-assisted research pipeline; the author is responsible for the content.</p></div></section>';
+  let latest = "";
   if (recentPapers && recentPapers.length > 0) {
-    papersHtml = '<section class="ld-latest"><h2>Latest papers</h2><ul>' + recentPapers.slice(0, 8).map(
-      (p) => '<li><a href="/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + '</a><span class="ld-date">' + esc(String(p.created_at || "").slice(0, 10)) + "</span></li>"
-    ).join("") + '</ul><p class="ld-more"><a href="/papers">Browse the full library \u2192</a></p></section>';
+    latest = '<section class="q-section" aria-labelledby="latest-h"><div class="q-wrap"><div class="q-section-head"><h2 class="q-h2" id="latest-h">Latest papers</h2><a href="https://papers.qnfo.org/papers">Browse the library</a></div><ul class="q-list q-compact" style="max-width:860px">' + recentPapers.slice(0, 6).map(function(p) {
+      return '<li class="q-item"><a class="q-item-title" href="https://papers.qnfo.org/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + '</a><div class="q-item-meta"><time>' + esc(String(p.created_at || "").slice(0, 10)) + "</time></div></li>";
+    }).join("") + "</ul></div></section>";
   }
-  const formScript = '<script>(function(){var f=document.getElementById("ld-sub-form");if(!f)return;var msg=document.getElementById("ld-msg");var btn=document.getElementById("ld-btn");f.addEventListener("submit",function(e){e.preventDefault();var email=(document.getElementById("ld-email").value||"").trim();var hp=(document.getElementById("ld-hp")||{}).value||"";if(!email||email.indexOf("@")<1){msg.className="ld-msg err";msg.textContent="Please enter a valid email address.";return;}btn.disabled=true;msg.className="ld-msg";msg.textContent="Subscribing\u2026";fetch("/api/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,hp:hp,source:"qnfo.org"})}).then(function(r){return r.json().then(function(j){return {s:r.status,j:j};}).catch(function(){return {s:r.status,j:{}};});}).then(function(res){if(res.s===200&&res.j&&res.j.ok){msg.className="ld-msg ok";msg.textContent="Thanks \u2014 check your inbox to confirm your subscription.";f.reset();}else{msg.className="ld-msg err";msg.textContent=(res.j&&res.j.error)||"Something went wrong. Please try again.";}}).catch(function(){msg.className="ld-msg err";msg.textContent="Network error. Please try again.";}).then(function(){btn.disabled=false;});});})();<\/script>';
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas</title><meta name="description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth."><meta name="author" content="Rowan Brad Quni-Gudzinas"><meta property="og:site_name" content="QNFO"><meta property="og:title" content="QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas"><meta property="og:description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth."><meta property="og:type" content="website"><meta property="og:url" content="https://qnfo.org/"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas"><meta name="twitter:description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth."><link rel="canonical" href="https://qnfo.org/">` + identityJsonLd("https://qnfo.org/") + `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='%23faf7f2' font-family='Georgia,serif'>Q</text></svg>"><script>window.MathJax={tex:{inlineMath:[["$","$"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.1,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false}};function __mq(){if(window.MathJax&&MathJax.typesetPromise){MathJax.typesetPromise().catch(function(){})}}if(document.readyState==="complete"){setTimeout(__mq,150)}else{window.addEventListener("load",function(){setTimeout(__mq,150)})}<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3/es5/tex-svg-full.js';document.head.appendChild(s);"><\/script><style>` + COMMON_CSS + LD_CSS + '</style><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body><a href="#ld-main" class="skip-link">Skip to main content</a><header class="ld-top"><a class="ld-brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><nav class="ld-nav" aria-label="Main"><a href="/papers">Papers</a><a href="#selected-works">Selected works</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a></nav></header><main class="ld-main" id="ld-main"><section class="ld-hero"><span class="ld-tag">Independent research</span><h1>QNFO</h1><p>QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. Every work carries a DOI, and corrections ship as new versions.</p><p class="ld-byline">Rowan Brad Quni-Gudzinas \u00b7 <a href="https://orcid.org/0009-0002-4317-5604">ORCID 0009-0002-4317-5604</a> \u00b7 <a href="/about">About</a> \u00b7 <a href="/work-with-me">Work with me</a></p></section>' + selectedWorksHTML() + '<div class="ld-cards">' + cardsHtml + "</div>" + papersHtml + '<section class="ld-sub" id="subscribe" aria-labelledby="ld-sub-h"><h2 id="ld-sub-h">New papers by email</h2><p>QNFO is moving off the social feeds. When new research is published, subscribers get one short weekly digest \u2014 titles, links and DOIs, nothing else.</p><form id="ld-sub-form" novalidate><label class="ld-sr" for="ld-email">Email address</label><input id="ld-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required><input class="ld-hp" type="text" id="ld-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"><button type="submit" id="ld-btn">Subscribe</button></form><p class="ld-msg" id="ld-msg" role="status" aria-live="polite"></p></section></main><footer class="ld-foot"><span>\xA9 2026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><a href="/papers">Papers</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="https://ipatent.qnfo.org/">iPatent</a><a href="https://orcid.org/0009-0002-4317-5604">ORCID</a><a href="/legal">QNFO-ULA</a></footer>' + formScript + "</body></html>";
+  const explore = [
+    { t: "Ask the corpus", d: "Questions answered from the papers, with citations and the knowledge graph around each answer.", h: "https://ask.qwav.tech/" },
+    { t: "Work with me", d: "Energy-per-correct-answer assessments, reviews of AI agent operations, talks, collaboration and roles.", h: "/work-with-me" },
+    { t: "Ideas", d: "Research conversations as they develop, with the questions that start them.", h: "https://ideas.qnfo.org/" },
+    { t: "Archive", d: "The library by field, feeds and the tools for finding your way through it.", h: "https://archive.qnfo.org/" },
+    { t: "iPatent", d: "A free, private-by-default assistant for drafting US provisional patent disclosures.", h: "https://ipatent.qnfo.org/" },
+    { t: "License", d: "The QNFO Unified License Agreement: open science with commercial protections.", h: "https://legal.qnfo.org/" }
+  ];
+  const exploreHtml = '<section class="q-section" aria-labelledby="ex-h"><div class="q-wrap"><h2 class="q-h2" id="ex-h">Explore</h2><div class="q-grid q-grid-3" style="margin-top:8px">' + explore.map(function(c) {
+    return '<a class="q-link-card" href="' + c.h + '"><h3>' + c.t + "</h3><p>" + c.d + "</p></a>";
+  }).join("") + "</div></div></section>";
+  const hero = '<section class="q-hero"><div class="q-wrap q-hero-grid"><div><p class="q-eyebrow">Independent research by Rowan Brad Quni-Gudzinas</p><h1 class="q-display">What computation really costs, and what it delivers.</h1>' +
+    '<p class="q-lede">QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. Every work carries a DOI, and corrections ship as new versions.</p>' +
+    '<div class="q-actions"><a class="q-btn" href="#selected-works">Start with the selected works</a><a class="q-btn q-btn-ghost" href="/work-with-me">Work with me</a></div>' +
+    '<p class="q-meta" style="margin-top:18px">Rowan Brad Quni-Gudzinas \u00b7 <a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + '</a> \u00b7 <a href="/about">About</a></p></div>' +
+    '<form class="q-panel" action="https://ask.qwav.tech/" method="get" role="search" aria-label="Ask the research corpus"><label class="q-h3" for="hub-q" style="display:block">Ask the corpus</label><p class="q-meta" style="margin:0 0 12px">Answers come from the papers, with citations.</p><div class="q-field"><input id="hub-q" name="q" placeholder="What does JPCUB measure?" autocomplete="off"><button class="q-btn" type="submit">Ask</button></div></form></div></section>';
+  const body = hero + selected + latest + exploreHtml + '<div class="q-wrap">' + subscribeBlock("qnfo.org") + "</div>";
+  return qdsPage({ title: "QNFO \u2014 independent research by Rowan Brad Quni-Gudzinas", description: "QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers, from energy per correct answer (Joules-per-Solution) to what an AI-assisted claim is worth.", canonical: "https://qnfo.org/", jsonld: identityJsonLd("https://qnfo.org/"), rss: true, active: "" }, body);
 }
 __name(renderHubHTML, "renderHubHTML");
 __name2(renderHubHTML, "renderHubHTML");
@@ -820,6 +1252,13 @@ function paperAuthors(paper) {
   }
   return out;
 }
+// LICENSE-ONE-1: the licence URL a paper's JSON-LD carries, from papers.license.
+function paperLicenseUrl(lic) {
+  const l = String(lic || "").toLowerCase().replace(/[^a-z0-9.]+/g, "-");
+  if (/^cc-by-4/.test(l)) return "https://creativecommons.org/licenses/by/4.0/";
+  if (/^cc-by-nc-sa-4/.test(l)) return "https://creativecommons.org/licenses/by-nc-sa/4.0/";
+  return "https://legal.qnfo.org/";
+}
 function buildPaperJsonLd(paper) {
   const title = displayTitle(paper.title) || "Untitled";
   const slug = paper.slug || "";
@@ -841,7 +1280,7 @@ function buildPaperJsonLd(paper) {
     abstract: abs,
     datePublished: (paper.created_at || "").slice(0, 10) || void 0,
     inLanguage: "en",
-    license: "https://creativecommons.org/licenses/by/4.0/",
+    license: paperLicenseUrl(paper.license),
     publisher: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org" },
     isAccessibleForFree: true
   };
@@ -867,16 +1306,9 @@ __name22222(citationAuthorsMeta, "citationAuthorsMeta");
 __name222222(citationAuthorsMeta, "citationAuthorsMeta");
 
 function subscribeBlock(source) {
-  var form = '<section style="max-width:720px;margin:36px auto 10px;padding:18px 20px;border:1px solid #e2dcd0;border-radius:12px;background:#f4f1ea">'
-    + '<h2 style="margin:0 0 6px;font-size:17px;color:#1b1915">Get new papers by email</h2>'
-    + '<p style="margin:0 0 12px;color:#6b665b;font-size:13.5px">One short weekly digest &mdash; titles, links and DOIs. No tracking; unsubscribe anytime.</p>'
-    + '<form id="ld-sub-form" novalidate style="display:flex;gap:8px;flex-wrap:wrap">'
-    + '<label for="ld-email" style="position:absolute;left:-9999px">Email address</label>'
-    + '<input id="ld-email" type="email" name="email" placeholder="you@example.com" required style="flex:1;min-width:220px;padding:9px 11px;border:1px solid #cfc7b8;border-radius:8px;font-size:14px">'
-    + '<input id="ld-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">'
-    + '<button type="submit" id="ld-btn" style="padding:9px 16px;border:0;border-radius:8px;background:#24315e;color:#fff;font-size:14px;cursor:pointer">Subscribe</button>'
-    + '</form><p id="ld-msg" role="status" aria-live="polite" style="min-height:18px;margin:8px 0 0;font-size:13px"></p></section>';
-  var js = "<script>(function(){var f=document.getElementById('ld-sub-form');if(!f)return;var msg=document.getElementById('ld-msg');var btn=document.getElementById('ld-btn');f.addEventListener('submit',function(e){e.preventDefault();var email=(document.getElementById('ld-email').value||'').trim();var hp=(document.getElementById('ld-hp')||{}).value||'';if(!email||email.indexOf('@')<1){msg.textContent='Please enter a valid email address.';return;}btn.disabled=true;msg.textContent='Subscribing...';fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,hp:hp,source:'" + source + "'})}).then(function(r){return r.json().catch(function(){return {};});}).then(function(j){if(j&&j.ok){msg.textContent='Thanks - check your inbox to confirm your subscription.';f.reset();}else{msg.textContent=(j&&j.error)||'Something went wrong. Please try again.';}}).catch(function(){msg.textContent='Network error. Please try again.';}).then(function(){btn.disabled=false;});});})();<\/script>";
+  const form = '<section class="q-subscribe" id="subscribe" aria-labelledby="q-sub-h"><div><h2 class="q-h2" id="q-sub-h">New papers by email</h2><p class="q-meta" style="margin:0">One short weekly digest: titles, links and DOIs, nothing else. Unsubscribe any time.</p></div>' +
+    '<form id="ld-sub-form" novalidate><label class="q-sr" for="ld-email">Email address</label><input class="q-input" id="ld-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required><input class="q-sr" type="text" id="ld-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"><button class="q-btn" type="submit" id="ld-btn">Subscribe</button></form><p class="q-msg" id="ld-msg" role="status" aria-live="polite"></p></section>';
+  const js = "<script>(function(){var f=document.getElementById('ld-sub-form');if(!f)return;var msg=document.getElementById('ld-msg');var btn=document.getElementById('ld-btn');f.addEventListener('submit',function(e){e.preventDefault();var email=(document.getElementById('ld-email').value||'').trim();var hp=(document.getElementById('ld-hp')||{}).value||'';if(!email||email.indexOf('@')<1){msg.className='q-msg err';msg.textContent='Enter a valid email address.';return;}btn.disabled=true;msg.className='q-msg';msg.textContent='Subscribing...';fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,hp:hp,source:'" + source + "'})}).then(function(r){return r.json().catch(function(){return {};});}).then(function(j){if(j&&j.ok){msg.className='q-msg ok';msg.textContent='Check your inbox to confirm the subscription.';f.reset();}else{msg.className='q-msg err';msg.textContent=(j&&j.error)||'The subscription did not go through. Try again.';}}).catch(function(){msg.className='q-msg err';msg.textContent='Network error. Try again.';}).then(function(){btn.disabled=false;});});})();<\/script>";
   return form + js;
 }
 __name(subscribeBlock, "subscribeBlock");
@@ -1072,9 +1504,9 @@ async function handlePaperDetail(request, env, path) {
   }
   try {
     const paper = await env.LIVING_PAPER.prepare(
-      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version,pdf_path FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
+      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version,pdf_path,license FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
     ).bind(slug).first();
-    if (!paper) return json({ error: "Paper not found", slug }, 404);
+    if (!paper) return notFoundPage(request, env, "papers.qnfo.org", "/papers/" + slug, slug);
     paper.doi = lpDoi(paper.doi);
     const accept = request.headers.get("Accept") || "";
     if (accept.includes("text/html") || !accept.includes("application/json")) {
@@ -1163,22 +1595,19 @@ __name22(handleAbout, "handleAbout");
 __name222(handleAbout, "handleAbout");
 __name2222(handleAbout, "handleAbout");
 function renderAboutHTML(stats) {
-  const pageCSS = COMMON_CSS + `
-.about-page{max-width:760px;margin:0 auto;padding:1.4rem 1.6rem 0}
-.about-page .meta-line{color:var(--muted);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;margin:-.7rem 0 1.7rem}
-.about-page p{color:var(--ink);font-size:.98rem;line-height:1.75;margin-bottom:1.05rem}
-.about-page .lede{color:var(--muted);font-size:1.04rem;line-height:1.75}
-.about-page .aside{color:var(--muted);font-size:.9rem;line-height:1.7;border-left:2px solid var(--border);padding-left:.9rem;margin:1rem 0}
-.record-table{width:100%;border-collapse:collapse;margin:.6rem 0 .5rem;font-size:.95rem}
-.record-table td{padding:.55rem .4rem;border-bottom:1px solid var(--border);vertical-align:top}
-.record-table td:first-child{color:var(--muted);width:46%}
-.record-table td:last-child{font-variant-numeric:tabular-nums}
-.record-note{color:var(--muted);font-size:.78rem;line-height:1.65;margin:.4rem 0 1.2rem}
-.changelog{width:100%;border-collapse:collapse;font-size:.88rem;margin:.8rem 0 1.2rem}
-.changelog td{padding:.5rem .4rem;border-bottom:1px solid var(--border);vertical-align:top}
-.changelog td:first-child{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;padding-right:1.2rem;width:7.2rem}
-.changelog a{color:var(--accent)}`;
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>About QNFO \u2014 independent research</title><meta name="description" content="About QNFO, the independent research imprint of Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604): the research line, the selected works and how the work is made."><meta property="og:title" content="About QNFO"><meta property="og:description" content="QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: what computation really costs and delivers."><meta property="og:type" content="website"><meta property="og:url" content="https://qnfo.org/about"><link rel="canonical" href="https://qnfo.org/about"><meta property="og:site_name" content="QNFO"><meta name="twitter:card" content="summary">${identityJsonLd("https://qnfo.org/about")}<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='white' font-family='system-ui'>Q</text></svg>"><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script><style>${pageCSS}</style></head><body><a href="#about-main" class="skip-link">Skip to main content</a><nav class="top-nav" role="navigation" aria-label="Main"><a class="brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a></nav><main id="about-main" class="about-page"><h1>About QNFO</h1><p class="meta-line">established 2025 \xB7 living record \xB7 modified 2026-09-03 \xB7 counts queried live</p><p class="lede">QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: one researcher with an open, auditable, AI-assisted research pipeline. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. The <a href="/#selected-works">selected works</a> are the place to start.</p><h2>What QNFO is</h2><p>Open research in three lines, in this order: energy-honest computing (the Joules-per-Solution metric), the epistemics of AI-assisted science, and autonomous research operations. Publications carry Zenodo DOIs. The corpus is browsable on <a href="/papers">papers.qnfo.org</a> and mapped in the <a href="/graph">knowledge graph</a>.</p><p class="aside">QNFO is not an acronym. The name is the name.</p><h2>The thesis</h2><p>Computational advantage is measured in joules-per-solution, not qubit counts or press releases. The <a href="https://github.com/rwnq8/joules-per-compute-benchmark">joules-per-compute benchmark</a> formalizes the questions the industry prefers to defer: the Landauer floor for cryogenic controllers, the Margolus\u2013Levitin bound as a scheduling constraint, and the energy floor of surface-code error correction at a thousand logical qubits.</p><p class="aside">The current line of work is energy accounting for quantum hardware claims. Recent papers are listed on the front page.</p><h2>The record</h2><table class="record-table"><tbody><tr><td>Papers in the corpus</td><td>${stats.papers} \u2014 counted live</td></tr><tr><td>Knowledge graph</td><td>${stats.nodes} nodes, ${stats.edges} edges \u2014 counted live</td></tr><tr><td>Queries logged (2026-09-03)</td><td>1,983</td></tr><tr><td>Honest daily readership</td><td>~400 requests per day on /papers/*</td></tr></tbody></table><p class="record-note">The first two rows are queried live on every request. Fleet figures were counted by the operations agent on 2026-09-03. Roughly nine in ten requests to the zone are scanner noise; the readership figure excludes it.</p><h2>How QNFO runs</h2><p>A cloud-scheduled pipeline keeps the corpus alive: an arXiv radar at 08:30 UTC, a research brief at 06:00 UTC, an hourly errata watch that turns corrections into new versions of the same record, a citation watch, and a weekly visibility digest. Outreach is capped and opt-out.</p><p class="aside">If the laptop is off, the pipeline does not notice.</p><h2>How QNFO holds itself</h2><p>Every quantitative claim is computationally verified before publication, with the verification artifacts deposited beside the paper. Traffic is never fabricated. Disconfirmation criteria are stated in advance. Corrections ship as new versions of the same record.</p><p class="aside">The record is the record.</p><h2>The operator</h2><p>QNFO is operated by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID 0009-0002-4317-5604</a>). Contact: <a href="mailto:rowan.quni@qnfo.org">rowan.quni@qnfo.org</a>. For assessments, reviews of AI agent operations, talks, research collaboration or roles, see <a href="/work-with-me">Work with me</a>.</p><p class="aside">The corpus discloses its own construction. There is nothing else to disclose.</p><h2>Changelog</h2><table class="changelog"><tbody><tr><td>2026-09-03</td><td>This page, with hub record counts rendered live. Model-key guard on a thirty-minute scheduler cadence.</td></tr><tr><td>2026-09-02</td><td>Outreach engine live \u2014 capped and opt-out. Weekly scorecard publishing real traffic deltas. Website-sync gate fixed.</td></tr><tr><td>2026-08-29</td><td>Universal Ignorance Audit re-pointed to v0.4 (<a href="https://doi.org/10.5281/zenodo.22158133">10.5281/zenodo.22158133</a>).</td></tr><tr><td>2026-08-28</td><td>OSF pre-registrations placed; results attached as comments on frozen registrations.</td></tr><tr><td>2026-08-10</td><td>Email deliverability hardened: SPF, DKIM, DMARC at reject on every sending domain.</td></tr></tbody></table><h2>Colophon</h2><p>One design system across every QNFO surface: warm paper, ink, navy. This page is generated by the qnfo-gateway worker. No tracker is added by this page.</p></main><footer class="site-footer" role="contentinfo"><div class="footer-links"><a href="/papers">Papers</a><a href="/graph">Knowledge Graph</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="/legal">License</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">Privacy</a></div><p>Licensed under <a href="/legal">QNFO-ULA v2.0</a><br>\xA9 2025\u20132026 QNFO</p></footer></body></html>`;
+  const fmt = function(n) { return Number(n || 0).toLocaleString("en-US"); };
+  const body = '<section class="q-hero" style="padding-bottom:16px"><div class="q-wrap"><p class="q-eyebrow">About</p><h1 class="q-display" style="max-width:18ch">About QNFO</h1><p class="q-lede">QNFO is the independent research imprint of Rowan Brad Quni-Gudzinas: one researcher with an open, auditable, AI-assisted research pipeline. The work asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth (ignorance audits), and what an autonomous research system actually delivers. The <a href="/#selected-works">selected works</a> are the place to start.</p></div></section>' +
+    '<div class="q-wrap"><article class="q-article"><div class="q-prose">' +
+    '<h2>What QNFO is</h2><p>Open research in three lines, in this order: energy-honest computing (the Joules-per-Solution metric), the epistemics of AI-assisted science, and autonomous research operations. Publications carry Zenodo DOIs. The corpus is browsable on <a href="https://papers.qnfo.org/papers">papers.qnfo.org</a>, and <a href="https://ask.qwav.tech/">Ask the corpus</a> answers questions from it with citations and the knowledge graph around each answer.</p><p class="q-meta">QNFO is not an acronym. The name is the name.</p>' +
+    '<h2>The thesis</h2><p>Computational advantage is measured in joules per solution, not qubit counts or press releases. The <a href="https://github.com/rwnq8/joules-per-compute-benchmark">joules-per-compute benchmark</a> formalizes the questions the industry prefers to defer: the Landauer floor for cryogenic controllers, the Margolus\u2013Levitin bound as a scheduling constraint, and the energy floor of surface-code error correction at a thousand logical qubits.</p>' +
+    '<h2>The record</h2><div class="q-table-wrap"><table class="q-table"><tbody><tr><td>Papers in the corpus</td><td class="q-num">' + fmt(stats.papers) + ' (counted live)</td></tr><tr><td>Knowledge graph</td><td class="q-num">' + fmt(stats.nodes) + " nodes, " + fmt(stats.edges) + ' edges (counted live)</td></tr><tr><td>Readership on paper pages</td><td class="q-num">about 400 requests a day (2026-09-03)</td></tr></tbody></table></div><p class="q-meta">The first two rows are queried on every request. Roughly nine in ten requests to the zone are scanner noise; the readership figure excludes it.</p>' +
+    '<h2>How QNFO runs</h2><p>A cloud-scheduled pipeline keeps the corpus alive: an arXiv radar each morning, a research brief, an hourly errata watch that turns corrections into new versions of the same record, a citation watch, and a weekly visibility digest. Outreach is capped and opt-out. If the laptop is off, the pipeline does not notice.</p>' +
+    '<h2>How QNFO holds itself</h2><p>Every quantitative claim is computationally verified before publication, with the verification artifacts deposited beside the paper. Traffic is never fabricated. Disconfirmation criteria are stated in advance. Corrections ship as new versions of the same record.</p>' +
+    '<h2>The author</h2><p>QNFO is operated by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + '</a>). Contact: <a href="mailto:rowan.quni@qnfo.org">rowan.quni@qnfo.org</a>. For assessments, reviews of AI agent operations, talks, research collaboration or roles, see <a href="/work-with-me">Work with me</a>.</p>' +
+    '<h2>Changelog</h2><div class="q-table-wrap"><table class="q-table"><tbody><tr><td class="q-num">2026-10-02</td><td>One design system across every QNFO site, with reading type for the papers and light and dark themes.</td></tr><tr><td class="q-num">2026-09-03</td><td>This page, with record counts rendered live.</td></tr><tr><td class="q-num">2026-09-02</td><td>Outreach live, capped and opt-out. A weekly scorecard publishes real traffic changes.</td></tr><tr><td class="q-num">2026-08-29</td><td>Universal Ignorance Audit re-pointed to v0.4 (<a href="https://doi.org/10.5281/zenodo.22158133">10.5281/zenodo.22158133</a>).</td></tr><tr><td class="q-num">2026-08-28</td><td>OSF pre-registrations placed; results attached as comments on frozen registrations.</td></tr><tr><td class="q-num">2026-08-10</td><td>Email deliverability hardened: SPF, DKIM and DMARC at reject on every sending domain.</td></tr></tbody></table></div>' +
+    '<p class="q-small">Prepared with an AI-assisted research pipeline; the author is responsible for the content.</p></div>' +
+    '<aside class="q-article-aside" aria-label="On this page"><section class="q-toc-wrap"><h2>On this page</h2><ol class="q-toc" data-q-toc=".q-prose"></ol></section></aside></article>' + subscribeBlock("about") + '</div>';
+  return qdsPage({ title: "About QNFO \u2014 independent research", description: "About QNFO, the independent research imprint of Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604): the research line, the selected works and how the work is made.", canonical: "https://qnfo.org/about", jsonld: identityJsonLd("https://qnfo.org/about"), active: "about" }, body);
 }
 __name(renderAboutHTML, "renderAboutHTML");
 __name2(renderAboutHTML, "renderAboutHTML");
@@ -1317,36 +1746,27 @@ function workWithMeJsonLd() {
   });
 }
 var WWM_CSS = `
-.ww-hero{text-align:left;padding:3.2rem 0 1.4rem}
-.ww-hero h1{font-family:'Fraunces',Georgia,serif;font-size:2.6rem;font-weight:600;margin:0 0 .9rem;letter-spacing:-.015em}
-.ww-hero p{color:var(--ink);font-size:1.04rem;line-height:1.75;max-width:680px;margin:0 0 .9rem}
-.ww-hero .ww-sub{color:var(--muted);font-size:.96rem}
-.ww-jump{display:flex;flex-wrap:wrap;gap:.45rem;margin:1.2rem 0 0;padding:0;list-style:none}
-.ww-jump a{display:inline-block;font-size:.84rem;color:var(--accent);text-decoration:none;border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:.32rem .8rem}
-.ww-jump a:hover{border-color:var(--accent)}
-.ww-offers{display:grid;gap:1.1rem;margin-top:1.8rem}
-.ww-offer{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem 1.6rem;scroll-margin-top:1rem}
-.ww-offer h2{font-family:'Fraunces',Georgia,serif;font-size:1.3rem;font-weight:600;margin:0 0 .2rem}
-.ww-offer h3{font-family:'Public Sans',system-ui,sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:1.05rem 0 .3rem}
-.ww-offer p,.ww-offer li{font-size:.95rem;line-height:1.65;margin:0}
-.ww-offer ul{margin:.1rem 0 0;padding-left:1.15rem}
-.ww-offer li+li{margin-top:.35rem}
-.ww-note{color:var(--muted);font-size:.88rem!important;border-left:2px solid var(--border);padding-left:.85rem;margin-top:.9rem!important}
-.ww-basis{color:var(--muted);font-size:.82rem!important;margin-top:.75rem!important}
-.ww-basis a{color:var(--muted)}
-.ww-btn{display:inline-block;margin-top:1.1rem;padding:.6rem 1.25rem;border-radius:999px;background:var(--accent);border:1.5px solid var(--accent);color:#fff;text-decoration:none;font-weight:500;font-size:.9rem;transition:all .15s}
-.ww-btn:hover{background:#1a2547;border-color:#1a2547}
-.ww-btn.ww-ghost{background:transparent;color:var(--accent)}
-.ww-btn.ww-ghost:hover{background:var(--accent-soft)}
-.ww-tag{display:block;margin-top:.45rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;color:var(--muted)}
-.ww-sec{margin-top:2.8rem;border-top:1px solid var(--border);padding-top:1.5rem}
-.ww-sec h2{font-family:'Fraunces',Georgia,serif;font-size:1.25rem;font-weight:600;margin:0 0 .6rem}
-.ww-sec p{font-size:.95rem;line-height:1.7;max-width:700px;margin:0 0 .8rem}
-.ww-record{list-style:none;padding:0;margin:.3rem 0 .8rem}
-.ww-record li{display:grid;grid-template-columns:7.5rem 1fr;gap:1rem;padding:.65rem 0;border-bottom:1px solid var(--border);font-size:.94rem;line-height:1.6}
-.ww-record .ww-when{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.86rem}
+.ww-jump{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0;padding:0;list-style:none}
+.ww-offers{display:grid;gap:20px;margin:8px 0 0}
+.ww-offer{background:var(--q-surface);border:1px solid var(--q-rule);border-radius:var(--q-r-lg);padding:28px;scroll-margin-top:90px}
+.ww-offer h2{font:500 var(--q-fs-xl)/1.2 var(--q-serif);margin:0 0 6px}
+.ww-offer h3{font:600 var(--q-fs-sm)/1.3 var(--q-sans);color:var(--q-accent);margin:18px 0 6px}
+.ww-offer p,.ww-offer li{font:400 1.0625rem/1.6 var(--q-serif);margin:0;color:var(--q-ink-2)}
+.ww-offer ul{margin:0;padding-left:1.2em}
+.ww-offer li+li{margin-top:6px}
+.ww-note{color:var(--q-muted)!important;font-size:var(--q-fs-sm)!important;font-family:var(--q-sans)!important;border-left:2px solid var(--q-rule);padding-left:12px;margin-top:14px!important}
+.ww-basis{color:var(--q-muted);font:400 var(--q-fs-sm)/1.5 var(--q-sans)!important;margin-top:12px!important}
+.ww-basis a{color:var(--q-muted)}
+.ww-btn{margin-top:18px}
+.ww-tag{display:block;margin-top:8px;font:400 var(--q-fs-xs)/1.4 var(--q-mono);color:var(--q-muted)}
+.ww-sec{margin-top:48px;border-top:1px solid var(--q-rule);padding-top:28px;max-width:var(--q-measure)}
+.ww-sec h2{font:500 var(--q-fs-xl)/1.2 var(--q-serif);margin:0 0 12px}
+.ww-sec p{font:400 1.0625rem/1.65 var(--q-serif);margin:0 0 12px}
+.ww-record{list-style:none;padding:0;margin:4px 0 12px}
+.ww-record li{display:grid;grid-template-columns:8rem 1fr;gap:16px;padding:12px 0;border-bottom:1px solid var(--q-rule);font:400 1rem/1.6 var(--q-serif)}
+.ww-record .ww-when{color:var(--q-muted);font:400 var(--q-fs-sm)/1.6 var(--q-sans);font-variant-numeric:tabular-nums}
 .ww-record b{font-weight:600}
-@media(max-width:640px){.ww-hero h1{font-size:2.1rem}.ww-offer{padding:1.2rem 1.15rem}.ww-record li{grid-template-columns:1fr;gap:.15rem}}
+@media(max-width:640px){.ww-offer{padding:20px}.ww-record li{grid-template-columns:1fr;gap:2px}}
 `;
 function wwmWorkLinks(idx) {
   if (!idx || !idx.length) return "";
@@ -1359,25 +1779,25 @@ function wwmOfferHTML(o) {
   const extra = o.key === "role" ? '<p class="ww-basis">CV: <a href="https://doi.org/' + WWM_CV_DOI + '">doi:' + WWM_CV_DOI + "</a>. Earlier work is published under Brad Gudzinas.</p>" : wwmWorkLinks(o.works);
   return '<section class="ww-offer" id="' + o.key + '" aria-labelledby="ww-h-' + o.key + '"><h2 id="ww-h-' + o.key + '">' + esc(o.title) + "</h2><h3>Who it is for</h3><p>" + esc(o.forWho) + "</p><h3>" + esc(o.getLabel) + "</h3><ul>" + o.get.map(function(g) {
     return "<li>" + esc(g) + "</li>";
-  }).join("") + '</ul><p class="ww-note">' + esc(o.status) + "</p><h3>How to start</h3><p>" + esc(o.start) + "</p>" + extra + '<a class="ww-btn" data-wwm="' + o.key + '" href="' + wwmMailto(o) + '">Email me about this</a><span class="ww-tag">Subject starts with ' + esc(wwmTag(o.key)) + "</span></section>";
+  }).join("") + '</ul><p class="ww-note">' + esc(o.status) + "</p><h3>How to start</h3><p>" + esc(o.start) + "</p>" + extra + '<a class="q-btn ww-btn" data-wwm="' + o.key + '" href="' + wwmMailto(o) + '">Email me about this</a><span class="ww-tag">Subject starts with ' + esc(wwmTag(o.key)) + "</span></section>";
 }
 function renderWorkWithMeHTML() {
   const title = "Work with me \u00b7 Rowan Brad Quni-Gudzinas \u00b7 QNFO";
   const desc = "Work with Rowan Brad Quni-Gudzinas: energy-per-correct-answer (JPCUB) assessments, reviews of AI research and agent operations, talks and workshops, research collaboration, and research-management and applied-AI roles.";
-  const ga = '<!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script>';
-  const head = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>' + esc(title) + '</title><meta name="description" content="' + escAttr(desc) + '"><meta name="author" content="Rowan Brad Quni-Gudzinas"><meta property="og:site_name" content="QNFO"><meta property="og:title" content="' + escAttr(title) + '"><meta property="og:description" content="' + escAttr(desc) + '"><meta property="og:type" content="website"><meta property="og:url" content="' + WWM_URL + '"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + escAttr(title) + '"><meta name="twitter:description" content="' + escAttr(desc) + '"><link rel="canonical" href="' + WWM_URL + '">' + workWithMeJsonLd() + `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2324315e'/><text x='16' y='23' text-anchor='middle' font-size='18' fill='%23faf7f2' font-family='Georgia,serif'>Q</text></svg>"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap"><style>` + COMMON_CSS + LD_CSS + WWM_CSS + "</style>" + ga + "</head>";
-  const nav = '<header class="ld-top"><a class="ld-brand" href="/" aria-label="QNFO home"><span class="qmark">Q</span> QNFO</a><nav class="ld-nav" aria-label="Main"><a href="/papers">Papers</a><a href="#selected-works">Selected works</a><a href="/about">About</a><a href="/work-with-me" aria-current="page">Work with me</a><a href="https://ideas.qnfo.org">Ideas</a><a href="https://archive.qnfo.org">Archive</a><a href="/legal">License</a></nav></header>';
   const jump = '<ul class="ww-jump" aria-label="Offers">' + WWM_OFFERS.map(function(o) {
-    return '<li><a href="#' + o.key + '">' + esc(o.title) + "</a></li>";
-  }).join("") + '<li><a href="#contact">Something else</a></li></ul>';
-  const hero = '<section class="ww-hero"><span class="ld-tag">Work with me</span><h1>Work with me</h1><p>I am Rowan Brad Quni-Gudzinas, and I build research systems that people can check. I have spent 15 years turning data into public decisions, including national research programmes at the U.S. Federal Highway Administration and at AARP\'s Public Policy Institute, where I led the Livability Index. Since 2024 I have run QNFO, an independent research imprint that asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth, and what an autonomous research system actually delivers.</p><p class="ww-sub">Five ways to work together. Each says who it is for, what you get and how to start, and each button opens an email to me.</p>' + jump + "</section>";
+    return '<li><a class="q-chip" href="#' + o.key + '">' + esc(o.title) + "</a></li>";
+  }).join("") + '<li><a class="q-chip" href="#contact">Something else</a></li></ul>';
+  const hero = '<section class="q-hero" style="padding-bottom:28px"><div class="q-wrap"><p class="q-eyebrow">Work with me</p><h1 class="q-display" style="max-width:16ch">Work with me</h1><p class="q-lede" style="max-width:62ch">I am Rowan Brad Quni-Gudzinas, and I build research systems that people can check. I have spent 15 years turning data into public decisions, including national research programmes at the U.S. Federal Highway Administration and at AARP\'s Public Policy Institute, where I led the Livability Index. Since 2024 I have run QNFO, an independent research imprint that asks what computation really costs and delivers: energy per correct answer (Joules-per-Solution), what an AI-assisted claim is worth, and what an autonomous research system actually delivers.</p><p class="q-meta">Five ways to work together. Each says who it is for, what you get and how to start, and each button opens an email to me.</p>' + jump + "</div></section>";
   const offers = '<div class="ww-offers">' + WWM_OFFERS.map(wwmOfferHTML).join("") + "</div>";
   const record = '<section class="ww-sec" id="record" aria-labelledby="ww-rec-h"><h2 id="ww-rec-h">The record</h2><ul class="ww-record"><li><span class="ww-when">2011 to 2015</span><span><b>U.S. Federal Highway Administration</b>, Data Analyst and Research Manager. Managed a $1.5M federal research portfolio as a certified Contracting Officer\'s Representative, and worked on the national long-distance passenger travel forecasting model.</span></li><li><span class="ww-when">2016 to 2021</span><span><b>AARP Public Policy Institute</b>, Product Manager and Senior Methods Advisor. Led the AARP Livability Index (50+ data sources across 7 domains, scoring U.S. neighborhoods, across multiple public releases) and co-authored its 2018 report.</span></li><li><span class="ww-when">2024 to now</span><span><b>QNFO</b> (independent research), Founder. An open, AI-assisted research pipeline that runs on 44 deployed Cloudflare Workers (October 2026). Every work carries a DOI, and corrections ship as new versions.</span></li></ul><p class="ww-basis">Earlier work is published under Brad Gudzinas. Full CV: <a href="https://doi.org/' + WWM_CV_DOI + '">doi:' + WWM_CV_DOI + '</a> \u00b7 <a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + "</a></p></section>";
   const how = '<section class="ww-sec" id="how" aria-labelledby="ww-how-h"><h2 id="ww-how-h">How I work</h2><p>AI agents do much of QNFO\'s engineering, analysis and drafting under my direction. I am accountable for every result, and each deliverable says which parts were AI-assisted.</p><p>There is no price list. Scope and fee are agreed for each engagement before any work starts; research collaboration has no fee.</p></section>';
-  const contact = '<section class="ww-sec" id="contact" aria-labelledby="ww-con-h"><h2 id="ww-con-h">Contact</h2><p>Email <a data-wwm="' + WWM_GENERAL.key + '" href="' + wwmMailto(WWM_GENERAL) + '">' + WWM_EMAIL + "</a>. The buttons above start the subject with a tag such as <code>" + esc(wwmTag("jpcub")) + "</code>. Please keep it: it is how I count which offers bring people here. There is no form on this page; your message arrives in my qnfo.org mailbox like any other email.</p>" + '<a class="ww-btn ww-ghost" data-wwm="' + WWM_GENERAL.key + '" href="' + wwmMailto(WWM_GENERAL) + '">Something else? Email me</a><span class="ww-tag">Subject starts with ' + esc(wwmTag(WWM_GENERAL.key)) + '</span><p class="ww-basis">New papers by email: <a href="/#subscribe">subscribe on the home page</a>.</p></section>';
+  const contact = '<section class="ww-sec" id="contact" aria-labelledby="ww-con-h"><h2 id="ww-con-h">Contact</h2><p>Email <a data-wwm="' + WWM_GENERAL.key + '" href="' + wwmMailto(WWM_GENERAL) + '">' + WWM_EMAIL + "</a>. The buttons above start the subject with a tag such as <code>" + esc(wwmTag("jpcub")) + "</code>. Please keep it: it is how I count which offers bring people here. There is no form on this page; your message arrives in my qnfo.org mailbox like any other email.</p>" + '<a class="q-btn q-btn-ghost ww-btn" data-wwm="' + WWM_GENERAL.key + '" href="' + wwmMailto(WWM_GENERAL) + '">Something else? Email me</a><span class="ww-tag">Subject starts with ' + esc(wwmTag(WWM_GENERAL.key)) + '</span><p class="ww-basis">New papers by email: <a href="/#subscribe">subscribe on the home page</a>.</p></section>';
+  const works = '<section class="ww-sec" id="selected-works" aria-labelledby="ww-sel-h"><h2 id="ww-sel-h">Selected works</h2><ol class="q-list q-compact">' + SELECTED_WORKS.map(function(w) {
+    return '<li class="q-item"><a class="q-item-title" href="https://doi.org/' + w.doi + '">' + esc(w.t) + '</a><div class="q-item-meta">' + esc(w.pillar) + ' \u00b7 <a href="https://doi.org/' + w.doi + '">doi:' + w.doi + "</a></div></li>";
+  }).join("") + '</ol><p class="ww-basis">Quni-Gudzinas, R. B. Published by QNFO. Prepared with an AI-assisted research pipeline; the author is responsible for the content.</p></section>';
   const disclosure = '<p class="ww-basis">This page was prepared with an AI-assisted research pipeline; the author is responsible for the content.</p>';
-  const foot = '<footer class="ld-foot"><span>\xA9 2026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><a href="/papers">Papers</a><a href="/about">About</a><a href="/work-with-me">Work with me</a><a href="https://orcid.org/' + OWNER_ORCID + '">ORCID</a><a href="/legal">QNFO-ULA</a></footer>';
-  return head + '<body><a href="#ld-main" class="skip-link">Skip to main content</a>' + nav + '<main class="ld-main" id="ld-main">' + hero + offers + record + how + contact + selectedWorksHTML() + disclosure + "</main>" + foot + "</body></html>";
+  const body = hero + '<div class="q-wrap" style="padding-bottom:56px">' + offers + record + how + contact + works + disclosure + "</div>";
+  return qdsPage({ title: title, description: desc, canonical: WWM_URL, jsonld: workWithMeJsonLd(), extra: "<style>" + WWM_CSS + "</style>", active: "work" }, body);
 }
 function handleWorkWithMe() {
   return new Response(renderWorkWithMeHTML(), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
@@ -1577,14 +1997,12 @@ __name222222222(health, "health");
 __name2222222222(health, "health");
 async function handleLegal(path, env) {
   try {
-    const body = await env.QNFO_BUCKET.get("legal/ula-v2.0.md").then((o) => o ? o.text() : "QNFO Unified License Agreement v2.0\nFull text at https://legal.qnfo.org");
-    const ct = path === "/plain" || path === "/text" ? "text/plain; charset=utf-8" : "text/html; charset=utf-8";
+    const text = await env.QNFO_BUCKET.get("legal/ula-v2.0.md").then((o) => o ? o.text() : "# QNFO Unified License Agreement v2.0\n\nFull text at https://legal.qnfo.org");
     const isPlain = path === "/plain" || path === "/text";
-    if (isPlain) return new Response(await body, { headers: { "Content-Type": ct, "Cache-Control": "public, max-age=86400" } });
-    return new Response(
-      '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QNFO ULA v2.0</title><meta name="viewport" content="width=device-width,initial-scale=1.0"><link rel="canonical" href="https://legal.qnfo.org"><!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script></head><body style="font-family:system-ui,sans-serif;max-width:860px;margin:0 auto;padding:1.5rem"><nav style="margin-bottom:1.5rem"><a href="https://qnfo.org" style="color:#1a56db;text-decoration:none;font-weight:600">\u2190 QNFO Hub</a></nav><pre style="white-space:pre-wrap;font-family:Consolas,monospace;font-size:.88rem;line-height:1.6">' + (await body).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</pre></body></html>",
-      { headers: { "Content-Type": ct, "Cache-Control": "public, max-age=86400" } }
-    );
+    if (isPlain) return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+    let md = fixMojibake(text).replace(/^\s*#\s+[^\n]*\n+/, "");
+    const body = '<div class="q-wrap"><article class="q-article"><div><header class="q-article-head"><p class="q-eyebrow">License</p><h1 class="q-h1">QNFO Unified License Agreement, version 2.0</h1><p class="q-meta">The license for all QNFO research, data, code and sites. <a href="/plain">Plain text</a></p></header><div class="q-prose">' + renderMarkdown(md) + '</div></div><aside class="q-article-aside" aria-label="Contents"><section class="q-toc-wrap"><h2>Contents</h2><ol class="q-toc" data-q-toc=".q-prose"></ol></section></aside></article></div>';
+    return new Response(qdsPage({ title: "QNFO Unified License Agreement v2.0 (QNFO-ULA)", description: "The QNFO Unified License Agreement v2.0: open science with commercial protections, for all QNFO research, data, code and sites.", canonical: "https://legal.qnfo.org/", math: false, active: "" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
   } catch (e) {
     return json({ error: e.message }, 500);
   }
@@ -2051,6 +2469,128 @@ __name2(handleUnsubscribeProxy, "handleUnsubscribeProxy");
 // papers.qnfo.org, legal.qnfo.org, ...) gets the discreet fleet command-line link, appended at the end of <body> by
 // HTMLRewriter so every page, present and future, carries it without editing each template. Non-HTML responses (PDF, JSON,
 // XML, feeds) pass through untouched. The link itself is https://fleet.qnfo.org/ctl.js (qnfo-fleet-dashboard FLEET-CMD-1).
+// ARCHIVE-ON-GATEWAY-1 (2026-10-02, fixes ARCHIVE-PAGES-UNDEPLOYABLE-1 / agent_issues 1393): archive.qnfo.org was a Pages
+// project no workflow could deploy, so it served corrupted CSS and stale counts. The gateway serves it from live data;
+// a zone route sends archive.qnfo.org/* here (scripts/attach-surface-routes.py).
+async function handleArchive(env) {
+  let rows = [], latest = [];
+  try {
+    const r = await env.LIVING_PAPER.prepare("SELECT slug, title, abstract, created_at, doi FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
+    rows = r.results || [];
+    latest = rows.slice(0, 5);
+  } catch (e) {}
+  const counts = {};
+  rows.forEach(function(p) { const c = detectCategory(p.title, p.abstract); counts[c] = (counts[c] || 0) + 1; });
+  const fields = [
+    { k: "qec", t: "Quantum error correction", d: "Stabilizer codes, ultrametric error correction, code constructions beyond the stabilizer formalism." },
+    { k: "number-theory", t: "Number theory", d: "p-adic valuation, Ostrowski's theorem, Tate's thesis, the Langlands programme." },
+    { k: "physics", t: "Physics", d: "Topological quantum matter, Majorana zero modes, energy limits of computation." },
+    { k: "computer-science", t: "Computer science", d: "Formal verification, ultrametric algorithms, computational benchmarking." },
+    { k: "other", t: "Other subjects", d: "Papers outside the four fields above, such as methods, AI-assisted science and research operations." }
+  ];
+  const fieldHtml = '<div class="q-grid q-grid-3">' + fields.map(function(f) {
+    return '<a class="q-link-card" href="https://papers.qnfo.org/papers?category=' + f.k + '"><h3>' + f.t + ' <span class="q-badge q-badge-muted q-num">' + (counts[f.k] || 0) + "</span></h3><p>" + f.d + "</p></a>";
+  }).join("") + '<a class="q-link-card" href="https://papers.qnfo.org/papers"><h3>Everything <span class="q-badge q-badge-muted q-num">' + rows.length + "</span></h3><p>The full library, newest first, with search.</p></a></div>";
+  const tools = '<div class="q-grid q-grid-3">' + [
+    { t: "Ask the corpus", d: "Natural-language questions answered from the papers, with citations and the knowledge graph.", h: "https://ask.qwav.tech/" },
+    { t: "Ideas", d: "Research conversations as they develop.", h: "https://ideas.qnfo.org/" },
+    { t: "RSS feed", d: "New papers as they are published.", h: "https://papers.qnfo.org/rss.xml" },
+    { t: "Sitemap", d: "Every paper page, for crawlers and archivists.", h: "https://papers.qnfo.org/sitemap.xml" },
+    { t: "Machine-readable index", d: "llms.txt: the corpus described for language-model agents.", h: "https://papers.qnfo.org/llms.txt" },
+    { t: "License", d: "QNFO Unified License Agreement v2.0.", h: "https://legal.qnfo.org/" }
+  ].map(function(c) { return '<a class="q-link-card" href="' + c.h + '"><h3>' + c.t + "</h3><p>" + c.d + "</p></a>"; }).join("") + "</div>";
+  const latestHtml = latest.length ? '<ul class="q-list q-compact" style="max-width:860px">' + latest.map(function(p) {
+    return '<li class="q-item"><a class="q-item-title" href="https://papers.qnfo.org/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + '</a><div class="q-item-meta"><time>' + esc(String(p.created_at || "").slice(0, 10)) + "</time>" + (p.doi ? '<a href="https://doi.org/' + escAttr(p.doi) + '">doi:' + esc(p.doi) + "</a>" : "") + "</div></li>";
+  }).join("") + "</ul>" : "";
+  const body = '<section class="q-hero" style="padding-bottom:24px"><div class="q-wrap"><p class="q-eyebrow">Archive</p><h1 class="q-display" style="max-width:16ch">The research archive</h1><p class="q-lede">Every QNFO publication, dataset and research artifact, by field. Each paper has a permanent Zenodo DOI; corrections are new versions of the same record. All content is licensed under the QNFO Unified License Agreement v2.0.</p></div></section>' +
+    '<section class="q-section" style="padding-top:24px" aria-labelledby="f-h"><div class="q-wrap"><h2 class="q-h2" id="f-h">By field</h2>' + fieldHtml + "</div></section>" +
+    '<section class="q-section" aria-labelledby="l-h"><div class="q-wrap"><div class="q-section-head"><h2 class="q-h2" id="l-h">Newest</h2><a href="https://papers.qnfo.org/papers">All papers</a></div>' + latestHtml + "</div></section>" +
+    '<section class="q-section" aria-labelledby="t-h"><div class="q-wrap"><h2 class="q-h2" id="t-h">Ways in</h2>' + tools + "</div></section>";
+  return new Response(qdsPage({ title: "QNFO Research Archive", description: "The QNFO research archive: every publication by field, with Zenodo DOIs, feeds and discovery tools. Licensed under QNFO-ULA v2.0.", canonical: "https://archive.qnfo.org/", jsonld: identityJsonLd("https://archive.qnfo.org/"), rss: true, active: "archive" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=1800" } });
+}
+// QWAV-ON-GATEWAY-1 (2026-10-02): qwav.org and qwav.tech were a Pages project outside the repository. The gateway serves the
+// QWAV page on the shared design system (QWAV accent), with the copy corrected to STRATEGY 2.1: QNFO is an independent
+// research imprint (never a "collective"), QWAV is a parked, pre-commercial label, and every number says whether it is
+// published or estimated. A zone route sends qwav.org/* and qwav.tech/* here.
+function renderQwavHTML(host) {
+  const canon = "https://qwav.org/"; // one canonical for both QWAV domains (the Pages site used qwav.org)
+  const landscape = [
+    ["IBM", "Superconducting transmon", "~15 mK", "Active (surface code)", "0.89 J per solution", "published (JPCUB P0)"],
+    ["Google", "Superconducting", "~15 mK", "Active (surface code)", "~0.05 J per solution", "estimate (landscape v2.3)"],
+    ["Rigetti", "Superconducting", "~15 mK", "Active", "~0.61 J per solution", "estimate (landscape v2.3)"],
+    ["IonQ", "Trapped ions", "Room temperature", "Active", "~16.3 J per solution", "estimate (landscape v2.3)"],
+    ["D-Wave", "Quantum annealing", "~15 mK", "None (annealing)", "~50 to 200 J per optimisation", "estimate (landscape v2.3)"],
+    ["QWAV", "p-adic ultrametric (qudits)", "Room-temperature target", "Intrinsic (Ostrowski)", "< 10\u207b\u00b3 J per solution", "design target, not measured"]
+  ];
+  const research = [
+    { t: "JPCUB P0: the metric", d: "Definition, measurement protocol and anti-gaming provisions. Worked example: IBM Eagle at 0.89 J per solution.", doi: "10.5281/zenodo.21637028" },
+    { t: "The physics of computation", d: "Landauer, Margolus\u2013Levitin and Bremermann limits; joules per solution as the falsifiable criterion for physical computational advantage.", doi: "10.5281/zenodo.21255013" },
+    { t: "JPCUB competitive landscape", d: "System-level estimates for 17 platforms from published specifications and third-party data.", doi: "10.5281/zenodo.21821767" },
+    { t: "Problem-substrate mapping", d: "A framework for matching computational problems to physical substrates before investing in them.", doi: "10.5281/zenodo.21255346" }
+  ];
+  const stack = [
+    ["Application", "QWAV SDK (Python), QWAV Cloud API (REST), JPCUB benchmark dashboard"],
+    ["Compilation", "Fontaine-stack compiler: problem, p-adic encoding, Bruhat\u2013Tits building, ZBW observable, readout"],
+    ["Runtime", "Adelic QEC (Ostrowski intrinsic protection), ZBW engine, Bruhat\u2013Tits readout protocol"],
+    ["Physical", "Trapped-ion Dirac simulator, room-temperature adelic nuclear-spin qubit (v2.0), 343-qubit tree topology"]
+  ];
+  const body = '<section class="q-hero"><div class="q-wrap q-hero-grid"><div><p class="q-eyebrow">Pre-commercial computing platform</p><h1 class="q-display">Benchmarked in joules per solution, not qubit counts.</h1><p class="q-lede">QWAV explores p-adic ultrametric architectures as an alternative to the qubit-gate-circuit model. The approach draws on Ostrowski\'s theorem for intrinsic error protection and targets room-temperature operation. Every performance claim is benchmarked with JPCUB, an open, falsifiable measure of energy per correct answer.</p><div class="q-actions"><a class="q-btn q-btn-accent" href="https://doi.org/10.5281/zenodo.21637028">Read the JPCUB protocol</a><a class="q-btn q-btn-ghost" href="https://doi.org/10.5281/zenodo.21641108">Strategy whitepaper</a></div></div>' +
+    '<div class="q-note"><strong>Status.</strong> QWAV is pre-commercial: no production system exists, and no commercial product is offered. The architecture is published as research with Zenodo DOIs. The JPCUB protocol is open, so anyone can measure any platform, including QWAV, with the same procedure.</div></div></section>' +
+    '<section class="q-section" id="jpcub" aria-labelledby="j-h"><div class="q-wrap q-hero-grid" style="align-items:start"><div><p class="q-eyebrow">The benchmark</p><h2 class="q-h1" id="j-h">Energy per correct answer</h2><p class="q-lede" style="font-size:1.125rem">JPCUB measures total system energy per correct answer: memory, input and output, cooling and power conversion included, not only the processor. Do not trust anyone\'s numbers, ours included: measure any platform yourself in joules per correct answer.</p><a class="q-btn q-btn-ghost" href="https://doi.org/10.5281/zenodo.21637028">JPCUB P0 protocol</a></div>' +
+    '<div class="q-panel"><p class="q-meta" style="margin:0 0 6px">QWAV design target</p><p style="font:500 3rem/1 var(--q-serif);margin:0 0 10px">&lt; 10<sup>\u22123</sup> J</p><p class="q-meta" style="margin:0">per solution. A target, not a measurement. For scale, the only published P0 measurement so far is IBM Eagle at 0.89 J per solution for factoring.</p></div></div></section>' +
+    '<section class="q-section" id="landscape" aria-labelledby="ls-h"><div class="q-wrap"><p class="q-eyebrow">Landscape</p><h2 class="q-h1" id="ls-h">How platforms compare on energy</h2><p class="q-lede" style="font-size:1.125rem">QWAV does not compete on qubit counts. Only IBM carries a published P0-protocol measurement; the others are conservative system-level upper bounds from the competitive landscape paper (<a href="https://doi.org/10.5281/zenodo.21821767">doi:10.5281/zenodo.21821767</a>).</p>' +
+    '<div class="q-table-wrap"><table class="q-table"><thead><tr><th>Platform</th><th>Approach</th><th>Operating temperature</th><th>Error correction</th><th class="q-num">JPCUB</th><th>Basis</th></tr></thead><tbody>' + landscape.map(function(r) {
+      return "<tr" + (r[0] === "QWAV" ? ' style="background:var(--q-accent-wash)"' : "") + "><td><strong>" + r[0] + "</strong></td><td>" + r[1] + "</td><td>" + r[2] + "</td><td>" + r[3] + '</td><td class="q-num">' + r[4] + '</td><td class="q-meta">' + r[5] + "</td></tr>";
+    }).join("") + "</tbody></table></div></div></section>" +
+    '<section class="q-section" id="stack" aria-labelledby="st-h"><div class="q-wrap"><p class="q-eyebrow">Architecture</p><h2 class="q-h1" id="st-h">The QWAV stack</h2><p class="q-lede" style="font-size:1.125rem">From p-adic mathematics to applications. These layers are published as research papers; the hardware remains pre-commercial.</p><div class="q-table-wrap"><table class="q-table"><tbody>' + stack.map(function(r) {
+      return '<tr><th scope="row" style="width:160px">' + r[0] + "</th><td>" + r[1] + "</td></tr>";
+    }).join("") + "</tbody></table></div></div></section>" +
+    '<section class="q-section" id="research" aria-labelledby="rs-h"><div class="q-wrap"><p class="q-eyebrow">Research</p><h2 class="q-h1" id="rs-h">Built on published research</h2><p class="q-lede" style="font-size:1.125rem">The work behind QWAV is by Rowan Brad Quni-Gudzinas and published by QNFO, an independent research imprint. Every paper has a DOI and can be checked independently.</p><div class="q-grid q-grid-2">' + research.map(function(r) {
+      return '<a class="q-link-card" href="https://doi.org/' + r.doi + '"><h3>' + r.t + "</h3><p>" + r.d + '</p><p class="q-small">doi:' + r.doi + "</p></a>";
+    }).join("") + '</div><div class="q-actions" style="margin-top:28px"><a class="q-btn" href="https://papers.qnfo.org/papers">Browse all papers</a><a class="q-btn q-btn-ghost" href="https://ask.qwav.tech/">Ask the corpus</a></div></div></section>';
+  return new Response(qdsPage({ brand: "qwav", title: "QWAV \u2014 benchmarked in joules per solution | p-adic ultrametric computing", description: "QWAV is a pre-commercial computing platform concept exploring p-adic ultrametric architectures, benchmarked with JPCUB: energy per correct answer, not qubit counts.", canonical: canon, active: "" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+}
+// NOT-FOUND-HTML-1 (2026-10-02, visitor audit): a mistyped paper link answered {"error":"Paper not found"} as raw JSON.
+// A browser now gets a QDS page with the closest papers by slug words, a search box and the ways back; API clients
+// (Accept without text/html) keep the JSON body and the same 404 status.
+async function notFoundPage(request, env, host, path, slug) {
+  const accept = (request && request.headers.get("Accept")) || "";
+  if (!/text\/html/.test(accept)) return json(slug ? { error: "Paper not found", slug } : { error: "Not found", path }, 404);
+  let near = [];
+  const words = String(slug || path || "").toLowerCase().replace(/^\/+papers\/+/, "").split(/[^a-z0-9]+/).filter(function(w) { return w.length >= 4 && !/^(paper|papers|html|v\d+)$/.test(w); }).slice(0, 4);
+  if (words.length && env.LIVING_PAPER) {
+    try {
+      const cond = words.map(function(_, i) { return "(slug LIKE ?" + (i + 1) + " OR lower(title) LIKE ?" + (i + 1) + ")"; }).join(" + ");
+      const sql = "SELECT slug, title, (" + words.map(function(_, i) { return "(slug LIKE ?" + (i + 1) + ")"; }).join(" + ") + ") AS hits FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') AND (" + cond.replace(/ \+ /g, " OR ") + ") ORDER BY hits DESC, created_at DESC LIMIT 5";
+      const st = env.LIVING_PAPER.prepare(sql);
+      near = ((await st.bind.apply(st, words.map(function(w) { return "%" + w + "%"; })).all()).results) || [];
+    } catch (e) { near = []; }
+  }
+  const q = words.join(" ");
+  const list = near.length ? '<h2 class="q-h3" style="margin:28px 0 8px">Did you mean</h2><ul class="q-list q-compact">' + near.map(function(p) {
+    return '<li class="q-item"><a class="q-item-title" href="https://papers.qnfo.org/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + "</a></li>";
+  }).join("") + "</ul>" : "";
+  const body = '<section class="q-hero"><div class="q-wrap" style="max-width:760px"><p class="q-eyebrow">Not found</p><h1 class="q-h1">' + (slug ? "There is no paper at this address" : "There is nothing at this address") + "</h1>" +
+    '<p class="q-lede">The link may be mistyped, or the paper may have a new address after a revision. Every paper keeps its DOI, so a DOI link always resolves.</p>' +
+    '<form class="q-field" action="https://papers.qnfo.org/papers" method="get" role="search" style="max-width:560px;margin-top:20px"><label class="q-sr" for="nf-q">Search the papers</label><input id="nf-q" name="search" type="search" value="' + escAttr(q) + '" placeholder="Search titles and abstracts"><button class="q-btn q-btn-accent" type="submit">Search</button></form>' +
+    list + '<p class="q-meta" style="margin-top:28px"><a href="https://papers.qnfo.org/papers">The library</a> \u00b7 <a href="https://ask.qwav.tech/' + (q ? "?q=" + encodeURIComponent(q) : "") + '">Ask the corpus</a> \u00b7 <a href="https://qnfo.org/">Home</a></p></div></section>';
+  return new Response(qdsPage({ title: "Not found \u00b7 QNFO", description: "No page at this address.", robots: "noindex", brand: "qnfo", active: slug ? "papers" : "" }, body), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+// PRIVACY-PAGE-1 (2026-10-02, visitor audit): the footer's "Privacy" link (legal.qnfo.org/privacy) served the licence text
+// and qnfo.org/privacy was a 404. This states what the QNFO sites actually collect, from the code that collects it.
+function renderPrivacyHTML() {
+  const sec = function(h, id, inner) { return '<h2 id="' + id + '">' + h + "</h2>" + inner; };
+  const body = '<div class="q-wrap"><article class="q-article"><div><header class="q-article-head"><p class="q-eyebrow">Privacy</p><h1 class="q-h1">What the QNFO sites collect</h1><p class="q-meta">Applies to qnfo.org, papers.qnfo.org, legal.qnfo.org, archive.qnfo.org, ideas.qnfo.org, ask.qwav.tech, ipatent.qnfo.org, qwav.org and qwav.tech. Updated 2 October 2026.</p></header><div class="q-prose">' +
+    "<p>QNFO is one researcher, Rowan Brad Quni-Gudzinas, who is responsible for these sites and for this notice. Nothing is sold, and nothing is shared for advertising.</p>" +
+    sec("Visit statistics", "statistics", "<p>Pages load Google Analytics 4 (property G-LV7RHRVW6R), which sets cookies and counts visits, pages and referrers. Cloudflare, which hosts the sites, may also add its Web Analytics beacon, which uses no cookies. These figures are used only to see which pages people read.</p>") +
+    sec("Email digest", "digest", "<p>If you subscribe, your email address is stored to send the weekly digest. You confirm by email first, and every digest has an unsubscribe link that removes you. Digest emails carry no tracking pixels.</p>") +
+    sec("Ask the corpus", "ask", "<p>Questions you ask and the ratings you give are stored with the answer, without your network address, to measure and improve the answers. A question the papers cannot answer may be added, with no identifier, to the research idea queue that decides what to study next.</p>") +
+    sec("iPatent", "ipatent", "<p>Your invention text is sent to the drafting model and is not kept unless you tick the box to keep a private copy. A one-way hash of your network address is stored to enforce the daily drafting limit.</p>") +
+    sec("Email to the author", "email", "<p>Mail you send to rowan.quni@qnfo.org is kept to answer it, and the subject tag of a work-with-me email is counted to measure contacts.</p>") +
+    sec("Your rights", "rights", '<p>To see, correct or delete what is held about you, email <a href="mailto:rowan.quni@qnfo.org?subject=Privacy%20request">rowan.quni@qnfo.org</a>. q08.org is a separate publication with its own practices and is not covered here.</p>') +
+    '</div></div><aside class="q-article-aside" aria-label="On this page"><section class="q-toc-wrap"><h2>On this page</h2><ol class="q-toc" data-q-toc=".q-prose"></ol></section></aside></article></div>';
+  return new Response(qdsPage({ title: "Privacy \u00b7 QNFO", description: "What the QNFO sites collect, why, and how to have it removed.", canonical: "https://legal.qnfo.org/privacy", brand: "qnfo" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+}
 var FLEET_CTL_TAG = '<script src="https://fleet.qnfo.org/ctl.js" defer></script>';
 function withFleetCtl(res) {
   try {
@@ -2080,21 +2620,21 @@ var LP_EXCLUDE = "('duplicate','kg-backfill','quarantined')";
 var LP_FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">';
 var LP_THEME_BOOT = "<script>(function(){try{var t=localStorage.getItem('qnfo-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()<\/script>";
 var LP_GA = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script>';
-var LP_MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["$","$"],["\\\\(","\\\\)"]],displayMath:[["$$","$$"]],processEscapes:true},svg:{scale:1.05,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false},startup:{typeset:true}};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script>';
+var LP_MATHJAX = '<script>window.MathJax={tex:{inlineMath:[["$","$"],["\\\\(","\\\\)"]],displayMath:[["$$","$$"],["\\\\[","\\\\]"]],processEscapes:true},svg:{scale:1.05,fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],enableMenu:false},startup:{typeset:true}};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg-full.js" id="MathJax-script" onerror="this.onerror=null;var s=document.createElement(&quot;script&quot;);s.src=&quot;https://unpkg.com/mathjax@3/es5/tex-svg-full.js&quot;;document.head.appendChild(s);"><\/script>';
 var LP_MARK = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 16h7M13 16l7-8M13 16l7 8M20 8h6M20 24h6M20 8l4-4M20 24l4 4" stroke="var(--teal)" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="6" cy="16" r="3" fill="var(--ink)"/></svg>';
 var LP_THEME_BTN = '<button class="q-theme" id="q-theme" type="button" aria-label="Switch colour theme"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg></button>';
 var LP_CAT_ORDER = ["qec", "number-theory", "physics", "computer-science", "other"];
 var LP_CAT_VAR = { "qec": "--teal", "number-theory": "--violet", "physics": "--rust", "computer-science": "--amber", "other": "--muted" };
-var LP_DS = ":root{--paper:#F5F7FB;--surface:#FFFFFF;--ink:#182042;--muted:#5A6386;--rule:#D9DEEC;--wash:#E9EDF7;--teal:#0E7C70;--teal-wash:#DDF1EE;--amber:#8A5300;--amber-wash:#FCEFD6;--red:#B42318;--red-wash:#FDECEA;--green:#157F3B;--green-wash:#E5F4EA;--violet:#5B4BB7;--violet-wash:#ECE9FA;--rust:#B5562A;--rust-wash:#FBE9E0;--serif:\"Newsreader\",Georgia,\"Times New Roman\",serif;--sans:\"Familjen Grotesk\",system-ui,-apple-system,\"Segoe UI\",sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--r-sm:6px;--r:10px;--r-lg:14px;--shadow:0 1px 2px rgba(24,32,66,.06),0 8px 24px -12px rgba(24,32,66,.18);color-scheme:light}@media (prefers-color-scheme:dark){:root:not([data-theme=\"light\"]){--paper:#141A33;--surface:#1B2346;--ink:#E6E8F3;--muted:#9AA3C6;--rule:#2D3762;--wash:#222B52;--teal:#5FD3C4;--teal-wash:#173B45;--amber:#F2B544;--amber-wash:#3A2F1A;--red:#FF8A80;--red-wash:#3A1D22;--green:#6FD39A;--green-wash:#163326;--violet:#A99BFF;--violet-wash:#2A2752;--rust:#F08A5D;--rust-wash:#3A2420;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);color-scheme:dark}}:root[data-theme=\"dark\"]{--paper:#141A33;--surface:#1B2346;--ink:#E6E8F3;--muted:#9AA3C6;--rule:#2D3762;--wash:#222B52;--teal:#5FD3C4;--teal-wash:#173B45;--amber:#F2B544;--amber-wash:#3A2F1A;--red:#FF8A80;--red-wash:#3A1D22;--green:#6FD39A;--green-wash:#163326;--violet:#A99BFF;--violet-wash:#2A2752;--rust:#F08A5D;--rust-wash:#3A2420;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);color-scheme:dark}[hidden]{display:none!important}*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;scroll-padding-top:84px}body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--sans);font-feature-settings:\"tnum\" 1;-webkit-font-smoothing:antialiased}a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}a:hover{color:var(--teal)}:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}button{font:inherit;color:inherit;cursor:pointer}.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.wrap{max-width:1240px;margin:0 auto;padding:0 24px}.q-top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid transparent;transition:border-color .2s}.q-top.scrolled{border-bottom-color:var(--rule)}.q-top .wrap{display:flex;align-items:center;gap:22px;height:64px}.q-mark{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:600;font-size:17px;letter-spacing:-.01em;white-space:nowrap}.q-mark svg{width:26px;height:26px;flex:none}.q-mark small{font-weight:400;color:var(--muted);font-size:15px}.q-nav{display:flex;gap:4px;margin-left:auto;font-size:14.5px;color:var(--muted)}.q-nav a{text-decoration:none;padding:6px 10px;border-radius:8px}.q-nav a:hover{background:var(--wash);color:var(--ink)}.q-nav a[aria-current]{color:var(--ink);background:var(--wash);font-weight:500}.q-theme{border:1px solid var(--rule);background:none;border-radius:999px;width:34px;height:34px;display:grid;place-items:center;color:var(--muted);flex:none}.q-theme:hover{color:var(--ink);border-color:var(--muted)}.q-theme svg{width:16px;height:16px}.q-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--rule);background:var(--surface);border-radius:10px;padding:8px 14px;font-weight:500;font-size:14px;text-decoration:none;color:var(--ink);white-space:nowrap;transition:border-color .15s,background .15s}.q-btn:hover{border-color:var(--muted);color:var(--ink)}.q-btn svg{width:16px;height:16px;flex:none}.q-btn.pri{background:var(--ink);border-color:var(--ink);color:var(--paper)}.q-btn.pri:hover{opacity:.9;color:var(--paper)}.q-btn.teal{background:var(--teal);border-color:var(--teal);color:var(--paper)}.q-btn.teal:hover{color:var(--paper);opacity:.92}.q-btn:disabled{opacity:.45;cursor:default}.q-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13.5px;text-decoration:none;color:var(--ink);white-space:nowrap}.q-chip:hover{border-color:var(--muted);color:var(--ink)}.q-chip[aria-pressed=\"true\"],.q-chip.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}.q-chip b{font-weight:600;font-variant-numeric:tabular-nums;opacity:.7}.q-eyebrow{font:600 12px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--teal)}.q-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg)}.q-tag{display:inline-flex;align-items:center;gap:5px;font:600 11.5px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;padding:4px 8px;border-radius:6px;background:var(--wash);color:var(--muted)}.q-foot{border-top:1px solid var(--rule);margin-top:64px;padding:26px 0 44px;font-size:13.5px;color:var(--muted)}.q-foot .wrap{display:flex;gap:10px 22px;flex-wrap:wrap;align-items:center}.q-foot a{color:var(--muted)}.q-foot a:hover{color:var(--teal)}.q-skel{display:block;height:13px;border-radius:4px;background:linear-gradient(90deg,var(--wash),var(--rule),var(--wash));background-size:200% 100%;animation:qsk 1.4s ease infinite;margin:10px 0}@keyframes qsk{to{background-position:-200% 0}}.q-spin{display:inline-block;width:12px;height:12px;border:2px solid var(--rule);border-top-color:var(--teal);border-radius:50%;animation:qsp .8s linear infinite;vertical-align:-1px}@keyframes qsp{to{transform:rotate(360deg)}}.q-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:all .2s;z-index:90}.q-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}@media (max-width:760px){.wrap{padding:0 16px}.q-nav{display:none}.q-theme{margin-left:auto}.q-top .wrap{height:56px}}@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}@media print{.q-top,.q-foot,.q-theme,.no-print{display:none!important}body{background:#fff;color:#000}}";
+var LP_DS = ":root{--paper:#F5F7FB;--surface:#FFFFFF;--ink:#182042;--muted:#5A6386;--rule:#D9DEEC;--wash:#E9EDF7;--teal:#0E7C70;--teal-wash:#DDF1EE;--amber:#8A5300;--amber-wash:#FCEFD6;--red:#B42318;--red-wash:#FDECEA;--green:#157F3B;--green-wash:#E5F4EA;--violet:#5B4BB7;--violet-wash:#ECE9FA;--rust:#B5562A;--rust-wash:#FBE9E0;--serif:\"Newsreader\",Georgia,\"Times New Roman\",serif;--sans:\"Familjen Grotesk\",system-ui,-apple-system,\"Segoe UI\",sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--r-sm:6px;--r:10px;--r-lg:14px;--shadow:0 1px 2px rgba(24,32,66,.06),0 8px 24px -12px rgba(24,32,66,.18);color-scheme:light}@media (prefers-color-scheme:dark){:root:not([data-theme=\"light\"]){--paper:#141A33;--surface:#1B2346;--ink:#E6E8F3;--muted:#9AA3C6;--rule:#2D3762;--wash:#222B52;--teal:#5FD3C4;--teal-wash:#173B45;--amber:#F2B544;--amber-wash:#3A2F1A;--red:#FF8A80;--red-wash:#3A1D22;--green:#6FD39A;--green-wash:#163326;--violet:#A99BFF;--violet-wash:#2A2752;--rust:#F08A5D;--rust-wash:#3A2420;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);color-scheme:dark}}:root[data-theme=\"dark\"]{--paper:#141A33;--surface:#1B2346;--ink:#E6E8F3;--muted:#9AA3C6;--rule:#2D3762;--wash:#222B52;--teal:#5FD3C4;--teal-wash:#173B45;--amber:#F2B544;--amber-wash:#3A2F1A;--red:#FF8A80;--red-wash:#3A1D22;--green:#6FD39A;--green-wash:#163326;--violet:#A99BFF;--violet-wash:#2A2752;--rust:#F08A5D;--rust-wash:#3A2420;--shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.6);color-scheme:dark}[hidden]{display:none!important}*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;scroll-padding-top:84px}body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.5 var(--sans);font-feature-settings:\"tnum\" 1;-webkit-font-smoothing:antialiased}a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}a:hover{color:var(--teal)}:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}button{font:inherit;color:inherit;cursor:pointer}.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.wrap{max-width:1240px;margin:0 auto;padding:0 24px}.q-top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid transparent;transition:border-color .2s}.q-top.scrolled{border-bottom-color:var(--rule)}.q-top .wrap{display:flex;align-items:center;gap:22px;height:64px}.q-mark{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:600;font-size:17px;letter-spacing:-.01em;white-space:nowrap}.q-mark svg{width:26px;height:26px;flex:none}.q-mark small{font-weight:400;color:var(--muted);font-size:15px}.q-nav{display:flex;gap:4px;margin-left:auto;font-size:14.5px;color:var(--muted)}.q-nav a{text-decoration:none;padding:6px 10px;border-radius:8px}.q-nav a:hover{background:var(--wash);color:var(--ink)}.q-nav a[aria-current]{color:var(--ink);background:var(--wash);font-weight:500}.q-theme{border:1px solid var(--rule);background:none;border-radius:999px;width:34px;height:34px;display:grid;place-items:center;color:var(--muted);flex:none}.q-theme:hover{color:var(--ink);border-color:var(--muted)}.q-theme svg{width:16px;height:16px}.q-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--rule);background:var(--surface);border-radius:10px;padding:8px 14px;font-weight:500;font-size:14px;text-decoration:none;color:var(--ink);white-space:nowrap;transition:border-color .15s,background .15s}.q-btn:hover{border-color:var(--muted);color:var(--ink)}.q-btn svg{width:16px;height:16px;flex:none}.q-btn.pri{background:var(--ink);border-color:var(--ink);color:var(--paper)}.q-btn.pri:hover{opacity:.9;color:var(--paper)}.q-btn.teal{background:var(--teal);border-color:var(--teal);color:var(--paper)}.q-btn.teal:hover{color:var(--paper);opacity:.92}.q-btn:disabled{opacity:.45;cursor:default}.q-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13.5px;text-decoration:none;color:var(--ink);white-space:nowrap}.q-chip:hover{border-color:var(--muted);color:var(--ink)}.q-chip[aria-pressed=\"true\"],.q-chip.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}.q-chip b{font-weight:600;font-variant-numeric:tabular-nums;opacity:.7}.q-eyebrow{font:600 12px/1 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--teal)}.q-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg)}.q-tag{display:inline-flex;align-items:center;gap:5px;font:600 11.5px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;padding:4px 8px;border-radius:6px;background:var(--wash);color:var(--muted)}.q-foot{border-top:1px solid var(--rule);margin-top:64px;padding:26px 0 44px;font-size:13.5px;color:var(--muted)}.q-foot .wrap{display:flex;gap:10px 22px;flex-wrap:wrap;align-items:center}.q-foot a{color:var(--muted)}.q-foot a:hover{color:var(--teal)}.q-skel{display:block;height:13px;border-radius:4px;background:linear-gradient(90deg,var(--wash),var(--rule),var(--wash));background-size:200% 100%;animation:qsk 1.4s ease infinite;margin:10px 0}@keyframes qsk{to{background-position:-200% 0}}.q-spin{display:inline-block;width:12px;height:12px;border:2px solid var(--rule);border-top-color:var(--teal);border-radius:50%;animation:qsp .8s linear infinite;vertical-align:-1px}@keyframes qsp{to{transform:rotate(360deg)}}.q-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:all .2s;z-index:90}.q-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}.q-menu{display:none;position:relative}.q-menu summary{list-style:none;cursor:pointer;border:1px solid var(--rule);border-radius:999px;width:34px;height:34px;display:grid;place-items:center;color:var(--muted)}.q-menu summary::-webkit-details-marker{display:none}.q-menu summary svg{width:16px;height:16px}.q-menu-panel{position:absolute;right:0;top:44px;z-index:50;min-width:200px;background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:8px;display:grid;box-shadow:var(--shadow)}.q-menu-panel a{padding:10px 12px;border-radius:8px;text-decoration:none;font-size:15px}.q-menu-panel a:hover,.q-menu-panel a[aria-current]{background:var(--wash)}@media (max-width:1000px){.q-nav a{padding:6px 7px}.q-nav{font-size:14px}}@media (max-width:860px){.q-nav{display:none}.q-menu{display:block;margin-left:auto}}@media (max-width:760px){.wrap{padding:0 16px}.q-top .wrap{height:56px;gap:10px}}@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}@media print{.q-top,.q-foot,.q-theme,.no-print{display:none!important}body{background:#fff;color:#000}}";
 var LP_CSS = ".dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c,var(--muted));flex:none}/* index */.ix-hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.75fr);gap:56px;padding:44px 24px 36px;align-items:start}.ix-intro h1{font:500 clamp(34px,4.4vw,56px)/1.04 var(--serif);letter-spacing:-.02em;margin:14px 0 18px;max-width:17ch}.lede{font:400 19px/1.55 var(--serif);color:var(--muted);max-width:56ch;margin:0 0 26px}.ix-search{position:relative;display:flex;align-items:center;background:var(--surface);border:1.5px solid var(--rule);border-radius:var(--r-lg);padding:0 14px;max-width:620px;transition:border-color .15s,box-shadow .15s}.ix-search:focus-within{border-color:var(--teal);box-shadow:0 0 0 4px var(--teal-wash)}.ix-search svg{width:19px;height:19px;color:var(--muted);flex:none}.ix-search input{flex:1;border:0;background:none;outline:none;font:400 18px/1.3 var(--serif);color:var(--ink);padding:15px 12px;min-width:0}.ix-search input::placeholder{color:var(--muted)}.ix-search input::-webkit-search-cancel-button{-webkit-appearance:none}kbd{font:500 12px/1 var(--mono);border:1px solid var(--rule);border-bottom-width:2px;border-radius:5px;padding:3px 6px;color:var(--muted);background:var(--paper)}.ix-hint{font-size:14px;color:var(--muted);margin:12px 2px 0}.ix-hint a{color:var(--teal);font-weight:500}.ix-stats{padding:22px 22px 18px}.ix-n{display:flex;align-items:flex-end;gap:12px;margin-bottom:16px}.ix-n b{font:500 54px/.9 var(--serif);letter-spacing:-.03em}.ix-n span{font-size:13.5px;color:var(--muted);line-height:1.35;padding-bottom:4px}.hist{width:100%;height:auto;display:block}.hist rect{fill:var(--teal);opacity:.35}.hist rect.now{opacity:1}.hist g:hover rect{opacity:.85}.hist text{font:500 10.5px var(--sans);fill:var(--muted)}.ix-cap{font-size:12px;color:var(--muted);margin:4px 0 16px}.catbar{display:flex;height:8px;border-radius:99px;overflow:hidden;gap:2px;margin-bottom:12px}.catbar span{background:var(--c)}.ix-legend{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:13px;color:var(--muted)}.ix-legend li{display:flex;align-items:center;gap:7px}.ix-legend b{margin-left:auto;color:var(--ink);font-weight:600}.ix-controls{position:sticky;top:64px;z-index:30;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}.ix-controls .wrap{display:flex;align-items:center;gap:16px;padding-top:10px;padding-bottom:10px}.ix-chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;flex:1;padding:2px}.ix-chips::-webkit-scrollbar{display:none}.ix-chips .q-chip.on .dot{background:var(--paper)}.ix-sort{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted)}.ix-sort select{font:500 14px var(--sans);color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:6px 26px 6px 10px;-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 13px) 50%,calc(100% - 8px) 50%;background-size:5px 5px;background-repeat:no-repeat}.ix-list{padding-top:28px}.ix-h{font:500 26px/1.2 var(--serif);margin:0 0 6px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}.ix-count{font:500 14px var(--sans);color:var(--muted)}.plist{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 40px}.plist.busy{opacity:.45;transition:opacity .15s}.pc{padding:22px 0;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;animation:pcin .3s ease both}@keyframes pcin{from{opacity:0;transform:translateY(6px)}}.pc-meta{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px;flex-wrap:wrap}.pc-cat{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--c)}.pc-cat::before{content:\"\";width:7px;height:7px;border-radius:50%;background:var(--c)}.pc-v{font:600 11.5px var(--sans);background:var(--wash);border-radius:5px;padding:2px 6px}.pc-t{font:500 21px/1.25 var(--serif);margin:0 0 8px;letter-spacing:-.005em}.pc-t a{text-decoration:none}.pc-t a:hover{color:var(--teal)}.pc-a{margin:0 0 12px;font-size:14.5px;line-height:1.55;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.pc-x{display:flex;gap:16px;font-size:13.5px;margin-top:auto;flex-wrap:wrap}.pc-x a{color:var(--teal);font-weight:600;text-decoration:none}.pc-x a:hover{text-decoration:underline}.pc-x a.pc-doi{color:var(--muted);font-weight:400;margin-left:auto;font-variant-numeric:tabular-nums}.empty{grid-column:1/-1;padding:40px 0;color:var(--muted);font:400 18px var(--serif)}.empty a{color:var(--teal)}.ix-more{text-align:center;padding:26px 0}.sub{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:8px 32px;align-items:center;padding:24px 26px;margin:40px 0 0}.sub h2{font:500 22px/1.2 var(--serif);margin:0 0 4px}.sub p{margin:0;color:var(--muted);font-size:14px}.sub form{display:flex;gap:8px}.sub input[type=email]{flex:1;min-width:0;border:1px solid var(--rule);background:var(--paper);color:var(--ink);border-radius:10px;padding:10px 12px;font:inherit}.sub input[type=email]:focus{outline:none;border-color:var(--teal)}#ld-msg{grid-column:1/-1;min-height:18px;font-size:13.5px}/* paper */.rp{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;pointer-events:none}.rp span{display:block;height:100%;width:0;background:var(--teal);transition:width .08s linear}.pp{padding-top:22px}.crumbs{display:flex;gap:8px;font-size:13.5px;color:var(--muted);margin-bottom:22px}.crumbs a{text-decoration:none}.crumbs a:hover{color:var(--teal)}.ph{max-width:880px;margin:0 0 30px}.ph h1{font:500 clamp(30px,3.7vw,46px)/1.1 var(--serif);letter-spacing:-.018em;margin:0 0 16px;text-wrap:balance}.by{font:400 17px/1.4 var(--serif);margin:0 0 14px}.by a{text-decoration:none}.by a:hover{text-decoration:underline}.orcid{width:15px;height:15px;vertical-align:-2px;margin-left:5px}.ph-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;font-size:14px;color:var(--muted)}.ph-meta a{color:var(--muted)}.q-tag.live{background:var(--teal-wash);color:var(--teal);text-transform:none;letter-spacing:0;font-size:12.5px;padding:5px 9px}.q-tag.live i{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 0 var(--teal);animation:pulse 2.4s ease infinite}@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--teal) 55%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}.ph-act{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}.pp-grid{display:grid;grid-template-columns:220px minmax(0,1fr) 360px;gap:48px;align-items:start}.toc{position:sticky;top:88px;max-height:calc(100vh - 110px);overflow:auto;font-size:13.5px;scrollbar-width:thin}.toc-d summary{font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);cursor:pointer;list-style:none;margin-bottom:10px}.toc-d summary::-webkit-details-marker{display:none}.toc-l{list-style:none;margin:0;padding:0;border-left:1px solid var(--rule)}.toc-l a{display:block;padding:5px 0 5px 14px;margin-left:-1px;border-left:2px solid transparent;text-decoration:none;color:var(--muted);line-height:1.35}.toc-l .lv3 a{padding-left:26px;font-size:13px}.toc-l a:hover{color:var(--ink)}.toc-l a.on{color:var(--ink);border-left-color:var(--teal);font-weight:500}.prose{font:400 18.5px/1.68 var(--serif);max-width:72ch;min-width:0;overflow-wrap:break-word;hyphens:auto;-webkit-hyphens:auto}.prose p{margin:0 0 1.05em}.prose h2{font:500 27px/1.2 var(--serif);letter-spacing:-.01em;margin:2em 0 .6em;position:relative;hyphens:none}.prose h3{font:600 20px/1.3 var(--serif);margin:1.7em 0 .5em;position:relative;hyphens:none}.prose h4{font:600 italic 18.5px/1.35 var(--serif);margin:1.4em 0 .4em;position:relative}.prose .hx{position:absolute;left:-1.05em;color:var(--rule);text-decoration:none;opacity:0;transition:opacity .15s;font-weight:400}.prose h2:hover .hx,.prose h3:hover .hx,.prose h4:hover .hx,.prose .hx:focus{opacity:1}.prose .hx:hover{color:var(--teal)}.prose ul,.prose ol{padding-left:1.4em;margin:0 0 1.05em}.prose li{margin-bottom:.35em}.prose a{color:var(--teal);text-decoration-color:color-mix(in srgb,var(--teal) 40%,transparent)}.prose blockquote{margin:1.3em 0;padding:.2em 0 .2em 1.1em;border-left:3px solid var(--teal);color:var(--muted);font-style:italic}.prose table{width:100%;border-collapse:collapse;margin:1.3em 0;font:400 14.5px/1.45 var(--sans);display:block;overflow-x:auto}.prose th{text-align:left;font-weight:600;border-bottom:1.5px solid var(--ink);padding:8px 10px;white-space:nowrap}.prose td{border-bottom:1px solid var(--rule);padding:7px 10px;vertical-align:top}.prose pre{font:13.5px/1.55 var(--mono);background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:14px 16px;overflow-x:auto;white-space:pre}.prose code{font:.84em var(--mono);background:var(--wash);padding:1px 5px;border-radius:4px}.prose pre code{background:none;padding:0}.prose hr{border:0;border-top:1px solid var(--rule);margin:2em 0}.prose img{max-width:100%;height:auto;border-radius:var(--r)}.prose mjx-container{max-width:100%;overflow-x:auto;overflow-y:hidden}.prose mjx-container[display=\"true\"]{margin:1.1em 0!important;padding:4px 0}.prose .math-display{text-align:center;margin:1.1em 0;overflow-x:auto}.abstract{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--teal);border-radius:0 var(--r-lg) var(--r-lg) 0;padding:6px 26px 10px;margin:0 0 2.2em;font-size:17.5px}.abstract h2{font:600 12px var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--teal);margin:16px 0 10px}.abstract .hx{display:none}.cite-n{color:var(--teal);font:600 .82em var(--sans);text-decoration:none;cursor:help;padding:0 1px;border-radius:3px}.cite-n:hover,.cite-n:focus{background:var(--teal-wash)}.refpop{position:absolute;z-index:70;max-width:380px;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px;font:400 14px/1.45 var(--sans);color:var(--ink)}.refpop b{color:var(--teal)}.selpop{position:absolute;z-index:70;display:flex;gap:2px;background:var(--ink);border-radius:10px;padding:4px;box-shadow:var(--shadow)}.selpop[hidden]{display:none}.selpop button{display:flex;align-items:center;gap:6px;border:0;background:none;color:var(--paper);font-size:13.5px;font-weight:500;padding:7px 10px;border-radius:7px}.selpop button:hover{background:color-mix(in srgb,var(--paper) 16%,transparent)}.selpop svg{width:15px;height:15px}mark.hl{background:var(--amber-wash);color:inherit;border-radius:3px;box-shadow:0 0 0 2px var(--amber-wash)}.rail{position:sticky;top:88px;max-height:calc(100vh - 104px);display:flex}.rail-in{display:flex;flex-direction:column;width:100%;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow)}.tabs{display:flex;border-bottom:1px solid var(--rule);padding:0 6px;flex:none}.tabs button{flex:1;border:0;background:none;padding:13px 4px 11px;font-size:13.5px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}.tabs button[aria-selected=\"true\"]{color:var(--ink);border-bottom-color:var(--teal)}.tabs button:hover{color:var(--ink)}.tp{padding:16px;overflow:auto;flex:1;min-height:0}#ask-f{display:flex;flex-direction:column;gap:8px}#ask-q{width:100%;border:1.5px solid var(--rule);border-radius:var(--r);background:var(--paper);color:var(--ink);font:400 16px/1.4 var(--serif);padding:10px 12px;resize:vertical;min-height:64px;max-height:200px}#ask-q:focus{outline:none;border-color:var(--teal)}#ask-f .q-btn{align-self:flex-end}.sugg{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}.sugg .q-chip{font-size:12.5px;padding:4px 10px;white-space:normal;text-align:left}.fine{font-size:12px;color:var(--muted);margin:14px 0 0;line-height:1.45}.turn{border-top:1px solid var(--rule);margin-top:14px;padding-top:14px}.turn .q{font:500 15.5px/1.35 var(--serif);margin:0 0 8px}.turn .st{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}.ans{font:400 15.5px/1.6 var(--serif)}.ans p{margin:0 0 .75em}.ans ul,.ans ol{padding-left:1.25em;margin:0 0 .75em}.ans h3,.ans h4{font:600 15px var(--sans);margin:1em 0 .35em}.ans a.c{color:var(--amber);font:600 .78em var(--sans);text-decoration:none;background:var(--amber-wash);border-radius:4px;padding:0 4px;margin:0 1px;vertical-align:1px}.ans .cur::after{content:\"\";display:inline-block;width:7px;height:15px;background:var(--teal);vertical-align:-2px;margin-left:2px;animation:blink 1s steps(2) infinite}@keyframes blink{50%{opacity:0}}.srcs{list-style:none;margin:10px 0 0;padding:0;font-size:13px}.srcs li{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:6px 0;border-top:1px dashed var(--rule)}.srcs .n{font:600 11.5px/20px var(--sans);text-align:center;background:var(--amber-wash);color:var(--amber);border-radius:5px;height:20px}.srcs a{text-decoration:none;font:500 14px/1.3 var(--serif)}.srcs a:hover{color:var(--teal)}.srcs .here{color:var(--teal);font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.05em;margin-left:6px}.fu{display:flex;flex-direction:column;gap:6px;margin-top:10px}.fu button{text-align:left;border:1px solid var(--rule);background:var(--paper);border-radius:8px;padding:7px 10px;font:400 14px/1.35 var(--serif)}.fu button:hover{border-color:var(--teal)}.fb{display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--muted);margin-top:10px}.fb button{border:1px solid var(--rule);background:none;border-radius:6px;padding:3px 9px;font-size:12.5px}.fb button:hover{border-color:var(--teal);color:var(--teal)}.err{color:var(--red);font-size:14px}.ctx-g{margin:0 0 18px}.ctx-g h3{font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}.ctx-l{display:flex;flex-wrap:wrap;gap:6px}.ctx-l button{display:inline-flex;align-items:center;gap:7px;text-align:left;border:1px solid var(--rule);background:var(--paper);border-radius:8px;padding:6px 10px;font:400 14px/1.3 var(--serif);color:var(--ink)}.ctx-l button:hover{border-color:var(--c)}.ctx-l button i{width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}.ctx-l.q button{width:100%}.ctx-l.q button i{border-radius:2px;transform:rotate(45deg)}.mini{width:100%;height:190px;display:block;margin:0 0 14px;border-radius:var(--r);background:var(--paper)}.mini line{stroke:var(--rule);stroke-width:1.2}.mini circle{stroke:var(--surface);stroke-width:2}.mini text{font:500 9.5px var(--sans);fill:var(--muted)}.mini g.c{cursor:pointer}.mini g.c:hover text{fill:var(--ink)}.vl,.rl{list-style:none;margin:0;padding:0}.vl li{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:10px 0;border-bottom:1px solid var(--rule);font-size:13.5px;align-items:baseline}.vl .v{font:600 12px var(--sans);background:var(--wash);border-radius:5px;padding:2px 7px;text-align:center}.vl .cur .v{background:var(--teal);color:var(--paper)}.vl a{text-decoration:none;font:400 14.5px/1.3 var(--serif)}.vl small{grid-column:2;color:var(--muted)}.rl li{padding:11px 0;border-bottom:1px solid var(--rule)}.rl a{text-decoration:none;font:500 15px/1.3 var(--serif);display:block;margin-bottom:3px}.rl a:hover{color:var(--teal)}.rl p{margin:0;font-size:13px;color:var(--muted);line-height:1.45}.rl small{font-size:12px;color:var(--muted)}.none{font-size:14px;color:var(--muted)}.fab{display:none}dialog#cite-d{padding:24px;max-width:620px;width:calc(100% - 32px);color:var(--ink);box-shadow:var(--shadow)}dialog#cite-d::backdrop{background:rgba(10,14,30,.45);backdrop-filter:blur(2px)}#cite-d h2{font:500 24px var(--serif);margin:0 0 14px}.cite-tabs{display:flex;gap:6px;margin-bottom:12px}#cite-t{font:13px/1.55 var(--mono);background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:14px;white-space:pre-wrap;word-break:break-word;margin:0 0 14px;max-height:50vh;overflow:auto}.cite-a{display:flex;gap:8px;justify-content:flex-end}@media (max-width:1240px){.pp-grid{grid-template-columns:190px minmax(0,1fr) 320px;gap:32px}}@media (max-width:1080px){.pp-grid{grid-template-columns:minmax(0,1fr) 330px}.toc{position:static;grid-column:1/-1;max-height:none}.toc-d{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:14px 16px}.toc-d:not([open]) summary{margin:0}.ix-hero{grid-template-columns:1fr;gap:28px}.plist{grid-template-columns:1fr}}@media (max-width:860px){.pp-grid{grid-template-columns:minmax(0,1fr)}.rail{position:static;max-height:none}.rail-in{max-height:none}.tp{max-height:none}.fab{display:inline-flex;position:fixed;right:16px;bottom:18px;z-index:50;align-items:center;gap:8px;border:0;background:var(--teal);color:var(--paper);border-radius:999px;padding:12px 18px;font-weight:600;box-shadow:var(--shadow)}.fab svg{width:18px;height:18px}.prose{font-size:17.5px}.prose .hx{display:none}.sub{grid-template-columns:1fr}}@media (max-width:560px){.ix-hero{padding:24px 16px 22px}.ix-intro h1{font-size:34px}.lede{font-size:17px}.ix-stats{display:none}.ix-controls{top:56px}.ix-sort span{display:none}.pc-t{font-size:19px}.pc-x a.pc-doi{display:none}.ph h1{font-size:28px}.ph-act .q-btn{padding:8px 11px}.abstract{padding:4px 16px 8px;font-size:16.5px}.prose{font-size:17px;line-height:1.62}.sub form{flex-direction:column}}@media print{.pp-grid{display:block}.prose{max-width:none;font-size:11pt}.abstract{border:1px solid #999}.rp{display:none}}";
 function lpHeader(current) {
-  const nav = [["Papers", "/papers", "papers"], ["Ask", LP_ASK, "ask"], ["Idea threads", "https://ideas.qnfo.org", "ideas"], ["QWAV", "https://qwav.org", "qwav"], ["QNFO", "https://qnfo.org", "qnfo"]];
+  const nav = [["Papers", "/papers", "papers"], ["Ask the corpus", LP_ASK + "/", "ask"], ["Ideas", "https://ideas.qnfo.org/", "ideas"], ["Archive", "https://archive.qnfo.org/", "archive"], ["About", "https://qnfo.org/about", "about"], ["Work with me", "https://qnfo.org/work-with-me", "work"]];
   return '<header class="q-top" id="q-top"><div class="wrap"><a class="q-mark" href="/papers" aria-label="QNFO Papers home">' + LP_MARK + 'QNFO <small>Papers</small></a><nav class="q-nav" aria-label="QNFO sites">' + nav.map(function(n) {
     return '<a href="' + n[1] + '"' + (n[2] === current ? ' aria-current="page"' : "") + ">" + n[0] + "</a>";
-  }).join("") + "</nav>" + LP_THEME_BTN + "</div></header>";
+  }).join("") + "</nav>" + '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="q-menu-panel">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === current ? ' aria-current="page"' : "") + ">" + n[0] + "</a>"; }).join("") + "</div></details>" + LP_THEME_BTN + "</div></header>";
 }
 function lpFooter() {
-  return '<footer class="q-foot"><div class="wrap"><span>QNFO Papers: open research from the QNFO program</span><a href="/rss.xml">RSS</a><a href="/sitemap.xml">Sitemap</a><a href="/llms.txt">llms.txt</a><a href="' + LP_ASK + '">Ask the corpus</a><a href="https://legal.qnfo.org">License: QNFO-ULA v2.0</a><a href="https://orcid.org/' + OWNER_ORCID + '">ORCID</a></div></footer><div class="q-toast" id="q-toast" role="status" aria-live="polite"></div>';
+  return '<footer class="q-foot"><div class="wrap"><span>QNFO Papers: open research from the QNFO program</span><a href="/rss.xml">RSS</a><a href="/sitemap.xml">Sitemap</a><a href="/llms.txt">llms.txt</a><a href="' + LP_ASK + '">Ask the corpus</a><a href="https://qnfo.org/about">About</a><a href="https://qnfo.org/work-with-me#contact">Contact</a><a href="https://legal.qnfo.org/">License: QNFO-ULA v2.0</a><a href="https://legal.qnfo.org/privacy">Privacy</a><a href="https://orcid.org/' + OWNER_ORCID + '">ORCID</a></div></footer><div class="q-toast" id="q-toast" role="status" aria-live="polite"></div>';
 }
 function lpDoc(o) {
   return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)">' + LP_THEME_BOOT + (o.head || "") + LP_FONTS + (o.math ? LP_MATHJAX : "") + "<style>" + LP_DS + LP_CSS + "</style>" + LP_GA + '</head><body class="' + (o.cls || "") + '">' + lpHeader(o.nav) + o.body + lpFooter() + "<script>" + LP_COMMON_JS + "<\/script>" + (o.js ? "<script>" + o.js + "<\/script>" : "") + "</body></html>";
@@ -2425,6 +2965,24 @@ var gateway_worker_default = {
         }
       });
     }
+    // QDS-1: the shared design system, served on every gateway host.
+    if (p === "/qds.css") return qdsAsset("css");
+    if (p === "/qds.js") return qdsAsset("js");
+    // ARCHIVE-ON-GATEWAY-1 and QWAV-ON-GATEWAY-1: hosts that were undeployable Pages projects.
+    if (host === "archive.qnfo.org" || host === "qwav.org" || host === "www.qwav.org" || host === "qwav.tech" || host === "www.qwav.tech") {
+      if (host.indexOf("www.") === 0) return new Response(null, { status: 301, headers: { Location: "https://" + host.slice(4) + p + u.search } });
+      if (p === "/health") return health();
+      if (p === "/robots.txt") return new Response("User-agent: *\nAllow: /\nSitemap: https://" + host + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+      if (p === "/sitemap.xml") return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://' + host + '/</loc><changefreq>weekly</changefreq></url></urlset>\n', { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+      if (host === "archive.qnfo.org") {
+        if (p === "/" || p === "/index.html") return handleArchive(env);
+        return new Response(null, { status: 301, headers: { Location: "https://archive.qnfo.org/" } });
+      }
+      if (p === "/legal" || p.indexOf("/legal/") === 0 || p === "/license" || p === "/privacy") return new Response(null, { status: 301, headers: { Location: "https://legal.qnfo.org" + (p === "/privacy" ? "/privacy" : "/") } });
+      if (p === "/" || p === "/index.html") return renderQwavHTML(host);
+      return new Response(null, { status: 301, headers: { Location: "https://" + host + "/" } });
+    }
+    if (p === "/privacy" && (host === "legal.qnfo.org" || host === "qnfo.org" || host === "www.qnfo.org" || host === "papers.qnfo.org")) return renderPrivacyHTML();
     if (host === "legal.qnfo.org") return handleLegal(p, env);
     if (host === "papers.qnfo.org" || host === "qnfo-publications.pages.dev") {
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
@@ -2489,7 +3047,7 @@ var gateway_worker_default = {
       if (p === "/work-with-me") return handleWorkWithMe();
       if (p === "/contact") return new Response(null, { status: 301, headers: { Location: "https://qnfo.org/work-with-me" } });
       if (p === "/" || p === "") return handleHub(env);
-      return json({ error: "Not found", path: p }, 404);
+      return notFoundPage(request, env, host, p, null);
     }
     if (p === "/health") return health();
     if (p === "/legal" || p === "/license") return handleLegal(p, env);
@@ -2510,7 +3068,7 @@ var gateway_worker_default = {
     if (method === "GET" && p.startsWith("/neighbors/")) return handleNeighbors(p.replace("/neighbors/", ""), env);
     if (method === "GET" && p === "/edges") return handleEdges(u, env);
     if (method === "GET" && p.startsWith("/impact/")) return handleImpact(p.replace("/impact/", ""), env);
-    return json({ error: "Not found", path: p }, 404);
+    return notFoundPage(request, env, host, p, null);
   },
   async scheduled(event, env, ctx) {
     try {
