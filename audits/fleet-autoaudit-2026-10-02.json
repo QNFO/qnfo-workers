@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 00:21:07",
+  "audited_at": "2026-10-02 03:09:03",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -422,7 +422,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.7.36-personal-channel-hold-ascii",
+        "version": "0.7.37-cadence-cap",
         "worker": "q08-signal-engine"
       },
       {
@@ -452,7 +452,7 @@
       },
       {
         "dir": "qnfo-autonomy-scorer",
-        "version": "1.1.4-capability-contract",
+        "version": "1.2.0-sai-weighted",
         "worker": "qnfo-autonomy-scorer"
       },
       {
@@ -462,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.16.4-capability-contract",
+        "version": "1.16.5-optout-evidence",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -487,12 +487,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.83-capability-contract",
+        "version": "0.4.84-charter-sai-composite",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.15.2-capability-contract",
+        "version": "1.16.0-q08-review",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -542,7 +542,7 @@
       },
       {
         "dir": "qnfo-outreach",
-        "version": "0.3.7-capability-contract",
+        "version": "0.3.8-cf-dow",
         "worker": "qnfo-outreach"
       },
       {
@@ -848,9 +848,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.7.36-personal-channel-hold-ascii",
+      "before": "0.7.37-cadence-cap",
       "http": 200,
-      "live": "0.7.36-personal-channel-hold-ascii",
+      "live": "0.7.37-cadence-cap",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -952,9 +952,9 @@
       "worker": "qnfo-auditor"
     },
     "qnfo-autonomy-scorer": {
-      "before": "1.1.4-capability-contract",
+      "before": "1.2.0-sai-weighted",
       "http": 200,
-      "live": "1.1.4-capability-contract",
+      "live": "1.2.0-sai-weighted",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-autonomy-scorer"
@@ -1016,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.16.4-capability-contract",
+      "before": "1.16.5-optout-evidence",
       "http": 200,
-      "live": "1.16.4-capability-contract",
+      "live": "1.16.5-optout-evidence",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.83-capability-contract",
+      "before": "0.4.84-charter-sai-composite",
       "http": 200,
-      "live": "0.4.83-capability-contract",
+      "live": "0.4.84-charter-sai-composite",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.15.2-capability-contract",
+      "before": "1.16.0-q08-review",
       "http": 200,
-      "live": "1.15.2-capability-contract",
+      "live": "1.16.0-q08-review",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1288,9 +1288,9 @@
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
-      "before": "0.3.7-capability-contract",
+      "before": "0.3.8-cf-dow",
       "http": 200,
-      "live": "0.3.7-capability-contract",
+      "live": "0.3.8-cf-dow",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-outreach"
