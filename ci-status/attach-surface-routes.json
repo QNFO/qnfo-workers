@@ -16,7 +16,7 @@
     },
     "qwav.org": {
       "zone": "qwav.org",
-      "route_id": "1bef2be2670740608dd6a17bd1376744",
+      "route_id": "f36c57a79cc04956a7431d23fad4c4bf",
       "status": "created",
       "detail": null,
       "dns_record": "bf15ded6489cd075d294f307eb16a2e5",
@@ -27,7 +27,7 @@
     },
     "www.qwav.org": {
       "zone": "qwav.org",
-      "route_id": "89f6b800a8984c409b09a0d940eaca1b",
+      "route_id": "cca07fbb40a64cc8af38f98788904a61",
       "status": "created",
       "detail": null,
       "dns_record": "26ff1daa55c154d3a62c0a6ae7400a7d",
@@ -44,5 +44,5 @@
       "verified": true
     }
   },
-  "ts": "2026-10-02T13:14:36Z"
+  "ts": "2026-10-02T13:31:56Z"
 }
