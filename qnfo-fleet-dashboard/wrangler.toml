@@ -41,6 +41,12 @@ binding = "IDENTITY"
 database_name = "qnfo-identity"
 database_id = "6c26125a-908a-4774-9812-f1f0e60afc5f"
 
+# FLEET-CMD-1 (2026-10-02): the command line's owner sign-in mails a 6-digit code to the owner's verified Email Routing
+# address only (the same address the fleet's owner nudges use). Nobody can choose where a code is sent.
+[[send_email]]
+name = "SEND_EMAIL"
+allowed_destination_addresses = ["rwnquni@outlook.com"]
+
 [triggers]
 crons = ["*/15 * * * *"]
 
