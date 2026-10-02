@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.37-core-prompt";
+var VERSION = "2.38.38-cron-apply-parse";
 // ---- UTF8-DEPLOY-1:BEGIN (2.38.36, 2026-10-02, pillar core) ----
 // The GitHub contents API returns base64 of the file's UTF-8 bytes. atob() alone gives one character per BYTE
 // (Latin-1), and fetch() then encodes that string as UTF-8 again, so every non-ASCII character in a worker was
@@ -42,6 +42,40 @@ function b64Utf8(b64) {
   return new TextDecoder("utf-8").decode(u);
 }
 // ---- UTF8-DEPLOY-1:END ----
+// ---- CRON-APPLY-PARSE-1:BEGIN (2.38.38, 2026-10-02, pillar core) ----
+// The canonical deploy found the cron list by searching for the word "crons": its first occurrence anywhere in the
+// file, comments included. qnfo-cloud-ops ("returns 21 crons"), qnfo-fleet-dashboard and radar-hub ("Same count of
+// crons") mention the word in a comment above [triggers], so the parse read the next "[...]" (a section header such as
+// [triggers]), found no quoted strings, logged "wrangler.toml declares no crons" and never applied their schedules:
+// radar-hub kept "0 5 * * 1" (Sunday in Cloudflare's numbering) after its wrangler.toml moved the events radar to
+// "0 5 * * 2" (#403). Read the `crons = [...]` assignment itself, on a line of its own, inside [triggers]; a comment
+// inside a multi-line array is skipped. Returns null when the file declares no crons key (nothing to apply), [] for an
+// explicit empty list.
+function tomlDeclaredCrons(wt) {
+  var lines = String(wt || "").split(/\r?\n/);
+  var section = "";
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].replace(/^\s+/, "");
+    if (line.charAt(0) === "#") continue;
+    var sec = /^\[\[?([^\]]+)\]\]?\s*(#.*)?$/.exec(line);
+    if (sec) { section = sec[1].trim(); continue; }
+    if (section !== "triggers") continue;
+    var m = /^crons\s*=\s*\[(.*)$/.exec(line);
+    if (!m) continue;
+    var body = m[1];
+    var j = i;
+    while (body.indexOf("]") < 0 && j + 1 < lines.length) { j++; body += "\n" + lines[j]; }
+    var close = body.indexOf("]");
+    if (close < 0) return null;
+    var seg = body.slice(0, close).split("\n").map(function (l) { return l.replace(/#.*$/, ""); }).join("\n");
+    var out = [];
+    var rx = /"([^"]*)"|'([^']*)'/g, q;
+    while ((q = rx.exec(seg)) !== null) { var v = q[1] != null ? q[1] : q[2]; if (v) out.push(v); }
+    return out;
+  }
+  return null;
+}
+// ---- CRON-APPLY-PARSE-1:END ----
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -6403,15 +6437,8 @@ async function opsDeploy(env, args) {
           if (wr.ok) {
             var wj = await wr.json();
             var wt = b64Utf8(wj.content);
-            var ci = wt.indexOf("crons");
-            var arrStart = ci >= 0 ? wt.indexOf("[", ci) : -1;
-            var arrEnd = arrStart >= 0 ? wt.indexOf("]", arrStart) : -1;
-            var crons = [];
-            if (arrStart >= 0 && arrEnd > arrStart) {
-              var seg = wt.slice(arrStart + 1, arrEnd);
-              var qparts = seg.split(String.fromCharCode(34));
-              for (var qi = 1; qi < qparts.length; qi += 2) { if (qparts[qi]) crons.push(qparts[qi]); }
-            }
+            // CRON-APPLY-PARSE-1: the [triggers] crons assignment itself, not the first "crons" in a comment.
+            var crons = tomlDeclaredCrons(wt) || [];
             if (crons.length) {
               var sr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/schedules", { method: "PUT", headers: { "Authorization": "Bearer " + (env.CF_API_TOKEN || ""), "Content-Type": "application/json" }, body: JSON.stringify(crons.map(function(c3) { return { cron: c3 }; })) });
               log.push({ step: "crons", http: sr.status, count: crons.length, crons });
