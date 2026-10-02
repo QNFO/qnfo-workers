@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.17.0-grant-followup"; /* 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.17.1-reach-loops"; /* 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -572,10 +572,28 @@ async function jobGmailTriage(env) {
   return { status: "ok", notes: { ...out, digest: d } };
 }
 __name(jobGmailTriage, "jobGmailTriage");
+// EMAIL-TRIAGE-D1-1 (1.17.1, pillar: reach): the triage read qnfo.org mail through qnfo-email's /emails/recent and
+// marked noise through /emails/status, both behind EMAIL_API_KEY. That secret is absent on this worker since its
+// 2026-09-26 recreation, so every run from 2026-09-30 failed with "unauthorized" (cloud_ops_events jr-email-triage-*).
+// Both routes are one statement each on qnfo-audit.emails, the database this worker already binds as AUDIT (the same
+// table GRANT-FOLLOWUP-1 reads), so the triage now runs those statements itself and needs no key.
+var EMAIL_TRIAGE_STATUSES = ["received", "processed", "sent", "replied", "archived", "spam", "read", "rejected"];
+async function emailTriageRecent(env, limit) {
+  const r = await env.AUDIT.prepare("SELECT id, message_id, sender, recipient, subject, classification, status, received_at, processing_ms FROM emails WHERE status = ?1 ORDER BY id DESC LIMIT ?2").bind("processed", Math.min(Math.max(Number(limit) || 30, 1), 100)).all();
+  return r.results || [];
+}
+async function emailTriageSetStatus(env, id, status) {
+  if (!Number(id) || EMAIL_TRIAGE_STATUSES.indexOf(status) < 0) return false;
+  await env.AUDIT.prepare("UPDATE emails SET status = ?1 WHERE id = ?2").bind(status, Number(id)).run();
+  return true;
+}
 async function jobEmailTriage(env) {
-  const recent = await cfEmail(env, "/emails/recent?limit=30&status=processed");
-  if (recent.error) return { status: "error", notes: { error: recent.error } };
-  const emails = recent.emails || [];
+  let emails;
+  try {
+    emails = await emailTriageRecent(env, 30);
+  } catch (e) {
+    return { status: "error", notes: { error: "emails read: " + String(e && e.message || e).slice(0, 160), source: "d1" } };
+  }
   const action = [], noise = [];
   const SPAM_SENDERS = ["glintopenaccess", "paperworkspot", "mdpi", "webofproceedings"];
   const SYS_PAT = /dmarc|srs0|bounce|cf-bounce|noreply|no-reply|mailer-daemon|rspamd/i;
@@ -596,9 +614,10 @@ async function jobEmailTriage(env) {
     }
     action.push(e);
   }
+  let marked = 0;
   for (const e of noise) {
     try {
-      await cfEmail(env, "/emails/status", { method: "PATCH", body: { id: e.id, status: "spam" } });
+      if (await emailTriageSetStatus(env, e.id, "spam")) marked++;
     } catch (err) {
     }
   }
@@ -629,7 +648,7 @@ async function jobEmailTriage(env) {
     L.push("", "No actionable inbound email.");
   }
   const d = await storeDigest(env, "email-triage", "QNFO email triage \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
-  return { status: "ok", notes: { checked: emails.length, actionable: action.length, noise: noise.length, digest: d } };
+  return { status: "ok", notes: { checked: emails.length, actionable: action.length, noise: noise.length, marked_spam: marked, source: "d1", digest: d } };
 }
 __name(jobEmailTriage, "jobEmailTriage");
 var REGISTER_R2_KEY = "obsidian/notes/v1/_personal-gtd.md";
@@ -1193,6 +1212,12 @@ async function jobPortfolioSync(env) {
   return { status: "ok", notes: { drift: true, directMain: true, ...out } };
 }
 __name(jobPortfolioSync, "jobPortfolioSync");
+// ZENODO-UA-1 (1.17.1, pillar: reach): the weekly zenodo-stats run fetched 0 of 308, 218 and 218 records on 2026-09-05,
+// 09-12 and 09-19 (cloud_ops_events jr-zenodo-stats-*), so zenodo_stats froze at 2026-08-29. It sent a spoofed desktop
+// Chrome User-Agent, which Zenodo now refuses with 403 "unusual traffic from your network"; the same request with an
+// honest client name returns 200 (probed 2026-10-02), and qnfo-paper-indexer and qnfo-social read the same API from
+// Cloudflare with honest names. Failures are now counted by HTTP status in the run notes, so a refusal is visible.
+var ZENODO_UA = "qnfo-cloud-ops/" + VERSION + " (+https://qnfo.org; zenodo-stats)";
 async function jobZenodoStats(env) {
   const corpus = await env.LIVING.prepare("SELECT zenodo_doi, slug FROM papers WHERE zenodo_doi IS NOT NULL AND zenodo_doi != '' AND status IN ('published','distributed')").all();
   const byDoi = {};
@@ -1213,7 +1238,8 @@ async function jobZenodoStats(env) {
   }
   const todo = Object.keys(byDoi).filter((d2) => !fresh.has(d2));
   let fetched = 0, errors = 0;
-  const UA = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" };
+  const failures = {};
+  const UA = { "User-Agent": ZENODO_UA, Accept: "application/json" };
   const movers = [];
   const auditViolations = [];
   for (const doi of todo) {
@@ -1222,6 +1248,7 @@ async function jobZenodoStats(env) {
       const r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA });
       if (!r.ok) {
         errors++;
+        failures[r.status] = (failures[r.status] || 0) + 1;
         continue;
       }
       const d2 = await r.json();
@@ -1257,13 +1284,14 @@ async function jobZenodoStats(env) {
       }
     } catch (e) {
       errors++;
+      failures.thrown = (failures.thrown || 0) + 1;
     }
     if (fetched % 40 === 0) await new Promise((res) => setTimeout(res, 200));
   }
   const tot = await env.AUDIT.prepare("SELECT COALESCE(SUM(downloads),0) AS dl, COALESCE(SUM(views),0) AS vw, COUNT(*) AS n FROM zenodo_stats").first();
   movers.sort((a, b) => b.g - a.g);
   const L = ["QNFO Zenodo stats delta \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
-  L.push("Corpus " + Object.keys(byDoi).length + " DOIs; fetched " + fetched + " today, errors " + errors + ".");
+  L.push("Corpus " + Object.keys(byDoi).length + " DOIs; fetched " + fetched + " today, errors " + errors + (errors ? " " + JSON.stringify(failures) : "") + ".");
   L.push("downloads: " + prevDl + " -> " + (tot.dl || 0) + " (+" + ((tot.dl || 0) - prevDl) + ")");
   L.push("views:     " + prevVw + " -> " + (tot.vw || 0) + " (+" + ((tot.vw || 0) - prevVw) + ")");
   if (movers.length) {
@@ -1277,7 +1305,7 @@ async function jobZenodoStats(env) {
     L.push("", "ADR-014 attribution audit: 0 creator violations (sole-author mandate holds).");
   }
   const d = await storeDigest(env, "zenodo-stats", "QNFO Zenodo stats delta \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
-  return { status: fetched > 0 || errors === 0 ? "ok" : "error", notes: { fetched, errors, corpus: Object.keys(byDoi).length, audit_violations: auditViolations.length, digest: d } };
+  return { status: fetched > 0 || errors === 0 ? "ok" : "error", notes: { fetched, errors, failures, corpus: Object.keys(byDoi).length, audit_violations: auditViolations.length, digest: d } };
 }
 __name(jobZenodoStats, "jobZenodoStats");
 async function jobBoardSync(env) {

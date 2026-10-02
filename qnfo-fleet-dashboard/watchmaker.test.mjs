@@ -2,6 +2,8 @@
 // synthetic ledgers and proves: a fully fresh fleet reads 0; a stalled runner, a never-run one, an unreadable ledger,
 // a research backlog and live code-task merges each count; a first run not yet due and the owner's by-policy approvals do
 // not; the daily run writes one row and the metric once per day, never before 07:00Z; GET /api/watchmaker serves it.
+// REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
+// stale zenodo_stats and job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
 // Run: node qnfo-fleet-dashboard/watchmaker.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -27,6 +29,10 @@ CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TE
 CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
 CREATE TABLE errata_watch (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE social_channels (channel_id TEXT PRIMARY KEY, service TEXT, name TEXT, connected INTEGER, checked_at TEXT, checked_day TEXT);
+CREATE TABLE zenodo_stats (doi TEXT PRIMARY KEY, downloads INTEGER, views INTEGER, fetched_at TEXT, updated_at TEXT);
+CREATE TABLE handoffs (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, project_id TEXT NOT NULL, timestamp TEXT NOT NULL, claim_sheet TEXT);
+CREATE TABLE events_radar (slug TEXT PRIMARY KEY, scanned_at TEXT);
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, layer TEXT NOT NULL, kind TEXT NOT NULL, formula TEXT, source_of_truth TEXT, baseline TEXT, target TEXT,
   owner TEXT, disposition_actor TEXT, refresh_cadence TEXT, warning_band TEXT, kill_band TEXT, last_value TEXT, last_refreshed TEXT, state TEXT);`);
 const NOW = Date.parse("2026-10-06T08:00:00Z");
@@ -47,6 +53,22 @@ db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pe
 db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-watch', ?)").run(JSON.stringify({ ts: ago(0.5), ok: true, last_ok: ago(0.5) }));
 db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-respond', ?)").run(JSON.stringify({ ts: ago(0.2), ok: false, last_ok: ago(1.2) }));
 db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-publish', ?)").run(JSON.stringify({ ts: ago(0.1), ok: true, last_ok: ago(0.1) }));
+// REACH-LOOPS-WATCH-1: the delegated identity and reach loops, each fresh against its cadence.
+// qnfo-social SOCIAL-RUN-LEDGER-1 rows: one per op per day, meta.last_ok = last completed run.
+const socialRow = (op, day, status, lastOkH, tsH) => db.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, meta, job, status) VALUES (?, ?, 'social-run', ?, 'qnfo-social', ?)").run("social-" + op + "-" + day, ago(tsH == null ? lastOkH : tsH), JSON.stringify({ op, last_ok: lastOkH == null ? null : ago(lastOkH), runs: 3 }), status);
+socialRow("profile-sync", "2026-10-06", "ok", 1);
+socialRow("drain", "2026-10-06", "ok", 1.5);
+socialRow("scan", "2026-10-06", "ok", 2);
+socialRow("engagement", "2026-10-06", "ok", 1);
+db.prepare("INSERT INTO social_channels (channel_id, service, connected, checked_at, checked_day) VALUES ('chL', 'linkedin', 1, ?, '2026-10-06')").run(ago(7));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-engagement-e1', ?, 'ok')").run(ago(3));
+db.prepare("INSERT INTO zenodo_stats (doi, updated_at) VALUES ('10.5281/zenodo.1', '2026-10-04 07:03:00')").run();   // Sunday's run, space format
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-email-triage-t1', ?, 'ok')").run(ago(20));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('mention-radar-2026-10-05', ?, 'mention-radar', 'radar-hub', 'degraded')").run(ago(23.5));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-radar-r1', ?, 'ok')").run(ago(24.5));
+db.prepare("INSERT INTO handoffs (session_id, project_id, timestamp, claim_sheet) VALUES ('cloud-workflow', 'job-market-watch-workflow-2026-10-05', ?, '{}')").run(ago(25));
+db.prepare("INSERT INTO handoffs (session_id, project_id, timestamp, claim_sheet) VALUES ('s', 'job-market-watch-2026-10-06', ?, '{}')").run(ago(0.5));   // a session note, outside the id range
+db.prepare("INSERT INTO events_radar (slug, scanned_at) VALUES ('events-radar-2026-10-05', ?)").run(ago(27));
 
 function stmtOn(sql) {
   let args = [];
@@ -103,6 +125,59 @@ ok(op(m, "grant-followup").counted && /stalled: last run 25h ago, cadence 12h/.t
 db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'jr-grant-followup-ok1'").run(ago(4));
 m = await api.watchmakerMeasure(env, NOW);
 ok(!op(m, "grant-followup").counted && m.index === 0, "a fresh full grant-followup run is not counted");
+
+// REACH-LOOPS-WATCH-1: the delegated identity and reach loops.
+const REACH = ["social-profile-sync", "social-posting", "social-scan", "buffer-channel-audit", "social-engagement", "engagement-feed", "zenodo-stats", "email-triage", "mention-radar", "cloud-ops-radar", "job-market-watch", "events-radar"];
+m = await api.watchmakerMeasure(env, NOW);
+ok(REACH.every((k) => op(m, k) && op(m, k).state.startsWith("ok")) && m.index === 0, "every reach loop is listed and reads fresh (" + REACH.filter((k) => !op(m, k) || !op(m, k).state.startsWith("ok")).join(",") + ")");
+ok(op(m, "social-posting").runner === "cron:qnfo-social" && op(m, "job-market-watch").runner === "cron:radar-hub" && op(m, "zenodo-stats").runner === "cron:qnfo-cloud-ops", "each loop names its Cloudflare runner");
+ok(op(m, "job-market-watch").age_h === 25 && op(m, "zenodo-stats").age_h === 49, "job-market reads the handoffs id range (not a session note) and zenodo-stats reads space-format UTC");
+// A failed tick after a good one: status error, but meta.last_ok still proves the last completed run.
+socialRow("profile-sync", "2026-10-06", "error", 1, 0.2);
+m = await api.watchmakerMeasure(env, NOW);
+ok(!op(m, "social-profile-sync").counted && op(m, "social-profile-sync").age_h === 1, "a failed profile-sync tick does not hide the last good one (meta.last_ok)");
+// A day of failures only: last_ok null on today's row, yesterday's row still answers.
+socialRow("profile-sync", "2026-10-06", "error", null, 0.2);
+socialRow("profile-sync", "2026-10-05", "ok", 20);
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "social-profile-sync").counted && /stalled: last run 20h ago, cadence 2h/.test(op(m, "social-profile-sync").state), "a profile sync failing all day counts as stalled from its last completed run");
+db.exec("DELETE FROM cloud_ops_events WHERE id LIKE 'social-profile-sync-%'");
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "social-profile-sync").counted && op(m, "social-profile-sync").state === "never ran", "a social op with no ledger row past its first due date counts");
+const early2 = await api.watchmakerMeasure(env, Date.parse("2026-10-03T08:00:00Z"));
+ok(!op(early2, "social-profile-sync").counted && /^first run due 2026-10-03T12:00/.test(op(early2, "social-profile-sync").state), "before the ledger's first due date it is not counted");
+socialRow("profile-sync", "2026-10-06", "ok", 1);
+// Mention radar: an error run proves nothing; degraded (a source refused) is a run.
+db.exec("UPDATE cloud_ops_events SET status = 'error' WHERE id = 'mention-radar-2026-10-05'");
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "mention-radar").counted && op(m, "mention-radar").state === "never ran", "a mention-radar run whose every source failed does not prove the radar");
+db.exec("UPDATE cloud_ops_events SET status = 'degraded' WHERE id = 'mention-radar-2026-10-05'");
+// Stale data: zenodo_stats frozen at 2026-08-29 (the 403 era) and the job market at 2026-09-08 both count.
+db.exec("UPDATE zenodo_stats SET updated_at = '2026-08-29 07:04:24'");
+db.exec("UPDATE handoffs SET timestamp = '2026-09-08T09:31:27.810Z' WHERE project_id = 'job-market-watch-workflow-2026-10-05'");
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "zenodo-stats").counted && /cadence 168h/.test(op(m, "zenodo-stats").state) && op(m, "job-market-watch").counted && m.index === 2, "zenodo-stats frozen since 2026-08-29 and the job market silent since 2026-09-08 count as stalled");
+db.exec("UPDATE zenodo_stats SET updated_at = '2026-10-04 07:03:00'");
+db.prepare("UPDATE handoffs SET timestamp = ? WHERE project_id = 'job-market-watch-workflow-2026-10-05'").run(ago(25));
+// Weekday-only jobs: the weekend is not a stall, a missed Monday is.
+const MON = Date.parse("2026-10-05T07:05:00Z");
+db.prepare("UPDATE cloud_ops_events SET ts = '2026-10-02T07:30:02.000Z' WHERE id = 'jr-radar-r1'").run();
+db.prepare("UPDATE cloud_ops_events SET ts = '2026-10-02T12:00:20.000Z' WHERE id = 'jr-email-triage-t1'").run();
+let wk = await api.watchmakerMeasure(env, MON);
+ok(!op(wk, "cloud-ops-radar").counted && !op(wk, "email-triage").counted, "Friday to Monday morning is not a stall for the weekday radar and triage");
+wk = await api.watchmakerMeasure(env, Date.parse("2026-10-06T13:00:00Z"));
+ok(op(wk, "cloud-ops-radar").counted && op(wk, "email-triage").counted, "no weekday run since Friday by Tuesday afternoon counts for both");
+db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'jr-radar-r1'").run(ago(24.5));
+db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'jr-email-triage-t1'").run(ago(20));
+// EMAIL-TRIAGE-D1-1: the 2026-09-30..10-01 'unauthorized' runs are errors and do not prove the triage.
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-email-triage-unauth', ?, 'error')").run(ago(0.5));
+db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'jr-email-triage-t1'").run(ago(80));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "email-triage").counted && op(m, "email-triage").age_h === 80, "an error triage run (EMAIL_API_KEY 'unauthorized') does not prove the triage");
+db.exec("DELETE FROM cloud_ops_events WHERE id = 'jr-email-triage-unauth'");
+db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'jr-email-triage-t1'").run(ago(20));
+m = await api.watchmakerMeasure(env, NOW);
+ok(m.index === 0, "the fixture is fresh again before the stall checks (" + m.counted.join(",") + ")");
 
 // Stalled, never-run, backlog, live merges, unreadable
 db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'portfolio-daily-2026-10-06'").run(ago(60));

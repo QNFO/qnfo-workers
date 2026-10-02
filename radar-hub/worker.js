@@ -2,7 +2,10 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // HUB-VERSION-SCOPE-1 (2026-09-23): radar-hub's OWN version, at MODULE scope so the hub's
 // `export default` can read it. Each embedded sub-worker IIFE declares its own `VERSION`
 // inside its own scope; a bare reference from module scope throws ReferenceError.
-var VERSION = "1.1.2";
+// 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
+// handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
+// EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
+var VERSION = "1.1.3";
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -719,16 +722,113 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-
+// JOB-MARKET-INLINE-1 (radar-hub 1.1.3, 2026-10-02, pillar: reach). The weekly job-market watch had not recorded a run
+// since 2026-09-08 (handoffs project_id job-market-watch-workflow-*; that row and the two of 09-01 came from manual
+// Workflow instances, never the cron: commit 3fda8b34 already found the cron "DETACHED ... zero fires"). Three defects:
+//   1. The cron only called env.JOB_MARKET_WATCH.create(). A Workflow is its own resource that `wrangler deploy` creates;
+//      radar-hub is deployed through qnfo-ops' raw script upload, which installs the binding (without a workflow_name)
+//      but never creates or re-points the Workflow, and the Workflow the binding named belonged to the job-market-watch
+//      script, retired on 2026-09-27. A created instance had no class to run.
+//   2. Since 2026-09-27 qnfo-audit refuses any handoffs row without a claim_sheet (trigger
+//      handoffs_claim_sheet_required_ins, FRAMEWORK-DOGFOOD-1). The record step wrote none, so even a running instance
+//      could not record.
+//   3. The D1 record came after the R2 vault write, so a vault failure lost the run.
+// The cron now runs the scan inline (three HTTP reads and two writes fit a scheduled invocation easily), writes the vault
+// note best-effort, and always writes the handoffs row with a claim_sheet. JobMarketWatchWorkflow stays exported, with the
+// same steps, so a manually created instance still works. Cron 0 7 * * 2 is Monday 07:00Z (Cloudflare numbers 1=Sunday).
+var JMW_PROJECT = "job-market-watch-workflow-";
+async function jmwScan(f) {
+  const opt = { headers: { "User-Agent": "QNFO-job-market-watch/1.1 (+https://qnfo.org)" }, signal: AbortSignal.timeout(20e3) };
+  const out = [];
+  try {
+    const r = await f("https://api.lever.co/v0/postings/epoch-ai?mode=json", opt);
+    if (r.ok) {
+      const j = await r.json();
+      out.push({ source: "epoch", channel: "RED", roles: (Array.isArray(j) ? j : []).map((x) => x.text || "").filter(Boolean).slice(0, 12) });
+    } else out.push({ source: "epoch", channel: "RED", error: "HTTP " + r.status });
+  } catch (e) {
+    out.push({ source: "epoch", channel: "RED", error: String(e && e.message || e).slice(0, 120) });
+  }
+  try {
+    const r = await f("https://api.ashbyhq.com/posting-api/job-board/quantware", opt);
+    if (r.ok) {
+      const j = await r.json();
+      out.push({ source: "quantware", channel: "RED", roles: (j.jobs || []).map((x) => x.title).slice(0, 12) });
+    } else out.push({ source: "quantware", channel: "RED", error: "HTTP " + r.status });
+  } catch (e) {
+    out.push({ source: "quantware", channel: "RED", error: String(e && e.message || e).slice(0, 120) });
+  }
+  try {
+    const r = await f("https://forecastingresearch.org/careers", opt);
+    if (r.ok) {
+      const html = await r.text();
+      const titles = [];
+      for (const m of html.matchAll(/<a[^>]+href="([^"]+)"[^>]*>([^<]{8,80})/g)) {
+        const t = m[2].trim();
+        if (/Senior|Research|Analyst|Fellow|Researcher|Data/.test(t) && titles.length < 12) titles.push(t);
+      }
+      out.push({ source: "fri", channel: "GREEN", roles: titles, email: html.includes("info@forecastingresearch.org") });
+    } else out.push({ source: "fri", channel: "GREEN", error: "HTTP " + r.status });
+  } catch (e) {
+    out.push({ source: "fri", channel: "GREEN", error: String(e && e.message || e).slice(0, 120) });
+  }
+  return out;
+}
+function jmwReport(boards, iso) {
+  const lines = ["# JOB MARKET WATCH", "", "> Generated " + iso, "", "## Scan results", ""];
+  for (const b of boards) {
+    lines.push("### " + b.source + " [" + b.channel + "]");
+    if (b.roles && b.roles.length) lines.push(b.roles.map(function(x) {
+      return "- " + x;
+    }).join(String.fromCharCode(10)));
+    if (b.error) lines.push("- ERROR: " + b.error);
+    if (b.email !== void 0) lines.push("- email channel: " + (b.email ? "yes (GREEN - automated application possible)" : "no"));
+  }
+  lines.push("", "## CHANNEL-1 POLICY", "GREEN = direct email application (automatable). RED = form-ATS (track only, recruit-at-large).");
+  return lines.join(String.fromCharCode(10));
+}
+function jmwKey(date) {
+  return "notes/v1/" + date.slice(0, 4) + "/" + date.slice(5, 7) + "/" + date + "/_job-market-watch-workflow-" + date + ".md";
+}
+async function jmwDeliver(env, key, report) {
+  if (!env.VAULT) return { key: null, error: "no VAULT binding" };
+  try {
+    await env.VAULT.put(key, report, { httpMetadata: { contentType: "text/markdown" } });
+    return { key, error: null };
+  } catch (e) {
+    return { key: null, error: String(e && e.message || e).slice(0, 120) };
+  }
+}
+async function jmwRecord(env, boards, date, iso, trigger, delivered) {
+  const ok = boards.filter((b) => !b.error).length;
+  const roles = boards.reduce((n, b) => n + (b.roles ? b.roles.length : 0), 0);
+  const green = boards.filter((b) => b.channel === "GREEN").length, red = boards.filter((b) => b.channel === "RED").length;
+  const summary = "Job market scan (" + trigger + "): " + boards.length + " boards (" + green + " GREEN / " + red + " RED), " + ok + " read, " + roles + " roles";
+  const claim = JSON.stringify({ claim: summary, evidence: delivered.key ? "R2 obsidian-vault " + delivered.key : "board reads only (vault note not written: " + (delivered.error || "?") + ")", boards: boards.map((b) => b.source + ":" + (b.error ? "error " + b.error : (b.roles || []).length + " roles")), confidence: "measured", status: ok ? "verified" : "unverified" });
+  const res = await env.AUDIT.prepare("INSERT INTO handoffs (session_id, project_id, phase_completed, summary, pending_work, next_action, r2_handoff_path, timestamp, wbs_code, claim_sheet) VALUES (?,?,?,?,?,?,?,?,?,?)").bind("cloud-workflow", JMW_PROJECT + date, "1", summary, "none - autonomous", "next: weekly Monday 07:00Z (cron 0 7 * * 2)", delivered.key, iso, "JOB-MARKET-WATCH", claim).run();
+  return res && res.meta ? res.meta.last_row_id : null;
+}
+async function runJobMarket(env, opts) {
+  opts = opts || {};
+  const f = opts.fetch || ((u, i) => fetch(u, i));
+  const iso = new Date(opts.now || Date.now()).toISOString(), date = iso.slice(0, 10);
+  const boards = await jmwScan(f);
+  const delivered = await jmwDeliver(env, jmwKey(date), jmwReport(boards, iso));
+  const handoff_id = await jmwRecord(env, boards, date, iso, opts.trigger || "cron", delivered);
+  return { boards: boards.length, read: boards.filter((b) => !b.error).length, key: delivered.key, vault_error: delivered.error, handoff_id };
+}
 var worker_default = {
   async scheduled(event, env, ctx) {
-    const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-    await env.JOB_MARKET_WATCH.create({ id: "cron-" + stamp, params: { trigger: "cron" } });
+    try {
+      console.log("job-market-watch", JSON.stringify(await runJobMarket(env, { trigger: "cron" })));
+    } catch (e) {
+      console.error("job-market-watch", String(e && e.message || e));
+    }
   },
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
-      return new Response(JSON.stringify({ ok: true, worker: "job-market-watch", version: "1.1.0" }), { headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true, worker: "job-market-watch", version: "1.2.0" }), { headers: { "content-type": "application/json" } });
     }
     return new Response("not found", { status: 404 });
   }
@@ -738,72 +838,14 @@ var JobMarketWatchWorkflow = class extends WorkflowEntrypoint {
     __name(this, "JobMarketWatchWorkflow");
   }
   async run(event, step) {
-    const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    const boards = await step.do("scan-sources", {
-      retries: { limit: 3, delay: "5 seconds", backoff: "exponential" },
-      timeout: "90 seconds"
-    }, async () => {
-      const out = [];
-      try {
-        const r = await fetch("https://api.lever.co/v0/postings/epoch-ai?mode=json");
-        if (r.ok) {
-          const j = await r.json();
-          out.push({ source: "epoch", channel: "RED", roles: (Array.isArray(j) ? j : []).map((x) => x.text || "").filter(Boolean).slice(0, 12) });
-        } else out.push({ source: "epoch", channel: "RED", error: "HTTP " + r.status });
-      } catch (e) {
-        out.push({ source: "epoch", channel: "RED", error: e.message });
-      }
-      try {
-        const r = await fetch("https://api.ashbyhq.com/posting-api/job-board/quantware");
-        if (r.ok) {
-          const j = await r.json();
-          out.push({ source: "quantware", channel: "RED", roles: (j.jobs || []).map((x) => x.title).slice(0, 12) });
-        } else out.push({ source: "quantware", channel: "RED", error: "HTTP " + r.status });
-      } catch (e) {
-        out.push({ source: "quantware", channel: "RED", error: e.message });
-      }
-      try {
-        const r = await fetch("https://forecastingresearch.org/careers");
-        if (r.ok) {
-          const html = await r.text();
-          const titles = [];
-          for (const m of html.matchAll(/<a[^>]+href="([^"]+)"[^>]*>([^<]{8,80})/g)) {
-            const t = m[2].trim();
-            if (/Senior|Research|Analyst|Fellow|Researcher|Data/.test(t) && titles.length < 12) titles.push(t);
-          }
-          out.push({ source: "fri", channel: "GREEN", roles: titles, email: html.includes("info@forecastingresearch.org") });
-        } else out.push({ source: "fri", channel: "GREEN", error: "HTTP " + r.status });
-      } catch (e) {
-        out.push({ source: "fri", channel: "GREEN", error: e.message });
-      }
-      return out;
-    });
-    const report = await step.do("build-report", {}, async () => {
-      const lines = ["# JOB MARKET WATCH (CLOUD WORKFLOW)", "", "> Generated " + (/* @__PURE__ */ new Date()).toISOString(), "", "## Scan results", ""];
-      for (const b of boards) {
-        lines.push("### " + b.source + " [" + b.channel + "]");
-        if (b.roles && b.roles.length) lines.push(b.roles.map(function(x) {
-          return "- " + x;
-        }).join(String.fromCharCode(10)));
-        if (b.error) lines.push("- ERROR: " + b.error);
-        if (b.email !== void 0) lines.push("- email channel: " + (b.email ? "yes (GREEN - automated application possible)" : "no"));
-      }
-      lines.push("", "## CHANNEL-1 POLICY", "GREEN = direct email application (automatable). RED = form-ATS (track only, recruit-at-large).");
-      return lines.join(String.fromCharCode(10));
-    });
-    const key = "notes/v1/" + date.slice(0, 4) + "/" + date.slice(5, 7) + "/" + date + "/_job-market-watch-workflow-" + date + ".md";
-    const delivered = await step.do("deliver-r2", { retries: { limit: 2, delay: "3 seconds" } }, async () => {
-      await this.env.VAULT.put(key, report, { httpMetadata: { contentType: "text/markdown" } });
-      return key;
-    });
-    const handoff_id = await step.do("record-d1", {}, async () => {
-      const res = await this.env.AUDIT.prepare("INSERT INTO handoffs (session_id, project_id, phase_completed, summary, pending_work, next_action, r2_handoff_path, timestamp, wbs_code) VALUES (?,?,?,?,?,?,?,?,?)").bind("cloud-workflow", "job-market-watch-workflow-" + date, "1", "Cloud workflow scan: " + boards.length + " boards (" + boards.filter((b) => b.channel === "GREEN").length + " GREEN / " + boards.filter((b) => b.channel === "RED").length + " RED)", "none - autonomous", "next: weekly Tuesday fire (0 7 * * 2)", key, (/* @__PURE__ */ new Date()).toISOString(), "CLOUD-WORKFLOW-2026-09-08").run();
-      return res.meta.last_row_id;
-    });
-    return { boards: boards.length, green: boards.filter((b) => b.channel === "GREEN").length, red: boards.filter((b) => b.channel === "RED").length, key: delivered, handoff_id };
+    const iso = (/* @__PURE__ */ new Date()).toISOString(), date = iso.slice(0, 10);
+    const boards = await step.do("scan-sources", { retries: { limit: 3, delay: "5 seconds", backoff: "exponential" }, timeout: "90 seconds" }, async () => jmwScan((u, i) => fetch(u, i)));
+    const delivered = await step.do("deliver-r2", {}, async () => jmwDeliver(this.env, jmwKey(date), jmwReport(boards, iso)));
+    const handoff_id = await step.do("record-d1", {}, async () => jmwRecord(this.env, boards, date, iso, "workflow", delivered));
+    return { boards: boards.length, key: delivered.key, handoff_id };
   }
 };
-return { JobMarketWatchWorkflow: JobMarketWatchWorkflow, default: worker_default };
+return { JobMarketWatchWorkflow: JobMarketWatchWorkflow, default: worker_default, runJobMarket: runJobMarket };
 })();
 //# sourceMappingURL=worker.js.map
 
@@ -1506,7 +1548,15 @@ var mentionMod = (function(){
       } catch (e) { sources[ch.channel] += " signals-" + errStr(e); }
     }
     var vals = Object.values(sources), healthy = vals.filter(function(v) { return v.indexOf("ok:") === 0; }).length;
-    return { status: healthy === 0 ? "error" : healthy < vals.length ? "degraded" : "ok", date: today, owner_dois: dois.length, sources: sources, new_mentions: written, reach_signals_rows: signals };
+    var res = { status: healthy === 0 ? "error" : healthy < vals.length ? "degraded" : "ok", date: today, owner_dois: dois.length, sources: sources, new_mentions: written, reach_signals_rows: signals };
+    // MENTION-RADAR-LEDGER-1 (radar-hub 1.1.3): the run result went only to the console and a run whose every source
+    // failed wrote nothing, so a dead radar looked like a quiet one. One cloud_ops_events row per UTC day, id
+    // mention-radar-<day> (kind mention-radar, job radar-hub), replaced by each run that day. Best-effort.
+    try {
+      await db.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, 'mention-radar', ?, ?, 'radar-hub', ?)").bind("mention-radar-" + today, iso, clip("mention radar " + res.status + " " + JSON.stringify(sources), 500), JSON.stringify(res).slice(0, 3000), res.status).run();
+      res.recorded = true;
+    } catch (e) { res.recorded = false; }
+    return res;
   }
 
   async function recent(env) {
@@ -1577,7 +1627,10 @@ export default {
   },
   async scheduled(event, env, ctx) {
     const c = event.cron;
-    if (c === "0 5 * * 1") return eventsMod.default.scheduled(event, env, ctx);
+    // EVENTS-RADAR-CF-DOW-1 (1.1.3): the events radar scans its 34 weekly sources only when strftime('%w') is 1 (Monday),
+    // but "0 5 * * 1" is Sunday in Cloudflare's numbering (1=Sunday..7=Saturday): every run (events_radar 2026-09-06, 13,
+    // 20, all Sundays) skipped them. "0 5 * * 2" is Monday 05:00Z. The old spelling stays routed for a stale registration.
+    if (c === "0 5 * * 2" || c === "0 5 * * 1") return eventsMod.default.scheduled(event, env, ctx);
     // MENTION-RADAR-1: the daily 08:30Z slot also runs the external-mention discovery; each job is isolated.
     if (c === "30 8 * * *") {
       await Promise.allSettled([
