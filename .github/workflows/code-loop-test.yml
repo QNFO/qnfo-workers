@@ -38,3 +38,9 @@ jobs:
         run: node --no-warnings qnfo-code-orchestrator/test-loop.mjs
       - name: Hunk patch test (HUNK-NO-EOL-1)
         run: node --no-warnings qnfo-code-orchestrator/test-hunk.mjs
+      # ISSUE-PLANNER-1: prose issues from trusted sources become code tasks; everything else is refused or recorded.
+      - name: Issue planner test
+        run: node --no-warnings qnfo-code-orchestrator/planner.test.mjs
+      # No-final-newline patches (incl. appending after a final line without newline, 120 seeded random edits) apply via git.
+      - name: No-final-newline patch round trips
+        run: node --no-warnings qnfo-code-orchestrator/no-eol.test.mjs
