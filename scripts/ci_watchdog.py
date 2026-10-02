@@ -140,6 +140,20 @@ def runs(per_page: int = 100, **q) -> list[dict]:
     return d.get("workflow_runs", []) if st == 200 else []
 
 
+def declares_schedule(path: str):
+    """True/False from the checked-out workflow file; None when the file is not in the checkout (caller asks the API)."""
+    root = os.environ.get("GITHUB_WORKSPACE") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    fp = os.path.join(root, path)
+    if not path or not os.path.isfile(fp):
+        return None
+    try:
+        with open(fp, encoding="utf-8", errors="replace") as fh:
+            txt = fh.read()
+    except OSError:
+        return None
+    return "schedule:" in txt or "schedule\n" in txt
+
+
 def run_events(wf_id: int, per_page: int = 100) -> list[dict]:
     st, d = gh(f"/repos/{REPO}/actions/workflows/{wf_id}/runs?per_page={per_page}")
     return d.get("workflow_runs", []) if st == 200 else []
@@ -384,9 +398,20 @@ def main() -> int:
     wfs = workflows()
     print(f"ci-watchdog: repo={REPO} workflows={len(wfs)}")
 
+    # API-BUDGET-1 (2026-10-02, agent_issues 1804): this loop made one runs call per workflow and the silent-schedule
+    # check below made one contents call per workflow: about 155 calls a run with 77 workflows. At 21 runs an hour that
+    # is about 3,250 calls an hour against the 1,000 an hour the repository's GITHUB_TOKEN gets, so every CodeQL
+    # Analyze job failed with "API rate limit exceeded for installation". Now: the schedule declaration is read from
+    # the checkout (no call), the per-workflow history is fetched only for workflows that declare a schedule, and
+    # every other workflow is described from two pages of recent runs.
+    recent_pool = runs(per_page=100) + runs(per_page=100, page=2)
+    by_wf: dict = {}
+    for _r in recent_pool:
+        by_wf.setdefault(_r.get("workflow_id"), []).append(_r)
     inventory = []
     for w in wfs:
-        rs = run_events(w["id"])
+        declares = declares_schedule(w.get("path") or "")
+        rs = run_events(w["id"]) if declares is not False else by_wf.get(w["id"], [])
         events = {r.get("event") for r in rs}
         state = w.get("state")
         last = rs[0]["created_at"][:19] if rs else "-"
@@ -395,7 +420,7 @@ def main() -> int:
         inventory.append({
             "id": w["id"], "name": w["name"], "path": w["path"], "state": state,
             "runs": len(rs), "events": sorted(e for e in events if e),
-            "last": last, "ever_scheduled": scheduled,
+            "last": last, "ever_scheduled": scheduled, "declares_schedule": declares,
         })
         print(f"  {state:7s} {w['name']:18s} runs={len(rs):3d} last={last} events={sorted(e for e in events if e)}")
 
@@ -416,12 +441,14 @@ def main() -> int:
     for it in inventory:
         if it["runs"] > 0 and not it["ever_scheduled"] and it["events"]:
             # declared a schedule but has never produced a schedule-event run
-            st, raw = gh(f"/repos/{REPO}/contents/{it['path']}?ref=main")
-            declared = False
-            if st == 200 and isinstance(raw, dict) and raw.get("content"):
-                import base64
-                txt = base64.b64decode(raw["content"]).decode("utf-8", "replace")
-                declared = "schedule:" in txt or "schedule\n" in txt
+            declared = it.get("declares_schedule")
+            if declared is None:  # the file is not in the checkout: ask the API, as before
+                st, raw = gh(f"/repos/{REPO}/contents/{it['path']}?ref=main")
+                declared = False
+                if st == 200 and isinstance(raw, dict) and raw.get("content"):
+                    import base64
+                    txt = base64.b64decode(raw["content"]).decode("utf-8", "replace")
+                    declared = "schedule:" in txt or "schedule\n" in txt
             if declared:
                 findings.append({"class": "silent-schedule", "subject": it["name"],
                                  "evidence": f"{it['path']}: no schedule-event run ever (events={it['events']}, runs={it['runs']})"})
