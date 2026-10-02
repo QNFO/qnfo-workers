@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.5, 2026-10-01 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.6, 2026-10-02 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5; 1.6: funder replies watched by the fleet, applications use the qnfo.org address, section 5). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -182,6 +182,11 @@ resolution. Standing decisions:
   Research Fund via Lightcone Commons (`funding/GRANTS_2026-10-31.md`). Every application the fleet submits keeps four
   rules: AI drafting is disclosed; no reference is named without that person's consent; no in-person, travel or salaried
   commitment the owner has not made; budgets use measured costs. Maryland teaming and the arXiv endorsement are not pursued.
+- Funder replies are watched by the fleet, not by a person (GRANT-FOLLOWUP-1, qnfo-cloud-ops, twice a day): a reply to a
+  submitted application becomes an `agent_issues` row. The fleet reads rowan.quni@qnfo.org mail (`qnfo-audit.emails`); it
+  cannot read the Gmail inbox, because no Gmail app password is stored (`GMAIL_PASS` absent since 2026-09-30). So every
+  application from now on gives rowan.quni@qnfo.org as its contact address and account login. The one exception on record
+  is the Lightcone Commons application (account rwnquni@gmail.com, agent_issues 1750), whose replies the fleet cannot see.
 - The 13 US provisional patent applications are not converted: conversion needs the inventor's signed declaration and
   USPTO fees. Public copy makes no patent claim; where a form asks, "13 US provisional patent applications (2025)".
 - Empowering Change is shown as a prior nonprofit (2023-2024), not a current entity, so leads that need an active
