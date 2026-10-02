@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.6.1-draft-latency"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.6.2-support-map-polish"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -104,7 +104,7 @@ var SM_STOP = new Set(("a an the and or of to in on for by with from into onto a
 function smTokens(text) {
   return Array.from(new Set(String(text || "").toLowerCase().replace(/[^a-z0-9À-ɏ\s-]/g, " ").split(/[\s-]+/)
     .filter((w) => w.length >= 4 && !SM_STOP.has(w) && !/^\d+$/.test(w))
-    .map((w) => w.replace(/(ies)$/, "y").replace(/([^s])s$/, "$1"))));
+    .map((w) => w.replace(/(ies)$/, "y").replace(/([^aiosu])s$/, "$1"))));
 }
 __name(smTokens, "smTokens");
 // Sections 2-5 -> numbered paragraphs. A block with no blank-line breaks over 600 chars is split every 3 sentences.
@@ -132,7 +132,7 @@ function claimElements(claimsText) {
   const claims = [];
   let cur = null;
   String(claimsText || "").split(/\n/).forEach((line) => {
-    const t = line.trim();
+    const t = line.replace(/\*\*|__|`/g, "").trim();
     if (!t) return;
     const m = t.match(/^(\d+)\s*[.)]\s*(.*)$/);
     if (m) { cur = { claim: Number(m[1]), text: m[2] }; claims.push(cur); }
