@@ -197,8 +197,11 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p ci-status
-          printf '{"workflow":"canonical-deploy","issue":"1406 1442 1443 1390","head":"%s","ts":"%s"}\n' \
-            "${GITHUB_SHA}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/canonical-deploy.json
+          # STATUS-NOOP-SKIP-1 (2026-10-02): the file used to carry only run stamps (head, ts), so all 40 of its commits on
+          # 2026-10-02 were stamp-only, each one a main push that starts CodeQL. It now records the job outcome, and the
+          # commit step below skips a file that differs from main only in head and ts.
+          printf '{"workflow":"canonical-deploy","issue":"1406 1442 1443 1390","outcome":"%s","head":"%s","ts":"%s"}\n' \
+            "${{ job.status }}" "${GITHUB_SHA}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ci-status/canonical-deploy.json
           cat ci-status/canonical-deploy.json
 
       - name: Upload the ci-status artifact
@@ -218,5 +221,11 @@ jobs:
           git config user.name "qnfo-selfheal-bot"
           git config user.email "bot@qnfo.org"
           # ARTIFACT-PUSH-CONFLICT-1: snapshot re-apply, never a rebase conflict (was: run 36760796833).
+          git fetch -q origin main || true
+          if python3 scripts/status_unchanged.py ci-status/canonical-deploy.json --ref origin/main; then
+            git checkout -- ci-status/canonical-deploy.json 2>/dev/null || true
+            echo "status unchanged apart from run stamps - not committing"
+            exit 0
+          fi
           git add ci-status/canonical-deploy.json
           bash scripts/push_artifact.sh "ci(status): canonical-deploy [skip ci]" ci-status/canonical-deploy.json || true

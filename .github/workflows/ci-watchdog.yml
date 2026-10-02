@@ -30,6 +30,14 @@ name: ci-watchdog
 # Ledger: the job summary and ci-watchdog-summary.json are always produced; when
 # OPS_ROUTER_AUTH_KEY is configured the summary is also POSTed to the fleet
 # ledger so the Cloudflare side sees the same rows.
+#
+# CI-WATCHDOG-RATE-GATE-1 (2026-10-02): every sweep makes about 80 GitHub API calls whatever triggered it, and this
+# workflow fired 175 times in 40 minutes (about 120 of them for pull-request runs), roughly 14,000 calls against the
+# 1,000 per hour the Actions token gets, so CodeQL uploads and every other API user failed with "API rate limit
+# exceeded for installation". Now: only runs on main trigger it (a sweep reads every branch's recent runs anyway),
+# one global concurrency group collapses bursts, and the gate job (scripts/ci_watchdog_gate.py, no API call; the
+# last sweep time lives in the Actions cache) skips the sweep when one finished under 10 minutes ago and the
+# triggering run did not fail. A failure, a dispatch or a 10-minute-old sweep always sweeps.
 
 on:
   workflow_run:
@@ -43,6 +51,7 @@ on:
       - adversarial-workers-guard
       - code-loop-test
     types: [completed]
+    branches: [main]
   workflow_dispatch:
   repository_dispatch:
     types: [ci-watchdog]
@@ -57,11 +66,40 @@ permissions:
   security-events: read
 
 concurrency:
-  group: ci-watchdog-${{ github.event.workflow_run.head_branch || 'main' }}
+  group: ci-watchdog
   cancel-in-progress: false
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      sweep: ${{ steps.decide.outputs.sweep }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/ci_watchdog_gate.py
+          sparse-checkout-cone-mode: false
+
+      - name: Restore the last sweep time
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-watchdog-last-sweep
+          key: ci-watchdog-last-sweep-${{ github.run_id }}
+          restore-keys: ci-watchdog-last-sweep-
+
+      - name: Decide whether to sweep
+        id: decide
+        env:
+          TRIGGER_EVENT: ${{ github.event_name }}
+          TRIGGER_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CI_WD_MIN_INTERVAL_MIN: "10"
+        run: python3 scripts/ci_watchdog_gate.py
+
   watch:
+    needs: gate
+    if: needs.gate.outputs.sweep == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -108,6 +146,17 @@ jobs:
           path: ci-watchdog-summary.json
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Record the sweep time
+        if: always()
+        run: date -u +%Y-%m-%dT%H:%M:%SZ > .ci-watchdog-last-sweep
+
+      - name: Save the sweep time for the next gate
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ci-watchdog-last-sweep
+          key: ci-watchdog-last-sweep-${{ github.run_id }}
 
       - name: Fail closed on an unactionable, untracked finding
         if: steps.wd.outputs.rc != '0'
