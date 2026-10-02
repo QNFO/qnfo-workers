@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 08:34:41",
+  "audited_at": "2026-10-02 08:42:33",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.9-claim-age",
+        "version": "0.3.10-reach-ideas",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -487,12 +487,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.92-performance-loop",
+        "version": "0.4.93-reach-ideation",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.18.2-ascii",
+        "version": "1.18.3-watchmaker-reach-ideation",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -512,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.7.0-reach",
+        "version": "3.8.0-subscribe-llms",
         "worker": "qnfo-ipatent"
       },
       {
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.9-claim-age",
+      "before": "0.3.10-reach-ideas",
       "http": 200,
-      "live": "0.3.9-claim-age",
+      "live": "0.3.10-reach-ideas",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.92-performance-loop",
+      "before": "0.4.93-reach-ideation",
       "http": 200,
-      "live": "0.4.92-performance-loop",
+      "live": "0.4.93-reach-ideation",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.18.2-ascii",
+      "before": "1.18.3-watchmaker-reach-ideation",
       "http": 200,
-      "live": "1.18.2-ascii",
+      "live": "1.18.3-watchmaker-reach-ideation",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1232,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.7.0-reach",
+      "before": "3.8.0-subscribe-llms",
       "http": 200,
-      "live": "3.7.0-reach",
+      "live": "3.8.0-subscribe-llms",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
