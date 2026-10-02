@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 03:36:47",
+  "audited_at": "2026-10-02 03:51:12",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -462,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.17.0-grant-followup",
+        "version": "1.17.1-reach-loops",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -482,7 +482,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.2.3-capability-contract",
+        "version": "2.2.4-handoff-claim-sheet",
         "worker": "qnfo-email"
       },
       {
@@ -492,7 +492,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.16.3-grant-followup-watch",
+        "version": "1.16.4-reach-loops-watch",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -572,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.26-capability-contract",
+        "version": "0.7.27-run-ledger",
         "worker": "qnfo-social"
       },
       {
@@ -592,7 +592,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.1.2",
+        "version": "1.1.3",
         "worker": "radar-hub"
       }
     ]
@@ -1016,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.17.0-grant-followup",
+      "before": "1.17.1-reach-loops",
       "http": 200,
-      "live": "1.17.0-grant-followup",
+      "live": "1.17.1-reach-loops",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1064,9 +1064,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.2.3-capability-contract",
+      "before": "2.2.4-handoff-claim-sheet",
       "http": 200,
-      "live": "2.2.3-capability-contract",
+      "live": "2.2.4-handoff-claim-sheet",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1152,9 +1152,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.16.3-grant-followup-watch",
+      "before": "1.16.4-reach-loops-watch",
       "http": 200,
-      "live": "1.16.3-grant-followup-watch",
+      "live": "1.16.4-reach-loops-watch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1416,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.26-capability-contract",
+      "before": "0.7.27-run-ledger",
       "http": 200,
-      "live": "0.7.26-capability-contract",
+      "live": "0.7.27-run-ledger",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
@@ -1472,9 +1472,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.1.2",
+      "before": "1.1.3",
       "http": 200,
-      "live": "1.1.2",
+      "live": "1.1.3",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
