@@ -16,7 +16,8 @@ db.prepare("INSERT INTO published_pieces (id, slug, title, body_md, published_at
 db.exec("INSERT INTO engine_runs (status, piece_published) VALUES ('ok',1),('gate_failed',0),('gate_failed',0),('running',0)");
 db.prepare("INSERT INTO q08_feedback (slug, signal, created_at) VALUES ('s1','good','2026-10-01T00:00:00Z')").run();
 const shim = { prepare: (sql) => { let a = []; const st = { bind: (...x) => { a = x; return st; }, run: async () => db.prepare(sql).run(...a), first: async () => db.prepare(sql).get(...a) || null, all: async () => ({ results: db.prepare(sql).all(...a) }) }; return st; } };
-const audit = { prepare: (sql) => { const st = { bind: () => st, first: async () => ({ n: 9000 }), run: async () => ({}), all: async () => ({ results: [] }) }; return st; } };
+const writes = [];
+const audit = { prepare: (sql) => { let a = []; const st = { bind: (...x) => { a = x; return st; }, first: async () => ({ n: 9000 }), run: async () => { if (/^UPDATE metric_registry/.test(sql)) { writes.push(a[0] + "=" + a[1]); return { meta: { changes: 1 } }; } return {}; }, all: async () => ({ results: [] }) }; return st; } };
 const env = { DB: shim, AUDIT: audit };
 const waits = []; const ctx = { waitUntil: (p) => waits.push(p) };
 const get = async (path, ua) => w.fetch(new Request("https://q08.org" + path, { headers: ua ? { "user-agent": ua } : {} }), env, ctx);
@@ -34,4 +35,10 @@ const h = await (await get("/health")).json();
 check("/health carries metrics_7d", h.metrics_7d && h.metrics_7d.human_reads === 1 && /^\d+\.\d+\.\d+/.test(h.version), { v: h.version });
 const p404 = await get("/p/none", "Mozilla/5.0");
 check("unknown piece is 404 and not counted", p404.status === 404 && db.prepare("SELECT human FROM q08_daily_reads").get().human === 1);
+// The generation cron writes q08's own registry values afterwards (no network in this test: every fetch fails fast).
+globalThis.fetch = async () => { throw new Error("offline test"); };
+const cronWaits = [];
+await w.scheduled({ cron: "0 */2 * * *" }, env, { waitUntil: (p) => cronWaits.push(p) });
+await Promise.all(cronWaits);
+check("after the generation cron, q08 writes its five registry values", writes.sort().join(",") === "q08_confirmed_subscribers=0,q08_gate_pass_rate_7d=0.333,q08_human_reads_7d=1,q08_neurons_per_published_piece_7d=9000,q08_verified_votes_7d=0", writes);
 console.log(fails ? fails + " FAILED" : "ALL PASSED"); process.exit(fails ? 1 : 0);

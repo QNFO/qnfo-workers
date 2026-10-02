@@ -122,6 +122,20 @@ async function metrics7d(env) {
     vote_cutoff: VOTE_CUTOFF
   };
 }
+// q08 writes its own registry values (the rows, targets and triggers are in migrations/2026-10-02-q08-metrics.sql). A value
+// that is not a finite number is not written: unknown is never a value.
+var Q08_METRIC_KEYS = [["q08_gate_pass_rate_7d", "gate_pass_rate"], ["q08_neurons_per_published_piece_7d", "neurons_per_published_piece"], ["q08_human_reads_7d", "human_reads"], ["q08_verified_votes_7d", "verified_votes"], ["q08_confirmed_subscribers", "confirmed_subscribers"]];
+async function writeOwnMetrics(env) {
+  if (!env.AUDIT) return 0;
+  var m = await metrics7d(env), now = nowIso(), n = 0;
+  for (var i = 0; i < Q08_METRIC_KEYS.length; i++) {
+    var v = m[Q08_METRIC_KEYS[i][1]];
+    if (typeof v !== "number" || !isFinite(v)) continue;
+    var r = await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind(Q08_METRIC_KEYS[i][0], String(v), now).run().catch(function () { return null; });
+    if (r && r.meta && r.meta.changes) n++;
+  }
+  return n;
+}
 var MAX_PER_DAY = 10;
 // Q08-CADENCE-CAP-1 (agent_issues 1716, Q08-REVIEW-2026-10-31; charter pillar: cost): the daily cap is the qnfo-audit
 // ops_config value under CAP_KEY, an integer 0..MAX_PER_DAY (0 pauses publishing). Absent, unreadable or not an integer
@@ -1321,6 +1335,6 @@ export default {
       await env.DB.prepare(
         "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, ms, status, error) VALUES (0,0,0,0,'error',?)"
       ).bind(String(e && e.message || e).slice(0, 500)).run().catch(() => {});
-    }).then(() => stallDetector(env)));
+    }).then(() => stallDetector(env)).then(() => writeOwnMetrics(env)).catch(function () {}));
   },
 };
