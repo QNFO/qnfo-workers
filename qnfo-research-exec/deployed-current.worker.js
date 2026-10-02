@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.55-prior-work"; // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.56-license-one"; // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -448,9 +448,9 @@ function buildProvenance(bodyMd, title, slug) {
     var id = [p.arxiv ? "arXiv:" + p.arxiv : null, p.doi ? "DOI " + p.doi : null].filter(Boolean).join("; ") || "no machine identifier present";
     return i + 1 + ". " + p.authors + " (" + p.year + "). " + p.title + ". Source: " + p.rest + " | Identifier: " + id;
   }).join("\n") : "No numbered references section found in the body.");
-  var readme = "# " + title + "\n\nAuthor: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)\nLicense: CC BY 4.0 (see LICENSE)\n\nHow to cite: use the deposit record DOI.\nFiles in this deposit:\n- " + slug + ".md - full paper (source)\n- references.bib - BibTeX of the cited references\n- citation-audit.md - reference verification log\n- PROJECT-PLAN.md - goal and claim\n- README.md - this file\n- LICENSE - CC BY 4.0\n\nProvenance: produced by the QNFO autonomous research pipeline.\n";
-  var plan = "# Project plan\n\nGoal: an open, self-contained preprint with real, verifiable references and no fabricated content.\n- Claim: stated in the record body.\n- Research/due-diligence: prior-work context is stated in the body; every reference is real (arXiv ID or DOI) and non-invented.\n- Deposit: paper, references.bib, citation-audit.md, README.md, PROJECT-PLAN.md, LICENSE.\n- License: CC BY 4.0.\n";
-  var lic = "SPDX-License-Identifier: CC-BY-4.0\n\nThis work is licensed under the Creative Commons Attribution 4.0 International License.\nYou are free to share (copy and redistribute the material in any medium or format) and adapt (remix, transform, and build upon the material) for any purpose, provided you give appropriate credit, provide a link to the license, and indicate if changes were made.\n\nFull legal code: https://creativecommons.org/licenses/by/4.0/legalcode\nLicense deed: https://creativecommons.org/licenses/by/4.0/\n";
+  var readme = "# " + title + "\n\nAuthor: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)\nLicense: QNFO-ULA v2.0, CC BY-NC-SA 4.0 with the QNFO Supplemental Terms (see LICENSE)\n\nHow to cite: use the deposit record DOI.\nFiles in this deposit:\n- " + slug + ".md - full paper (source)\n- references.bib - BibTeX of the cited references\n- citation-audit.md - reference verification log\n- PROJECT-PLAN.md - goal and claim\n- README.md - this file\n- LICENSE - QNFO-ULA v2.0\n\nProvenance: produced by the QNFO autonomous research pipeline.\n";
+  var plan = "# Project plan\n\nGoal: an open, self-contained preprint with real, verifiable references and no fabricated content.\n- Claim: stated in the record body.\n- Research/due-diligence: prior-work context is stated in the body; every reference is real (arXiv ID or DOI) and non-invented.\n- Deposit: paper, references.bib, citation-audit.md, README.md, PROJECT-PLAN.md, LICENSE.\n- License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 base).\n";
+  var lic = "SPDX-License-Identifier: LicenseRef-QNFO-ULA-2.0\n\nThis work is licensed under the QNFO Unified License Agreement, version 2.0 (QNFO-ULA): the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0) together with the QNFO Supplemental Terms.\nYou may share and adapt it for non-commercial purposes with credit, under the same terms. Commercial use needs a separate agreement: rowan.quni@qnfo.org.\n\nFull text: https://legal.qnfo.org/\nCC BY-NC-SA 4.0 legal code: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode\n"; // LICENSE-ONE-1 (2026-10-02): new deposits under QNFO-ULA v2.0
   return { files: [
     { file: slug + ".md", content: String(bodyMd || "") },
     { file: "references.bib", content: bib },
@@ -478,7 +478,7 @@ async function publishToZenodo(env, title, abstract, bodyMd, slug, extras) {
     description: (abstract || title).slice(0, 3e3) + (slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + slug + '/">papers.qnfo.org/papers/' + slug + '/</a></p>' : ''),
     creators: [{ name: ZENODO_CREATOR_NAME, affiliation: ZENODO_AFFILIATION, orcid: ORCID }],
     access_right: "open",
-    license: "cc-by",
+    license: "cc-by-nc-sa-4.0", // LICENSE-ONE-1: the Zenodo id of QNFO-ULA v2.0's CC base
     version: "1.0.0",
     keywords: ["QNFO", "quantum computing", "energy"],
     related_identifiers: slug ? [{ identifier: "https://papers.qnfo.org/papers/" + slug + "/", relation: "isVariantFormOf", resource_type: "publication-preprint" }] : [],
@@ -994,7 +994,7 @@ async function depositToGithub(env, slug, title, md, doi) {
   var owner = "QNFO", repo = "qnfo-research";
   var prog = programFor(slug);
   var dir = prog === "papers" ? "papers/" + slug : prog + "/" + slug;
-  var readme = "# " + (title || slug) + NL + NL + "DOI: " + doi + NL + NL + "Author: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)" + NL + "License: CC BY 4.0" + NL + NL + "Auto-deposited by qnfo-research-exec (artifact-deposition P3).";
+  var readme = "# " + (title || slug) + NL + NL + "DOI: " + doi + NL + NL + "Author: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)" + NL + "License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 with the QNFO Supplemental Terms, https://legal.qnfo.org/)" + NL + NL + "Auto-deposited by qnfo-research-exec (artifact-deposition P3).";
   var files = [["paper.md", md || ""], ["README.md", readme]];
   var out = [];
   for (var i = 0; i < files.length; i++) {
@@ -1096,7 +1096,7 @@ async function publishV2(env, row) {
     var fdUpd = await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, zenodo_url=?, status='published', updated_at=datetime('now') WHERE slug=?").bind(fdTitle, fdBody, row.version_to || "1.0.0", fd.doi, fd.doi, fd.record, String(row.slug || "")).run();
     if (!fdUpd || !fdUpd.meta || !fdUpd.meta.changes) {
       try {
-        await env.LIVING_PAPER.prepare("INSERT INTO papers (identifier, title, authors, abstract, doi, version, zenodo_doi, zenodo_url, status, body_md, license, language, paper_type, slug, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'published',?,?,?,?,?,datetime('now'),datetime('now'))").bind("vq-" + row.id, fdTitle, '["Rowan Brad Quni-Gudzinas"]', fdAbstract, fd.doi, row.version_to || "1.0.0", fd.doi, fd.record, fdBody, "CC BY 4.0", "en", "preprint", String(row.slug || "")).run();
+        await env.LIVING_PAPER.prepare("INSERT INTO papers (identifier, title, authors, abstract, doi, version, zenodo_doi, zenodo_url, status, body_md, license, language, paper_type, slug, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'published',?,?,?,?,?,datetime('now'),datetime('now'))").bind("vq-" + row.id, fdTitle, '["Rowan Brad Quni-Gudzinas"]', fdAbstract, fd.doi, row.version_to || "1.0.0", fd.doi, fd.record, fdBody, "QNFO-ULA", "en", "preprint", String(row.slug || "")).run();
       } catch (eIns) {
       }
     }
@@ -2589,7 +2589,7 @@ async function ensurePaperRow(env, row) {
     if (String(own.status || "") === "published") return { error: "identifier " + identifier + " already published" };
     await env.LIVING_PAPER.prepare("UPDATE papers SET title=?1, abstract=?2, body_md=?3, slug=?4, updated_at=datetime('now') WHERE identifier=?5").bind(title, abstract, body, slug, identifier).run();
   } else {
-    await env.LIVING_PAPER.prepare("INSERT INTO papers (identifier, title, authors, abstract, version, status, body_md, license, language, paper_type, identifier_type, slug, created_at, updated_at) VALUES (?1,?2,?3,?4,'1.0.0','draft',?5,'CC BY 4.0','en','preprint','qnfo',?6,datetime('now'),datetime('now'))").bind(identifier, title, JSON.stringify([AUTHOR]), abstract, body, slug).run();
+    await env.LIVING_PAPER.prepare("INSERT INTO papers (identifier, title, authors, abstract, version, status, body_md, license, language, paper_type, identifier_type, slug, created_at, updated_at) VALUES (?1,?2,?3,?4,'1.0.0','draft',?5,'QNFO-ULA','en','preprint','qnfo',?6,datetime('now'),datetime('now'))").bind(identifier, title, JSON.stringify([AUTHOR]), abstract, body, slug).run();
   }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET paper_slug=? WHERE id=?").bind(slug, row.id).run();
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();

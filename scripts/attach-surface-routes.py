@@ -39,7 +39,12 @@ ORIGIN_HEALTH = "https://qnfo.org/health"
 MIN_VERSION = (3, 9)  # 3.9.0-qds is the first gateway that renders these hosts (3.8.x would serve its default page)
 # (zone, hostname). www.qwav.tech is left out: a zone redirect rule already sends it to qwav.tech.
 HOSTS = [("qnfo.org", "archive.qnfo.org"), ("qwav.org", "qwav.org"), ("qwav.org", "www.qwav.org"), ("qwav.tech", "qwav.tech")]
-UA = "qnfo-ops-surface-routes/1.0"
+UA = "qnfo-ops-surface-routes/1.1"
+# SURFACE-ROUTES-PROXY-1 (2026-10-02): qwav.org and www.qwav.org are DNS-only CNAMEs to qwav.pages.dev, so a zone route never
+# runs on them (first run: "no proxied DNS record"). For these hosts only, a single CNAME to *.pages.dev is switched to
+# proxied (Cloudflare serves the Pages site exactly as before until the route takes over), and switched back if the
+# route then fails verification. The report records the record id and its previous state for a manual rollback.
+PROXY_ALLOWED = {"qwav.org", "www.qwav.org"}
 API = "https://api.cloudflare.com/client/v4"
 REPORT_PATH = "ci-status/attach-surface-routes.json"
 RESULT = {"marker": "SURFACE-ROUTES-1", "service": SERVICE, "token_present": bool(TOK), "stage": "start", "status": "unknown",
@@ -131,6 +136,18 @@ def attach(zone_name, host, zones):
             return True
     st, j = req("GET", "/zones/%s/dns_records?name=%s" % (zone, host))
     recs = (j.get("result") or []) if st == 200 else []
+    if not any(x.get("proxied") for x in recs) and host in PROXY_ALLOWED and len(recs) == 1 and recs[0].get("type") == "CNAME" \
+            and str(recs[0].get("content", "")).endswith(".pages.dev"):
+        rid = recs[0].get("id")
+        st, pj = req("PATCH", "/zones/%s/dns_records/%s" % (zone, rid), {"proxied": True})
+        if st == 200 and pj.get("success"):
+            h.update(dns_record=rid, dns_proxied_from=False)
+            print("dns proxied: %s (%s -> %s)" % (host, rid, recs[0].get("content")))
+            time.sleep(20)
+            recs = [dict(recs[0], proxied=True)]
+        else:
+            h.update(status="failed", detail="could not proxy the DNS record http=%s body=%s" % (st, json.dumps(pj)[:300]))
+            return False
     if not any(x.get("proxied") for x in recs):
         h.update(status="failed", detail="no proxied DNS record; a route would be inert (records: %s)" % json.dumps(recs)[:300])
         return False
@@ -193,6 +210,9 @@ def main():
                     st, j = req("DELETE", "/zones/%s/workers/routes/%s" % (zones[zone_name], RESULT["hosts"][host]["route_id"]))
                     RESULT["hosts"][host]["rolled_back"] = bool(st == 200 and j.get("success"))
                     print("rollback %s http=%s ok=%s" % (host, st, j.get("success")))
+                if RESULT["hosts"][host].get("dns_proxied_from") is False:
+                    st, j = req("PATCH", "/zones/%s/dns_records/%s" % (zones[zone_name], RESULT["hosts"][host]["dns_record"]), {"proxied": False})
+                    RESULT["hosts"][host]["dns_restored"] = bool(st == 200 and j.get("success"))
         else:
             ok = False
     if ok:
