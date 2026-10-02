@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-02 09:53:57",
+  "audited_at": "2026-10-02 10:01:57",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-control"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -487,7 +494,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.100-trigger-parse",
+        "version": "0.4.101-reach-ideation-2",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -537,7 +544,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.36-utf8-deploy",
+        "version": "2.38.37-core-prompt",
         "worker": "qnfo-ops"
       },
       {
@@ -1144,9 +1151,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.100-trigger-parse",
+      "before": "0.4.101-reach-ideation-2",
       "http": 200,
-      "live": "0.4.100-trigger-parse",
+      "live": "0.4.101-reach-ideation-2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1280,9 +1287,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.36-utf8-deploy",
+      "before": "2.38.37-core-prompt",
       "http": 200,
-      "live": "2.38.36-utf8-deploy",
+      "live": "2.38.37-core-prompt",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
