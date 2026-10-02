@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.4"; // FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
+var VERSION = "1.2.5"; // CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -311,15 +311,19 @@ function applyVersionMarkers(md, versionTo) {
 __name(applyVersionMarkers, "applyVersionMarkers");
 function addChangelog(md, versionTo, changelog) {
   const entry = "- v" + versionTo + ": " + changelog;
-  const chIdx = md.indexOf("## Changelog");
+  const chM = /^#{1,6}[ \t]+Changelog[ \t]*$/m.exec(md);
+  const chIdx = chM ? chM.index : -1;
   if (chIdx >= 0) {
-    const nl = md.indexOf("\n", chIdx + "## Changelog".length);
-    const insertAt = nl >= 0 ? nl + 1 : md.length;
+    const nl = md.indexOf("\n", chIdx + chM[0].length);
+    let insertAt = nl >= 0 ? nl + 1 : md.length;
+    if (md.charAt(insertAt) === "\n") insertAt++;
     return md.slice(0, insertAt) + entry + "\n" + md.slice(insertAt);
   }
-  const block = "\n## Changelog\n\n" + entry + "\n";
-  const refIdx = md.indexOf("## References");
-  if (refIdx >= 0) return md.slice(0, refIdx) + block + md.slice(refIdx);
+  const block = "\n## Changelog\n\n" + entry + "\n\n";
+  // CHANGELOG-ANCHOR-1 (1.2.5): the References heading is matched at the start of a line. indexOf("## References")
+  // also hit "### References", so the block landed after its first "#" and published a bare "#" line (4 papers).
+  const refM = /^#{1,6}[ \t]+(?:\d+\.?\s*)?(?:references|bibliography)\b/im.exec(md);
+  if (refM) return md.slice(0, refM.index) + block + md.slice(refM.index);
   return md + block;
 }
 __name(addChangelog, "addChangelog");
