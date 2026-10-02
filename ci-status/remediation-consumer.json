@@ -1,12 +1,21 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@c4012bd70d4c",
- "due": 0,
- "pass": 0,
+ "verifier": "remediation-consumer@21bec1c3e81c",
+ "due": 1,
+ "pass": 1,
  "fail": 0,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "EVID-QWAV-SCAN-CRON",
+   "issue_id": 1734,
+   "verdict": "pass",
+   "expected": "cron-ledgered",
+   "observed": "cron-ledgered",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -23,7 +32,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 1619,
- "head": "c4012bd70d4c388d6ea6bb176455bc95ee5dd2cd",
+ "spent_ms": 3788,
+ "head": "21bec1c3e81c837bbaf96ef9eda3b7324004f7c7",
  "job_status": "success"
 }
