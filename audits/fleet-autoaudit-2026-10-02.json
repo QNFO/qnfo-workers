@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 09:47:58",
+  "audited_at": "2026-10-02 09:53:57",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -412,7 +412,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.2.0-vision-toolleak",
+        "version": "4.3.1-gcal-mcp",
         "worker": "personal-api"
       },
       {
@@ -800,9 +800,9 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.2.0-vision-toolleak",
+      "before": "4.3.1-gcal-mcp",
       "http": 200,
-      "live": "4.2.0-vision-toolleak",
+      "live": "4.3.1-gcal-mcp",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
