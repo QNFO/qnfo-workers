@@ -240,6 +240,7 @@ jobs:
         run: |
           set -euo pipefail
           node --no-warnings qnfo-deploy-guard/work-lock.test.mjs
+          node --no-warnings qnfo-deploy-guard/work-claim-unify.test.mjs
           node --no-warnings qnfo-deploy-guard/secret-lock.test.mjs
 
       # INBOUND-SLA-1 (qnfo-email-orchestrator 0.5.0, pillar: reach): every human inbound message gets a fleet action within
