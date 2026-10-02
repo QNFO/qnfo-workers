@@ -1,8 +1,17 @@
-# personal-api - Agentic Personal Twin (v4.3.2)
+# personal-api - Agentic Personal Twin (v4.4.0)
 
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
 RAG + live-web + live-weather over the personal-life D1 + Vectorize archive, now with an
 AGENTIC TOOL LOOP. Never calls the QNFO records oracle (PERSONAL-QNFO-SEPARATION-1).
+
+## v4.4.0 (2026-10-02) - MCP with OAuth 2.1 for connector-only clients (pillar: personal)
+- TWIN-MCP-OAUTH-1 (issue 1817): `/mcp` accepts OAuth access tokens as well as the bearer API key. Discovery at
+  `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`; dynamic client registration
+  (`/oauth/register`, public clients, https or localhost redirects); authorization code + PKCE S256 only
+  (`/oauth/authorize`, consent page shows the client name and redirect host, approved with the personal API key);
+  `/oauth/token` (1 h access, 30 d rotating refresh); `/oauth/revoke`. Codes and tokens are stored as SHA-256 hashes in
+  personal-life D1 (`oauth_clients`, `oauth_codes`, `oauth_tokens`). Add the twin in a connector UI with the URL
+  `https://personal-api.q08.workers.dev/mcp`.
 
 ## v4.3.2 (2026-10-02) - twin web page works again; fleet link without remote code (pillar: personal)
 - PLAYGROUND-REGEX-1: the page script's link regex lost its escapes inside the template literal and rendered as
