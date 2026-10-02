@@ -118,7 +118,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(src.slice(A, B + END.length) + "\n" + orch.slice(o1, o2) + "\n" + orch.slice(o3, o4) +
-  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED };", sandbox, { filename: "code-merge-block.js" });
+  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED };", sandbox, { filename: "code-merge-block.js" });
 const W = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -426,6 +426,28 @@ ok(d2.status === "published" && d2.green_since === new Date(NOW).toISOString() &
 r = J(await W.codeMergeTick(env, { now: NOW + 36e5 }));
 ok(gh.merges.length === 2 && one("SELECT status FROM code_tasks WHERE id = 'ct_doc000000002'").status === "merged", "the next tick merges it");
 
+// MERGE-THROUGHPUT-1: the limit is an ops_config dial (clamped 1..5); both green doc PRs merge in one tick when it is 2
+{
+  freshDb(); freshGh();
+  db.prepare("INSERT INTO ops_config (key, value) VALUES ('code_merge_max_merges_per_tick', '2')").run();
+  for (const [i, id] of ["ct_doc000000003", "ct_doc000000004"].entries()) {
+    const num = 420 + i, br = "codeagent-" + id.slice(3, 15);
+    db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, pr_url, created_at, updated_at) VALUES (?, 'qnfo-workers', ?, 'doc', 'published', 'done', 0, ?, ?, ?, ?, ?)").run(id, "docs/y" + i + ".md", JSON.stringify({ patch: WHOLE.split("docs/x.md").join("docs/y" + i + ".md") }), br, "https://github.com/QNFO/qnfo-workers/pull/" + num, "2026-10-02T00:00:00Z", "2026-10-02T00:00:00Z");
+    gh.pulls[num] = prJson({ number: num, head: { ref: br, sha: "e" + i, repo: { full_name: "QNFO/qnfo-workers" } } });
+    gh.files[num] = [{ filename: "docs/y" + i + ".md", status: "modified" }];
+    gh.checks["e" + i] = green("e" + i, ["gate", "mirror-guard", "comparator"]);
+    gh.contents["base0:docs/y" + i + ".md"] = "one\ntwo\n"; gh.contents["e" + i + ":docs/y" + i + ".md"] = "one\ntwo\nthree\n";
+  }
+  const r2 = J(await W.codeMergeTick(env, { now: NOW }));
+  ok(gh.merges.length === 2, "merge dial 2: two green PRs on different files merge in one tick", { merges: gh.merges.length, r: r2.decided });
+  const c9 = await W.cmConfig({ AUDIT: env.AUDIT });
+  db.exec("UPDATE ops_config SET value = '99' WHERE key = 'code_merge_max_merges_per_tick'");
+  const c5 = await W.cmConfig({ AUDIT: env.AUDIT });
+  db.exec("UPDATE ops_config SET value = 'abc' WHERE key = 'code_merge_max_merges_per_tick'");
+  const c1 = await W.cmConfig({ AUDIT: env.AUDIT });
+  ok(c9.maxMerges === 2 && c5.maxMerges === 5 && c1.maxMerges === 1, "merge dial is clamped to 1..5 and a non-number keeps the default 1", { c9: c9.maxMerges, c5: c5.maxMerges, c1: c1.maxMerges });
+  freshDb(); freshGh();
+}
 freshDb(); freshGh();
 db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
 seedTask();
