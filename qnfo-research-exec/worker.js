@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.52-utf8-redeploy"; // UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.53-codeagent"; // UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3021,11 +3021,13 @@ var worker_default = {
         await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");
         return json({ ok: true, worker: WORKER, version: VERSION, accepted: true, mode: "deferred", note: "research stages run on the cron under a single-flight lease (RESEARCH-SINGLE-FLIGHT-1); POST /run?sync=1 runs one stage inline" }, 202);
       }
-      const lr = await runLeased(env, "http-" + Date.now().toString(36), 1, 0);
+            if (/\.workers\.dev$|(^|\.)qnfo\.org$/i.test(url.hostname)) return json({ error: "forbidden: internal callers only (RUN-INTERNAL-1); the cron runs this" }, 403);
+const lr = await runLeased(env, "http-" + Date.now().toString(36), 1, 0);
       if (lr.busy) return json({ ok: true, worker: WORKER, version: VERSION, busy: true, note: "another run holds the single-flight lease" }, 409);
       return json({ ok: true, worker: WORKER, version: VERSION, out: lr.stages[0] || null });
     }
     if (url.pathname === "/run/drain-v2" && request.method === "POST") {
+      if (/\.workers\.dev$|(^|\.)qnfo\.org$/i.test(url.hostname)) return json({ error: "forbidden: internal callers only (RUN-INTERNAL-1); the cron runs this" }, 403);
       const drained = await drainV2(env);
       return json({ ok: true, worker: WORKER, version: VERSION, drained });
     }
