@@ -28,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.1.0-paper-pin";
+var VERSION = "2.1.1-ascii"; // ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -378,7 +378,7 @@ async function retrieve(env, query, cfg) {
     return {
       slug: g.slug, title: (m && m.title) || g.chunks.map(headingOf).find(Boolean) || g.slug.replace(/[-_]+/g, " ").replace(/^\w/, function (c) { return c.toUpperCase(); }),
       doi: (m && m.doi) || null, url: m ? "https://papers.qnfo.org/papers/" + g.slug : null, published: !!m, score: Math.round(g.score * 1000) / 1000,
-      abstract: m && m.abstract ? String(m.abstract).replace(/\s+/g, " ").slice(0, 320) : "", excerpt: g.chunks.join("\n\n…\n\n"),
+      abstract: m && m.abstract ? String(m.abstract).replace(/\s+/g, " ").slice(0, 320) : "", excerpt: g.chunks.join("\n\n\u2026\n\n"),
     };
   });
   // Versions of one work (v2.0, v2.3, drafts) are shown once: published first, then score; the others' excerpts stay as context.
@@ -389,7 +389,7 @@ async function retrieve(env, query, cfg) {
     if (!cur) { byTitle.set(k, Object.assign({}, it, { versions: 1 })); return; }
     var better = it.published && !cur.published ? it : cur, other = better === it ? cur : it;
     var merged = Object.assign({}, better, { versions: cur.versions + 1, score: Math.max(cur.score, it.score) });
-    if (merged.excerpt.length < 2600) merged.excerpt += "\n\n…\n\n" + other.excerpt.slice(0, 1400);
+    if (merged.excerpt.length < 2600) merged.excerpt += "\n\n\u2026\n\n" + other.excerpt.slice(0, 1400);
     byTitle.set(k, merged);
   });
   var out = Array.from(byTitle.values()).sort(function (a, b) { return b.score - a.score; }).slice(0, cfg.max_sources).map(function (x, i) { return Object.assign(x, { n: i + 1 }); });
@@ -411,7 +411,7 @@ async function pinPaper(env, slug, query) {
   }).filter(function (x) { return x.text.length > 80 && !/^(references|bibliography)/i.test(x.head.replace(/^[\d.\s]+/, "")); });
   var abs = String(p.abstract || "").trim();
   var pick = secs.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 3).sort(function (a, b) { return a.i - b.i; });
-  var excerpt = (abs ? "Abstract: " + abs.slice(0, 900) + "\n\n" : "") + pick.map(function (x) { return x.text.slice(0, 1600); }).join("\n\n…\n\n");
+  var excerpt = (abs ? "Abstract: " + abs.slice(0, 900) + "\n\n" : "") + pick.map(function (x) { return x.text.slice(0, 1600); }).join("\n\n\u2026\n\n");
   return { slug: p.slug, title: p.title, doi: p.doi || null, url: "https://papers.qnfo.org/papers/" + p.slug, published: true, score: 1, abstract: abs.replace(/\s+/g, " ").slice(0, 320), excerpt: excerpt || abs, cap: 4800, pinned: true, versions: 1 };
 }
 async function relatedThreads(env, q) {
@@ -517,10 +517,10 @@ function splitFollowups(text) {
   return { body: text.slice(0, m.index).trim(), followups: fu };
 }
 function citeStats(body, nSources) {
-  var cites = 0, invalid = 0, re = /\[(\d{1,2}(?:\s*[,–-]\s*\d{1,2})*)\]/g, m;
+  var cites = 0, invalid = 0, re = /\[(\d{1,2}(?:\s*[,\u2013-]\s*\d{1,2})*)\]/g, m;
   while ((m = re.exec(body)) !== null) {
     m[1].split(/\s*,\s*/).forEach(function (part) {
-      part.split(/[–-]/).forEach(function (n) { n = Number(n); if (!n) return; cites++; if (n < 1 || n > nSources) invalid++; });
+      part.split(/[\u2013-]/).forEach(function (n) { n = Number(n); if (!n) return; cites++; if (n < 1 || n > nSources) invalid++; });
     });
   }
   return { cites: cites, invalid: invalid };
@@ -1222,7 +1222,7 @@ footer.site a{color:var(--muted)}
         </form>
         <p class="hint">Press Enter to ask, Shift + Enter for a new line.</p>
       </div>
-      <p class="census" id="census">Reading the corpus…</p>
+      <p class="census" id="census">Reading the corpus\u2026</p>
     </div>
     <div class="tree">
       <h2>Open questions in the graph</h2>
@@ -1332,7 +1332,7 @@ function ago(iso){
   if (m < 60) return m + " min ago"; var h = Math.round(m / 60); if (h < 36) return h + " h ago";
   return Math.round(h / 24) + " days ago";
 }
-function fmt(n){ return n == null ? "–" : Number(n).toLocaleString("en"); }
+function fmt(n){ return n == null ? "\u2013" : Number(n).toLocaleString("en"); }
 fetch("/api/stats").then(function(r){ return r.json(); }).then(function(s){
   $("#census").innerHTML = "Searching <b>" + fmt(s.papers) + " papers</b> and a knowledge graph of <b>" + fmt(s.graph_nodes) + " nodes</b> joined by <b>" + fmt(s.graph_edges) + " relations</b>" +
     (s.threads ? ", alongside <b>" + fmt(s.threads) + " public idea threads</b>" : "") + "." + (s.latest_paper_at ? " Newest paper added " + ago(s.latest_paper_at) + "." : "");
@@ -1340,10 +1340,10 @@ fetch("/api/stats").then(function(r){ return r.json(); }).then(function(s){
 
 fetch("/api/recent").then(function(r){ return r.json(); }).then(function(d){
   $("#papers").innerHTML = (d.papers || []).map(function(p){
-    return '<li><a href="https://papers.qnfo.org/papers/' + encodeURIComponent(p.slug) + '">' + esc(p.title) + '</a><small>' + esc(ago(p.created_at)) + (p.doi ? " · DOI " + esc(p.doi) : "") + '</small></li>';
+    return '<li><a href="https://papers.qnfo.org/papers/' + encodeURIComponent(p.slug) + '">' + esc(p.title) + '</a><small>' + esc(ago(p.created_at)) + (p.doi ? " \u00b7 DOI " + esc(p.doi) : "") + '</small></li>';
   }).join("") || "<li><small>No papers returned.</small></li>";
   $("#threads").innerHTML = (d.threads || []).map(function(t){
-    return '<li><a href="https://ideas.qnfo.org/#/s/' + encodeURIComponent(t.id) + '">' + esc(t.title.length > 140 ? t.title.slice(0, 137) + "…" : t.title) + '</a><small>' + esc(ago(t.updated_at)) + ", " + t.message_count + ' messages</small></li>';
+    return '<li><a href="https://ideas.qnfo.org/#/s/' + encodeURIComponent(t.id) + '">' + esc(t.title.length > 140 ? t.title.slice(0, 137) + "\u2026" : t.title) + '</a><small>' + esc(ago(t.updated_at)) + ", " + t.message_count + ' messages</small></li>';
   }).join("") || "<li><small>No public threads yet.</small></li>";
   drawTree(d.questions || []);
 }).catch(function(){
@@ -1352,7 +1352,7 @@ fetch("/api/recent").then(function(r){ return r.json(); }).then(function(d){
   $("#threads").innerHTML = '<li><a href="https://ideas.qnfo.org">Browse idea threads</a></li>';
 });
 
-/* Bruhat–Tits flavoured branching: a root splits in two, each branch splits again, ends carry the questions. */
+/* Bruhat\u2013Tits flavoured branching: a root splits in two, each branch splits again, ends carry the questions. */
 function drawTree(qs){
   var list = $("#qlist"), svg = $("#qsvg");
   qs = qs.slice(0, 6);
@@ -1392,8 +1392,8 @@ function renderMd(src){
     var x = math[+i];
     try { return window.katex ? katex.renderToString(x.tex, { displayMode: x.disp, throwOnError: false, output: "html" }) : esc(x.tex); } catch (e) { return esc(x.tex); }
   });
-  html = html.replace(/\\[(\\d{1,2}(?:\\s*[,–-]\\s*\\d{1,2})*)\\](?![^<]*<\\/a>)/g, function(m, inner){
-    return inner.split(/\\s*,\\s*/).map(function(n){ n = n.replace(/\\s/g, ""); return '<a class="cite" href="#" data-n="' + esc(n.split(/[–-]/)[0]) + '">' + esc(n) + "</a>"; }).join("");
+  html = html.replace(/\\[(\\d{1,2}(?:\\s*[,\u2013-]\\s*\\d{1,2})*)\\](?![^<]*<\\/a>)/g, function(m, inner){
+    return inner.split(/\\s*,\\s*/).map(function(n){ n = n.replace(/\\s/g, ""); return '<a class="cite" href="#" data-n="' + esc(n.split(/[\u2013-]/)[0]) + '">' + esc(n) + "</a>"; }).join("");
   });
   return window.DOMPurify ? DOMPurify.sanitize(html, { ADD_ATTR: ["data-n", "aria-hidden"], ADD_TAGS: ["semantics", "annotation"] }) : html;
 }
@@ -1500,7 +1500,7 @@ function showMeta(el, d){
   if (d.threads && d.threads.length){
     var t = $(".thr", el); t.hidden = false;
     $(".threads", t).innerHTML = d.threads.map(function(x){
-      return '<li><a href="https://ideas.qnfo.org/#/s/' + encodeURIComponent(x.id) + '" target="_blank" rel="noopener">' + esc(x.title.length > 150 ? x.title.slice(0, 147) + "…" : x.title) + "</a><small>" + x.message_count + " messages, " + esc(ago(x.updated_at)) + "</small></li>";
+      return '<li><a href="https://ideas.qnfo.org/#/s/' + encodeURIComponent(x.id) + '" target="_blank" rel="noopener">' + esc(x.title.length > 150 ? x.title.slice(0, 147) + "\u2026" : x.title) + "</a><small>" + x.message_count + " messages, " + esc(ago(x.updated_at)) + "</small></li>";
     }).join("");
   }
   drawGraph(el, d.graph || { nodes: [], edges: [] });
@@ -1569,7 +1569,7 @@ function drawGraph(el, g){
       .attr("aria-label", function(d){ return kind(d.label).name + ": " + d.name; });
     shape(node);
     node.append("title").text(function(d){ return d.name; });
-    node.append("text").attr("x", 11).attr("y", 4).text(function(d){ var t = d.cite ? "[" + d.cite + "] " : ""; var nm = d.name.length > 26 ? d.name.slice(0, 24) + "…" : d.name; return d.seed || d.cite || nodes.length < 14 ? t + nm : t; });
+    node.append("text").attr("x", 11).attr("y", 4).text(function(d){ var t = d.cite ? "[" + d.cite + "] " : ""; var nm = d.name.length > 26 ? d.name.slice(0, 24) + "\u2026" : d.name; return d.seed || d.cite || nodes.length < 14 ? t + nm : t; });
     node.on("click", function(e, d){ select(d); }).on("keydown", function(e, d){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); select(d); } })
       .on("mouseenter", function(e, d){ if (d.cite) highlight(el, d.cite, true); }).on("mouseleave", function(e, d){ if (d.cite) highlight(el, d.cite, false); });
     node.call(d3.drag().on("start", function(e, d){ if (!e.active) sim.alphaTarget(.25).restart(); d.fx = d.x; d.fy = d.y; })
@@ -1604,7 +1604,7 @@ function drawGraph(el, g){
       '<div class="acts"><button type="button" class="ab">Ask about this</button><button type="button" class="xb">Show its neighbours</button>' + link + "</div>";
     $(".ab", card).addEventListener("click", function(){ ask(d.label === "ResearchQuestion" ? d.name : "What does the QNFO corpus say about " + d.name + "?"); });
     $(".xb", card).addEventListener("click", function(e){
-      e.target.textContent = "Loading…";
+      e.target.textContent = "Loading\u2026";
       fetch("/api/explore?node=" + encodeURIComponent(d.id)).then(function(r){ return r.json(); }).then(function(x){
         var added = 0;
         (x.nodes || []).forEach(function(n){ if (!byId[n.id]){ n = Object.assign({}, n, { seed: false, x: d.x + (Math.random() - .5) * 40, y: d.y + (Math.random() - .5) * 40 }); byId[n.id] = n; nodes.push(n); added++; } });
