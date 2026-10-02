@@ -89,6 +89,50 @@ class Forbidden(http.server.BaseHTTPRequestHandler):
         self.wfile.write(b"nope")
 
 
+hits: dict = {}
+
+
+class RateLimited(http.server.BaseHTTPRequestHandler):
+    """GitHub's primary-limit answer: 403, x-ratelimit-remaining 0, 'API rate limit exceeded for installation'."""
+
+    def log_message(self, *a):
+        pass
+
+    def do_GET(self):
+        hits["rl"] = hits.get("rl", 0) + 1
+        body = b'{"message":"API rate limit exceeded for installation ID 1."}'
+        self.send_response(403)
+        self.send_header("x-ratelimit-remaining", "0")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class IssuesApi(http.server.BaseHTTPRequestHandler):
+    """Just enough of the issues API for file_or_refresh: an empty open list, then a created issue."""
+
+    def log_message(self, *a):
+        pass
+
+    def _reply(self, code, obj):
+        import json as _j
+        body = _j.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        hits["GET " + self.path.split("?")[0]] = hits.get("GET " + self.path.split("?")[0], 0) + 1
+        self._reply(200, [])
+
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        self.rfile.read(n)
+        hits["POST " + self.path] = hits.get("POST " + self.path, 0) + 1
+        self._reply(201, {"number": 9} if self.path.endswith("/issues") else {"name": "ci-watchdog"})
+
+
 def main() -> int:
     srv = _serve(Redirector)
     cw.API = "http://127.0.0.1:%d" % srv.server_address[1]
@@ -153,6 +197,133 @@ def main() -> int:
                                 {"number": 7, "body": "no run here"}, {"number": 8, "body": None}])
     check("closed finding bodies yield run id -> issue number", ids == {36860029746: 332}, ids)
     check("branch_runs without a workflow id makes no call", cw.branch_runs(None, "main") == [])
+
+    # ACTIONS-QUOTA-1 (2026-10-02): the schedule declaration is read from the file, ignoring comments.
+    check("a comment that says schedule: is not a schedule",
+          cw.declares_schedule("# WHY push AND NOT schedule: on this repository\non:\n  push:\n    branches: [main]\n") is False)
+    check("an on.schedule key is a schedule",
+          cw.declares_schedule("on:\n  schedule:\n    - cron: '17 * * * *'\n  workflow_dispatch:\n") is True)
+    check("a trailing comment after the key still counts",
+          cw.declares_schedule("on:\n  schedule:   # opportunistic\n    - cron: '1 * * * *'\n") is True)
+    check("a trailing comment mentioning schedule: does not",
+          cw.declares_schedule("on:\n  push:  # not a schedule: trigger\n") is False)
+    check("no text -> no schedule", cw.declares_schedule("") is False)
+    # The sweep reads the checkout only when it runs on main; a PR run of this selftest has GITHUB_REF=refs/pull/N/merge,
+    # so pin the ref for these two checks (otherwise they would ask the API, and fail without a token).
+    _ref = os.environ.get("GITHUB_REF")
+    os.environ["GITHUB_REF"] = "refs/heads/main"
+    try:
+        check("a dynamic workflow path has no file -> None", cw.workflow_text("dynamic/github-code-scanning/codeql") is None)
+        check("the watchdog's own file is read from the checkout",
+              "workflow_run" in (cw.workflow_text(".github/workflows/ci-watchdog.yml") or ""))
+    finally:
+        if _ref is None:
+            os.environ.pop("GITHUB_REF", None)
+        else:
+            os.environ["GITHUB_REF"] = _ref
+    try:
+        import yaml  # parity with a real YAML parse over every workflow in the repository
+        import glob
+        wf_dir = os.path.join(cw.ROOT, ".github", "workflows")
+        disagree = []
+        for p in sorted(glob.glob(os.path.join(wf_dir, "*.yml"))):
+            with open(p, encoding="utf-8") as fh:
+                txt = fh.read()
+            doc = yaml.safe_load(txt) or {}
+            on = doc.get(True, doc.get("on")) if isinstance(doc, dict) else None
+            real = isinstance(on, dict) and "schedule" in on
+            if cw.declares_schedule(txt) != real:
+                disagree.append(os.path.basename(p))
+        check("declares_schedule agrees with YAML on every workflow", not disagree, disagree)
+    except ImportError:
+        print("SKIP YAML parity check (PyYAML not installed)")
+
+    # file_or_refresh lists the open findings once per sweep, files once, and a second finding with the same
+    # title is 'already reported', not a duplicate issue.
+    hits.clear()
+    srv3 = _serve(IssuesApi)
+    cw.API = "http://127.0.0.1:%d" % srv3.server_address[1]
+    calls0 = cw.CALLS
+    r1 = cw.file_or_refresh("unknown", "selftest-wf", "evidence run=1")
+    r2 = cw.file_or_refresh("unknown", "selftest-wf", "evidence run=2")
+    r3 = cw.file_or_refresh("unknown", "other-wf", "evidence run=3")
+    srv3.shutdown()
+    check("first finding files an issue", r1 == "filed #9", r1)
+    check("same title in the same sweep is already reported", r2.startswith("already reported #9"), r2)
+    check("open findings listed once for three findings", hits.get("GET /repos/%s/issues" % cw.REPO) == 1, hits)
+    check("label created once, only because an issue was filed", hits.get("POST /repos/%s/labels" % cw.REPO) == 1, hits)
+    check("two distinct titles -> two issue POSTs", hits.get("POST /repos/%s/issues" % cw.REPO) == 2, (r3, hits))
+    check("calls are counted", cw.CALLS - calls0 == 4, cw.CALLS - calls0)
+
+    # A plain 403 is not the budget; GitHub's rate-limit answer is, and it stops the sweep sending more.
+    check("a plain 403 does not mark the sweep rate-limited", cw.RATE_LIMITED is False)
+    hits.clear()
+    srv4 = _serve(RateLimited)
+    cw.API = "http://127.0.0.1:%d" % srv4.server_address[1]
+    st, _ = cw.gh("/repos/x/y/actions/workflows?per_page=100")
+    check("rate-limit answer -> 403 and RATE_LIMITED", st == 403 and cw.RATE_LIMITED is True, (st, cw.RATE_LIMITED))
+    st2, d2 = cw.gh("/repos/x/y/actions/runs?per_page=60")
+    check("later calls are answered locally, not sent", st2 == 403 and hits.get("rl") == 1 and d2.get("rate_limited"), (st2, hits))
+    check("log fetch is skipped once rate-limited", cw._raw_log(1) == "" and hits.get("rl") == 1, hits)
+    check("workflows() degrades to [] without raising", cw.workflows() == [])
+    srv4.shutdown()
+    cw.RATE_LIMITED = False
+
+    # API-BUDGET-1 (#480) end to end, on the merged code: a sweep over 41 workflows samples run history only for
+    # the 3 that declare a schedule; a workflow whose file is not in the checkout is not sampled and costs no
+    # contents call when the job runs on main.
+    import tempfile
+    ws = tempfile.mkdtemp(prefix="wd-")
+    os.makedirs(os.path.join(ws, ".github", "workflows"))
+    wf_list = []
+    for i in range(1, 41):
+        rel = ".github/workflows/w%d.yml" % i
+        with open(os.path.join(ws, rel), "w", encoding="utf-8") as fh:
+            fh.write("on:\n  push:\n" + ("  schedule:\n    - cron: '0 6 * * *'\n" if i <= 3 else ""))
+        wf_list.append({"id": i, "name": "w%d" % i, "path": rel, "state": "active"})
+    wf_list.append({"id": 99, "name": "gone", "path": ".github/workflows/gone.yml", "state": "active"})
+    calls: list = []
+
+    def fake_gh(path, method="GET", body=None):
+        calls.append((method, path))
+        if "/actions/workflows?" in path:
+            return 200, {"workflows": wf_list}
+        if "/actions/workflows/" in path and "/runs" in path:
+            return 200, {"workflow_runs": [{"id": 1, "event": "push", "created_at": "2026-10-01T00:00:00Z"}]}
+        return 200, {}
+
+    old_root, old_gh, old_tok, old_ref = cw.ROOT, cw.gh, cw.TOKEN, os.environ.get("GITHUB_REF")
+    cw.ROOT, cw.gh, cw.TOKEN = ws, fake_gh, "t"
+    os.environ["GITHUB_REF"] = "refs/heads/main"
+    try:
+        check("a checked-out workflow with a schedule declares one",
+              cw.declares_schedule(cw.workflow_text(".github/workflows/w1.yml") or "") is True)
+        check("a checked-out workflow without one does not",
+              cw.declares_schedule(cw.workflow_text(".github/workflows/w9.yml") or "") is False)
+        check("a file missing from the checkout reads as None on main, with no call",
+              cw.workflow_text(".github/workflows/gone.yml") is None and not calls, calls)
+        import contextlib, io
+        _cwd = os.getcwd()
+        os.chdir(ws)  # main() writes ci-watchdog-summary.json into the working directory: keep it out of the repository
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                try:
+                    cw.main()
+                except SystemExit:
+                    pass
+        finally:
+            os.chdir(_cwd)
+        hist = [c for c in calls if "/actions/workflows/" in c[1] and "/runs" in c[1] and "branch=" not in c[1]]
+        cont = [c for c in calls if "/contents/" in c[1]]
+        check("history is fetched only for the 3 scheduled workflows", len(hist) == 3, len(hist))
+        check("no contents call when every file is read from the checkout", not cont, cont)
+        check("41 workflows cost under 30 API calls in total (was about 2 per workflow)", len(calls) < 30, len(calls))
+    finally:
+        cw.ROOT, cw.gh, cw.TOKEN = old_root, old_gh, old_tok
+        if old_ref is None:
+            os.environ.pop("GITHUB_REF", None)
+        else:
+            os.environ["GITHUB_REF"] = old_ref
 
     print("\n%d failure(s)" % len(fails))
     return 1 if fails else 0

@@ -11,6 +11,19 @@ because each one was broken at least once; the linked issue holds the evidence.
   a later re-probe confirms it.
 - Never re-accept a rotated-out key, and never commit a secret value.
 
+## Work claims (WORK-CLAIM-1)
+- Before you start an `agent_issues` row or change a worker, take the claim:
+  `POST https://qnfo-deploy-guard.q08.workers.dev/work-lock/acquire {"key":"issue:<id>","owner":"<session>","ttl_sec":3600}`
+  (`file:<worker>/worker.js` for a worker, one claim per worker; `ttl_sec` at most 7200). If `acquired` is false, `holder`
+  is on it until `expires_at`: skip it and take other work. `GET /work-locks` lists every live claim (open, never a token).
+- Acquire again with your `token` to extend it; hold it until your PR merges or you stop, then
+  `POST /work-lock/release {"key":"<key>","token":"<token>"}`. An issue claim records you in `agent_issues.linked_session`.
+- Before you bump a worker's VERSION, list what main and the open PRs claim (REST: `gh pr list` is GraphQL, refused in
+  sessions) and take a numeric core above the last line. version-bump-guard fails one that is not ahead (VERSION-AHEAD-1).
+  ```
+  W=<worker>; R=repos/QNFO/qnfo-workers; for x in main $(gh api "$R/pulls?state=open&per_page=100" --jq '.[]|"\(.head.sha)#\(.number)"'); do gh api "$R/contents/$W/worker.js?ref=${x%#*}" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep -m1 -oE 'var VERSION = "[^"]*"' | sed -E "s/.*\"(.*)\"/\1 ${x#*#}/"; done | sort -V | tail -3
+  ```
+
 ## Internal calls to qnfo-ai (#1703)
 - Internal workers authenticate to qnfo-ai by service-binding props, not by a copy of the router key. Add
   `props = { caller = "<worker name>" }` under the worker's qnfo-ai `[[services]]` binding in wrangler.toml; the canonical
@@ -124,7 +137,17 @@ because each one was broken at least once; the linked issue holds the evidence.
   (zenodo_versions_per_flagship read 1 while the true minimum was 3: two flagships were unmeasured, #1754). An action the
   session is refused is handed to the owner with the reason, not retried.
 
+## Claim before you change (WORK-CLAIMS-1)
+- Before changing a file, look for in-flight work on it:
+  `SELECT kind, intent, holder, pr FROM v_work_claims_active WHERE path = '<repo path>'` (D1 `qnfo-audit`; the view also
+  lists the code loop's unfinished tasks). If a row describes the same defect, do not write a second fix: review that
+  change, or add what is missing to it. If the rows are about something else, go ahead and expect a VERSION-line rebase.
+- Then say what you are doing: `INSERT INTO work_claims (path, intent, holder, issue_id) VALUES (...)`. A claim is
+  advisory and expires after two hours; renew it by inserting again. When the PR merges or closes, set `released_at`,
+  `pr` and `outcome` (`merged`, `closed`, `duplicate`). See migrations/2026-10-02-work-claims.sql.
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
-- GitHub `schedule` triggers never fire on this repository; periodic work belongs in worker crons.
+- GitHub `schedule` triggers fire rarely and late on this repository (95 schedule runs in total by 2026-10-02; mirror-autosync
+  ran 9 times), so no periodic work may depend on one; periodic work belongs in worker crons.

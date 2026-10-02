@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.18.7-guard-rcs-cancelled"; /* 1.18.7 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); 1.18.6 WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.37: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.18.9-guard-rcs-cancelled"; /* 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.38: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2550,6 +2550,12 @@ function guardRunState(runs) {
 // IMPRESSIONS-METRIC-PRIOR-WINDOW-1 (2026-10-01): distinct days with RUM rows in a window; a 30-day comparison needs
 // at least RUM_MIN_PRIOR_DAYS of them.
 var RUM_MIN_PRIOR_DAYS = 28;
+// PAGEVIEWS-HUMAN-1 (1.18.6, pillar reach): pageviews_30d summed every RUM page load, crawlers included, while the reach
+// KPI engaged_human_sessions_28d reads the same dataset with the Web Analytics "Exclude bots" filter. Both 30-day windows
+// (pageviews_30d and the prior window impressions_growth_30d compares it with) now carry that filter, so the growth
+// figure still compares like with like. referral_30d keeps its own read.
+var REGISTRY_PV_FILTER = "bot: 0";
+var REGISTRY_PV_FORMULA = "SUM(rumPageloadEventsAdaptiveGroups.count) over the last 30 days with the Exclude-bots filter (bot: 0), qnfo-fleet-dashboard refreshRegistryMetrics hourly (PAGEVIEWS-HUMAN-1; before 1.18.6 the sum included crawler page loads)";
 function rumDaysCovered(rows) {
   const d = {};
   for (const r of rows || []) { const k = r && r.dimensions && r.dimensions.date; if (k && (r.count || 0) > 0) d[k] = 1; }
@@ -2573,13 +2579,13 @@ async function refreshRegistryMetrics(env) {
     }
   };
   const acct = 'accounts(filter: { accountTag: "' + ACCOUNT + '" })';
-  const win = function(fromH, toH) {
-    return 'filter: { datetime_geq: "' + new Date(Date.now() - fromH * 36e5).toISOString() + '", datetime_leq: "' + new Date(Date.now() - toH * 36e5).toISOString() + '" }';
+  const win = function(fromH, toH, extra) {
+    return 'filter: { datetime_geq: "' + new Date(Date.now() - fromH * 36e5).toISOString() + '", datetime_leq: "' + new Date(Date.now() - toH * 36e5).toISOString() + '"' + (extra ? ", " + extra : "") + " }";
   };
   let pv30 = null, pvPrior = null, priorDays = null;
   try {
-    const a = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(720, 0) + ") { count } } } }");
-    const b = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(1440, 720) + ") { count dimensions { date } } } } }");
+    const a = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(720, 0, REGISTRY_PV_FILTER) + ") { count } } } }");
+    const b = await roiGf(env, "query { viewer { " + acct + " { rumPageloadEventsAdaptiveGroups(limit: 10000, " + win(1440, 720, REGISTRY_PV_FILTER) + ") { count dimensions { date } } } } }");
     const ra = a && (((a.viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups);
     const rb = b && (((b.viewer || {}).accounts || [{}])[0].rumPageloadEventsAdaptiveGroups);
     if (Array.isArray(ra)) pv30 = ra.reduce(function(x, r) { return x + (r.count || 0); }, 0);
@@ -2587,7 +2593,7 @@ async function refreshRegistryMetrics(env) {
     if (Array.isArray(rb)) priorDays = rumDaysCovered(rb);
   } catch (e) {
   }
-  if (pv30 != null) await put("pageviews_30d", pv30, "MEASURED");
+  if (pv30 != null) await put("pageviews_30d", pv30, "MEASURED", ", formula=?5", [REGISTRY_PV_FORMULA]);
   else out.skipped.push("pageviews_30d: RUM unreadable");
   if (pv30 != null && pvPrior > 0 && priorDays != null && priorDays < RUM_MIN_PRIOR_DAYS) {
     // IMPRESSIONS-METRIC-PRIOR-WINDOW-1 (2026-10-01, agent_issues #1715): the prior window held about a fifth of the
@@ -3786,8 +3792,19 @@ var WATCHMAKER_OPS = [
   // One-shot (retried hourly while deferred): it counts only when it is 48h past due with no decision recorded.
   { key: "q08-review", what: "q08 decision on bot-filtered human reads, once from 2026-10-31 (Q08-REVIEW-2026-10-31, agent_issues 1716)", runner: "cron:qnfo-fleet-dashboard", stuck_sql: "SELECT CASE WHEN ?1 >= '2026-10-31T00:00:00.000Z' AND NOT EXISTS (SELECT 1 FROM ops_config WHERE key = 'q08_review_2026_10_31' AND value <> '') THEN 1 ELSE 0 END AS stuck", stuck_note: "q08 review 48h past due with no decision recorded (deferred: see GET /api/q08-review)" },
   // GRANT-FOLLOWUP-1 (qnfo-cloud-ops 1.17.0): only a run that read BOTH mailboxes is 'ok'. A run without the GMAIL_PASS
-  // secret is 'degraded' and proves nothing here, so the op counts until Gmail (the Lightcone application's inbox) is read.
-  { key: "grant-followup", what: "Funder replies to submitted grant applications, from qnfo.org mail and Gmail, filed as agent_issues (GRANT-FOLLOWUP-1)", runner: "cron:qnfo-cloud-ops", cadence_h: 12, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'jr-grant-followup-' AND id < 'jr-grant-followup.' AND status = 'ok'", replaces: "the application-response check of local cronjob 3851f539 (funding/APPLICATIONS.md)" },
+  // secret is 'degraded', so the op counts until Gmail (the Lightcone application's inbox) is read.
+  // GRANT-FOLLOWUP-HONEST-1 (1.18.6): its sql took only 'ok' rows, so a runner that ran twice a day without GMAIL_PASS would
+  // have read "never ran" forever. sql now dates the runner's last run of any status (a stopped runner still stalls after
+  // 24h, and why_sql names its last status); stuck_sql counts the runs since the last full read, with the reason as a
+  // column (gmail_pass_unset from meta.reason or the run text, errors), so the op stays counted and says why.
+  { key: "grant-followup", what: "Funder replies to submitted grant applications, from qnfo.org mail and Gmail, filed as agent_issues (GRANT-FOLLOWUP-1)", runner: "cron:qnfo-cloud-ops", cadence_h: 12,
+    sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'jr-grant-followup-' AND id < 'jr-grant-followup.'",
+    why_sql: "SELECT status FROM cloud_ops_events WHERE id >= 'jr-grant-followup-' AND id < 'jr-grant-followup.' ORDER BY ts DESC LIMIT 1",
+    stuck_hours: [720],
+    stuck_sql: "SELECT COUNT(*) AS stuck, COALESCE(SUM(CASE WHEN (COALESCE(meta, '') || ' ' || COALESCE(text, '')) LIKE '%GMAIL_PASS%' THEN 1 ELSE 0 END), 0) AS gmail_pass_unset, COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) AS errors " +
+      "FROM cloud_ops_events WHERE id >= 'jr-grant-followup-' AND id < 'jr-grant-followup.' AND ts >= ?1 AND COALESCE(status, '') <> 'ok' " +
+      "AND ts > COALESCE((SELECT MAX(ts) FROM cloud_ops_events WHERE id >= 'jr-grant-followup-' AND id < 'jr-grant-followup.' AND status = 'ok'), '')",
+    stuck_note: "grant-followup runs since the last full read that left a mailbox unread", replaces: "the application-response check of local cronjob 3851f539 (funding/APPLICATIONS.md)" },
   // INBOUND-SLA-1 (qnfo-email-orchestrator 0.5.0, pillar: reach): every human inbound message gets a fleet action within
   // 72h, inside docs/STRATEGY.md section 5. The step runs on the orchestrator's */15 cron and upserts cloud_ops_events
   // inbound-sla-run-<day> (meta.last_ok; status 'disabled' while ops_config inbound_sla_enabled is off); each decision is
@@ -5600,6 +5617,7 @@ var CMD_HELP = [
   "  workers [word]         scheduled workers, runs, errors",
   "  worker <name>          one worker in detail",
   "  spend                  money and return",
+  "  ipatent                iPatent views, searches and drafts (counts by topic)",
   "  decision               continue / scale back / stop",
   "  suggest                what the fleet proposes you do now",
   "  open <page>            queue, owner, watchmaker, decision, state",
@@ -5872,6 +5890,8 @@ var CMD_SEARCH_SURFACES = [
     rx: /ipatent/i,
     host: "ipatent.qnfo.org",
     metrics: "ipatent_",
+    live: true,
+    live_history: "Since 2026-10-02 (qnfo-ipatent 3.8.2, IPATENT-USAGE-1) ipatent.qnfo.org counts each search and each draft per day by broad topic only; the query and draft text are never stored, as its page promises. Before that, searches were last logged on 2026-07-12.",
     store: "This dashboard cannot read ipatent-db, where ipatent.qnfo.org keeps its own records: it is not bound here, on purpose (it holds inventors' unpublished disclosures).",
     history: "Site searches were logged in ipatent-db's analytics table until 2026-07-12, when that table stopped (qnfo-ipatent PAGE-METRICS-1); qnfo-ipatent's /api/search does not record a query today, so recent ipatent searches are not recorded anywhere.",
     where: "Where the answer lives: qnfo-ops' public read mode (dataset ipatent_activity, OPS-PUBLIC-READ-1, qnfo-ops 2.38.35 and later) serves ipatent-db aggregates: page views by day, path and source, searches with emails and numbers redacted, event and submission counts, and the last activity dates. Page views and drafts for 7 and 30 days are at https://ipatent.qnfo.org/api/metrics."
@@ -5884,7 +5904,9 @@ async function cmdQueryLogs(env, text) {
     return s.rx.test(text);
   });
   for (const s of named) {
-    lines.push(s.store, s.history, s.where);
+    // IPATENT-USAGE-1: a surface that now counts its own searches (by topic, never the text) adds its live counts.
+    lines.push(s.store, s.live ? s.live_history : s.history, s.where);
+    if (s.live) lines.push(ipatentText(await ipatentUsage(env)));
     try {
       const ms = await d1all(env.AUDIT, "SELECT metric, last_value, last_refreshed FROM metric_registry WHERE substr(metric, 1, length(?1)) = ?1 ORDER BY metric", [s.metrics]);
       if (ms.length) lines.push("What this dashboard can read (metric_registry, from https://" + s.host + "/api/metrics" + (ms[0].last_refreshed ? ", refreshed " + agoText(ageDaysOf(ms[0].last_refreshed)) : "") + "): " + ms.map(function(m) {
@@ -5921,7 +5943,7 @@ async function cmdQueryLogs(env, text) {
     }).join(", ") + "). Search engines do not pass the search terms, and Search Console is not ingested (REACH-SIGNALS-INGEST-1 phase 2), so the terms are not known." : "Cloudflare RUM saw no visits from search engines in the last 30 days.");
   } catch (e) {
   }
-  for (const s of named) lines.push("To have new " + s.host + " searches counted again (aggregates only), type: task count " + s.host + " /api/search queries (needs your email code).");
+  for (const s of named) if (!s.live) lines.push("To have new " + s.host + " searches counted again (aggregates only), type: task count " + s.host + " /api/search queries (needs your email code).");
   return lines.join("\n");
 }
 // OWNER-SURFACE-HONESTY-1: the stored facts of the messages a question names ("mail:<domain>", a sender domain, or the
@@ -6008,6 +6030,45 @@ function cmdPlainFailure(err) {
   if (/^abandoned/i.test(String(err || ""))) return "Not answered: this request was cut off before the fleet saved an answer." + tail;
   return "Not answered: the AI model did not answer (" + cmdModelReason(err) + ")." + tail;
 }
+// IPATENT-USAGE-1 (2026-10-02, owner: "What are recent ipatent web queries?" -> connect it). iPatent keeps no search or
+// draft text by design ("not stored" on its page); it counts page views by source class and, since 2026-10-02, searches
+// and drafts per day by broad topic only. The dashboard reads those totals (qnfo-ipatent /api/metrics, over the service
+// binding) for the "ipatent" command and for plain-English questions that mention patents. Cached 5 minutes.
+var IPATENT_CACHE = /* @__PURE__ */ new WeakMap();
+async function ipatentUsage(env) {
+  const key = env.SVC_QNFO_IPATENT || env;
+  const hit = IPATENT_CACHE.get(key);
+  if (hit && Date.now() - hit.at < 3e5) return hit.data;
+  try {
+    const req = new Request("https://ipatent.qnfo.org/api/metrics", { headers: { "User-Agent": "qnfo-fleet-dashboard/" + VERSION } });
+    const r = await (env.SVC_QNFO_IPATENT ? env.SVC_QNFO_IPATENT.fetch(req) : fetch(req, { signal: AbortSignal.timeout(8e3) }));
+    if (!r.ok) return { error: "iPatent metrics HTTP " + r.status };
+    const j = await r.json();
+    IPATENT_CACHE.set(key, { at: Date.now(), data: j });
+    return j;
+  } catch (e) {
+    return { error: "iPatent metrics unreachable: " + String(e && e.message || e).slice(0, 100) };
+  }
+}
+function ipatentText(m) {
+  if (!m || m.error || !m.windows) return "iPatent usage could not be read just now" + (m && m.error ? " (" + m.error + ")" : "") + ".";
+  const top = function(o) {
+    const k = Object.keys(o || {}).sort(function(a, b) {
+      return o[b] - o[a];
+    });
+    return k.length ? k.slice(0, 5).map(function(x) {
+      return x + " " + o[x];
+    }).join(", ") : "none";
+  };
+  const lines = ["iPatent (" + (m.version || "?") + "). It keeps no search or draft text, by design; these are counts."];
+  for (const w of ["7d", "30d"]) {
+    const x = m.windows[w] || {}, u = x.usage || {};
+    lines.push(w + ": human page views " + (x.views_human != null ? x.views_human : "?") + " (search engines " + (x.views_search != null ? x.views_search : "?") + ", qnfo " + (x.views_qnfo != null ? x.views_qnfo : "?") + ", referral " + (x.views_referral != null ? x.views_referral : "?") + ", direct " + (x.views_direct != null ? x.views_direct : "?") + "; crawlers " + (x.views_crawler != null ? x.views_crawler : "?") + "); drafts " + (x.drafts != null ? x.drafts : "?") + " (" + (x.drafts_saved || 0) + " saved by their inventors, " + (x.drafters || 0) + " drafters)");
+    lines.push("    searches " + (u.searches != null ? u.searches : "n/a") + " by topic: " + top(u.searches_by_topic) + "; drafts by topic: " + top(u.drafts_by_topic));
+  }
+  lines.push("Topic counts started 2026-10-02 (IPATENT-USAGE-1); page views by source started with iPatent 3.5.1.");
+  return lines.join("\n");
+}
 function cmdAiContext(c) {
   const v = c.v, st = c.st || {};
   const ctx = v ? askContextObj(v, c.mail) : c.mail && c.mail.length ? { mail: c.mail } : {};
@@ -6027,6 +6088,7 @@ function cmdAiContext(c) {
     return s.name === c.scope.worker;
   }) || null : null };
   ctx.state_age_min = c.age_min;
+  if (c.ipatent) ctx.ipatent = c.ipatent.error ? { error: c.ipatent.error } : { version: c.ipatent.version, note: "counts only; iPatent never stores search or draft text", windows: c.ipatent.windows };
   return JSON.stringify(ctx).slice(0, 9e3);
 }
 var CMD_AI_SYS = "You are the command line of the QNFO fleet dashboard. Reply with ONE JSON object and nothing else: {\"answer\": string, \"actions\": array}. 'answer' is brief, concrete and uses only CONTEXT (say plainly when CONTEXT lacks it; never invent numbers). 'actions' proposes 0-4 actions the owner can approve with one tap, each one of: {\"op\":\"snooze\",\"key\":<queue key>,\"days\":1-90}, {\"op\":\"note\",\"key\":<queue key>,\"note\":string}, {\"op\":\"done\",\"key\":<queue key starting ha:>}, {\"op\":\"dismiss\",\"key\":<queue key starting ha:>}, {\"op\":\"task\",\"text\":string}, {\"op\":\"ratify\",\"id\":number}, {\"op\":\"reject\",\"id\":number}, {\"op\":\"refresh\"}. Use queue keys exactly as in CONTEXT.queue_keys. A request to change, fix, build or investigate something becomes a 'task' whose text is a complete, self-contained instruction for the fleet's issue loop (include the page URL and worker when CONTEXT.page is set). Propose only what the user asked for or what clearly follows; never claim an action was taken. Each action may carry \"why\": string." + ASK_MAIL_RULE;
@@ -6121,6 +6183,7 @@ async function cmdAnswer(env, text, c) {
   const t0 = Date.now();
   // OWNER-SURFACE-HONESTY-1: the stored facts of any message the question names (public or owner fields, by c.holder).
   c.mail = await mailAskFacts(env, text, c.v, !!c.holder);
+  if (/patent/i.test(text)) c.ipatent = await ipatentUsage(env);
   const messages = [{ role: "system", content: CMD_AI_SYS + "\nCONTEXT: " + cmdAiContext(c) }, { role: "user", content: text }];
   let last = "no model";
   for (const model of ASK_MODELS) {
@@ -6286,6 +6349,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   const from = String(b && b.from || "").slice(0, 500);
   if (text.length < 1 || text.length > 2e3) return ownerJson({ error: "type 1-2000 characters" }, 400);
   const c = await cmdContext(env, from, holder);
+  if (/^(i-?patent|patent)( usage| queries| searches| metrics| stats)?\??$/i.test(text.trim())) return ownerJson({ ok: true, kind: "answer", text: ipatentText(await ipatentUsage(env)), links: [{ label: "iPatent metrics JSON", href: "https://ipatent.qnfo.org/api/metrics" }], holder });
   const p = cmdParse(text, c, holder);
   if (p && p.login) {
     const r = await cmdSendCode(env, request);

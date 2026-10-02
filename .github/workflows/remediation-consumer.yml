@@ -90,7 +90,7 @@ jobs:
           set -uo pipefail
           mkdir -p ci-status
           python3 - <<'PY'
-          import json, pathlib
+          import datetime, json, pathlib
           raw = pathlib.Path("/tmp/remediation-consumer.json")
           try:
               d = json.loads(raw.read_text())
@@ -99,9 +99,21 @@ jobs:
           d["marker"] = "REMEDIATION-CONSUMER-1"
           d["head"] = "${{ github.sha }}"
           d["job_status"] = "${{ job.status }}"
+          # STATUS-THROTTLE-1: when this snapshot was written (a run stamp, ignored by the no-op comparison).
+          d["ts"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
           pathlib.Path("ci-status/remediation-consumer.json").write_text(json.dumps(d, indent=1)[:8000])
           print(json.dumps({k: d.get(k) for k in ("ok", "due", "pass", "fail", "error")}))
           PY
+
+      # STATUS-THROTTLE-1: every run's snapshot is kept here, so batching the git copy below loses no snapshot.
+      - name: Upload the status artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remediation-consumer-status
+          path: ci-status/remediation-consumer.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Commit the status artifact
         if: always()
@@ -112,10 +124,14 @@ jobs:
           git config user.email "bot@qnfo.org"
           # STATUS-NOOP-SKIP-1: a status file that differs only in run stamps (head, spent_ms, verifier) carries no
           # information; committing it only multiplies main pushes and CodeQL runs. Outcomes always still commit.
+          # STATUS-THROTTLE-1 (ACTIONS-QUOTA-1): a count-only change (due, pass, fail, contracts) commits at most once
+          # per 30 min; a change in ok / job_status / error still commits at once. This writer pushed 84 of main's
+          # 648 commits in the 24h to 2026-10-02 09Z, each starting a CodeQL analysis. Every verdict is still a D1
+          # remediation_verifications row (the record the auto-close triggers read); the upload above keeps every run.
           git fetch -q origin main || true
-          if python3 scripts/status_unchanged.py ci-status/remediation-consumer.json --ref origin/main; then
+          if python3 scripts/status_unchanged.py ci-status/remediation-consumer.json --ref origin/main --throttle-min 30; then
             git checkout -- ci-status/remediation-consumer.json 2>/dev/null || true
-            echo "status unchanged apart from run stamps - not committing"
+            echo "status unchanged apart from run stamps, or outcome unchanged within the 30 min window - not committing"
             exit 0
           fi
           git add ci-status/remediation-consumer.json

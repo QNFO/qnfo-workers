@@ -61,7 +61,7 @@ function mkFetch(calls, opts) {
       const uris = new URL(u).searchParams.getAll('uris');
       return J({ posts: uris.map((x, i) => ({ uri: x, likeCount: i + 1, repostCount: 0, replyCount: 2, quoteCount: 0 })) });
     }
-    if (u.startsWith('https://papers.qnfo.org/')) return new Response('<html>paper</html>', { status: 200 });
+    if (u.startsWith('https://papers.qnfo.org/') || u.startsWith('https://ipatent.qnfo.org/')) return new Response('<html>paper</html>', { status: 200 });
     return new Response('nf', { status: 404 });
   };
 }
@@ -236,5 +236,80 @@ function baseState(over) {
   assert.ok(rows.every(l => l.sql.includes('ON CONFLICT(platform, post_id, metric, collected_at)') && l.args[0] === 'bluesky' && /^\d{4}-\d{2}-\d{2}$/.test(l.args[5])));
   assert.ok(calls.every(c => !c.u.includes('createSession')), 'no credential used');
   ok('collectEngagement: dedupes ids from both tables, upserts 4 metrics per post via public AppView');
+}
+// ---------- POST-UTM-SUBDOMAIN-1: every qnfo.org host is tagged, nothing else ----------
+{
+  for (const h of ['qnfo.org', 'www.qnfo.org', 'papers.qnfo.org', 'ipatent.qnfo.org', 'fleet.qnfo.org', 'a.b.qnfo.org']) assert.equal(mod.utmHost(h), true, h);
+  for (const h of ['q08.org', 'doi.org', 'zenodo.org', 'notqnfo.org', 'qnfo.org.evil.com', 'qnfo-social.q08.workers.dev', '']) assert.equal(mod.utmHost(h), false, h);
+  assert.equal(mod.utmTag('https://ipatent.qnfo.org/example', 'bluesky', 'ipatent-example'), 'https://ipatent.qnfo.org/example?utm_source=bluesky&utm_medium=social&utm_campaign=ipatent-example');
+  assert.equal(mod.utmTag('https://doi.org/10.5281/zenodo.1', 'bluesky', 'x'), 'https://doi.org/10.5281/zenodo.1');
+  ok('utmHost: every *.qnfo.org host is tagged (ipatent launch link), other domains untouched');
+}
+// ---------- POST-SENT-TEXT-1: a posted row stores the text as posted, UTM included ----------
+{
+  assert.equal(mod.sentPostsJson([]), null);
+  assert.equal(mod.sentPostsJson(['a', '']), null);
+  assert.equal(mod.sentPostsJson(null), null);
+  assert.equal(mod.sentPostsJson(['a', 'b']), '["a","b"]');
+  ok('sentPostsJson: only a complete list of non-empty texts replaces posts');
+  // drainQueue: the combined posted write carries the tagged text as ?3 (post_uri ?1 and id ?2 unchanged).
+  const calls = [];
+  globalThis.fetch = mkFetch(calls);
+  const st = baseState({ queued: [{ id: 153, slug: 'ipatent-example', title: 'iPatent', posts: JSON.stringify(['Claim: an AI-drafted provisional only protects what its description supports.\nhttps://ipatent.qnfo.org/example']) }] });
+  const { env, log } = mkEnv(st);
+  const r = await mod.drainQueue(env);
+  assert.equal(r.posted, 1);
+  const rec = JSON.parse(calls.find(c => c.u.includes('createRecord')).body).record;
+  assert.ok(rec.text.includes('https://ipatent.qnfo.org/example?utm_source=bluesky&utm_medium=social&utm_campaign=ipatent-example'), 'ipatent link tagged on Bluesky');
+  const upd = log.find(l => l.sql.includes("SET status='posted'") && l.sql.includes('posts=COALESCE(?3, posts)'));
+  assert.ok(upd, 'posted write stores the sent text');
+  assert.equal(upd.args[1], 153);
+  const stored = JSON.parse(upd.args[2]);
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0], rec.text, 'stored text is exactly the posted text');
+  assert.ok(/utm_source=/.test(upd.args[2]), 'a probe on social_threads.posts LIKE %utm_source=% now sees the tag');
+  const cps = calls.filter(c => c.body.includes('createPost'));
+  assert.ok(cps.length === 2 && cps.every(c => c.body.includes('ipatent.qnfo.org/example?utm_source=')), 'Buffer channels get the tagged ipatent link too');
+  ok('drainQueue: posted row stores the tagged text (POST-SENT-TEXT-1), ipatent.qnfo.org tagged on every channel');
+}
+{
+  // /post, /thread and /cross record the tagged text, not the untagged draft.
+  const calls = [];
+  globalThis.fetch = mkFetch(calls);
+  const m = mkEnv(baseState({ posted7: 0 }));
+  const res = await W.fetch(new Request('https://x/post', { method: 'POST', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ text: 'New paper https://papers.qnfo.org/papers/abc/', slug: 'abc' }) }), m.env);
+  assert.equal(res.status, 200);
+  const ins = m.log.find(l => l.sql.includes('INSERT INTO social_threads') && l.sql.includes('post_uri'));
+  assert.ok(JSON.parse(ins.args[2])[0].includes('papers.qnfo.org/papers/abc/?utm_source=bluesky&utm_medium=social&utm_campaign=abc'));
+  const m2 = mkEnv(baseState({ posted7: 0 }));
+  const res2 = await W.fetch(new Request('https://x/thread', { method: 'POST', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ posts: ['First https://qnfo.org/work-with-me', 'Second, no link.'], slug: 'wwm' }) }), m2.env);
+  assert.equal(res2.status, 200);
+  const ins2 = m2.log.find(l => l.sql.includes('INSERT INTO social_threads') && l.sql.includes('post_uri'));
+  const t2 = JSON.parse(ins2.args[2]);
+  assert.equal(t2.length, 2);
+  assert.ok(t2[0].includes('qnfo.org/work-with-me?utm_source=bluesky') && t2[1] === 'Second, no link.');
+  const m3 = mkEnv(baseState({ posted7: 0 }));
+  const res3 = await W.fetch(new Request('https://x/cross', { method: 'POST', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ text: 'A complete sentence about the work.', link: 'https://papers.qnfo.org/papers/abc/', slug: 'abc' }) }), m3.env);
+  assert.equal(res3.status, 200);
+  const ins3 = m3.log.find(l => l.sql.includes('INSERT INTO social_threads'));
+  assert.ok(JSON.parse(ins3.args[2])[0].includes('utm_source=mastodon'), '/cross stores the text Buffer received');
+  ok('/post, /thread and /cross store the tagged text as posted');
+}
+{
+  // drainDissemination: post_text_snippet carries the posted text on success.
+  const calls = [];
+  globalThis.fetch = mkFetch(calls);
+  const st = baseState();
+  const f0 = st.first;
+  st.dq = [{ id: 'd1', paper_slug: 'paper', paper_title: 'A paper', pages_url: 'https://papers.qnfo.org/papers/paper/', channel: 'bluesky' }];
+  st.first = (sql, args) => sql.includes("FROM dissemination_tracker WHERE action='queued'") ? (st.dq.shift() || null) : f0(sql, args);
+  const { env, log } = mkEnv(st);
+  const r = await mod.drainDissemination(env);
+  assert.equal(r.posted, 1);
+  const upd = log.find(l => l.sql.includes("SET action='posted'") && l.sql.includes('post_text_snippet'));
+  assert.ok(upd, 'dissemination posted write stores the text');
+  assert.ok(String(upd.args[2]).includes('papers.qnfo.org/papers/paper/?utm_source=bluesky&utm_medium=social&utm_campaign=paper'));
+  assert.equal(upd.args[3], 'd1');
+  ok('drainDissemination: post_text_snippet records the tagged text as posted');
 }
 console.log('\n' + pass + ' passed');

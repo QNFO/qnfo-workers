@@ -74,20 +74,20 @@ database_id = "d80fdf2a-0a60-45a3-968b-2907ce806dcd"
 binding = "QNFO_INFRA"
 service = "qnfo-infra"
 
+# WORKER-HEALTH-PROBE-AUTH-1 (1.18.2): the worker-health chat probe calls qnfo-ai through this binding. INTERNAL-CALLER-PROPS-1
+# (#1703): qnfo-ai authenticates it by ctx.props.caller, so no copy of ROUTER_AUTH_KEY is needed (the probe's old reference
+# to one is retired with this binding; the secret was never re-set after the 2026-09-26 recreation, #1468). Installed by
+# qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+props = { caller = "qnfo-cloud-ops" }
+
 # v1.13.1 - self-registration to the qnfo-ops service registry (cross-service discovery).
 # Secret: REGISTRY_TOKEN (shared with qnfo-ops /registry/register) - set via wrangler secret put.
 [[services]]
 binding = "QNFO_OPS"
 service = "qnfo-ops"
-
-# HEALTH-KEYLESS-1 (1.18.3): worker-health reaches qnfo-ai's chat route through this binding; qnfo-ai authenticates it
-# by props.caller (INTERNAL-CALLER-PROPS-1, CLAUDE.md #1703) instead of a copy of ROUTER_AUTH_KEY. It funds the
-# retirement of that copy: no code in this worker reads ROUTER_AUTH_KEY or PL_API_KEY any more.
-[[services]]
-binding = "QNFO_AI"
-service = "qnfo-ai"
-environment = "production"
-props = { caller = "qnfo-cloud-ops" }
 
 [[send_email]]
 binding = "SEND_EMAIL"

@@ -30,14 +30,6 @@ name: ci-watchdog
 # Ledger: the job summary and ci-watchdog-summary.json are always produced; when
 # OPS_ROUTER_AUTH_KEY is configured the summary is also POSTed to the fleet
 # ledger so the Cloudflare side sees the same rows.
-#
-# CI-WATCHDOG-RATE-GATE-1 (2026-10-02): every sweep makes about 80 GitHub API calls whatever triggered it, and this
-# workflow fired 175 times in 40 minutes (about 120 of them for pull-request runs), roughly 14,000 calls against the
-# 1,000 per hour the Actions token gets, so CodeQL uploads and every other API user failed with "API rate limit
-# exceeded for installation". Now: only runs on main trigger it (a sweep reads every branch's recent runs anyway),
-# one global concurrency group collapses bursts, and the gate job (scripts/ci_watchdog_gate.py, no API call; the
-# last sweep time lives in the Actions cache) skips the sweep when one finished under 10 minutes ago and the
-# triggering run did not fail. A failure, a dispatch or a 10-minute-old sweep always sweeps.
 
 on:
   workflow_run:
@@ -51,6 +43,8 @@ on:
       - adversarial-workers-guard
       - code-loop-test
     types: [completed]
+    # MAIN-ONLY-FINDINGS-1: a pull-request run's red check belongs to that PR (scripts/ci_watchdog.py skips it), so
+    # it no longer starts a sweep either.
     branches: [main]
   workflow_dispatch:
   repository_dispatch:
@@ -65,41 +59,30 @@ permissions:
   # never pass: an unauthorized probe is not evidence.
   security-events: read
 
+# ACTIONS-QUOTA-1 (2026-10-02): ONE group for the whole repository. The group used to be keyed on the
+# TRIGGERING run's branch, so every PR branch got its own lane and a merge burst ran up to 19 sweeps at
+# once. A sweep reads repository-wide state (all workflows, the newest 100 runs) and never looks at which run
+# triggered it, so parallel sweeps were pure duplicates: measured 2026-10-01/02, 2,031 watchdog runs in 24h,
+# ~745 executed at ~150 REST calls each, ~4,600 calls an hour from the bucket CodeQL's SARIF upload also
+# draws on ("API rate limit exceeded for installation" on PRs 435, 441, 466 and most Push-on-main runs).
+# With one group at most one sweep runs and one waits; a newer trigger replaces the waiting one.
 concurrency:
   group: ci-watchdog
   cancel-in-progress: false
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    outputs:
-      sweep: ${{ steps.decide.outputs.sweep }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          sparse-checkout: scripts/ci_watchdog_gate.py
-          sparse-checkout-cone-mode: false
-
-      - name: Restore the last sweep time
-        uses: actions/cache/restore@v4
-        with:
-          path: .ci-watchdog-last-sweep
-          key: ci-watchdog-last-sweep-${{ github.run_id }}
-          restore-keys: ci-watchdog-last-sweep-
-
-      - name: Decide whether to sweep
-        id: decide
-        env:
-          TRIGGER_EVENT: ${{ github.event_name }}
-          TRIGGER_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          CI_WD_MIN_INTERVAL_MIN: "10"
-        run: python3 scripts/ci_watchdog_gate.py
-
   watch:
-    needs: gate
-    if: needs.gate.outputs.sweep == 'true'
+    # ACTIONS-QUOTA-1: sweep when there is something new to look at. A sweep runs on
+    #   * every dispatch (workflow_dispatch / repository_dispatch);
+    #   * every mirror-sync completion: mirror-sync runs once per push to main, so the periodic sweep keeps
+    #     the cadence of main (it was 4 sweeps per push: mirror-guard, version-compare, deploy-gate, mirror-sync);
+    #   * every watched run on main that did not succeed (failure, timed_out, startup_failure, ...).
+    # A green PR check no longer starts a repository-wide sweep on its own; a failure anywhere in the newest 100
+    # runs is still picked up by the next sweep (6h window, unchanged). A skipped job costs no API call.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.name == 'mirror-sync' ||
+      !contains(fromJSON('["success", "cancelled", "skipped", "neutral"]'), github.event.workflow_run.conclusion)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -120,6 +103,9 @@ jobs:
           # fleet ledger when the ops key is present, and no-ops when it is not,
           # so the watchdog still gates on its own exit code either way.
           OPS_KEY: ${{ secrets.OPS_ROUTER_AUTH_KEY }}
+          # ACTIONS-QUOTA-1: a sweep samples only the workflows that declare a schedule (13 run listings
+          # instead of 80 plus ~65 contents reads). A manual dispatch samples every workflow, as before.
+          CI_WD_FULL_INVENTORY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         run: |
           set +e
           python scripts/ci_watchdog.py | tee /tmp/wd.log
@@ -146,17 +132,6 @@ jobs:
           path: ci-watchdog-summary.json
           if-no-files-found: ignore
           retention-days: 30
-
-      - name: Record the sweep time
-        if: always()
-        run: date -u +%Y-%m-%dT%H:%M:%SZ > .ci-watchdog-last-sweep
-
-      - name: Save the sweep time for the next gate
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .ci-watchdog-last-sweep
-          key: ci-watchdog-last-sweep-${{ github.run_id }}
 
       - name: Fail closed on an unactionable, untracked finding
         if: steps.wd.outputs.rc != '0'

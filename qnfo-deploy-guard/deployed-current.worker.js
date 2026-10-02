@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.17 - deploy lock + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1)
+// qnfo-deploy-guard v1.3.21 - deploy lock + secret lock + work claims + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.20-capability-snapshot";
+var VERSION = "1.3.21-work-claims";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -361,6 +361,108 @@ async function capabilitySnapshot(env, force) {
   try { await env.FLEET_CONFIG.put(CAP_KEY, JSON.stringify(out), { expirationTtl: 604800 }); } catch (e) {}
   return Object.assign({ ran: true }, out);
 }
+function changes(r) { return (r && r.meta && typeof r.meta.changes === "number") ? r.meta.changes : (r && typeof r.changes === "number" ? r.changes : 0); }
+// One D1 deploy_locks lease (deploy locks, secrets:<worker>, work:<key>). Returns [http status, body]. quiet=true records no
+// lock denial (a refused work claim is the claim doing its job, not the deploy contention DEPLOY-LOCK-CONTENTION counts).
+async function acquireLease(env, b, quiet) {
+  var w4 = String(b.worker || "");
+  if (!w4) return [400, { error: "worker required" }];
+  var tn = Number(b.ttl_sec || DEFAULT_TTL); if (!isFinite(tn)) tn = DEFAULT_TTL;
+  var ttl = Math.min(Math.max(tn, 60), MAX_TTL);
+  var now4 = Date.now();
+  // expected_version optimistic-concurrency check (registry-as-truth): reject a deploy that
+  // assumes a stale current version. Enforced only when the worker is registered.
+  if (b.expected_version) {
+    var reg = await auditAll(env, "SELECT version FROM service_registry WHERE service=?1 LIMIT 1", [w4]);
+    var curVer = reg && reg.length ? reg[0].version : null;
+    if (curVer && String(curVer) !== String(b.expected_version)) {
+      return [409, { acquired: false, reason: "version-mismatch", worker: w4, expected_version: String(b.expected_version), current_version: curVer }];
+    }
+  }
+  var actor4 = String(b.actor || b.owner || "unknown");
+  var sid4 = b.session_id ? String(b.session_id) : null;
+  await auditRun(env, "DELETE FROM deploy_locks WHERE (typeof(expires_at) IN ('integer','real') AND expires_at <= ?1) OR (typeof(expires_at)='text' AND datetime(expires_at) < datetime('now'))", [now4]);
+  var raw4 = tok(); var th4 = await sha256hex(raw4);
+  var ins4 = await auditRun(env, "INSERT INTO deploy_locks (worker, token_hash, owner, actor, session_id, since, expires_at, expected_version) SELECT ?1,?2,?3,?4,?5,?6,?7,?8 WHERE NOT EXISTS (SELECT 1 FROM deploy_locks WHERE worker=?1 AND expires_at > ?6)", [w4, th4, String(b.owner || "unknown"), actor4, sid4, now4, now4 + ttl * 1000, b.expected_version || null]);
+  if (ins4 && ins4.ok === false) return [500, { error: "lock_db_unavailable", detail: ins4.error }];
+  if (!changes(ins4)) {
+    var cur = await readLock(env, w4);
+    if (!quiet) { try { await env.FLEET_CONFIG.put(DENY_PREFIX + Date.now() + "-" + tok(), JSON.stringify({ worker: w4, owner: String(b.owner || "unknown"), held_by: cur ? cur.owner : null, at: nowIso() }), { expirationTtl: 3600 }); } catch (e) {} }
+    return [409, { acquired: false, holder: cur ? cur.owner : "unknown", held_by: cur ? cur.owner : "unknown", held_since: cur ? cur.since : null, expires_at: cur ? new Date(cur.expires_at).toISOString() : null }];
+  }
+  return [200, { acquired: true, token: raw4, holder: String(b.owner || "unknown"), expires_at: new Date(now4 + ttl * 1000).toISOString() }];
+}
+async function releaseLease(env, w5, tk) {
+  if (!w5 || !tk) return [400, { error: "worker and token required" }];
+  var th5 = await sha256hex(tk);
+  var del5 = await auditRun(env, "DELETE FROM deploy_locks WHERE worker=?1 AND token_hash=?2", [w5, th5]);
+  if (del5 && del5.ok === false) return [500, { released: false, reason: "lock_db_unavailable" }];
+  if (!changes(del5)) return [409, { released: false, reason: "token mismatch or no lock" }];
+  return [200, { released: true }];
+}
+// WORK-CLAIM-1 (2026-10-02, pillar autonomy): concurrent agent sessions duplicated work three times in one day (two fixes of
+// one JS-verifier root cause, PR 447 and the publish check in PR 441; two fixes of one q08 test, PRs 453 and 456; the
+// qnfo-fleet-dashboard VERSION claimed twice at 1.17.2, 1.17.3, 1.17.8 and 1.18.x across five PRs). A work claim is the same
+// D1 deploy_locks lease as the secret lock, under "work:<key>", where <key> is "issue:<agent_issues id>" or
+// "file:<repo-relative path>". It is advisory: it stops only a session that asks first (CLAUDE.md "Work claims").
+// An issue claim also writes the holder into agent_issues.linked_session (live issues only), which stays as attribution after
+// release; GET /work-locks is the live truth. GET /work-locks is open (OPEN-ACCESS-1): key, holder, since and expiry,
+// never a token or its hash. Acquire with the held token renews (extends) the claim instead of refusing its own holder.
+var WORK_PREFIX = "work:"; var WORK_DEFAULT_TTL = 3600;
+var ISSUE_DONE = ["closed", "resolved", "wontfix", "duplicate", "done"];
+function workKey(k) {
+  var s = String(k == null ? "" : k).trim();
+  var m = /^issue:#?(\d{1,9})$/.exec(s);
+  if (m) return "issue:" + Number(m[1]);
+  m = /^file:(.+)$/.exec(s);
+  if (!m) return null;
+  var p = m[1].replace(/\\/g, "/").replace(/^(?:\.\/|\/)+/, "").replace(/\/{2,}/g, "/").replace(/\/+$/, "");
+  if (!p || p.length > 200 || !/^[A-Za-z0-9._\/-]+$/.test(p) || /(^|\/)\.\.?(\/|$)/.test(p)) return null;
+  return "file:" + p;
+}
+function isoMs(v) { var n = Number(v); return (isFinite(n) && n > 0) ? new Date(n).toISOString() : (v == null ? null : String(v)); }
+var WORK_KEY_ERROR = "key must be issue:<agent_issues id> or file:<repo-relative path>";
+async function workAcquire(env, b) {
+  b = (b && typeof b === "object") ? b : {};
+  var wk = workKey(b.key);
+  if (!wk) return [400, { error: WORK_KEY_ERROR }];
+  var wo = String(b.owner || "").trim().slice(0, 120);
+  if (!wo) return [400, { error: "owner required (your session id)" }];
+  var lk = WORK_PREFIX + wk;
+  var tn = Number(b.ttl_sec || WORK_DEFAULT_TTL); if (!isFinite(tn)) tn = WORK_DEFAULT_TTL;
+  var ttl = Math.min(Math.max(tn, 60), MAX_TTL);
+  if (b.token) {
+    var nowR = Date.now();
+    var up = await auditRun(env, "UPDATE deploy_locks SET expires_at=?1 WHERE worker=?2 AND token_hash=?3 AND typeof(expires_at) IN ('integer','real') AND expires_at > ?4", [nowR + ttl * 1000, lk, await sha256hex(String(b.token)), nowR]);
+    if (changes(up)) {
+      var held = await readLock(env, lk);
+      return [200, { acquired: true, renewed: true, key: wk, token: String(b.token), holder: held ? held.owner : wo, expires_at: new Date(nowR + ttl * 1000).toISOString() }];
+    }
+    // The token no longer holds the claim (expired or reaped): fall through to a fresh acquire, which issues a new token.
+  }
+  var r = await acquireLease(env, { worker: lk, owner: wo, actor: wo, ttl_sec: ttl }, true);
+  var out = Object.assign({ key: wk }, r[1]); delete out.held_by;
+  if (r[0] === 409 && out.held_since != null) { out.since = isoMs(out.held_since); delete out.held_since; }
+  if (r[0] === 200 && wk.indexOf("issue:") === 0) {
+    var iid = Number(wk.slice(6));
+    var ir = await auditAll(env, "SELECT status FROM agent_issues WHERE id=?1", [iid]);
+    var ist = ir.length ? ir[0].status : null; var linked = false;
+    if (ist != null && ISSUE_DONE.indexOf(String(ist).toLowerCase()) < 0) {
+      linked = changes(await auditRun(env, "UPDATE agent_issues SET linked_session=?1 WHERE id=?2", [wo, iid])) > 0;
+    }
+    out.issue = { id: iid, status: ist, linked_session: linked ? wo : null };
+  }
+  return [r[0], out];
+}
+async function workList(env) {
+  var now6 = Date.now(); var rows;
+  try {
+    var st6 = env.AUDIT.prepare("SELECT worker, owner, since, expires_at FROM deploy_locks WHERE substr(worker,1,5)='work:' AND typeof(expires_at) IN ('integer','real') AND expires_at > ?1 ORDER BY expires_at");
+    rows = ((await st6.bind(now6).all()) || {}).results || [];
+  } catch (e) { return [503, { error: "lock_db_unavailable" }]; }
+  var claims = rows.map(function (x) { return { key: String(x.worker).slice(WORK_PREFIX.length), holder: x.owner, since: isoMs(x.since), expires_at: isoMs(x.expires_at), ttl_left_sec: Math.max(0, Math.round((Number(x.expires_at) - now6) / 1000)) }; });
+  return [200, { claims: claims, count: claims.length, now: new Date(now6).toISOString(), rule: "take POST /work-lock/acquire before starting an issue or a worker's file; skip a key another session holds" }];
+}
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(scan(env).catch(function () {})); ctx.waitUntil(capabilitySnapshot(env, false).catch(function () {})); },
   async fetch(request, env, ctx) {
@@ -376,47 +478,29 @@ export default {
       p = "/lock/" + p.slice("/secret-lock/".length);
       request = new Request(url.origin + p, { method: "POST", body: JSON.stringify(sb) });
     }
-    if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: nowIso(), capabilities: ["deploy-lock", "secret-lock", "ledger", "mutation-detector", "cost-watchdog", "capability-snapshot"], limitations: ["D1 lease, not a distributed consensus lock", "detects a mutation only on the next 20-minute scan", "capability snapshot at most every 6 hours (POST /capability-snapshot forces one, 10-minute floor)"] });
+    // WORK-CLAIM-1: POST /work-lock/acquire {key, owner, ttl_sec<=7200[, token to renew]}, POST /work-lock/release {key, token},
+    // GET /work-locks (open; never a token).
+    if (p === "/work-lock/acquire" && request.method === "POST") { var wa = await workAcquire(env, await request.json().catch(function () { return {}; })); return json(wa[1], wa[0]); }
+    if (p === "/work-lock/release" && request.method === "POST") {
+      var wrb = (await request.json().catch(function () { return {}; })) || {}; var wrk = workKey(wrb.key);
+      if (!wrk) return json({ error: WORK_KEY_ERROR }, 400);
+      var wr = await releaseLease(env, WORK_PREFIX + wrk, String(wrb.token || ""));
+      return json(Object.assign({ key: wrk }, wr[1]), wr[0]);
+    }
+    if (p === "/work-locks" && request.method === "GET") { var wl = await workList(env); return json(wl[1], wl[0]); }
+    if (p === "/health") return json({ ok: true, worker: WORKER, version: VERSION, ts: nowIso(), capabilities: ["deploy-lock", "secret-lock", "work-claim", "ledger", "mutation-detector", "cost-watchdog", "capability-snapshot"], limitations: ["D1 lease, not a distributed consensus lock", "work claims are advisory: they stop only a session that asks first", "detects a mutation only on the next 20-minute scan", "capability snapshot at most every 6 hours (POST /capability-snapshot forces one, 10-minute floor)"] });
     if (p === "/report" && request.method === "GET") { var rp = await env.FLEET_CONFIG.get(REPORT_KEY); return json(rp ? JSON.parse(rp) : { ts: null }); }
     if (p === "/locks" && request.method === "GET") { var lr = await auditAll(env, "SELECT worker, owner, since, expires_at, expected_version FROM deploy_locks WHERE expires_at > ?1", [Date.now()]); return json({ locks: lr, now: nowIso() }); }
     if (p.indexOf("/lock/") === 0 && request.method === "GET") { var w3 = decodeURIComponent(p.slice(6)); return json({ worker: w3, lock: await readLock(env, w3), now: nowIso() }); }
     if (p === "/lock/acquire" && request.method === "POST") {
-      var b = await request.json().catch(function () { return {}; }); var w4 = String(b.worker || "");
-      if (!w4) return json({ error: "worker required" }, 400);
-      var ttl = Math.min(Math.max(Number(b.ttl_sec || DEFAULT_TTL), 60), MAX_TTL);
-      var now4 = Date.now();
-      // expected_version optimistic-concurrency check (registry-as-truth): reject a deploy that
-      // assumes a stale current version. Enforced only when the worker is registered.
-      if (b.expected_version) {
-        var reg = await auditAll(env, "SELECT version FROM service_registry WHERE service=?1 LIMIT 1", [w4]);
-        var curVer = reg && reg.length ? reg[0].version : null;
-        if (curVer && String(curVer) !== String(b.expected_version)) {
-          return json({ acquired: false, reason: "version-mismatch", worker: w4, expected_version: String(b.expected_version), current_version: curVer }, 409);
-        }
-      }
-      var actor4 = String(b.actor || b.owner || "unknown");
-      var sid4 = b.session_id ? String(b.session_id) : null;
-      await auditRun(env, "DELETE FROM deploy_locks WHERE (typeof(expires_at) IN ('integer','real') AND expires_at <= ?1) OR (typeof(expires_at)='text' AND datetime(expires_at) < datetime('now'))", [now4]);
-      var raw4 = tok(); var th4 = await sha256hex(raw4);
-      var ins4 = await auditRun(env, "INSERT INTO deploy_locks (worker, token_hash, owner, actor, session_id, since, expires_at, expected_version) SELECT ?1,?2,?3,?4,?5,?6,?7,?8 WHERE NOT EXISTS (SELECT 1 FROM deploy_locks WHERE worker=?1 AND expires_at > ?6)", [w4, th4, String(b.owner || "unknown"), actor4, sid4, now4, now4 + ttl * 1000, b.expected_version || null]);
-      if (ins4 && ins4.ok === false) return json({ error: "lock_db_unavailable", detail: ins4.error }, 500);
-      var ch4 = (ins4 && ins4.meta && typeof ins4.meta.changes === "number") ? ins4.meta.changes : (ins4 && typeof ins4.changes === "number" ? ins4.changes : 0);
-      if (!ch4) {
-        var cur = await readLock(env, w4);
-        try { await env.FLEET_CONFIG.put(DENY_PREFIX + Date.now() + "-" + tok(), JSON.stringify({ worker: w4, owner: String(b.owner || "unknown"), held_by: cur ? cur.owner : null, at: nowIso() }), { expirationTtl: 3600 }); } catch (e) {}
-        return json({ acquired: false, held_by: cur ? cur.owner : "unknown", held_since: cur ? cur.since : null, expires_at: cur ? new Date(cur.expires_at).toISOString() : null }, 409);
-      }
-      return json({ acquired: true, token: raw4, expires_at: new Date(now4 + ttl * 1000).toISOString() });
+      var b = await request.json().catch(function () { return {}; });
+      var la = await acquireLease(env, b, false);
+      return json(la[1], la[0]);
     }
     if (p === "/lock/release" && request.method === "POST") {
-      var b5 = await request.json().catch(function () { return {}; }); var w5 = String(b5.worker || ""); var tk = String(b5.token || "");
-      if (!w5 || !tk) return json({ error: "worker and token required" }, 400);
-      var th5 = await sha256hex(tk);
-      var del5 = await auditRun(env, "DELETE FROM deploy_locks WHERE worker=?1 AND token_hash=?2", [w5, th5]);
-      if (del5 && del5.ok === false) return json({ released: false, reason: "lock_db_unavailable" }, 500);
-      var cd5 = (del5 && del5.meta && typeof del5.meta.changes === "number") ? del5.meta.changes : (del5 && typeof del5.changes === "number" ? del5.changes : 0);
-      if (!cd5) return json({ released: false, reason: "token mismatch or no lock" }, 409);
-      return json({ released: true });
+      var b5 = await request.json().catch(function () { return {}; });
+      var lr5 = await releaseLease(env, String(b5.worker || ""), String(b5.token || ""));
+      return json(lr5[1], lr5[0]);
     }
     if (p === "/ledger" && request.method === "POST") {
       var bl = await request.json().catch(function () { return {}; }); if (!bl.worker) return json({ error: "worker required" }, 400);

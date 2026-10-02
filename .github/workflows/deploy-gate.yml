@@ -164,10 +164,6 @@ jobs:
       # worker per change day, with a heartbeat the watchmaker reads.
       - name: SECRET-CHANGE-WATCH-1 offline suite (qnfo-ops)
         run: node qnfo-ops/secret-watch.test.mjs
-      # HEALTH-KEYLESS-1: qnfo-cloud-ops worker-health sends no key copy (stale since the 2026-10-01 rotation); qnfo-ai is
-      # probed through the QNFO_AI binding (props.caller), personal-api at its keyless /v1/models.
-      - name: HEALTH-KEYLESS-1 offline suite (qnfo-cloud-ops)
-        run: node qnfo-cloud-ops/worker-health.test.mjs
       # GUARD-RCS-CANCELLED-1: a concurrency-cancelled or skipped guard run is not a guard that failed closed.
       - name: GUARD-RCS-CANCELLED-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/guard-rcs.test.mjs
@@ -178,6 +174,12 @@ jobs:
       # ASK-RETRY-1: asks abandoned by a stopped worker are answered again by the cron (bounded), fastest model first.
       - name: ASK-RETRY-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/ask-retry.test.mjs
+      # IPATENT-USAGE-1: iPatent counts searches and drafts by broad topic only (never their text); the dashboard reads them.
+      - name: IPATENT-USAGE-1 offline suites (qnfo-ipatent, qnfo-fleet-dashboard)
+        run: |
+          node qnfo-ipatent/usage.test.mjs
+          node qnfo-ipatent/routes.test.mjs
+          node qnfo-fleet-dashboard/ipatent-usage.test.mjs
       # Q08-REVIEW-2026-10-31 (#1716): the one-shot q08 decision on bot-filtered RUM page views and the cadence cap
       # q08-signal-engine reads (Q08-CADENCE-CAP-1); a deferral never satisfies the remediation probe.
       - name: Q08-REVIEW-2026-10-31 offline suite (qnfo-fleet-dashboard + q08-signal-engine)
@@ -223,12 +225,30 @@ jobs:
         run: node qnfo-social/social-gates.test.mjs
       - name: EMAIL-TRIAGE-D1-1 and ZENODO-UA-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/email-zenodo.test.mjs
+      # WORKER-HEALTH-PROBE-AUTH-1 + GMAIL-TRIAGE-UNCONFIGURED-1 (qnfo-cloud-ops 1.18.2): the qnfo-ai chat probe uses the
+      # props-authenticated QNFO_AI binding, a probe without its credential is skipped (never a 401 false alarm), real
+      # failures still alert, one job-run row per run, and gmail-triage without GMAIL_PASS is skipped rather than an error.
+      - name: WORKER-HEALTH-PROBE-AUTH-1 offline suite (qnfo-cloud-ops)
+        run: node qnfo-cloud-ops/worker-health.test.mjs
+      # COMMAND-EXIT-HONEST-1 (qnfo-containers-pilot 1.0.11): a caller's command that exits non-zero is recorded as warn
+      # with its exit code; a container fault is still container.error with status error.
+      - name: COMMAND-EXIT-HONEST-1 offline suite (qnfo-containers-pilot)
+        run: node qnfo-containers-pilot/command-exit.test.mjs
       - name: Job market, mention radar ledger and events cron offline suite (radar-hub)
         run: node radar-hub/radar-hub.test.mjs
 
       # HANDOFF-CLAIM-SHEET-1 (qnfo-email 2.2.4): every handoffs insert carries the claim_sheet the qnfo-audit trigger requires.
       - name: HANDOFF-CLAIM-SHEET-1 check (qnfo-email)
         run: node qnfo-email/handoff-claim-sheet.test.mjs
+
+      # WORK-CLAIM-1 + CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (qnfo-deploy-guard 1.3.21): work claims, secret leases and deploy
+      # locks share the D1 deploy_locks lease. Acquire, conflict, expiry, wrong-token release, renew, the open read without tokens,
+      # agent_issues.linked_session, and the unchanged deploy and secret paths, against in-memory SQLite.
+      - name: WORK-CLAIM-1 and secret-lock offline suites (qnfo-deploy-guard)
+        run: |
+          set -euo pipefail
+          node --no-warnings qnfo-deploy-guard/work-lock.test.mjs
+          node --no-warnings qnfo-deploy-guard/secret-lock.test.mjs
 
       # INBOUND-SLA-1 (qnfo-email-orchestrator 0.5.0, pillar: reach): every human inbound message gets a fleet action within
       # 72h inside docs/STRATEGY.md section 5. Category routing, no mail to automated or no-reply senders, one holding

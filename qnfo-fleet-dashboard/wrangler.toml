@@ -58,6 +58,12 @@ environment = "production"
 # rotation no longer strands this worker. Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
 props = { caller = "qnfo-fleet-dashboard" }
 
+# IPATENT-USAGE-1 (2026-10-02): iPatent's /api/metrics (page views by source, searches and drafts by topic; no text).
+[[services]]
+binding = "SVC_QNFO_IPATENT"
+service = "qnfo-ipatent"
+environment = "production"
+
 [[services]]
 binding = "SVC_PERSONAL_API"
 service = "personal-api"

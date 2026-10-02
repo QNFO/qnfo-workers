@@ -1,4 +1,4 @@
-// GUARD-RCS-CANCELLED-1 offline suite (qnfo-fleet-dashboard 1.18.7).
+// GUARD-RCS-CANCELLED-1 offline suite (qnfo-fleet-dashboard 1.18.9).
 // Slices guardRunState out of the real worker.js. Proves: a guard's state is its latest run that actually concluded,
 // so a concurrency-cancelled or skipped run never counts as a guard that failed closed (the false METRIC-TRIGGER-361 of
 // 2026-10-02, agent_issues 1797), while a real failure, timeout or startup failure still counts.

@@ -1,4 +1,4 @@
-var VERSION="3.8.4-ask-model";
+var VERSION="3.8.5-pandoc-code";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -409,6 +409,16 @@ function renderMarkdown(md) {
   m = m.replace(/([^\n])[ \t]+(---)[ \t]*(?=\n)/g, "$1\n$2\n");
   m = m.replace(/([^\n|])[ \t]+(#{1,6}[ \t])/g, "$1\n$2");
   var _bt2 = String.fromCharCode(96);
+  // PANDOC-CODE-1 (3.8.5): code exported by pandoc without fences keeps a "[](#cb1-25)" anchor on every line; those runs
+  // are code (their ** is exponentiation, not bold), so they become one fenced block with the anchors removed.
+  m = m.replace(/(?:^\[\]\(#cb\d+-\d+\)[^\n]*(?:\n|$))+/gm, function(run) {
+    return "\n" + _bt2 + _bt2 + _bt2 + "\n" + run.replace(/^\[\]\(#cb\d+-\d+\)/gm, "").replace(/\n*$/, "\n") + _bt2 + _bt2 + _bt2 + "\n";
+  });
+  // HEADING-WRAP-1 (3.8.5): a heading wrapped onto the next line ("# **Appendix A: Formal Proof of Emergent Temporal" /
+  // "dynamics**") left an unclosed ** in the heading and a stray one in the text; the continuation is joined back.
+  m = m.replace(/^(#{1,6}[ \t][^\n]*)\n([^\n#|][^\n]*)$/gm, function(all, h, nx) {
+    return (h.split("**").length - 1) % 2 === 1 && nx.indexOf("**") >= 0 ? h + " " + nx.trim() : all;
+  });
   var _fence = new RegExp(_bt2 + _bt2 + _bt2 + "(\\w*)\\n([\\s\\S]*?)" + _bt2 + _bt2 + _bt2, "g");
   m = m.replace(_fence, function(_, l2, c) {
     mb.push("<pre" + (l2 ? ' class="lang-' + l2 + '"' : "") + "><code>" + esc(c) + "</code></pre>");
