@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.3-frontier-rungs";
+var VERSION = "0.3.4-issue-planner"; // 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -320,8 +320,18 @@ function hunkPatch(path, base, next) {
   const noEol = !fin(base);
   const a = base.split("\n"), b = next.split("\n");
   if (!noEol) { a.pop(); b.pop(); }
-  const ops = lineOps(a, b);
-  if (!ops) return wholeFilePatch(path, base, next);
+  const raw = lineOps(a, b);
+  if (!raw) return wholeFilePatch(path, base, next);
+  // ISSUE-PLANNER-1 / no-EOL append: an unchanged line that is last in one file only (a line appended after a final line that
+  // has no newline) is written as removed + added, as git does, instead of falling back to a whole-file patch.
+  const ops = [];
+  for (let q = 0, x = 0, y = 0; q < raw.length; q++) {
+    const t = raw[q].t;
+    if (noEol && t === " " && (x === a.length - 1) !== (y === b.length - 1)) ops.push({ t: "-", l: raw[q].l }, { t: "+", l: raw[q].l });
+    else ops.push(raw[q]);
+    if (t !== "+") x++;
+    if (t !== "-") y++;
+  }
   const C = 3, hunks = [];
   let i = 0;
   while (i < ops.length) {
@@ -656,6 +666,173 @@ async function intakeIssues(env, maxNew) {
   }
   return { ok: true, created: created };
 }
+// ISSUE-PLANNER-1 (2026-10-02, owner directive: "Filing an issue is not fixing it. Something still has to do the work: the
+// fleet's code agent for code changes it can handle."). The code loop only took issues that carried a hand-written
+// `code-task: repo=.. path=..` line (ISSUE-INTAKE-1), so every breach filed by the metric triggers ended as prose that no
+// machine acted on (measured 2026-10-02: 0 of 37 enabled triggers carry a code-task line; the loop has run 5 tasks in its
+// life, 2 of them real code). This planner is the missing first link: each cron tick it takes at most one open issue
+// without a code-task line, from a trusted source, and asks a model whether ONE edit in ONE worker.js fixes it.
+//   yes -> one queued code task (goal "[issue #N] ...", verbatim anchor checked against the file), and the existing chain
+//          does the rest: propose -> verify -> publish -> qnfo-fleet-control opens, checks, merges, deploys, verifies,
+//          reverts on failure;
+//   no  -> recorded with the reason in issue_plans and not asked again for PLAN_RECHECK_DAYS.
+// Guards: trusted issue sources only (the same provenance the merge runner enforces), no security/governance/outreach
+// issues, no secrets/caps/deletions in the text, never a control-plane worker, at most PLAN_DAILY_CAP plans a day and at
+// most PLAN_WIP unfinished code tasks in flight. Nothing is inferred into a merge: every change still passes every gate.
+const PLAN_MODEL_DEFAULT = "@cf/zai-org/glm-5.3-flash";
+const PLAN_DAILY_CAP = 8;
+const PLAN_WIP = 3;
+const PLAN_RECHECK_DAYS = 7;
+const PLAN_MIN_AGE_MS = 15 * 60 * 1000;
+const PLAN_SNIPPET_CHARS = 14000;
+const PLAN_FILE_MAX = 900000;
+// Mirrors qnfo-fleet-control CM_DENY (EVOLVE_DENY + the code loop): workers that never auto-merge are never planned.
+const PLAN_DENY_WORKERS = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot", "qnfo-gateway", "qnfo-ai", "qnfo-autonomy-scorer", "qnfo-code-orchestrator", "qnfo-code-agent"];
+const PLAN_DENY_CATEGORY = /^(security|governance|outreach|legal|finance|identity)$/i;
+const PLAN_DENY_TEXT = /\b(secret|credential|password|api[ _-]?key|private key|raise (the |a )?cap|increase (the |a )?cap|delete (all|every|the) |drop table|rotate|revoke)\b/i;
+// Issue sources whose text may become code (the merge runner's trusted list, plus the fleet's own metric triggers).
+const PLAN_TRUSTED = [
+  { src: "qnfo-fleet-dashboard:owner-request", title: "OWNER-TASK-" },
+  { src: "qnfo-fleet-dashboard:owner-request", title: "OWNER-NOTE-" },
+  { src: "qnfo-fleet-control", title: "METRIC-TRIGGER-" },
+  { src: "claude-session", prefix: true },
+  { src: "claude-code-session", prefix: true }
+];
+function planTrusted(source, title) {
+  const s = String(source || ""), t = String(title || "");
+  return PLAN_TRUSTED.some(function (r) { return (r.prefix ? s.indexOf(r.src) === 0 : s === r.src) && (!r.title || t.indexOf(r.title) === 0); });
+}
+const _planDbs = new WeakSet();
+async function ensurePlanSchema(env) {
+  if (_planDbs.has(env.AUDIT_DB)) return;
+  await env.AUDIT_DB.prepare("CREATE TABLE IF NOT EXISTS issue_plans (issue_id INTEGER PRIMARY KEY, planned_at TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT, task_id TEXT, path TEXT, model TEXT, attempts INTEGER DEFAULT 1)").run();
+  _planDbs.add(env.AUDIT_DB);
+}
+// Words that locate the code: tags like Q08-VOTE-CUTOFF-1, camelCase / snake_case identifiers, routes, quoted literals.
+const PLAN_STOP = new Set(["agent_issues", "issue_triage", "close_evidence", "metric_registry", "definition", "analytics_metric_triggers", "analytics_dash_meta", "code_tasks"]);
+function planKeywords(text) {
+  const t = String(text || ""), out = [];
+  const add = function (w) { w = String(w || "").trim(); if (w.length >= 5 && w.length <= 80 && !PLAN_STOP.has(w) && out.indexOf(w) < 0) out.push(w); };
+  (t.match(/\/api\/[A-Za-z0-9_\/-]+/g) || []).forEach(add);
+  (t.match(/\b[a-z][a-z0-9]*(?:[A-Z][a-z0-9]+)+\b/g) || []).forEach(add);
+  (t.match(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g) || []).forEach(add);
+  (t.match(/\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\b/g) || []).forEach(function (w) { if (w.indexOf("METRIC-TRIGGER") !== 0) add(w); });
+  (t.match(/"([^"\n]{5,60})"/g) || []).forEach(function (q) { add(q.slice(1, -1)); });
+  return out.slice(0, 14);
+}
+// Which worker the issue is about: names that appear in the text, in order of appearance; the trigger's owner counts.
+function planWorkers(text, names) {
+  const t = String(text || ""), hits = [];
+  names.forEach(function (n) { const i = t.indexOf(n); if (i >= 0) hits.push({ n: n, i: i }); });
+  // a longer name that contains a shorter one wins at the same position (qnfo-ai-search over qnfo-ai)
+  hits.sort(function (a, b) { return a.i - b.i || b.n.length - a.n.length; });
+  const out = [];
+  hits.forEach(function (h) { if (out.indexOf(h.n) < 0 && !hits.some(function (o) { return o.n !== h.n && o.n.indexOf(h.n) >= 0 && t.indexOf(o.n) === h.i; })) out.push(h.n); });
+  return out;
+}
+// Windows of the file around keyword hits (verbatim lines, so an anchor can be copied); an outline when nothing hits.
+function planSnippets(file, keywords) {
+  const lines = String(file).split("\n"), hit = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (keywords.some(function (k) { return l.indexOf(k) >= 0; })) hit.push(i);
+  }
+  let parts = [];
+  if (hit.length) {
+    const win = [];
+    hit.forEach(function (i) {
+      const s = Math.max(0, i - 15), e = Math.min(lines.length, i + 16);
+      if (win.length && s <= win[win.length - 1][1]) win[win.length - 1][1] = Math.max(win[win.length - 1][1], e); else win.push([s, e]);
+    });
+    parts = win.map(function (w) { return lines.slice(w[0], w[1]).map(function (l) { return l.length > 400 ? l.slice(0, 400) + " ...[line cut]" : l; }).join("\n"); });
+  } else {
+    parts = [lines.filter(function (l) { return /^(async )?function |^(var|const|let) [A-Z_]{3,} =|^\s*if \(path === |^\s*if \(p === |^\s*async (fetch|scheduled)\(/.test(l); }).map(function (l) { return l.slice(0, 200); }).join("\n")];
+  }
+  let out = "", n = 0;
+  for (const p of parts) {
+    if (out.length + p.length + 8 > PLAN_SNIPPET_CHARS) break;
+    out += (n++ ? "\n----\n" : "") + p;
+  }
+  return { text: out, hits: hit.length };
+}
+function planParse(raw) {
+  const s = String(raw || "").replace(/<think>[\s\S]*?<\/think>/g, "");
+  const a = s.indexOf("{"), b = s.lastIndexOf("}");
+  if (a < 0 || b <= a) return null;
+  try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { return null; }
+}
+function countOccur(hay, needle) {
+  let n = 0, i = 0;
+  if (!needle) return 0;
+  while ((i = hay.indexOf(needle, i)) >= 0) { n++; i += needle.length; }
+  return n;
+}
+const PLAN_SYS = "You plan code changes for an autonomous code loop that edits ONE file of a Cloudflare Worker fleet. You get one fleet issue and SNIPPETS (verbatim lines) of the worker it names. Decide whether a single, small, self-contained edit to this one worker.js fixes the issue or the measurable part of it. Reply with ONE JSON object and nothing else: {\"code_fixable\": boolean, \"reason\": string, \"anchor\": string, \"goal\": string}. If code_fixable: anchor is ONE complete line copied character for character from SNIPPETS, unique, at or just before where the edit goes (copy it exactly, at most 200 characters); goal is a precise instruction for an editor who sees only about 200 lines around the anchor: what to add or change, the exact behaviour, that nothing else changes, ASCII only, keep existing style. Answer code_fixable=false (with the reason) when the fix is a data, config or D1 change, an owner decision, work in an external account, needs several files or workers, needs code you cannot see in SNIPPETS, or touches secrets, caps, spending limits or deletions.";
+// One plan per call. Returns { planned, outcome, ... } and never throws to the caller of tick().
+async function planIssues(env, opts) {
+  opts = opts || {};
+  await ensureSchema(env);
+  await ensurePlanSchema(env);
+  const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+  const used = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM issue_plans WHERE planned_at >= ?").bind(today).first();
+  if (used && Number(used.n) >= PLAN_DAILY_CAP) return { planned: false, why: "daily cap " + PLAN_DAILY_CAP };
+  const wip = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM code_tasks WHERE status NOT IN ('merged','closed','publish_failed','needs_human','failed','reverted')").first();
+  if (wip && Number(wip.n) >= PLAN_WIP) return { planned: false, why: "work in progress " + wip.n + " >= " + PLAN_WIP };
+  let rows;
+  try {
+    rows = (await env.AUDIT_DB.prepare(
+      "SELECT a.id, a.title, a.description, a.category, a.priority, a.source, a.created_at FROM agent_issues a LEFT JOIN issue_plans p ON p.issue_id = a.id " +
+      "WHERE a.status = 'open' AND COALESCE(a.description, '') NOT LIKE '%code-task:%' AND (p.issue_id IS NULL OR (p.outcome <> 'queued' AND p.planned_at < ?)) " +
+      "ORDER BY CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, a.id LIMIT 40"
+    ).bind(new Date(now - PLAN_RECHECK_DAYS * 864e5).toISOString()).all()).results || [];
+  } catch (e) { return { planned: false, why: "no agent_issues table" }; }
+  const record = async function (id, outcome, detail, taskId, path, model) {
+    await env.AUDIT_DB.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome, detail, task_id, path, model) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(issue_id) DO UPDATE SET planned_at = ?2, outcome = ?3, detail = ?4, task_id = ?5, path = ?6, model = ?7, attempts = attempts + 1")
+      .bind(id, new Date().toISOString(), outcome, String(detail || "").slice(0, 600), taskId || null, path || null, model || null).run();
+    await audit(env, "code-task.plan", "[issue #" + id + "] " + outcome + ": " + String(detail || "").slice(0, 200), { issue: id, task: taskId || null }, outcome === "queued" ? "ok" : "skip");
+  };
+  let names = [];
+  try {
+    names = ((await env.AUDIT_DB.prepare("SELECT service FROM service_registry WHERE state = 'live' AND kind = 'worker'").all()).results || [])
+      .map(function (r) { return String(r.service || ""); }).filter(function (n) { return /^[a-z0-9][a-z0-9-]{1,60}$/.test(n) && PLAN_DENY_WORKERS.indexOf(n) < 0; });
+  } catch (e) { names = []; }
+  for (const r of rows) {
+    const created = typeof r.created_at === "number" ? r.created_at : Number(r.created_at) || Date.parse(String(r.created_at || "")) || 0;
+    if (created && now - created < PLAN_MIN_AGE_MS) continue;
+    if (!planTrusted(r.source, r.title)) continue;                      // untrusted text never becomes code
+    const text = String(r.title || "") + "\n" + String(r.description || "");
+    if (PLAN_DENY_CATEGORY.test(String(r.category || ""))) { await record(r.id, "refused", "category " + r.category + " is never planned automatically"); return { planned: true, issue: r.id, outcome: "refused" }; }
+    if (PLAN_DENY_TEXT.test(text)) { await record(r.id, "refused", "the issue mentions secrets, caps or deletions"); return { planned: true, issue: r.id, outcome: "refused" }; }
+    const seen = await env.AUDIT_DB.prepare("SELECT id FROM code_tasks WHERE goal LIKE ? LIMIT 1").bind("[issue #" + r.id + "]%").first();
+    if (seen) { await record(r.id, "queued", "a code task already exists", seen.id); continue; }
+    const workers = planWorkers(text, names);
+    if (!workers.length) { await record(r.id, "not-code", "the issue names no worker the code loop may change"); return { planned: true, issue: r.id, outcome: "not-code" }; }
+    const worker = workers[0], path = worker + "/worker.js";
+    const f = await readRepoFile(env, "qnfo-workers", path, PLAN_FILE_MAX + 1);
+    if (!f || !f.ok || f.truncated) { await record(r.id, "not-code", "could not read " + path + (f && f.error ? ": " + f.error : ""), null, path); return { planned: true, issue: r.id, outcome: "not-code" }; }
+    const file = String(f.content || "");
+    const sn = planSnippets(file, planKeywords(text));
+    const model = env.PLAN_MODEL || PLAN_MODEL_DEFAULT;
+    let raw = "";
+    try {
+      raw = await ai(env, model, [{ role: "system", content: PLAN_SYS }, { role: "user", content: "ISSUE #" + r.id + " (" + (r.category || "?") + ", " + (r.priority || "?") + ")\nTITLE: " + String(r.title || "").slice(0, 300) + "\nDESCRIPTION:\n" + String(r.description || "").slice(0, 3000) + "\n\nWORKER: " + worker + " (file " + path + ", " + file.split("\n").length + " lines; snippets " + (sn.hits ? "around " + sn.hits + " keyword hits" : "are an outline: no keyword hit") + ")\nSNIPPETS:\n" + sn.text }]);
+    } catch (e) { await record(r.id, "error", "model call failed: " + String((e && e.message) || e).slice(0, 160), null, path, model); return { planned: true, issue: r.id, outcome: "error" }; }
+    const p = planParse(raw);
+    if (!p || typeof p.code_fixable !== "boolean") { await record(r.id, "invalid", "unparseable plan: " + String(raw).slice(0, 160), null, path, model); return { planned: true, issue: r.id, outcome: "invalid" }; }
+    if (!p.code_fixable) { await record(r.id, "not-code", String(p.reason || "model: not a single-file code change"), null, path, model); return { planned: true, issue: r.id, outcome: "not-code" }; }
+    let anchor = String(p.anchor || "").replace(/\s+$/, "");
+    if (anchor && countOccur(file, anchor) !== 1) anchor = anchor.trim();
+    const goal = String(p.goal || "").trim();
+    if (!anchor || anchor.length > MAX_ANCHOR_CHARS || countOccur(file, anchor) !== 1) { await record(r.id, "invalid", "anchor is not one verbatim, unique line of " + path + ": " + anchor.slice(0, 120), null, path, model); return { planned: true, issue: r.id, outcome: "invalid" }; }
+    if (goal.length < 40 || PLAN_DENY_TEXT.test(goal)) { await record(r.id, "invalid", "goal too short or touches secrets/caps/deletions", null, path, model); return { planned: true, issue: r.id, outcome: "invalid" }; }
+    const res = await enqueue(env, { repo: "qnfo-workers", path: path, anchor: anchor, goal: ("[issue #" + r.id + "] " + String(r.title || "").slice(0, 160) + "\n" + goal + "\n(planned by ISSUE-PLANNER-1 from the issue; the issue holds the definition of done)").slice(0, 2000) });
+    if (!res.ok) { await record(r.id, "invalid", "enqueue refused: " + res.error, null, path, model); return { planned: true, issue: r.id, outcome: "invalid" }; }
+    await record(r.id, "queued", String(p.reason || "single-file change").slice(0, 300), res.id, path, model);
+    return { planned: true, issue: r.id, outcome: "queued", task: res.id, path: path };
+  }
+  return { planned: false, why: "no plannable issue" };
+}
 // Runs steps until the budget or step cap is hit. Called by cron and by POST /v1/tick.
 async function tick(env, opts) {
   await ensureSchema(env);
@@ -670,7 +847,10 @@ async function tick(env, opts) {
     const res = await stepTask(env, task);
     done.push({ id: task.id, step: task.step, ok: res.ok, error: res.error || null });
   }
-  return { ok: true, steps: done.length, done: done };
+  // ISSUE-PLANNER-1: after the steps, turn at most one prose issue into a code task (or record why not).
+  let plan = null;
+  if (!opts || opts.plan !== false) { try { plan = await planIssues(env); } catch (e) { plan = { planned: false, error: String((e && e.message) || e).slice(0, 200) }; await audit(env, "code-task.plan-error", plan.error, null, "error"); } }
+  return { ok: true, steps: done.length, done: done, plan: plan };
 }
 async function handleV1(req, env, url) {
   if (!env.AUDIT_DB) return json({ ok: false, error: "AUDIT_DB binding missing" }, 503);
@@ -695,6 +875,11 @@ async function handleV1(req, env, url) {
       return r ? json({ ok: true, task: pub(r) }) : json({ ok: false, error: "not found" }, 404);
     }
     if (p === "/v1/probe/dynamic-cpu" && req.method === "POST") return json(await probeDynamicCpu(env));
+    if (p === "/v1/plan" && req.method === "POST") return json(await planIssues(env));
+    if (p === "/v1/plans" && req.method === "GET") {
+      await ensurePlanSchema(env);
+      return json({ ok: true, plans: (await env.AUDIT_DB.prepare("SELECT * FROM issue_plans ORDER BY planned_at DESC LIMIT 50").all()).results || [] });
+    }
     if (p === "/v1/tick" && req.method === "POST") {
       const b = await req.json().catch(function () { return {}; });
       return json(await tick(env, b));
@@ -709,7 +894,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["orchestrator", "github-read", "container-exec", "server-side", "task-loop", "model-ladder", "pr-gated", "patch-mode"], limitations: ["every route except /health needs ORCH_TOKEN", "changes ship only as pull requests: commits to main or master are refused, and in pull mode a workflow opens the PR", "the task loop runs on the */10 cron with a 20-second budget and at most 8 steps per tick", "files over 60000 characters need a code-anchor line (patch mode, pull mode only)", "verifies py, json, md and txt; js and mjs only while the platform-enforced Dynamic Workers check is on (see js_verify)"],
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["orchestrator", "github-read", "container-exec", "server-side", "task-loop", "model-ladder", "pr-gated", "patch-mode", "issue-planner"], limitations: ["every route except /health needs ORCH_TOKEN", "changes ship only as pull requests: commits to main or master are refused, and in pull mode a workflow opens the PR", "the task loop runs on the */10 cron with a 20-second budget and at most 8 steps per tick", "ISSUE-PLANNER-1 turns at most one open issue per tick (8 a day, at most 3 unfinished tasks in flight) into a code task, only from trusted sources and never for security, governance or outreach issues, secrets, caps or deletions, or a control-plane worker", "files over 60000 characters need a code-anchor line (patch mode, pull mode only)", "verifies py, json, md and txt; js and mjs only while the platform-enforced Dynamic Workers check is on (see js_verify)"],
         verifiers: VERIFIABLE.concat((await jsVerifyOn(env)) ? ["js", "mjs"] : []), js_verify: env.JS_VERIFY === "dynamic" ? "dynamic" : env.JS_VERIFY === "auto" ? ((await jsVerifyOn(env)) ? "auto-on" : "auto-off") : "off", patch_mode: true, ladder: ladder(env), bindings: { ai: !!env.AI, audit_db: !!env.AUDIT_DB, container: !!env.PY_CONTAINER } });
     }
     if (!(await authed(env, req))) return json({ ok: false, error: "unauthorized (ORCH_TOKEN required)" }, 401);

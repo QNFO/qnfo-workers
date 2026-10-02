@@ -18,7 +18,7 @@ const ca = src.indexOf("// ---- CHARTER-LOOP-1:BEGIN"), cb = src.indexOf("// ---
 if (ca < 0 || cb < 0) { console.error("FAIL charter block markers missing"); console.log("1 failed"); process.exit(1); }
 const sandbox = { fetch: async () => { throw new Error("offline"); }, AbortSignal, VERSION: "test", timedFetch: null, b64encode: null, sha256: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, isFinite, TextDecoder, atob, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(ca, cb + "// ---- CHARTER-LOOP-1:END ----".length) + "\n" + src.slice(a, b + END.length) + "\n__export = { improvementEvaluate, improvementLoopTick, ilDirection, ilIssueMetric, IL_SELF_METRICS, ilSurfaceValues, IL_SURFACES };", sandbox, { filename: "improvement-block.js" });
+vm.runInContext(src.slice(ca, cb + "// ---- CHARTER-LOOP-1:END ----".length) + "\n" + src.slice(a, b + END.length) + "\n__export = { improvementEvaluate, improvementLoopTick, ilDirection, ilIssueMetric, IL_SELF_METRICS, ilSurfaceValues, IL_SURFACES, ilRunRate, IL_RUN_RATE_METRIC };", sandbox, { filename: "improvement-block.js" });
 const I = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -126,6 +126,17 @@ eq(I.ilSurfaceValues(ip, { windows: { "7d": { views_human: null, views_error: "x
 eq(I.ilSurfaceValues(ip, null).length, 0, "unreadable surface writes nothing");
 eq(I.ilDirection("maximize (trended by IMPROVEMENT-LOOP-1; pillar reach)"), "up", "surface target trends upward");
 
+// fleet run-rate: full days only, free allocation subtracted, router adds, unknown is null
+eq(I.ilRunRate([], [], "2026-10-02T07:00:00Z"), null, "no data: null");
+eq(I.ilRunRate([{ day: "2026-10-02", neurons: 60000 }], [], "2026-10-02T07:00:00Z"), null, "today's partial day is not a full day");
+let rr = I.ilRunRate([{ day: "2026-10-01", neurons: 133228 }, { day: "2026-10-02", neurons: 60287 }], [{ day: "2026-10-01", usd: 0.02 }], "2026-10-02T07:00:00Z");
+eq(rr.days, 1, "one full day");
+eq(rr.workers_ai_usd_30d, 40.67, "(133228 - 10000) x 0.011/1k x 30");
+eq(rr.usd_30d, 41.27, "plus router 0.02/day x 30");
+rr = I.ilRunRate([{ day: "2026-09-30", neurons: 5000 }, { day: "2026-10-01", neurons: 9000 }], [], "2026-10-02");
+eq(rr.usd_30d, 0, "under the free allocation costs nothing");
+eq(I.ilDirection(I.IL_RUN_RATE_METRIC.target), "down", "run-rate target is lower-is-better");
+
 // self metrics declare targets and triggers the trigger loop can read
 eq(I.IL_SELF_METRICS.length, 3, "three self metrics");
 eq(I.IL_SELF_METRICS.filter((m) => m.trigger).length, 2, "two self triggers");
@@ -177,7 +188,7 @@ CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_is
   eq(one("SELECT COUNT(*) n FROM analytics_metric_triggers WHERE notes='seeded by IMPROVEMENT-LOOP-1'").n, 2, "self triggers seeded");
   t = await I.improvementLoopTick(env);
   eq(one("SELECT COUNT(*) n FROM metric_history").n, 2, "same-day tick upserts, never duplicates");
-  eq(one("SELECT COUNT(*) n FROM analytics_metric_triggers").n, 2, "seeds are idempotent");
+  eq(one("SELECT COUNT(*) n FROM analytics_metric_triggers").n, 3, "seeds are idempotent (two self triggers + the run-rate trigger)");
 
   // backfill 13 earlier days: pageviews fell 40% week on week, cost fell 30%
   const ins = db.prepare("INSERT OR REPLACE INTO metric_history (metric, day, value, meets, target, ts) VALUES (?, ?, ?, ?, '', '')");

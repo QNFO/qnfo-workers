@@ -129,6 +129,10 @@ jobs:
         run: node qnfo-gateway/work-with-me.test.mjs
       - name: WORK-WITH-ME-METRIC-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/work-with-me.test.mjs
+      # ASK-LOOP-1: ask.qwav.tech measures, evaluates, tunes and dispatches its own fixes (qnfo-ai-search). The suite drives
+      # the real handler and cron with stubbed AI Search, gateway, idea-hub and Workers AI over in-memory SQLite.
+      - name: ASK-LOOP-1 offline suite (qnfo-ai-search)
+        run: node qnfo-ai-search/ask-loop.test.mjs
       # CODE-TASK-MERGE-RUNNER-1: qnfo-fleet-control merges code-loop PRs itself. The suite replays the merge decision (every
       # refusal), the CI kick, merge, deploy and live verification and the inverse-patch revert against a scripted GitHub and
       # an in-memory D1 (node:sqlite, so it runs here after the Node 22 switch).

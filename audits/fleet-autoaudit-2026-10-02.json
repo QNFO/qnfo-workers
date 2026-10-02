@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 06:53:42",
+  "audited_at": "2026-10-02 07:05:43",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.2-hunk-no-eol",
+        "version": "0.3.3-frontier-rungs",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -487,17 +487,17 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.88-surface-metrics",
+        "version": "0.4.89-act-bridge",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.17.1-watchmaker-improvement-loop",
+        "version": "1.17.2-work-with-me-metric",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.7.26-ipatent-link",
+        "version": "3.7.27-work-with-me",
         "worker": "qnfo-gateway"
       },
       {
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.2-hunk-no-eol",
+      "before": "0.3.3-frontier-rungs",
       "http": 200,
-      "live": "0.3.2-hunk-no-eol",
+      "live": "0.3.3-frontier-rungs",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.88-surface-metrics",
+      "before": "0.4.89-act-bridge",
       "http": 200,
-      "live": "0.4.88-surface-metrics",
+      "live": "0.4.89-act-bridge",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.17.1-watchmaker-improvement-loop",
+      "before": "1.17.2-work-with-me-metric",
       "http": 200,
-      "live": "1.17.1-watchmaker-improvement-loop",
+      "live": "1.17.2-work-with-me-metric",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.26-ipatent-link",
+      "before": "3.7.27-work-with-me",
       "http": 200,
-      "live": "3.7.26-ipatent-link",
+      "live": "3.7.27-work-with-me",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"

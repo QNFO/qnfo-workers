@@ -62,6 +62,8 @@ jobs:
           node --check qnfo-code-orchestrator/worker.js
           node --no-warnings qnfo-code-orchestrator/test-loop.mjs
           node --no-warnings qnfo-code-orchestrator/test-hunk.mjs
+          node --no-warnings qnfo-code-orchestrator/planner.test.mjs
+          node --no-warnings qnfo-code-orchestrator/no-eol.test.mjs
           python3 scripts/mirror-guard.py
 
       - name: Assert required bindings are declared
