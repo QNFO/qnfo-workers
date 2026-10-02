@@ -99,6 +99,7 @@ ok(typeof OPT_OUT === "string" && /stop/i.test(OPT_OUT), "OUTREACH_OPT_OUT is a 
   ok(t.sent.length === 8, "shared daily cap: exactly 8 mails (got " + t.sent.length + ")");
   ok(r.status === "capped", "a cap-limited drain reports capped (got " + r.status + ")");
   ok(t.sent.every((m) => String(m.text).includes(OPT_OUT)), "every first mail carries the opt-out line");
+  ok(t.sent.every((m) => /an independent research imprint/.test(m.text) && /\bJPCUB\b/.test(m.text) && !/research collective|\bJPCub\b/i.test(m.text.replace(/JPCUB/g, ""))), "every first mail uses the STRATEGY 2.1 imprint label and spells JPCUB (template v2)");
   ok(t.sent.every((m) => !isRe(m.subject)), "no first mail subject starts with Re:");
   ok(!to.includes("opted@uni-b.edu") && qStatus(t, "opted@uni-b.edu") === "skipped-suppressed", "email_suppression is honoured");
   ok(!to.includes("held@uni-c.edu") && qStatus(t, "held@uni-c.edu") === "skipped-suppressed", "qnfo-outreach contacts.suppress is honoured");

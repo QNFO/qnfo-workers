@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.7, 2026-10-02 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5; 1.6: funder replies watched by the fleet, applications use the qnfo.org address, section 5; 1.7: the fleet measures and improves its own effectiveness, the distribution reward it can actually measure, and inbound mail answered within 72h, section 6.4). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.7, 2026-10-02 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5; 1.6: funder replies watched by the fleet, applications use the qnfo.org address, section 5; 1.7: the fleet measures and improves its own effectiveness: the distribution and outreach learners, the reward they can actually measure, and inbound mail answered within 72h, section 6.4). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -284,8 +284,13 @@ Baselines are set from the first full week of ingested data; targets are in sect
 - **Search loop (weekly):** pages with high search impressions and low CTR get a rewritten title and description; pages ranked
   8-20 get internal links and a short FAQ; each change is logged and compared over 28 days.
 - **Content loop (monthly):** topics that combine search demand and engagement choose the next explainer for a selected work.
-- **Outreach loop (weekly):** reply rate by segment and template moves the daily cap toward the segments that answer; any
-  segment under 1% after 50 sends stops.
+- **Outreach loop (daily, OUTREACH-LEARNER-1, qnfo-cloud-ops 1.18.0):** six segments, paper topic (energy, QEC, other)
+  by recipient type (institutional, personal). Thompson sampling on positive replies matched to our own sends chooses who
+  takes each slot under the unchanged caps (8 a day, 3 per domain); it never raises them. Any segment under 1% after 50
+  sends stops, and `ops_config outreach_learner_resume:<segment>` resumes it. There is one first-contact template (v2 from
+  2026-10-02, recorded per send), so template is not yet a dimension. Metrics `outreach_reply_rate_30d` (trigger under 2%)
+  and `warm_conversations_30d` (trigger under 2); kill switch `ops_config.outreach_learner_enabled`. The daily "sent as
+  you" digest goes through the `SEND_EMAIL` binding to rowan.quni@qnfo.org.
 - **Integrity:** bot-quality flags exclude automated traffic from every KPI; no metric is ever optimised by buying
   attention or by volume.
 - **Self-improvement (owner directive 2026-10-02: "automatically measure and improve internal and external performance
