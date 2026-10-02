@@ -1,53 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@8359cb75b80a",
- "due": 5,
- "pass": 1,
- "fail": 4,
+ "verifier": "remediation-consumer@2f88241d93e2",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "predicate-set-incomplete",
-   "issue_id": 1282,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "55",
-   "written": true
-  },
-  {
-   "class": "cron-registry-drift",
-   "issue_id": 1494,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1726",
-   "issue_id": 1726,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "4",
-   "written": true
-  },
-  {
-   "class": "issue-1700",
-   "issue_id": 1700,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "19",
-   "written": true
-  },
-  {
-   "class": "issue-1713",
-   "issue_id": 1713,
-   "verdict": "fail",
-   "expected": "linkedin-connected+buffer-id",
-   "observed": "linkedin-rows=1,linkedin-buffer-posts=0",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -64,7 +23,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 14034,
- "head": "8359cb75b80a9979cf3acca4642956d962c905db",
+ "spent_ms": 1749,
+ "head": "2f88241d93e296179f684d66fa50cc2e1464d5f7",
  "job_status": "success"
 }
