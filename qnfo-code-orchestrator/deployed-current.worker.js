@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.7-self-repair"; // 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.8-verify-fail-closed"; // 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -525,8 +525,16 @@ async function jsSyntaxCheck(env, src) {
   const msg = String((err && err.message) || err);
   if (msg === "DYNAMIC_TIMEOUT") return { verdict: "fail", error: "candidate did not finish starting within " + DYN_TIMEOUT_MS + "ms (top-level code spins?)" };
   if (/SyntaxError/.test(msg)) return { verdict: "fail", error: msg.replace(/\s+/g, " ").slice(0, 300) };
-  return { verdict: "ok" }; // it parsed; a later load/runtime error says nothing about syntax
+  // JS-VERIFY-FAIL-CLOSED-1 (2026-10-02, GitHub #445): "anything else => syntax OK" let a real syntax error through
+  // (ct_4c0lf1nu36lp6g, personal-companion/worker.js:934, unescaped quotes; deploy-gate caught it). Only errors that can
+  // only happen AFTER the module parsed count as a pass; any other start failure (CPU or size limits, platform errors)
+  // means the syntax was not verified, so the task stops for review instead of becoming a PR. The message is kept
+  // (verify_note, audit code-task.verify-unknown) so the allowlist can learn from what the platform really says.
+  if (JS_PARSED_THEN_FAILED.test(msg)) return { verdict: "ok", note: msg.replace(/\s+/g, " ").slice(0, 200) };
+  await audit(env, "code-task.verify-unknown", msg.replace(/\s+/g, " ").slice(0, 400), null, "error");
+  return { verdict: "no-verifier", error: "the JS verifier could not confirm the syntax (start failed with: " + msg.replace(/\s+/g, " ").slice(0, 200) + ")" };
 }
+const JS_PARSED_THEN_FAILED = /\b(ReferenceError|TypeError|RangeError|URIError)\b|No such module|not permitted to access the internet|Illegal invocation|Network connection lost/;
 // Measures whether the platform enforces limits.cpuMs (a spinning module must be stopped well before the wall timeout).
 async function probeDynamicCpu(env) {
   if (!env.LOADER) return { ok: false, error: "LOADER binding missing" };
