@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 09:04:06",
+  "audited_at": "2026-10-02 09:09:59",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.11-runtime-shape",
+        "version": "0.3.12-plan-wip-handoff",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -487,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.94-trigger-dispatch",
+        "version": "0.4.95-merge-throughput",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -537,7 +537,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.35-public-read",
+        "version": "2.38.36-utf8-deploy",
         "worker": "qnfo-ops"
       },
       {
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.11-runtime-shape",
+      "before": "0.3.12-plan-wip-handoff",
       "http": 200,
-      "live": "0.3.11-runtime-shape",
+      "live": "0.3.12-plan-wip-handoff",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1144,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.94-trigger-dispatch",
+      "before": "0.4.95-merge-throughput",
       "http": 200,
-      "live": "0.4.94-trigger-dispatch",
+      "live": "0.4.95-merge-throughput",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1280,9 +1280,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.35-public-read",
+      "before": "2.38.36-utf8-deploy",
       "http": 200,
-      "live": "2.38.35-public-read",
+      "live": "2.38.36-utf8-deploy",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
