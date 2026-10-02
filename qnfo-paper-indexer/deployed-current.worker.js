@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.10-selected-works";
+var VERSION = "3.0.11-render-health"; // RENDER-HEALTH-1 (2026-10-02): publishes paper_render_defect_pages at 06:05 from papers.render_defects (gateway 06:00 sweep).
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -383,6 +383,14 @@ var worker_default = {
         const r = await runImpact(env, true, 50);
         console.log("[qnfo-impact] scheduled:", JSON.stringify({ papers: r.papers, errors: r.errors.length }));
       } else {
+        // RENDER-HEALTH-1 (3.0.11, pillar reach): the gateway's 06:00 cron renders every public paper and writes
+        // papers.render_defects; this publishes the count of pages with defects as metric paper_render_defect_pages
+        // (target 0; trigger in migrations/2026-10-02-render-health.sql). Nothing is written until a sweep has run.
+        try {
+          const rh = await env.LIVING_PAPER.prepare("SELECT SUM(CASE WHEN render_defects <> 0 THEN 1 ELSE 0 END) AS bad, COUNT(render_checked_at) AS checked FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND render_checked_at >= datetime('now', '-2 days')").first();
+          if (rh && rh.checked > 0) await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'paper_render_defect_pages'").bind(String(rh.bad || 0), new Date().toISOString()).run();
+          console.log("[qnfo-paper-indexer] render health:", JSON.stringify(rh));
+        } catch (e) { console.error("[qnfo-paper-indexer] render health error:", e.message); }
         const p = await handlePurge(env, false);
         console.log("[qnfo-paper-indexer] scheduled purge:", JSON.stringify({ records: p.records, vectors_deleted: p.vectors_deleted }));
         // #1188 PAPER-INDEXER-CRON-WINDOW-STARVATION-1 (2026-09-27): the window used to be

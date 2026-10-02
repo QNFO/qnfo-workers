@@ -13,7 +13,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.7.31-sent-text";
+var VERSION = "0.7.32-card-release";
 // 0.7.31 (2026-10-02, #1712 POST-ID-UTM-1, pillar: reach): POST-SENT-TEXT-1 + POST-UTM-SUBDOMAIN-1. The UTM tag was
 // applied at send time only and social_threads.posts kept the untagged draft, so D1 had no record that any posted link
 // carried a UTM and the issue's probe could never pass. A posted row now stores the text exactly as posted (tagged and
@@ -1755,6 +1755,25 @@ async function learnerReport(env) {
   return out;
 }
 
+// CARD-RELEASE-1 (0.7.32, 2026-10-02, pillar reach): a post that waits for the owner is a social_threads row in status
+// 'draft' whose notes are exactly 'await-card:<human_actions slug>'. Marking that card done on fleet.qnfo.org (the card's
+// status becomes 'resolved') queues the post as a selected post, inside every gate and cap as usual; dismissing the card
+// sets the post to 'rejected'. Nothing else releases it: recheckDrafts only touches checker-unavailable drafts.
+async function releaseCardApproved(env) {
+  const rows = await env.DB.prepare("SELECT t.id, substr(t.notes, 12) AS card_slug, h.status AS card FROM social_threads t JOIN human_actions h ON h.slug = substr(t.notes, 12) WHERE t.status = 'draft' AND t.notes LIKE 'await-card:%' AND h.status IN ('resolved', 'dismissed')").all();
+  let queued = 0, rejected = 0;
+  for (const r of rows.results || []) {
+    if (r.card === 'resolved') {
+      await env.DB.prepare("UPDATE social_threads SET status='queued', flags='selected', notes=?, updated_at=datetime('now') WHERE id=? AND status='draft'").bind('selected: released by owner card ' + r.card_slug, r.id).run();
+      queued++;
+    } else {
+      await env.DB.prepare("UPDATE social_threads SET status='rejected', notes=?, updated_at=datetime('now') WHERE id=? AND status='draft'").bind('rejected: owner dismissed card ' + r.card_slug, r.id).run();
+      rejected++;
+    }
+  }
+  return { queued, rejected };
+}
+
 export default {
   async scheduled(event, env) {
     // SOCIAL-RUN-LEDGER-1: every operation below records its run with recordSocialRun (defined after drainQueue).
@@ -1782,11 +1801,13 @@ export default {
     } catch (e) { ps = { error: 'threw: ' + String(e && e.message || e).slice(0, 200) }; console.log('[qnfo-social] profile-sync threw', ps.error); }
     await recordSocialRun(env, 'profile-sync', profileRunStatus(ps), ps);
     try { await recheckDrafts(env); } catch (e) { console.log('[qnfo-social] recheck threw', String(e && e.message || e).slice(0, 200)); }
+    let cr;
+    try { cr = await releaseCardApproved(env); } catch (e) { cr = { error: String(e && e.message || e).slice(0, 200) }; }
     // Each drain is isolated: a throw in one used to end the tick before the other drain and the link checks ran.
     let q, d;
     try { q = await drainQueue(env); } catch (e) { q = { error: String(e && e.message || e).slice(0, 200) }; }
     try { d = await drainDissemination(env); } catch (e) { d = { error: String(e && e.message || e).slice(0, 200) }; }
-    await recordSocialRun(env, 'drain', drainRunStatus(q, d), { queue: q, dissemination: d });
+    await recordSocialRun(env, 'drain', drainRunStatus(q, d), { queue: q, dissemination: d, card_release: cr });
     await retractDeadLinks(env);
     await restoreMisdeleted(env);
   },

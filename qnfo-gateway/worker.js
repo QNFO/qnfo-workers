@@ -1,4 +1,4 @@
-var VERSION="3.9.1-render-fix-3";
+var VERSION="3.9.2-reading";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -1937,6 +1937,57 @@ async function handleIndexNow(env, full) {
   return new Response(JSON.stringify({ ok: true, submitted: urls.length, indexnow: res }), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } });
 }
 __name(handleIndexNow, "handleIndexNow");
+// RENDER-HEALTH-1 (3.9.2, 2026-10-02, pillar reach; guard metric paper_render_defect_pages): the 06:00 cron renders every
+// public paper exactly as its page does and stores what still shows through as raw Markdown on the row
+// (papers.render_defects, papers.render_checked_at): raw bold opening a word, a raw heading marker, a raw table rule, or
+// an odd number of unescaped $. qnfo-paper-indexer turns the count of pages with defects into the metric at 06:05, and
+// GET /api/render-health lists them, so a regression in the renderer or in a source is seen without a session. The
+// 2026-10-02 session sweep (446 -> 33 -> RENDER-FIX-3) used the same four tests.
+function renderDefectCount(html) {
+  const t = String(html || "").replace(/<span class="usd">\$<\/span>/g, "\u00a4").replace(/<(pre|code|table)[\s\S]*?<\/\1>/g, " ").replace(/<div class="math-display">[\s\S]*?<\/div>/g, " ").replace(/<[^>]+>/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+  const bold = (t.match(/(^|[\s(])\*\*[^\s*]/g) || []).length;
+  const head = (t.match(/(^|\s)#{1,6}\s+\w/g) || []).length;
+  const rule = (t.match(/\|\s*:?-{3,}/g) || []).length;
+  const odd = (t.replace(/\\\$/g, "").split("$").length - 1) % 2;
+  return bold + head + rule + odd;
+}
+function paperRenderHtml(row) {
+  const stripped = stripFrontmatter(String(row.body_md || "")).trim();
+  if (stripped.length < 40) return "";
+  return renderMarkdown(lpStripTitle(fixMojibake(stripped), row.title));
+}
+async function renderHealthSweep(env) {
+  let last = 0, checked = 0, withDefects = 0;
+  const started = Date.now();
+  for (let page = 0; page < 60; page++) {
+    const r = await env.LIVING_PAPER.prepare("SELECT rowid AS rid, slug, title, body_md, render_defects FROM papers WHERE rowid > ?1 AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY rowid LIMIT 15").bind(last).all();
+    const rows = r.results || [];
+    if (!rows.length) break;
+    const upd = [];
+    for (const row of rows) {
+      last = row.rid;
+      let n = 0;
+      try { n = renderDefectCount(paperRenderHtml(row)); } catch (e) { n = -1; }
+      checked++;
+      if (n !== 0) withDefects++;
+      upd.push(env.LIVING_PAPER.prepare("UPDATE papers SET render_defects = ?1, render_checked_at = datetime('now') WHERE rowid = ?2").bind(n, row.rid));
+    }
+    await env.LIVING_PAPER.batch(upd);
+    if (Date.now() - started > 600000) break;
+  }
+  console.log("RENDER-HEALTH-1 checked " + checked + " pages, " + withDefects + " with defects");
+  return { checked, with_defects: withDefects };
+}
+async function handleRenderHealth(env) {
+  try {
+    const r = await env.LIVING_PAPER.prepare("SELECT slug, render_defects, render_checked_at FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND render_defects IS NOT NULL AND render_defects <> 0 ORDER BY render_defects DESC, slug").all();
+    const n = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS checked, MAX(render_checked_at) AS last FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND render_checked_at IS NOT NULL").first();
+    return json({ metric: "paper_render_defect_pages", value: (r.results || []).length, checked: n ? n.checked : 0, last_checked: n ? n.last : null, tests: ["raw ** opening a word", "raw heading marker", "raw table rule", "odd number of unescaped $"], pages: r.results || [] });
+  } catch (e) {
+    console.log("RENDER-HEALTH-1 read failed: " + String(e && e.message || e).slice(0, 200));
+    return json({ error: "render health unavailable" }, 503);
+  }
+}
 async function handleSitemap(env, sitemapHost) {
   try {
     const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
@@ -1960,7 +2011,8 @@ async function handleSitemap(env, sitemapHost) {
       })))
       : [
         { loc: base + "/", priority: "1.0" },
-        { loc: base + "/papers", priority: "0.9" }
+        { loc: base + "/papers", priority: "0.9" },
+        { loc: base + "/reading", priority: "0.9" }
       ];
     const all = ALL.concat(isSite ? [] : res.results.map((p) => ({
       loc: base + "/papers/" + encodeURIComponent(p.slug),
@@ -2488,6 +2540,21 @@ async function handleConfirmProxy(request, env) {
 }
 __name(handleConfirmProxy, "handleConfirmProxy");
 __name2(handleConfirmProxy, "handleConfirmProxy");
+// SUBSCRIBE-SOURCE-1 (3.9.2, 2026-10-02, pillar reach): a subscription records the form, the page it was made on and that
+// page's utm_campaign ("papers|/reading|living-papers"), read from the Referer the same-origin form fetch sends, so a
+// subscription can be joined to the post or page that caused it (subscribers.source, 80 characters; STRATEGY 6.4 named
+// "subscriptions per post" as unmeasurable). Without a Referer it is the form's own label, as before.
+function subscribeSource(request, payload) {
+  const form = String(payload && payload.source || "qnfo.org").replace(/\|/g, "/").slice(0, 24);
+  let page = "", camp = "";
+  try {
+    const ref = new URL(request.headers.get("Referer") || "");
+    page = ref.pathname.slice(0, 40);
+    camp = String(ref.searchParams.get("utm_campaign") || "").replace(/[^A-Za-z0-9._-]/g, "").slice(0, 24);
+  } catch (e) {
+  }
+  return (form + (page ? "|" + page : "") + (camp ? "|" + camp : "")).slice(0, 80);
+}
 async function handleSubscribeProxy(request, env) {
   let payload = {};
   try {
@@ -2512,7 +2579,7 @@ async function handleSubscribeProxy(request, env) {
         "X-Forwarded-For": request.headers.get("CF-Connecting-IP") || "",
         "X-Client-UA": String(request.headers.get("User-Agent") || "").slice(0, 300)
       },
-      body: JSON.stringify({ email, hp: String(payload && payload.hp || ""), source: String(payload && payload.source || "qnfo.org").slice(0, 80) }),
+      body: JSON.stringify({ email, hp: String(payload && payload.hp || ""), source: subscribeSource(request, payload) }),
       signal: ctrl.signal
     });
     const data = await r.json().catch(function() {
@@ -2658,6 +2725,30 @@ async function notFoundPage(request, env, host, path, slug) {
     list + '<p class="q-meta" style="margin-top:28px"><a href="https://papers.qnfo.org/papers">The library</a> \u00b7 <a href="https://ask.qwav.tech/' + (q ? "?q=" + encodeURIComponent(q) : "") + '">Ask the corpus</a> \u00b7 <a href="https://qnfo.org/">Home</a></p></div></section>';
   return new Response(qdsPage({ title: "Not found \u00b7 QNFO", description: "No page at this address.", robots: "noindex", brand: "qnfo", active: slug ? "papers" : "" }, body), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
+// LIVING-PAPERS-PAGE-1 (3.9.2, 2026-10-02, pillar reach; docs/outreach/living-papers-launch-2026-10.md): the launch
+// landing page. It says what a living paper does for a reader, sends them to one sample, and states the limits plainly.
+var READING_SAMPLE = "joules-per-solution-metric";
+function renderReadingHTML() {
+  const feat = function(h, p) { return '<div class="q-card" style="padding:20px 22px"><h3 style="margin:0 0 6px;font-size:1.05rem">' + h + '</h3><p class="q-meta" style="margin:0;line-height:1.6">' + p + "</p></div>"; };
+  const body = '<section class="q-hero" style="padding-bottom:24px"><div class="q-wrap"><p class="q-eyebrow">Living papers</p><h1 class="q-display" style="max-width:20ch">Research papers you can actually read</h1>' +
+    '<p class="q-lede" style="max-width:62ch">Every paper on papers.qnfo.org opens as a living paper. The words are the author\u2019s, unchanged. The page around them does the work a PDF leaves to you: it shows the shape of the paper, typesets its mathematics, explains a reference without losing your place, and answers questions from the paper itself, with citations.</p>' +
+    '<p style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px"><a class="q-btn q-btn-accent" href="/papers/' + READING_SAMPLE + '">Open a sample paper</a><a class="q-btn" href="/papers">Browse all papers</a></p></div></section>' +
+    '<section class="q-wrap" style="padding-bottom:40px"><h2 class="q-h2" style="margin:8px 0 18px">What every paper page does</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">' +
+    feat("See the whole paper at once", "A contents rail follows you down the page and a progress bar shows how far you are. Every section has a link you can share.") +
+    feat("Mathematics, tables and code, rendered", "Formulas are typeset, tables are tables, and code keeps its lines. Nothing is a picture of text.") +
+    feat("References without the scroll", "Hover or focus a citation such as [12] to read the reference in place, then carry on reading.") +
+    feat("Ask the paper", "Ask in plain language. The answer is written from the paper, which is always source [1], and every claim points to the passage or paper it came from.") +
+    feat("Select, ask, quote", "Select a passage to ask about exactly that passage, or copy it as a quote that carries its citation.") +
+    feat("Context, versions and related work", "The concepts the paper touches in the QNFO knowledge graph, every version of the work, and its nearest neighbours in the library.") +
+    feat("Cite in one click", "APA, BibTeX or plain text, with the permanent DOI where the paper has one.") +
+    feat("Open by default", "Free, no account, no paywall, a licence on every paper, and RSS, a sitemap and llms.txt for machines.") +
+    "</div></section>" +
+    '<section class="q-wrap" style="padding-bottom:56px"><div class="q-prose" style="max-width:68ch"><h2>What it is not</h2>' +
+    "<p>These are one researcher\u2019s preprints, prepared with an AI-assisted research pipeline; they are not peer reviewed, and the author is responsible for the content. Every paper states its claim, how it was tested and its status. The format is an experiment in making dense research readable; it does not change what a paper says or make it more right.</p>" +
+    "<p>The rendering is automatic. A few older papers came through word-processor conversions and still show formatting defects, and the Ask panel is rate-limited so it stays free. If something reads badly, say so: <a href=\"mailto:rowan.quni@qnfo.org?subject=%5Bliving-papers%5D%20feedback\">rowan.quni@qnfo.org</a>.</p>" +
+    '<h2>Start here</h2><p><a href="/papers/' + READING_SAMPLE + '">The Joules-per-Solution metric</a> is a good first paper: it has sections, equations, references and a knowledge-graph context to try every feature on. Or <a href="/papers">search the library</a>.</p></div></section>';
+  return new Response(qdsPage({ title: "Living papers \u00b7 QNFO Papers", description: "Research papers you can actually read: contents, rendered mathematics, reference previews, versions, and an Ask panel that answers from the paper and cites it. Free and open.", canonical: "https://papers.qnfo.org/reading", brand: "qnfo", active: "papers" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+}
 // PRIVACY-PAGE-1 (2026-10-02, visitor audit): the footer's "Privacy" link (legal.qnfo.org/privacy) served the licence text
 // and qnfo.org/privacy was a 404. This states what the QNFO sites actually collect, from the code that collects it.
 function renderPrivacyHTML() {
@@ -2800,7 +2891,7 @@ function lpIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery
   const latest = extra.latest ? lpDate(extra.latest) : "";
   const title = searchQuery ? 'Search: "' + esc(searchQuery) + '" \u2014 QNFO Papers' : activeCategory ? (CATEGORY_LABELS[activeCategory] || activeCategory) + " Papers \u2014 QNFO" : "QNFO Papers \u2014 open research with permanent DOIs";
   const head = "<title>" + title + '</title><meta name="description" content="' + escAttr(all + " open-access papers from the QNFO research program: p-adic and adelic physics, ultrametric information, topological quantum computing and computer science, most with a permanent Zenodo DOI.") + '"><link rel="canonical" href="https://papers.qnfo.org/papers"><link rel="alternate" type="application/rss+xml" title="QNFO Papers RSS" href="/rss.xml"><meta property="og:title" content="QNFO Papers"><meta property="og:type" content="website"><meta property="og:url" content="https://papers.qnfo.org/papers"><meta property="og:description" content="' + escAttr(all + " open research papers from the QNFO program.") + '">';
-  const body = '<main id="main"><section class="wrap ix-hero"><div class="ix-intro"><p class="q-eyebrow">Open research library</p><h1>Papers you can read, cite and question</h1><p class="lede">' + all + ' papers from the QNFO program on p-adic and adelic physics, ultrametric information, topological quantum computing and the computer science around them' + (extra.with_doi != null ? ", " + extra.with_doi + " of them with a permanent Zenodo DOI" : "") + '. Every page renders its mathematics and can be questioned in place.</p><form class="ix-search" method="get" action="/papers" role="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><label class="sr" for="ix-q">Search papers</label><input id="ix-q" type="search" name="search" value="' + (searchQuery ? escAttr(searchQuery) : "") + '" placeholder="Search titles and abstracts" autocomplete="off">' + (activeCategory ? '<input type="hidden" name="category" value="' + escAttr(activeCategory) + '">' : "") + '<kbd>/</kbd></form><p class="ix-hint">Looking for an answer rather than a paper? <a href="' + LP_ASK + '">Ask the whole corpus</a>: answers cite the papers they come from.</p></div><aside class="ix-stats q-card" aria-label="Library at a glance"><div class="ix-n"><b>' + all + "</b><span>papers" + (latest ? "<br>newest " + esc(latest) : "") + "</span></div>" + lpHistogram(extra.months) + '<p class="ix-cap">Published per month</p>' + bar + '<ul class="ix-legend">' + LP_CAT_ORDER.map(function(c) {
+  const body = '<main id="main"><section class="wrap ix-hero"><div class="ix-intro"><p class="q-eyebrow">Open research library</p><h1>Papers you can read, cite and question</h1><p class="lede">' + all + ' papers from the QNFO program on p-adic and adelic physics, ultrametric information, topological quantum computing and the computer science around them' + (extra.with_doi != null ? ", " + extra.with_doi + " of them with a permanent Zenodo DOI" : "") + '. Every page renders its mathematics and can be questioned in place. <a href="/reading">How a living paper works</a>.</p><form class="ix-search" method="get" action="/papers" role="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><label class="sr" for="ix-q">Search papers</label><input id="ix-q" type="search" name="search" value="' + (searchQuery ? escAttr(searchQuery) : "") + '" placeholder="Search titles and abstracts" autocomplete="off">' + (activeCategory ? '<input type="hidden" name="category" value="' + escAttr(activeCategory) + '">' : "") + '<kbd>/</kbd></form><p class="ix-hint">Looking for an answer rather than a paper? <a href="' + LP_ASK + '">Ask the whole corpus</a>: answers cite the papers they come from.</p></div><aside class="ix-stats q-card" aria-label="Library at a glance"><div class="ix-n"><b>' + all + "</b><span>papers" + (latest ? "<br>newest " + esc(latest) : "") + "</span></div>" + lpHistogram(extra.months) + '<p class="ix-cap">Published per month</p>' + bar + '<ul class="ix-legend">' + LP_CAT_ORDER.map(function(c) {
     return '<li><i class="dot" style="--c:var(' + LP_CAT_VAR[c] + ')"></i>' + esc(CATEGORY_LABELS[c] || c) + " <b>" + (facets[c] || 0) + "</b></li>";
   }).join("") + '</ul></aside></section><section class="ix-controls"><div class="wrap"><div class="ix-chips" id="ix-chips" role="group" aria-label="Topic">' + chips + '</div><label class="ix-sort"><span>Sort</span><select id="ix-sort" aria-label="Sort papers"><option value="new"' + (sort === "new" ? " selected" : "") + '>Newest</option><option value="old"' + (sort === "old" ? " selected" : "") + '>Oldest</option><option value="title"' + (sort === "title" ? " selected" : "") + '>Title A\u2013Z</option></select></label></div></section><section class="wrap ix-list"><h2 class="ix-h"><span id="ix-head">' + heading + '</span> <span class="ix-count" id="paper-count">' + total + " paper" + (total === 1 ? "" : "s") + '</span></h2><ol class="plist paper-list" id="plist" data-offset="' + (offset + papers.length) + '" data-more="' + (hasMore ? "1" : "0") + '">' + (papers.length ? papers.map(lpPaperRow).join("") : '<li class="empty">No paper matches. <a href="' + LP_ASK + "/?q=" + encodeURIComponent(searchQuery || "") + '">Ask the corpus instead</a>.</li>') + '</ol><div class="ix-more" id="ix-more">' + (hasMore ? '<button class="q-btn" id="load-more" type="button">Load more papers</button>' : "") + "</div>" + lpSubscribe("papers") + "</section></main>";
   return lpDoc({ head, body, math: true, nav: "papers", cls: "ix", js: LP_INDEX_JS });
@@ -3078,9 +3169,11 @@ var gateway_worker_default = {
       if (p === "/api/indexnow" && (method === "GET" || method === "POST")) return handleIndexNow(env, u.searchParams.get("full") === "1");
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
       if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19)));
+      if (p === "/api/render-health" && method === "GET") return handleRenderHealth(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/ipatent" || p === "/ipatent/") return new Response(null, { status: 301, headers: { Location: "https://ipatent.qnfo.org/" } });
+      if (p === "/reading" || p === "/reading/") return renderReadingHTML();
       if (p === "/papers" || p === "/") return handlePapers(request, env);
       return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
@@ -3108,6 +3201,7 @@ var gateway_worker_default = {
       if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
       if (p === "/api/confirm" && (method === "GET" || method === "POST")) return handleConfirmProxy(request, env);
       if (p.startsWith("/api/paper-context/") && method === "GET") return handlePaperContext(env, decodeURIComponent(p.slice(19)));
+      if (p === "/api/render-health" && method === "GET") return handleRenderHealth(env);
       if (p === "/_audit/blank-papers") return handleBlankPapers(env);
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
@@ -3158,6 +3252,11 @@ var gateway_worker_default = {
     } catch (e) {
     }
     await askRatePrune(env);
+    try {
+      await renderHealthSweep(env);
+    } catch (e) {
+      console.log("RENDER-HEALTH-1 sweep failed: " + String(e && e.message || e).slice(0, 200));
+    }
   }
 };
 export {
