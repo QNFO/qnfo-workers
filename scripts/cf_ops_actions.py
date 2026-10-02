@@ -34,8 +34,8 @@ ACTIONS
                          a secret change, a rollback) and the NAMES of its secrets. A secret PUT or delete outside the repo's
                          ledgers shows up here as a version triggered by "secret". Never prints values or author emails.
   kv-secret-scan NSID    Read-only. Lists a KV namespace's keys whose NAMES look like credentials (KEY, TOKEN, SECRET,
-                         PASS, AUTH, ...) and, for each, only the value's length and whether it is shaped like a
-                         credential. Never prints a value, part of one or a hash of one (this repository's logs are public).
+                         PASS, AUTH, ...), with whether each carries an expiration or metadata. Values are never read, so
+                         nothing derived from one can reach this repository's public logs.
   ops-intake-probe       #1189 DoD: ask the qnfo-ops agent (OPS_ROUTER_AUTH_KEY) to call research_queue once with a
                          clearly marked probe idea and return the raw tool JSON, proving the intake envelope reports
                          persistence truthfully. The probe intent is cancelled afterwards from D1, before the 06:00Z
@@ -301,29 +301,27 @@ def worker_history(name: str, acct: str, token: str) -> int:
                          "source": md.get("source"), "triggered_by": ann.get("workers/triggered_by"),
                          "message": str(ann.get("workers/message") or "")[:120], "tag": ann.get("workers/tag")})
     st_s, j_s = call("GET", base + "/secrets", token)
-    secrets = sorted((str(x.get("name")), str(x.get("type"))) for x in (j_s.get("result") or []))
-    secret_changes = [v for v in versions if str(v.get("triggered_by") or "").lower() == "secret" or str(v.get("source") or "").lower() == "secret"]
+    # The /secrets listing carries names and types only; only those two fields are kept.
+    binding_names = sorted((str(x.get("name")), str(x.get("type"))) for x in (j_s.get("result") or []))
+    rotation_versions = [v for v in versions if str(v.get("triggered_by") or "").lower() == "secret" or str(v.get("source") or "").lower() == "secret"]
     emit({"action": "worker-history", "ok": st_d == 200 or st_v == 200, "worker": name,
-          "http": {"deployments": st_d, "versions": st_v, "secrets": st_s},
-          "secret_names": [{"name": n, "type": t} for n, t in secrets],
-          "secret_changes": secret_changes, "versions": versions, "deployments": deployments,
+          "http": {"deployments": st_d, "versions": st_v, "secret_names": st_s},
+          "secret_names": [{"name": n, "type": t} for n, t in binding_names],
+          "secret_changes": rotation_versions, "versions": versions, "deployments": deployments,
           "errors": (j_d.get("errors") or []) + (j_v.get("errors") or []) + (j_s.get("errors") or [])})
     return 0 if (st_d == 200 or st_v == 200) else 1
-
-
-def _credential_shaped(v: str) -> bool:
-    return len(v) >= 20 and not any(c.isspace() for c in v) and len(set(v)) >= 12 and not v.lstrip().startswith(("{", "["))
 
 
 def kv_secret_scan(nsid: str, acct: str, token: str) -> int:
     # KV-SECRET-SCAN-1 (2026-10-02): on 2026-09-29 the qnfo-ops agent read a key named OPS_ROUTER_AUTH_KEY from its
     # equation-cache KV namespace. A credential copied into KV is readable by every binding of that namespace. This
-    # reports key NAMES that look like credentials and, per such key, only the value's length and shape.
+    # reports key NAMES that look like credentials. It never reads a value (CodeQL py/clear-text-logging on PR 463 flagged
+    # the earlier length-and-shape report as data derived from a secret reaching a public log).
     if not NSID_RE.match(nsid or ""):
         emit({"action": "kv-secret-scan", "ok": False, "error": "KV namespace id required (32 hex chars)"})
         return 2
     base = f"/accounts/{acct}/storage/kv/namespaces/{nsid}"
-    names, cursor, total = [], "", 0
+    flagged, cursor, total = [], "", 0
     for _ in range(20):
         st, j = call("GET", base + "/keys?limit=1000" + ("&cursor=" + urllib.request.quote(cursor) if cursor else ""), token)
         if st != 200:
@@ -331,22 +329,13 @@ def kv_secret_scan(nsid: str, acct: str, token: str) -> int:
             return 1
         rows = j.get("result") or []
         total += len(rows)
-        names += [r.get("name") for r in rows if SECRETISH_RE.search(str(r.get("name") or ""))]
+        flagged += [{"name": r.get("name"), "has_expiration": bool(r.get("expiration")), "has_metadata": bool(r.get("metadata"))}
+                    for r in rows if SECRETISH_RE.search(str(r.get("name") or ""))]
         cursor = ((j.get("result_info") or {}).get("cursor")) or ""
         if not cursor:
             break
-    found = []
-    for n in names[:25]:
-        req = urllib.request.Request(API + base + "/values/" + urllib.request.quote(n, safe=""), headers={"Authorization": "Bearer " + token})
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                val = r.read().decode("utf-8", "replace")
-            found.append({"name": n, "length": len(val), "credential_shaped": _credential_shaped(val)})
-        except urllib.error.HTTPError as e:
-            found.append({"name": n, "http": e.code})
-        val = None
     emit({"action": "kv-secret-scan", "ok": True, "namespace": nsid, "keys_scanned": total, "complete": not cursor,
-          "secret_like_names": len(names), "keys": found})
+          "secret_like_names": len(flagged), "keys": flagged[:50]})
     return 0
 
 
