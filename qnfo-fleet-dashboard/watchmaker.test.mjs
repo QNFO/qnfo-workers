@@ -32,6 +32,7 @@ CREATE TABLE portfolio_sync_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT,
 CREATE TABLE evolve_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE objective_constraint_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE improvement_loop_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
+CREATE TABLE reach_idea_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE ask_loop_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, version TEXT, kind TEXT NOT NULL, ok INTEGER NOT NULL, note TEXT);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, last_attempt_at TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
@@ -60,6 +61,7 @@ db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(
 db.prepare("INSERT INTO evolve_candidates (ts) VALUES (?)").run(ago(9));
 db.prepare("INSERT INTO objective_constraint_runs (ts) VALUES (?)").run(ago(1));
 db.prepare("INSERT INTO improvement_loop_runs (ts) VALUES (?)").run(ago(1));
+db.prepare("INSERT INTO reach_idea_runs (ts) VALUES (?)").run(ago(1));
 // ASK-LOOP-1 (qnfo-ai-search): an hourly measure row and the daily fix row prove both ask-loop ops; a failed row proves nothing.
 db.prepare("INSERT INTO ask_loop_runs (ts, kind, ok) VALUES (?, 'measure', 1)").run(ago(0.3));
 db.prepare("INSERT INTO ask_loop_runs (ts, kind, ok) VALUES (?, 'fix', 1)").run(ago(4.3));
