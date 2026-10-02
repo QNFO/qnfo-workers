@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.54-metadata-verify-order"; // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.55-prior-work"; // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1509,8 +1509,19 @@ async function enrichGateBlocked(env) {
       } catch (eAx) {
       }
     }
-    var refIdx = md.search(/#{1,4}[^\n]*(references|bibliography)/i);
-    var enrichedMd = refIdx >= 0 ? md.slice(0, refIdx) + priorSection + md.slice(refIdx) : md + priorSection;
+    // PRIOR-WORK-EMPTY-1 (0.9.55): only a section with at least one entry is inserted (16 papers were published with the
+    // heading and "builds on the following related research:" followed by nothing when arXiv returned no match), and the
+    // References heading is matched at the start of a line, not anywhere a "#" precedes the word.
+    if (!/\n\d+\. \S/.test(priorSection)) {
+      await env.QNFO_AUDIT.prepare(
+        "UPDATE version_queue SET status='drafted', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?"
+      ).bind(br.id).run();
+      enriched++;
+      continue;
+    }
+    var refM = /^#{1,6}[ \t]+[^\n]*\b(references|bibliography)\b/im.exec(md);
+    var refIdx = refM ? refM.index : -1;
+    var enrichedMd = refIdx >= 0 ? md.slice(0, refIdx).replace(/\n+$/, "") + priorSection + md.slice(refIdx) : md + priorSection;
     await env.QNFO_AUDIT.prepare(
       "UPDATE version_queue SET corrected_md=?, status='drafted', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?"
     ).bind(enrichedMd, br.id).run();

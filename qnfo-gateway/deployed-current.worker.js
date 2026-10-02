@@ -1,4 +1,4 @@
-var VERSION="3.9.0-qds";
+var VERSION="3.9.1-render-fix-3";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -736,7 +736,7 @@ function _mdInline(t) {
     return saveMath(c, true);
   });
   t = t.replace(/([^\s$])\$\$(?=[\^_])/g, "$1");
-  t = t.replace(/\$((?=\s*\d)[^$\n]+?(?=\$(?!\d))|(?!\s*\d)[^$\n]+?)\$/g, function(m, c) {
+  t = t.replace(/(?<!\\)\$((?=\s*\d)(?:\\[^\n]|[^$\n\\])+?(?=\$(?!\d))|(?!\s*\d)(?:\\[^\n]|[^$\n\\])+?)\$/g, function(m, c) {
     return saveMath(c, false);
   });
   t = t.replace(/\\\(([^\n]*?)\\\)/g, function(m, c) {
@@ -745,7 +745,9 @@ function _mdInline(t) {
   t = esc(t).replace(/\$/g, "\u0007");
   t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
   t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  t = t.replace(/\*\*\*(?=\S)([^*]+?)\*\*\*/g, "<strong><em>$1</em></strong>");
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  t = t.replace(/(?<![\w)\]*])\*\*(?=\S)((?:[^*]|\*(?!\*))+?)\*\*(?![\w(])/g, "<strong>$1</strong>");
   t = t.replace(/(?<![\p{L}\p{N}\\])__(?=\S)([^_\n]+?)__(?![\p{L}\p{N}])/gu, "<strong>$1</strong>");
   t = t.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   t = t.replace(/(?<![\p{L}\p{N}\\_])_(?=\S)([^_\n]+?)_(?![\p{L}\p{N}_])/gu, "<em>$1</em>");
@@ -824,23 +826,42 @@ function renderMarkdown(md) {
   m = m.replace(/^[ \t]*@[A-Za-z0-9_:-]+:[ \t]*$/gm, "");
   m = m.replace(/\[[@][A-Za-z0-9_:-]+(?:[ \t;,]+[@A-Za-z0-9_:-]+)*\]/g, "");
   m = m.replace(/(^|[^A-Za-z0-9_])@[A-Za-z][A-Za-z0-9_:-]+/g, "$1");
-  m = m.replace(/([^\n])[ \t]+(---)[ \t]*(?=\n)/g, "$1\n$2\n");
-  m = m.replace(/([^\n|])[ \t]+(#{1,6}[ \t])/g, "$1\n$2");
   var _bt2 = String.fromCharCode(96);
   // PANDOC-CODE-1 (3.8.5): code exported by pandoc without fences keeps a "[](#cb1-25)" anchor on every line; those runs
   // are code (their ** is exponentiation, not bold), so they become one fenced block with the anchors removed.
   m = m.replace(/(?:^\[\]\(#cb\d+-\d+\)[^\n]*(?:\n|$))+/gm, function(run) {
     return "\n" + _bt2 + _bt2 + _bt2 + "\n" + run.replace(/^\[\]\(#cb\d+-\d+\)/gm, "").replace(/\n*$/, "\n") + _bt2 + _bt2 + _bt2 + "\n";
   });
-  // HEADING-WRAP-1 (3.8.5): a heading wrapped onto the next line ("# **Appendix A: Formal Proof of Emergent Temporal" /
-  // "dynamics**") left an unclosed ** in the heading and a stray one in the text; the continuation is joined back.
-  m = m.replace(/^(#{1,6}[ \t][^\n]*)\n([^\n#|][^\n]*)$/gm, function(all, h, nx) {
-    return (h.split("**").length - 1) % 2 === 1 && nx.indexOf("**") >= 0 ? h + " " + nx.trim() : all;
-  });
   var _fence = new RegExp(_bt2 + _bt2 + _bt2 + "(\\w*)\\n([\\s\\S]*?)" + _bt2 + _bt2 + _bt2, "g");
   m = m.replace(_fence, function(_, l2, c) {
     mb.push("<pre" + (l2 ? ' class="lang-' + l2 + '"' : "") + "><code>" + esc(c) + "</code></pre>");
     return "B" + mb.length + "";
+  });
+  // RENDER-FIX-3 (3.9.1): heading markers glued to the previous line are split off only outside code (this ran before
+  // fence extraction and moved Python comments in fenced and pandoc-anchored code onto lines of their own, where they
+  // became headings), never inside a table row ("| Crossing # $n$ |") or inline code, and also when the marker ends the
+  // line. A bare marker followed by a bold line is that heading ("##" / "**Abstract**"); a bare marker alone is dropped.
+  m = m.replace(/([^\n])[ \t]+(---)[ \t]*(?=\n)/g, "$1\n$2\n");
+  m = m.split("\n").map(function(line) {
+    var tl = line.trim();
+    if (tl.charAt(0) === "|" || (tl.match(/\|/g) || []).length >= 2) return line;
+    return line.replace(/([^\n|])[ \t]+(#{1,6})(?=[ \t]|$)/g, function(all, pre, hs, off) {
+      return ((line.slice(0, off).split(String.fromCharCode(96)).length - 1) % 2) ? all : pre + "\n" + hs;
+    });
+  }).join("\n");
+  m = m.replace(/^(#{1,6})[ \t]*\n[ \t]*\*\*((?:[^*\n]|\*(?!\*)|\n(?![ \t]*\n))+?)\*\*[ \t]*/gm, function(all, hs, t) {
+    return hs + " " + t.replace(/\s+/g, " ").trim() + "\n\n";
+  });
+  // A heading whose bold runs onto the next lines ("###### **1.4.1.1. Legitimate" / "Invalidation ... Model** text") is
+  // joined up to the closing **; the rest of that line starts the paragraph.
+  m = m.replace(/^(#{1,6}[ \t]+(?:[^*\n]|\*(?!\*))*)\*\*((?:[^*\n]|\*(?!\*))*\n(?:[^*\n]|\*(?!\*)|\n(?![ \t]*\n))*?)\*\*[ \t]*/gm, function(all, h, t) {
+    return h + "**" + t.replace(/\s+/g, " ").trim() + "**\n\n";
+  });
+  m = m.replace(/^[ \t]*#{1,6}[ \t]*$/gm, "");
+  // HEADING-WRAP-1 (3.8.5): a heading wrapped onto the next line ("# **Appendix A: Formal Proof of Emergent Temporal" /
+  // "dynamics**") left an unclosed ** in the heading and a stray one in the text; the continuation is joined back.
+  m = m.replace(/^(#{1,6}[ \t][^\n]*)\n([^\n#|][^\n]*)$/gm, function(all, h, nx) {
+    return (h.split("**").length - 1) % 2 === 1 && nx.indexOf("**") >= 0 ? h + " " + nx.trim() : all;
   });
   m = m.replace(/([^\s$])\$\$(?=[\^_])/g, "$1").replace(/([^\s$])\$\$(?=[\\A-Za-z0-9{(])/g, "$1$ $");
   m = m.replace(/\$\$([\s\S]*?)\$\$/g, function(_, c) {
@@ -851,11 +872,12 @@ function renderMarkdown(md) {
     mb.push('<div class="math-display">$$' + texSafe(c) + "$$</div>");
     return "B" + mb.length + "";
   });
-  m = m.replace(/\$((?=\s*\d)[^$\n]+?(?=\$(?!\d))|(?!\s*\d)[^$\n]+?)\$/g, function(_, c) {
+  m = m.replace(/(?<!\\)\$((?=\s*\d)(?:\\[^\n]|[^$\n\\])+?(?=\$(?!\d))|(?!\s*\d)(?:\\[^\n]|[^$\n\\])+?)\$/g, function(_, c) {
     mi.push(c);
     return "M" + (mi.length - 1) + "";
   });
-  m = m.replace(/\\\(([^\n]*?)\\\)/g, function(_, c) {
+  m = m.replace(/\\\(((?:[^\n]|\n(?![ \t]*\n))*?)\\\)/g, function(_, c) {
+    c = c.replace(/[ \t]*\n[ \t]*/g, " ");
     mi.push(c);
     return "M" + (mi.length - 1) + "";
   });
@@ -910,6 +932,53 @@ function renderMarkdown(md) {
   __name22(isContinuation, "isContinuation");
   __name222(isContinuation, "isContinuation");
   __name2222(isContinuation, "isContinuation");
+  // FLAT-TABLE-1 (3.9.1): pandoc flattened about 240 docx tables in 77 papers into paragraphs of "cell |" lines, one
+  // paragraph per row ("Scenario |" / "Fab Yield |" ...), which printed as prose full of pipes. A run of at least two
+  // such paragraphs whose body rows have the same number of cells (2 or more) is a table; the first is its header.
+  function ftPara(k) {
+    var ls = [];
+    while (k < L.length && L[k].trim() && !/^#{1,6}\s/.test(L[k].trim()) && !/^\u0001B\d+\u0001$/.test(L[k].trim())) {
+      ls.push(L[k].trim());
+      k++;
+    }
+    return { lines: ls, end: k };
+  }
+  function ftCells(ls) {
+    if (!ls.length || ls[0].charAt(0) === "|" || !/\|$/.test(ls[ls.length - 1])) return null;
+    return ls.join(" ").split("|").map(function(x) {
+      return x.trim();
+    }).filter(function(x) {
+      return x;
+    });
+  }
+  function ftSkip(k) {
+    while (k < L.length && (!L[k].trim() || L[k].trim() === "|")) k++;
+    return k;
+  }
+  function flatTableAt(k0) {
+    var p = ftPara(k0), c = ftCells(p.lines);
+    if (!c || c.length < 2) return null;
+    var rows = [c], k = ftSkip(p.end);
+    while (k < L.length) {
+      var q = ftPara(k), qc = ftCells(q.lines);
+      if (!qc || qc.length < 2) break;
+      if (rows.length > 1 && qc.length !== rows[1].length) break;
+      if (rows.length === 1 && Math.abs(qc.length - c.length) > 1) break;
+      rows.push(qc);
+      k = ftSkip(q.end);
+    }
+    if (rows.length < 2) return null;
+    var n = rows[1].length, hdr = rows[0].slice(0, n), h = "<table><thead><tr>", r, x;
+    while (hdr.length < n) hdr.push("");
+    for (x = 0; x < n; x++) h += "<th>" + _mdInline(cleanPunct(hdr[x])) + "</th>";
+    h += "</tr></thead><tbody>";
+    for (r = 1; r < rows.length; r++) {
+      h += "<tr>";
+      for (x = 0; x < n; x++) h += "<td>" + _mdInline(cleanPunct(rows[r][x])) + "</td>";
+      h += "</tr>";
+    }
+    return { html: h + "</tbody></table>\n", next: k };
+  }
   L = m.split("\n");
   i = 0;
   while (i < L.length) {
@@ -1016,6 +1085,12 @@ function renderMarkdown(md) {
         continue;
       }
     }
+    var ft = flatTableAt(i);
+    if (ft) {
+      o += ft.html;
+      i = ft.next;
+      continue;
+    }
     if (isListStart(t)) {
       var ordered = /^\d+[.)]\s/.test(t);
       o += ordered ? "<ol>" : "<ul>";
@@ -1033,7 +1108,7 @@ function renderMarkdown(md) {
           itemText = mList[2];
           inItem = true;
           i++;
-        } else if (inItem && isContinuation(liRaw) && !/^\|?[\s:]* -{3,}/.test(lit) && !isTableSep(lit)) {
+        } else if (inItem && !/^\|?[\s:]* -{3,}/.test(lit) && !isTableSep(lit) && (isContinuation(liRaw) || !(/^#{1,6}\s/.test(lit) || /^(-{3,}|\*{3,}|_{3,})$/.test(lit) || lit.charAt(0) === ">" || (lit.indexOf("|") >= 0 && i + 1 < L.length && isTableSep(L[i + 1].trim())) || /^\u0001B\d+\u0001$/.test(lit)))) {
           itemText += " " + lit;
           i++;
         } else break;
@@ -1048,7 +1123,7 @@ function renderMarkdown(md) {
       var pl = L[i], pt = pl.trim();
       if (!pt) break;
       if (/^(#{1,6})\s/.test(pt)) break;
-      if (isListStart(pt)) break;
+      if (isListStart(pt) && !(para.length && (para.join(" ").split("**").length - 1) % 2 === 1)) break;
       if (/^(-{3,}|\*{3,}|_{3,})$/.test(pt)) break;
       if (pt.charAt(0) === ">") break;
       if (/^\u0001B\d+\u0001$/.test(pt)) break;
@@ -1057,7 +1132,14 @@ function renderMarkdown(md) {
       i++;
     }
     if (para.length) {
-      o += emitBlockText(cleanPunct(para.join(" "))) + "\n";
+      var pj = para.join(" ");
+      if ((pj.match(/\|/g) || []).length === 1 && /\s\|$/.test(pj)) pj = pj.replace(/\s*\|$/, "");
+      if (pj.trim() === "|" || !pj.trim()) continue;
+      if ((pj.split("**").length - 1) % 2 === 1) {
+        if (/^\*\*\S/.test(pj)) pj = pj + "**";
+        else if (/\S\*\*[.,;:!?)]*$/.test(pj)) pj = "**" + pj;
+      }
+      o += emitBlockText(cleanPunct(pj)) + "\n";
     } else {
       i++;
     }

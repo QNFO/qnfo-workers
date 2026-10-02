@@ -29,5 +29,26 @@ h = renderMarkdown("Code:\n[](#cb1-1)import numpy as np\n[](#cb1-2)var = np.sum(
 ok(/<pre><code>/.test(h) && /dist\*\*2/.test(h) && !/#cb1/.test(h) && !/<strong>/.test(h), "PANDOC-CODE-1: anchored code lines become one code block; ** stays an operator", h);
 h = renderMarkdown("# **Appendix A: Formal Proof of Emergent Temporal\ndynamics**\n\nText.");
 ok(/<h1><strong>Appendix A: Formal Proof of Emergent Temporal dynamics<\/strong><\/h1>/.test(h), "HEADING-WRAP-1: a heading wrapped onto the next line is joined", h);
+// RENDER-FIX-3 (3.9.1)
+h = renderMarkdown("Sample $s \\xleftarrow{\\$} \\mathbb{Z}_p^n$ uniformly, a sub-\\$500K program, and $x$.");
+ok(math(h).length === 2 && math(h)[0].indexOf("xleftarrow") > 0 && (h.match(/usd/g) || []).length === 1, "RENDER-FIX-3: an escaped dollar inside a formula or before a number is never a delimiter", math(h));
+h = renderMarkdown("Code:\n\n```python\nx = 1  # a comment\n```\n\nAfter.");
+ok(!/<h1>/.test(h) && /x = 1  # a comment/.test(h), "RENDER-FIX-3: a comment in fenced code stays on its line (no heading)", h);
+h = renderMarkdown("Code:\n[](#cb1-1)rho = c**5\n[](#cb1-2)        # Store state\n[](#cb1-3)return rho\n\nAfter.");
+ok(!/<h1>/.test(h) && (h.match(/<pre>/g) || []).length === 1 && /# Store state/.test(h), "RENDER-FIX-3: a comment in pandoc-anchored code stays in the one code block", h);
+h = renderMarkdown("| Lepton | Crossing # $n$ |\n|:--|:--|\n| e | 0 |");
+ok(/<table>/.test(h) && !/<h1>/.test(h) && /<td>e<\/td>/.test(h), "RENDER-FIX-3: a '#' inside a table header cell does not split the row into a heading", h);
+h = renderMarkdown("the model operates. ######\n**1.3.1.1. Ptolemy's Model's Paradoxical\nSuccess** A detailed recounting.\n\n#\n## Changelog\n\n- v2");
+ok(/<h6>1\.3\.1\.1\. Ptolemy.s Model.s Paradoxical Success<\/h6>/.test(h) && /<p>A detailed recounting\.<\/p>/.test(h) && /<h2>Changelog<\/h2>/.test(h) && !/<p>#/.test(h) && !/\*\*/.test(h), "RENDER-FIX-3: a heading marker at the end of a line takes the bold line after it; a bare marker is dropped", h);
+h = renderMarkdown("- **Experimental tests of consciousness\nmeasurement.** While controversial.\n- Next");
+ok((h.match(/<li>/g) || []).length === 2 && /<strong>Experimental tests of consciousness measurement\.<\/strong>/.test(h), "RENDER-FIX-3: list items take lazy continuation lines", h);
+h = renderMarkdown("**5.5.2.2 A New Lens: an *additional, orthogonal lens* for biology.** Text ***both***.");
+ok(/<strong>5\.5\.2\.2 A New Lens: an <em>additional, orthogonal lens<\/em> for biology\.<\/strong>/.test(h) && /<strong><em>both<\/em><\/strong>/.test(h) && !/\*/.test(h), "RENDER-FIX-3: bold containing italic, and bold italic", h);
+h = renderMarkdown("Let \\(D_0\n= \\{\\bot\\}\\) be flat.");
+ok(math(h).length === 1 && math(h)[0] === "$D_0 = \\{\\bot\\}$", "RENDER-FIX-3: \\( ... \\) may wrap onto the next line", math(h));
+h = renderMarkdown("**Table 2: Cost**\n\nScenario |\nFab Yield |\nCost (\\$M) |\n|\n\nStandard |\n95% |\n\\$10.53 |\n\n**Topological\n(Baseline)** |\n**50%** |\n**\\$1.00** |\n\nAfter the table.");
+ok(/<table><thead><tr><th>Scenario<\/th><th>Fab Yield<\/th><th>Cost/.test(h) && (h.match(/<tr>/g) || []).length === 3 && /<strong>Topological \(Baseline\)<\/strong>/.test(h) && /<p>After the table\.<\/p>/.test(h) && !/\|/.test(h), "FLAT-TABLE-1: docx tables flattened into 'cell |' paragraphs become tables", h);
+h = renderMarkdown("The construction proceeds through inverse limits: |\n\nNext paragraph.");
+ok(!/<table>/.test(h) && /inverse limits:<\/p>/.test(h), "FLAT-TABLE-1: a one-cell row is prose without its stray pipe", h);
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);
