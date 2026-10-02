@@ -80,3 +80,11 @@ Read: `GET /improvement`. Run now: `POST /improvement/tick` (admin token). Ledge
 (seeded idempotently past the integrity triggers, target `maximize`), so they get history, trends and regression issues.
 First surface: iPatent (`https://ipatent.qnfo.org/api/metrics`): human views, search visits, crawler hits, drafters (7d).
 An unreadable surface writes nothing.
+
+## FLEET-RUN-RATE-1 (0.4.90, 2026-10-02, pillar cost)
+`cost_usd_30d` ($450, target $200) is list cost over 30 days across all providers, dominated by spend no worker can move:
+a one-off gpt-5.5 session burst on 2026-09-26 (about $198, ages out about 2026-10-26) and the owner's own desktop client
+on BYOK DeepSeek (about $167). `fleet_ai_run_rate_30d_usd` is the fleet's own live AI cost projected to 30 days from the
+last full days of data (attributed Workers AI neurons above the free 10k/day at $0.011/1k, plus qnfo-ai router spend on
+other providers). Proposed target <= $15; its trigger names the top neuron consumer as the lever. Refreshed by the
+improvement tick; tested in `improvement.test.mjs`.
