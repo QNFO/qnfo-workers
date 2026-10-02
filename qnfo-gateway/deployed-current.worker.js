@@ -1,4 +1,4 @@
-var VERSION="3.8.3-doi-hygiene";
+var VERSION="3.8.4-ask-model";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -1552,7 +1552,7 @@ __name22222222(handleRss, "handleRss");
 __name222222222(handleRss, "handleRss");
 __name2222222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "legal-pages", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Ask-a-paper uses one model (glm-5.3-flash) with a 2048-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
+  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "legal-pages", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Ask-a-paper (POST /api/ask) uses one model (llama-3.3-70b-instruct-fp8-fast) with a 1200-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -1644,14 +1644,18 @@ async function handleAskAI(request, env) {
         paperBody = (stripFrontmatter(paper.body_md) || paper.abstract || "").slice(0, 6e3);
       }
     }
-    const result = await env.AI.run("@cf/zai-org/glm-5.3-flash", {
+    // ASK-MODEL-1 (3.8.4): glm-5.3-flash is a reasoning model; within 2048 tokens it often returned no answer at all
+    // (measured on ask.qwav.tech, ASK-LOOP-1 2.0.2). Same non-reasoning model as ask.qwav.tech's champion; any <think>
+    // block is removed. Paper pages ask through ask.qwav.tech; this route stays for API callers.
+    const result = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
       messages: [
-        { role: "system", content: 'You are a research assistant for a QNFO paper titled "' + paperTitle + '".' },
+        { role: "system", content: 'You are a research assistant for a QNFO paper titled "' + paperTitle + '". Answer from the paper content; say plainly when it does not cover the question.' },
         { role: "user", content: question + "\n\nPaper content: " + paperBody }
       ],
-      max_tokens: 2048
+      max_tokens: 1200
     });
-    return json({ answer: result?.response || "No response generated.", slug: slug || null });
+    const text = String(result && (result.response || (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content)) || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    return json({ answer: text || "No response generated.", slug: slug || null, model: "llama-3.3-70b-instruct-fp8-fast" });
   } catch (e) {
     return json({ error: "The model call failed; try again later." }, 502);
   }
