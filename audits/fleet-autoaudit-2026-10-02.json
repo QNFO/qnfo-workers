@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 08:14:15",
+  "audited_at": "2026-10-02 08:19:01",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -422,7 +422,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.7.37-cadence-cap",
+        "version": "0.7.38-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -442,7 +442,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.0.2-ask-loop",
+        "version": "2.1.0-paper-pin",
         "worker": "qnfo-ai-search"
       },
       {
@@ -497,7 +497,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.7.28-fleet-ctl",
+        "version": "3.8.1-living-papers",
         "worker": "qnfo-gateway"
       },
       {
@@ -848,9 +848,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.7.37-cadence-cap",
+      "before": "0.7.38-codeagent",
       "http": 200,
-      "live": "0.7.37-cadence-cap",
+      "live": "0.7.38-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -896,9 +896,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.0.2-ask-loop",
+      "before": "2.1.0-paper-pin",
       "http": 200,
-      "live": "2.0.2-ask-loop",
+      "live": "2.1.0-paper-pin",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.7.28-fleet-ctl",
+      "before": "3.8.1-living-papers",
       "http": 200,
-      "live": "3.7.28-fleet-ctl",
+      "live": "3.8.1-living-papers",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
