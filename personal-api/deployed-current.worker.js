@@ -45,7 +45,11 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.3.1-gcal-mcp";
+var VERSION = "4.3.2-static-fleet-link";
+// FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
+// <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
+// any script loaded here can read it; a remote script from a shared, open worker would put calendar write access and
+// personal data one edit away (PERSONAL-QNFO-SEPARATION-1). Same link, position, style and Alt+Shift+K shortcut.
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -2165,7 +2169,7 @@ function md(s){
       var t=mid.join('');
       var c=t.split(String.fromCharCode(96));var fin=[];
       for(var k=0;k<c.length;k++){fin.push(k%2===1?'<code>'+c[k]+'</code>':c[k]);}
-      out.push(fin.join('').replace(/(https?://[^s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>').split(NL).join('<br>'));
+      out.push(fin.join('').replace(/(https?:\\/\\/[^\\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>').split(NL).join('<br>'));
     }
   }
   return out.join('');
@@ -2219,7 +2223,7 @@ $('#inp').addEventListener('keydown',function(e){if(e.key==='Enter')$('#send').c
 $('#sendIntent').onclick=function(){var txt=$('#expr').value.trim();if(!txt)return;var key=$('#key').value.trim();if(!key){$('#intentResult').textContent='API key required';return;}var btn=$('#sendIntent');btn.disabled=true;$('#intentResult').textContent='Expressing...';fetch('/v1/express',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({desire:txt,source:'pwa'})}).then(function(r){return r.json();}).then(function(j){if(j.error){$('#intentResult').textContent='ERROR: '+j.error;return;}$('#intentResult').textContent='[stored] '+(j.id||'')+(j.ts?' at '+j.ts.slice(0,16).replace('T',' '):'');$('#expr').value='';}).catch(function(e){$('#intentResult').textContent='ERROR: '+String(e.message||e);}).finally(function(){btn.disabled=false;});};
 $('#key').addEventListener('input',function(){save(msgs);loadModels();});
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}
-<\/script></body></html>`;
+<\/script><a id="fleet-ctl" href="https://fleet.qnfo.org/cmd?from=https%3A%2F%2Fpersonal-api.q08.workers.dev%2F" rel="noopener noreferrer" title="Fleet command line for this page (owner controls need an email code)" aria-label="Fleet command line" style="position:fixed;right:10px;bottom:8px;z-index:2147483000;font:12px/1 system-ui,sans-serif;padding:5px 8px;border-radius:7px;color:#5b6472;background:rgba(127,127,127,.12);text-decoration:none;opacity:.45">&#8984; fleet</a><script>document.addEventListener("keydown",function(e){if(e.altKey&&e.shiftKey&&(e.key==="K"||e.key==="k"))location.href=document.getElementById("fleet-ctl").href;});<\/script></body></html>`;
 var TITLE = "Personal Twin - notes (personal-api)";
 var SHORT = "Personal Twin";
 var MANIFEST = '{"name":"__TITLE__","short_name":"__SHORT__","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#0b57d0","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml"}]}';

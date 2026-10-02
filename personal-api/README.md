@@ -1,8 +1,15 @@
-# personal-api - Agentic Personal Twin (v4.3.1)
+# personal-api - Agentic Personal Twin (v4.3.2)
 
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
 RAG + live-web + live-weather over the personal-life D1 + Vectorize archive, now with an
 AGENTIC TOOL LOOP. Never calls the QNFO records oracle (PERSONAL-QNFO-SEPARATION-1).
+
+## v4.3.2 (2026-10-02) - twin web page works again; fleet link without remote code (pillar: personal)
+- PLAYGROUND-REGEX-1: the page script's link regex lost its escapes inside the template literal and rendered as
+  `/(https?://[^s<]+)/`, a syntax error, so the whole playground script never ran (no send, no model list). Fixed.
+- FLEET-CTL-STATIC-1 (issue 1771, supersedes PR 443): the owner control link is static HTML plus an inline Alt+Shift+K
+  handler, not `<script src="https://fleet.qnfo.org/ctl.js">`: this page stores the personal API key in localStorage and
+  any loaded script can read it.
 
 ## v4.3.1 (2026-10-02) - real Google Calendar, MCP for any client (pillar: personal)
 - 4.3.1: /google/* pages HTML-escape all text and send a strict CSP (reflected XSS via ?error= fixed before release).
