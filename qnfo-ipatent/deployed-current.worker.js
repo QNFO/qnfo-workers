@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.1-error-json"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.2-fleet-link"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -313,6 +313,13 @@ __name(generateId, "generateId");
 __name2(generateId, "generateId");
 __name22(generateId, "generateId");
 __name222(generateId, "generateId");
+// FLEET-CTL-STATIC-1 (issues 1776, 1777; owner request 1757): the owner's fleet command-line link at the bottom of every
+// iPatent page, as static HTML. Not <script src="https://fleet.qnfo.org/ctl.js">: these pages hold an inventor's unfiled
+// disclosure text, and a script loaded from a shared, open worker could read it (same decision as personal-api 4.3.2).
+// The generated disclosure document (generateHtmlDocument) carries no link: it is what the inventor saves and prints.
+function fleetCtlLink(pageUrl) {
+  return '<a id="fleet-ctl" href="https://fleet.qnfo.org/cmd?from=' + encodeURIComponent(pageUrl) + '" rel="noopener noreferrer" title="Fleet command line for this page (owner controls need an email code)" aria-label="Fleet command line" style="position:fixed;right:10px;bottom:8px;z-index:2147483000;font:12px/1 system-ui,sans-serif;padding:5px 8px;border-radius:7px;color:#5b6472;background:rgba(127,127,127,.12);text-decoration:none;opacity:.45">&#8984; fleet</a><style>@media print{#fleet-ctl{display:none!important}}</style>';
+}
 function escapeHtml(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -959,7 +966,7 @@ ${page.sections.map(([h, body]) => "<h2>" + esc(h) + "</h2>" + body).join("\n")}
 <h2>More guides</h2><ul><li><a href="/guide">What a provisional protects, and how to draft one</a></li>${others}</ul>
 <footer><p class="mono">By ${esc(GUIDE_AUTHOR.name)} (<a href="https://orcid.org/${GUIDE_AUTHOR.orcid}">ORCID</a>) at <a href="https://qnfo.org">QNFO</a>. General information about US law and USPTO practice as of ${esc(page.updated)}, not legal advice: have a registered patent attorney or agent review your filing. Licensed under <a href="https://qnfo.org/legal">QNFO-ULA</a>. <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-guide">Work with me</a> \u00b7 <a href="/#subscribe">Get the benchmark results</a></p>
 <p class="mono">Share: ${shareLinks(url + "?utm_source=share&utm_medium=social&utm_campaign=ipatent-guide", page.title)}</p></footer>
-</div></body></html>`;
+</div>${fleetCtlLink(url)}</body></html>`;
 }
 __name(renderGuidePage, "renderGuidePage");
 
@@ -1070,6 +1077,7 @@ var GUIDE_HTML = `<!DOCTYPE html>
 iPatent is a free, open experiment from <a href="https://qnfo.org">QNFO</a> by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID</a>). <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-guide">Work with me</a> · <a href="/example">See a real run</a>. Source code is public at <a href="https://github.com/QNFO/qnfo-workers/tree/main/qnfo-ipatent">github.com/QNFO/qnfo-workers</a>. This guide is general information, not legal advice, and reflects US law and USPTO fees as of 2 October 2026.
 </footer>
 </div>
+${fleetCtlLink(CANONICAL_ORIGIN + "/guide")}
 </body>
 </html>`;
 
@@ -1151,7 +1159,7 @@ function renderExamplePage() {
 <a class="cta" href="/#draft">Draft your own, free</a><a class="cta alt" href="/guide">Read the provisional guide</a>
 <footer><p>Share this example: ${shareLinks("https://ipatent.qnfo.org/example?utm_source=share&utm_medium=social&utm_campaign=ipatent-example", "A real AI-drafted provisional patent, and the five things it invented")}</p>
 <p class="mono">Built by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID</a>) at <a href="https://qnfo.org">QNFO</a>. Want a human review, iPatent for your team or institution, or to collaborate? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&utm_medium=referral&utm_campaign=ipatent">Work with me</a>. Not legal advice.</p></footer>
-</div></body></html>`;
+</div>${fleetCtlLink(CANONICAL_ORIGIN + "/example")}</body></html>`;
 }
 __name(renderExamplePage, "renderExamplePage");
 
@@ -1854,6 +1862,7 @@ var LANDING_HTML = `<!DOCTYPE html>
   loadStarters();
 })();
 <\/script>
+${fleetCtlLink(CANONICAL_ORIGIN + "/")}
 </body>
 </html>
 `;

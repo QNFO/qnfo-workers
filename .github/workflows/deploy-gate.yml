@@ -191,6 +191,7 @@ jobs:
       - name: IPATENT-USAGE-1 offline suites (qnfo-ipatent, qnfo-fleet-dashboard)
         run: |
           node qnfo-ipatent/usage.test.mjs
+          node qnfo-ipatent/fleet-link.test.mjs
           node qnfo-ipatent/routes.test.mjs
           node qnfo-ipatent/error-json.test.mjs
           node qnfo-fleet-dashboard/ipatent-usage.test.mjs
