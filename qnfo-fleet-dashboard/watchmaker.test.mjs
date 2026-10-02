@@ -64,6 +64,11 @@ db.prepare("INSERT INTO improvement_loop_runs (ts) VALUES (?)").run(ago(1));
 db.prepare("INSERT INTO ask_loop_runs (ts, kind, ok) VALUES (?, 'measure', 1)").run(ago(0.3));
 db.prepare("INSERT INTO ask_loop_runs (ts, kind, ok) VALUES (?, 'fix', 1)").run(ago(4.3));
 db.prepare("INSERT INTO ask_loop_runs (ts, kind, ok) VALUES (?, 'fix', 0)").run(ago(0.1));
+// PERFORMANCE-LOOP-1 (1.17.4): the experiment evaluator's daily ledger and the five KPIs it refreshes hourly.
+db.exec("CREATE TABLE perf_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, day TEXT, kind TEXT)");
+db.prepare("INSERT INTO perf_runs (ts, day, kind) VALUES (?, '2026-10-05', 'experiments')").run(ago(23));
+const PERF_KPIS = ["issue_mttr_h_30d", "deploy_failure_rate_7d", "worker_health_failure_rate", "credibility_events_90d", "selected_works_citation_coverage"];
+for (const k of PERF_KPIS) db.prepare("INSERT INTO metric_registry (metric, layer, kind, source_of_truth, disposition_actor, refresh_cadence, last_value, last_refreshed, state) VALUES (?, 'operational', 'leading', 's', 'a', 'hourly', 'n/a: unmeasured', ?, 'UNMEASURED')").run(k, ago(0.5));
 db.prepare("INSERT INTO remediation_contracts (class, last_attempt_at) VALUES ('EVID-1', ?)").run(new Date(NOW - 2 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pending', 'research', ?)").run(ago(10));
 // errata-hub hourly ticks (#1747): the watchmaker reads $.last_ok, which a failed tick carries forward.
@@ -210,6 +215,24 @@ m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "errata-respond").counted && /stalled: last run 3h ago, cadence 1h/.test(op(m, "errata-respond").state) && m.index === 1, "an errata member with no successful tick for over 2h counts as stalled");
 db.prepare("UPDATE errata_watch SET value = ? WHERE key = 'tick:errata-respond'").run(JSON.stringify({ ts: ago(0.2), ok: true, last_ok: ago(0.2) }));
 ok(op(m, "objective-constraints").state.startsWith("ok") && op(m, "objective-constraints").runner === "cron:qnfo-fleet-control", "OBJECTIVE-CONSTRAINTS-1 is listed with its hourly kernel ledger");
+
+// PERFORMANCE-LOOP-1: the experiment evaluator (daily perf_runs row) and its five hourly KPIs (MIN(last_refreshed)).
+m = await api.watchmakerMeasure(env, NOW);
+ok(m.index === 0 && op(m, "performance-experiments").state === "ok, last run 23h ago" && op(m, "performance-metrics").state === "ok, last run 0.5h ago" && op(m, "performance-experiments").runner === "cron:qnfo-fleet-control", "PERFORMANCE-LOOP-1: the evaluator and the KPIs read fresh (an unmeasured KPI still proves its run)");
+db.prepare("UPDATE perf_runs SET ts = ?").run(ago(49));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "performance-experiments").counted && /stalled: last run 49h ago, cadence 24h/.test(op(m, "performance-experiments").state) && m.index === 1, "an evaluator with no ledger row for over 48h counts as stalled");
+db.prepare("UPDATE perf_runs SET ts = ?").run(ago(23));
+db.prepare("UPDATE metric_registry SET last_refreshed = ? WHERE metric = 'credibility_events_90d'").run(ago(3));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "performance-metrics").counted && /stalled: last run 3h ago, cadence 1h/.test(op(m, "performance-metrics").state) && m.index === 1, "one of the five KPIs not refreshed for over 2h stalls the op (the stalest decides)");
+db.prepare("UPDATE metric_registry SET last_refreshed = ? WHERE metric = 'credibility_events_90d'").run(ago(0.5));
+db.exec("DELETE FROM perf_runs");
+m = await api.watchmakerMeasure(env, NOW);
+ok(!op(m, "performance-experiments").counted && /^first run due 2026-10-06T12:00/.test(op(m, "performance-experiments").state), "before its first due date a never-run evaluator is not counted");
+m = await api.watchmakerMeasure(env, Date.parse("2026-10-06T13:00:00Z"));
+ok(op(m, "performance-experiments").counted && op(m, "performance-experiments").state === "never ran", "after its first due date a never-run evaluator counts");
+db.prepare("INSERT INTO perf_runs (ts, day, kind) VALUES (?, '2026-10-05', 'experiments')").run(ago(23));
 
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('t1', 'pending', 'task', ?)").run(ago(5));
 m = await api.watchmakerMeasure(env, NOW);
