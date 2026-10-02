@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.2.14-public-read-only"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.2.15-codeagent"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -635,7 +635,7 @@ export default {
       const summary = await digest(env, r);
       await assessIntegration(env);
     } catch (e) { console.error('scheduled failed', String(e && e.message || e)); }
-    ctx.waitUntil(Promise.resolve());
+    ctx.waitUntil(evReview(env).catch(console.error));
   },
 
   async fetch(req, env, ctx) {
