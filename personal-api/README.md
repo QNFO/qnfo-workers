@@ -1,10 +1,11 @@
-# personal-api - Agentic Personal Twin (v4.3.0)
+# personal-api - Agentic Personal Twin (v4.3.1)
 
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
 RAG + live-web + live-weather over the personal-life D1 + Vectorize archive, now with an
 AGENTIC TOOL LOOP. Never calls the QNFO records oracle (PERSONAL-QNFO-SEPARATION-1).
 
-## v4.3.0 (2026-10-02) - real Google Calendar, MCP for any client (pillar: personal)
+## v4.3.1 (2026-10-02) - real Google Calendar, MCP for any client (pillar: personal)
+- 4.3.1: /google/* pages HTML-escape all text and send a strict CSP (reflected XSS via ?error= fixed before release).
 - GCAL-1: calendar tools, the brief, the plan and the chat context read Rowan's Google Calendar (primary) and write
   new events to it. Until now they read only calendar-api's D1 store, so real events never appeared. Rows are labelled
   `google`, `twin-store` or `suggestion` (radar ideas, not bookings). Times without an offset are Europe/Amsterdam.

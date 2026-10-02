@@ -45,7 +45,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.3.0-gcal-mcp";
+var VERSION = "4.3.1-gcal-mcp";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -817,9 +817,16 @@ async function calDelete(env, args) {
 }
 __name(calDelete, "calDelete");
 var CONNECT_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect Google Calendar</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem}input,button{font:inherit;padding:.5rem;width:100%;box-sizing:border-box;margin:.4rem 0}</style></head><body><h1>Connect Google Calendar</h1><p>__MSG__</p>__FORM__</body></html>';
+// Every message is HTML-escaped: some carry text from the query string or from Google (e.g. ?error=), and the twin's
+// origin holds the API key in its playground, so a reflected script would be an account takeover.
+function escHtmlText(t) {
+  return String(t == null ? "" : t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+__name(escHtmlText, "escHtmlText");
 function connectPage(msg, form, status) {
+  msg = escHtmlText(msg);
   const f = form ? '<form method="post" action="/google/connect"><label>Personal API key<input type="password" name="key" autocomplete="current-password" required></label><button type="submit">Continue to Google</button></form>' : "";
-  return new Response(CONNECT_HTML.replace("__MSG__", msg).replace("__FORM__", f), { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  return new Response(CONNECT_HTML.replace("__MSG__", msg).replace("__FORM__", f), { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://accounts.google.com; frame-ancestors 'none'", "X-Content-Type-Options": "nosniff" } });
 }
 __name(connectPage, "connectPage");
 async function handleGoogle(request, env, url) {
