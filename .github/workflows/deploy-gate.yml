@@ -215,6 +215,10 @@ jobs:
       # failure, mail facts in the Ask context (public vs owner fields), and the credential behind every ratification.
       - name: OWNER-SURFACE-HONESTY-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/owner-surface.test.mjs
+      # OWNER-MORNING-1: credit runway from the 7-day third-party gateway burn, /api/changes, an honest health pill,
+      # human-only pageviews, a 60 s poll and a public refresh that does not re-measure the whole fleet.
+      - name: OWNER-MORNING-1 offline suite (qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-fleet-dashboard/owner-morning.test.mjs
 
       # SAI-COMPOSITE-WEIGHTS-1 (#1739): survival_state.sai and the charter's Autonomy composite are the owner-weighted SAI.
       # The suite locks the scorer's SAI formula to the dashboard's computeSai (parity on a live fixture and 400 random

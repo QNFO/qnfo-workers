@@ -169,6 +169,16 @@ jobs:
           echo "$out" | grep -q "0 failed" \
             || { echo "::error::performance loop suite reported failures"; exit 1; }
 
+      # TRIGGER-RECOVERY-1: a METRIC-TRIGGER issue closes itself with close_evidence after an hour of recovery, a breach
+      # during the streak ends it, and the publication preflight closes its own issue (real code, in-memory SQLite D1).
+      - name: Replay trigger recovery offline
+        run: |
+          set -euo pipefail
+          out=$(node --no-warnings qnfo-fleet-control/trigger-recovery.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "^0 failure(s)" \
+            || { echo "::error::trigger recovery suite reported failures"; exit 1; }
+
       - name: Resolve the diff range
         id: range
         run: |

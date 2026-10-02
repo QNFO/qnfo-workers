@@ -975,7 +975,7 @@ var calibratorMod = (function() {
     async scheduled(controller, env, ctx) {
       const cron = controller.cron || "";
       let type = "daily";
-      if (cron === "30 3 * * 0") type = "stress";
+      if (cron === "30 3 * * 1") type = "stress"; // CAL-STRESS-CRON-1: wrangler declares Monday (1); the Sunday key never matched
       else if (cron === "0 4 1 * *") type = "monthly";
       const out = await runCalibration(env, type, "cron:" + cron, null);
       await stateSet2(env, "last_cron", sjs({ cron, type, out, at: nowIso() }));
@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.105-evolve-json"; /* 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.106-trigger-recovery"; /* 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -6973,6 +6973,17 @@ function triggerIssuePriority(p) {
   if (s === "" || !isFinite(n)) return "medium";
   return n >= 9 ? "critical" : n >= 7 ? "high" : n >= 5 ? "medium" : "low";
 }
+// TRIGGER-RECOVERY-1 (2026-10-02, autonomy audit): a METRIC-TRIGGER issue was filed on breach and never closed when the
+// metric recovered (nothing else closes that title), so recovered breaches stayed open and remedy efficacy could not be
+// judged. A trigger that is no longer hit opens a 'recovering' streak in analytics_action_log; once the metric has stayed
+// on the right side of its threshold for TRIGGER_RECOVERY_MIN minutes the issue closes itself with close_evidence. A hit
+// during the streak writes 'relapsed', which ends it, so a metric hovering at its threshold is not closed and refiled.
+var TRIGGER_RECOVERY_MIN = 60;
+function triggerRecoveryDue(streakStartIso, nowMs, minMinutes) {
+  if (!streakStartIso) return false;
+  var t = Date.parse(String(streakStartIso).replace(" ", "T") + (/Z$|[+-]\d\d:?\d\d$/.test(String(streakStartIso)) ? "" : "Z"));
+  return isFinite(t) && nowMs - t >= (Number(minMinutes) || TRIGGER_RECOVERY_MIN) * 60000;
+}
 // ---- ACT-BRIDGE-1:END ----
 async function evaluateMetricTriggers(env) {
   var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
@@ -6987,7 +6998,30 @@ async function evaluateMetricTriggers(env) {
     out.evaluated++;
     var thr = Number(t.threshold), op = String(t.operator || "gte");
     var hit = op === "gt" ? v > thr : op === "lte" ? v <= thr : op === "lt" ? v < thr : op === "eq" ? v === thr : v >= thr;
-    if (!hit) continue;
+    var lastFire = await db.prepare("SELECT MAX(id) AS i FROM analytics_action_log WHERE trigger_id = ?1 AND status NOT IN ('recovering','recovered')").bind(t.id).first().catch(function () { return null; });
+    var streak = await db.prepare("SELECT MIN(fired_at) AS t FROM analytics_action_log WHERE trigger_id = ?1 AND status = 'recovering' AND id > ?2").bind(t.id, lastFire && lastFire.i || 0).first().catch(function () { return null; });
+    if (!hit) {
+      if (String(t.queue_target || "") !== "agent_issues") continue;
+      var openRec = await db.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 AND status = 'open' ORDER BY id LIMIT 5").bind("METRIC-TRIGGER-" + t.id + "-%").all().catch(function () { return { results: [] }; });
+      var openIds = (openRec.results || []).map(function (r) { return r.id; });
+      if (!openIds.length) continue;
+      if (!(streak && streak.t)) {
+        await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'recovery streak opened', 'agent_issues', 'recovering', ?3)").bind(t.id, v, "open issues " + openIds.join(",")).run().catch(function () {});
+        continue;
+      }
+      if (!triggerRecoveryDue(streak.t, Date.now(), TRIGGER_RECOVERY_MIN)) continue;
+      var evid = "TRIGGER-RECOVERY-1 " + new Date().toISOString() + ": " + t.metric_key + "=" + v + " no longer " + op + " " + thr + " since " + streak.t + " (" + TRIGGER_RECOVERY_MIN + " min or more)";
+      for (var oi = 0; oi < openIds.length; oi++) {
+        try {
+          await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'TRIGGER-RECOVERY-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(openIds[oi], evid).run();
+          await db.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1 AND status='open'").bind(openIds[oi], Date.now()).run();
+        } catch (e) {}
+      }
+      await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'closed on recovery', 'agent_issues', 'recovered', ?3)").bind(t.id, v, "closed " + openIds.join(",")).run().catch(function () {});
+      out.recovered = (out.recovered || []).concat([{ id: t.id, metric: t.metric_key, value: v, closed: openIds }]);
+      continue;
+    }
+    if (streak && streak.t) await db.prepare("INSERT INTO analytics_action_log (trigger_id, fired_at, metric_value, action, queue_target, status, notes) VALUES (?1, datetime('now'), ?2, 'breach again during recovery streak', ?3, 'relapsed', NULL)").bind(t.id, v, String(t.queue_target || "none")).run().catch(function () {});
     var cd = Math.max(1, Number(t.cooldown_hours) || 24);
     var recent = await db.prepare("SELECT id FROM analytics_action_log WHERE trigger_id = ?1 AND fired_at > datetime('now', ?2) AND status <> 'dispatch-failed' LIMIT 1").bind(t.id, "-" + cd + " hours").first().catch(function () { return null; });
     if (recent) continue;
@@ -7079,6 +7113,9 @@ async function publicationPreflight(env) {
         await db.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('qnfo-fleet-control', 'error', ?1, NULL)").bind(title.slice(0, 400)).run();
       } else if (sok && open) {
         await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'publication_preflight_recovered', ?3, '{}', 'qnfo-fleet-control', 'ok')").bind("ppr-" + Date.now().toString(36), new Date().toISOString(), sf.name + " recovered; open issue " + open.id).run();
+        // TRIGGER-RECOVERY-1: recovery used to be recorded but the issue stayed open; close it with the passing checks as evidence.
+        await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'PUBLICATION-PREFLIGHT-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(open.id, "PUBLICATION-PREFLIGHT-1 " + new Date().toISOString() + ": all checks pass: " + JSON.stringify(checks).slice(0, 600)).run();
+        await db.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1 AND status='open'").bind(open.id, Date.now()).run();
       }
     } catch (e) {}
   }

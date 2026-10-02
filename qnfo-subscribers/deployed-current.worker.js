@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.3-capability-contract";
+var VERSION = "1.1.4-digest-exclude"; // DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
 var SITE = "https://qnfo.org";
 var FROM = { email: "qnfo@qnfo.org", name: "QNFO" };
 var MAX_RECIPIENTS = 1e3;
@@ -206,7 +206,7 @@ async function runDigest(env, opts) {
   let papers = [];
   try {
     const pr = await env.LIVING.prepare(
-      "SELECT slug, title, created_at, doi, zenodo_doi FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill') AND created_at >= ?1 ORDER BY created_at DESC LIMIT " + PAPER_CAP
+      "SELECT slug, title, created_at, doi, zenodo_doi FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') AND created_at >= ?1 ORDER BY created_at DESC LIMIT " + PAPER_CAP
     ).bind(since).all();
     papers = pr && pr.results || [];
   } catch (e) {
