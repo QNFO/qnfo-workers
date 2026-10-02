@@ -1,13 +1,26 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.1.5-capability-contract"; // WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.2.0-crons-gated"; // 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
-var WATCH_VERSION = "0.2.2";
-var RESPOND_VERSION = "0.4.1";
-var PUBLISH_VERSION = "0.7.2-republish-verify";
+var WATCH_VERSION = "0.2.3";
+var RESPOND_VERSION = "0.4.2-ai-disclosed";
+var PUBLISH_VERSION = "0.8.0-publish-gate";
+// ERRATA-HUB-CRONS-UNDECLARED-1 (2026-10-02, #1747, pillar research): wrangler.toml now declares the three hourly members
+// (watch :00, respond :15, publish :30). Every cron tick upserts qnfo-audit errata_watch key 'tick:<member>' with its
+// outcome, so a member that stops running is visible in D1 (qnfo-fleet-dashboard WATCHMAKER_OPS reads $.last_ok). A
+// failed tick records its error and keeps the previous last_ok.
+async function errataTick(env, member, ok, data) {
+  const ts = new Date().toISOString();
+  const v = JSON.stringify(Object.assign({ ts, ok: !!ok, hub: VERSION }, data || {}, ok ? { last_ok: ts } : {}));
+  try {
+    await env.WATCH_DB.prepare("INSERT INTO errata_watch (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = CASE WHEN json_extract(excluded.value, '$.ok') THEN excluded.value ELSE json_set(excluded.value, '$.last_ok', json_extract(errata_watch.value, '$.last_ok')) END").bind("tick:" + member, v).run();
+  } catch (e) {
+    console.error("[errata-hub] tick write failed:", member, e && e.message);
+  }
+}
 var erratawatchMod = (function(){
 const QNFO_VERSION = "qnfo-errata-watch/fabric-20260910";
 var __defProp = Object.defineProperty;
@@ -114,8 +127,10 @@ var worker_default = {
     try {
       const r = await runCheck(env, "live");
       console.log("[qnfo-errata-watch] cron done:", JSON.stringify({ scanned: r.scanned, classified: r.classified, detected: r.detectedCount }));
+      await errataTick(env, "errata-watch", true, { version: WATCH_VERSION, scanned: r.scanned, classified: r.classified, detected: r.detectedCount, last_email_id: r.advancedTo });
     } catch (e) {
       console.error("[qnfo-errata-watch] cron error:", e.message);
+      await errataTick(env, "errata-watch", false, { version: WATCH_VERSION, error: String(e && e.message || e).slice(0, 300) });
     }
   }
 };
@@ -128,6 +143,9 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var MODEL = "@cf/zai-org/glm-5.3-flash";
+// ERRATA-AI-DISCLOSURE-1 (2026-10-02, #1747): the clarification, acknowledgement and changelog below are drafted by MODEL.
+// The corrected text carries this line whenever any of them lands, so a correction that is ever published discloses it.
+var AI_DISCLOSURE = "This correction was drafted with AI assistance (" + MODEL + ") from a correspondent's report.";
 function json(data, status) {
   if (status === void 0) status = 200;
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -216,11 +234,12 @@ function insertClarification(md, corr) {
   return { md: md2, applied: true, reason: null };
 }
 __name(insertClarification, "insertClarification");
-function addAcknowledgementAndChangelog(md, corr) {
+function addAcknowledgementAndChangelog(md, corr, clarified) {
   let out = md;
   const block = [];
   if (corr.acknowledgement) block.push("**Acknowledgements:** " + corr.acknowledgement);
   if (corr.changelog) block.push("**Changelog:** " + corr.changelog + (corr.version ? " (v" + corr.version + ")" : ""));
+  if (block.length || clarified) block.push("*" + AI_DISCLOSURE + "*");
   if (block.length === 0) return out;
   const insertBlock = "\n\n" + block.join("\n\n") + "\n";
   const refIdx = out.indexOf("## References");
@@ -250,7 +269,7 @@ function applyCorrection(paperMd, corr) {
   const r1 = insertClarification(md, corr);
   md = r1.md;
   applied.clarification = r1.applied;
-  md = addAcknowledgementAndChangelog(md, corr);
+  md = addAcknowledgementAndChangelog(md, corr, r1.applied);
   applied.acknowledgement = !!(corr.acknowledgement || corr.changelog);
   md = bumpVersion(md, corr.version);
   applied.version = !!corr.version;
@@ -279,7 +298,7 @@ async function notifyUser(env, paper, corr, action) {
   try {
     const subject = "QNFO errata drafted: " + (paper.slug || paper.doi || "");
     const text = [
-      "An inbound email requested a correction to a QNFO paper, and a correction was drafted automatically (cloud pipeline).",
+      "An inbound email requested a correction to a QNFO paper, and a correction was drafted automatically by an AI model (" + MODEL + ", cloud pipeline).",
       "",
       "Paper: " + (paper.slug || "") + " (" + (paper.doi || "") + ")",
       "Risk: " + (corr.risk || "high"),
@@ -288,7 +307,7 @@ async function notifyUser(env, paper, corr, action) {
       "Changelog: " + (corr.changelog || "(none)"),
       "New version: " + (corr.version || "(unchanged)"),
       "",
-      "This is an automatic receipt. The staged correction is recorded in D1 (errata_actions) and is queued for publication."
+      "This is an automatic receipt. The staged correction is recorded in D1 (errata_actions). errata-publish sends a low-risk draft to Zenodo only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (default off); until then it is listed as would_publish in errata_watch tick:errata-publish. The errata sender is not emailed."
     ].join("\n");
     await env.SEND_EMAIL.send({ to: "rwnquni@outlook.com", from: "qnfo@qnfo.org", subject, text, html: "<pre>" + text.replace(/</g, "&lt;") + "</pre>" });
     return { sent: true };
@@ -369,8 +388,12 @@ var worker_default = {
     try {
       const r = await runRespond(env, "live");
       console.log("[qnfo-errata-respond] cron done:", JSON.stringify({ processed: r.processed, results: r.results }));
+      await errataTick(env, "errata-respond", true, { version: RESPOND_VERSION, processed: r.processed, results: r.results.map(function(x) {
+        return { item_id: x.item_id, slug: x.slug || null, risk: x.risk || null, error: x.error || null };
+      }) });
     } catch (e) {
       console.error("[qnfo-errata-respond] cron error:", e.message);
+      await errataTick(env, "errata-respond", false, { version: RESPOND_VERSION, error: String(e && e.message || e).slice(0, 300) });
     }
   }
 };
@@ -21535,8 +21558,25 @@ async function verifyPublished(env) {
   return out;
 }
 __name(verifyPublished, "verifyPublished");
+// ERRATA-PUBLISH-GATE-1 (2026-10-02, #1747, pillar research): a live publish mints an irreversible Zenodo version in the
+// owner's name from an AI-drafted correction whose risk label the model chose itself (AUTONOMY-DECISION-POLICY-1: irreversible
+// and external, so it parks with a safe default). It runs only while qnfo-audit pipeline_flags.errata_publish_enabled = '1';
+// no row, any other value or an unreadable flag means off. Off, a live run is forced dry: no Zenodo call, no papers/KG/R2
+// re-point, no status change, no mail. The cron's tick row (errata_watch tick:errata-publish) lists what it would publish.
+async function publishGate(env) {
+  const flag = "qnfo-audit pipeline_flags.errata_publish_enabled";
+  try {
+    const r = await (env.AUDIT_DB || env.WATCH_DB).prepare("SELECT value FROM pipeline_flags WHERE key = 'errata_publish_enabled'").first();
+    const value = r && r.value != null ? String(r.value) : null;
+    return { enabled: value === "1", flag, value };
+  } catch (e) {
+    return { enabled: false, flag, value: null, error: String(e && e.message || e).slice(0, 200) };
+  }
+}
+__name(publishGate, "publishGate");
 async function runPublish(env, mode) {
-  const dry = mode === "dry";
+  const gate = await publishGate(env);
+  const dry = mode === "dry" || !gate.enabled;
   if (!dry) {
     const stuck = await env.WATCH_DB.prepare(
       "SELECT id, paper_doi, slug FROM errata_actions WHERE status='publishing' AND updated_at < datetime('now','-60 minutes') ORDER BY id ASC LIMIT 5"
@@ -21568,7 +21608,7 @@ async function runPublish(env, mode) {
       results.push({ action_id: a.id, error: e.message });
     }
   }
-  return { ok: true, worker: "qnfo-errata-publish", version: PUBLISH_VERSION, dry, processed: rows.length, results };
+  return { ok: true, worker: "qnfo-errata-publish", version: PUBLISH_VERSION, dry, gate, processed: rows.length, results };
 }
 __name(runPublish, "runPublish");
 __name2(runPublish, "runPublish");
@@ -21611,11 +21651,19 @@ var publish_worker_src_default = {
   async scheduled(event, env, ctx) {
     try {
       const r = await runPublish(env, "live");
-      console.log("[qnfo-errata-publish] cron done:", JSON.stringify({ processed: r.processed, results: r.results }));
+      console.log("[qnfo-errata-publish] cron done:", JSON.stringify({ gate: r.gate, processed: r.processed, results: r.results }));
       const v = await verifyPublished(env);
       if (v.checked) console.log("[qnfo-errata-publish] verify:", JSON.stringify(v));
+      await errataTick(env, "errata-publish", true, {
+        version: PUBLISH_VERSION, gate: r.gate, dry: r.dry, processed: r.processed,
+        would_publish: r.dry ? r.results.map(function(x) { return { action_id: x.action_id, paper: x.paper, version_to: x.version_to }; }) : [],
+        published: r.dry ? [] : r.results.filter(function(x) { return x.published && !x.error; }).map(function(x) { return x.action_id; }),
+        errors: r.results.filter(function(x) { return x.error; }).map(function(x) { return { action_id: x.action_id, error: String(x.error).slice(0, 200) }; }),
+        verify: v
+      });
     } catch (e) {
       console.error("[qnfo-errata-publish] cron error:", e.message);
+      await errataTick(env, "errata-publish", false, { version: PUBLISH_VERSION, error: String(e && e.message || e).slice(0, 300) });
     }
   }
 };
@@ -21651,7 +21699,7 @@ async function internalErrataIntake(request, env) {
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake"], limitations: ["no cron is declared in wrangler.toml, so the hourly watch/respond/publish members do not run on their own (ERRATA-HUB-CRONS-UNDECLARED-1)", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction goes to Zenodo only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published"] }), { headers: { "content-type": "application/json" } });
     if (p === "/internal-errata" && request.method === "POST") return internalErrataIntake(request, env);
     if (p === "/errata-watch" || p.startsWith("/errata-watch/")) { const u = new URL(request.url); u.pathname = p.slice(13) || "/"; return erratawatchMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/errata-respond" || p.startsWith("/errata-respond/")) { const u = new URL(request.url); u.pathname = p.slice(15) || "/"; return erratarespondMod.default.fetch(new Request(u.toString(), request), env, ctx); }
