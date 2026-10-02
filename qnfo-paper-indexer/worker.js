@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.8-flagship-measure";
+var VERSION = "3.0.9-codeagent";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -77,6 +77,7 @@ async function runImpact(env, commit, limit) {
     const have = new Set(list.map((p) => p.zenodo_doi || p.doi));
     const fl = await env.QNFO_AUDIT.prepare("SELECT doi FROM citation_stats WHERE source='zenodo' AND metric='downloads' GROUP BY doi ORDER BY MAX(value) DESC LIMIT 10").all();
     for (const f of fl.results || []) if (f.doi && !have.has(f.doi)) { have.add(f.doi); list.push({ slug: "flagship:" + f.doi, doi: f.doi, zenodo_doi: f.doi }); }
+['10.5281/zenodo.21637028', '10.5281/zenodo.22261547', '10.5281/zenodo.21821767', '10.5281/zenodo.21945415', '10.5281/zenodo.21901984', '10.5281/zenodo.22026592', '10.5281/zenodo.23079905'].forEach(doi => { if (!have.has(doi)) { have.add(doi); list.push({ slug: 'selected:' + doi, doi: doi, zenodo_doi: doi }); } });
   } catch (e) {
     out.errors.push({ slug: "flagship-set", error: String(e && e.message || e).slice(0, 200) });
   }
