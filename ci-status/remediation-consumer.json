@@ -1,61 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@80ad96b5f602",
- "due": 6,
+ "verifier": "remediation-consumer@7a4a68b5f779",
+ "due": 0,
  "pass": 0,
- "fail": 6,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "issue-1653",
-   "issue_id": 1653,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1621",
-   "issue_id": 1621,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "274",
-   "written": true
-  },
-  {
-   "class": "issue-1753",
-   "issue_id": 1753,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1754",
-   "issue_id": 1754,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1755",
-   "issue_id": 1755,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1756",
-   "issue_id": 1756,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -72,7 +23,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 13874,
- "head": "80ad96b5f6022771169f6d6533fd5afc908d555e",
+ "spent_ms": 2248,
+ "head": "7a4a68b5f779083be0ed733d0491fb6b6a8b6d42",
  "job_status": "success"
 }
