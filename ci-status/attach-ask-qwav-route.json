@@ -1,0 +1,14 @@
+{
+  "marker": "ASK-QWAV-ROUTE-1",
+  "hostname": "ask.qwav.tech",
+  "service": "qnfo-ai-search",
+  "token_present": true,
+  "stage": "verified",
+  "status": "success",
+  "http": 200,
+  "error": null,
+  "zone_id": "331e4363fd05e8e4fc123ea7d2775411",
+  "route_id": "19ab6769115a4f609558686b2b3ed16b",
+  "worker_version": "2.0.1-ask-loop",
+  "ts": "2026-10-02T07:08:35Z"
+}
