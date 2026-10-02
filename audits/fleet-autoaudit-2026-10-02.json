@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 09:14:54",
+  "audited_at": "2026-10-02 09:19:30",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -397,7 +397,7 @@
       },
       {
         "dir": "errata-hub",
-        "version": "1.2.0-crons-gated",
+        "version": "1.2.1-utf8-redeploy",
         "worker": "errata-hub"
       },
       {
@@ -462,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.18.1-outreach-learner",
+        "version": "1.18.2-utf8-github",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -487,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.95-merge-throughput",
+        "version": "0.4.96-utf8-decode",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -497,7 +497,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.8.1-living-papers",
+        "version": "3.8.4-ask-model",
         "worker": "qnfo-gateway"
       },
       {
@@ -512,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.8.0-subscribe-llms",
+        "version": "3.8.1-utf8-redeploy",
         "worker": "qnfo-ipatent"
       },
       {
@@ -557,12 +557,12 @@
       },
       {
         "dir": "qnfo-pdf",
-        "version": "1.0.1-render-internal",
+        "version": "1.0.2-utf8-redeploy",
         "worker": "qnfo-pdf"
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.51-terminal-selfclose",
+        "version": "0.9.52-utf8-redeploy",
         "worker": "qnfo-research-exec"
       },
       {
@@ -656,9 +656,9 @@
       "worker": "docs"
     },
     "errata-hub": {
-      "before": "1.2.0-crons-gated",
+      "before": "1.2.1-utf8-redeploy",
       "http": 200,
-      "live": "1.2.0-crons-gated",
+      "live": "1.2.1-utf8-redeploy",
       "match": 1,
       "note": "SYNC",
       "worker": "errata-hub"
@@ -1016,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.18.1-outreach-learner",
+      "before": "1.18.2-utf8-github",
       "http": 200,
-      "live": "1.18.1-outreach-learner",
+      "live": "1.18.2-utf8-github",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1144,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.95-merge-throughput",
+      "before": "0.4.96-utf8-decode",
       "http": 200,
-      "live": "0.4.95-merge-throughput",
+      "live": "0.4.96-utf8-decode",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.8.1-living-papers",
+      "before": "3.8.4-ask-model",
       "http": 200,
-      "live": "3.8.1-living-papers",
+      "live": "3.8.4-ask-model",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1232,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.8.0-subscribe-llms",
+      "before": "3.8.1-utf8-redeploy",
       "http": 200,
-      "live": "3.8.0-subscribe-llms",
+      "live": "3.8.1-utf8-redeploy",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1320,9 +1320,9 @@
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
-      "before": "1.0.1-render-internal",
+      "before": "1.0.2-utf8-redeploy",
       "http": 200,
-      "live": "1.0.1-render-internal",
+      "live": "1.0.2-utf8-redeploy",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-pdf"
@@ -1360,9 +1360,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.51-terminal-selfclose",
+      "before": "0.9.52-utf8-redeploy",
       "http": 200,
-      "live": "0.9.51-terminal-selfclose",
+      "live": "0.9.52-utf8-redeploy",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
