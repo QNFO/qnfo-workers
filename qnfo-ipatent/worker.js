@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.5.1-page-metrics"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.6.0-support-map"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -83,6 +83,92 @@ async function handleMetrics(env) {
   return json(out);
 }
 __name(handleMetrics, "handleMetrics");
+// SUPPORT-MAP-1 (3.6.0): a provisional secures priority only for what it describes (35 U.S.C. 112(a)). After drafting,
+// every claim element is matched, deterministically and at no model cost, to the numbered specification paragraph that
+// shares the most of its distinctive terms. Elements with no paragraph covering most of their terms are flagged, so the
+// inventor sees exactly what the description must still say. This is a lexical check: a "supported" verdict means the
+// words are there, not that a court would find written description or enablement. The paragraphs are numbered [0001]
+// in USPTO style, and the same numbering is used by the map, the page and the downloadable document.
+var SM_STOP = new Set(("a an the and or of to in on for by with from into onto at as is are be been being this that these those " +
+  "said wherein whereby comprising comprises comprise including includes include having has have configured adapted " +
+  "operable claim claims further least plurality each first second third one more such which where when thereof therein " +
+  "according embodiment embodiments invention present method system apparatus device means step steps based using use " +
+  "used via can may also other another respective respectively portion portions element elements unit units within " +
+  "between about substantially approximately wherein’s its it their them they than then there herein").split(/\s+/));
+function smTokens(text) {
+  return Array.from(new Set(String(text || "").toLowerCase().replace(/[^a-z0-9À-ɏ\s-]/g, " ").split(/[\s-]+/)
+    .filter((w) => w.length >= 4 && !SM_STOP.has(w) && !/^\d+$/.test(w))
+    .map((w) => w.replace(/(ies)$/, "y").replace(/([^s])s$/, "$1"))));
+}
+__name(smTokens, "smTokens");
+// Sections 2-5 -> numbered paragraphs. A block with no blank-line breaks over 600 chars is split every 3 sentences.
+function specParagraphs(sections) {
+  const out = [];
+  const keys = [["technical_field", "Technical Field"], ["background", "Background"], ["summary", "Summary of the Invention"], ["detailed_description", "Detailed Description"]];
+  keys.forEach(([k, label]) => {
+    const raw = String(sections && sections[k] || "").trim();
+    if (!raw) return;
+    let parts = raw.split(/\n\s*\n|\n(?=\s*(?:[-*•]|\d+\.)\s)/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 1 && parts[0].length > 600) {
+      const sent = parts[0].match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [parts[0]];
+      parts = [];
+      for (let i = 0; i < sent.length; i += 3) parts.push(sent.slice(i, i + 3).join("").trim());
+    }
+    parts.forEach((t) => out.push({ n: out.length + 1, section: label, key: k, text: t }));
+  });
+  return out;
+}
+__name(specParagraphs, "specParagraphs");
+function paraNo(n) { return "[" + String(n).padStart(4, "0") + "]"; }
+__name(paraNo, "paraNo");
+// Claims text -> [{claim, element}]: the preamble before "comprising:" is dropped; the body splits on ";" and new lines.
+function claimElements(claimsText) {
+  const claims = [];
+  let cur = null;
+  String(claimsText || "").split(/\n/).forEach((line) => {
+    const t = line.trim();
+    if (!t) return;
+    const m = t.match(/^(\d+)\s*[.)]\s*(.*)$/);
+    if (m) { cur = { claim: Number(m[1]), text: m[2] }; claims.push(cur); }
+    else if (cur) cur.text += " " + t;
+  });
+  const out = [];
+  claims.forEach((c) => {
+    let body = c.text.replace(/^the (method|system|apparatus|device|medium|composition|process)[^,]*of claim \d+[^,]*,?\s*/i, "");
+    const ci = body.search(/\b(comprising|consisting of|including|wherein)\b\s*:?/i);
+    if (ci >= 0 && ci < 220) body = body.slice(ci).replace(/^(comprising|consisting of|including)\s*:?\s*/i, "");
+    body.split(/;|\n|\.\s+(?=[A-Z])/).map((e) => e.trim().replace(/^(and|or)\s+/i, "").replace(/[.;,\s]+$/, "").trim())
+      .filter((e) => e.length >= 12).forEach((e) => out.push({ claim: c.claim, element: e.slice(0, 400) }));
+  });
+  return out;
+}
+__name(claimElements, "claimElements");
+var SM_SUPPORTED = 0.6;
+var SM_WEAK = 0.35;
+function supportMap(claimsText, paragraphs) {
+  const paras = (paragraphs || []).map((p) => ({ n: p.n, tok: new Set(smTokens(p.text)) }));
+  const rows = [];
+  claimElements(claimsText).forEach((ce) => {
+    const tok = smTokens(ce.element);
+    if (tok.length < 2) return;
+    let best = null, bestCov = 0, missing = tok;
+    paras.forEach((p) => {
+      const hit = tok.filter((w) => p.tok.has(w));
+      const cov = hit.length / tok.length;
+      if (cov > bestCov) { bestCov = cov; best = p.n; missing = tok.filter((w) => !p.tok.has(w)); }
+    });
+    rows.push({ claim: ce.claim, element: ce.element, paragraph: best, coverage: Math.round(bestCov * 100) / 100,
+      status: bestCov >= SM_SUPPORTED ? "supported" : bestCov >= SM_WEAK ? "weak" : "unsupported", missing_terms: missing.slice(0, 6) });
+  });
+  const count = (s) => rows.filter((r) => r.status === s).length;
+  return { method: "lexical overlap of distinctive terms with the best numbered paragraph; a check on wording, not a legal opinion",
+    elements: rows.length, supported: count("supported"), weak: count("weak"), unsupported: count("unsupported"), rows };
+}
+__name(supportMap, "supportMap");
+// Global daily cap (COST-GUARD-1): every draft is one long reasoning-model call; the per-IP limit does not bound the total.
+var DAILY_DRAFT_CAP = 150;
+// IndexNow (INDEXNOW-1): the key file proves ownership to Bing, Yandex, Seznam and Naver; Google does not use IndexNow.
+var INDEXNOW_KEY = "7f3c9a1e5b2d4086a1c3e5f7092b4d6e";
 var VZ_TOP_K = 8;
 var MAX_DESCRIPTION_LEN = 5e3;
 var RATE_LIMIT_WINDOW_MS = 60 * 60 * 1e3;
@@ -343,8 +429,16 @@ __name(formatClaims, "formatClaims");
 __name2(formatClaims, "formatClaims");
 __name22(formatClaims, "formatClaims");
 __name222(formatClaims, "formatClaims");
-function generateHtmlDocument({ submissionId, title, inventorName, inventorEmail, sections, date }) {
+function generateHtmlDocument({ submissionId, title, inventorName, inventorEmail, sections, date, paragraphs, supportMapData }) {
   const esc = escapeHtml;
+  const paras = paragraphs || [];
+  const specBlock = (key, heading) => {
+    const ps = paras.filter((p) => p.key === key);
+    if (ps.length) return `<h2>${heading}</h2><div class="section">${ps.map((p) => `<p class="para"><span class="pn">${paraNo(p.n)}</span> ${esc(p.text)}</p>`).join("")}</div>`;
+    return sections[key] ? `<h2>${heading}</h2><div class="section">${esc(sections[key])}</div>` : "";
+  };
+  const sm = supportMapData;
+  const smBlock = sm && sm.rows && sm.rows.length ? `<h2>Reviewer notes: support map (remove before filing)</h2><div class="section sm"><p>${sm.supported} of ${sm.elements} claim elements are worded in a numbered paragraph; ${sm.weak} partly; ${sm.unsupported} not at all. Method: ${esc(sm.method)}.</p><table><tr><th>Claim</th><th>Element</th><th>Best paragraph</th><th>Status</th><th>Terms not found</th></tr>${sm.rows.map((r) => `<tr class="${r.status}"><td>${r.claim}</td><td>${esc(r.element)}</td><td>${r.paragraph ? paraNo(r.paragraph) : "none"}</td><td>${r.status} (${Math.round(r.coverage * 100)}%)</td><td>${esc((r.missing_terms || []).join(", "))}</td></tr>`).join("")}</table></div>` : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -360,6 +454,9 @@ function generateHtmlDocument({ submissionId, title, inventorName, inventorEmail
   .claims .claim{margin:8px 0;padding:6px 0;border-bottom:1px dotted #e5e7eb}
   .footer{font-size:.75rem;color:#9ca3af;margin-top:40px;border-top:1px solid #e5e7eb;padding-top:16px}
   .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-25deg);font-size:6rem;color:rgba(79,70,229,.03);pointer-events:none;z-index:-1;white-space:nowrap}
+  .para{margin:0 0 10px;white-space:pre-wrap}.pn{font-weight:600;color:#4f46e5;margin-right:6px}
+  .section.sm{white-space:normal}.sm table{border-collapse:collapse;width:100%;font-size:.85rem}.sm th,.sm td{border:1px solid #e5e7eb;padding:6px;text-align:left;vertical-align:top}
+  .sm tr.unsupported td{background:#fdecea}.sm tr.weak td{background:#fff7e0}
   @media print{.watermark{display:none}body{font-size:11pt}}
 </style>
 </head>
@@ -375,13 +472,14 @@ function generateHtmlDocument({ submissionId, title, inventorName, inventorEmail
 </div>
 <h2>1. Title of Invention</h2>
 <p>${esc(title)}</p>
-${sections.technical_field ? `<h2>2. Technical Field</h2><div class="section">${esc(sections.technical_field)}</div>` : ""}
-${sections.background ? `<h2>3. Background</h2><div class="section">${esc(sections.background)}</div>` : ""}
-${sections.summary ? `<h2>4. Summary of the Invention</h2><div class="section">${esc(sections.summary)}</div>` : ""}
-${sections.detailed_description ? `<h2>5. Detailed Description</h2><div class="section">${esc(sections.detailed_description)}</div>` : ""}
+${specBlock("technical_field", "2. Technical Field")}
+${specBlock("background", "3. Background")}
+${specBlock("summary", "4. Summary of the Invention")}
+${specBlock("detailed_description", "5. Detailed Description")}
 ${sections.claims ? `<h2>6. Claims</h2><div class="section claims">${formatClaims(sections.claims)}</div>` : ""}
 ${sections.abstract ? `<h2>7. Abstract</h2><div class="section">${esc(sections.abstract)}</div>` : ""}
 ${sections.declaration ? `<h2>8. Inventor Declaration</h2><div class="section">${esc(sections.declaration)}</div>` : ""}
+${smBlock}
 ${sections.support_gaps ? `<h2>Reviewer notes: support gaps (remove before filing)</h2><div class="section" style="border-color:#a97b1d">${esc(sections.support_gaps)}</div>` : ""}
 <h2>Next Steps</h2>
 <ol>
@@ -422,6 +520,10 @@ async function handleDraft(request, env, ctx) {
   }
   const ip = await hashIp(request.headers.get("CF-Connecting-IP") || "unknown");
   const rateLimit = await checkRateLimit(env, ip);
+  try {
+    const day = await env.IPATENT_DB.prepare("SELECT COUNT(*) AS n FROM submissions WHERE created_at > datetime('now', '-1 day')").first();
+    if (day && Number(day.n) >= DAILY_DRAFT_CAP) return json({ error: "iPatent has reached its daily drafting limit (" + DAILY_DRAFT_CAP + " drafts in 24 hours). Please try again later." }, 429);
+  } catch (e) {}
   if (!rateLimit.allowed) {
     return json({ error: "Rate limit exceeded. Please try again later.", rate_limit: rateLimit }, 429);
   }
@@ -437,7 +539,9 @@ async function handleDraft(request, env, ctx) {
   }
   const submissionId = generateId();
   const now = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  const documentHtml = generateHtmlDocument({ submissionId, title, inventorName, inventorEmail, sections, date: now });
+  const paragraphs = specParagraphs(sections);
+  const supportMapData = supportMap(sections.claims || "", paragraphs);
+  const documentHtml = generateHtmlDocument({ submissionId, title, inventorName, inventorEmail, sections, date: now, paragraphs, supportMapData });
   const disclosureText = [
     sections.title,
     sections.technical_field,
@@ -490,6 +594,8 @@ async function handleDraft(request, env, ctx) {
     document_html: documentHtml,
     rag_sources: ragContext.map((r) => ({ title: r.title, score: r.score, section: r.section })),
     prior_art: priorArt,
+    paragraphs: paragraphs.map((p) => ({ n: p.n, key: p.key, text: p.text })),
+    support_map: supportMapData,
     saved: keepCopy,
     private_link: keepCopy ? CANONICAL_ORIGIN + "/d/" + submissionId : null,
     rate_limit: rateLimit
@@ -1008,6 +1114,22 @@ var LANDING_HTML = `<!DOCTYPE html>
   .g-t{color:var(--ink)}
   .g-pct{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--amber)}
   .g-note{margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--ink-soft)}
+    .meter{margin:10px 0 4px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft)}
+  .meter-bar{height:4px;background:var(--line);margin:6px 0 8px;position:relative}
+  .meter-fill{position:absolute;left:0;top:0;bottom:0;background:var(--green);transition:width .3s}
+  .meter-items{display:flex;flex-wrap:wrap;gap:6px}
+  .mi{border:1px solid var(--line);border-radius:999px;padding:3px 9px;background:var(--white)}
+  .mi.ok{border-color:var(--green);color:var(--green)}
+  .mi.ok::before{content:"\u2713 "}
+  .mi.no::before{content:"\u25CB "}
+  .smap{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:11px}
+  .smap .sm-row{padding:6px 0;border-bottom:1px dotted var(--line);display:grid;grid-template-columns:44px 1fr;gap:8px}
+  .smap .sm-st{font-weight:600}
+  .smap .supported .sm-st{color:var(--green)} .smap .weak .sm-st{color:var(--amber)} .smap .unsupported .sm-st{color:var(--danger)}
+  .smap .sm-el{font-family:'Fraunces',Georgia,serif;font-size:13.5px;color:var(--ink)}
+  .smap .sm-meta{color:var(--ink-soft);font-size:10px}
+  .paper .pn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--green);margin-right:6px}
+  .paper .para{margin:0 0 10px;white-space:pre-wrap;font-size:15.5px;line-height:1.75}
     .close-warn{display:none;margin:0 0 18px;border:1px solid var(--amber);border-left:4px solid var(--amber);background:rgba(169,123,29,.08);padding:12px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.65;color:var(--ink)}
   .close-warn b{color:var(--amber);letter-spacing:.06em}
 @media print{.docket,.hero,.chips,.actions,.status,.how,footer,.suggest,.form-card,#dlBar{display:none}}
@@ -1074,6 +1196,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       <div class="field">
         <label for="description"><span class="num">3.</span>Description of the Invention *</label>
         <textarea id="description" name="description" placeholder="What is your invention? What problem does it solve? How does it work \u2014 components, mechanism, key novelty?" required></textarea>
+        <div class="meter" id="meter" aria-live="polite"><div>COMPLETENESS <span id="meterPct">0%</span> &mdash; a provisional protects only what it describes</div><div class="meter-bar"><div class="meter-fill" id="meterFill" style="width:0%"></div></div><div class="meter-items" id="meterItems"></div></div>
       </div>
             <div class="suggest" id="starterZone">
         <div class="sug-head">STARTERS <span>&mdash; corpus examples. Pick one to load, then improve it before drafting.</span></div>
@@ -1174,6 +1297,36 @@ var LANDING_HTML = `<!DOCTYPE html>
 
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   var lastDoc = null;
+  // COMPLETENESS-METER-1: what a provisional needs, checked as you type. Advisory only; it never blocks drafting.
+  var METER = [
+    ['problem', 'Problem solved', /\\b(problem|limitation|drawback|existing|conventional|currently|fails?|inefficien|costly|slow)\\b/i],
+    ['parts', 'Parts named', /\\b(comprises?|includes?|consists?|component|module|unit|layer|circuit|sensor|housing|controller|processor|chamber|assembly)\\b/i],
+    ['how', 'How it works', /\\b(configured to|so that|causes?|in order to|operat\\w*|which then|by (\\w+ing))\\b/i],
+    ['numbers', 'Concrete values', /\\d+(\\.\\d+)?\\s?(nm|um|\u00b5m|mm|cm|m|kg|g|mg|\u00b0c|k|hz|khz|mhz|ghz|v|mv|a|ma|w|kw|%|ms|s|min|rpm|bar|psi|ppm)\\b/i],
+    ['variants', 'Alternatives', /\\b(alternativ\\w*|instead|variant|optionally|another embodiment|in some embodiments|may also|could also)\\b/i],
+    ['figures', 'Figures described', /\\b(fig(ure)?\\.?\\s?\\d|drawing|diagram|sketch|schematic|flowchart)\\b/i],
+    ['length', 'Enough detail (600+ chars)', null]
+  ];
+  function updateMeter(){
+    var d = (document.getElementById('description') || {}).value || '';
+    var hits = METER.map(function(m){ return m[2] ? m[2].test(d) : d.trim().length >= 600; });
+    var n = hits.filter(Boolean).length, pct = Math.round(n / METER.length * 100);
+    var f = document.getElementById('meterFill'); if(f) f.style.width = pct + '%';
+    var pc = document.getElementById('meterPct'); if(pc) pc.textContent = pct + '%';
+    var it = document.getElementById('meterItems');
+    if(it) it.innerHTML = METER.map(function(m, i){ return '<span class="mi ' + (hits[i] ? 'ok' : 'no') + '">' + m[1] + '</span>'; }).join('');
+  }
+  document.addEventListener('input', function(ev){ if(ev.target && ev.target.id === 'description') updateMeter(); });
+  setTimeout(updateMeter, 0);
+  function pnum(n){ return '[' + String(n).padStart(4, '0') + ']'; }
+  function renderSupportMap(sm){
+    if(!sm || !sm.rows || !sm.rows.length) return '';
+    var head = '<b>SUPPORT MAP</b> \u2014 ' + sm.supported + ' of ' + sm.elements + ' claim elements are worded in a numbered paragraph, ' + sm.weak + ' partly, ' + sm.unsupported + ' not at all. Fix the red ones in your description before filing. <span class="sm-meta">(' + esc(sm.method) + ')</span>';
+    var rows = sm.rows.map(function(r){
+      return '<div class="sm-row ' + r.status + '"><div>CL ' + r.claim + '</div><div><div class="sm-el">' + esc(r.element) + '</div><div class="sm-meta"><span class="sm-st">' + r.status.toUpperCase() + ' ' + Math.round(r.coverage * 100) + '%</span> \u00b7 best ' + (r.paragraph ? pnum(r.paragraph) : 'none') + ((r.missing_terms && r.missing_terms.length) ? ' \u00b7 not found: ' + esc(r.missing_terms.join(', ')) : '') + '</div></div></div>';
+    }).join('');
+    return '<div class="smap">' + head + rows + '</div>';
+  }
   function downloadDoc(){
     if(!lastDoc || !lastDoc.html) return;
     var blob = new Blob([lastDoc.html], {type:'text/html'});
@@ -1188,7 +1341,9 @@ var LANDING_HTML = `<!DOCTYPE html>
     if(t && t.id === 'dlPrint') window.print();
   });
 
-  function renderSections(s){
+  function renderSections(s, paras){
+    paras = paras || [];
+    var numbered = function(key){ return paras.filter(function(p){ return p.key === key; }).map(function(p){ return '<p class="para"><span class="pn">' + pnum(p.n) + '</span>' + esc(p.text) + '</p>'; }).join(''); };
     const blocks = [
       ['1. TITLE OF INVENTION', s.title],
       ['2. TECHNICAL FIELD', s.technical_field],
@@ -1205,6 +1360,9 @@ var LANDING_HTML = `<!DOCTYPE html>
         const claims = String(v).split(/\\n/).filter(l=>l.trim()).map(l=>'<div class="claim">'+esc(l)+'</div>').join('');
         return '<h3>'+h+'</h3><div>'+claims+'</div>';
       }
+      var keyOf = {'2.':'technical_field','3.':'background','4.':'summary','5.':'detailed_description'}[h.slice(0,2)];
+      var nb = keyOf ? numbered(keyOf) : '';
+      if(nb) return '<h3>'+h+'</h3><div>'+nb+'</div>';
       return '<h3>'+h+'</h3><div class="sec">'+esc(v)+'</div>';
     }).join('');
   }
@@ -1306,7 +1464,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       }
       result.style.display = 'block';
       document.getElementById('resultId').textContent = 'SUBMISSION ' + data.submission_id;
-      rc.innerHTML = renderSections(data.sections||{});
+      rc.innerHTML = renderSections(data.sections||{}, data.paragraphs||[]) + renderSupportMap(data.support_map);
       rag.innerHTML = renderRag(data.rag_sources||[]);
       var cw = document.getElementById('closeWarn');
       if(cw){
@@ -1385,8 +1543,8 @@ var qnfo_ipatent_default = {
           status: "ok",
           worker: "qnfo-ipatent",
           version: VERSION,
-          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics"],
-          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token", "page metrics are daily counts by source class only (no IP, user agent or cookie); crawler detection is a user-agent heuristic"],
+          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics", "support-map", "completeness-meter"],
+          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token", "page metrics are daily counts by source class only (no IP, user agent or cookie); crawler detection is a user-agent heuristic", "the support map is a lexical check of claim wording against numbered paragraphs, not a legal opinion", "at most 150 drafts in 24 hours across all users"],
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
             r2: !!env.IPATENT_R2 ? "ipatent" : null,
@@ -1405,6 +1563,7 @@ var qnfo_ipatent_default = {
         return html(GUIDE_HTML);
       }
       if (path === "/api/metrics" && request.method === "GET") return handleMetrics(env);
+      if (path === "/" + INDEXNOW_KEY + ".txt" && isRead) return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       if (path === "/robots.txt" && isRead) {
         return new Response("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /d/\nSitemap: " + CANONICAL_ORIGIN + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       }
