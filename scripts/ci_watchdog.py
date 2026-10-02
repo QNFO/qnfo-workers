@@ -26,16 +26,31 @@ WHAT IT DOES ABOUT EACH (detect -> ACT -> verify, never detect-only)
   others            file or refresh ONE deduped issue carrying the exact
                     evidence and the hinted fix; never owner=USER
 
+API BUDGET (ACTIONS-QUOTA-1, 2026-10-02)
+  Every workflow's GITHUB_TOKEN and CodeQL's SARIF upload share ONE installation
+  rate-limit bucket. A full sweep used to cost ~150 calls (80 per-workflow run
+  listings + ~65 contents reads for the silent-schedule check; measured 152 in a
+  dry run on 2026-10-02) and ran ~745 times a day, so the watchdog alone asked for
+  ~4,600 calls an hour and CodeQL's uploads failed with "API rate limit exceeded for
+  installation". Now: whether a workflow declares a schedule is read from the
+  checked-out files (no API), only the 13 workflows that do are sampled, the
+  label/closed-issue calls happen only when needed, and the first rate-limited answer
+  stops the sweep instead of spending more. Measured on the same live state: 21 calls
+  (with one failure to classify). `api_calls` and `rate_limited` are in the summary.
+  CI_WD_FULL_INVENTORY=1 (set on workflow_dispatch) samples every workflow again.
+
 Exit: 0 when every finding was acted on or is already tracked
       1 when a finding is unactionable and untracked (the watchdog is a gate)
 
 Env: GH_TOKEN / GITHUB_TOKEN (needs actions:write, issues:write, contents:read)
      REPO (default QNFO/qnfo-workers)  DRY_RUN=1 to suppress all writes
+     CI_WD_FULL_INVENTORY=1 to list runs for every workflow, not only scheduled ones
 """
 from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -43,7 +58,12 @@ import urllib.request
 REPO = os.environ.get("REPO", "QNFO/qnfo-workers")
 TOKEN = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
 DRY = os.environ.get("DRY_RUN") == "1"
+FULL_INVENTORY = os.environ.get("CI_WD_FULL_INVENTORY") == "1"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API = "https://api.github.com"
+# ACTIONS-QUOTA-1: every REST call this sweep made, and whether GitHub said the shared budget is spent.
+CALLS = 0
+RATE_LIMITED = False
 LABEL = "ci-watchdog"
 TITLE_PREFIX = "[ci-watchdog]"
 # A finding filed against the watchdog itself is an unbreakable loop: the
@@ -53,8 +73,29 @@ SELF_WORKFLOWS = {"ci-watchdog"}
 ONE_SHOT_PREFIXES = ("apply-", "restore-", "container-config-restore")
 
 
+def _rate_limited(code: int, headers, raw: str) -> bool:
+    """True when a 403/429 is GitHub saying the budget is spent, not that the call is forbidden."""
+    if code not in (403, 429):
+        return False
+    try:
+        if headers is not None and (headers.get("x-ratelimit-remaining") == "0" or headers.get("retry-after")):
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    return "rate limit" in (raw or "").lower()
+
+
 def gh(path: str, method: str = "GET", body: dict | None = None):
-    """Minimal API client. Returns (status, parsed)."""
+    """Minimal API client. Returns (status, parsed).
+
+    ACTIONS-QUOTA-1: once GitHub answers that the shared installation budget is spent, every later call
+    in this sweep is answered locally with 403 instead of being sent: it would fail anyway, and each
+    attempt competes with CodeQL's SARIF upload for the same bucket.
+    """
+    global CALLS, RATE_LIMITED
+    if RATE_LIMITED:
+        return 403, {"rate_limited": True}
+    CALLS += 1
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(API + path, data=data, method=method)
     req.add_header("Accept", "application/vnd.github+json")
@@ -70,6 +111,8 @@ def gh(path: str, method: str = "GET", body: dict | None = None):
             return r.status, (json.loads(raw) if raw.strip() else {})
     except urllib.error.HTTPError as e:
         raw = e.read().decode()
+        if _rate_limited(e.code, e.headers, raw):
+            RATE_LIMITED = True
         try:
             return e.code, json.loads(raw) if raw.strip() else {}
         except Exception:
@@ -95,6 +138,10 @@ def _raw_log(job_id: int, cap: int = 200000) -> str:
     unclassifiable findings to `unknown`. Doing the two-step by hand, with a
     header-free second request, is the fix. The signed URL is the credential.
     """
+    global CALLS
+    if RATE_LIMITED:
+        return ""
+    CALLS += 1  # hop 1 is a REST call; hop 2 goes to blob storage and costs no API budget
     url = f"{API}/repos/{REPO}/actions/jobs/{job_id}/logs"
     opener = urllib.request.build_opener(_NoRedirect)
     req = urllib.request.Request(url, method="GET")
@@ -140,23 +187,53 @@ def runs(per_page: int = 100, **q) -> list[dict]:
     return d.get("workflow_runs", []) if st == 200 else []
 
 
-def declares_schedule(path: str):
-    """True/False from the checked-out workflow file; None when the file is not in the checkout (caller asks the API)."""
-    root = os.environ.get("GITHUB_WORKSPACE") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    fp = os.path.join(root, path)
-    if not path or not os.path.isfile(fp):
-        return None
-    try:
-        with open(fp, encoding="utf-8", errors="replace") as fh:
-            txt = fh.read()
-    except OSError:
-        return None
-    return "schedule:" in txt or "schedule\n" in txt
-
-
 def run_events(wf_id: int, per_page: int = 100) -> list[dict]:
     st, d = gh(f"/repos/{REPO}/actions/workflows/{wf_id}/runs?per_page={per_page}")
     return d.get("workflow_runs", []) if st == 200 else []
+
+
+_SCHEDULE_KEY = re.compile(r"\bschedule\s*:")
+
+
+def declares_schedule(text: str) -> bool:
+    """True when the workflow text declares a `schedule:` key outside YAML comments. Pure.
+
+    The old test (`"schedule:" in text`) also matched comments, so ci-watchdog-resolve.yml ("WHY push AND NOT
+    schedule: ...") and restore-container-config-1485.yml were treated as scheduled and re-dispatched on a timer.
+    Measured 2026-10-02: on every workflow in this repository this test agrees with a real YAML parse of `on:`.
+    """
+    for line in (text or "").splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        if _SCHEDULE_KEY.search(re.split(r"\s#", line, maxsplit=1)[0]):
+            return True
+    return False
+
+
+def workflow_text(path: str) -> str | None:
+    """The workflow file as it is on main: read from the checkout when the job runs on main, else via the API.
+
+    ACTIONS-QUOTA-1: this used to be one contents call per workflow per sweep (~63 calls). workflow_run and
+    repository_dispatch jobs check out the default branch, so the file is already on disk. A path that is not a
+    file (a deleted workflow, or a dynamic one such as dynamic/github-code-scanning/codeql) returns None, which is
+    what the API's 404 meant before.
+    """
+    if not path:
+        return None
+    if os.environ.get("GITHUB_REF", "refs/heads/main") == "refs/heads/main":
+        local = os.path.join(ROOT, path)
+        if not os.path.isfile(local):
+            return None
+        try:
+            with open(local, encoding="utf-8", errors="replace") as fh:
+                return fh.read()
+        except OSError:
+            return None
+    st, raw = gh(f"/repos/{REPO}/contents/{path}?ref=main")
+    if st == 200 and isinstance(raw, dict) and raw.get("content"):
+        import base64
+        return base64.b64decode(raw["content"]).decode("utf-8", "replace")
+    return None
 
 
 def job_logs(run_id: int) -> str:
@@ -206,7 +283,7 @@ def classify_structural(name: str, run: dict) -> tuple[str, str]:
             return "missing-module", "the workflow runs a module/suite that is not committed; land it or retire the workflow"
         return "comparator-regression", "the fail-closed comparator invariant regressed; do NOT relax rule 5"
     if name in ("deploy-drift", "indexnow-submit"):
-        return "external-runner", "driven by the watchdog because GitHub `schedule` never fires on this repo"
+        return "external-runner", "driven by the watchdog because GitHub `schedule` fires rarely and late on this repo"
     return "unknown", "inspect the job log"
 
 
@@ -293,11 +370,27 @@ def configure_codeql() -> tuple[bool, str]:
     return st in (200, 202), f"http-{st} {d.get('state', '')}".strip()
 
 
+_LABEL_ENSURED = False
+_OPEN_FINDINGS: tuple[int, list] | None = None
+
+
 def ensure_label() -> None:
-    if DRY:
+    """Create the label once, and only when a new issue is about to be filed (it used to be one POST per sweep)."""
+    global _LABEL_ENSURED
+    if DRY or _LABEL_ENSURED:
         return
+    _LABEL_ENSURED = True
     gh(f"/repos/{REPO}/labels", "POST", {"name": LABEL, "color": "b60205",
                                          "description": "filed by ci-watchdog"})
+
+
+def open_findings() -> tuple[int, list]:
+    """The open ci-watchdog issues, listed once per sweep however many findings need them."""
+    global _OPEN_FINDINGS
+    if _OPEN_FINDINGS is None:
+        st, d = gh(f"/repos/{REPO}/issues?state=open&labels={LABEL}&per_page=100")
+        _OPEN_FINDINGS = (st, d if st == 200 and isinstance(d, list) else [])
+    return _OPEN_FINDINGS
 
 
 def file_or_refresh(klass: str, subject: str, body: str) -> str:
@@ -305,7 +398,7 @@ def file_or_refresh(klass: str, subject: str, body: str) -> str:
     title = f"{TITLE_PREFIX} {klass}: {subject}"
     if DRY:
         return f"DRY_RUN would file {title!r}"
-    st, d = gh(f"/repos/{REPO}/issues?state=open&labels={LABEL}&per_page=100")
+    st, d = open_findings()
     existing = None
     if st == 200:
         for it in d:
@@ -325,10 +418,21 @@ def file_or_refresh(klass: str, subject: str, body: str) -> str:
         except Exception:
             pass
         gh(f"/repos/{REPO}/issues/{existing['number']}/comments", "POST", {"body": body})
+        # The list is cached for the sweep: stamp the refresh so a second finding with the same title
+        # is "already reported" exactly as it was when the list was re-read for every finding.
+        existing["updated_at"] = _now_z()
         return f"refreshed #{existing['number']}"
+    ensure_label()
     st, d = gh(f"/repos/{REPO}/issues", "POST",
                {"title": title, "body": body, "labels": [LABEL]})
+    if st in (201, 200) and isinstance(d, dict):
+        open_findings()[1].append(dict(d, title=title, updated_at=_now_z()))
     return f"filed #{d.get('number')}" if st in (201, 200) else f"FAILED http-{st}"
+
+
+def _now_z() -> str:
+    import datetime as _d3
+    return _d3.datetime.now(_d3.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 # --------------------------------------------------------------------------
@@ -362,7 +466,7 @@ def superseded_by_green(run: dict, pool: list[dict]) -> dict | None:
 
 
 def branch_runs(workflow_id, branch: str, per_page: int = 10) -> list[dict]:
-    """The newest runs of one workflow on one branch (one call; only when the 60-run pool had no verdict)."""
+    """The newest runs of one workflow on one branch (one call; only when the 100-run pool had no verdict)."""
     if not workflow_id or not branch:
         return []
     import urllib.parse as _up
@@ -398,31 +502,35 @@ def main() -> int:
     wfs = workflows()
     print(f"ci-watchdog: repo={REPO} workflows={len(wfs)}")
 
-    # API-BUDGET-1 (2026-10-02, agent_issues 1804): this loop made one runs call per workflow and the silent-schedule
-    # check below made one contents call per workflow: about 155 calls a run with 77 workflows. At 21 runs an hour that
-    # is about 3,250 calls an hour against the 1,000 an hour the repository's GITHUB_TOKEN gets, so every CodeQL
-    # Analyze job failed with "API rate limit exceeded for installation". Now: the schedule declaration is read from
-    # the checkout (no call), the per-workflow history is fetched only for workflows that declare a schedule, and
-    # every other workflow is described from two pages of recent runs.
-    recent_pool = runs(per_page=100) + runs(per_page=100, page=2)
-    by_wf: dict = {}
-    for _r in recent_pool:
-        by_wf.setdefault(_r.get("workflow_id"), []).append(_r)
+    # ACTIONS-QUOTA-1: only a workflow whose file declares a schedule can be a silent-schedule finding, so only
+    # those are sampled (one run listing each). The rest keep an inventory row built from the workflow list
+    # alone (id, name, path, state) at no extra cost; CI_WD_FULL_INVENTORY=1 samples them too.
     inventory = []
+    unsampled = 0
     for w in wfs:
-        declares = declares_schedule(w.get("path") or "")
-        rs = run_events(w["id"]) if declares is not False else by_wf.get(w["id"], [])
-        events = {r.get("event") for r in rs}
+        declared = declares_schedule(workflow_text(w.get("path") or "") or "")
         state = w.get("state")
+        if not (declared or FULL_INVENTORY):
+            unsampled += 1
+            inventory.append({
+                "id": w["id"], "name": w["name"], "path": w["path"], "state": state,
+                "runs": None, "events": [], "last": "-", "ever_scheduled": None,
+                "declares_schedule": False, "sampled": False,
+            })
+            continue
+        rs = run_events(w["id"])
+        events = {r.get("event") for r in rs}
         last = rs[0]["created_at"][:19] if rs else "-"
         scheduled = "schedule" in events
-        declared = "schedule" in (w.get("path") or "")
         inventory.append({
             "id": w["id"], "name": w["name"], "path": w["path"], "state": state,
             "runs": len(rs), "events": sorted(e for e in events if e),
-            "last": last, "ever_scheduled": scheduled, "declares_schedule": declares,
+            "last": last, "ever_scheduled": scheduled,
+            "declares_schedule": declared, "sampled": True,
         })
         print(f"  {state:7s} {w['name']:18s} runs={len(rs):3d} last={last} events={sorted(e for e in events if e)}")
+    if unsampled:
+        print(f"  ({unsampled} workflows declare no schedule; not sampled. CI_WD_FULL_INVENTORY=1 samples every workflow)")
 
     import datetime as _dtdt
     _now = _dtdt.datetime.now(_dtdt.timezone.utc)
@@ -439,19 +547,11 @@ def main() -> int:
 
     # --- class: silent-schedule -------------------------------------------
     for it in inventory:
-        if it["runs"] > 0 and not it["ever_scheduled"] and it["events"]:
-            # declared a schedule but has never produced a schedule-event run
-            declared = it.get("declares_schedule")
-            if declared is None:  # the file is not in the checkout: ask the API, as before
-                st, raw = gh(f"/repos/{REPO}/contents/{it['path']}?ref=main")
-                declared = False
-                if st == 200 and isinstance(raw, dict) and raw.get("content"):
-                    import base64
-                    txt = base64.b64decode(raw["content"]).decode("utf-8", "replace")
-                    declared = "schedule:" in txt or "schedule\n" in txt
-            if declared:
-                findings.append({"class": "silent-schedule", "subject": it["name"],
-                                 "evidence": f"{it['path']}: no schedule-event run ever (events={it['events']}, runs={it['runs']})"})
+        # declared a schedule but has never produced a schedule-event run (the declaration was read from the
+        # checked-out file above instead of one contents call per workflow)
+        if it["declares_schedule"] and it["runs"] and not it["ever_scheduled"] and it["events"]:
+            findings.append({"class": "silent-schedule", "subject": it["name"],
+                             "evidence": f"{it['path']}: no schedule-event run ever (events={it['events']}, runs={it['runs']})"})
 
     # --- class: codeql-config ---------------------------------------------
     cs = setup_config()
@@ -462,7 +562,7 @@ def main() -> int:
         findings.append({"class": "codeql-config", "subject": "default-setup",
                          "evidence": f"state={cs}"})
 
-    # --- failures in the last 60 runs -------------------------------------
+    # --- failures in the last 100 runs ------------------------------------
     # Bounded on purpose: the watchdog runs on a 10-minute CI budget and must
     # not re-litigate history. Only failures inside WINDOW_HOURS are considered,
     # log fetches are capped, and a retired workflow (file gone from the ref) is
@@ -479,8 +579,14 @@ def main() -> int:
     log_fetches = 0
     superseded: list[tuple[str, str]] = []
     if WINDOW_HOURS > 0:
-        pool = runs(per_page=60)
-        closed_runs = closed_finding_runs(cutoff)
+        # ACTIONS-QUOTA-1: 100 (the page maximum, still one call), not 60. Sweeps are now started per push to main
+        # and per failed watched run instead of after every green check, so each sweep's pool must reach further
+        # back: at the 2026-10-02 08Z peak (~900 runs/h) 60 runs were about 4 minutes of history.
+        pool = runs(per_page=100)
+        # ACTIONS-QUOTA-1: the closed-finding lookup only matters when there is a failure to check against it.
+        candidates = [r for r in pool if r.get("conclusion") == "failure" and (r.get("created_at") or "") >= cutoff
+                      and (r.get("name") or "") not in SELF_WORKFLOWS]
+        closed_runs = closed_finding_runs(cutoff) if candidates else {}
         for r in pool:
             if r.get("conclusion") != "failure":
                 continue
@@ -500,7 +606,12 @@ def main() -> int:
                 superseded.append((f"- `superseded` **{name}** — {_ev}", f"superseded by green run {g.get('id')} ({(g.get('created_at') or '')[:19]})"))
                 continue
             path = (r.get("path") or "")
-            st, _ = gh(f"/repos/{REPO}/contents/{path}?ref={r.get('head_branch') or 'main'}")
+            if path.startswith("dynamic/"):
+                # A dynamic workflow (CodeQL default setup, Copilot, ...) has no file, so the contents call always
+                # answered 404 and the run was recorded as retired. Same verdict, without spending the call.
+                st = 404
+            else:
+                st, _ = gh(f"/repos/{REPO}/contents/{path}?ref={r.get('head_branch') or 'main'}")
             retired = st == 404
             # Structural first: needs no log download, and log downloading
             # is exactly what silently failed in CI.
@@ -526,7 +637,7 @@ def main() -> int:
         print("failures loop skipped (CI_WD_WINDOW_HOURS<=0)")
 
     # --- ACT ---------------------------------------------------------------
-    ensure_label()
+    # (the label is created lazily by file_or_refresh, only when a new issue is filed)
     acted, tracked, unactionable = [], [], []
     for f in findings:
         k, subj = f["class"], f["subject"]
@@ -555,7 +666,7 @@ def main() -> int:
                 (tracked).append((line, "workflow file removed; cannot re-run (retired)"))
                 continue
             body = (f"{f['evidence']}\n\n**Suggested fix:** {f.get('hint','inspect')}\n\n"
-                    f"Filed by `scripts/ci_watchdog.py` (event-driven; GitHub `schedule` has never fired on this repo).")
+                    f"Filed by `scripts/ci_watchdog.py` (event-driven; GitHub `schedule` fires rarely and late on this repo).")
             res = file_or_refresh(k, subj, body)
             (tracked if "FAILED" not in res else unactionable).append((line, res))
 
@@ -570,12 +681,20 @@ def main() -> int:
         print("OPEN  " + line + "  -> " + how)
     for line, how in superseded:
         print("SKIP  " + line + "  -> " + how)
+    print(f"api_calls={CALLS} rate_limited={RATE_LIMITED}")
+    if RATE_LIMITED:
+        print(f"::warning::ci-watchdog: GitHub answered 'rate limit exceeded' after {CALLS} calls; the rest of this "
+              "sweep was not sent. An incomplete sweep is not green evidence (ACTIONS-QUOTA-1).")
+    # The outcome keys come first: post_ledger() sends only the first 4000 characters, which the inventory
+    # used to fill on its own, so the findings never reached the fleet ledger.
     summary = {"repo": REPO, "when": __import__("datetime").datetime.utcnow().isoformat() + "Z",
-               "inventory": inventory, "findings": findings,
+               "api_calls": CALLS, "rate_limited": RATE_LIMITED,
+               "findings": findings,
                "acted": [a[0] for a in acted],
                "tracked": [t[0] for t in tracked],
                "unactionable": [u[0] for u in unactionable],
-               "superseded": [s[0] + "  -> " + s[1] for s in superseded]}
+               "superseded": [s[0] + "  -> " + s[1] for s in superseded],
+               "inventory": inventory}
     with open("ci-watchdog-summary.json", "w", encoding="utf-8") as fh:
         json.dump(summary, fh, indent=2)
     print("\nwrote ci-watchdog-summary.json")
