@@ -515,5 +515,28 @@ function fakeLoader(spinMs) {
   check("js auto: the cron stores its own CPU-limit measurement", !!m && JSON.parse(m.value).enforced === true && !!JSON.parse(m.value).ts, m);
 }
 
+// ===== JS-VERIFY-RUNTIME-MSG-1: a runtime error MESSAGE (no error name) proves the module parsed =====
+{
+  const src = "export default { async fetch(req, env){ return new Response(String(await env.DB.prepare('x'))); } }\n";
+  const thrower = (make) => ({ load: () => ({ getEntrypoint: () => ({ fetch: async () => { throw make(); } }) }) });
+  const run = async (loader) => {
+    installCodeAgent({ "qnfo-workers/a/r.mjs": src });
+    const { env } = envWith([fileBlock(src.replace("'x'", "'y'").trimEnd())], { PR_PUBLISH_MODE: "pull", JS_VERIFY: "dynamic", LOADER: loader });
+    const q = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "a/r.mjs", goal: "g" });
+    await call(env, "POST", "/v1/tick", {});
+    return await env.AUDIT_DB.prepare("SELECT status, last_error FROM code_tasks WHERE id=?").bind(q.body.id).first();
+  };
+  const a = await run(thrower(() => new Error("Cannot read properties of undefined (reading 'prepare')")));
+  check("js verify: a bare runtime message (env.DB undefined) counts as parsed", a.status === "ready_to_publish", a);
+  const b = await run(thrower(() => { const e = new Error("x.y is not a function"); return e; }));
+  check("js verify: 'is not a function' counts as parsed", b.status === "ready_to_publish", b);
+  const c = await run(thrower(() => { const e = new Error("boom"); e.name = "TypeError"; return e; }));
+  check("js verify: an error NAME the message lacks is honoured", c.status === "ready_to_publish", c);
+  const d = await run(thrower(() => new Error("Worker exceeded CPU time limit")));
+  check("js verify: an unknown start failure still stops for review", d.status === "needs_human" && /could not confirm/.test(d.last_error || ""), d);
+  const e = await run(thrower(() => new Error("Failed to start Worker:\nUncaught SyntaxError: Unexpected token '}'\n  at m.js:3:1")));
+  check("js verify: a syntax error is still a failure, never a pass", e.status !== "ready_to_publish", e);
+}
+
 console.log("\n" + failures + " failure(s)");
 process.exit(failures ? 1 : 0);
