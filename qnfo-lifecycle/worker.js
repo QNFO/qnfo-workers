@@ -1,4 +1,4 @@
-var VERSION = "1.6.7-run-internal"; // Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.6.8-codeagent"; // Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -73,7 +73,7 @@ var worker_default = {
       else if (cron === "0 5 * * *") await runBackup(env);
       else if (cron === "0 8 * * 1") await runSecretsAudit(env);
       else if (cron === "0 * * * *") { await runSync(env); await runMetricFreshness(env); }
-      else if (cron === "*/30 * * * *") await runPing(env);
+      // Dead code removed as runPing is never triggered by a declared cron
     } catch (e) {
       console.error("[qnfo-lifecycle] cron error:", e.message);
     }
