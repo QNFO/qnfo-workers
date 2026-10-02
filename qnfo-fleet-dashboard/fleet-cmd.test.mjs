@@ -177,8 +177,9 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   const r = await cmd(env, "is anything on fire right now?");
   const j = await r.json();
   await flush();
-  const row = db.prepare("SELECT status, error FROM cmd_log WHERE id=?").get(j.id);
-  ok(row.status === "failed" && /timeout/.test(row.error) && Date.now() - t0 < 30000, "H7 a model that never answers is aborted and the job fails within the budget (" + Math.round((Date.now() - t0) / 1000) + "s)");
+  const row = db.prepare("SELECT status, error, answer FROM cmd_log WHERE id=?").get(j.id);
+  // OWNER-SURFACE-HONESTY-1 (1.17.8): the job still ends within the budget, but with a plain answer from the fleet's data.
+  ok(row.status === "fallback" && /timeout/.test(row.error) && /did not answer just now \(it timed out\)/.test(row.answer) && Date.now() - t0 < 30000, "H7 a model that never answers is aborted within the budget and the job answers plainly from the data (" + Math.round((Date.now() - t0) / 1000) + "s)");
 }
 {
   const { env, db } = mk();

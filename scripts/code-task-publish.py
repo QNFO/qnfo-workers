@@ -34,6 +34,7 @@ import datetime
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -194,6 +195,43 @@ def compare_url(base, branch):
     return "https://github.com/" + REPO_NAME_FULL + "/compare/" + base + "..." + branch + "?expand=1"
 
 
+# PUBLISH-JS-CHECK-1 (2026-10-02): the orchestrator's in-Worker JS verifier passed a patch that does not parse (code task
+# ct_4c0lf1nu36lp6g: unescaped double quotes inside a string at personal-companion/worker.js:934), and the PR reached CI,
+# where deploy-gate rejected it (run 36981662012, ci-watchdog #445). This runner has a real JavaScript parser, so every
+# .js/.mjs file the patch touches is parsed here after `git apply`, before anything is pushed. A file that does not parse
+# goes back to the orchestrator's propose step with the parser's message as feedback (SELF-REPAIR-1 counts the attempt),
+# never to a PR. The check is syntax only: imports are not resolved and nothing is executed.
+def js_syntax_errors(repo_dir, files):
+    """First parse error among the patched .js/.mjs files, or None (also None when node is not installed)."""
+    for f in files:
+        if not (f.endswith(".js") or f.endswith(".mjs")):
+            continue
+        src = os.path.join(repo_dir, f)
+        if not os.path.isfile(src):
+            continue
+        tmp = os.path.join(tempfile.mkdtemp(prefix="ctp-js-"), "check.mjs")  # .mjs: parse as an ES module on any Node version
+        shutil.copyfile(src, tmp)
+        try:
+            r = subprocess.run(["node", "--check", tmp], capture_output=True, text=True, timeout=60)
+        except FileNotFoundError:
+            return None
+        if r.returncode != 0:
+            lines = [ln for ln in (r.stderr or "").splitlines() if ln.strip()]
+            where = next((ln.strip().replace(tmp, f) for ln in lines if tmp in ln), f)
+            what = next((ln.strip() for ln in lines if "Error" in ln), lines[-1].strip() if lines else "parse failed")
+            return (f + ": " + what + " (" + where + ")")[:400]
+    return None
+
+
+def requeue_for_syntax(store, tid, err):
+    """Send a task whose patch does not parse back to the orchestrator's propose step with the parser's message."""
+    msg = ("JavaScript does not parse after applying the edits (node --check, PUBLISH-JS-CHECK-1): " + err)[:500]
+    return store.changes(
+        "UPDATE code_tasks SET status='queued', step='propose', attempts=attempts+1, lease_until=NULL, last_error=?, "
+        "ctx=json_set(COALESCE(ctx, '{}'), '$.lastError', ?), updated_at=? WHERE id=?",
+        [msg, msg, now(), tid])
+
+
 def publish_one(task, repo_dir, base, pr, delegate=False):
     """Returns (status, pr_url, error). Raises nothing: every failure is a returned publish_failed.
     delegate=True: push the branch and stop at branch_pushed; qnfo-fleet-control opens the PR with the fleet token."""
@@ -236,6 +274,11 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
         if chk.returncode != 0:
             return "publish_failed", None, "patch does not apply to " + base + ": " + (chk.stderr or "").strip()[:250]
         git(repo_dir, "apply", pf)
+        bad = js_syntax_errors(repo_dir, sorted(files))
+        if bad:
+            git(repo_dir, "reset", "-q", "--hard")
+            git(repo_dir, "checkout", "-q", "--detach", "origin/" + base)
+            return "syntax_retry", None, bad
         git(repo_dir, "add", "--", *sorted(files))
         git(repo_dir, "commit", "-q", "-m", "code-task " + task["id"] + ": " + str(task.get("goal") or "")[:60])
         git(repo_dir, "push", "origin", "refs/heads/" + branch + ":refs/heads/" + branch)
@@ -273,6 +316,11 @@ def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
             out["skipped"] += 1
             continue
         st, url, err = publish_one(t, repo_dir, base, pr, delegate)
+        if st == "syntax_retry":
+            requeue_for_syntax(store, t["id"], err)
+            out["retried"] = out.get("retried", 0) + 1
+            log(f"::warning::syntax_retry {t['id']}: {err} (sent back to the orchestrator, no branch pushed)")
+            continue
         finish(store, t["id"], st, url, err)
         if st == "branch_pushed" and delegate:
             out["published"] += 1
@@ -436,6 +484,33 @@ def selftest():
     publish_all(store, work, "main", pr, quiet)
     check("policy / empty / wrong-file patches are publish_failed with reasons",
           all(row(store, i)["status"] == "publish_failed" and row(store, i)["last_error"] for i in ("ct_policybad001", "ct_nopatch00001", "ct_wrongfile001")))
+
+    # 3b. PUBLISH-JS-CHECK-1: a .js patch that does not parse is sent back to the orchestrator, never pushed; one that parses publishes
+    if shutil.which("node"):
+        remote, work, store = fixture()
+        os.makedirs(os.path.join(work, "w"))
+        with open(os.path.join(work, "w/worker.js"), "w") as fh:
+            fh.write('export default { fetch() { return new Response("a"); } };\n')
+        _sh(work, "git", "add", "-A")
+        _sh(work, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "js")
+        _sh(work, "git", "push", "-q", "origin", "main")
+        _sh(work, "git", "fetch", "-q", "origin", "main")
+        pr = FakePR()
+        jsp = lambda new: ("diff --git a/w/worker.js b/w/worker.js\n--- a/w/worker.js\n+++ b/w/worker.js\n@@ -1 +1 @@\n"  # noqa: E731
+                           "-export default { fetch() { return new Response(\"a\"); } };\n+" + new + "\n")
+        add(store, "ct_jsbad0000001", jsp('export default { fetch() { return new Response("<script src="https://x.example/a.js">"); } };'), path="w/worker.js")
+        add(store, "ct_jsgood000001", jsp('export default { fetch() { return new Response("b"); } };'), path="w/worker.js", branch="codeagent-jsgood000001")
+        r = publish_all(store, work, "main", pr, quiet)
+        tb, tg = row(store, "ct_jsbad0000001"), row(store, "ct_jsgood000001")
+        cb = json.loads(tb["ctx"] or "{}")
+        check("js parse fails: sent back to propose with the parser's message, attempts counted",
+              tb["status"] == "queued" and tb["step"] == "propose" and tb["attempts"] == 1 and "node --check" in (tb["last_error"] or "")
+              and "w/worker.js" in (cb.get("lastError") or "") and r.get("retried") == 1, dict(tb))
+        brb = subprocess.run(["git", "--git-dir", remote, "branch", "--list", "codeagent-jsbad0000001"], capture_output=True, text=True)
+        check("js parse fails: nothing pushed, no PR", brb.stdout.strip() == "" and "codeagent-jsbad0000001" not in pr.created)
+        check("js that parses (an ES module) still publishes", tg["status"] == "published" and r["published"] == 1, dict(tg))
+    else:
+        print("SKIP PUBLISH-JS-CHECK-1 selftest: node not installed")
 
     # 4. idempotency: a second run does nothing; a crashed run's existing PR is adopted, not duplicated
     remote, work, store = fixture()

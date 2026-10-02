@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.8-verify-fail-closed"; // 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.9-claim-age"; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -222,13 +222,19 @@ async function enqueue(env, b) {
   return { ok: true, status: 202, id: id };
 }
 // CLAIM-FAIRNESS-1: fewest failed attempts first, then oldest, so a task that keeps failing verification cannot starve fresh ones.
+// CLAIM-AGE-1 (0.3.8): but a queued task untouched for CLAIM_WAIT_MS goes first, so a retry cannot starve either: with the
+// issue planner adding fresh tasks every tick, a task waiting on its second attempt was never claimed again (measured
+// 2026-10-02, ct_qldqse7ngltdth: queued from 07:40 to past 08:00 while four newer tasks ran). A task that keeps failing
+// still gets at most one attempt per CLAIM_WAIT_MS while others wait, and SELF-REPAIR-1's lease backoff still applies.
 // Claim with a lease: a crashed isolate's lease simply expires and the task is picked up again.
+const CLAIM_WAIT_MS = 20 * 60 * 1000;
 async function claim(env) {
   const now = iso();
   const until = new Date(Date.now() + LEASE_MS).toISOString();
+  const waited = new Date(Date.now() - CLAIM_WAIT_MS).toISOString();
   return await env.AUDIT_DB.prepare(
-    "UPDATE code_tasks SET lease_until=?, updated_at=? WHERE id=(SELECT id FROM code_tasks WHERE status='queued' AND (lease_until IS NULL OR lease_until < ?) ORDER BY attempts ASC, created_at ASC LIMIT 1) RETURNING *"
-  ).bind(until, now, now).first();
+    "UPDATE code_tasks SET lease_until=?, updated_at=? WHERE id=(SELECT id FROM code_tasks WHERE status='queued' AND (lease_until IS NULL OR lease_until < ?) ORDER BY CASE WHEN updated_at < ? THEN 0 ELSE 1 END, attempts ASC, created_at ASC LIMIT 1) RETURNING *"
+  ).bind(until, now, now, waited).first();
 }
 // FENCE-IN-FILE-1 (2026-10-01, code_tasks ct_readme20261001b): the reply's closing fence is the LAST one. The old lazy
 // match stopped at the first "\n```" inside the file, so any file that itself contains a fenced block (most READMEs) came

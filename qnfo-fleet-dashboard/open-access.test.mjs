@@ -130,7 +130,8 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
 {
   const { env, db } = mk({ svc: async () => new Response(JSON.stringify({ error: "model exploded: internal detail" }), { status: 500 }) });
   const r = await ask(env, "does this fail safely?", "203.0.113.50"); const j = await r.json();
-  ok(!j.ok && j.status === "failed" && !JSON.stringify(j).includes("exploded") && db.prepare("SELECT status FROM owner_prompts").get().status === "failed", "D9 a model failure is reported plainly without internals");
+  // OWNER-SURFACE-HONESTY-1 (1.17.8): never a bare failure; the answer comes from the fleet's data and says so.
+  ok(j.ok && j.status === "fallback" && /did not answer just now/.test(j.answer) && !JSON.stringify(j).includes("exploded") && db.prepare("SELECT status FROM owner_prompts").get().status === "fallback", "D9 a model failure gets a plain answer from the data, without internals");
 }
 // E. a LOOP_TOKEN holder (the fleet's own sessions and scripts) can still change the fleet
 {

@@ -1,0 +1,21 @@
+-- OBJECTIVE-AUTHORITY-TRUTH-1 (qnfo-fleet-dashboard 1.17.8, pillar: core; agent_issues 1765/1766). Record the truth about
+-- who made an owner-queue decision. The objective ratify route accepts the owner's emailed-code session or the fleet's
+-- LOOP_TOKEN (OWNER-QUEUE-DELEGATION-1), and human_responses did not record which one acted, so the apply step stamped
+-- objectives.ratified_by = 'owner (fleet.qnfo.org)' on every ratification, delegated or not.
+--
+-- From 1.17.8 every human_responses row the dashboard writes for a card decision (ratify, reject, done, dismiss, snooze,
+-- note) carries the credential that made it:
+--   'owner-session'  the owner's session opened by an emailed code (FLEET-CMD-1)
+--   'loop-token'     the fleet's LOOP_TOKEN (x-loop-token); it wins when present, since it alone skips the fresh-code check
+--   'owner-key'      the legacy OWNER_TOKEN cookie (dormant unless an owner key is configured)
+-- and the apply step stamps objectives.ratified_by and objective_revision_applies.via from it:
+--   'owner (fleet.qnfo.org, emailed code)' / 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)' /
+--   'owner-key cookie (fleet.qnfo.org, OWNER_TOKEN holder)' / 'unknown credential' (nothing recorded; never the owner);
+--   via = '<route|cron>:<credential|unknown>'.
+-- Access is unchanged: whether the loop token may ratify is the owner's decision (card objective-authority:delegated-ratification).
+--
+-- Existing rows are not changed: rows written before 1.17.8 keep credential NULL, so a later apply of such a decision reads
+-- 'unknown credential'. The dashboard also adds this column itself, idempotently, on its first decision after deploy
+-- (ensureResponseCredential), so this file documents the schema and is safe to run before or after that. Not applied by
+-- the session that wrote it. Running it a second time fails with "duplicate column name: credential", which is harmless.
+ALTER TABLE human_responses ADD COLUMN credential TEXT;
