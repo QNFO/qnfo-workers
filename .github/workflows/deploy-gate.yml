@@ -166,6 +166,10 @@ jobs:
       # each paper's JSON-LD names its own licence (LICENSE-ONE-1).
       - name: QDS-1 gateway pages offline suite (qnfo-gateway)
         run: node --no-warnings qnfo-gateway/qds-pages.test.mjs
+      # ASK-GAP-1: questions the corpus could not answer become idea proposals once each, through the public research gate,
+      # at most five a run and never while triage is backed up (idea-hub's own runAskGap on an in-memory D1).
+      - name: ASK-GAP-1 offline suite (idea-hub)
+        run: node --no-warnings idea-hub/ask-gap.test.mjs
       - name: OPEN-ACCESS-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/open-access.test.mjs
       # OPS-PUBLIC-READ-1: qnfo-ops answers a chat with no key, or a stale one, in public read-only mode (free tier, only

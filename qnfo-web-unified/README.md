@@ -1,30 +1,44 @@
-# qnfo-web-unified — QNFO unified design system (2026-08-31)
+# qnfo-web-unified — the QNFO design system (QDS-1, 2026-10-02)
 
-One professional, minimalist, functional look across every **QNFO-branded** public surface.
-**QWAV-branded surfaces intentionally remain on their existing design** (user decision,
-2026-08-31: "I like QWAV look and feel as it is. Stick to QNFO changes for now").
-Reference implementation: https://ideas.qnfo.org
+One design system across every public surface: QNFO, QWAV and q08. It supersedes the 2026-08-31 paper-and-ink
+system (Fraunces + Public Sans, accent #24315e) and the 2026-08-31 decision to leave QWAV on its own design: on
+2026-10-02 the owner asked for the whole front end ("Everything should be designed for impressions, impact, and
+readability") and chose to build from the ask.qwav.tech redesign.
+
+## Where it lives
+- **Stylesheet and script:** `https://qnfo.org/qds.css` and `https://qnfo.org/qds.js` (versioned `?v=1.0.0`), served by
+  `qnfo-gateway` from the `QDS-1` block in `qnfo-gateway/worker.js` (`QDS_CSS`, `QDS_JS`). CORS `*`, cached one day.
+- **Page shell:** `qdsHead`, `qdsHeader`, `qdsFooter`, `qdsPage` in the same block. Workers other than the gateway carry a
+  copy between `// ---- QDS-SHELL:BEGIN` and `// ---- QDS-SHELL:END` markers (idea-hub today); regenerate it from the
+  gateway block rather than editing it by hand.
+- **Living papers and the fleet dashboard** (`LP_DS` in qnfo-gateway, `FLEET_DS` in qnfo-fleet-dashboard) inline the same
+  tokens and type; they do not load qds.css because their class names predate it. Keep the tokens identical.
 
 ## Design language
-- **Palette (warm paper/ink):** --paper #faf7f2, --surface #f2eee6, --ink #1b1915,
-  --muted #8a8376, --border #e2dcd0, --accent #24315e, --accent-soft #eceef6
-- **Type:** Fraunces (display serif) + Public Sans (UI). No Inter, no generic system fonts.
-- **Mark:** rounded-square "Q" tile (accent bg, serif Q) as the shared brand glyph.
-- **Components:** sticky top-nav, centered hero with overline tag, stat rows, card grids,
-  paper-list rows, pill buttons, minimal footer. Generous whitespace, editorial restraint.
+- **Tokens:** paper `#F5F7FB`, surface `#FFFFFF`, ink `#182042`, muted `#58618A`, rule `#D9DEEC`; dark theme paper
+  `#121731`-`#141A33`, ink `#E6E8F3`. Light/dark follows the OS until the visitor picks one (toggle, stored as `qnfo-theme`).
+- **Accent by brand** (`<html data-brand>`): QNFO teal `#0E7C70`, QWAV indigo `#3B4CCA`, q08 rust `#B4472A`.
+- **Type:** Newsreader for reading and display, Familjen Grotesk for interface. Reading measure about 68 characters;
+  serif body gets the longer line height.
+- **Components:** sticky header with a mobile menu, hero, sections, lists (`q-list`/`q-item`), link cards, panels,
+  notes, tables, long-form prose with a contents sidebar (`q-article`, `q-toc`), subscribe block, footer, print styles.
+- **Rules:** sentence-case labels, no all-caps eyebrows, no emoji marks; every public page keeps the STRATEGY 2.5
+  metadata (title, description, canonical, OG/Twitter, JSON-LD, GA4, subscribe CTA, AI disclosure).
 
-## QNFO surfaces converted (live, verified 2026-08-31)
-| Surface | Host | Where it runs | File |
-|---|---|---|---|
-| QNFO Research Foundation | qnfo.org | qnfo-gateway Worker (COMMON_CSS replaced) | qnfo-gateway.deployed.worker.js |
-| QNFO About page (gateway v3.5.0) | qnfo.org/about | qnfo-gateway Worker (live D1 counts) | qnfo-gateway.deployed.worker.js |
-| QNFO Papers (+ Load More, no 50-cap) | papers.qnfo.org | qnfo-gateway Worker | qnfo-gateway.deployed.worker.js |
-| QNFO Hub + subdomains | hub.qnfo.org, q08.org, design/quantum/measure/hensel/unity.qnfo.org | qnfo-hub Pages (index.html + host-aware _worker.js) | hub-index.html, hub-worker.js |
-| QNFO Research Archive | archive.qnfo.org | qnfo-publications Pages | archive-qnfo.html |
-| Research profile | qnfo-landing.pages.dev | qnfo-landing Pages | landing-profile.html |
-| QNFO Ideas (v2.1.0) | ideas.qnfo.org | qnfo-idea-factory Worker | ../qnfo-idea-factory/worker.js |
+## Surfaces on QDS (2026-10-02)
+| Surface | Host | Worker |
+|---|---|---|
+| Home, about, work with me | qnfo.org | qnfo-gateway 3.9.0 |
+| Library and living papers | papers.qnfo.org | qnfo-gateway (LIVING-PAPERS-1 on the same tokens) |
+| License | legal.qnfo.org | qnfo-gateway |
+| Research archive | archive.qnfo.org | qnfo-gateway via zone route (SURFACE-ROUTES-1); Pages project qnfo-publications left intact behind it |
+| QWAV platform | qwav.org, qwav.tech | qnfo-gateway via zone routes (SURFACE-ROUTES-1); Pages projects left intact |
+| Ask the corpus | ask.qwav.tech | qnfo-ai-search 2.2.0 (tokens inline; family navigation) |
+| Ideas | ideas.qnfo.org | idea-hub 1.4.0 |
+| q08 | q08.org | q08-signal-engine 0.8.0 (own wordmark, no QNFO navigation: separate publication) |
+| Fleet dashboard | fleet.qnfo.org | qnfo-fleet-dashboard 1.20.0 (FLEET_DS tokens) |
 
-## QNFO Ideas v2.1.0 content rules (2026-08-31 user mandate)
+## Ideas content rules (2026-08-31 owner mandate, still in force)
 - **Only threads submitted through the QNFO AI endpoint** (the `chat` table written by
   qnfo-ai on /v1/chat/completions). The DeepChat-sync archive (`chat_sessions`) is NOT shown.
 - **Capped at the last 20 threads.**
@@ -39,19 +53,8 @@ Reference implementation: https://ideas.qnfo.org
 - /papers?format=json&limit=&offset=&category=&search= returns JSON (with pre-rendered rows)
   for client-side appending. Category + search totals are computed over the full corpus.
 
-## QWAV surfaces (unchanged by design)
-qwav.org + mirrors, ask.qwav.tech, qwav-demo-bt-qec — reverted to their original designs.
-
-## Conversion recipe (for future QNFO surfaces)
-1. Map the existing page's CSS variables onto the unified tokens (keep var names so inline
-   styles survive; add --blue: var(--accent) legacy alias).
-2. Swap the font source (Google Fonts link or @import) to Fraunces + Public Sans.
-3. Replace the favicon blue (#1a56db) with the accent (#24315e).
-4. Replace brand emoji with the Q mark span.
-5. Append unified overrides (headings serif, pill buttons, card grids, muted meta).
-Pages deploys: upload-token -> check-missing -> upload (base64 JSON) -> upsert-hashes ->
-create deployment (manifest = MD5 hashes, keys "/index.html" for files, "_worker.js" without
-slash for Functions). Worker deploys: script-only PUT /content (preserves bindings).
+## History
+The 2026-08-31 paper-and-ink system, its Pages conversion recipe and the QWAV exemption are superseded by QDS-1.
 
 ---
 

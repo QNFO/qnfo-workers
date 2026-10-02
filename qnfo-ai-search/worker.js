@@ -28,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.1.1-ascii"; // ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
+var VERSION = "2.2.0-qds"; // ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -1047,6 +1047,15 @@ button{font:inherit;color:inherit;cursor:pointer}
 .mark svg{width:26px;height:26px}
 .top nav{display:flex;gap:18px;margin-left:auto;font-size:14.5px;color:var(--muted)}
 .top nav a{text-decoration:none}
+.top nav a:hover,.top nav a[aria-current]{color:var(--ink)}
+.top nav a[aria-current]{font-weight:600}
+.menu{display:none;position:relative}
+.menu summary{list-style:none;cursor:pointer;border:1px solid var(--rule);border-radius:999px;width:34px;height:34px;display:grid;place-items:center;color:var(--muted)}
+.menu summary::-webkit-details-marker{display:none}
+.menu summary svg{width:16px;height:16px}
+.menu-panel{position:absolute;right:0;top:44px;z-index:20;min-width:200px;background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:8px;display:grid;box-shadow:0 12px 32px rgba(24,32,66,.14)}
+.menu-panel a{padding:10px 12px;border-radius:8px;text-decoration:none;font-size:15px}
+.menu-panel a:hover,.menu-panel a[aria-current]{background:var(--wash)}
 .theme{border:1px solid var(--rule);background:none;border-radius:999px;width:34px;height:34px;display:grid;place-items:center;color:var(--muted)}
 .theme svg{width:16px;height:16px}
 
@@ -1166,6 +1175,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 footer.site{border-top:1px solid var(--rule);padding:22px 0 40px;font-size:13px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap}
 footer.site a{color:var(--muted)}
 
+@media (max-width: 1100px){
+  .top nav{gap:14px;font-size:14px}
+}
 @media (max-width: 980px){
   .landing{grid-template-columns:1fr;gap:40px;padding-top:28px}
   .turn{grid-template-columns:1fr;gap:28px}
@@ -1175,7 +1187,8 @@ footer.site a{color:var(--muted)}
 @media (max-width: 560px){
   .wrap{padding:0 16px}
   .top nav{display:none}
-  .theme{margin-left:auto}
+  .menu{display:block;margin-left:auto}
+  .top{gap:10px}
   .qtree{grid-template-columns:72px 1fr}
   .qtree svg{width:72px}
   .askbar textarea{font-size:17px}
@@ -1199,10 +1212,15 @@ footer.site a{color:var(--muted)}
     </a>
     <nav aria-label="QNFO sites">
       <a href="https://papers.qnfo.org/papers">Papers</a>
-      <a href="https://ideas.qnfo.org">Idea threads</a>
-      <a href="https://qwav.org">QWAV</a>
-      <a href="https://qnfo.org">QNFO</a>
+      <a href="/" aria-current="page">Ask the corpus</a>
+      <a href="https://ideas.qnfo.org/">Ideas</a>
+      <a href="https://archive.qnfo.org/">Archive</a>
+      <a href="https://qnfo.org/about">About</a>
+      <a href="https://qnfo.org/work-with-me">Work with me</a>
     </nav>
+    <details class="menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="menu-panel">
+      <a href="https://papers.qnfo.org/papers">Papers</a><a href="/" aria-current="page">Ask the corpus</a><a href="https://ideas.qnfo.org/">Ideas</a><a href="https://archive.qnfo.org/">Archive</a><a href="https://qnfo.org/about">About</a><a href="https://qnfo.org/work-with-me">Work with me</a>
+    </div></details>
     <button class="theme" id="theme" type="button" aria-label="Switch colour theme">
       <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></svg>
     </button>
@@ -1266,7 +1284,10 @@ footer.site a{color:var(--muted)}
   <footer class="site">
     <span>Runs on the QNFO Cloudflare fleet: AI Search over the paper corpus, the qnfo-graph knowledge graph and Workers AI. Questions and ratings are stored without your address to measure and improve the answers.</span>
     <a href="https://papers.qnfo.org/papers">All papers</a>
-    <a href="https://legal.qnfo.org">QNFO-ULA v2.0</a>
+    <a href="https://qnfo.org/about">About QNFO</a>
+    <a href="https://qnfo.org/work-with-me#contact">Contact</a>
+    <a href="https://legal.qnfo.org/">License (QNFO-ULA v2.0)</a>
+    <a href="https://legal.qnfo.org/privacy">Privacy</a>
   </footer>
 </div>
 
