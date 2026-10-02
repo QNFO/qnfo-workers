@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.96-utf8-decode"; /* 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.97-budget-live"; /* 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2063,10 +2063,51 @@ __name(cronDrift, "cronDrift");
 // Every scan/optimize refreshes fleet_budget.current for workers from the live CF script list and,
 // when a class is at/over cap, files a disposition row + report line. NET-ZERO RULE: at/over cap a
 // NEW worker registration must name a same-class retirement; growth is never silently absorbed.
+// ---- BUDGET-LIVE-1:BEGIN (pure; replayed by budget-live.test.mjs)
+// BUDGET-LIVE-1 (2026-10-02): only fleet_budget.workers and the ai_spend rows were ever refreshed. Every other class kept
+// the number typed on 2026-09-26, so a cap could be breached unseen (cron_schedules read 69 with 84 expressions
+// registered; d1_databases read 10 with 11 databases live against a cap of 10). These classes are counted from the account.
+var BUDGET_LIVE_SOURCES = {
+  d1_databases: "/d1/database?per_page=100",
+  kv_namespaces: "/storage/kv/namespaces?per_page=100",
+  r2_buckets: "/r2/buckets?per_page=1000",
+  queues: "/queues?per_page=100",
+  vectorize_indexes: "/vectorize/v2/indexes?per_page=100"
+};
+// The count a Cloudflare list response states: result_info.total_count when it is at least the listed rows, else the
+// listed rows. null = unreadable (never a zero, so a failed read cannot hide a breach).
+function budgetLiveCount(j) {
+  if (!j || j.success !== true) return null;
+  var res = j.result, rows = Array.isArray(res) ? res : res && Array.isArray(res.buckets) ? res.buckets : null;
+  if (!rows) return null;
+  var tc = j.result_info ? Number(j.result_info.total_count) : NaN;
+  return isFinite(tc) && tc >= rows.length ? tc : rows.length;
+}
+// ---- BUDGET-LIVE-1:END
+async function budgetLiveCounts(env) {
+  var live = {};
+  try {
+    var cr = await env.AUDIT.prepare("SELECT SUM(json_array_length(crons_json)) AS n, MAX(refreshed_at) AS at FROM worker_schedules WHERE json_valid(crons_json)").first();
+    if (cr && cr.n != null && cr.at && Date.parse(cr.at) > Date.now() - 36 * 36e5) live.cron_schedules = Number(cr.n);
+  } catch (e) {
+  }
+  await Promise.all(Object.keys(BUDGET_LIVE_SOURCES).map(async function (k) {
+    try {
+      var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + BUDGET_LIVE_SOURCES[k], { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 8e3);
+      if (!r || !r.ok) return;
+      var n = budgetLiveCount(await r.json());
+      if (n != null) live[k] = n;
+    } catch (e) {
+    }
+  }));
+  return live;
+}
 async function budgetAudit(env, names) {
   var out = { classes: 0, over: [] };
   try {
     var live = Array.isArray(names) ? names.length : null;
+    var liveBy = await budgetLiveCounts(env);
+    out.live = liveBy;
     var rows = await env.AUDIT.prepare("SELECT node_class, cap, target, current FROM fleet_budget").all();
     var rs = rows && rows.results || [];
     for (var i = 0; i < rs.length; i++) {
@@ -2078,6 +2119,13 @@ async function budgetAudit(env, names) {
         } catch (e) {
         }
         if (live > Number(r.cap)) out.over.push("workers live=" + live + " cap=" + r.cap + " (+" + (live - Number(r.cap)) + ")");
+      } else if (liveBy[r.node_class] != null) {
+        var lv = liveBy[r.node_class];
+        try {
+          await env.AUDIT.prepare("UPDATE fleet_budget SET current=?1, updated_at=datetime('now') WHERE node_class=?2").bind(lv, r.node_class).run();
+        } catch (e) {
+        }
+        if (lv > Number(r.cap)) out.over.push(r.node_class + " live=" + lv + " cap=" + r.cap + " (+" + (lv - Number(r.cap)) + ")");
       } else if (Number(r.current) > Number(r.cap)) {
         out.over.push(r.node_class + " cur=" + r.current + " cap=" + r.cap);
       }
