@@ -219,6 +219,15 @@ jobs:
       - name: HANDOFF-CLAIM-SHEET-1 check (qnfo-email)
         run: node qnfo-email/handoff-claim-sheet.test.mjs
 
+      # WORK-CLAIM-1 + CONCURRENT-SESSION-SHARED-SECRET-CLOBBER-1 (qnfo-deploy-guard 1.3.21): work claims, secret leases and deploy
+      # locks share the D1 deploy_locks lease. Acquire, conflict, expiry, wrong-token release, renew, the open read without tokens,
+      # agent_issues.linked_session, and the unchanged deploy and secret paths, against in-memory SQLite.
+      - name: WORK-CLAIM-1 and secret-lock offline suites (qnfo-deploy-guard)
+        run: |
+          set -euo pipefail
+          node --no-warnings qnfo-deploy-guard/work-lock.test.mjs
+          node --no-warnings qnfo-deploy-guard/secret-lock.test.mjs
+
       # INBOUND-SLA-1 (qnfo-email-orchestrator 0.5.0, pillar: reach): every human inbound message gets a fleet action within
       # 72h inside docs/STRATEGY.md section 5. Category routing, no mail to automated or no-reply senders, one holding
       # acknowledgement per thread, no substantive answer for reserved categories, the kill switch and the metrics.

@@ -31,6 +31,19 @@ WHAT IT DOES
   Formatting-only changes are reported too, deliberately: the deployer cannot distinguish a
   whitespace edit from a real fix either, so neither can this guard.
 
+  VERSION-AHEAD-1 (2026-10-02, WORK-CLAIM-1): when both sides carry a numeric core
+  ("<v?>1.18.5-suffix"), the new core must be STRICTLY AHEAD of the base's. A changed string is
+  not enough: on 2026-10-02 five PRs claimed qnfo-fleet-dashboard 1.17.2, 1.17.3, 1.17.8 and
+  1.18.x twice each, and a collision resolved by keeping "1.17.2-b" over main's "1.17.2-a"
+  passes a string-change check while qnfo-fleet-control/version-compare.mjs rule 5 ranks equal
+  cores with different suffixes UNORDERABLE (the drift redeployer never acts on them) and the
+  deployment_history monotonic trigger refuses a lower version. On a pull request the base is
+  the merge-base with the base branch tip, so this compares against what main holds NOW: a PR
+  that kept a number another PR already merged goes red. Versions without a numeric core are
+  not ordered (the string-change rule still applies). Measured over the 343 bundle bumps on
+  main from 2026-09-30 12:00 to 2026-10-02: 339 strictly ahead, 0 behind, 4 equal-core
+  (qnfo-fleet-control 0.4.39-selfstate-obs1..4, which the comparator could never order).
+
 USAGE
   python3 scripts/version-bump-guard.py <base_ref> <head_ref>
   python3 scripts/version-bump-guard.py                 # falls back to HEAD~1..HEAD
@@ -84,6 +97,27 @@ def blob(ref, path):
 def version_of(text):
     m = VERSION_RE.search(text)
     return m.group(1) if m else None
+
+
+CORE_RE = re.compile(r'^(\d+(?:\.\d+)*)(.*)$')
+
+
+def numeric_core(v):
+    """'<v?><dotted numeric core><suffix>' -> list of ints, or None (parse rules of version-compare.mjs)."""
+    if v is None:
+        return None
+    m = CORE_RE.match(re.sub(r'^[vV]', '', v.strip()))
+    return [int(x) for x in m.group(1).split('.')] if m else None
+
+
+def core_order(old, new):
+    """-1 when new's numeric core is ahead, 0 equal, 1 behind; None when either side has no numeric core."""
+    a, b = numeric_core(old), numeric_core(new)
+    if a is None or b is None:
+        return None
+    n = max(len(a), len(b))
+    a, b = a + [0] * (n - len(a)), b + [0] * (n - len(b))
+    return 0 if a == b else (-1 if a < b else 1)
 
 
 def main(argv):
@@ -143,6 +177,15 @@ def main(argv):
         if v_old == v_new:
             violations.append((path, v_old, "unchanged VERSION after a byte change"))
             continue
+        order = core_order(v_old, v_new) if ok_old else None
+        if order == 0:
+            violations.append((path, v_old, "VERSION-AHEAD-1: %s keeps the base's numeric core (equal cores with "
+                               "different suffixes are unorderable; this is a version collision). Take a number above "
+                               "the highest one main and the open PRs claim (CLAUDE.md, Work claims)" % v_new))
+            continue
+        if order == 1:
+            violations.append((path, v_old, "VERSION-AHEAD-1: %s is behind the base's %s (the version regresses)" % (v_new, v_old)))
+            continue
         bumped.append((path, v_old, v_new))
 
     for path, v_old, v_new in bumped:
@@ -162,7 +205,8 @@ def main(argv):
     print("bundle that changes without a VERSION bump is therefore invisible to every drift check")
     print("and is never auto-deployed - the fix stays on main forever (see issue 1371).")
     print("")
-    print("FIX: bump `var VERSION = \"...\"` in the changed bundle(s) in this same commit.")
+    print("FIX: bump `var VERSION = \"...\"` in the changed bundle(s) in this same commit, to a numeric")
+    print("core strictly above the base's and above every open PR's claim for that worker (CLAUDE.md, Work claims).")
     print("If the change is genuinely cosmetic, bump anyway - the deployer cannot tell the")
     print("difference, and neither can a future reader of the ledger.")
     return 1
