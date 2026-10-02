@@ -9,8 +9,8 @@ const src = readFileSync(join(here, "worker.js"), "utf8");
 const block = src.slice(src.indexOf("// ---- ACT-BRIDGE-1:BEGIN"), src.indexOf("// ---- ACT-BRIDGE-1:END"));
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(block + "\n__export = { triggerIssueDescription };", sandbox);
-const { triggerIssueDescription } = sandbox.__export;
+vm.runInContext(block + "\n__export = { triggerIssueDescription, triggerIssuePriority };", sandbox);
+const { triggerIssueDescription, triggerIssuePriority } = sandbox.__export;
 const orch = readFileSync(join(here, "..", "qnfo-code-orchestrator", "worker.js"), "utf8");
 const INTAKE_MARK = new RegExp(orch.match(/const INTAKE_MARK = \/(.+)\/m;/)[1], "m");
 const ANCHOR = /^[ \t]*code-anchor:[ \t]*(.{1,300}?)[ \t]*$/m;
@@ -34,5 +34,14 @@ check(!INTAKE_MARK.test(triggerIssueDescription(head, "see code-task: repo=a pat
 const two = triggerIssueDescription(head, "x\ncode-task: repo=a path=b.js\ncode-task: repo=c path=d.js", tail);
 check((two.match(/code-task:/g) || []).length === 1, "at most one code task per issue");
 check(!ANCHOR.test(triggerIssueDescription(head, "x\ncode-anchor: lonely", tail)), "an anchor without a task is dropped");
+
+// TRIGGER-DISPATCH-1: the priority written to agent_issues must be a priority_canon value, whatever the trigger stores.
+const CANON = ["critical", "high", "medium", "low"];
+check([1, 5, 6, 7, 8, 9, "7", "high", "HIGH", null, undefined, "", "x"].every((v) => CANON.includes(triggerIssuePriority(v))), "every stored priority maps to a canonical value");
+check(triggerIssuePriority(9) === "critical" && triggerIssuePriority(8) === "high" && triggerIssuePriority(7) === "high", "9 is critical, 7 and 8 are high");
+check(triggerIssuePriority(6) === "medium" && triggerIssuePriority(5) === "medium" && triggerIssuePriority(4) === "low", "5 and 6 are medium, below is low");
+check(triggerIssuePriority("medium") === "medium" && triggerIssuePriority(" High ") === "high", "a canonical word passes through");
+check(triggerIssuePriority(null) === "medium" && triggerIssuePriority("x") === "medium", "an unreadable priority files as medium");
+check(/status <> 'dispatch-failed'/.test(src.slice(src.indexOf("async function evaluateMetricTriggers"), src.indexOf('__name(evaluateMetricTriggers'))), "a failed dispatch does not start the cooldown");
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);
