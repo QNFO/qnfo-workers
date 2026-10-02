@@ -1,7 +1,7 @@
 // WATCHMAKER-INDEX-1 offline suite: replays the watchmaker block from worker.js against an in-memory SQLite D1 with
 // synthetic ledgers and proves: a fully fresh fleet reads 0; a stalled runner, a never-run one, an unreadable ledger,
-// a research backlog and live code-task merges each count; a first run not yet due and the owner's by-policy approvals do
-// not; the daily run writes one row and the metric once per day, never before 07:00Z; GET /api/watchmaker serves it.
+// a research backlog and code-task merges a person still does (waiting now, or merged or closed by a person in the last 30
+// days) each count; a first run not yet due, a code loop dormant for 30 days and the owner's by-policy approvals do not; the daily run writes one row and the metric once per day, never before 07:00Z; GET /api/watchmaker serves it.
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
 // stale zenodo_stats and job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
 // Run: node qnfo-fleet-dashboard/watchmaker.test.mjs   -> prints "N passed, 0 failed"
@@ -97,7 +97,22 @@ ok(m.index === 0 && m.counted.length === 0, "a fully fresh fleet reads 0 (got " 
 ok(op(m, "portfolio-daily").state.startsWith("ok") && op(m, "portfolio-daily").age_h === 3, "the id range picks the real portfolio-daily row");
 ok(op(m, "identity-weekly").state.startsWith("ok") && op(m, "time-gated-verification").state.startsWith("ok"), "space-format timestamps are read as UTC");
 ok(!op(m, "linkedin-draft-approval").counted && /by policy/.test(op(m, "linkedin-draft-approval").state), "by-policy owner approvals are listed, not counted");
-ok(!op(m, "code-task-merge").counted && /^0 code tasks/.test(op(m, "code-task-merge").state), "no live code-task PRs: merging is dormant, not counted");
+ok(!op(m, "code-task-merge").counted && /^0 code tasks.*; 0 waiting now$/.test(op(m, "code-task-merge").state), "no code-task PRs at all: merging is dormant, not counted");
+// WATCHMAKER-CODE-MERGE-1: a PR a person merged or closed is person work; only a code loop quiet for 30 days is dormant.
+db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm1', 'merged', ?)").run(ago(10));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "code-task-merge").counted && /^1 code tasks that needed a person.*; 0 waiting now$/.test(op(m, "code-task-merge").state) && m.index === 1, "a code-loop PR a person merged in the last 30 days counts although nothing waits now");
+db.exec("UPDATE code_tasks SET status = 'closed' WHERE id = 'cm1'");
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "code-task-merge").counted, "a code-loop PR a person closed in the last 30 days counts");
+db.prepare("UPDATE code_tasks SET status = 'merged', updated_at = ? WHERE id = 'cm1'").run(ago(31 * 24));
+m = await api.watchmakerMeasure(env, NOW);
+ok(!op(m, "code-task-merge").counted && m.index === 0, "a merge older than 30 days with nothing waiting is dormant, not counted");
+db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm2', 'published', ?)").run(ago(40 * 24));
+db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm3', 'pr_open', ?)").run(ago(2));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "code-task-merge").counted && /^2 code tasks.*; 2 waiting now$/.test(op(m, "code-task-merge").state), "a PR waiting on a person counts at any age, and the orchestrator's own pr_open rows count");
+db.exec("DELETE FROM code_tasks");
 ok(m.retired.length === 4, "retired claude.ai Routines are listed with what replaced them");
 ok(!op(m, "q08-review").counted && op(m, "q08-review").state === "no backlog", "the one-shot q08 review is not counted before it is 48h overdue (Q08-REVIEW-2026-10-31)");
 ok(op(m, "errata-watch").state.startsWith("ok") && op(m, "errata-respond").age_h === 1.2 && !op(m, "errata-publish").counted, "errata-hub ticks are read from errata_watch $.last_ok");
@@ -189,7 +204,7 @@ m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "portfolio-daily").counted && /stalled: last run 60h ago, cadence 24h/.test(op(m, "portfolio-daily").state), "a runner silent for over twice its cadence counts as stalled");
 ok(op(m, "charter-loop").counted && op(m, "charter-loop").state === "never ran", "a runner past its first due date that never ran counts");
 ok(op(m, "research-intent-triage").counted && /^1 pending research intents older than 48h/.test(op(m, "research-intent-triage").state), "a research backlog older than 48h counts");
-ok(op(m, "code-task-merge").counted && /^1 code tasks waiting/.test(op(m, "code-task-merge").state), "a code task waiting on a person counts");
+ok(op(m, "code-task-merge").counted && /^1 code tasks.*; 1 waiting now$/.test(op(m, "code-task-merge").state), "a code task waiting on a person counts");
 ok(op(m, "fleet-defects").counted && /^unmeasured/.test(op(m, "fleet-defects").state), "an unreadable ledger counts as unmeasured");
 ok(m.index === 5 && m.counted.join(",") === "charter-loop,fleet-defects,portfolio-daily,research-intent-triage,code-task-merge".split(",").sort((x, y) => m.counted.indexOf(x) - m.counted.indexOf(y)).join(","), "the index is the number of counted operations (" + m.index + ")");
 // first_due in the future: not counted

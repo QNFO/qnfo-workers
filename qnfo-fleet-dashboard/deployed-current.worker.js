@@ -3534,7 +3534,11 @@ var WATCHMAKER_OPS = [
   { key: "time-gated-verification", what: "Time-gated issue verification (remediation_contracts)", runner: "workflow:remediation-consumer", cadence_h: 6, sql: "SELECT MAX(last_attempt_at) AS last FROM remediation_contracts", replaces: "13 one-shot claude.ai session check-ins" },
   { key: "research-intent-triage", what: "Research intent triage (qnfo-intent-orchestrator 06:30Z)", runner: "cron:qnfo-intent-orchestrator", cadence_h: 24, stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'research' AND created_at < ?1", stuck_note: "pending research intents older than 48h" },
   { key: "task-intent-intake", what: "Task intents from ChatBox, DeepChat and qnfo-ops feeds, filed as agent_issues (TASK-INTENT-INTAKE-1)", runner: "cron:qnfo-fleet-dashboard", stuck_sql: "SELECT COUNT(*) AS stuck FROM intents WHERE status = 'pending' AND type = 'task' AND created_at < ?1", stuck_note: "pending task intents older than 48h with no consumer" },
-  { key: "code-task-merge", what: "Merging code-loop PRs (code-task-publish never merges)", runner: "owner", live_sql: "SELECT COUNT(*) AS n FROM code_tasks WHERE status IN ('published', 'branch_pushed', 'needs_human') AND updated_at > ?1", live_note: "code tasks waiting on a person in the last 30 days" },
+  // WATCHMAKER-CODE-MERGE-1 (1.15.3): no Cloudflare runner merges a code-loop PR, so every merged or closed code task was
+  // merged or closed by a person. The op counts while one waits on a person now (any age, including the orchestrator's own
+  // pr_open rows) or a person merged or closed one in the last 30 days. It is dormant only after 30 quiet days, and it stops
+  // counting for good only when a Cloudflare runner does the merge (then this entry gets that runner and a stuck query).
+  { key: "code-task-merge", what: "Merging code-loop PRs (code-task-publish never merges)", runner: "owner", live_sql: "SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN status IN ('published', 'branch_pushed', 'pr_open', 'needs_human') THEN 1 ELSE 0 END), 0) AS waiting FROM code_tasks WHERE status IN ('published', 'branch_pushed', 'pr_open', 'needs_human') OR (status IN ('merged', 'closed') AND updated_at > ?1)", live_note: "code tasks that needed a person to merge or close their PR (waiting now, or done in the last 30 days)" },
   { key: "linkedin-draft-approval", what: "Approving each LinkedIn draft in Buffer (LinkedIn API Terms 3.1; STRATEGY gate 7)", runner: "owner-by-policy" },
   { key: "objective-ratification", what: "Ratifying objective revisions (QUNIVERSE-CHARTER s7)", runner: "owner-by-policy" }
 ];
@@ -3559,7 +3563,7 @@ async function watchmakerMeasure(env, nowMs) {
           const x = (await d1all(env.AUDIT, op.live_sql, [new Date(now - 30 * DAY_MS).toISOString()]))[0];
           const n = x ? Number(x.n) : null;
           r.counted = !(n === 0);
-          r.state = n == null ? "unmeasured" : n + " " + op.live_note;
+          r.state = n == null ? "unmeasured" : n + " " + op.live_note + (x.waiting != null ? "; " + Number(x.waiting) + " waiting now" : "");
         } else {
           r.counted = true;
           r.state = "run by a " + (op.runner === "owner" ? "person" : "session");
