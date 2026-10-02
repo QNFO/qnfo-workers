@@ -102,6 +102,15 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Every agent session writes one `qnfo-audit.session_records` row at closeout (wbs_code, summary, decisions_made,
   handoff_notes, total_tasks, completed_tasks, execution_ratio, started_at, completed_at): what it was asked, what it
   finished, what it left and why. `session_execution_ratio_30d` and `session_records_30d` are graded from these rows.
+- A closing probe makes the claim checkable: a metric issue carries a `remediation_contracts` d1-query probe on the metric
+  itself, so the hourly remediation tick closes it on recovery; every "this will work after the deploy" gets such a probe
+  written at the same time.
+- Session lessons (SESSION-EFFECTIVENESS-1, each from a 2026-10-01 or 2026-10-02 miss): re-read `origin/main` and the open
+  pull requests for the thing you are about to build, immediately before building it (a watchmaker index was built twice;
+  PR 345 closed unmerged). State what is true from a read made in this session ("never proven live" was said of the code
+  loop hours after it delivered a merged PR). Before treating an off-target metric as a real gap, check that it is measured
+  (zenodo_versions_per_flagship read 1 while the true minimum was 3: two flagships were unmeasured, #1754). An action the
+  session is refused is handed to the owner with the reason, not retried.
 
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
