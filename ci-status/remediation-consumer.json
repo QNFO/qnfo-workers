@@ -1,12 +1,21 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3823a7f98515",
- "due": 0,
+ "verifier": "remediation-consumer@0e33b8af2cef",
+ "due": 1,
  "pass": 0,
- "fail": 0,
+ "fail": 1,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "GCAL-CONNECTED-1",
+   "issue_id": 1816,
+   "verdict": "fail",
+   "expected": "connected",
+   "observed": "not-linked",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -23,7 +32,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 2178,
- "head": "3823a7f985159c8e9851744f34c8796c0baab004",
+ "spent_ms": 3976,
+ "head": "0e33b8af2ceffae8c07deb62e59f757de08adcef",
  "job_status": "success"
 }
