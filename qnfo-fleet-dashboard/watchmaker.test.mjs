@@ -6,6 +6,8 @@
 // first run not yet due, runner merges, person merges from before the runner existed and the owner's by-policy approvals
 // do not; the daily run writes one row and the metric once per day, never before 07:00Z;
 // GET /api/watchmaker serves it.
+// INBOUND-SLA-1: the inbound SLA step counts when its runner is stalled, disabled or not yet run after its first due date,
+// or when a human inbound message is older than 72h with no fleet action (a decision row or sent_at is one).
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
 // stale zenodo_stats and job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
 // WORK-WITH-ME-METRIC-1: the work-with-me contacts op reads its own reach_signals rows (stalled after 48h, never ran).
@@ -40,6 +42,7 @@ CREATE TABLE zenodo_stats (doi TEXT PRIMARY KEY, downloads INTEGER, views INTEGE
 CREATE TABLE handoffs (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, project_id TEXT NOT NULL, timestamp TEXT NOT NULL, claim_sheet TEXT);
 CREATE TABLE events_radar (slug TEXT PRIMARY KEY, scanned_at TEXT);
 CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));
+CREATE TABLE email_reply_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, email_id INTEGER, sender TEXT, received_at TEXT, decision TEXT, skip_reason TEXT, sent_at TEXT);
 CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, layer TEXT NOT NULL, kind TEXT NOT NULL, formula TEXT, source_of_truth TEXT, baseline TEXT, target TEXT,
   owner TEXT, disposition_actor TEXT, refresh_cadence TEXT, warning_band TEXT, kill_band TEXT, last_value TEXT, last_refreshed TEXT, state TEXT);`);
 const NOW = Date.parse("2026-10-06T08:00:00Z");
@@ -62,6 +65,8 @@ db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pe
 db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-watch', ?)").run(JSON.stringify({ ts: ago(0.5), ok: true, last_ok: ago(0.5) }));
 db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-respond', ?)").run(JSON.stringify({ ts: ago(0.2), ok: false, last_ok: ago(1.2) }));
 db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-publish', ?)").run(JSON.stringify({ ts: ago(0.1), ok: true, last_ok: ago(0.1) }));
+// INBOUND-SLA-1: qnfo-email-orchestrator's */15 step upserts inbound-sla-run-<day> with meta.last_ok.
+db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, meta, job, status) VALUES ('inbound-sla-run-2026-10-06', ?, 'inbound-sla-run', ?, 'qnfo-email-orchestrator', 'ok')").run(ago(0.2), JSON.stringify({ last_ok: ago(0.2), runs: 30 }));
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops, each fresh against its cadence.
 // qnfo-social SOCIAL-RUN-LEDGER-1 rows: one per op per day, meta.last_ok = last completed run.
 const socialRow = (op, day, status, lastOkH, tsH) => db.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, meta, job, status) VALUES (?, ?, 'social-run', ?, 'qnfo-social', ?)").run("social-" + op + "-" + day, ago(tsH == null ? lastOkH : tsH), JSON.stringify({ op, last_ok: lastOkH == null ? null : ago(lastOkH), runs: 3 }), status);
@@ -278,6 +283,40 @@ ok(!op(await api.watchmakerMeasure(env, Date.parse("2026-10-04T08:00:00Z")), "wo
 db.prepare("INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality, collected_at) VALUES ('2026-10-05', 'work-with-me', 'email', 'campaign', 'work-with-me:all', 'inbound_contacts_30d', 0, 'unknown', ?)").run(wwmAt(5.5));
 m = await api.watchmakerMeasure(env, NOW);
 ok(m.index === 0, "the fixture is fresh again before the stall checks (" + m.counted.join(",") + ")");
+
+// INBOUND-SLA-1: counted when the runner is stalled or disabled, or a human inbound message waits over 72h with no action.
+const sla = async () => op(await api.watchmakerMeasure(env, NOW), "inbound-sla");
+let sl = await sla();
+ok(!sl.counted && sl.runner === "cron:qnfo-email-orchestrator" && /^ok, last run 0.2h ago$/.test(sl.state), "a fresh inbound-SLA runner with nothing waiting is not counted", sl.state);
+db.prepare("INSERT INTO email_reply_queue (email_id, sender, received_at, decision, skip_reason) VALUES (1, 'a@x.example', ?, 'escalate', 'awaiting authored draft')").run(ago(71));
+ok(!(await sla()).counted, "a human message 71h old is still inside the SLA");
+db.prepare("UPDATE email_reply_queue SET received_at = ? WHERE id = 1").run(ago(73));
+sl = await sla();
+ok(sl.counted && /^1 human inbound messages older than 72h with no fleet action$/.test(sl.state), "a human message older than 72h with no fleet action counts", sl.state);
+m = await api.watchmakerMeasure(env, NOW);
+ok(m.index === 1 && m.counted[0] === "inbound-sla", "and it is the only counted op");
+db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, meta, status) VALUES ('inbound-sla-q-1', ?, 'inbound-sla-decision', '{}', 'held')").run(ago(1));
+ok(!(await sla()).counted, "an INBOUND-SLA-1 decision row is a fleet action");
+db.exec("DELETE FROM cloud_ops_events WHERE id = 'inbound-sla-q-1'");
+db.prepare("UPDATE email_reply_queue SET sent_at = ? WHERE id = 1").run(ago(2).slice(0, 19).replace("T", " "));
+ok(!(await sla()).counted, "a row with sent_at is answered");
+db.exec("UPDATE email_reply_queue SET sent_at = NULL, decision = 'pending', skip_reason = 'db-trigger: machine/marketing sender terminalized on first touch'");
+ok(!(await sla()).counted, "a machine sender terminalised by the DB trigger is not human inbound");
+db.exec("DELETE FROM email_reply_queue");
+db.prepare("UPDATE cloud_ops_events SET meta = ? WHERE id = 'inbound-sla-run-2026-10-06'").run(JSON.stringify({ last_ok: ago(3), runs: 31 }));
+sl = await sla();
+ok(sl.counted && /^stalled: last run 3h ago, cadence 1h$/.test(sl.state), "an inbound-SLA runner silent for over 2h counts as stalled", sl.state);
+db.prepare("UPDATE cloud_ops_events SET ts = ?, status = 'disabled' WHERE id = 'inbound-sla-run-2026-10-06'").run(ago(0.1));
+sl = await sla();
+ok(sl.counted && /^runner disabled; stalled/.test(sl.state), "the inbound_sla_enabled kill switch off: counted, and the state says the runner is disabled", sl.state);
+db.prepare("UPDATE cloud_ops_events SET ts = ?, status = 'ok', meta = ? WHERE id = 'inbound-sla-run-2026-10-06'").run(ago(0.2), JSON.stringify({ last_ok: ago(0.2), runs: 32 }));
+db.exec("ALTER TABLE cloud_ops_events RENAME TO coe_full; CREATE TABLE cloud_ops_events AS SELECT * FROM coe_full WHERE id NOT LIKE 'inbound-sla-run-%'");
+const earlySla = op(await api.watchmakerMeasure(env, Date.parse("2026-10-04T08:00:00Z")), "inbound-sla");
+ok(!earlySla.counted && /^first run due 2026-10-05/.test(earlySla.state), "with no ledger before its first due date the op is not counted", earlySla.state);
+ok((await sla()).counted && (await sla()).state === "never ran", "with no ledger after its first due date the op counts as never ran");
+db.exec("DROP TABLE cloud_ops_events; ALTER TABLE coe_full RENAME TO cloud_ops_events");
+m = await api.watchmakerMeasure(env, NOW);
+ok(m.index === 0, "fresh again after the inbound-SLA checks (" + m.counted.join(",") + ")");
 
 // Stalled, never-run, backlog, live merges, unreadable
 db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'portfolio-daily-2026-10-06'").run(ago(60));
