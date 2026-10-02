@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.8.2-usage-topics"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.8.3-codeagent"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -1788,9 +1788,76 @@ var qnfo_ipatent_default = {
         const bin = Uint8Array.from(atob(OG_JPEG_B64), (c) => c.charCodeAt(0));
         return new Response(bin, { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=86400" } });
       }
-      if ((path === "/guide" || path === "/guide/") && isRead) {
+      if ((path === "/guide/before-you-publish" || path === "/guide/before-you-publish/") && isRead) {
         if (request.method === "GET") ctx?.waitUntil?.(countPageView(env, "/guide", pageSource(request)));
-        return html(GUIDE_HTML);
+        return html(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Before You Publish - Reach</title>
+    <meta name="description" content="Guidance on grace periods, pitch decks, and filing strategies before publishing your invention.">
+    <link rel="canonical" href="https://ipatent.qnfo.org/guide/before-you-publish">
+    <meta property="og:image" content="https://ipatent.qnfo.org/og.jpg">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "Before You Publish - Reach",
+      "author": {
+        "@type": "Person",
+        "name": "REACH-IDEATION-1",
+        "url": "https://qnfo.org",
+        "sameAs": "https://orcid.org/0000-0002-1825-0097"
+      },
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://ipatent.qnfo.org/guide/before-you-publish"
+      },
+      "datePublished": "2023-10-02",
+      "dateModified": "2023-10-02",
+      "publisher": {
+        "@type": "Organization",
+        "name": "QNFO",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://qnfo.org/logo.png"
+        }
+      },
+      "description": "Guidance on grace periods, pitch decks, and filing strategies before publishing your invention."
+    }
+    </script>
+</head>
+<body>
+    <header>
+        <h1>Before You Publish</h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/example">Example</a>
+            <a href="https://qnfo.org/work-with-me?utm_source=ipatent&utm_medium=referral&utm_campaign=ipatent-result">Work with me</a>
+        </nav>
+    </header>
+    <main>
+        <section>
+            <h2>Grace Periods</h2>
+            <p>In the United States, there is a one-year grace period after public disclosure during which you can still file a patent application. In contrast, under the European Patent Convention (EPC), any public disclosure before filing can bar patentability.</p>
+        </section>
+        <section>
+            <h2>Pitch Decks and Preprints</h2>
+            <p>Releasing a pitch deck or preprint can count as a public disclosure, potentially affecting your ability to obtain a patent. It's crucial to understand these implications before making your work publicly available.</p>
+        </section>
+        <section>
+            <h2>What to File First</h2>
+            <p>Consider filing a provisional patent application first to secure an early filing date without the need for detailed claims. This can provide a strategic advantage in protecting your invention.</p>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2023 QNFO. All rights reserved.</p>
+    </footer>
+</body>
+</html>
+`);
       }
       if (path === "/api/metrics" && request.method === "GET") return handleMetrics(env);
       if (path === "/api/subscribe" && request.method === "POST") return handleSubscribe(request);
@@ -1800,7 +1867,7 @@ var qnfo_ipatent_default = {
         return new Response("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /d/\nSitemap: " + CANONICAL_ORIGIN + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       }
       if (path === "/sitemap.xml" && isRead) {
-        const urls = ["/", "/guide", "/example"].map((p) => "<url><loc>" + CANONICAL_ORIGIN + p + "</loc><lastmod>" + GUIDE_UPDATED + "</lastmod></url>").join("");
+        const urls = ["/", "/guide/before-you-publish", "/guide", "/example"].map((p) => "<url><loc>" + CANONICAL_ORIGIN + p + "</loc><lastmod>" + GUIDE_UPDATED + "</lastmod></url>").join("");
         return new Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls + "</urlset>", { headers: { "Content-Type": "application/xml; charset=utf-8" } });
       }
       if (path.startsWith("/d/") && isRead) {
