@@ -58,4 +58,6 @@ class_name = "JobMarketWatchWorkflow"
 # EVENTS-RADAR-CF-DOW-1 (2026-10-02): events was "0 5 * * 1", which is Sunday in Cloudflare's numbering (1=Sunday..7=Saturday);
 # the radar reads its weekly sources only on Mondays, so "0 5 * * 2" (Monday 05:00Z). Same count of crons (net-zero).
 [triggers]
-crons = ["0 5 * * 2", "30 8 * * *", "0 6 1 * *", "0 8 * * 7", "0 9 * * 7", "0 11 1,15 * *", "0 7 * * 2", "30 5 * * 2", "0 6 * * *"]
+# CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
+# (0 5 * * 2, 30 8 * * *, 0 6 1 * *, 0 8 * * 7, 0 9 * * 7, 0 11 1,15 * *, 0 7 * * 2, 30 5 * * 2, 0 6 * * *) and runs each entry in the hour it fired.
+crons = ["0 * * * *"]
