@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.5-fleet-link"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
+var VERSION = "1.1.5-fleet-link-client-ip"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
 var SITE = "https://qnfo.org";
 // FLEET-CTL-STATIC-1 (issue 1778; owner request 1757): the owner's fleet command-line link on the subscribe, confirm and
 // unsubscribe pages, as static HTML scoped to the subscribe surface. Not fleet.qnfo.org/ctl.js: it scopes the link with
@@ -123,8 +123,9 @@ async function handleSubscribe(request, env) {
     const sup = await env.AUDIT.prepare("SELECT 1 AS x FROM email_suppression WHERE lower(email) = ?1").bind(email).first();
     if (sup) return json({ ok: true, pending: false, confirmation_sent: false, suppressed: true });
   } catch (e) {}
-  const ip = request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "";
-  const ua = String(request.headers.get("User-Agent") || "").slice(0, 300);
+  const xff = String(request.headers.get("X-Forwarded-For") || "").split(",")[0].trim();
+const ip = xff || request.headers.get("CF-Connecting-IP") || "";
+  const ua = String(request.headers.get("X-Client-UA") || request.headers.get("User-Agent") || "").slice(0, 300);
   const ipHash = ip ? await sha256Hex(ip) : "";
   const source = String(body && body.source || "qnfo.org").slice(0, 80);
   try {
