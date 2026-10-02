@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.52-utf8-redeploy"; // UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.54-metadata-verify-order"; // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2912,8 +2912,11 @@ async function verifyMetadataBackfill(env, fetchImpl) {
   var summary = "rows=" + c.n + " published=" + (c.pub || 0) + " unchanged=" + (c.unch || 0) + " error=" + (c.err || 0) + "; public re-read " + pass + "/" + sample.length + " carry the patched creator" + (fails.length ? " (failed: " + fails.slice(0, 10).join(",") + ")" : "");
   if (Number(c.err) || fails.length || !sample.length) return { issue: iss.id, closed: false, summary: summary };
   var ev = "METADATA-BACKFILL-VERIFY-1 " + new Date().toISOString() + ": " + summary;
-  await db.prepare("UPDATE agent_issues SET status='closed', updated_at=? WHERE id=? AND status='open'").bind(Date.now(), iss.id).run();
+  // METADATA-VERIFY-ORDER-1 (0.9.54, #1732): evidence first, then the close. qnfo-audit's issue_close_evidence_required
+  // trigger aborts an agent_issues close unless issue_triage already holds close_evidence, and #1732 has an AUTOTRIAGE row
+  // with none, so the old order (close, then evidence) threw 'close-without-evidence' and the backfill could never close.
   await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'METADATA-BACKFILL-VERIFY-1', 'closed', 'qnfo-research-exec', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(iss.id, ev).run();
+  await db.prepare("UPDATE agent_issues SET status='closed', updated_at=? WHERE id=? AND status='open'").bind(Date.now(), iss.id).run();
   return { issue: iss.id, closed: true, summary: summary };
 }
 async function drainVersionRequests(env) {
@@ -2966,6 +2969,9 @@ async function drainVersionRequests(env) {
     return await finish("error", null, null, String(e && e.message || e).slice(0, 300));
   }
 }
+// ---- RUN-INTERNAL-1:BEGIN (0.9.54, #1783) ----
+function isPublicHost(h) { return /\.workers\.dev$|(^|\.)qnfo\.org$/i.test(String(h || "")); }
+// ---- RUN-INTERNAL-1:END ----
 var worker_default = {
   async scheduled(event, env, ctx) {
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
@@ -3021,11 +3027,15 @@ var worker_default = {
         await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");
         return json({ ok: true, worker: WORKER, version: VERSION, accepted: true, mode: "deferred", note: "research stages run on the cron under a single-flight lease (RESEARCH-SINGLE-FLIGHT-1); POST /run?sync=1 runs one stage inline" }, 202);
       }
+      // RUN-INTERNAL-1 (#1783): an inline stage run spends AI and moves papers; only the cron and internal callers (service
+      // bindings, whose request host is not a public hostname) may start one. Measured 2026-10-02: an anonymous POST worked.
+      if (isPublicHost(url.hostname)) return json({ error: "forbidden: internal callers only (RUN-INTERNAL-1); the cron runs this" }, 403);
       const lr = await runLeased(env, "http-" + Date.now().toString(36), 1, 0);
       if (lr.busy) return json({ ok: true, worker: WORKER, version: VERSION, busy: true, note: "another run holds the single-flight lease" }, 409);
       return json({ ok: true, worker: WORKER, version: VERSION, out: lr.stages[0] || null });
     }
     if (url.pathname === "/run/drain-v2" && request.method === "POST") {
+      if (isPublicHost(url.hostname)) return json({ error: "forbidden: internal callers only (RUN-INTERNAL-1); the cron runs this" }, 403);
       const drained = await drainV2(env);
       return json({ ok: true, worker: WORKER, version: VERSION, drained });
     }

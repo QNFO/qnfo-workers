@@ -144,6 +144,10 @@ assert.equal(lim.length, 3);
 db.exec("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, status TEXT, updated_at INTEGER)");
 db.exec("CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT)");
 db.exec("INSERT INTO agent_issues (id, title, status) VALUES (1732, 'ZENODO-METADATA-EDITS-1 backfill: one creator identity', 'open')");
+// METADATA-VERIFY-ORDER-1 (0.9.54): production qnfo-audit as it is. The AUTOTRIAGE row exists with no evidence, and the
+// issue_close_evidence_required trigger (verbatim) aborts any close that is not preceded by close_evidence.
+db.exec("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) VALUES (1732, 'AUTOTRIAGE-1', 'triaged', 'qnfo-ops', '2026-10-08 14:34:30')");
+db.exec("CREATE TRIGGER issue_close_evidence_required BEFORE UPDATE OF status ON agent_issues WHEN NEW.status IN ('closed','resolved','wontfix') AND OLD.status NOT IN ('closed','resolved','wontfix') AND NOT EXISTS (SELECT 1 FROM issue_triage t WHERE t.issue_id = NEW.id AND t.close_evidence IS NOT NULL AND TRIM(t.close_evidence) <> '') BEGIN SELECT RAISE(ABORT,'close-without-evidence'); END");
 db.exec("DELETE FROM zenodo_version_requests WHERE kind='metadata'");
 const live = {};
 const pubFetch = async (url) => { const id = String(url).split("/").pop(); return live[id] ? ok({ metadata: { creators: live[id] } }) : ok({}, 404); };
