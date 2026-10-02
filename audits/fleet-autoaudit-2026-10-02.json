@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 07:05:43",
+  "audited_at": "2026-10-02 07:10:38",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -442,7 +442,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "1.0.3-capability-contract",
+        "version": "2.0.1-ask-loop",
         "worker": "qnfo-ai-search"
       },
       {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.3-frontier-rungs",
+        "version": "0.3.4-issue-planner",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -487,12 +487,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.89-act-bridge",
+        "version": "0.4.90-fleet-run-rate",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.17.2-work-with-me-metric",
+        "version": "1.17.3-watchmaker-ask-loop",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -896,9 +896,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "1.0.3-capability-contract",
+      "before": "2.0.1-ask-loop",
       "http": 200,
-      "live": "1.0.3-capability-contract",
+      "live": "2.0.1-ask-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.3-frontier-rungs",
+      "before": "0.3.4-issue-planner",
       "http": 200,
-      "live": "0.3.3-frontier-rungs",
+      "live": "0.3.4-issue-planner",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.89-act-bridge",
+      "before": "0.4.90-fleet-run-rate",
       "http": 200,
-      "live": "0.4.89-act-bridge",
+      "live": "0.4.90-fleet-run-rate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.17.2-work-with-me-metric",
+      "before": "1.17.3-watchmaker-ask-loop",
       "http": 200,
-      "live": "1.17.2-work-with-me-metric",
+      "live": "1.17.3-watchmaker-ask-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
