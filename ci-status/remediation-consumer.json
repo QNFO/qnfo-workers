@@ -1,19 +1,19 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@25e08d8958f4",
+ "verifier": "remediation-consumer@aa1beaa6c6e2",
  "due": 1,
  "pass": 0,
- "fail": 1,
- "skipped": 0,
+ "fail": 0,
+ "skipped": 1,
  "contracts": [
   {
-   "class": "cron-registry-truth",
+   "class": "cron-registry-drift",
    "issue_id": 1494,
-   "verdict": "fail",
-   "expected": 17,
-   "observed": 0,
-   "written": true
+   "verdict": "vacuous-probe-result",
+   "expected": null,
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
   }
  ],
  "trusted_transports": [
@@ -32,7 +32,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 4261,
- "head": "25e08d8958f428cfa3b9c6e55a28211c1dbfb74e",
+ "spent_ms": 3198,
+ "head": "aa1beaa6c6e28ad9418e27fad3d4488526bfe5c4",
  "job_status": "success"
 }
