@@ -229,6 +229,10 @@ jobs:
         run: node qnfo-containers-pilot/command-exit.test.mjs
       - name: Job market, mention radar ledger and events cron offline suite (radar-hub)
         run: node radar-hub/radar-hub.test.mjs
+      # CRON-SINGLE-TRIGGER-1 (#1785): radar-hub, errata-hub, qnfo-lifecycle and personal-companion hold one hourly trigger
+      # and a CRON_TABLE; every fire of each former trigger list is delivered once, in the hour it fired.
+      - name: CRON-SINGLE-TRIGGER-1 hourly tick offline suite (four workers)
+        run: node scripts/cron-single-trigger.test.mjs
 
       # HANDOFF-CLAIM-SHEET-1 (qnfo-email 2.2.4): every handoffs insert carries the claim_sheet the qnfo-audit trigger requires.
       - name: HANDOFF-CLAIM-SHEET-1 check (qnfo-email)
