@@ -13,7 +13,7 @@ const a = src.indexOf(BEGIN), b = src.indexOf(END);
 if (a < 0 || b < 0 || b < a) { console.error("FAIL reach block markers missing"); console.log("1 failed"); process.exit(1); }
 const sb = { VERSION: "test", console, Date, Math, JSON, Number, String, Object, Array, RegExp, __export: null };
 vm.createContext(sb);
-vm.runInContext(src.slice(a, b + END.length) + "\n__export = { reachIdeasEvaluate, ideaDescription, IDEA_PREFIX, IDEA_SURFACES, IDEA_CHECKS, IDEA_CONTENT };", sb);
+vm.runInContext(src.slice(a, b + END.length) + "\n__export = { reachIdeasEvaluate, ideaPriority, ideaDescription, IDEA_PREFIX, IDEA_SURFACES, IDEA_CHECKS, IDEA_CONTENT };", sb);
 const R = sb.__export;
 let passed = 0, failed = 0;
 function eq(x, y, l) { if (x === y) { passed++; return; } failed++; console.error(`FAIL ${l}: got ${JSON.stringify(x)}, want ${JSON.stringify(y)}`); }
@@ -34,5 +34,9 @@ eq(mix[0].buildable, true, "buildable ideas sort first");
 eq(mix.filter((f) => f.worker === "qnfo-gateway").every((f) => f.buildable === false), true, "gateway ideas are marked not auto-buildable");
 eq(/NOT AUTO-BUILDABLE/.test(R.ideaDescription(mix.find((f) => !f.buildable))), true, "description says so");
 eq(/qnfo-ipatent\/worker\.js/.test(R.ideaDescription(mix[0])), true, "description names the worker file for the planner");
+eq(R.ideaPriority({ surface: "guide-drawings", check: "content", buildable: true, score: 4 }), "high", "buildable content idea for the flagship is high");
+eq(R.ideaPriority({ surface: "ipatent-guide", check: "subscribe-box", buildable: true, score: 4 }), "high", "buildable flagship surface idea is high");
+eq(R.ideaPriority({ surface: "ideas", check: "canonical", buildable: true, score: 2 }), "medium", "other low-score idea stays medium");
+eq(R.ideaPriority({ surface: "qnfo-home", check: "share-image", buildable: false, score: 9 }), "high", "high score stays high");
 console.log(`${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

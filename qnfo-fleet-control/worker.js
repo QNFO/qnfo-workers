@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.98-evolve-no-double"; /* 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.99-reach-priority"; /* 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -5446,6 +5446,14 @@ function reachIdeasEvaluate(probes, content) {
   out.sort(function(a, b) { return (b.buildable ? 1 : 0) - (a.buildable ? 1 : 0) || b.score - a.score || (a.key < b.key ? -1 : 1); });
   return out;
 }
+// REACH-PRIORITY-1: the owner made iPatent the QNFO marquee (STRATEGY 1.8 s2.4a). A buildable idea on a flagship surface or
+// from the content catalog is filed high, so the code loop's planner (priority, then age; 8 model plans a day) reaches it
+// before older medium issues. Other ideas: high from score 6, else medium.
+function ideaPriority(f) {
+  var flagship = IDEA_SURFACES.some(function(s) { return s.key === f.surface && s.flagship; }) || f.check === "content";
+  if (f.buildable && flagship) return "high";
+  return f.score >= 6 ? "high" : "medium";
+}
 function ideaDescription(f) {
   return "AUTO-FILED by qnfo-fleet-control REACH-IDEATION-1 (owner directive 2026-10-02: the fleet ideates and builds reach work itself). " +
     "Surface: " + f.url + " (served by " + f.worker + "/worker.js). Evidence: " + f.evidence + ". Idea: " + f.fix + ". Metric it should move: " + f.metric +
@@ -5496,7 +5504,7 @@ async function reachIdeationTick(env, force) {
     if (openByTitle[f.key]) continue;
     try {
       await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reach', ?3, 'open', ?4, ?4)")
-        .bind(f.key, ideaDescription(f), f.score >= 6 ? "high" : "medium", nowMs).run();
+        .bind(f.key, ideaDescription(f), ideaPriority(f), nowMs).run();
       filed++;
     } catch (e) {}
   }
