@@ -1,25 +1,8 @@
 {
-  "audited_at": "2026-10-02 09:26:32",
+  "audited_at": "2026-10-02 09:39:22",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [
-        "qnfo-fleet-control"
-      ],
-      "waited_for": [
-        "qnfo-fleet-control"
-      ]
-    },
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-deploy-guard"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "qnfo-fleet-control"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -50,7 +33,14 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-fleet-control",
+        "live": "0.4.99-reach-priority",
+        "repo": "0.4.98-evolve-no-double",
+        "worker": "qnfo-fleet-control"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -504,12 +494,12 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.18.5-ask-truncated-json",
+        "version": "1.18.6-ipatent-usage",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.8.4-ask-model",
+        "version": "3.8.5-pandoc-code",
         "worker": "qnfo-gateway"
       },
       {
@@ -524,7 +514,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.8.1-utf8-redeploy",
+        "version": "3.8.2-usage-topics",
         "worker": "qnfo-ipatent"
       },
       {
@@ -606,10 +596,6 @@
         "dir": "radar-hub",
         "version": "1.1.3",
         "worker": "radar-hub"
-      },
-      {
-        "version": "0.4.97-budget-live",
-        "worker": "qnfo-fleet-control"
       }
     ]
   },
@@ -1160,17 +1146,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.97-budget-live",
+      "before": "0.4.98-evolve-no-double",
       "http": 200,
-      "live": "0.4.97-budget-live",
-      "match": 1,
-      "note": "SYNC",
+      "live": "0.4.99-reach-priority",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.18.5-ask-truncated-json",
+      "before": "1.18.6-ipatent-usage",
       "http": 200,
-      "live": "1.18.5-ask-truncated-json",
+      "live": "1.18.6-ipatent-usage",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1192,9 +1178,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.8.4-ask-model",
+      "before": "3.8.5-pandoc-code",
       "http": 200,
-      "live": "3.8.4-ask-model",
+      "live": "3.8.5-pandoc-code",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1248,9 +1234,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.8.1-utf8-redeploy",
+      "before": "3.8.2-usage-topics",
       "http": 200,
-      "live": "3.8.1-utf8-redeploy",
+      "live": "3.8.2-usage-topics",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
