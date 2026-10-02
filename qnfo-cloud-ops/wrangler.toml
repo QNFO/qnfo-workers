@@ -80,6 +80,15 @@ service = "qnfo-infra"
 binding = "QNFO_OPS"
 service = "qnfo-ops"
 
+# HEALTH-KEYLESS-1 (1.18.3): worker-health reaches qnfo-ai's chat route through this binding; qnfo-ai authenticates it
+# by props.caller (INTERNAL-CALLER-PROPS-1, CLAUDE.md #1703) instead of a copy of ROUTER_AUTH_KEY. It funds the
+# retirement of that copy: no code in this worker reads ROUTER_AUTH_KEY or PL_API_KEY any more.
+[[services]]
+binding = "QNFO_AI"
+service = "qnfo-ai"
+environment = "production"
+props = { caller = "qnfo-cloud-ops" }
+
 [[send_email]]
 binding = "SEND_EMAIL"
 name = "SEND_EMAIL"

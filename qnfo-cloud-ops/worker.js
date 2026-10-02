@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.18.2-utf8-github"; /* 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.18.3-health-keyless"; /* 1.18.3 HEALTH-KEYLESS-1: worker-health no longer sends stale copies of ROUTER_AUTH_KEY and PL_API_KEY (401 on every run since 2026-09-30 15:05Z after the #1676 rotation); qnfo-ai chat goes through the QNFO_AI service binding authenticated by props.caller, personal-api is checked at its keyless /v1/models; 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2511,12 +2511,22 @@ async function jobWorkerHealth(env) {
     { worker: "qnfo-ai", url: "https://ai.qnfo.org/health", headers: { "User-Agent": UA } },
     { worker: "personal-api", url: "https://personal.qnfo.org/health", headers: { "User-Agent": UA } },
     { worker: "qnfo-idea-factory", url: "https://ideas.qnfo.org/health", headers: { "User-Agent": UA } },
-    { worker: "qnfo-ai-chat", url: "https://ai.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.ROUTER_AUTH_KEY || ""), "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
-    { worker: "personal-api-chat", url: "https://personal.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.PL_API_KEY || ""), "User-Agent": UA }, body: { model: "personal-twin-chat", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } }
+    // HEALTH-KEYLESS-1 (1.18.3): these two probes sent copies of ROUTER_AUTH_KEY and PL_API_KEY, which the 2026-10-01
+    // rotation (#1676, #1701) left stale, so worker-health failed every run from 2026-09-30 15:05Z on a 401 that said
+    // nothing about either worker. qnfo-ai is now reached through the QNFO_AI service binding, which authenticates by
+    // props.caller (INTERNAL-CALLER-PROPS-1, CLAUDE.md #1703) with no key; personal-api has no caller props, so its
+    // keyless model listing (MODEL-DISCOVERY-PUBLIC-1) proves the front door answers. No secret copy is read.
+    { worker: "qnfo-ai-chat", binding: "QNFO_AI", url: "https://qnfo-ai/v1/chat/completions", headers: { "Content-Type": "application/json", "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
+    { worker: "personal-api-models", url: "https://personal.qnfo.org/v1/models", headers: { "User-Agent": UA } }
   ];
-  const out = { checks: [], failed: [] };
+  const out = { checks: [], failed: [], skipped: [] };
   const now = (/* @__PURE__ */ new Date()).toISOString();
   for (const ep of endpoints) {
+    if (ep.binding && !(env[ep.binding] && env[ep.binding].fetch)) {
+      // A probe that needs a binding the live worker does not carry yet is skipped, never sent unauthenticated.
+      out.skipped.push({ worker: ep.worker, reason: "binding " + ep.binding + " not installed" });
+      continue;
+    }
     const t0 = Date.now();
     let status = 0, dur = 0, error = "", body = "";
     try {

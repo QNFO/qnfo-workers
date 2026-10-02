@@ -164,6 +164,10 @@ jobs:
       # worker per change day, with a heartbeat the watchmaker reads.
       - name: SECRET-CHANGE-WATCH-1 offline suite (qnfo-ops)
         run: node qnfo-ops/secret-watch.test.mjs
+      # HEALTH-KEYLESS-1: qnfo-cloud-ops worker-health sends no key copy (stale since the 2026-10-01 rotation); qnfo-ai is
+      # probed through the QNFO_AI binding (props.caller), personal-api at its keyless /v1/models.
+      - name: HEALTH-KEYLESS-1 offline suite (qnfo-cloud-ops)
+        run: node qnfo-cloud-ops/worker-health.test.mjs
       # FLEET-CMD-1: the fleet command line (input outside the 10s refresh, open reads, emailed-code actions, 15-min step-up
       # for destructive ones, validated AI proposals, no hanging asks).
       - name: FLEET-CMD-1 offline suite (qnfo-fleet-dashboard)
