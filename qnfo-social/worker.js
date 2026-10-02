@@ -13,7 +13,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.7.32-card-release";
+var VERSION = "0.7.33-scan-pagesize";
 // 0.7.31 (2026-10-02, #1712 POST-ID-UTM-1, pillar: reach): POST-SENT-TEXT-1 + POST-UTM-SUBDOMAIN-1. The UTM tag was
 // applied at send time only and social_threads.posts kept the untagged draft, so D1 had no record that any posted link
 // carried a UTM and the issue's probe could never pass. A posted row now stores the text exactly as posted (tagged and
@@ -569,9 +569,10 @@ async function autoScan(env) {
     // DISTRIBUTION-RECONCILE-1 (#1692, 2026-10-01): the scan used to read only the 15 newest records
     // past the last_scanned cursor, so a batch of publications larger than 15 (or a record indexed late)
     // was skipped for good: 3 of the 10 papers published in the 30 days to 2026-10-01 had no post on
-    // any channel. It now reads 50 records and also composes for any record from the last 30 days that
+    // any channel. It now reads 25 records and also composes for any record from the last 30 days that
     // has no thread and no posted dissemination row (at most RECONCILE_PER_RUN per run).
-    const r = await fetch('https://zenodo.org/api/records?q=' + encodeURIComponent(q) + '&sort=mostrecent&size=50', {
+    // size=25: Zenodo's anonymous API rejects size>25 with 400 (SOCIAL-SCAN-PAGESIZE-1).
+    const r = await fetch('https://zenodo.org/api/records?q=' + encodeURIComponent(q) + '&sort=mostrecent&size=25', {
       headers: { 'User-Agent': 'Mozilla/5.0 (qnfo-social)' }
     });
     if (!r.ok) { console.error('auto-scan zenodo fetch failed', r.status); return { error: 'zenodo ' + r.status }; }
