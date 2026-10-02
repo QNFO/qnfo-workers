@@ -1,87 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@57c0bebd807c",
- "due": 12,
+ "verifier": "remediation-consumer@0b0b8896289e",
+ "due": 0,
  "pass": 0,
  "fail": 0,
- "skipped": 12,
- "contracts": [
-  {
-   "class": "detect-threshold-blindspot",
-   "issue_id": 1165,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "act-half-unverified",
-   "issue_id": 1207,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "closure-evidence-unbacked",
-   "issue_id": 1263,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "remediation-class-death",
-   "issue_id": 1200,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "capability-precondition-missing",
-   "issue_id": 1118,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "predicate-set-incomplete",
-   "issue_id": 1282,
-   "verdict": "vacuous-probe-result",
-   "expected": null,
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "mixed-type-timestamp",
-   "issue_id": 1283,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "timestamp-seconds-bypass",
-   "issue_id": 1298,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "router-calib-agent-class",
-   "issue_id": 1293,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "outreach-selector-drift",
-   "issue_id": 1294,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "outreach-drain-scheduled",
-   "issue_id": 1295,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "close-predicate-monotone",
-   "issue_id": 1297,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  }
- ],
+ "skipped": 0,
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -98,7 +23,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 10004,
- "head": "57c0bebd807c8474a51e71159d964d3e7228ad16",
+ "spent_ms": 2679,
+ "head": "0b0b8896289eb7181bb0d59581e0e678a25b0ee3",
  "job_status": "success"
 }
