@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.34-no-anthropic-upstream";
+var VERSION = "2.38.35-public-read";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -322,7 +322,7 @@ var OPS_EXEC_LOOP_LIMITS = ["pure server-side execution: client-supplied tools a
 var OPS_RELAY_LIMITS = ["pass-through relay only: does NOT execute code or tools server-side", "no ops agent tool loop (no shell_exec/ops_d1_query/etc.)", "client-supplied tools are relayed back to the caller, not executed here"];
 var OPS_ALIAS_LIMITATIONS = ["alias of ops-frontier: identical agent loop AND identical upstream (deepseek/deepseek-v4-pro)", "the ops-frontier / ops-frontier-mini / ops-frontier-reason ids are NOT behaviourally distinct today"];
 var OPS_ALIAS_LIMITS = OPS_ALIAS_LIMITATIONS;
-var OPS_ENDPOINT_LIMITATIONS = ["single model, server-side agentic tool loop - client-supplied tools are not dispatched back to the caller", "code/tool execution is confined to the Cloudflare Workers/Containers runtime; no arbitrary host shell or host filesystem", "no vision/image input", "model routing (provider/upstream/tier) is a back-end concern and is never exposed", "logs only to qnfo-audit (ops_ai_log/cloud_ops_events); never writes research or personal stores"];
+var OPS_ENDPOINT_LIMITATIONS = ["single model, server-side agentic tool loop - client-supplied tools are not dispatched back to the caller", "code/tool execution is confined to the Cloudflare Workers/Containers runtime; no arbitrary host shell or host filesystem", "no vision/image input", "model routing (provider/upstream/tier) is a back-end concern and is never exposed", "logs only to qnfo-audit (ops_ai_log/cloud_ops_events); never writes research or personal stores", "without a valid key, chat runs in public read-only mode: free tier, 4 tool rounds, fleet health and privacy-safe datasets only, capped per visitor per hour and per UTC day (OPS-PUBLIC-READ-1)"];
 function opsModelIds() {
   // OPS-SINGLE-MODEL-1 (2026-09-26): never expose the internal routing list (manifest/health).
   // The endpoint advertises exactly one model; provider/upstream selection stays back-end.
@@ -927,6 +927,130 @@ __name22(codeToolsPayload, "codeToolsPayload");
 __name222(codeToolsPayload, "codeToolsPayload");
 __name2222(codeToolsPayload, "codeToolsPayload");
 __name22222(codeToolsPayload, "codeToolsPayload");
+// OPS-PUBLIC-READ-1 (2026-10-02, OPEN-ACCESS-1): a chat request without a valid ops key used to get 401 "Unauthorized -
+// set Bearer OPS_ROUTER_AUTH_KEY" (the owner's ChatBox hit exactly that on 2026-10-02). The owner's directive is that
+// reads take no token and nobody is told to set one, so such a request is now answered in a public read-only mode:
+// only the tools below (they read no private store and change nothing), the free Workers AI tier, 4 tool rounds, no
+// cache reads, no durable jobs and no checkpoint a keyed turn would later replay. It is capped per hashed visitor per
+// hour and per UTC day, inside the endpoint's existing daily request and cost caps. A valid key keeps the full agent;
+// OPS_PUBLIC_READ=off restores the 401. Private stores (ipatent submissions and visitor addresses, personal-life,
+// email, outreach contacts, secrets) stay behind the key: public_data returns aggregates and redacted search text only.
+var OPS_PUBLIC_MAX_ITERS = 4;
+var OPS_PUBLIC_DEADLINE_MS = 9e4;
+var OPS_PUBLIC_ANSWER_CAP = 8192;
+var OPS_PUBLIC_MAX_CHARS = 6e4;
+var OPS_PUBLIC_DATASETS = ["ipatent_activity", "ops_usage", "deploys", "open_issues"];
+var OPS_PUBLIC_TOOLS = OPS_TOOLS.filter(function(t) {
+  return t.name === "fleet_status" || t.name === "backlog_status";
+}).concat([
+  { name: "public_data", description: "Read a privacy-safe fleet dataset. ipatent_activity: ipatent site page views by day/path/source, site searches (time, query text with emails and numbers redacted, result count, country), event and submission counts by day, and the last activity dates (never inventor names, emails, titles, disclosure text, IP addresses, sessions or user agents). ops_usage: ops endpoint calls, successes and cost by day and client. deploys: worker versions deployed in the window. open_issues: open fleet issue counts by priority and category.", parameters: { type: "object", properties: { dataset: { type: "string", enum: OPS_PUBLIC_DATASETS }, days: { type: "number", description: "look-back window in days, 1-365 (default 30)" } }, required: ["dataset"], additionalProperties: false } }
+]);
+var OPS_PUBLIC_TOOL_NAMES = OPS_PUBLIC_TOOLS.map(function(t) {
+  return t.name;
+});
+var OPS_PUBLIC_SYSTEM_PROMPT = [
+  "You are qnfo-ops answering in PUBLIC READ-ONLY mode: anyone on the internet may be asking.",
+  "Tools: fleet_status (fleet health), backlog_status (open backlog count), public_data (privacy-safe datasets: " + OPS_PUBLIC_DATASETS.join(", ") + "). Call them directly; never invent data.",
+  "In this mode you cannot read email, personal data, private databases, secrets or source code, and you cannot change anything (no deploys, writes, code execution or messages). Say so plainly when asked; do not guess at that data.",
+  "Fleet changes and owner decisions are made at https://fleet.qnfo.org/cmd, where actions are confirmed by an emailed code. Never tell anyone to create, find or enter a token or key.",
+  "Lead with the direct answer and the numbers, with dates. When a dataset shows no recent activity, say when the last activity was."
+].join(String.fromCharCode(10));
+function publicToolsPayload() {
+  return OPS_PUBLIC_TOOLS.map(function(t) {
+    return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } };
+  });
+}
+__name(publicToolsPayload, "publicToolsPayload");
+function publicTrimMessages(msgs) {
+  const out = msgs.slice(-12);
+  while (out.length > 1 && JSON.stringify(out).length > OPS_PUBLIC_MAX_CHARS) out.shift();
+  return out;
+}
+__name(publicTrimMessages, "publicTrimMessages");
+async function opsPublicGate(env, ip) {
+  const day = iso().slice(0, 10);
+  const perDay = envInt(env, "OPS_PUBLIC_DAY", 60);
+  const perHour = envInt(env, "OPS_PUBLIC_PER_IP_HOUR", 10);
+  // The daily count is read from ops_ai_log (strongly consistent); a failed read refuses rather than serves unmetered.
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ops_ai_log WHERE source = 'public' AND ts >= ?1").bind(day).first();
+    if (r && Number(r.c) >= perDay) return { blocked: true, error: "public read mode has answered its " + perDay + " questions for this UTC day; it resets at 00:00 UTC" };
+  } catch (e) {
+    return { blocked: true, error: "public read mode is unavailable right now (usage ledger unreadable); please retry shortly" };
+  }
+  if (env.OPS_CACHE_KV) {
+    try {
+      const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(ip || "unknown") + "|" + day + "|" + WORKER));
+      const vk = "opspub:" + Array.from(new Uint8Array(h)).slice(0, 8).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("") + ":" + iso().slice(0, 13);
+      const n = Number(await env.OPS_CACHE_KV.get(vk)) || 0;
+      if (n >= perHour) return { blocked: true, error: "public read mode answers " + perHour + " questions per visitor per hour; please try again later" };
+      await env.OPS_CACHE_KV.put(vk, String(n + 1), { expirationTtl: 7200 });
+    } catch (e) { }
+  }
+  return { blocked: false };
+}
+__name(opsPublicGate, "opsPublicGate");
+function publicRedact(s) {
+  return String(s == null ? "" : s).replace(/[^\s@]+@[^\s@]+/g, "[email]").replace(/\+?\d[\d\s().-]{6,}\d/g, "[number]").slice(0, 120);
+}
+__name(publicRedact, "publicRedact");
+async function publicData(env, args) {
+  const ds = String(args && args.dataset || "");
+  const days = Math.max(1, Math.min(365, Math.floor(Number(args && args.days) || 30)));
+  const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+  const rows = async function(db, sql, binds) {
+    const r = await db.prepare(sql).bind(...binds).all();
+    return r && r.results || [];
+  };
+  if (ds === "ipatent_activity") {
+    const db = env.IPATENT;
+    if (!db) return { ok: false, error: "ipatent store not bound" };
+    const searches = (await rows(db, "SELECT created_at, CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.query') END AS query, CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.results') END AS results, country FROM analytics WHERE event_type = 'search' AND created_at >= ?1 ORDER BY created_at DESC LIMIT 50", [since])).map(function(r) {
+      return { at: r.created_at, query: publicRedact(r.query), results: r.results == null ? null : Number(r.results), country: r.country || null };
+    });
+    const page_views = await rows(db, "SELECT day, path, source, n FROM page_views WHERE day >= ?1 ORDER BY day DESC, n DESC LIMIT 200", [since]);
+    const events_by_day = await rows(db, "SELECT substr(created_at, 1, 10) AS day, event_type, COUNT(*) AS n FROM analytics WHERE created_at >= ?1 GROUP BY day, event_type ORDER BY day DESC LIMIT 200", [since]);
+    const submissions_by_day = await rows(db, "SELECT substr(created_at, 1, 10) AS day, status, COUNT(*) AS n FROM submissions WHERE created_at >= ?1 GROUP BY day, status ORDER BY day DESC LIMIT 200", [since]);
+    const last = await db.prepare("SELECT (SELECT MAX(created_at) FROM analytics WHERE event_type = 'search') AS last_search, (SELECT COUNT(*) FROM analytics WHERE event_type = 'search') AS searches_all_time, (SELECT MAX(created_at) FROM analytics) AS last_event, (SELECT MAX(day) FROM page_views) AS last_page_view_day, (SELECT MAX(created_at) FROM submissions) AS last_submission, (SELECT COUNT(*) FROM submissions) AS submissions_all_time").first();
+    return { ok: true, dataset: ds, since, searches, page_views, events_by_day, submissions_by_day, last: last || {} };
+  }
+  if (!env.QNFO_AUDIT) return { ok: false, error: "audit store not bound" };
+  if (ds === "ops_usage") {
+    return { ok: true, dataset: ds, since, rows: await rows(env.QNFO_AUDIT, "SELECT substr(ts, 1, 10) AS day, COALESCE(source, 'other') AS client, COUNT(*) AS calls, SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS ok, ROUND(COALESCE(SUM(cost_usd), 0), 4) AS cost_usd FROM ops_ai_log WHERE ts >= ?1 GROUP BY day, client ORDER BY day DESC LIMIT 400", [since]) };
+  }
+  if (ds === "deploys") {
+    return { ok: true, dataset: ds, since, rows: await rows(env.QNFO_AUDIT, "SELECT MAX(ts) AS ts, worker, to_sha AS version, MIN(ok) AS ok FROM fleet_deploys WHERE ts >= ?1 AND to_sha IS NOT NULL GROUP BY worker, to_sha ORDER BY ts DESC LIMIT 60", [since]) };
+  }
+  if (ds === "open_issues") {
+    // Counts only: owner notes and tasks are filed as agent_issues (OWNER-NOTES-ROUTE-1), so titles stay private.
+    return { ok: true, dataset: ds, rows: await rows(env.QNFO_AUDIT, "SELECT COALESCE(priority, '?') AS priority, COALESCE(category, '?') AS category, COUNT(*) AS n FROM agent_issues WHERE status = 'open' GROUP BY priority, category ORDER BY n DESC LIMIT 60", []) };
+  }
+  return { ok: false, error: "unknown dataset: " + ds.slice(0, 40), datasets: OPS_PUBLIC_DATASETS };
+}
+__name(publicData, "publicData");
+async function execPublicTool(env, name, rawArgs, resultCap) {
+  if (OPS_PUBLIC_TOOL_NAMES.indexOf(name) < 0) {
+    return { tool_call_id: null, name, ok: false, text: JSON.stringify({ ok: false, error: "tool " + String(name || "").slice(0, 60) + " is not available in public read-only mode", available: OPS_PUBLIC_TOOL_NAMES }) };
+  }
+  if (name !== "public_data") return await execTool(env, name, "{}", "", resultCap);
+  let args = {};
+  try {
+    args = JSON.parse(rawArgs || "{}") || {};
+  } catch (e) {
+  }
+  const t0 = Date.now();
+  let res;
+  try {
+    res = await publicData(env, args);
+  } catch (e) {
+    res = { ok: false, error: "public_data failed: " + String(e && e.message || e).slice(0, 200) };
+  }
+  await logToolEvent(env, name, args, res, Date.now() - t0);
+  const text = JSON.stringify(res);
+  const cap = resultCap || 16e3;
+  return { tool_call_id: null, name, ok: !!(res && res.ok), text: text.length > cap ? text.slice(0, cap) + "...(truncated to " + cap + " chars)" : text };
+}
+__name(execPublicTool, "execPublicTool");
 var FLEET = [
   { name: "qnfo-lifecycle", binding: "LIFECYCLE" },
   { name: "qnfo-email", binding: "EMAIL", auth: true },
@@ -4681,9 +4805,31 @@ async function costGuard(env) {
 }
 __name(costGuard, "costGuard");
 __name2(costGuard, "costGuard");
-async function handleChat(env, body, authHeader, ua, ctx) {
-  const okAuth = await authOk(authHeader, env);
-  if (!okAuth) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
+// OPS-PUBLIC-READ-1: a request without a valid key is answered in public read-only mode (see OPS_PUBLIC_TOOLS), and its
+// response carries x-ops-access: public-read so a client or a rotation check can tell the two modes apart.
+async function handleChat(env, body, authHeader, ua, ctx, ip) {
+  const pub = !await authOk(authHeader, env);
+  if (pub) {
+    if (String(env.OPS_PUBLIC_READ || "").toLowerCase() === "off") return json({ error: "Unauthorized: public read mode is switched off on this endpoint" }, 401);
+    const _pg = await opsPublicGate(env, ip);
+    if (_pg.blocked) return markPublicRead(json({ error: _pg.error }, 429));
+  }
+  const resp = await handleChatCore(env, body, ua, ctx, pub);
+  return pub ? markPublicRead(resp) : resp;
+}
+function markPublicRead(resp) {
+  if (!resp) return resp;
+  try {
+    resp.headers.set("x-ops-access", "public-read");
+    return resp;
+  } catch (e) {
+    const h = new Headers(resp.headers);
+    h.set("x-ops-access", "public-read");
+    return new Response(resp.body, { status: resp.status, headers: h });
+  }
+}
+__name(markPublicRead, "markPublicRead");
+async function handleChatCore(env, body, ua, ctx, pub) {
   try {
     {
       const _cg = await costGuard(env);
@@ -4698,9 +4844,10 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   }
   // COST-ROUTING-STACK-1 L7: per-tier daily caps. T2 (paid deepseek) cap OPS_T2_DAILY_CAP (default $2).
   // On breach, paid-first degrades to the free tier (budgetFallback) instead of terminating (BUDGET-CAP-FREE-FALLBACK-1).
-  let _t2Blocked = false;
+  // OPS-PUBLIC-READ-1: public read mode always takes the free tier (budgetFallback), never a paid upstream.
+  let _t2Blocked = !!pub;
   try {
-    if (env.QNFO_AUDIT) {
+    if (env.QNFO_AUDIT && !pub) {
       const _t2d = await env.QNFO_AUDIT.prepare("SELECT COALESCE(SUM(spent_usd),0) s FROM model_ladder_daily WHERE tier = 2 AND day = ?1").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 10)).first();
       const _t2cap = Number(env.OPS_T2_DAILY_CAP) > 0 ? Number(env.OPS_T2_DAILY_CAP) : 2;
       _t2Blocked = !!(_t2d && Number(_t2d.s) >= _t2cap);
@@ -4708,39 +4855,42 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     }
   } catch (e) { }
   const model = body && body.model;
-  const messages = body && body.messages;
+  // OPS-PUBLIC-READ-1: public read mode keeps the latest messages that fit OPS_PUBLIC_MAX_CHARS (at most 12), runs the
+  // single public model and ignores model ids that would select a paid upstream or a raw relay.
+  const messages = pub && body && Array.isArray(body.messages) ? publicTrimMessages(body.messages) : body && body.messages;
   const max_tokens = body && body.max_tokens;
   const stream = body && body.stream;
-  const rawWanted = String(model || "ops-exec");
+  const rawWanted = pub ? OPS_PUBLIC_MODEL : String(model || "ops-exec");
   const wanted = rawWanted.indexOf("/") >= 0 ? rawWanted.split("/").pop() : rawWanted;
-  const execUpstream = OPS_EXEC_MODELS[wanted];
+  const execUpstream = pub ? void 0 : OPS_EXEC_MODELS[wanted];
   const frontierMode = !!execUpstream;
   // UNIVERSAL-OPENAI-MODEL-COMPAT-1 (2026-09-26): the endpoint NEVER rejects a model id. Any
   // unrecognized / foreign id (gpt-4o, gpt-3.5-turbo, claude-*, "", null, provider-qualified)
   // is routed to the single public ops model (server-side agent loop). Routing stays back-end.
   if (!env.DEEPSEEK_API_KEY) return json({ error: "ops endpoint misconfigured: DEEPSEEK_API_KEY missing" }, 503);
   if (!Array.isArray(messages) || !messages.length) return json({ error: "messages array required" }, 400);
-  if (wanted === "deepseek-v4-flash") return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx);
-  if (PASSTHROUGH_MODELS[wanted]) return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx, PASSTHROUGH_MODELS[wanted], wanted);
-  if (WAI_PASSTHROUGH[wanted]) return await handleWaiRelay(env, body, messages, max_tokens, !!stream, ua, ctx, WAI_PASSTHROUGH[wanted], wanted);
+  if (pub && JSON.stringify(messages).length > OPS_PUBLIC_MAX_CHARS) return json({ error: "public read mode takes messages of up to " + OPS_PUBLIC_MAX_CHARS + " characters; shorten the question" }, 413);
+  if (!pub && wanted === "deepseek-v4-flash") return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx);
+  if (!pub && PASSTHROUGH_MODELS[wanted]) return await handleRelay(env, body, messages, max_tokens, !!stream, ua, ctx, PASSTHROUGH_MODELS[wanted], wanted);
+  if (!pub && WAI_PASSTHROUGH[wanted]) return await handleWaiRelay(env, body, messages, max_tokens, !!stream, ua, ctx, WAI_PASSTHROUGH[wanted], wanted);
   const t0 = Date.now();
   const isStream = !!stream;
-  const clientTools = Array.isArray(body && body.tools) && body.tools.length ? body.tools.slice(0, 120) : null;
+  const clientTools = !pub && Array.isArray(body && body.tools) && body.tools.length ? body.tools.slice(0, 120) : null;
   const clientToolChoice = body && body.tool_choice || "auto";
-  const source = detectSource(ua);
+  const source = pub ? "public" : detectSource(ua);
   const domain = frontierMode ? "ops" : classifyDomain(lastUserText(messages));
   const codeMode = false;
   let servedBy = null;
   const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
-  const answerCap = Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216))));
+  const answerCap = pub ? OPS_PUBLIC_ANSWER_CAP : Math.max(8192, clamp(Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : DEFAULT_MAX_OUT, Math.min(DEFAULT_MAX_OUT, envInt(env, "OPS_ANSWER_CAP", 393216))));
   const _baseRoundCap = envInt(env, "OPS_TOOL_ROUND_MAX", 32768);
   const toolRoundCap = Math.min(answerCap, Math.max(_baseRoundCap, Math.min(8e3, Math.ceil(estTokens(JSON.stringify(messages || [])) * 0.2))));
   const loopDeadlineMs = isStream ? envInt(env, "OPS_LOOP_DEADLINE_MS", 3e5) : envInt(env, "OPS_NONSTREAM_DEADLINE_MS", 3e5);
-  const maxIters = envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
+  const maxIters = pub ? OPS_PUBLIC_MAX_ITERS : envInt(env, "OPS_MAX_TOOL_ITERS", MAX_TOOL_ITERS);
   const toolResultCap = envInt(env, "OPS_TOOL_RESULT_CAP", MAX_TOOL_RESULT_CHARS);
   const temperature = body && typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : envFloat(env, "OPS_TEMPERATURE", 0.5);
   const topP = body && typeof body.top_p === "number" && body.top_p > 0 && body.top_p <= 1 ? body.top_p : envFloat(env, "OPS_TOP_P", 0.9);
-  const _opsToolNames = new Set(OPS_TOOLS.map(function(t) {
+  const _opsToolNames = new Set((pub ? OPS_PUBLIC_TOOLS : OPS_TOOLS).map(function(t) {
     return t.name;
   }));
   const _clientToolNames = new Set((clientTools || []).map(function(t) {
@@ -4752,7 +4902,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
   }) : OPS_TOOLS;
   const roundTools = hybrid ? serverTools.map(function(t) {
     return { type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } };
-  }).concat(clientTools) : codeMode ? codeToolsPayload() : toolsPayload();
+  }).concat(clientTools) : pub ? publicToolsPayload() : codeMode ? codeToolsPayload() : toolsPayload();
   const work = [];
   for (const m of messages) {
     if (!m || !m.role) continue;
@@ -4780,9 +4930,10 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     if (si >= 0) work[si] = Object.assign({}, work[si], { content: String(work[si].content || "") + "\n\n" + opsCtx });
     else work.unshift({ role: "system", content: OPS_SYSTEM_PROMPT + sysDate });
   } else {
-    work.unshift({ role: "system", content: (codeMode ? CODE_ONLY_SYSTEM_PROMPT : OPS_SYSTEM_PROMPT) + sysDate });
+    work.unshift({ role: "system", content: (pub ? OPS_PUBLIC_SYSTEM_PROMPT : codeMode ? CODE_ONLY_SYSTEM_PROMPT : OPS_SYSTEM_PROMPT) + sysDate });
   }
-  if (!clientTools && !execUpstream && (source === "mobile" || source === "deepchat")) {
+  // Background job results and checkpoints belong to the owner's keyed turns, never to a public one.
+  if (!pub && !clientTools && !execUpstream && (source === "mobile" || source === "deepchat")) {
     const _bg = await opsSurfacePromoted(env);
     if (_bg) work.splice(1, 0, { role: "system", content: _bg });
     const _ck = await opsSurfaceCheckpoints(env);
@@ -4814,7 +4965,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       return json({ id: respId, object: "chat.completion", created, model: wanted, choices: [{ index: 0, message: { role: "assistant", content: _dtext }, finish_reason: "stop" }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }, _router: { tier: 0, deterministic: true, kind: _det.kind } });
     }
   }
-  const loopDeadline = Date.now() + loopDeadlineMs;
+  const loopDeadline = Date.now() + (pub ? Math.min(loopDeadlineMs, OPS_PUBLIC_DEADLINE_MS) : loopDeadlineMs);
   const enc = new TextEncoder();
   const nlnl = String.fromCharCode(10, 10);
   let streamController = null;
@@ -4864,6 +5015,19 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     strategy = strat;
     const fallback = content;
     content = "";
+    if (pub) {
+      // OPS-PUBLIC-READ-1: no paid streaming upstream in public mode; one free-tier round, emitted whole by finalize().
+      try {
+        const { resp: _pr, servedBy: _psb } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, budgetT2Blocked: true });
+        const _pc = _pr && _pr.choices && _pr.choices[0];
+        content = String(_pc && _pc.message && _pc.message.content || "");
+        if (_pr && _pr.usage) upstreamUsage = _pr.usage;
+        if (_psb) servedBy = _psb;
+      } catch (e) {
+      }
+      if (!String(content || "").trim()) content = fallback;
+      return await finalize();
+    }
     if (codeMode && env.WAI) {
       try {
         const _ck = await callWorkersAI(env, work, answerCap, null, { temperature, topP });
@@ -4958,7 +5122,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       escalations++;
       try {
         const _w6 = work.concat([{ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE + " Answer in plain prose; do not emit tool-call markup." }]);
-        const { resp: r6, servedBy: _sb6 } = await callDeepSeek(env, _w6, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0 });
+        const { resp: r6, servedBy: _sb6 } = await callDeepSeek(env, _w6, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: !!pub });
         const c6 = r6 && r6.choices && r6.choices[0];
         const t6 = stripToolFrames(String(c6 && c6.message && c6.message.content || ""));
         if (String(t6 || "").trim()) {
@@ -5007,7 +5171,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
     // OPS-CACHE-TOOL-ANSWER-1: an answer built from server-side tool calls reflects live state or an action
     // outcome (e.g. research_queue), so it is never cached; a semantic neighbour would replay it without
     // running the tool.
-    if (cacheHit === 0 && !execUpstream && !clientTools && toolLog.length === 0 && okFlag && String(content || "").trim().length >= 40 && String(content || "").trim().length < 4000 && String(prompt || "").length < 2000) {
+    if (!pub && cacheHit === 0 && !execUpstream && !clientTools && toolLog.length === 0 && okFlag && String(content || "").trim().length >= 40 && String(content || "").trim().length < 4000 && String(prompt || "").length < 2000) {
       ctx.waitUntil(chatCacheStore(env, prompt, String(content || "").trim(), wanted));
     }
     ctx.waitUntil(logOps(env, logRec));
@@ -5035,7 +5199,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
       for (let iter = 0; iter <= maxIters; iter++) {
         // L1 CACHE (COST-ROUTING-STACK-1): exact KV + semantic Vectorize for the chat class
         // (no tools, fresh single turn). Serves above threshold without any model call.
-        if (iter === 0 && !execUpstream && !clientTools && !codeMode && cacheHit === 0 && String(prompt || "").length < 2000) {
+        if (iter === 0 && !pub && !execUpstream && !clientTools && !codeMode && cacheHit === 0 && String(prompt || "").length < 2000) {
           try {
             const _ch = await chatCacheLookup(env, prompt, wanted);
             if (_ch && _ch.answer) {
@@ -5057,14 +5221,15 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           const _firstBail = !work.some(function(m) { return m.content === BUDGET_EXHAUSTED_DIRECTIVE; });
           if (_firstBail) opsToolBudgetBail(env, "chat", iter, maxIters, deadlineHit);
           work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
-          if (_firstBail && !promotedJobId && !clientTools && !execUpstream && (source === "mobile" || source === "deepchat") && toolLog.length >= 3) {
+          if (_firstBail && !pub && !promotedJobId && !clientTools && !execUpstream && (source === "mobile" || source === "deepchat") && toolLog.length >= 3) {
             const _pj = await opsBudgetPromote(env, work, toolLog, iter, deadlineHit);
             if (_pj && _pj.id) {
               promotedJobId = _pj.id;
               work.push({ role: "system", content: BUDGET_PROMOTED_DIRECTIVE.replace(/\{job\}/g, _pj.id) });
             }
           }
-          if (_firstBail && !promotedJobId) await opsBudgetCheckpoint(env, lastUserText(messages), toolLog, iter, deadlineHit);
+          // OPS-PUBLIC-READ-1: a public turn never leaves a checkpoint; opsSurfaceCheckpoints would replay it into a keyed turn.
+          if (_firstBail && !pub && !promotedJobId) await opsBudgetCheckpoint(env, lastUserText(messages), toolLog, iter, deadlineHit);
         }
         const _dsOpts = { temperature, topP, toolChoice: clientToolChoice, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: _t2Blocked };
         let _r1 = null;
@@ -5136,7 +5301,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
             const fn = tc && tc.function;
             const name = fn && fn.name ? String(fn.name) : "";
             const rawArgs = fn && fn.arguments || "{}";
-            const execRes = await execTool(env, name, rawArgs, lastUserText(work), toolResultCap);
+            const execRes = pub ? await execPublicTool(env, name, rawArgs, toolResultCap) : await execTool(env, name, rawArgs, lastUserText(work), toolResultCap);
             toolLog.push({ name, ok: execRes.ok, summary: snippet(execRes.text, 160) });
             return { id: tc.id || "", text: execRes.text };
           }));
@@ -5170,7 +5335,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
         }
         if (withTools && finishReason === "length") {
           try {
-            const { resp: r3, servedBy: _sb2 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0 });
+            const { resp: r3, servedBy: _sb2 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: !!pub });
             if (_sb2) servedBy = _sb2;
             const c3 = r3 && r3.choices && r3.choices[0];
             const m3 = c3 && c3.message;
@@ -5190,7 +5355,7 @@ async function handleChat(env, body, authHeader, ua, ctx) {
           // the loop produces a final summary instead of logging an empty ok=0 response (seen live 3x today).
           try {
             work.push({ role: "system", content: BUDGET_EXHAUSTED_DIRECTIVE });
-            const { resp: r4, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0 });
+            const { resp: r4, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, codeMode, upstreamModel: execUpstream || void 0, budgetT2Blocked: !!pub });
             if (_sb3) servedBy = _sb3;
             const c4 = r4 && r4.choices && r4.choices[0];
             content = String(c4 && c4.message && c4.message.content || "");
@@ -6394,7 +6559,7 @@ var worker_default = {
       return env.AGENTIC_OPS_EXEC.get(aoId).fetch(request);
     }
     if (path === "/" && method === "GET") {
-      return json({ worker: WORKER, version: VERSION, purpose: "QNFO ops/infrastructure AI execution endpoint (separate from research + personal twin). OpenAI-compatible: POST /v1/chat/completions (Bearer OPS_ROUTER_AUTH_KEY). Single model: ops. Isolation: logs only to qnfo-audit.ops_ai_log; never writes research stores.", docs: "qnfo-workers/qnfo-ops/README-deploy.md" });
+      return json({ worker: WORKER, version: VERSION, purpose: "QNFO ops/infrastructure AI execution endpoint (separate from research + personal twin). OpenAI-compatible: POST /v1/chat/completions. Without a key it answers in a capped public read-only mode (OPS-PUBLIC-READ-1); the full agent takes Bearer OPS_ROUTER_AUTH_KEY. Single model: ops. Isolation: logs only to qnfo-audit.ops_ai_log; never writes research stores.", docs: "qnfo-workers/qnfo-ops/README-deploy.md" });
     }
     if (path === "/fleet" && method === "GET") return json(await fleetStatus(env));
     if (path === "/manifest" && method === "GET") return json(manifest());
@@ -6519,7 +6684,7 @@ var worker_default = {
         return json({ id: created.id, status: "queued", model: chatBody.model, workflow: "ops-exec-workflow", poll: "/v1/jobs/" + created.id, ts: iso() }, 202);
       }
       const chatPromise = (async function() {
-        const chatResp = await handleChat(env, chatBody, request.headers.get("Authorization") || "", ua, ctx);
+        const chatResp = await handleChat(env, chatBody, request.headers.get("Authorization") || "", ua, ctx, request.headers.get("cf-connecting-ip") || "");
         if (!chatResp.ok) return { error: "upstream " + chatResp.status };
         let chatData = null;
         try {
@@ -6632,7 +6797,7 @@ var worker_default = {
         if (created.error) return json({ error: created.error, id: created.id || null }, created.status || 400);
         return json({ id: created.id, status: "queued", model: created.model, workflow: "ops-exec-workflow", poll: "/v1/jobs/" + created.id, ts: iso() }, 202);
       }
-      return handleChat(env, body, request.headers.get("Authorization") || "", ua, ctx);
+      return handleChat(env, body, request.headers.get("Authorization") || "", ua, ctx, request.headers.get("cf-connecting-ip") || "");
     }
     if (path === "/v1/jobs" && method === "POST") {
       if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);

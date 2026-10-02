@@ -29,7 +29,9 @@ silently break the research/social/intent pipelines (CHANGE-AUDIT-FIRST-1).
      done by default for the router key).
 4. **Redeploy** any worker whose secret was re-put (secret PUT alone does not redeploy).
 5. **Verify, both directions:**
-   - OLD value → **401** on the target endpoint.
+   - OLD value → **401** on the target endpoint. For `OPS_ROUTER_AUTH_KEY`, probe a keyed route (`GET /v1/jobs` or
+     `POST /ops/deploy`): since qnfo-ops 2.38.35 (OPS-PUBLIC-READ-1) `/v1/chat/completions` answers any non-matching key
+     in public read-only mode with HTTP 200 and `x-ops-access: public-read`, so a 200 there proves nothing.
    - NEW value → **200** on the target endpoint.
    - One live end-to-end call per consumer class (a script, a client, a worker).
 6. **Record** to `self_heal_actions` + `reorg_work_queue` (close the item) with the two-direction proof.

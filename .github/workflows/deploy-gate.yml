@@ -145,6 +145,11 @@ jobs:
             || { echo "::error::code-merge runner suite reported failures"; exit 1; }
       - name: OPEN-ACCESS-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/open-access.test.mjs
+      # OPS-PUBLIC-READ-1: qnfo-ops answers a chat with no key, or a stale one, in public read-only mode (free tier, only
+      # fleet_status, backlog_status and privacy-safe public_data, capped per visitor and per day); private stores, writes,
+      # paid upstreams, caches, durable jobs and checkpoints stay behind the key.
+      - name: OPS-PUBLIC-READ-1 offline suite (qnfo-ops)
+        run: node qnfo-ops/public-read.test.mjs
       # FLEET-CMD-1: the fleet command line (input outside the 10s refresh, open reads, emailed-code actions, 15-min step-up
       # for destructive ones, validated AI proposals, no hanging asks).
       - name: FLEET-CMD-1 offline suite (qnfo-fleet-dashboard)
