@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.4, 2026-10-01 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.5, 2026-10-01 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -175,10 +175,13 @@ owner queue with the default in effect stated, and are not re-asked.
 **Owner queue delegation (2026-10-01, OWNER-QUEUE-DELEGATION-1):** the owner then directed "manage the rest of my owner
 queue automatically too". Each card was decided on the evidence the fleet can read, and the decision is the card's
 resolution. Standing decisions:
-- No application is submitted in the owner's name: each commits the owner's own work, accountability or presence. FRI is
-  not applied to (its form forbids AI help). Grant drafts (NLnet Restack; the 31 October Corrigibility Fund and Foresight
-  nodes legs) may be prepared by the fleet and kept in `funding/`, but are submitted only after the owner's own review;
-  NLnet also requires a full GenAI prompt log. Maryland teaming and the arXiv endorsement are not pursued.
+- An application is submitted in the owner's name only on the owner's explicit direction for that application. FRI is not
+  applied to (its form forbids AI help); NLnet Restack stays a draft (its budget is the owner's own hours, and NLnet requires
+  a full GenAI prompt log). The two 31 October grants were submitted on the owner's direction of 2026-10-01 ("submit the
+  31 Oct grant applications automatically too"): Foresight AI for Science & Safety Nodes (area 2) and the Corrigibility
+  Research Fund via Lightcone Commons (`funding/GRANTS_2026-10-31.md`). Every application the fleet submits keeps four
+  rules: AI drafting is disclosed; no reference is named without that person's consent; no in-person, travel or salaried
+  commitment the owner has not made; budgets use measured costs. Maryland teaming and the arXiv endorsement are not pursued.
 - The 13 US provisional patent applications are not converted: conversion needs the inventor's signed declaration and
   USPTO fees. Public copy makes no patent claim; where a form asks, "13 US provisional patent applications (2025)".
 - Empowering Change is shown as a prior nonprofit (2023-2024), not a current entity, so leads that need an active
