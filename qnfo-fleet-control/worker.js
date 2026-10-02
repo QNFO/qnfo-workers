@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.105-evolve-json"; /* 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.106-merge-runner-unstick"; /* 0.4.106 MERGE-RUNNER-UNSTICK-1: the merge runner re-reads lazy mergeability, requeues a conflicted code-loop pull request and looks at candidates round-robin (agent_issues 1801); 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3069,9 +3069,22 @@ var CM_CHECKS_WAIT_H = 3;
 var CM_DEPLOY_WAIT_H = 3;
 var CM_MAX_CANDIDATES = 5;
 var CM_MAX_MERGES = 1;
+// MERGE-RUNNER-UNSTICK-1 (0.4.106, agent_issues 1801): three reasons the runner had merged nothing by 2026-10-02 10:00Z.
+//   null     GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the single read
+//            per hourly tick returned mergeable=null for a green pull request every time (PR 443 waited from 08:00Z,
+//            PR 475 from 09:00Z; a second read seconds later answered). The runner now re-reads up to CM_MERGEABLE_READS.
+//   conflict every worker.js change bumps the one VERSION line, so a second task on a file conflicts once the first
+//            merges; pull_request checks do not start on a conflicted head, so it waited 3h and then became needs_human.
+//            A conflicted code-loop pull request is now closed and its task requeued at 'read' (the orchestrator rebuilds
+//            the patch on current main), at most CM_MAX_REQUEUES times; after that it is a refusal as before.
+//   order    candidates were taken by updated_at, which a wait does not touch, so the same stuck five filled every tick.
+//            They are now taken by merge_checked_at (least recently looked at first).
+var CM_MERGEABLE_READS = 3;
+var CM_MERGEABLE_WAIT_MS = 2000;
+var CM_MAX_REQUEUES = 2;
 var CM_OK = ["success", "neutral", "skipped"];
 var CM_INFLIGHT = ["deploying", "deployed", "reverting"];
-var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"];
+var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT", "requeues INTEGER"];
 var CM_VDECL = /^(?:var|const|let) VERSION = "/;
 function cmCtx(t) {
   try { return t && t.ctx ? JSON.parse(t.ctx) : {}; } catch (e) { return null; }
@@ -3298,6 +3311,10 @@ function cmDecide(t, g, nowMs) {
   if (tg) return tg;
   var sc = cmScope(String(t.path || "")), names = (g.files || []).map(function(f) { return f.filename; });
   if (pr.draft) return wait("the pull request is a draft");
+  if (pr.mergeable === false || pr.mergeable_state === "dirty") {
+    if (Number(t.requeues || 0) < CM_MAX_REQUEUES) return { action: "requeue", why: "the pull request conflicts with main (mergeable_state " + pr.mergeable_state + ")" };
+    return refuse("the pull request conflicts with main (mergeable_state " + pr.mergeable_state + ") after " + CM_MAX_REQUEUES + " requeues");
+  }
   var req = cmRequired(names), ck = cmChecks(g.checks, g.status, req), sha7 = String(head.sha || "").slice(0, 7);
   if (ck.failed.length) return refuse("required check(s) failed on " + sha7 + ": " + ck.failed.join(", "));
   if (ck.status === "failure" || ck.status === "error") return refuse("the commit status on " + sha7 + " is " + ck.status);
@@ -3317,7 +3334,6 @@ function cmDecide(t, g, nowMs) {
   if (ck.other.length) return wait("a non-required check failed (" + ck.other.join(", ") + "); not merging until it passes");
   if (ck.status === "pending") return wait("the commit status is pending");
   if (pr.mergeable == null) return wait("GitHub is still computing mergeability");
-  if (pr.mergeable === false || pr.mergeable_state === "dirty") return refuse("the pull request conflicts with main (mergeable_state " + pr.mergeable_state + ")");
   var ig = cmIntegrityGate(t, g.integrity);
   if (ig) return ig;
   return { action: "merge", why: "required checks " + req.join(", ") + " green on " + sha7, required: req, kind: sc.kind, worker: sc.worker || null, version_to: g.integrity.version_to || null, green: true };
@@ -3515,6 +3531,12 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
   if (d.action !== "refuse") {
     var pr = await evApi(env, "GET", "/pulls/" + num);
     if (!pr.ok || !pr.j) { out.errors++; return { id: t.id, action: "error", why: "pull HTTP " + pr.status }; }
+    var waitMs = env.CM_MERGEABLE_WAIT_MS != null ? Number(env.CM_MERGEABLE_WAIT_MS) : CM_MERGEABLE_WAIT_MS;
+    for (var mr = 1; mr < CM_MERGEABLE_READS && pr.j.state === "open" && !pr.j.merged && pr.j.mergeable == null; mr++) {
+      if (waitMs > 0) await new Promise(function(res) { setTimeout(res, waitMs); });
+      var again = await evApi(env, "GET", "/pulls/" + num);
+      if (again.ok && again.j) pr = again;
+    }
     g.pr = pr.j;
     if (!pr.j.merged && pr.j.state === "open" && pr.j.head && pr.j.head.sha) {
       var head = pr.j.head.sha;
@@ -3545,6 +3567,16 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
     if (changed) {
       if (num && g.pr && g.pr.state === "open") await evApi(env, "POST", "/issues/" + num + "/comments", { body: "CODE-TASK-MERGE-RUNNER-1 (qnfo-fleet-control) did not merge this pull request: " + d.why + ".\n\nCode task `" + t.id + "` is now `needs_human`. Merge or close it here; the runner records the outcome." });
       await cmEvent(env, cx, "refused", t, t.pr_url + ": " + d.why, "refused");
+    }
+  } else if (d.action === "requeue") {
+    var rq = Number(t.requeues || 0) + 1;
+    var note = "requeued " + rq + "/" + CM_MAX_REQUEUES + " by " + CM_RUNNER + ": " + d.why + "; pull request " + num + " closed, patch to be rebuilt on main";
+    if (await cmSave(env, cx, t.id, { status: "queued", step: "read", attempts: 0, last_error: null, lease_until: null, pr_url: null, pr_opened_by: null, pr_opened_at: null, green_since: null, nochecks_sha: null, nochecks_since: null, requeues: rq, merge_note: note.slice(0, 500), merge_checked_at: cx.iso }, { touch: true, ifStatus: t.status })) {
+      await evApi(env, "POST", "/issues/" + num + "/comments", { body: "CODE-TASK-MERGE-RUNNER-1 (qnfo-fleet-control) closed this pull request: " + d.why + ".\n\nCode task `" + t.id + "` is queued again (" + rq + " of " + CM_MAX_REQUEUES + "); the code loop rebuilds the patch on current main and a new pull request follows." });
+      await evApi(env, "PATCH", "/pulls/" + num, { state: "closed" });
+      await evApi(env, "DELETE", "/git/refs/heads/" + t.branch);
+      await cmEvent(env, cx, "requeued", t, t.pr_url + ": " + note, "ok");
+      out.requeued = (out.requeued || 0) + 1;
     }
   } else if (d.action === "reconcile") {
     var f = { status: d.status, merge_checked_at: cx.iso };
@@ -3656,9 +3688,9 @@ async function codeMergeTick(env, opts) {
   (await all("SELECT path FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting')", [CM_RUNNER])).forEach(function(r) { var s = cmScope(r.path); if (s.worker) busy[s.worker] = 1; });
   try { (await all("SELECT worker FROM evolve_candidates WHERE status IN ('pr-open', 'merged', 'deployed')")).forEach(function(r) { busy[r.worker] = 1; }); } catch (e) {}
   // Pushed branches first: open their PRs (CI then starts by itself; they are merge candidates from the next tick).
-  var pushed = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status = 'branch_pushed' AND branch LIKE 'codeagent-%' ORDER BY updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
+  var pushed = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status = 'branch_pushed' AND branch LIKE 'codeagent-%' ORDER BY COALESCE(merge_checked_at, '') ASC, updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
   for (var o = 0; o < pushed.length; o++) out.opened.push(await cmOpenHandle(env, cx, pushed[o], cfg, out));
-  var cands = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status IN ('published', 'pr_open') AND branch LIKE 'codeagent-%' AND pr_url LIKE 'https://github.com/QNFO/qnfo-workers/pull/%' ORDER BY updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
+  var cands = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status IN ('published', 'pr_open') AND branch LIKE 'codeagent-%' AND pr_url LIKE 'https://github.com/QNFO/qnfo-workers/pull/%' ORDER BY COALESCE(merge_checked_at, '') ASC, updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
   for (var j = 0; j < cands.length; j++) out.decided.push(await cmHandle(env, cx, cands[j], cfg, busy, out));
   // A refused PR (or a refused branch whose PR a person opened) that a person later merged or closed: record the outcome
   // (code-task-publish reconciles only waiting rows).

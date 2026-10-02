@@ -213,7 +213,7 @@ const refuses = [
   ["an untrusted origin", task(), g({ provenance: { ok: false, why: "source issue #50 came from 'kaizen-ai'" } })],
   ["a failed required check", task(), g({ checks: green("h1", ["gate", "mirror-guard", "comparator"]).concat([{ id: 300, name: "guard", status: "completed", conclusion: "failure" }]) })],
   ["a failing commit status", task(), g({ status: { state: "failure", total_count: 1 } })],
-  ["a merge conflict", task(), g({ pr: prJson({ mergeable: false, mergeable_state: "dirty" }) })],
+  ["a merge conflict after the requeue budget", task({ requeues: 2 }), g({ pr: prJson({ mergeable: false, mergeable_state: "dirty" }) })],
   ["content other than the verified patch", task(), g({ integrity: { ok: false, why: "qnfo-demo/worker.js at the PR head is not the verified patch" } })],
   ["a container worker", task(), g({ integrity: { ok: true, revertible: true, containers: true } })],
   ["a worker that cannot be auto-reverted", task(), g({ integrity: { ok: true, revertible: false, revert_why: "no single var VERSION" } })],
@@ -514,5 +514,33 @@ db.prepare("INSERT INTO worker_live_audit (worker, http, live_version, probed_at
 a = J(await W.evAdvance(env, one("SELECT * FROM evolve_candidates WHERE id = 1")));
 ok(a.status === "verified", "evAdvance verifies live through evLiveCheck", a);
 
+// ================================================================ MERGE-RUNNER-UNSTICK-1: lazy mergeability, conflict requeue, round-robin
+ok(act(task(), g({ pr: prJson({ mergeable: false, mergeable_state: "dirty" }) })).action === "requeue", "a conflicted code-loop PR is requeued, not refused");
+ok(act(task({ requeues: 1 }), g({ pr: prJson({ mergeable: false, mergeable_state: "dirty" }), checks: [] })).action === "requeue", "a conflict is seen before the missing checks (no 3h wait)");
+{
+  freshDb(); freshGh();
+  const env2 = { AUDIT, GITHUB_TOKEN: "test-token", CM_MERGEABLE_WAIT_MS: 0 };
+  db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+  seedTask();
+  seedWorkerPr(401, BRANCH, "h1");
+  gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+  // GitHub answers mergeable=null on the first read and the real value on the next one.
+  const real = gh.pulls[401];
+  let reads = 0;
+  Object.defineProperty(gh.pulls, "401", { configurable: true, get() { reads++; return reads === 1 ? Object.assign({}, real, { mergeable: null, mergeable_state: "unknown" }) : real; } });
+  let u = J(await W.codeMergeTick(env2, { now: NOW }));
+  ok(u.decided[0].action === "merge" && gh.merges.length === 1, "mergeable=null on the first read is re-read in the same tick and merged", u.decided);
+  // a conflicted pull request: closed, branch deleted, task queued again at read
+  freshDb(); freshGh();
+  db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+  seedTask();
+  seedWorkerPr(401, BRANCH, "h1");
+  gh.pulls[401].mergeable = false; gh.pulls[401].mergeable_state = "dirty";
+  u = J(await W.codeMergeTick(env2, { now: NOW }));
+  const q = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+  ok(u.decided[0].action === "requeue" && q.status === "queued" && q.step === "read" && q.requeues === 1 && q.pr_url === null && q.last_error === null, "a conflict requeues the task at read and counts it", q);
+  ok(gh.calls.includes("PATCH /pulls/401") && gh.calls.includes("DELETE /git/refs/heads/" + BRANCH) && gh.comments.length === 1 && gh.merges.length === 0, "the conflicted pull request is closed with a comment and its branch deleted", gh.calls);
+  ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.requeued'").n === 1, "the requeue writes one cloud_ops_events row");
+}
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
