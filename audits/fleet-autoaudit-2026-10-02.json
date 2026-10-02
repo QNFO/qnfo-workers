@@ -1,16 +1,8 @@
 {
-  "audited_at": "2026-10-02 07:40:34",
+  "audited_at": "2026-10-02 08:01:36",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-code-orchestrator",
-        "qnfo-ipatent"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -500,7 +492,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.17.7-performance-loop",
+        "version": "1.17.8-ctl-print-safe",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -520,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.6.2-support-map-polish",
+        "version": "3.7.0-reach",
         "worker": "qnfo-ipatent"
       },
       {
@@ -580,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.29-social-learner",
+        "version": "0.7.30-cap-epoch",
         "worker": "qnfo-social"
       },
       {
@@ -1160,9 +1152,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.17.7-performance-loop",
+      "before": "1.17.8-ctl-print-safe",
       "http": 200,
-      "live": "1.17.7-performance-loop",
+      "live": "1.17.8-ctl-print-safe",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1240,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.6.2-support-map-polish",
+      "before": "3.7.0-reach",
       "http": 200,
-      "live": "3.6.2-support-map-polish",
+      "live": "3.7.0-reach",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1424,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.29-social-learner",
+      "before": "0.7.30-cap-epoch",
       "http": 200,
-      "live": "0.7.29-social-learner",
+      "live": "0.7.30-cap-epoch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"

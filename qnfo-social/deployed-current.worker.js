@@ -13,7 +13,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.7.29-social-learner";
+var VERSION = "0.7.30-cap-epoch";
 // 0.7.29 (2026-10-02): GET /learner names an unavailable part ("posterior unavailable") and never echoes exception text
 // (CodeQL js/stack-trace-exposure); the detail goes to the worker log.
 // 0.7.28 (2026-10-02, pillar: reach): SOCIAL-DISTRIBUTION-LEARNER-1 (STRATEGY 6.4 "distribution allocation (weekly)",
@@ -772,7 +772,13 @@ async function socialGate(env, who) {
       console.log('SOCIAL-PAUSE-1 ' + who + ': pipeline_flags.social_paused=1, posting nothing');
       return { allowed: 0, reason: 'paused', cap: cap };
     }
-    const c = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM social_threads WHERE status='posted' AND posted_at >= datetime('now','-7 days')) + (SELECT COUNT(*) FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND posted_at >= datetime('now','-7 days')) AS n").first();
+    // SOCIAL-CAP-EPOCH-1 (0.7.30, owner direction 2026-10-02 "bring users"): the 2-per-week cap was counting 96 posts from
+    // the volume regime STRATEGY-1 retired on 2026-10-01 (79 q08 essays, 17 automatic paper posts), which held the curated
+    // launch queue for a week. pipeline_flags.social_cap_epoch (a UTC 'YYYY-MM-DD HH:MM:SS') starts the count no earlier
+    // than the reset; the cap itself is unchanged. Delete the flag to count the plain rolling 7 days again.
+    let epoch = '0';
+    try { const ef = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_cap_epoch'").first(); if (ef && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(ef.value || '').trim())) epoch = String(ef.value).trim(); } catch (e) {}
+    const c = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM social_threads WHERE status='posted' AND posted_at >= MAX(datetime('now','-7 days'), ?1)) + (SELECT COUNT(*) FROM dissemination_tracker WHERE action='posted' AND channel='bluesky' AND posted_at >= MAX(datetime('now','-7 days'), ?1)) AS n").bind(epoch).first();
     const n = Number((c && c.n) || 0);
     console.log('SOCIAL-CADENCE-CAP-1 ' + who + ': bluesky posts_7d=' + n + ' cap=' + cap + (n >= cap ? ' -> holding queued rows' : ''));
     return { allowed: Math.max(0, cap - n), reason: n >= cap ? 'weekly-cap' : null, posted_7d: n, cap: cap };
