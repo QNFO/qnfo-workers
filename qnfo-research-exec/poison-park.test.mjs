@@ -6,7 +6,8 @@ import { markError, reclaimStaleResearching } from "./worker.js";
 const db = new DatabaseSync(":memory:");
 db.exec(`CREATE TABLE research_queue (id TEXT PRIMARY KEY, status TEXT DEFAULT 'queued', stage TEXT, claimed_at TEXT, attempt INTEGER DEFAULT 0, error TEXT, recover_count INTEGER DEFAULT 0, terminal_rearms INTEGER DEFAULT 0);
 CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);`);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT NOT NULL, action TEXT NOT NULL, verify_probe TEXT NOT NULL, verify_transport TEXT NOT NULL, max_attempts INTEGER NOT NULL DEFAULT 3, escalate_to TEXT NOT NULL, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), next_due_at TEXT);`);
 function stmt(sql) {
   let args = [];
   const o = { bind(...a) { args = a; return o; },
@@ -43,4 +44,22 @@ assert.equal(get("e").status, "researching");
 // 4. a second reclaim pass is a no-op (parked rows never come back)
 assert.deepEqual(await reclaimStaleResearching(env), { parked: 0, requeued: 0 });
 assert.equal(db.prepare("SELECT count(*) n FROM research_queue").get().n, 5); // nothing deleted
+// 5. RESEARCH-TERMINAL-SELFCLOSE-1: a content-only terminal row (verify mismatch, every gate passed) files its issue with a
+// remediation probe; the probe passes once the row is parked and the queue is advancing. A gate failure gets no probe.
+const U1 = "18826b2d-d5f1-454f-9fc2-42a55a845415", U2 = "196536e3-44ee-4613-82e9-df08b180568d";
+db.prepare("INSERT INTO research_queue (id,status,stage,recover_count) VALUES (?,'researching','verify',3),(?,'researching','verify',3)").run(U1, U2);
+await markError(env, get(U1), "verify: unresolved after revision - mismatch=true gates=");
+await markError(env, get(U2), "verify: unresolved after revision - mismatch=true gates=gate-refcount");
+const c1 = db.prepare("SELECT * FROM remediation_contracts WHERE class = 'research-terminal-18826b2d'").get();
+const i1 = db.prepare("SELECT id FROM agent_issues WHERE title LIKE 'RESEARCH-TERMINAL 18826b2d%'").get();
+assert.ok(c1 && i1 && c1.issue_id === i1.id && c1.status === "active" && c1.verify_transport === "d1-query", "content-only terminal row gets an active d1-query contract on its issue");
+assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts WHERE class = 'research-terminal-196536e3'").get().n, 0, "a gate failure gets no self-closing contract");
+assert.ok(/^select /i.test(c1.verify_probe) && !c1.verify_probe.includes(";"), "the probe is a literal SELECT the remediation tick will run");
+let pr = db.prepare(c1.verify_probe).get();
+assert.equal(pr.observed, "pending", "no stage advance yet: the probe waits");
+db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES ('re-x', strftime('%Y-%m-%dT%H:%M:%SZ','now'), 'done', '{\"ok\":true,\"stage\":\"ground->ensemble\"}', 'qnfo-research-exec', 'ok')").run();
+pr = db.prepare(c1.verify_probe).get();
+assert.equal(pr.observed, pr.expected, "parked row plus an advancing queue passes the probe");
+await markError(env, get(U1), "verify: unresolved after revision - mismatch=true gates=");
+assert.equal(db.prepare("SELECT count(*) n FROM remediation_contracts").get().n, 1, "a repeat park files no second contract");
 console.log("poison-park tests passed");
