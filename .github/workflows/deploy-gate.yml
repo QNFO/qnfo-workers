@@ -185,6 +185,7 @@ jobs:
         run: |
           node qnfo-ipatent/usage.test.mjs
           node qnfo-ipatent/routes.test.mjs
+          node qnfo-ipatent/error-json.test.mjs
           node qnfo-fleet-dashboard/ipatent-usage.test.mjs
       # Q08-REVIEW-2026-10-31 (#1716): the one-shot q08 decision on bot-filtered RUM page views and the cadence cap
       # q08-signal-engine reads (Q08-CADENCE-CAP-1); a deferral never satisfies the remediation probe.

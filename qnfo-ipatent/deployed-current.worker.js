@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.0-guide-pages"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.1-error-json"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -1752,6 +1752,20 @@ var LANDING_HTML = `<!DOCTYPE html>
     var el = document.getElementById(id);
     if(el) el.addEventListener('input', function(){ if(guideTimer) clearTimeout(guideTimer); guideTimer = setTimeout(loadGuidance, 400); });
   });
+  // The friendly failure: the form keeps everything the visitor typed, and Retry resubmits the same input.
+  function showRetry(){
+    status.className = 'status err';
+    status.textContent = 'The drafting model did not answer in time. Your text is still here; try again in a minute. ';
+    var rb = document.createElement('button');
+    rb.type = 'button';
+    rb.id = 'retryBtn';
+    rb.textContent = 'Retry';
+    rb.style.cssText = 'margin-left:6px;padding:2px 10px;font:inherit;cursor:pointer';
+    rb.addEventListener('click', function(){
+      if(form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', {cancelable:true}));
+    });
+    status.appendChild(rb);
+  }
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     btn.disabled = true;
@@ -1772,10 +1786,18 @@ var LANDING_HTML = `<!DOCTYPE html>
           save: !!(document.getElementById('keepCopy') && document.getElementById('keepCopy').checked)
         })
       });
-      const data = await resp.json();
-      if(!resp.ok){
-        status.className = 'status err';
-        status.textContent = 'Error: ' + (data.error || resp.status);
+      // IPATENT-ERROR-JSON-1: an edge 502/504 arrives as text/plain ('upstream request failed'); read text first and parse
+      // JSON only when the server says it is JSON, so a slow model never surfaces as 'Unexpected token u'.
+      const raw = await resp.text();
+      let data = null;
+      if(/json/i.test(resp.headers.get('content-type') || '')){ try{ data = JSON.parse(raw); }catch(_){ data = null; } }
+      if(!resp.ok || !data){
+        if(resp.status >= 400 && resp.status < 500 && data && data.error){
+          status.className = 'status err';
+          status.textContent = 'Error: ' + data.error;
+        } else {
+          showRetry();
+        }
         return;
       }
       result.style.display = 'block';
@@ -1797,8 +1819,7 @@ var LANDING_HTML = `<!DOCTYPE html>
         : 'Draft generated \xB7 not stored \u2014 download or print it now';
       document.getElementById('result').scrollIntoView({behavior:'smooth'});
     }catch(err){
-      status.className = 'status err';
-      status.textContent = 'Network error: ' + err.message;
+      showRetry();
     }finally{
       btn.disabled = false;
       btn.textContent = 'Draft Disclosure';
