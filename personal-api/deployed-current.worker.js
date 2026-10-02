@@ -45,7 +45,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.3.2-static-fleet-link";
+var VERSION = "4.4.0-mcp-oauth";
 // FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
 // <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
 // any script loaded here can read it; a remote script from a shared, open worker would put calendar write access and
@@ -2332,6 +2332,7 @@ var api_default = {
     }
     if (path.startsWith("/google/")) return handleGoogle(request, env, url);
     if (path === "/mcp" || path === "/mcp/") return handleMcp(request, env, ctx);
+    if (path.startsWith("/.well-known/oauth-") || path === "/.well-known/openid-configuration" || path.startsWith("/oauth/")) return handleOAuth(request, env, url);
     if (path === "/v1/models") {
       // MODEL-DISCOVERY-PUBLIC-1 (2026-09-26): serve the model list without auth so every
       // OpenAI-compatible client (LiteLLM, LM Studio, llama.cpp, ChatBox, OpenWebUI, etc.) can
@@ -2866,7 +2867,7 @@ var api_default = {
     }
     if (path === "/health") {
       const _g = await gStatus(env).catch(() => ({ state: "unknown" }));
-      return json({ ok: true, worker: "personal-api", version: VERSION, google_calendar: _g.state, mcp: "/mcp (bearer)", capabilities: ["personal-twin-chat", "vision", "google-calendar", "mcp", "journal", "habits", "plan", "daily-brief", "location", "media", "web-search", "embeddings"], limitations: ["every /v1 route needs the personal API key (bearer)", "the daily brief is built on the 05:05 cron and cached in D1; /v1/plan is uncached (one or two model calls)", "calendar reads and writes use the owner's Google Calendar once /google/connect has run (state in google_calendar); until then they use the calendar-api store", "/mcp exposes the twin's tools to MCP clients that can send a bearer header; clients that only support OAuth connectors (claude.ai web, ChatGPT) cannot use it yet"] });
+      return json({ ok: true, worker: "personal-api", version: VERSION, google_calendar: _g.state, mcp: "/mcp (bearer key or OAuth 2.1)", capabilities: ["personal-twin-chat", "vision", "google-calendar", "mcp", "journal", "habits", "plan", "daily-brief", "location", "media", "web-search", "embeddings"], limitations: ["every /v1 route needs the personal API key (bearer)", "the daily brief is built on the 05:05 cron and cached in D1; /v1/plan is uncached (one or two model calls)", "calendar reads and writes use the owner's Google Calendar once /google/connect has run (state in google_calendar); until then they use the calendar-api store", "/mcp exposes the twin's tools to MCP clients by bearer key or OAuth 2.1 (PKCE, dynamic registration); each OAuth client is approved once on the consent page with the personal API key"] });
     }
     if (path === "/" && request.method === "GET") {
       return new Response(PLAYGROUND_HTML.replaceAll("__TITLE__", "Personal Twin - notes (personal-api)").replace("__KEY_HINT__", "your personal API key (Bearer)").replace("__DEFAULT_MODEL__", "personal-twin-chat").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
@@ -3010,10 +3011,170 @@ async function mcpOne(env, ctx, msg) {
   return err(-32601, "method not found: " + method.slice(0, 80));
 }
 __name(mcpOne, "mcpOne");
+// ============================================================================================================
+// TWIN-MCP-OAUTH-1 (2026-10-02, issue 1817): OAuth 2.1 for the MCP endpoint, so connector-only clients (claude.ai web
+// and mobile, ChatGPT and other MCP hosts that cannot send a static header) can attach. Inside personal-api, no new
+// worker. Discovery (RFC 9728 protected-resource + RFC 8414 server metadata), dynamic client registration (RFC 7591,
+// public clients only), authorization code + PKCE S256 only, rotating refresh tokens, RFC 7009 revocation.
+// Consent: the owner approves each client on a page that shows the client's name and redirect host, entering the
+// existing personal API key; no new secret. Codes and tokens are stored only as SHA-256 hashes in personal-life D1.
+// The bearer API key keeps working on /mcp for header-capable clients.
+// ============================================================================================================
+var OAUTH_ACCESS_TTL_S = 3600;
+var OAUTH_REFRESH_TTL_S = 30 * 86400;
+var OAUTH_CODE_TTL_S = 600;
+var OAUTH_MAX_CLIENTS = 200;
+async function oauthEnsure(env) {
+  await env.PERSONAL.batch([
+    env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS oauth_clients (client_id TEXT PRIMARY KEY, client_name TEXT, redirect_uris TEXT NOT NULL, created_at TEXT NOT NULL, last_used_at TEXT)"),
+    env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS oauth_codes (code_hash TEXT PRIMARY KEY, client_id TEXT NOT NULL, redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, scope TEXT, expires INTEGER NOT NULL)"),
+    env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS oauth_tokens (token_hash TEXT PRIMARY KEY, kind TEXT NOT NULL, client_id TEXT NOT NULL, scope TEXT, expires INTEGER NOT NULL, created_at TEXT NOT NULL, revoked INTEGER DEFAULT 0)")
+  ]);
+}
+__name(oauthEnsure, "oauthEnsure");
+function b64url(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+__name(b64url, "b64url");
+function randToken(n) { return b64url(crypto.getRandomValues(new Uint8Array(n || 32))); }
+__name(randToken, "randToken");
+async function sha256b64url(s) { return b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s))))); }
+__name(sha256b64url, "sha256b64url");
+function oauthJson(obj, status, extra) {
+  return new Response(JSON.stringify(obj), { status: status || 200, headers: Object.assign({ "Content-Type": "application/json", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, Authorization, MCP-Protocol-Version" }, extra || {}) });
+}
+__name(oauthJson, "oauthJson");
+function redirectAllowed(u) {
+  try {
+    const x = new URL(u);
+    if (x.hash) return false;
+    if (x.protocol === "https:") return true;
+    return x.protocol === "http:" && (x.hostname === "localhost" || x.hostname === "127.0.0.1" || x.hostname === "[::1]");
+  } catch (e) { return false; }
+}
+__name(redirectAllowed, "redirectAllowed");
+function oauthMeta(origin) {
+  return {
+    issuer: origin,
+    authorization_endpoint: origin + "/oauth/authorize",
+    token_endpoint: origin + "/oauth/token",
+    registration_endpoint: origin + "/oauth/register",
+    revocation_endpoint: origin + "/oauth/revoke",
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    code_challenge_methods_supported: ["S256"],
+    token_endpoint_auth_methods_supported: ["none"],
+    revocation_endpoint_auth_methods_supported: ["none"],
+    scopes_supported: ["twin"]
+  };
+}
+__name(oauthMeta, "oauthMeta");
+// Returns true when the bearer is a live OAuth access token for this twin.
+async function oauthBearerOk(env, request) {
+  const tok = bearer(request);
+  if (!tok || tok.length < 20) return false;
+  try {
+    await oauthEnsure(env);
+    const row = await env.PERSONAL.prepare("SELECT client_id, expires, revoked FROM oauth_tokens WHERE token_hash = ?1 AND kind = 'access'").bind(await sha256b64url(tok)).first();
+    return !!(row && !row.revoked && Number(row.expires) > Date.now());
+  } catch (e) { return false; }
+}
+__name(oauthBearerOk, "oauthBearerOk");
+async function issueTokens(env, clientId, scope) {
+  const access = randToken(32), refresh = randToken(32), now = Date.now(), iso = new Date().toISOString();
+  await env.PERSONAL.batch([
+    env.PERSONAL.prepare("INSERT INTO oauth_tokens (token_hash, kind, client_id, scope, expires, created_at) VALUES (?1, 'access', ?2, ?3, ?4, ?5)").bind(await sha256b64url(access), clientId, scope || "twin", now + OAUTH_ACCESS_TTL_S * 1e3, iso),
+    env.PERSONAL.prepare("INSERT INTO oauth_tokens (token_hash, kind, client_id, scope, expires, created_at) VALUES (?1, 'refresh', ?2, ?3, ?4, ?5)").bind(await sha256b64url(refresh), clientId, scope || "twin", now + OAUTH_REFRESH_TTL_S * 1e3, iso),
+    env.PERSONAL.prepare("UPDATE oauth_clients SET last_used_at = ?1 WHERE client_id = ?2").bind(iso, clientId),
+    env.PERSONAL.prepare("DELETE FROM oauth_tokens WHERE expires < ?1").bind(now - 86400e3)
+  ]);
+  return { access_token: access, token_type: "Bearer", expires_in: OAUTH_ACCESS_TTL_S, refresh_token: refresh, scope: scope || "twin" };
+}
+__name(issueTokens, "issueTokens");
+var CONSENT_HTML = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Allow access to your personal twin</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem}input,button{font:inherit;padding:.5rem;width:100%;box-sizing:border-box;margin:.4rem 0}code{word-break:break-all}.warn{color:#9a3412}</style></head><body>__BODY__</body></html>';
+function consentPage(body, status) {
+  return new Response(CONSENT_HTML.replace("__BODY__", body), { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer" } });
+}
+__name(consentPage, "consentPage");
+async function handleOAuth(request, env, url) {
+  const origin = url.origin, path = url.pathname;
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, Authorization, MCP-Protocol-Version" } });
+  if (path === "/.well-known/oauth-protected-resource" || path === "/.well-known/oauth-protected-resource/mcp") {
+    return oauthJson({ resource: origin + "/mcp", authorization_servers: [origin], bearer_methods_supported: ["header"], scopes_supported: ["twin"], resource_name: "Rowan's personal twin" });
+  }
+  if (path === "/.well-known/oauth-authorization-server" || path === "/.well-known/openid-configuration") return oauthJson(oauthMeta(origin));
+  await oauthEnsure(env);
+  if (path === "/oauth/register") {
+    if (request.method !== "POST") return oauthJson({ error: "invalid_request" }, 405);
+    const b = await request.json().catch(() => null);
+    const uris = b && Array.isArray(b.redirect_uris) ? b.redirect_uris.map(String).slice(0, 5) : [];
+    if (!uris.length || !uris.every(redirectAllowed)) return oauthJson({ error: "invalid_redirect_uri", error_description: "redirect_uris must be https, or http on localhost" }, 400);
+    if (b.token_endpoint_auth_method && b.token_endpoint_auth_method !== "none") return oauthJson({ error: "invalid_client_metadata", error_description: "only public clients (token_endpoint_auth_method none) are supported" }, 400);
+    const n = await env.PERSONAL.prepare("SELECT COUNT(*) n FROM oauth_clients").first();
+    if (n && Number(n.n) >= OAUTH_MAX_CLIENTS) await env.PERSONAL.prepare("DELETE FROM oauth_clients WHERE client_id IN (SELECT client_id FROM oauth_clients WHERE last_used_at IS NULL ORDER BY created_at ASC LIMIT 50)").run();
+    const cid = "twin-" + randToken(16);
+    const name = String(b.client_name || "MCP client").replace(/[\u0000-\u001f]/g, " ").slice(0, 80);
+    await env.PERSONAL.prepare("INSERT INTO oauth_clients (client_id, client_name, redirect_uris, created_at) VALUES (?1, ?2, ?3, ?4)").bind(cid, name, JSON.stringify(uris), new Date().toISOString()).run();
+    return oauthJson({ client_id: cid, client_name: name, redirect_uris: uris, grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none", client_id_issued_at: Math.floor(Date.now() / 1e3) }, 201);
+  }
+  if (path === "/oauth/authorize") {
+    const P = request.method === "POST" ? Object.fromEntries((await request.formData().catch(() => new FormData())).entries()) : Object.fromEntries(url.searchParams.entries());
+    const cid = String(P.client_id || ""), ru = String(P.redirect_uri || ""), state = String(P.state || "");
+    const client = cid ? await env.PERSONAL.prepare("SELECT client_id, client_name, redirect_uris FROM oauth_clients WHERE client_id = ?1").bind(cid).first() : null;
+    let uris = [];
+    try { uris = client ? JSON.parse(client.redirect_uris) : []; } catch (e) {}
+    if (!client || !ru || uris.indexOf(ru) < 0) return consentPage("<h1>Cannot continue</h1><p>Unknown client or redirect address. Nothing was shared.</p>", 400);
+    const back = (q) => { const x = new URL(ru); for (const k in q) if (q[k] != null && q[k] !== "") x.searchParams.set(k, q[k]); return Response.redirect(x.toString(), 302); };
+    if (String(P.response_type || "") !== "code") return back({ error: "unsupported_response_type", state });
+    if (String(P.code_challenge_method || "") !== "S256" || !/^[A-Za-z0-9_-]{43,128}$/.test(String(P.code_challenge || ""))) return back({ error: "invalid_request", error_description: "PKCE S256 code_challenge required", state });
+    const host = new URL(ru).host;
+    if (request.method !== "POST") {
+      const hidden = ["response_type", "client_id", "redirect_uri", "code_challenge", "code_challenge_method", "state", "scope", "resource"].map((k) => '<input type="hidden" name="' + k + '" value="' + escHtmlText(P[k] || "") + '">').join("");
+      return consentPage('<h1>Allow access to your personal twin?</h1><p><b>' + escHtmlText(client.client_name) + '</b> asks to use your twin\'s tools: calendar (read and add), memory, tasks, email index, journal, web search.</p><p>It will receive the access at <code>' + escHtmlText(host) + '</code>.</p><p class="warn">Approve only if you started this connection just now.</p><form method="post" action="/oauth/authorize">' + hidden + '<label>Personal API key<input type="password" name="key" autocomplete="current-password" required></label><button type="submit" name="decision" value="allow">Allow</button><button type="submit" name="decision" value="deny" formnovalidate>Deny</button></form>');
+    }
+    if (String(P.decision || "") !== "allow") return back({ error: "access_denied", state });
+    if (!safeEqual(String(P.key || ""), String(env.API_KEY || ""))) return consentPage("<h1>Key not accepted</h1><p>Nothing was shared. Go back to your app and start the connection again.</p>", 401);
+    const code = randToken(32);
+    await env.PERSONAL.prepare("INSERT INTO oauth_codes (code_hash, client_id, redirect_uri, challenge, scope, expires) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(await sha256b64url(code), cid, ru, String(P.code_challenge), "twin", Date.now() + OAUTH_CODE_TTL_S * 1e3).run();
+    return back({ code, state });
+  }
+  if (path === "/oauth/token") {
+    if (request.method !== "POST") return oauthJson({ error: "invalid_request" }, 405);
+    const ct = request.headers.get("Content-Type") || "";
+    const P = ct.indexOf("application/json") >= 0 ? await request.json().catch(() => ({})) : Object.fromEntries((await request.formData().catch(() => new FormData())).entries());
+    const gt = String(P.grant_type || ""), cid = String(P.client_id || "");
+    if (gt === "authorization_code") {
+      const h = await sha256b64url(String(P.code || ""));
+      const row = await env.PERSONAL.prepare("SELECT client_id, redirect_uri, challenge, expires FROM oauth_codes WHERE code_hash = ?1").bind(h).first();
+      await env.PERSONAL.prepare("DELETE FROM oauth_codes WHERE code_hash = ?1 OR expires < ?2").bind(h, Date.now()).run();
+      if (!row || Number(row.expires) < Date.now() || row.client_id !== cid || row.redirect_uri !== String(P.redirect_uri || "")) return oauthJson({ error: "invalid_grant" }, 400);
+      if (await sha256b64url(String(P.code_verifier || "")) !== row.challenge) return oauthJson({ error: "invalid_grant", error_description: "PKCE verification failed" }, 400);
+      return oauthJson(await issueTokens(env, cid, "twin"));
+    }
+    if (gt === "refresh_token") {
+      const h = await sha256b64url(String(P.refresh_token || ""));
+      const row = await env.PERSONAL.prepare("SELECT client_id, expires, revoked FROM oauth_tokens WHERE token_hash = ?1 AND kind = 'refresh'").bind(h).first();
+      if (!row || row.revoked || Number(row.expires) < Date.now() || (cid && row.client_id !== cid)) return oauthJson({ error: "invalid_grant" }, 400);
+      await env.PERSONAL.prepare("UPDATE oauth_tokens SET revoked = 1 WHERE token_hash = ?1").bind(h).run();
+      return oauthJson(await issueTokens(env, row.client_id, "twin"));
+    }
+    return oauthJson({ error: "unsupported_grant_type" }, 400);
+  }
+  if (path === "/oauth/revoke") {
+    if (request.method !== "POST") return oauthJson({ error: "invalid_request" }, 405);
+    const P = Object.fromEntries((await request.formData().catch(() => new FormData())).entries());
+    if (P.token) await env.PERSONAL.prepare("UPDATE oauth_tokens SET revoked = 1 WHERE token_hash = ?1").bind(await sha256b64url(String(P.token))).run();
+    return new Response(null, { status: 200, headers: { "Cache-Control": "no-store" } });
+  }
+  return oauthJson({ error: "not_found" }, 404);
+}
+__name(handleOAuth, "handleOAuth");
 async function handleMcp(request, env, ctx) {
   if (request.method === "GET" || request.method === "DELETE") return new Response(JSON.stringify({ error: "this MCP endpoint answers POST only (no server-initiated stream)" }), { status: 405, headers: Object.assign({ Allow: "POST" }, mcpHeaders()) });
   if (request.method !== "POST") return new Response(null, { status: 405, headers: mcpHeaders() });
-  if (!await auth(request, env)) return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized: send Authorization: Bearer <personal API key>" } }), { status: 401, headers: Object.assign({ "WWW-Authenticate": "Bearer" }, mcpHeaders()) });
+  if (!await auth(request, env) && !await oauthBearerOk(env, request)) return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized: send Authorization: Bearer <personal API key or OAuth access token>" } }), { status: 401, headers: Object.assign({ "WWW-Authenticate": 'Bearer resource_metadata="' + new URL(request.url).origin + '/.well-known/oauth-protected-resource"' }, mcpHeaders()) });
   let body;
   try { body = await request.json(); } catch (e) { return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }), { status: 400, headers: mcpHeaders() }); }
   const msgs = Array.isArray(body) ? body : [body];
