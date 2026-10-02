@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-02 08:54:43",
+  "audited_at": "2026-10-02 09:04:06",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-control"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -474,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.10-reach-ideas",
+        "version": "0.3.11-runtime-shape",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -499,7 +492,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.18.4-ask-retry",
+        "version": "1.18.5-ask-truncated-json",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1039,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.10-reach-ideas",
+      "before": "0.3.11-runtime-shape",
       "http": 200,
-      "live": "0.3.10-reach-ideas",
+      "live": "0.3.11-runtime-shape",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1159,9 +1152,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.18.4-ask-retry",
+      "before": "1.18.5-ask-truncated-json",
       "http": 200,
-      "live": "1.18.4-ask-retry",
+      "live": "1.18.5-ask-truncated-json",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
