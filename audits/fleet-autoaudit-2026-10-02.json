@@ -1,18 +1,8 @@
 {
-  "audited_at": "2026-10-02 07:18:48",
+  "audited_at": "2026-10-02 07:23:16",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-cloud-ops",
-        "qnfo-fleet-dashboard",
-        "qnfo-paper-indexer",
-        "qnfo-social"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -522,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.5.1-page-metrics",
+        "version": "3.6.0-support-map",
         "worker": "qnfo-ipatent"
       },
       {
@@ -1242,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.5.1-page-metrics",
+      "before": "3.6.0-support-map",
       "http": 200,
-      "live": "3.5.1-page-metrics",
+      "live": "3.6.0-support-map",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
