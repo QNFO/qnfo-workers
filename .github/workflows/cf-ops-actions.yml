@@ -26,12 +26,13 @@ on:
           - access-probe
           - delete-worker
           - delete-vectorize-index
+          - zaraz-remove-tool
       target:
-        description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) or ops-workspace path (r2-get)"
+        description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) ops-workspace path (r2-get) or zone (zaraz-remove-tool)"
         required: false
         default: ""
       model:
-        description: "model filter (gateway-logs only)"
+        description: "model filter (gateway-logs) or tool match (zaraz-remove-tool)"
         required: false
         default: ""
       gateway:

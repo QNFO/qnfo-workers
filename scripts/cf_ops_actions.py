@@ -36,6 +36,9 @@ ACTIONS
   kv-secret-scan NSID    Read-only. Lists a KV namespace's keys whose NAMES look like credentials (KEY, TOKEN, SECRET,
                          PASS, AUTH, ...), with whether each carries an expiration or metadata. Values are never read, so
                          nothing derived from one can reach this repository's public logs.
+  zaraz-remove-tool ZONE --model MATCH
+                         Remove exactly one Zaraz tool matching MATCH on an allowlisted zone (q08.org), publish, verify
+                         (ZARAZ-TOOL-REMOVE-1). Prints only the removed tool's non-secret settings so it can be re-added.
   ops-intake-probe       #1189 DoD: ask the qnfo-ops agent (OPS_ROUTER_AUTH_KEY) to call research_queue once with a
                          clearly marked probe idea and return the raw tool JSON, proving the intake envelope reports
                          persistence truthfully. The probe intent is cancelled afterwards from D1, before the 06:00Z
@@ -367,9 +370,60 @@ def ops_intake_probe() -> int:
     return 0
 
 
+# ZARAZ-TOOL-REMOVE-1 (2026-10-02, owner decision delegated): q08.org loaded a Taboola pixel through Cloudflare Zaraz with no
+# consent prompt, and nothing in the fleet reads Taboola. Remove exactly one Zaraz tool whose name or component matches
+# --model on the zone named by --target, publish if the zone uses the preview workflow, and verify it is gone. Only the
+# removed tool's non-secret identity is printed (name, component, type, pixel/account ids), enough to re-add it by hand.
+ZARAZ_ALLOWED_ZONES = {"q08.org"}
+SECRETISH = ("secret", "token", "key", "password", "apiKey", "api_key")
+
+
+def zaraz_remove_tool(zone_name: str, match: str, token: str) -> int:
+    match = (match or "").strip().lower()
+    if zone_name not in ZARAZ_ALLOWED_ZONES or len(match) < 4:
+        emit({"action": "zaraz-remove-tool", "ok": False, "error": "zone not allowlisted or match shorter than 4 characters", "zone": zone_name})
+        return 2
+    st, j = call("GET", "/zones?name=" + zone_name, token)
+    if st != 200 or not j.get("result"):
+        emit({"action": "zaraz-remove-tool", "ok": False, "stage": "zone", "http": st, "errors": j.get("errors")})
+        return 1
+    zid = j["result"][0]["id"]
+    st, j = call("GET", "/zones/%s/settings/zaraz/config" % zid, token)
+    if st != 200:
+        emit({"action": "zaraz-remove-tool", "ok": False, "stage": "get-config", "http": st, "errors": j.get("errors")})
+        return 1
+    cfg = j.get("result") or {}
+    tools = cfg.get("tools") or {}
+    hits = [k for k, t in tools.items() if match in json.dumps({"n": t.get("name"), "c": t.get("component"), "l": t.get("library")}).lower()]
+    listing = [{"id": k, "name": t.get("name"), "component": t.get("component"), "enabled": t.get("enabled")} for k, t in tools.items()]
+    if len(hits) != 1:
+        emit({"action": "zaraz-remove-tool", "ok": len(hits) == 0, "stage": "match", "matched": hits, "tools": listing,
+              "note": "nothing to remove" if not hits else "more than one tool matches; refusing"})
+        return 0 if not hits else 1
+    t = tools[hits[0]]
+    removed = {"id": hits[0], "name": t.get("name"), "component": t.get("component"), "type": t.get("type"),
+               "settings": {k: v for k, v in (t.get("settings") or {}).items() if not any(x.lower() in k.lower() for x in SECRETISH)}}
+    del tools[hits[0]]
+    cfg["tools"] = tools
+    st, j = call("PUT", "/zones/%s/settings/zaraz/config" % zid, token, cfg)
+    if st not in (200, 201) or j.get("success") is False:
+        emit({"action": "zaraz-remove-tool", "ok": False, "stage": "put-config", "http": st, "errors": j.get("errors"), "removed_would_be": removed})
+        return 1
+    st, w = call("GET", "/zones/%s/settings/zaraz/workflow" % zid, token)
+    published = None
+    if st == 200 and str(w.get("result")) == "preview":
+        st2, p = call("POST", "/zones/%s/settings/zaraz/publish" % zid, token, {"description": "ZARAZ-TOOL-REMOVE-1: remove " + str(removed["name"])})
+        published = st2
+    st, j = call("GET", "/zones/%s/settings/zaraz/config" % zid, token)
+    left = [k for k, t2 in ((j.get("result") or {}).get("tools") or {}).items() if match in json.dumps({"n": t2.get("name"), "c": t2.get("component")}).lower()]
+    emit({"action": "zaraz-remove-tool", "ok": not left, "zone": zone_name, "removed": removed, "workflow": w.get("result") if isinstance(w, dict) else None,
+          "published_http": published, "still_matching": left, "tools_now": [t2.get("name") for t2 in ((j.get("result") or {}).get("tools") or {}).values()]})
+    return 0 if not left else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe"])
+    ap.add_argument("action", choices=["worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -388,6 +442,8 @@ def main() -> int:
             print("::error::delete-vectorize-index needs --target")
             return 2
         return delete_vectorize_index(a.target, acct, token)
+    if a.action == "zaraz-remove-tool":
+        return zaraz_remove_tool(a.target, a.model, token)
     if a.action == "r2-get":
         return r2_get(acct, token, a.target)
     if a.action == "worker-history":
