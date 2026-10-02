@@ -3623,7 +3623,7 @@ __name(activitySnapshotDaily, "activitySnapshotDaily");
 //              GitHub Contents API (the same GITHUB_TOKEN write path LAND-CODE-FIX-1 proved), at most once per UTC day
 //              and only when the block changed. A doc without both markers is never written (nothing to anchor to).
 // The pure functions take no env and touch no I/O, so qnfo-fleet-control/charter.test.mjs exercises them offline.
-var CHARTER_VERSION = "1.0.6";
+var CHARTER_VERSION = "1.0.7";
 // CHARTER-ON-CLOUDFLARE-1 (#1727, owner directive 2026-10-01: all data on Cloudflare): every tick also writes the
 // whole charter (hand-written sections + the live block) to R2 qnfo-canonical under this key, so the document is
 // readable from Cloudflare storage (GET /charter/full.md) when GitHub or any agent session is not.
@@ -4715,8 +4715,8 @@ async function loopWatch(env) {
   return { ok: true, ts: nowIso, healthy: findings.length === 0, findings: findings, filed: filed, closed: closed, charter_last: f.charter_last, portfolio_last: f.portfolio_last ? { ts: f.portfolio_last.ts, status: f.portfolio_last.status, note: f.portfolio_last.note } : null, first_seen: f.first_seen };
 }
 // ---- LOOP-WATCH-1:END ----
-// ---- OBJECTIVE-CONSTRAINTS-1:BEGIN (2026-10-02, owner-ratified goals 41, 43, 57; agent_issues 1744, 1745, 1746) ----
-// The owner ratified three objective revisions on fleet.qnfo.org (2026-10-01). None is a weight change, so
+// ---- OBJECTIVE-CONSTRAINTS-1:BEGIN (2026-10-02, goals 41, 43, 57, ratified under the owner's queue delegation; agent_issues 1744, 1745, 1746) ----
+// Three objective revisions were ratified on fleet.qnfo.org (2026-10-01) by a session under the owner's queue delegation, not by the owner in person (audit 2026-10-02, issues 1765, 1766). None is a weight change, so
 // OBJECTIVE-REVISION-APPLY-1 (qnfo-fleet-dashboard) filed each as work. This block makes each one a constraint the kernel
 // measures and enforces every hour, the way LOOP-WATCH-1 enforces the loops:
 //   goal 41  capability_contract_conformance >= 1.0: every live worker declares what it can and cannot do (gate C6,
@@ -4745,17 +4745,17 @@ var OC_REVIEW_MAX_NEW = 2;
 var OC_ISSUE_PREFIX = "OBJECTIVE-CONSTRAINT-BREACH-1: ";
 var OBJECTIVE_CONSTRAINTS = [
   { metric: "capability_contract_conformance", goal: 41, issue: 1744, op: ">=", val: 1, severity: "medium", layer: "fleet", kind: "leading",
-    target: ">= 1.0 (every live worker advertises non-empty capabilities[] and limitations[], snapshot under 26h; owner-ratified goals.id=41)",
+    target: ">= 1.0 (every live worker advertises non-empty capabilities[] and limitations[], snapshot under 26h; delegated-ratified goals.id=41)",
     formula: "conforming / max(capability_audit_snapshot rows, fleet_budget workers.current); a row conforms when capabilities[] and limitations[] are both non-empty and its ts is under 26h old (OBJECTIVE-CONSTRAINTS-1, qnfo-fleet-control hourly)",
     source: "qnfo-audit.capability_audit_snapshot (qnfo-deploy-guard CAPABILITY-SNAPSHOT-1 every 6h; cron-only workers self-report) x fleet_budget workers",
     warning: "< 1.0", kill: "< 0.9" },
   { metric: "energy_efficiency", goal: 43, issue: 1745, op: ">=", val: 0.8, severity: "medium", layer: "fleet", kind: "leading",
-    target: ">= 0.8 (compute proxy; owner-ratified goals.id=43)",
+    target: ">= 0.8 (compute proxy; delegated-ratified goals.id=43)",
     formula: "COMPUTE PROXY, not joules: 1 - wasted/total Workers AI neurons over 7d from ai_call_counters rows with calls > 0 and neurons > 0; wasted = neurons x errors / calls per (day, worker, purpose, model) row (a failed call is charged its row's mean compute and delivered no answer). Excludes external providers (no compute unit) and calls without neuron attribution (OBJECTIVE-CONSTRAINTS-1, qnfo-fleet-control hourly)",
     source: "qnfo-audit.ai_call_counters (Workers AI attribution wrappers; coverage in workers_ai_attribution_coverage_pct)",
     warning: "< 0.9", kill: "< 0.8" },
   { metric: "unmanaged_direct_spend_share", goal: 57, issue: 1746, op: "<=", val: 0.5, severity: "high", layer: "system", kind: "lagging",
-    target: "<= 0.5 (owner-ratified goals.id=57)",
+    target: "<= 0.5 (delegated-ratified goals.id=57)",
     formula: "(gateway BYOK list cost 30d + qnfo-ai direct DeepSeek 30d) / (all-provider AI list cost 30d + qnfo-ai direct DeepSeek 30d + Cloudflare plan monthly baseline). Excludes cost_daily scope 'external' (the owner's own client keys: declared, not metered); GET /constraints shows the share if it were counted (OBJECTIVE-CONSTRAINTS-1, qnfo-fleet-control hourly)",
     source: "qnfo-audit.analytics_dash_meta byok_cost_usd_30d + ai_est_cost_30d (UNIFIED-AI-SPEND-1 hourly) + ai_spend_ledger provider deepseek + cost_daily cloudflare_plan",
     warning: "> 0.4", kill: "> 0.5" }
@@ -4819,7 +4819,7 @@ function ocUnmanaged(f, nowMs) {
     declared_external_usd_month: ext, declared_external_as_of: f.external_declared_as_of || null, share_if_declared_counted: ext === null ? null : charterRound((unmanaged + ext) / (total + ext), 4) };
 }
 function ocBreachText(c, p) {
-  var head = c.metric + " = " + p.value + " vs target " + c.op + " " + c.val + " (owner-ratified goals.id=" + c.goal + ", agent_issues " + c.issue + "): ";
+  var head = c.metric + " = " + p.value + " vs target " + c.op + " " + c.val + " (delegated-ratified goals.id=" + c.goal + ", agent_issues " + c.issue + "): ";
   if (c.metric === "capability_contract_conformance") return head + p.conforming + " of " + p.of + " live workers declare non-empty capabilities[] and limitations[] with a snapshot under " + OC_FRESH_H + "h" + (p.stale.length ? "; stale: " + p.stale.slice(0, 12).join(", ") : "") + (p.empty.length ? "; empty: " + p.empty.slice(0, 12).join(", ") : "") + (p.unlisted ? "; " + p.unlisted + " live worker(s) missing from the snapshot" : "") + ".";
   if (c.metric === "energy_efficiency") return head + p.wasted_neurons + " of " + p.neurons + " Workers AI neurons in " + p.days + "d went to " + p.errors + " failed calls (of " + p.calls + "); find the failing worker/model in ai_call_counters and stop the retry or failure storm.";
   if (c.metric === "unmanaged_direct_spend_share") return head + "$" + p.unmanaged_usd + " of $" + p.total_fleet_usd + " fleet cost in 30d is direct-provider spend no spend limit governs (gateway BYOK $" + p.gateway_byok_usd + ", qnfo-ai direct DeepSeek $" + p.router_direct_deepseek_usd + "). Throttle the BYOK callers (qnfo-ai spend governor, AIG_BYOK_PROVIDERS); raising a cap stays the owner's call.";
@@ -4877,7 +4877,7 @@ function objectiveLimitsReview(f, nowMs) {
       objective_key: o.objective_key, version: o.version, terms: terms.length, undecidable: undecidable, unobserved: unobserved,
       goal_key: "lrev-" + o.objective_key + "-v" + o.version + "-" + ocHash(sig),
       statement: "Revise terminal objective " + o.objective_key + " v" + o.version + ": " + limited.length + " of its " + terms.length + " graded terms cannot be decided or observed by the fleet, so it cannot be shown met or unmet on them.",
-      alignment: "OBJECTIVE-LIMITS-REVIEW-1 (owner-ratified goals.id=41) | no decidable target (formal limit): " + (undecidable.join(", ") || "none") + " | not observed (knowledge limit): " + (unobserved.join(", ") || "none") + " | proposal: give each term a falsifiable threshold, or drop it from the objective's grade | evidence: metric_registry on " + day
+      alignment: "OBJECTIVE-LIMITS-REVIEW-1 (delegated-ratified goals.id=41) | no decidable target (formal limit): " + (undecidable.join(", ") || "none") + " | not observed (knowledge limit): " + (unobserved.join(", ") || "none") + " | proposal: give each term a falsifiable threshold, or drop it from the objective's grade | evidence: metric_registry on " + day
     });
   });
   return out;
@@ -4971,7 +4971,7 @@ async function objectiveConstraintsTick(env) {
     if (!openByTitle[t] || x.meets !== true) continue;
     try {
       await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'OBJECTIVE-CONSTRAINTS-1', 'closed', 'qnfo-fleet-control', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'")
-        .bind(openByTitle[t], "OBJECTIVE-CONSTRAINTS-1 " + nowIso + ": " + x.metric + "=" + x.value + " meets " + x.target + " (owner-ratified goals.id=" + x.goal + "); " + JSON.stringify(x.detail).slice(0, 400)).run();
+        .bind(openByTitle[t], "OBJECTIVE-CONSTRAINTS-1 " + nowIso + ": " + x.metric + "=" + x.value + " meets " + x.target + " (delegated-ratified goals.id=" + x.goal + "); " + JSON.stringify(x.detail).slice(0, 400)).run();
       await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?2 WHERE id=?1 AND status='open'").bind(openByTitle[t], nowMs).run();
       closed++;
     } catch (e) {}
@@ -5796,7 +5796,7 @@ var worker_default2 = {
       var lwx = loopWatchEvaluate(lwf, Date.now());
       return json({ ok: true, worker_version: VERSION, healthy: lwx.length === 0, findings: lwx, charter_last: lwf.charter_last, portfolio_last: lwf.portfolio_last ? { ts: lwf.portfolio_last.ts, status: lwf.portfolio_last.status, note: lwf.portfolio_last.note } : null, first_seen: lwf.first_seen });
     }
-    // OBJECTIVE-CONSTRAINTS-1 (goals 41, 43, 57): the owner-ratified constraints, measured live; public read (OPEN-ACCESS-1).
+    // OBJECTIVE-CONSTRAINTS-1 (goals 41, 43, 57): the delegated constraints, measured live; public read (OPEN-ACCESS-1).
     if (p === "/constraints" && request.method === "GET") {
       var ocf = await ocFacts(env);
       var ocl = await charterOne(env, "SELECT ts, worker_version, healthy, measured, findings, filed, closed, review FROM objective_constraint_runs ORDER BY id DESC LIMIT 1");

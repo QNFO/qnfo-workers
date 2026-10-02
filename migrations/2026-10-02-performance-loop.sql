@@ -15,11 +15,14 @@
 --      so the order in which this migration and that deploy land does not matter;
 --   3. remedy_efficacy_30d learns from experiments: a kept experiment counts as a remedy that worked, a reverted one as a
 --      remedy that did not, beside the trigger firings it already counts (superseded and aborted ones are not judged);
---   4. six KPIs and their registry rows (five computed hourly by the kernel, one by qnfo-fleet-dashboard 1.17.4), and a
---      trigger for every KPI the owner's coordinating session listed, including the five other workers compute
---      (social_engagement_rate_30d in qnfo-social; outreach_reply_rate_30d and warm_conversations_30d in qnfo-cloud-ops;
---      inbound_first_response_h_median_30d in qnfo-email; inbound_contacts_30d in qnfo-fleet-dashboard). A trigger on a
---      metric with no numeric value yet is unreadable, never fired (v_metric_trigger_state.hit is NULL).
+--   4. six KPIs and their registry rows (five computed hourly by the kernel, one by qnfo-fleet-dashboard), and a trigger
+--      for each of the five the kernel computes. The five reach KPIs other workers compute carry their triggers in the
+--      migration that registers them (one owner per trigger, in its writer's units): social_engagement_rate_30d
+--      (2026-10-02-social-distribution-learner.sql, engagements per post, lt 0.2); outreach_reply_rate_30d (percent, lt 2)
+--      and warm_conversations_30d (people, lt 2) (2026-10-02-outreach-learner-metrics.sql);
+--      inbound_first_response_h_median_30d (hours, gt 48) (2026-10-02-inbound-sla.sql); inbound_contacts_30d (people,
+--      lt 1) (2026-10-02-work-with-me-triggers.sql). A trigger on a metric with no numeric value yet is unreadable, never
+--      fired (v_metric_trigger_state.hit is NULL).
 --
 -- Deliberately without a trigger (CLAUDE.md METRIC-CLOSED-LOOP-1 names its exemption here): engaged_human_sessions_28d.
 -- Its STRATEGY s9 target is relative ("baseline in week 1, then x2") and the baseline does not exist yet; its registry
@@ -27,13 +30,6 @@
 -- A threshold trigger follows once two weeks of bot-filtered readings exist (2 x the week-1 median, linear pace to
 -- 2026-12-31).
 --
--- Units the triggers below assume for the metrics other workers compute (check each against its writer before applying):
---   social_engagement_rate_30d          reactions + reposts + replies or quotes per post in 30 days (a count per post)
---   outreach_reply_rate_30d             a fraction 0..1 (replies / recipients), not a percentage
---   warm_conversations_30d              distinct people in 30 days
---   inbound_first_response_h_median_30d hours
---   inbound_contacts_30d                distinct people in 30 days
-
 -- 1. The experiment ledger (same DDL as PERF_DDL in qnfo-fleet-control/worker.js).
 CREATE TABLE IF NOT EXISTS perf_levers (key TEXT PRIMARY KEY, metric TEXT, ops_config_key TEXT, min REAL, max REAL, step REAL, current TEXT, tier TEXT, note TEXT, direction INTEGER, effect TEXT, default_value REAL, owner_voice INTEGER, eval_days INTEGER, updated_at TEXT);
 CREATE TABLE IF NOT EXISTS perf_experiments (id INTEGER PRIMARY KEY AUTOINCREMENT, lever TEXT, metric TEXT, trigger_id INTEGER, dir TEXT, from_value TEXT, to_value TEXT, started_at TEXT, baseline REAL, baseline_sd REAL, eval_after TEXT, observed REAL, threshold REAL, decision TEXT, decided_at TEXT, note TEXT);
@@ -78,12 +74,7 @@ WITH v(metric_key, title, source_table, operator, threshold, priority, action, o
   ('deploy_failure_rate_7d', 'Core gap: over 10% of canonical deploys failed in 7 days', 'registry', 'gt', 0.1, 6, 'Pillar core. More than 10% of fleet_deploys rows in 7 days have ok=0. Group the failures by worker and note (SELECT worker, note, COUNT(*) FROM fleet_deploys WHERE ok=0 AND ts >= datetime(''now'',''-7 days'') GROUP BY 1, 2), fix the dominant cause in that worker or in the canonical deploy step, and stop redeploy loops.', 'qnfo-ops', 72),
   ('worker_health_failure_rate', 'Core gap: live workers failing their health probe', 'registry', 'gt', 0.05, 7, 'Pillar core. More than 5% of live workers in worker_live_audit are neither http 200 nor SYNC or CRON_ONLY. Re-probe each failing worker''s /health and fix the crash; a worker that serves no HTTP reports CRON_ONLY.', 'qnfo-fleet-control', 24),
   ('credibility_events_90d', 'Reach gap: fewer than 2 credibility events in 90 days (review gate)', 'registry', 'lt', 2, 7, 'Pillar reach. The 2026-12-31 review gate needs credibility events >= 2 (STRATEGY s9). Levers: the arXiv package for selected works 1, 2 and 4 (STRATEGY s4); Scholar tags with citation_pdf_url on paper pages; a JPCUB measurement call to warm contacts (STRATEGY s7); attest each real event with its evidence at POST https://fleet.qnfo.org/api/decision/fact. Never count volume.', 'qnfo-paper-indexer', 168),
-  ('selected_works_citation_coverage', 'Measurement gap: OpenAlex does not cover every selected work', 'registry', 'lt', 7, 6, 'Pillar reach. Fewer than 7 of the selected works (STRATEGY s2.4) have an OpenAlex cited_by_count reading in 3 days, so credibility_events_90d cannot be measured. Add the seven DOIs to qnfo-paper-indexer''s daily OpenAlex collection whatever their age (STRATEGY s6.1: cover the selected works always).', 'qnfo-paper-indexer', 168),
-  ('warm_conversations_30d', 'Reach gap: fewer than 3 warm conversations in 30 days', 'registry', 'lt', 3, 7, 'Pillar reach. STRATEGY s9 asks for 10 new warm conversations by 2026-12-31 (about 3.3 per 30 days). Answer every escalated human email still awaiting a draft (email_reply_queue decision escalate), offer the JPCUB assessment to warm contacts (STRATEGY s7), and tie each outreach first line to the recipient''s own work (OUTREACH-CONSENT-1); never above 8 sends a day.', 'qnfo-cloud-ops', 168),
-  ('outreach_reply_rate_30d', 'Reach gap: research outreach reply rate under 2% (30 days)', 'registry', 'lt', 0.02, 6, 'Pillar reach. Fewer than 2% of research recipients reply (the campaign ran at about 4% before 2026-10-01). Move the daily cap toward the segments that answer and stop any segment under 1% after 50 sends (STRATEGY s6.4); rewrite the first line around the recipient''s own work. Never raise the 8/day cap.', 'qnfo-cloud-ops', 168),
-  ('inbound_first_response_h_median_30d', 'Reach gap: humans wait over 48h for a first reply', 'registry', 'gt', 48, 6, 'Pillar reach. The median first response to an inbound human email is over 48h. Author the drafts the queue executor waits for (email_reply_queue decision escalate, draft_text empty) and check replyStallGuard and the drain cron in qnfo-email.', 'qnfo-email', 72),
-  ('social_engagement_rate_30d', 'Reach gap: under 1 engagement per post (30 days)', 'registry', 'lt', 1, 6, 'Pillar reach. Posts average under one reaction, repost or reply. Post about the selected works with the claim, test and status lines (STRATEGY s2.5), one UTM link each; never raise the cadence above STRATEGY s4 and never automate follows or likes. Check that the engagement collector ran in the last 48h.', 'qnfo-social', 168),
-  ('inbound_contacts_30d', 'Reach gap: no inbound human contact in 30 days', 'registry', 'lt', 1, 6, 'Pillar reach. Nobody wrote to the fleet unprompted in 30 days. Put a contact and subscribe line on every selected-work page (STRATEGY s2.5) and in each post about a selected work, and check that mail to rowan.quni@qnfo.org reaches qnfo-audit.emails.', 'qnfo-gateway', 168)
+  ('selected_works_citation_coverage', 'Measurement gap: OpenAlex does not cover every selected work', 'registry', 'lt', 7, 6, 'Pillar reach. Fewer than 7 of the selected works (STRATEGY s2.4) have an OpenAlex cited_by_count reading in 3 days, so credibility_events_90d cannot be measured. Add the seven DOIs to qnfo-paper-indexer''s daily OpenAlex collection whatever their age (STRATEGY s6.1: cover the selected works always).', 'qnfo-paper-indexer', 168)
 )
 INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 SELECT v.metric_key, v.title, v.source_table, v.operator, v.threshold, v.priority, v.action || ' Definition of done: the metric is back inside its threshold in metric_registry; record the before and after values in issue_triage.close_evidence. If the remedy you try does not move the metric within 7 days, say so on the issue and try a different lever (remedy_efficacy_30d counts it).', v.owner, 'agent_issues', v.cooldown, 1, 'PERFORMANCE-LOOP-1 2026-10-02'

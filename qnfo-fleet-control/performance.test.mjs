@@ -247,9 +247,15 @@ CREATE TABLE invest_facts (key TEXT PRIMARY KEY, value TEXT, evidence TEXT, upda
     const t2 = db2.prepare("SELECT operator, threshold, action FROM analytics_metric_triggers WHERE metric_key = 'fleet_ai_run_rate_30d_usd'").get();
     ok(t2 && t2.operator === "gt" && t2.threshold === 15 && t2.action.split("perf-lever:q08-cadence").length === 2, "migration first: the run-rate trigger is created with FLEET-RUN-RATE-1's fields and the lever token");
   }
-  for (const m of ["issue_mttr_h_30d", "deploy_failure_rate_7d", "worker_health_failure_rate", "credibility_events_90d", "selected_works_citation_coverage", "warm_conversations_30d", "outreach_reply_rate_30d", "inbound_first_response_h_median_30d", "social_engagement_rate_30d", "inbound_contacts_30d"]) {
+  for (const m of ["issue_mttr_h_30d", "deploy_failure_rate_7d", "worker_health_failure_rate", "credibility_events_90d", "selected_works_citation_coverage"]) {
     const t = one("SELECT threshold, owner, action, enabled FROM analytics_metric_triggers WHERE metric_key = ?", m);
     ok(t && t.enabled === 1 && t.threshold !== null && t.owner && /Definition of done/.test(t.action), "trigger with threshold, owner, lever and DoD: " + m);
+  }
+  // The five reach KPIs other workers compute carry their trigger in the migration that registers them (one owner per
+  // trigger, in the writer's units); this migration must not add a second one.
+  for (const [m, f] of [["social_engagement_rate_30d", "2026-10-02-social-distribution-learner.sql"], ["outreach_reply_rate_30d", "2026-10-02-outreach-learner-metrics.sql"], ["warm_conversations_30d", "2026-10-02-outreach-learner-metrics.sql"], ["inbound_first_response_h_median_30d", "2026-10-02-inbound-sla.sql"], ["inbound_contacts_30d", "2026-10-02-work-with-me-triggers.sql"]]) {
+    const src = readFileSync(join(here, "..", "migrations", f), "utf8");
+    ok(src.includes("('" + m + "', '") && /INSERT OR IGNORE INTO analytics_metric_triggers/.test(src) && one("SELECT COUNT(*) n FROM analytics_metric_triggers WHERE metric_key = ?", m).n === 0, "trigger for " + m + " is owned by " + f + ", not duplicated here");
   }
   eq(one("SELECT COUNT(*) n FROM analytics_metric_triggers WHERE metric_key = 'engaged_human_sessions_28d'").n, 0, "engaged_human_sessions_28d is the named exemption");
   eq(one("SELECT COUNT(*) n FROM metric_registry WHERE metric IN ('issue_mttr_h_30d','deploy_failure_rate_7d','worker_health_failure_rate','credibility_events_90d','selected_works_citation_coverage','engaged_human_sessions_28d')").n, 6, "the six KPI rows pass the registry guards");

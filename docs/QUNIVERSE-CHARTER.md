@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.6, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three owner-ratified objective constraints are graded and enforced, section 3.1). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.7, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -97,8 +97,9 @@ Seven objective-function revisions proposed by the fleet await the owner (`goals
 They are proposals; this charter does not adopt them.
 
 **Which number is the "Autonomy composite" (SAI-COMPOSITE-WEIGHTS-1, 1.0.5).** The scoreboard's Autonomy composite is
-the objective-function SAI above: its eight terms weighted by the owner-ratified weights in D1 `sai_config` (`w_*`, the
-rows OBJECTIVE-REVISION-APPLY-1 rewrites when the owner ratifies a weight revision), on a 0-5 scale (SAI out of 100,
+the objective-function SAI above: its eight terms weighted by the ratified weights in D1 `sai_config` (`w_*`, the
+rows OBJECTIVE-REVISION-APPLY-1 rewrites when a weight revision is ratified; the 2026-10-01 revision, goal 58, was
+ratified under the owner's queue delegation, not by the owner in person), on a 0-5 scale (SAI out of 100,
 divided by 20). `qnfo-autonomy-scorer` computes it on its daily cron with the same formula and inputs as the dashboard's
 SAI (`computeSai` in `qnfo-fleet-dashboard`; an offline parity test keeps the two identical) and publishes it as
 `autonomy_scores.sai_weighted` (dated, with the weights and terms in its evidence) and `survival_state.sai`. A ratified
@@ -107,8 +108,11 @@ dimensions is a different number, `autonomy_scores.overall`, shown as the "Auton
 dimensions, not the objective, and no weight revision moves it. When the SAI cannot be measured (dashboard state older
 than six hours, a missing weight), `survival_state.sai` is NULL and the composite shows its last scoring date.
 
-**Owner-ratified constraints (OBJECTIVE-CONSTRAINTS-1, 1.0.6).** The owner ratified three revisions on 2026-10-01 that
-are constraints, not weight changes. `qnfo-fleet-control` measures each one every hour, writes it to `metric_registry`
+**Delegated constraints (OBJECTIVE-CONSTRAINTS-1, 1.0.6; corrected 1.0.7).** Three revisions that are constraints, not
+weight changes (goals 41, 43, 57), were ratified on 2026-10-01 through the dashboard route by a session acting under the
+owner's queue delegation (OWNER-QUEUE-DELEGATION-1), not by the owner in person (objective-authority audit 2026-10-02,
+issues 1765 and 1766). Whether delegated ratification stays allowed is the owner's decision (fleet.qnfo.org card
+`objective-authority:delegated-ratification`); until then it is allowed and recorded as delegated. `qnfo-fleet-control` measures each one every hour, writes it to `metric_registry`
 (graded in 3.2), files `OBJECTIVE-CONSTRAINT-BREACH-1: <metric>` when it is out of bounds and closes that issue with
 evidence when it is back. A constraint whose inputs cannot be read is reported as unmeasured, never as zero.
 `GET https://qnfo-fleet-control.q08.workers.dev/constraints` serves the live verdict.
@@ -379,7 +383,7 @@ close-evidence trigger) and stated here for the rest.
   `PORTFOLIO-SYNC-STALE-1` or `PORTFOLIO-WRITE-FAILED-1` as deduped issues, closing them with evidence when the loop
   recovers; `GET /loops` serves the verdict. Agent sessions may read these surfaces; nothing waits for one.
 - **Ratified constraints are enforced, not quoted (OBJECTIVE-CONSTRAINTS-1, 1.0.5).** The same hourly cron measures the
-  owner-ratified constraints in 3.1, writes one `objective_constraint_runs` row per tick (listed in the dashboard's
+  delegated constraints in 3.1, writes one `objective_constraint_runs` row per tick (listed in the dashboard's
   watchmaker index), files and closes `OBJECTIVE-CONSTRAINT-BREACH-1` issues, and once a day proposes objective
   revisions for terms the fleet cannot decide or observe. `GET /constraints` serves the verdict and the review preview.
 - **Failure modes it accepts.** If GitHub is unreachable the snapshot still lands in D1 and the next day retries. If a
