@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.8.1-codeagent"; // v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.8.2-metrics"; // v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -74,6 +74,68 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
   }
 }
 var WORKER = "q08-signal-engine";
+// Q08-METRICS-1 (#1759, pillar: reach): q08 measures itself for METRIC-CLOSED-LOOP-1. A GET of /p/<slug> adds 1 to a daily
+// counter as human or crawler (the user-agent test iPatent's PAGE-METRICS-1 uses; no IP, cookie or referrer is stored).
+// GET /api/metrics serves 7d aggregates; qnfo-fleet-control SURFACE-METRICS-1 reads them into metric_registry hourly.
+// Votes count only from VOTE_CUTOFF, the day after POST-only voting went live (crawler votes before it are noise).
+var Q08_BOT_UA = /bot|crawl|spider|slurp|preview|headless|curl|wget|python|httpclient|go-http|java\/|okhttp|axios|node-fetch|lighthouse|pingdom|uptime|monitor|scanner|facebookexternalhit|embedly|whatsapp|telegram/i;
+var VOTE_CUTOFF = "2026-10-03T00:00:00Z";
+function isCrawler(req) {
+  var ua = String(req.headers.get("user-agent") || "");
+  if (!ua || Q08_BOT_UA.test(ua)) return true;
+  var bm = req.cf && req.cf.botManagement;
+  return !!(bm && bm.verifiedBot);
+}
+async function countRead(env, req) {
+  var col = isCrawler(req) ? "crawler" : "human";
+  await env.DB.prepare("INSERT INTO q08_daily_reads (day, " + col + ") VALUES (?1, 1) ON CONFLICT(day) DO UPDATE SET " + col + " = " + col + " + 1").bind(utcDay()).run();
+}
+function ratio(a, b) { return b > 0 ? Math.round((a / b) * 1000) / 1000 : null; }
+async function metrics7d(env) {
+  var since = new Date(Date.now() - 7 * 864e5).toISOString();
+  var voteSince = since > VOTE_CUTOFF ? since : VOTE_CUTOFF;
+  var one = function (sql, args) { var st = env.DB.prepare(sql); return (args ? st.bind.apply(st, args) : st).first().catch(function () { return null; }); };
+  var pub = await one("SELECT COUNT(*) n FROM published_pieces WHERE published_at >= ?1", [since]);
+  var runs = await one("SELECT COUNT(*) n, SUM(CASE WHEN piece_published = 1 THEN 1 ELSE 0 END) ok FROM engine_runs WHERE ran_at >= datetime('now','-7 days') AND status NOT IN ('running','abandoned','async-done')");
+  var reads = await one("SELECT COALESCE(SUM(human),0) human, COALESCE(SUM(crawler),0) crawler, COUNT(*) days FROM q08_daily_reads WHERE day >= ?1", [since.slice(0, 10)]);
+  var votes = await one("SELECT COUNT(*) n, SUM(CASE WHEN signal = 'good' THEN 1 ELSE 0 END) good FROM q08_feedback WHERE created_at >= ?1", [voteSince]);
+  var subs = await one("SELECT COUNT(*) n FROM subscribers WHERE status = 'confirmed'");
+  var neurons = null;
+  if (env.AUDIT) {
+    var nr = await env.AUDIT.prepare("SELECT COALESCE(SUM(neurons),0) n FROM ai_call_counters WHERE worker = ?1 AND day >= ?2").bind(WORKER, since.slice(0, 10)).first().catch(function () { return null; });
+    neurons = nr ? Number(nr.n) || 0 : null;
+  }
+  var published = Number(pub && pub.n) || 0, finished = Number(runs && runs.n) || 0, ok = Number(runs && runs.ok) || 0;
+  var nVotes = Number(votes && votes.n) || 0;
+  return {
+    published: published,
+    finished_runs: finished,
+    gate_pass_rate: ratio(ok, finished),
+    human_reads: Number(reads && reads.human) || 0,
+    crawler_reads: Number(reads && reads.crawler) || 0,
+    read_days_measured: Number(reads && reads.days) || 0,
+    verified_votes: nVotes,
+    verified_good_share: ratio(Number(votes && votes.good) || 0, nVotes),
+    neurons: neurons,
+    neurons_per_published_piece: neurons == null ? null : ratio(neurons, published),
+    confirmed_subscribers: Number(subs && subs.n) || 0,
+    vote_cutoff: VOTE_CUTOFF
+  };
+}
+// q08 writes its own registry values (the rows, targets and triggers are in migrations/2026-10-02-q08-metrics.sql). A value
+// that is not a finite number is not written: unknown is never a value.
+var Q08_METRIC_KEYS = [["q08_gate_pass_rate_7d", "gate_pass_rate"], ["q08_neurons_per_published_piece_7d", "neurons_per_published_piece"], ["q08_human_reads_7d", "human_reads"], ["q08_verified_votes_7d", "verified_votes"], ["q08_confirmed_subscribers", "confirmed_subscribers"]];
+async function writeOwnMetrics(env) {
+  if (!env.AUDIT) return 0;
+  var m = await metrics7d(env), now = nowIso(), n = 0;
+  for (var i = 0; i < Q08_METRIC_KEYS.length; i++) {
+    var v = m[Q08_METRIC_KEYS[i][1]];
+    if (typeof v !== "number" || !isFinite(v)) continue;
+    var r = await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind(Q08_METRIC_KEYS[i][0], String(v), now).run().catch(function () { return null; });
+    if (r && r.meta && r.meta.changes) n++;
+  }
+  return n;
+}
 var MAX_PER_DAY = 10;
 // Q08-CADENCE-CAP-1 (agent_issues 1716, Q08-REVIEW-2026-10-31; charter pillar: cost): the daily cap is the qnfo-audit
 // ops_config value under CAP_KEY, an integer 0..MAX_PER_DAY (0 pauses publishing). Absent, unreadable or not an integer
@@ -374,7 +436,22 @@ var COMPOSE_MODELS = [
   // serve as fallbacks at this token budget. Re-add only with a raised reasoning floor.
 ];
 
+// Q08-SELF-TUNE-1 (#1760): the compose temperature is a tunable for PERFORMANCE-LOOP-1 (lever on q08_gate_pass_rate_7d).
+// ops_config q08_compose_temperature, clamped to 0.4..0.8; absent or unreadable means 0.65, the value before this knob.
+// The gate, the FACTS rule, Q08_SOCIAL_QUEUE and MAX_PER_DAY are invariants and have no ops_config knob.
+var TEMP_KEY = "q08_compose_temperature", TEMP_DEFAULT = 0.65;
+function parseTemperature(v) {
+  var n = Number(String(v == null ? "" : v).trim());
+  if (!String(v == null ? "" : v).trim() || !isFinite(n)) return TEMP_DEFAULT;
+  return Math.min(0.8, Math.max(0.4, n));
+}
+async function composeTemperature(env) {
+  if (!env || !env.AUDIT) return TEMP_DEFAULT;
+  try { var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(TEMP_KEY).first(); return parseTemperature(r && r.value); }
+  catch (e) { return TEMP_DEFAULT; }
+}
 async function compose(env, prompt) {
+  var temperature = await composeTemperature(env);
   var lastErr;
   // TITLE-PROMOTE-1: compliance-driven fallback -- keep the best draft across
   // models rather than returning the first long-enough one gate-unchecked.
@@ -384,7 +461,7 @@ async function compose(env, prompt) {
       var resp = await env.AI.run(modelId, {
         messages: [{ role: "user", content: prompt }],
         max_tokens: 6000,
-        temperature: 0.65,
+        temperature: temperature,
       }, { signal: AbortSignal.timeout(120000) });
       // Workers AI returns {response: string} for chat models
       var text = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
@@ -1106,11 +1183,15 @@ export default {
     var url  = new URL(req.url);
     var path = url.pathname.replace(/\/+$/, "") || "/";
 
+    if (path === "/api/metrics") {
+      return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), windows: { "7d": await metrics7d(env) } });
+    }
     if (path === "/health") {
+      var m7 = await metrics7d(env).catch(function () { return null; });
       var cnt = await env.DB.prepare("SELECT COUNT(*) n FROM published_pieces").first().catch(() => ({n:0}));
       var last = await env.DB.prepare("SELECT slug, title, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 1").first().catch(() => null);
       var runs = await env.DB.prepare("SELECT status, COUNT(*) n FROM engine_runs GROUP BY status").all().catch(() => ({results:[]}));
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "/run is unauthenticated but rate-limited to 5 per IP per hour", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], pieces: cnt.n, daily_cap: await dailyCap(env), daily_cap_key: "ops_config " + CAP_KEY, last, runs: runs.results });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "/run is unauthenticated but rate-limited to 5 per IP per hour", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], metrics_7d: m7, pieces: cnt.n, daily_cap: await dailyCap(env), daily_cap_key: "ops_config " + CAP_KEY, last, runs: runs.results });
     }
 
     if (path === "/run" && req.method === "POST") {
@@ -1221,6 +1302,7 @@ export default {
       if (!piece) return html("<h1>Not found</h1>", 404);
       // Increment read count
       env.DB.prepare("UPDATE published_pieces SET reads=reads+1 WHERE slug=?").bind(slug).run().catch(() => {});
+      ctx.waitUntil(countRead(env, req).catch(function () {}));
       return html(renderPiece(piece));
     }
 
@@ -1268,6 +1350,6 @@ export default {
       await env.DB.prepare(
         "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, ms, status, error) VALUES (0,0,0,0,'error',?)"
       ).bind(String(e && e.message || e).slice(0, 500)).run().catch(() => {});
-    }).then(() => stallDetector(env)));
+    }).then(() => stallDetector(env)).then(() => writeOwnMetrics(env)).catch(function () {}));
   },
 };
