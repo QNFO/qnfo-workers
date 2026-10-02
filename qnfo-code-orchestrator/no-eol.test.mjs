@@ -53,7 +53,14 @@ roundTrip("EOL state change", big, big + "\n");
 // 7. the real failure: a 1228-line worker without a final newline, 2 small edits plus the mirror
 const q08 = fs.readFileSync(path.join(here, "..", "q08-signal-engine", "worker.js"), "utf8");
 if (!q08.endsWith("\n")) {
-  const next = q08.replace("var fb = '<div class=\"fb\">", "var fb = '<div class=\"fb\" data-t=\"1\">");
+  // A small edit in the middle of the real file. It is chosen by line position, not by a string from q08's markup:
+  // the old anchor (var fb = '<div class="fb">) vanished in Q08-VOTE-POST-FORM-1 (#432), the replace became a no-op and
+  // the empty patch failed git apply on main (ci-watchdog #452, which also skipped the orchestrator deploy, #451).
+  const q08Lines = q08.split("\n");
+  const mid = Math.floor(q08Lines.length / 2);
+  q08Lines[mid] = q08Lines[mid] + " /* no-eol-test */";
+  const next = q08Lines.join("\n");
+  ok(next !== q08 && !next.endsWith("\n"), "q08 worker.js: the test edit changes the file and keeps it without a final newline");
   p = roundTrip("q08 worker.js (no final newline)", q08, next);
   ok(p.length < 5000, "q08 worker.js: patch is " + p.length + " chars (was ~379k as a whole-file patch)");
 }

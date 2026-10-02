@@ -1,5 +1,11 @@
 # OPS_CLIENT_KEY Setup for ChatBox / SannaBot / Android
 
+> **Since qnfo-ops 2.38.35 (OPS-PUBLIC-READ-1, 2026-10-02):** a client needs no key to ask read questions. With no key,
+> or a key that no longer matches, `/v1/chat/completions` answers in public read-only mode (free tier, fleet health,
+> backlog and privacy-safe datasets only, capped per visitor and per day; the response carries
+> `x-ops-access: public-read`). The steps below remain for machine callers of the full agent; do not ask the owner to
+> create or enter a key (OPEN-ACCESS-1). Owner actions go through https://fleet.qnfo.org/cmd.
+
 ## Problem (FIX-6, 2026-09-14)
 ops-exec returned 401 Unauthorized for ChatBox and SannaBot because
 authOk() only checked OPS_ROUTER_AUTH_KEY and OPS_ROUTER_AUTH_KEY_2.

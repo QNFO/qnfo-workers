@@ -16,7 +16,10 @@ accepted as server-side aliases, but the picker exposes only the single id above
 ## ChatBox (Android / iOS / desktop — custom provider)
 1. Settings → AI Providers → Add Custom Provider (OpenAI-compatible).
 2. Name: `QNFO Ops`; API Host: `https://ops.qnfo.org`; API Path: `/v1/chat/completions`.
-3. API Key: the `OPS_ROUTER_AUTH_KEY` value (from the ops machine's `~/.env` mirror; never commit it).
+3. API Key: optional. With no key (or a key that no longer matches) the endpoint answers in **public read-only
+   mode** (OPS-PUBLIC-READ-1, OPEN-ACCESS-1): fleet health, the open backlog and privacy-safe datasets (ipatent
+   activity, ops usage, deploys, issue counts), free tier, capped per visitor and per day. Private stores and every
+   action stay with the keyed agent; fleet changes and decisions are made at https://fleet.qnfo.org/cmd (emailed code).
 4. Model id: `ops` (fetched from `/v1/models`, or add manually). Cap the client max output at
    65536 to stop runaway replies.
 5. Repeat for `QNFO Router / qnfo` (research, reasoning, RAG) and `Personal Twin / personal`
