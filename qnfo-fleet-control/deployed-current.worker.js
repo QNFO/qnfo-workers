@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.93-reach-ideation"; /* 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.94-trigger-dispatch"; /* 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -6709,6 +6709,16 @@ function triggerIssueDescription(summaryHead, action, summaryTail) {
   var anchor = task.length ? marks.filter(function (l) { return /code-anchor:/.test(l); }).slice(0, 1).map(function (l) { return l.trim(); }) : [];
   return summaryHead + prose.slice(0, 300) + summaryTail + (task.length ? "\n" + task.concat(anchor).join("\n") : "");
 }
+// TRIGGER-DISPATCH-1 (2026-10-02): analytics_metric_triggers.priority is an integer 1..9 on 44 of 50 agent_issues
+// triggers, and agent_issues accepts only priority_canon values (agent_issues_enum_guard_ins). String(7) was refused with
+// SQLITE_CONSTRAINT_TRIGGER, so 11 breaches were logged dispatch-failed and no issue was filed. Map to the canon here.
+function triggerIssuePriority(p) {
+  var s = String(p == null ? "" : p).trim().toLowerCase();
+  if (s === "critical" || s === "high" || s === "medium" || s === "low") return s;
+  var n = Number(s);
+  if (s === "" || !isFinite(n)) return "medium";
+  return n >= 9 ? "critical" : n >= 7 ? "high" : n >= 5 ? "medium" : "low";
+}
 // ---- ACT-BRIDGE-1:END ----
 async function evaluateMetricTriggers(env) {
   var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
@@ -6725,7 +6735,7 @@ async function evaluateMetricTriggers(env) {
     var hit = op === "gt" ? v > thr : op === "lte" ? v <= thr : op === "lt" ? v < thr : op === "eq" ? v === thr : v >= thr;
     if (!hit) continue;
     var cd = Math.max(1, Number(t.cooldown_hours) || 24);
-    var recent = await db.prepare("SELECT id FROM analytics_action_log WHERE trigger_id = ?1 AND fired_at > datetime('now', ?2) LIMIT 1").bind(t.id, "-" + cd + " hours").first().catch(function () { return null; });
+    var recent = await db.prepare("SELECT id FROM analytics_action_log WHERE trigger_id = ?1 AND fired_at > datetime('now', ?2) AND status <> 'dispatch-failed' LIMIT 1").bind(t.id, "-" + cd + " hours").first().catch(function () { return null; });
     if (recent) continue;
     var target = String(t.queue_target || "none");
     var summary = triggerIssueDescription("METRIC-TRIGGER #" + t.id + " " + t.metric_key + "=" + v + " " + op + " " + thr + " -> ", t.action, " (owner " + (t.owner || "-") + ", target " + target + ")");
@@ -6737,7 +6747,7 @@ async function evaluateMetricTriggers(env) {
         if (open) { status = "deduped"; note = "open issue " + open.id; }
         else {
           var nowMs = Date.now();
-          await db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', ?3, 'open', ?4, ?4)").bind(title, summary, String(t.priority || "medium"), nowMs).run();
+          await db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', ?3, 'open', ?4, ?4)").bind(title, summary, triggerIssuePriority(t.priority), nowMs).run();
           note = "agent_issues filed";
         }
       } else {
