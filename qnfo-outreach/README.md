@@ -17,7 +17,8 @@ under docs/STRATEGY.md section 5).
   verify /health version after deploy).
 - **Canonical source**: QNFO/qnfo-workers/qnfo-outreach/worker.js (+ schema.sql, wrangler.toml).
   deployed-current.worker.js mirrors the deployed bundle (FLEET-SELF-DOC-1).
-- **Cron**: 0 11 * * 1-5 (full pipeline). Legacy slot 0 9 * * * tolerated: mine+draft only, no sends.
+- **Cron**: 0 11 * * 2-6, Monday-Friday (full pipeline). Cloudflare numbers weekdays 1=Sunday, so the earlier
+  `1-5` ran Sunday-Thursday (OUTREACH-CF-DOW-1, 0.3.8). Legacy slot 0 9 * * * tolerated: mine+draft only, no sends.
 - **Safety**: ACTIVATION_AT 2026-09-15; kill switch pipeline_state.external_sends_enabled=0;
   caps global 8/day, per-campaign daily_cap/total_cap, per-domain 3/day; no-repeat bridge across
   sends + legacy outreach_campaigns + qnfo-audit.outreach_log + contact_ledger opt-outs; spam-token

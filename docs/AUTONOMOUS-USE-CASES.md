@@ -42,7 +42,7 @@ Trigger: Inbound SMTP → qnfo-email worker
 Chain: emails → classification → processed/archived/spam → optional auto-reply
 
 ### UC-6: Outreach (ACTIVATION_AT 2026-09-15)
-Trigger: Cron 0 11 * * 1-5 UTC — AUTONOMOUS as gated T1 (owner-voice gates, docs/STRATEGY.md section 5); no per-instance approval
+Trigger: Cron 0 11 * * 2-6 UTC (Mon-Fri; Cloudflare weekdays start at 1=Sunday) — AUTONOMOUS as gated T1 (owner-voice gates, docs/STRATEGY.md section 5); no per-instance approval
 Chain: outreach_queue → qnfo-outreach (and the qnfo-cloud-ops outreach job) → sends (cap 8/day in total across both engines, 3/day per domain)
 Consent rules (OUTREACH-CONSENT-1): a real reason tied to the recipient's own work; an opt-out line in every message;
 suppression list honoured by both engines; one honest follow-up (`Following up:`, never a fake `Re:`); no repeat contact

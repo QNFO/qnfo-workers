@@ -40,7 +40,7 @@ Trigger: Inbound SMTP → qnfo-email worker
 Chain: emails → classification → processed/archived/spam → optional auto-reply
 
 ### UC-6: Outreach (ACTIVATION_AT 2026-09-15)
-Trigger: Cron 0 11 * * 1-5 UTC — AUTONOMOUS, no per-instance approval
+Trigger: Cron 0 11 * * 2-6 UTC (Mon-Fri; Cloudflare weekdays start at 1=Sunday) — AUTONOMOUS, no per-instance approval
 Chain: outreach_queue → qnfo-outreach → sends (cap 8/day global, 3/domain/day)
 Kill switch: qnfo-outreach D1 pipeline_state.external_sends_enabled=0
 

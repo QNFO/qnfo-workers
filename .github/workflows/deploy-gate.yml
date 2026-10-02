@@ -139,3 +139,5 @@ jobs:
       # honours suppression and the shared caps, and records per-send opt-out evidence the DoD probe reads.
       - name: OUTREACH-CONSENT-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/outreach-consent.test.mjs
+      - name: OUTREACH-CF-DOW-1 cron weekday check (qnfo-outreach)
+        run: node qnfo-outreach/cron-dow.test.mjs
