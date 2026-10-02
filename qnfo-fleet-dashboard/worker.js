@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.15.2-capability-contract"; /* 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.16.0-q08-review"; /* 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2153,6 +2153,16 @@ async function handleRequest(request, env, ctx) {
     if (!env.LOOP_TOKEN || tok !== env.LOOP_TOKEN) return json({ error: "unauthorized" }, 401);
     return json(await ingestReachSignals(env, { day: url.searchParams.get("day") || reachYesterday(Date.now()) }));
   }
+  // Q08-REVIEW-2026-10-31 (#1716): the review's state is open to everyone. A measurement of the 7 days ending ?to=<day>
+  // (two CF GraphQL calls on the reach ingest's credential, nothing written) takes x-loop-token like the ingest above.
+  if (path === "/api/q08-review") {
+    if (request.method !== "POST") return json(await q08ReviewStatus(env));
+    const tok = request.headers.get("x-loop-token") || "";
+    if (!env.LOOP_TOKEN || tok !== env.LOOP_TOKEN) return json({ error: "unauthorized" }, 401);
+    const to = url.searchParams.get("to") || reachYesterday(Date.now());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(to) || to > reachYesterday(Date.now())) return json({ error: "to must be a complete UTC day (YYYY-MM-DD)" }, 400);
+    return json(Object.assign({ preview: true, written: false }, await q08ReviewMeasure(env, to)));
+  }
   // HUMAN-DASHBOARD-1: /ops and /roi were folded into the one human page; old bookmarks land there.
   if (path === "/roi" || path === "/api/roi" || path === "/ops") {
     return new Response(null, { status: 301, headers: { Location: "/", "Cache-Control": "no-store" } });
@@ -2473,6 +2483,10 @@ var worker_default = {
       // cloud_ops_events row reach-ingest-<day> (ok = done; partial retried up to 3 attempts).
       ctx.waitUntil(within(ingestReachSignals(env).catch(function() {
       })));
+      // Q08-REVIEW-2026-10-31 (#1716): one-shot from the first tick at or after 2026-10-31T00:00Z (a no-op before it, and
+      // once ops_config q08_review_2026_10_31 holds a decision); a deferred measurement is retried an hour later.
+      ctx.waitUntil(within(q08Review(env).catch(function() {
+      })));
       // PORTFOLIO-DAILY-1 (2026-10-01): owner-voice guard + portfolio_runs row, once per UTC day after 05:00Z; throttled
       // inside on the cloud_ops_events row portfolio-daily-<day>.
       ctx.waitUntil(within(portfolioDailyRun(env).catch(function() {
@@ -2766,8 +2780,9 @@ function reachRumReferrerRows(groups, day) {
     return reachRow(day, "cf-rum", "web", "referrer", id, "pageviews", v, "unknown");
   });
 }
-function reachRumQuery(dims, geq, leq) {
-  return 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: ' + REACH_RUM_LIMIT + ', filter: { datetime_geq: "' + geq + '", datetime_leq: "' + leq + '" }) { count dimensions { ' + dims + " } } } } }";
+// extraFilter (optional) goes inside the filter object, e.g. "bot: 0", the Web Analytics "Exclude bots" filter.
+function reachRumQuery(dims, geq, leq, extraFilter) {
+  return 'query { viewer { accounts(filter: { accountTag: "' + ACCOUNT + '" }) { rumPageloadEventsAdaptiveGroups(limit: ' + REACH_RUM_LIMIT + ', filter: { datetime_geq: "' + geq + '", datetime_leq: "' + leq + '"' + (extraFilter ? ", " + extraFilter : "") + " }) { count dimensions { " + dims + " } } } } }";
 }
 // roiGf drops the GraphQL error text; the ingest needs it to log a rejected dimension name and skip that query.
 async function reachGf(env, query) {
@@ -3004,6 +3019,183 @@ async function ingestReachSignals(env, opts) {
   await record(out.skipped.length ? "partial" : "ok", "reach ingest " + day + ": " + (summary || "nothing written") + (out.skipped.length ? "; skipped " + out.skipped.length : ""));
   return out;
 }
+// Q08-REVIEW-2026-10-31 (agent_issues 1716, docs/STRATEGY.md s7; charter pillar: cost). q08-signal-engine writes an AI
+// essay every 2 hours, and published_pieces.reads counts every GET, bots included, so it cannot decide q08's future. The
+// review measures human page views on q08.org and www.q08.org from Cloudflare Web Analytics (RUM) over the 7 complete UTC
+// days before 2026-10-31 with the "Exclude bots" filter (bot: 0), through the reach ingest's own path (reachGf on
+// CF_TOKEN, reachRumQuery, dimensions requestHost requestPath). Under 50 a week, q08 is cut to at most 2 essays a day
+// through the knob q08-signal-engine reads (ops_config q08_max_per_day, Q08-CADENCE-CAP-1). Retiring the worker stays the
+// owner's call and is never automated. The cap and the decision are written in one D1 batch, and ops_config
+// q08_review_2026_10_31 (the key the issue's remediation probe reads) is written only on a real decision (keep or
+// cut-cadence). A failed or inconclusive measurement is recorded as 'deferred' in cloud_ops_events q08-review-2026-10-31
+// with its reason and retried an hour later; it is never written as a number. Once the key holds a value the job never
+// runs again. Runs on the */15 cron from the first tick at or after 2026-10-31T00:00Z. GET /api/q08-review shows the
+// state; POST /api/q08-review?to=<day> (x-loop-token) runs the same measurement for any 7-day window and writes nothing.
+var Q08_REVIEW_KEY = "q08_review_2026_10_31";
+var Q08_REVIEW_EVENT = "q08-review-2026-10-31";
+var Q08_REVIEW_DUE = "2026-10-31T00:00:00Z";
+var Q08_REVIEW_DAYS = 7;
+var Q08_REVIEW_HOSTS = ["q08.org", "www.q08.org"];
+var Q08_REVIEW_THRESHOLD = 50;
+var Q08_REVIEW_RETRY_MS = 36e5;
+var Q08_REVIEW_RULE = "under 50 bot-filtered human page views per week on q08.org: cut q08-signal-engine to at most 2 essays a day (STRATEGY s7; retiring it is the owner's decision)";
+var Q08_REVIEW_SOURCE = "Cloudflare Web Analytics (RUM) GraphQL rumPageloadEventsAdaptiveGroups, filter bot: 0, dimensions requestHost requestPath, hosts q08.org and www.q08.org (qnfo-fleet-dashboard reachGf, CF_TOKEN)";
+// The knob q08-signal-engine reads before each generation (Q08-CADENCE-CAP-1): an integer 0..10; absent means 10.
+var Q08_CAP_KEY = "q08_max_per_day";
+var Q08_CAP_DEFAULT = 10;
+var Q08_CAP_CUT = 2;
+function q08ReviewWindow(toDay) {
+  return { from: reachShiftDay(toDay, -(Q08_REVIEW_DAYS - 1)) + "T00:00:00Z", to: toDay + "T23:59:59Z", days: Q08_REVIEW_DAYS };
+}
+// Pure: page views on the q08 hosts from RUM groups; essays are /p/<slug>. Other hosts are only summed, so a window with
+// no page views on any host reads as "RUM collected nothing", not as a quiet week.
+function q08ReviewTally(groups) {
+  const paths = /* @__PURE__ */ new Map();
+  let views = 0, essays = 0, other = 0;
+  for (const g of groups || []) {
+    const n = Number(g && g.count) || 0;
+    if (n <= 0) continue;
+    const d = g.dimensions || {};
+    const host = String(d.requestHost || "").trim().toLowerCase().replace(/\.$/, "");
+    if (Q08_REVIEW_HOSTS.indexOf(host) < 0) {
+      other += n;
+      continue;
+    }
+    const p = String(d.requestPath || "").trim() || "/";
+    views += n;
+    if (/^\/p\/[^\/]+\/?$/.test(p)) essays += n;
+    paths.set(p, (paths.get(p) || 0) + n);
+  }
+  const top = Array.from(paths.entries()).sort(function(a, b) {
+    return b[1] - a[1];
+  }).slice(0, 10).map(function(e) {
+    return [e[0].slice(0, 120), e[1]];
+  });
+  return { pageviews: views, essay_pageviews: essays, other_hosts_pageviews: other, top_paths: top };
+}
+// Pure: the decision. 'deferred' whenever the number cannot be trusted: the bot-filtered query failed, RUM returned no
+// page views for any host, or a count under the threshold is only a lower bound (the group limit was hit).
+function q08ReviewDecide(human, limitHit) {
+  if (!human) return { decision: "deferred", reason: "bot-filtered RUM query failed" };
+  if (human.pageviews + human.other_hosts_pageviews <= 0) return { decision: "deferred", reason: "RUM returned no bot-filtered page views for any host in the window (collection down or filter wrong)" };
+  if (human.pageviews < Q08_REVIEW_THRESHOLD) {
+    if (limitHit) return { decision: "deferred", reason: human.pageviews + " is only a lower bound under " + Q08_REVIEW_THRESHOLD + " (group limit " + REACH_RUM_LIMIT + " hit)" };
+    return { decision: "cut-cadence", reason: human.pageviews + " human page views/week < " + Q08_REVIEW_THRESHOLD };
+  }
+  return { decision: "keep", reason: human.pageviews + " human page views/week >= " + Q08_REVIEW_THRESHOLD };
+}
+// Pure: the cap the cut leaves. It never raises a lower cap already set; an absent or invalid value is the engine default.
+function q08ReviewCap(current) {
+  const s = current == null ? "" : String(current).trim();
+  const n = /^\d{1,3}$/.test(s) ? Math.min(Number(s), Q08_CAP_DEFAULT) : Q08_CAP_DEFAULT;
+  return Math.min(n, Q08_CAP_CUT);
+}
+// The measurement for the 7 complete UTC days ending toDay: two GraphQL reads, no writes.
+async function q08ReviewMeasure(env, toDay) {
+  const win = q08ReviewWindow(toDay);
+  const dims = "requestHost requestPath";
+  const h = await reachGf(env, reachRumQuery(dims, win.from, win.to, "bot: 0"));
+  const hg = h.err ? null : reachRumGroups(h.data);
+  // Unfiltered (bots included) for the bot share only; the decision never uses it.
+  const a = await reachGf(env, reachRumQuery(dims, win.from, win.to));
+  const ag = a.err ? null : reachRumGroups(a.data);
+  const human = hg ? q08ReviewTally(hg) : null;
+  const all = ag ? q08ReviewTally(ag) : null;
+  const v = q08ReviewDecide(human, !!(hg && hg.length >= REACH_RUM_LIMIT));
+  if (!human) v.reason += ": " + (h.err || "rumPageloadEventsAdaptiveGroups missing from response");
+  return {
+    schema: "q08-review/v1",
+    issue: 1716,
+    rule: Q08_REVIEW_RULE,
+    decision: v.decision,
+    reason: v.reason,
+    human_pageviews_week: human ? human.pageviews : null,
+    threshold: Q08_REVIEW_THRESHOLD,
+    window: win,
+    source: Q08_REVIEW_SOURCE,
+    essay_pageviews_week: human ? human.essay_pageviews : null,
+    all_pageviews_week: all ? all.pageviews : null,
+    unfiltered_error: all ? null : a.err || "rumPageloadEventsAdaptiveGroups missing from response",
+    top_paths: human ? human.top_paths : []
+  };
+}
+async function q08Review(env, opts) {
+  opts = opts || {};
+  const nowMs = opts.nowMs || Date.now();
+  if (nowMs < Date.parse(Q08_REVIEW_DUE)) return { not_yet: Q08_REVIEW_DUE };
+  const A = env.AUDIT;
+  const have = (await d1all(A, "SELECT value FROM ops_config WHERE key = ?", [Q08_REVIEW_KEY]))[0];
+  if (have && have.value != null && String(have.value) !== "") return { done: Q08_REVIEW_KEY };
+  let attempts = 1;
+  const prev = (await d1all(A, "SELECT ts, status, meta FROM cloud_ops_events WHERE id = ?", [Q08_REVIEW_EVENT]))[0];
+  if (prev) {
+    let pm = {};
+    try {
+      pm = JSON.parse(prev.meta || "{}") || {};
+    } catch (e) {
+    }
+    attempts = (Number(pm.attempts) || 0) + 1;
+    const last = Date.parse(prev.ts);
+    if (prev.status === "deferred" && nowMs - last < Q08_REVIEW_RETRY_MS) return { retry_after: new Date(last + Q08_REVIEW_RETRY_MS).toISOString() };
+  }
+  const m = await q08ReviewMeasure(env, reachShiftDay(Q08_REVIEW_DUE.slice(0, 10), -1));
+  m.measured_at = new Date(nowMs).toISOString();
+  m.by = NAME + " " + VERSION;
+  m.attempts = attempts;
+  m.action = null;
+  const event = async function(status, text) {
+    try {
+      await A.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, 'q08-review', ?, ?, ?, ?)").bind(Q08_REVIEW_EVENT, m.measured_at, text, JSON.stringify(m).slice(0, 4e3), NAME, status).run();
+    } catch (e) {
+    }
+  };
+  if (m.decision === "deferred") {
+    await event("deferred", "q08 review deferred (attempt " + attempts + "): " + m.reason);
+    return m;
+  }
+  const upsert = "INSERT INTO ops_config (key, value, note, updated_at) VALUES (?1, ?2, ?3, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = excluded.updated_at";
+  const stmts = [];
+  if (m.decision === "cut-cadence") {
+    const cur = (await d1all(A, "SELECT value FROM ops_config WHERE key = ?", [Q08_CAP_KEY]))[0];
+    const to = q08ReviewCap(cur ? cur.value : null);
+    m.action = { ops_config: Q08_CAP_KEY, from: cur ? cur.value : null, to, undo: "delete ops_config " + Q08_CAP_KEY + " or set it to " + Q08_CAP_DEFAULT };
+    stmts.push(A.prepare(upsert).bind(Q08_CAP_KEY, String(to), "Q08-REVIEW-2026-10-31 (#1716): " + m.reason + "; q08-signal-engine publishes at most " + to + " essays a day. Reversible: delete this row or raise it (max " + Q08_CAP_DEFAULT + "). Retiring q08 is the owner's decision."));
+  }
+  // Written once: the WHERE keeps a value someone else recorded first.
+  stmts.push(A.prepare(upsert + " WHERE ops_config.value IS NULL OR ops_config.value = ''").bind(Q08_REVIEW_KEY, JSON.stringify(m), "Q08-REVIEW-2026-10-31 decision (agent_issues 1716), written once by " + m.by));
+  try {
+    await A.batch(stmts);
+  } catch (e) {
+    m.write_error = reachErr(e);
+    await event("deferred", "q08 review measured " + m.decision + " but the D1 write failed: " + m.write_error);
+    return m;
+  }
+  await event("ok", "q08 review: " + m.decision + " (" + m.human_pageviews_week + " human page views/week, threshold " + Q08_REVIEW_THRESHOLD + ")");
+  return m;
+}
+async function q08ReviewStatus(env) {
+  const out = { schema: "q08-review-status/v1", key: Q08_REVIEW_KEY, due: Q08_REVIEW_DUE, rule: Q08_REVIEW_RULE, source: Q08_REVIEW_SOURCE, decision: null, cap: null, last_attempt: null };
+  try {
+    const rows = await d1all(env.AUDIT, "SELECT key, value, updated_at FROM ops_config WHERE key IN (?, ?)", [Q08_REVIEW_KEY, Q08_CAP_KEY]);
+    for (const r of rows) {
+      if (r.key === Q08_CAP_KEY) out.cap = { key: Q08_CAP_KEY, value: r.value, updated_at: r.updated_at };
+      else if (r.value != null && String(r.value) !== "") {
+        try {
+          out.decision = JSON.parse(r.value);
+        } catch (e) {
+          out.decision = String(r.value);
+        }
+        out.decided_at = r.updated_at;
+      }
+    }
+    const ev = (await d1all(env.AUDIT, "SELECT ts, status, text FROM cloud_ops_events WHERE id = ?", [Q08_REVIEW_EVENT]))[0];
+    if (ev) out.last_attempt = ev;
+  } catch (e) {
+    out.error = reachErr(e);
+  }
+  return out;
+}
+// Q08-REVIEW-2026-10-31 end
 // Scorecard (STRATEGY 6.3) over reach_signals. Flows (pageviews, outreach) are summed over the window; stocks
 // (Bluesky counts per post, citations and Zenodo counts per DOI, subscribers) take each entity's latest row in it.
 async function reachLatestAgg(env, source, from, to) {
@@ -3308,6 +3500,8 @@ var WATCHMAKER_OPS = [
   { key: "portfolio-daily", what: "Portfolio daily run: owner-voice guard, scorecard, run log", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'portfolio-daily-' AND id < 'portfolio-daily.' AND status = 'ok'", replaces: "claude.ai Routine 'QNFO portfolio management'" },
   { key: "identity-weekly", what: "Identity weekly review (IDENTITY-WEEKLY-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 168, first_due: "2026-10-05T06:00:00Z", sql: "SELECT MAX(created_at) AS last FROM portfolio_runs WHERE kind = 'identity-weekly'", replaces: "claude.ai Routines 'Identity and brand weekly review', 'Weekly identity and opportunity check'" },
   { key: "reach-ingest", what: "Reach signals ingest (REACH-SIGNALS-INGEST-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'reach-ingest-' AND id < 'reach-ingest.'" },
+  // One-shot (retried hourly while deferred): it counts only when it is 48h past due with no decision recorded.
+  { key: "q08-review", what: "q08 decision on bot-filtered human reads, once from 2026-10-31 (Q08-REVIEW-2026-10-31, agent_issues 1716)", runner: "cron:qnfo-fleet-dashboard", stuck_sql: "SELECT CASE WHEN ?1 >= '2026-10-31T00:00:00.000Z' AND NOT EXISTS (SELECT 1 FROM ops_config WHERE key = 'q08_review_2026_10_31' AND value <> '') THEN 1 ELSE 0 END AS stuck", stuck_note: "q08 review 48h past due with no decision recorded (deferred: see GET /api/q08-review)" },
   { key: "charter-loop", what: "Charter live block and snapshot (CHARTER-LOOP-1)", runner: "cron:qnfo-fleet-control", cadence_h: 24, first_due: "2026-10-02T06:00:00Z", sql: "SELECT MAX(ts) AS last FROM charter_snapshots" },
   { key: "portfolio-sync", what: "Repository portfolio sync and hygiene (PORTFOLIO-LOOP-1)", runner: "cron:qnfo-fleet-control", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM portfolio_sync_runs WHERE status = 'ok'" },
   { key: "fleet-defects", what: "Fleet defects to anchored PRs (evolveTick)", runner: "cron:qnfo-fleet-control", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM evolve_candidates", replaces: "claude.ai Routine 'Daily fleet issue sweep'" },

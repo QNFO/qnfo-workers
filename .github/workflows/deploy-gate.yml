@@ -124,3 +124,7 @@ jobs:
         run: node qnfo-fleet-dashboard/watchmaker.test.mjs
       - name: OPEN-ACCESS-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/open-access.test.mjs
+      # Q08-REVIEW-2026-10-31 (#1716): the one-shot q08 decision on bot-filtered RUM page views and the cadence cap
+      # q08-signal-engine reads (Q08-CADENCE-CAP-1); a deferral never satisfies the remediation probe.
+      - name: Q08-REVIEW-2026-10-31 offline suite (qnfo-fleet-dashboard + q08-signal-engine)
+        run: node qnfo-fleet-dashboard/q08-review.test.mjs
