@@ -87,7 +87,18 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   ok(r.status === 200 && ph.includes('id="ctext"') && ph.includes('data-from="https://fleet.qnfo.org/owner"'), "F8 /cmd opens the command line scoped to the page it came from");
   const js = await callW(env, "/ctl.js");
   const jt = await js.text();
-  ok(js.status === 200 && /javascript/.test(js.headers.get("Content-Type")) && jt.includes("fleet.qnfo.org/cmd?from=") && jt.includes("encodeURIComponent(location.href)"), "F9 /ctl.js gives any page a discreet link scoped to that page");
+  ok(js.status === 200 && /javascript/.test(js.headers.get("Content-Type")) && jt.includes("fleet.qnfo.org/cmd?from=") && jt.includes("encodeURIComponent(location.origin+location.pathname)"), "F9 /ctl.js gives any page a discreet link scoped to that page");
+  // CTL-FROM-NO-QUERY-1: run the script on a confirm page opened with a token; the link carries the path, never the query.
+  {
+    const made = [];
+    const el = () => { const e = { style: {}, setAttribute() {}, textContent: "" }; made.push(e); return e; };
+    const doc = { head: { appendChild() {} }, body: { appendChild() {} }, createElement: el, addEventListener() {} };
+    const win = {};
+    win.top = win; win.self = win;
+    new Function("window", "document", "navigator", "location", jt)(win, doc, {}, { href: "https://q08.org/confirm?t=SECRET-TOKEN-9", origin: "https://q08.org", pathname: "/confirm" });
+    const a = made.find((e) => e.id === "fleet-ctl");
+    ok(a && a.href === "https://fleet.qnfo.org/cmd?from=" + encodeURIComponent("https://q08.org/confirm") && !/SECRET/.test(a.href), "F9b the link never carries the page's query string (confirm/unsubscribe tokens)", a && a.href);
+  }
 }
 // G. actions need the owner; the code goes only to the owner's fixed address
 {
