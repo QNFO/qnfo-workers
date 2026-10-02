@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 13:35:06",
+  "audited_at": "2026-10-02 14:03:48",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -417,7 +417,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.8.0-single-trigger",
+        "version": "1.8.1-codeagent",
         "worker": "personal-companion"
       },
       {
@@ -487,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.108-stale-requeue",
+        "version": "0.4.109-cost-and-advisor",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -808,9 +808,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.8.0-single-trigger",
+      "before": "1.8.1-codeagent",
       "http": 200,
-      "live": "1.8.0-single-trigger",
+      "live": "1.8.1-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1144,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.108-stale-requeue",
+      "before": "0.4.109-cost-and-advisor",
       "http": 200,
-      "live": "0.4.108-stale-requeue",
+      "live": "0.4.109-cost-and-advisor",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
