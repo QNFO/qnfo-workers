@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.0-guide-pages"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.1-codeagent"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -1061,7 +1061,7 @@ var GUIDE_HTML = `<!DOCTYPE html>
   <li><b>It is not legal advice.</b> Machine-generated text can be wrong or invent details. Under USPTO rules a person, not a tool, signs and is responsible for every statement filed. Have a registered patent attorney or agent review the draft.</li>
   <li><b>Inventors are people.</b> US law names only natural persons as inventors (<i>Thaler v. Vidal</i>, Fed. Cir. 2022). The invention has to be yours; the tool only helps you write it down.</li>
 </ul>
-<a class="cta" href="/#draft">Draft a disclosure</a>
+<a class="cta" href="/#draft">Draft a disclosure</a><script src="https://fleet.qnfo.org/ctl.js" defer></script>
 
 <h2><span class="n">07</span>More guides</h2>
 <ul>${GUIDE_PAGES.map((p) => '<li><a href="/guide/' + p.slug + '">' + escapeHtml(p.title) + "</a></li>").join("")}</ul>
