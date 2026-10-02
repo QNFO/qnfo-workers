@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.16.5-optout-evidence"; /* OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.17.0-grant-followup"; /* 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -2346,8 +2346,24 @@ var JOBS = {
   "engagement": jobEngagement,
   "owner-voice-stop": jobOwnerVoiceStop,
   "owner-voice-resume": jobOwnerVoiceResume,
-  "radar": jobRadar
+  "radar": jobRadar,
+  "grant-followup": jobGrantFollowup
 };
+// GRANT-FOLLOWUP-1: a job that rides another job's cron slot, because the dispatch map holds one job per cron and a new
+// cron would count against the account cap (charter rule 2). Companions run first, each in its own try and logged under
+// its own name, so neither job can stop or hide the other. worker-health fires twice a day, every day (05:05 and 17:05
+// Amsterdam).
+var CRON_COMPANIONS = { "worker-health": ["grant-followup"] };
+async function runCompanion(env, job) {
+  try {
+    const out = await JOBS[job](env);
+    await logRun(env, job, out.status, out.notes || {});
+    await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), { job, status: out.status });
+  } catch (e) {
+    await logRun(env, job, "error", { error: String(e && e.message || e) });
+    await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " error " + String(e && e.message || e), { job, status: "error" });
+  }
+}
 function cfDowToIso(spec) {
   const s = String(spec == null ? "*" : spec).trim();
   if (s === "*" || s === "") return "*";
@@ -2467,6 +2483,296 @@ async function jobRadar(env) {
   return { status: healthy === 0 ? "error" : healthy < vals.length ? "degraded" : "ok", notes: { scanned: mentions.length, new_mentions: added, sources } };
 }
 __name(jobRadar, "jobRadar");
+// GRANT-FOLLOWUP-1 begin
+// GRANT-FOLLOWUP-1 (2026-10-02, pillar: reach; agent_issues 1750 LIGHTCONE-APP-EMPTY-1). Funders answer applications by
+// mail, and no loop read those answers. On 2026-10-02 qnfo-audit.emails held an EA Funds reply of 2026-08-19
+// (email_reply_queue 'escalate', never drafted) and an Emergent Ventures reply of 2026-08-13, while
+// funding/APPLICATIONS.md still read "awaiting response". IDENTITY-WEEKLY-1 looks back only 8 days, by subject keyword,
+// reads no Gmail and files no issue. This job reads two mailboxes, read-only:
+//   - qnfo-audit.emails: what qnfo-email received for qnfo.org and qwav.tech, the addresses most applications used;
+//   - Gmail (the Lightcone Commons account) over IMAP: the folder flagged \All ("All Mail", so mail that gmail-triage or a
+//     person moved out of INBOX is still seen), opened with EXAMINE, headers fetched with BODY.PEEK. It never sends,
+//     moves, deletes or flags mail.
+// A message counts when its sender's domain belongs to a submitted application below and it is dated on or after the
+// submission. Each new one becomes one cloud_ops_events row (id 'grant-reply-<message-id>', kind 'grant-reply', status
+// = reply | message | receipt) holding the application, sender, subject, date, message-id and where to read it; body text
+// is never stored. Every reply or message without an issue then opens or extends that application's agent_issues row
+// (an application with a tracking issue, Lightcone 1750, gets the note there while it is open). Bulk mail (List-Id,
+// List-Unsubscribe, Precedence: bulk) is skipped unless its subject reads like a decision. Status 'ok' needs both
+// mailboxes read: without the GMAIL_PASS secret the job reports 'degraded' and Gmail is not watched.
+// A new application is added here in the same PR that records its submission in funding/APPLICATIONS.md.
+var GRANT_APPLICATIONS = [
+  { key: "manifund", funder: "Manifund", submitted: "2026-08-13", domains: ["manifund.org"] },
+  { key: "ea-funds-ltff", funder: "EA Funds (LTFF)", submitted: "2026-08-13", domains: ["effectivealtruism.com", "effectivealtruism.org"], handled_through: "2026-10-01", handled_note: "reply of 2026-08-19 (pitch out of scope) already recorded in funding/APPLICATIONS.md and the identity doc" },
+  { key: "filecoin-devgrants", funder: "Filecoin Foundation Open Grants", submitted: "2026-08-13", domains: ["fil.org"] },
+  { key: "emergent-ventures", funder: "Emergent Ventures (Mercatus Center)", submitted: "2026-08-13", domains: ["mercatus.gmu.edu", "mercatus.org"], handled_through: "2026-10-01", handled_note: "reply of 2026-08-13 (only the web form counts) already recorded in funding/APPLICATIONS.md and the identity doc" },
+  { key: "foresight-ai-nodes", funder: "Foresight Institute (AI for Science & Safety Nodes)", submitted: "2026-10-01", domains: ["foresight.org"] },
+  { key: "lightcone-corrigibility", funder: "Corrigibility Research Fund via Lightcone Commons", submitted: "2026-10-01", domains: ["lightconeinfrastructure.com", "lightconecommons.com", "lightconecommons.org"], issue: 1750 }
+];
+// handled_through (YYYY-MM-DD): replies dated on or before it were already read and acted on before this loop existed; they
+// are recorded with status 'handled' (never filed as a new issue), so only later replies become GRANT-REPLY issues.
+var GRANT_WINDOW_DAYS = 240;
+var GRANT_MAX_PER_APP = 50;
+var GRANT_MAX_ISSUE_WRITES = 10;
+var GRANT_HEADER_FIELDS = "FROM SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES LIST-ID LIST-UNSUBSCRIBE PRECEDENCE";
+var GRANT_RECEIPT_RX = /thank(s| you) for (your )?(submission|submitting|applying|application)|application (has been |was )?(received|submitted)|submission (has been |was )?(received|confirmed)|we('ve| have) received your|confirmation of (your )?(submission|application)|\breceipt\b/i;
+var GRANT_DECISION_RX = /decision|award|funded|grant (offer|agreement)|unfortunately|not (been )?selected|regret|accepted|declined|shortlist|next (round|stage|step)|interview|question/i;
+var GRANT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var GRANT_DOD = "Definition of done: read the message where it lives, then act: answer it through the owner-voice gates (docs/STRATEGY.md section 5, OUTREACH-CONSENT-1; mail sent as the owner is tier 2), or, when it needs the owner's own decision, file one fleet.qnfo.org queue card; update funding/APPLICATIONS.md; close with issue_triage.close_evidence naming the message-id and what was done. Filed by qnfo-cloud-ops GRANT-FOLLOWUP-1.";
+function grantAddress(s) {
+  const t = String(s || "");
+  const m = /<\s*([^<>\s@]+@[^<>\s]+?)\s*>/.exec(t) || /([^\s<>"'(),;:]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/.exec(t);
+  return m ? m[1].toLowerCase() : "";
+}
+function grantDomain(addr) {
+  const a = String(addr || "").toLowerCase();
+  const i = a.lastIndexOf("@");
+  return i < 0 ? "" : a.slice(i + 1).replace(/[^a-z0-9.-]/g, "");
+}
+function grantDomainIn(dom, list) {
+  return !!dom && list.some((d) => dom === d || dom.endsWith("." + d));
+}
+function grantMsgId(s) {
+  return String(s || "").trim().replace(/^<+|>+$/g, "").slice(0, 250);
+}
+function grantIso(s) {
+  if (s == null || s === "") return null;
+  let v = String(s).trim().replace(/\s*\([^)]*\)\s*$/, "");
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(v)) v = v.replace(" ", "T") + "Z";
+  const t = Date.parse(v);
+  return isNaN(t) ? null : new Date(t).toISOString();
+}
+function grantIsList(listId, unsub, precedence) {
+  return !!(listId || unsub) || /bulk|list|junk/i.test(String(precedence || ""));
+}
+function grantActive(app, nowMs) {
+  const t = Date.parse(app.submitted + "T00:00:00Z");
+  return !isNaN(t) && nowMs >= t && nowMs - t <= GRANT_WINDOW_DAYS * 864e5;
+}
+// The application a message answers, or null: sender (From header or envelope) on one of its domains, dated on or after
+// the submission day.
+function grantMatch(apps, rec) {
+  for (const app of apps) {
+    if (!grantDomainIn(grantDomain(rec.from), app.domains) && !grantDomainIn(grantDomain(rec.envelope), app.domains)) continue;
+    if (rec.date && rec.date.slice(0, 10) < app.submitted) continue;
+    return app;
+  }
+  return null;
+}
+// reply: part of a thread we started; receipt: an automatic acknowledgement; message: anything else from the funder;
+// bulk: list or newsletter mail without a decision-like subject (skipped).
+function grantKind(rec) {
+  const s = String(rec.subject || "");
+  if (rec.in_reply || /^\s*(re|aw|sv|antw)\s*:/i.test(s)) return "reply";
+  if (rec.list) return GRANT_DECISION_RX.test(s) ? "message" : "bulk";
+  if (GRANT_RECEIPT_RX.test(s)) return "receipt";
+  return "message";
+}
+function grantImapDate(ms) {
+  const d = new Date(ms);
+  return d.getUTCDate() + "-" + GRANT_MONTHS[d.getUTCMonth()] + "-" + d.getUTCFullYear();
+}
+// IMAP search keys are ANDed; OR is binary prefix, so n domains take n-1 leading ORs.
+function grantImapSearch(app) {
+  const keys = app.domains.map((d) => 'FROM "' + String(d).replace(/[^A-Za-z0-9.-]/g, "") + '"');
+  return "SINCE " + grantImapDate(Date.parse(app.submitted + "T00:00:00Z")) + " " + "OR ".repeat(Math.max(0, keys.length - 1)) + keys.join(" ");
+}
+function grantImapQuote(s) {
+  return '"' + String(s).replace(/(["\\])/g, "\\$1") + '"';
+}
+// The mailbox flagged \All (Gmail "All Mail" under any UI language), or null.
+function grantAllMailBox(lines) {
+  for (const ln of lines || []) {
+    const m = /^\* X?LIST \(([^)]*)\) (?:"(?:[^"\\]|\\.)*"|NIL) (.+)$/i.exec(String(ln));
+    if (!m || !/\\All\b/i.test(m[1])) continue;
+    let name = m[2].trim();
+    if (name.startsWith('"') && name.endsWith('"')) name = name.slice(1, -1).replace(/\\(["\\])/g, "$1");
+    return name;
+  }
+  return null;
+}
+function grantUidValidity(lines) {
+  for (const ln of lines || []) {
+    const m = /\[UIDVALIDITY (\d+)\]/i.exec(String(ln));
+    if (m) return m[1];
+  }
+  return "?";
+}
+function grantSearchUids(lines) {
+  const ln = (lines || []).find((l) => /^\* SEARCH\b/i.test(String(l)));
+  return ln ? String(ln).replace(/^\* SEARCH/i, "").trim().split(/\s+/).filter((x) => /^\d+$/.test(x)) : [];
+}
+function grantParseHeaders(raw) {
+  const out = {};
+  const text = String(raw || "").replace(/\r\n/g, "\n").replace(/\n[ \t]+/g, " ");
+  for (const line of text.split("\n")) {
+    const m = /^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/.exec(line);
+    if (m && !(m[1].toLowerCase() in out)) out[m[1].toLowerCase()] = m[2].trim();
+  }
+  return out;
+}
+// imapOpen().cmd() returns each untagged line, and a literal ({n}) as the element after its line.
+function grantParseFetch(lines) {
+  const out = [];
+  for (let i = 0; i < (lines || []).length; i++) {
+    const ln = String(lines[i] || "");
+    if (!/^\* \d+ FETCH \(/i.test(ln) || !/\{\d+\}$/.test(ln)) continue;
+    const um = /\bUID (\d+)/i.exec(ln) || /\bUID (\d+)/i.exec(String(lines[i + 2] || ""));
+    out.push({ uid: um ? um[1] : null, headers: grantParseHeaders(lines[i + 1]) });
+    i++;
+  }
+  return out;
+}
+async function grantD1Scan(env, apps, decode) {
+  if (!apps.length) return [];
+  const since = apps.map((a) => a.submitted).sort()[0];
+  const doms = [...new Set(apps.flatMap((a) => a.domains))].slice(0, 40);
+  const hdr = (k) => "CASE WHEN json_valid(headers_json) THEN json_extract(headers_json, '$.\"" + k + "\"') END";
+  const where = doms.map((_, i) => "instr(lower(sender || ' ' || COALESCE(hfrom, '')), ?" + (i + 2) + ") > 0").join(" OR ");
+  const sql = "SELECT id, message_id, sender, subject, received_at, hfrom, hirt, hrefs, hlist, hunsub, hprec FROM (SELECT id, message_id, sender, subject, received_at, " + hdr("from") + " AS hfrom, " + hdr("in-reply-to") + " AS hirt, " + hdr("references") + " AS hrefs, " + hdr("list-id") + " AS hlist, " + hdr("list-unsubscribe") + " AS hunsub, " + hdr("precedence") + " AS hprec FROM emails WHERE received_at >= ?1) WHERE " + where + " ORDER BY received_at LIMIT 300";
+  const r = await env.AUDIT.prepare(sql).bind(since, ...doms).all();
+  return (r.results || []).map((x) => ({
+    channel: "qnfo-email",
+    ref: "qnfo-audit.emails id " + x.id,
+    message_id: grantMsgId(x.message_id),
+    from: grantAddress(x.hfrom) || grantAddress(x.sender),
+    envelope: grantAddress(x.sender),
+    subject: decode(String(x.subject || "")),
+    date: grantIso(x.received_at),
+    in_reply: !!(x.hirt || x.hrefs),
+    list: grantIsList(x.hlist, x.hunsub, x.hprec)
+  }));
+}
+async function grantGmailScan(env, apps, d) {
+  if (!env.GMAIL_PASS) return { status: "no-credential", rows: [] };
+  let imap = null;
+  try {
+    imap = await d.open(env);
+    const login = await imap.cmd('LOGIN "rwnquni@gmail.com" "' + String(env.GMAIL_PASS).replace(/"/g, "") + '"');
+    if (!login.ok) throw new Error("gmail login failed");
+    const box = grantAllMailBox((await imap.cmd('LIST "" "*"')).lines) || "[Gmail]/All Mail";
+    const ex = await imap.cmd("EXAMINE " + grantImapQuote(box));
+    if (!ex.ok) throw new Error("EXAMINE failed for " + box);
+    const uv = grantUidValidity(ex.lines);
+    const rows = [];
+    for (const app of apps) {
+      const s = await imap.cmd("UID SEARCH " + grantImapSearch(app));
+      if (!s.ok) throw new Error("SEARCH failed for " + app.key);
+      const uids = grantSearchUids(s.lines).slice(-GRANT_MAX_PER_APP);
+      for (let i = 0; i < uids.length; i += 20) {
+        const f = await imap.cmd("UID FETCH " + uids.slice(i, i + 20).join(",") + " (UID BODY.PEEK[HEADER.FIELDS (" + GRANT_HEADER_FIELDS + ")])");
+        for (const m of grantParseFetch(f.lines)) {
+          const h = m.headers;
+          rows.push({
+            channel: "gmail",
+            ref: "Gmail " + box + " UID " + m.uid + " (UIDVALIDITY " + uv + ")",
+            message_id: grantMsgId(h["message-id"]),
+            from: grantAddress(h.from),
+            envelope: "",
+            subject: d.decode(h.subject || ""),
+            date: grantIso(h.date),
+            in_reply: !!(h["in-reply-to"] || h.references),
+            list: grantIsList(h["list-id"], h["list-unsubscribe"], h.precedence)
+          });
+        }
+      }
+    }
+    await imap.close();
+    return { status: "ok", box, rows };
+  } catch (e) {
+    if (imap) {
+      try {
+        await imap.close();
+      } catch (e2) {
+      }
+    }
+    return { status: "error", error: String(e && e.message || e).slice(0, 120), rows: [] };
+  }
+}
+function grantClip(s, n) {
+  return String(s == null ? "" : s).replace(/\s+/g, " ").replace(/"/g, "'").trim().slice(0, n);
+}
+// Opens or extends the agent_issues row for one recorded reply; returns the issue id, or null to retry on the next run.
+async function grantFileIssue(env, evId, m, nowMs) {
+  const A = env.AUDIT;
+  const note = "[GRANT-FOLLOWUP-1 " + new Date(nowMs).toISOString().slice(0, 16) + "Z] " + m.funder + " sent a " + m.kind + " on " + String(m.sent_at || "?").slice(0, 10) + ': "' + grantClip(m.subject, 140) + '" from ' + (grantDomain(m.from) || "?") + ". Read it at: " + m.ref + " (message-id " + grantClip(m.message_id, 160) + "; evidence cloud_ops_events " + evId + ").";
+  if (m.issue_link) {
+    const u = await A.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1, updated_at = ?2 WHERE id = ?3 AND status = 'open'").bind("\n\n" + note, nowMs, m.issue_link).run();
+    if (u && u.meta && u.meta.changes) return Number(m.issue_link);
+  }
+  const title = ("GRANT-REPLY-" + String(m.application).toUpperCase() + ": " + m.funder + " answered the application (pillar: reach)").slice(0, 180);
+  const up = await A.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1, updated_at = ?2 WHERE title = ?3 AND status = 'open'").bind("\n\n" + note, nowMs, title).run();
+  if (!(up && up.meta && up.meta.changes)) {
+    await A.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, ?3, 'funding', 'high', 'open', ?4, ?4 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE lower(trim(title)) = lower(trim(?1)) AND status = 'open')").bind(title, note + " " + GRANT_DOD, "cloud_ops_events:" + evId, nowMs).run();
+  }
+  const row = await A.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1").bind(title).first();
+  return row ? Number(row.id) : null;
+}
+async function jobGrantFollowup(env, deps) {
+  const d = deps || { open: imapOpen, decode: decodeHeader };
+  const now = d.now || Date.now();
+  const apps = GRANT_APPLICATIONS.filter((a) => grantActive(a, now));
+  const channels = {};
+  let recs = [];
+  try {
+    const r = await grantD1Scan(env, apps, d.decode);
+    recs = recs.concat(r);
+    channels.qnfo_email = "ok:" + r.length;
+  } catch (e) {
+    channels.qnfo_email = "error:" + String(e && e.message || e).slice(0, 80);
+  }
+  const g = await grantGmailScan(env, apps, d);
+  channels.gmail = g.status === "ok" ? "ok:" + g.rows.length : g.status === "no-credential" ? "no-credential: GMAIL_PASS unset" : "error:" + g.error;
+  recs = recs.concat(g.rows);
+  const out = { applications: apps.length, matched: 0, new_rows: 0, receipts: 0, bulk: 0, issues: [] };
+  const seen = new Set();
+  recs.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  // 1. Record each new message from a funder (dedup on the message-id across runs and channels).
+  for (const rec of recs) {
+    const app = grantMatch(apps, rec);
+    if (!app) continue;
+    const kind = grantKind(rec);
+    if (kind === "bulk") {
+      out.bulk++;
+      continue;
+    }
+    const key = rec.message_id || rec.ref;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.matched++;
+    const evId = "grant-reply-" + key;
+    const handled = !!(app.handled_through && rec.date && String(rec.date).slice(0, 10) <= app.handled_through);
+    const meta = { job: "grant-followup", application: app.key, funder: app.funder, kind, channel: rec.channel, from: rec.from, subject: grantClip(rec.subject, 200), sent_at: rec.date, message_id: rec.message_id, ref: rec.ref, issue_link: app.issue || null, issue_id: null, handled: handled ? app.handled_note || "handled before GRANT-FOLLOWUP-1" : null };
+    const ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'grant-reply', ?3, ?4, 'grant-followup', ?5)").bind(evId, new Date(now).toISOString(), app.funder + " " + kind + ": " + grantClip(rec.subject, 160), JSON.stringify(meta), handled ? "handled" : kind).run();
+    if (ins && ins.meta && ins.meta.changes) {
+      out.new_rows++;
+      if (kind === "receipt") out.receipts++;
+    }
+  }
+  // 2. Act on every recorded reply or message that has no issue yet (new ones, and any a failed run left behind).
+  const pending = await env.AUDIT.prepare("SELECT id, meta FROM cloud_ops_events WHERE id >= 'grant-reply-' AND id < 'grant-reply.' AND status IN ('reply', 'message') AND json_extract(meta, '$.issue_id') IS NULL ORDER BY ts, id LIMIT " + GRANT_MAX_ISSUE_WRITES).all();
+  for (const p of pending.results || []) {
+    let m = null;
+    try {
+      m = JSON.parse(p.meta || "null");
+    } catch (e) {
+      m = null;
+    }
+    if (!m || !m.application) continue;
+    try {
+      const id = await grantFileIssue(env, p.id, m, now);
+      if (id) {
+        await env.AUDIT.prepare("UPDATE cloud_ops_events SET meta = json_set(meta, '$.issue_id', ?1) WHERE id = ?2").bind(id, p.id).run();
+        out.issues.push(m.application + ":" + id);
+      }
+    } catch (e) {
+      out.issue_error = String(e && e.message || e).slice(0, 120);
+    }
+  }
+  const okD1 = channels.qnfo_email.indexOf("ok:") === 0, okGmail = channels.gmail.indexOf("ok:") === 0;
+  return { status: okD1 && okGmail && !out.issue_error ? "ok" : okD1 || okGmail ? "degraded" : "error", notes: Object.assign({ channels }, out) };
+}
+// GRANT-FOLLOWUP-1 end
 var CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
@@ -2517,6 +2823,9 @@ var worker_default = {
       } catch (e) {}
       return;
     }
+    for (const companion of CRON_COMPANIONS[job] || []) {
+      if (JOBS[companion]) await runCompanion(env, companion);
+    }
     try {
       const out = await JOBS[job](env);
       await logRun(env, job, out.status, out.notes || {});
@@ -2544,7 +2853,7 @@ var worker_default = {
       // gate below, so it used to disclose binding/secret presence and the
       // full cron map to anonymous callers. Serve a minimal public body; the
       // detailed body requires a valid bearer token.
-      const publicBody = { ok: true, worker: WORKER_NAME, version: VERSION, capabilities: ["weekly-digest", "scorecard", "outreach-send-gate", "ai-endpoint-health", "seo-health", "research-scan"], limitations: ["every route except this minimal /health needs a bearer token; the job and cron map is served only to authenticated callers", "jobs run only on its crons (Amsterdam-time aware)", "outreach sends are held inside the fleet-wide shared daily and per-domain caps"] };
+      const publicBody = { ok: true, worker: WORKER_NAME, version: VERSION, capabilities: ["weekly-digest", "scorecard", "outreach-send-gate", "ai-endpoint-health", "seo-health", "research-scan", "grant-followup"], limitations: ["every route except this minimal /health needs a bearer token; the job and cron map is served only to authenticated callers", "jobs run only on its crons (Amsterdam-time aware)", "outreach sends are held inside the fleet-wide shared daily and per-domain caps", "grant-followup reads funder mail read-only (never sends, moves or flags it) and watches Gmail only while the GMAIL_PASS secret is set"] };
       const healthToken = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
       if (!auth(healthToken, env)) {
         return new Response(JSON.stringify(publicBody), { headers: { "Content-Type": "application/json", ...CORS } });

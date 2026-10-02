@@ -35,6 +35,7 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('portfolio-dai
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('portfolio-dailyx', ?, 'ok')").run(ago(1));   // outside the id range
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('reach-ingest-2026-10-06', ?, 'ok')").run(ago(6));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jo-qnfo-backlog-exec-abc', ?, 'ok')").run(ago(7));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-grant-followup-ok1', ?, 'ok')").run(ago(4));
 db.prepare("INSERT INTO portfolio_runs (run_date, kind, created_at) VALUES ('2026-10-05', 'identity-weekly', ?)").run(new Date(NOW - 26 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO charter_snapshots (ts) VALUES (?)").run(ago(5));
 db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(ago(1));
@@ -91,6 +92,17 @@ db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('t2', 'pe
 m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "task-intent-intake").counted && /^1 pending task intents older than 48h with no consumer/.test(op(m, "task-intent-intake").state) && m.index === 1, "task intents nobody reads count once 48h old");
 db.exec("DELETE FROM intents WHERE id IN ('t1', 't2')");
+
+// GRANT-FOLLOWUP-1: only a run that read both mailboxes proves the op; a 'degraded' run (no GMAIL_PASS) does not.
+db.exec("UPDATE cloud_ops_events SET status = 'degraded' WHERE id = 'jr-grant-followup-ok1'");
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "grant-followup").counted && op(m, "grant-followup").state === "never ran" && m.index === 1, "a grant-followup run that missed Gmail does not prove the op");
+db.prepare("UPDATE cloud_ops_events SET status = 'ok', ts = ? WHERE id = 'jr-grant-followup-ok1'").run(ago(25));
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "grant-followup").counted && /stalled: last run 25h ago, cadence 12h/.test(op(m, "grant-followup").state), "grant-followup silent for over 24h counts as stalled");
+db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'jr-grant-followup-ok1'").run(ago(4));
+m = await api.watchmakerMeasure(env, NOW);
+ok(!op(m, "grant-followup").counted && m.index === 0, "a fresh full grant-followup run is not counted");
 
 // Stalled, never-run, backlog, live merges, unreadable
 db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'portfolio-daily-2026-10-06'").run(ago(60));
