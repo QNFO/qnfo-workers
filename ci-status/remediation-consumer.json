@@ -1,17 +1,51 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@c4fa89793af6",
- "due": 1,
- "pass": 0,
- "fail": 0,
- "skipped": 1,
+ "verifier": "remediation-consumer@8359cb75b80a",
+ "due": 5,
+ "pass": 1,
+ "fail": 4,
+ "skipped": 0,
  "contracts": [
   {
-   "class": "CI-WATCHDOG-REAPER-SUBJECT-SHAPE-1",
-   "issue_id": null,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
+   "class": "predicate-set-incomplete",
+   "issue_id": 1282,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "55",
+   "written": true
+  },
+  {
+   "class": "cron-registry-drift",
+   "issue_id": 1494,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1726",
+   "issue_id": 1726,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "4",
+   "written": true
+  },
+  {
+   "class": "issue-1700",
+   "issue_id": 1700,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "19",
+   "written": true
+  },
+  {
+   "class": "issue-1713",
+   "issue_id": 1713,
+   "verdict": "fail",
+   "expected": "linkedin-connected+buffer-id",
+   "observed": "linkedin-rows=1,linkedin-buffer-posts=0",
+   "written": true
   }
  ],
  "trusted_transports": [
@@ -30,7 +64,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 2399,
- "head": "c4fa89793af6400ec07625014338942cdea4e6ba",
+ "spent_ms": 14034,
+ "head": "8359cb75b80a9979cf3acca4642956d962c905db",
  "job_status": "success"
 }
