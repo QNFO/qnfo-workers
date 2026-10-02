@@ -65,7 +65,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   ok(h.includes("Add the selected works to ORCID"), "A2 the queue is shown to everyone");
   ok(!/OWNER_TOKEN|owner key|Sign in|sign out/i.test(h), "A3 nothing asks anyone for a token or a sign-in");
   ok(!h.includes('data-act="done"') && !h.includes("Queue as task") && !h.includes('data-act="ratify"'), "A4 no fleet-changing controls on the public page");
-  ok(h.includes('id="pask"') && h.includes("Ask the fleet") && h.includes("Open to everyone"), "A5 Ask now is on the page for everyone");
+  ok(h.includes('id="ctext"') && h.includes("Ask or tell the fleet") && h.includes("open to everyone"), "A5 the command line is on the page for everyone");
   r = await call(env, "/?frag=1"); ok(r.status === 200, "A6 the live fragment opens too");
   let j = await (await call(env, "/api/human")).json();
   ok(Array.isArray(j.items) && j.items.length > 0 && !j.locked && !j.responses, "A7 /api/human is full and open (owner's own responses stay with token holders)");
