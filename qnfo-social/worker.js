@@ -13,7 +13,9 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.7.28-social-learner";
+var VERSION = "0.7.29-social-learner";
+// 0.7.29 (2026-10-02): GET /learner names an unavailable part ("posterior unavailable") and never echoes exception text
+// (CodeQL js/stack-trace-exposure); the detail goes to the worker log.
 // 0.7.28 (2026-10-02, pillar: reach): SOCIAL-DISTRIBUTION-LEARNER-1 (STRATEGY 6.4 "distribution allocation (weekly)",
 // owner directive 2026-10-02: measure external effectiveness and change itself to improve it). A Thompson-sampling bandit
 // over topic x format x time slot chooses which queued post goes next and in which slot, inside the weekly cap, pause flag
