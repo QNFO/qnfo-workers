@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.3-capability-contract";
+var VERSION = "1.1.4-codeagent";
 var SITE = "https://qnfo.org";
 var FROM = { email: "qnfo@qnfo.org", name: "QNFO" };
 var MAX_RECIPIENTS = 1e3;
@@ -17,7 +17,7 @@ function json(data, status) {
 }
 __name(json, "json");
 function html(body, status) {
-  const page = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>QNFO</title><style>body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#faf7f2;color:#1b1915;display:flex;min-height:100vh;align-items:center;justify-content:center}main{max-width:560px;padding:2.5rem 1.6rem;text-align:center}h1{font-family:Georgia,serif;font-size:1.6rem;font-weight:600}p{color:#8a8376;line-height:1.7}a{color:#24315e}</style></head><body><main>' + body + '<p style="margin-top:2rem"><a href="' + SITE + '">\u2190 qnfo.org</a></p></main></body></html>';
+  const page = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>QNFO</title><style>body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#faf7f2;color:#1b1915;display:flex;min-height:100vh;align-items:center;justify-content:center}main{max-width:560px;padding:2.5rem 1.6rem;text-align:center}h1{font-family:Georgia,serif;font-size:1.6rem;font-weight:600}p{color:#8a8376;line-height:1.7}a{color:#24315e}</style></head><body><main>' + body + '<p style="margin-top:2rem"><a href="' + SITE + '">\u2190 qnfo.org</a></p></main><script src="https://fleet.qnfo.org/ctl.js" defer></script></body></html>';
   return new Response(page, { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
 }
 __name(html, "html");
