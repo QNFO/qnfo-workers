@@ -71,6 +71,8 @@ function baseState(over) {
     queued: [],
     first(sql, args) {
       if (sql.includes("pipeline_flags WHERE key='social_paused'")) return s.paused ? { value: '1' } : null;
+      if (sql.includes("pipeline_flags WHERE key='social_cap_epoch'")) return s.epoch ? { value: s.epoch } : null;
+      if (sql.includes("AS n") && sql.includes('-7 days') && s.epochCounts) { s.boundEpoch = args[0]; return { n: args[0] > '2026-10-01' ? 0 : s.posted7 }; }
       if (sql.includes("pipeline_flags WHERE key='linkedin_mode'")) return s.liMode ? { value: s.liMode } : null;
       if (sql.includes('FROM social_channels WHERE checked_day')) return s.auditDone ? { x: 1 } : null;
       if (sql.includes("AS n") && sql.includes('-7 days')) return { n: s.posted7 };
@@ -88,6 +90,19 @@ function baseState(over) {
     }
   };
   return Object.assign(s, over || {});
+}
+
+// ---------- SOCIAL-CAP-EPOCH-1: the cap counts from the epoch when the flag is set ----------
+{
+  const st = baseState({ posted7: 96, epochCounts: true });
+  let g = await mod.socialGate(mkEnv(st).env, 't');
+  assert.equal(g.allowed, 0); assert.equal(st.boundEpoch, '0'); ok('no epoch flag: the rolling 7 days count (96 posts hold)');
+  const st2 = baseState({ posted7: 96, epochCounts: true, epoch: '2026-10-01 21:30:00' });
+  g = await mod.socialGate(mkEnv(st2).env, 't');
+  assert.equal(st2.boundEpoch, '2026-10-01 21:30:00'); assert.equal(g.allowed, 2); ok('epoch flag: posts before the reset no longer count, cap still 2');
+  const st3 = baseState({ posted7: 96, epochCounts: true, epoch: 'not-a-date' });
+  g = await mod.socialGate(mkEnv(st3).env, 't');
+  assert.equal(st3.boundEpoch, '0'); ok('malformed epoch is ignored');
 }
 
 // ---------- drainQueue: clean row posts, writes status + post_uri in one statement, LinkedIn as draft ----------
