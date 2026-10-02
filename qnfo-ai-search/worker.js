@@ -26,7 +26,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.0.1-ask-loop";
+var VERSION = "2.0.2-ask-loop";
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -37,7 +37,10 @@ var DEFAULT_CONFIG = {
   kw_title_score: 0.62,
   kw_abstract_score: 0.5,
   max_sources: 6,
-  model: "@cf/zai-org/glm-5.3-flash",
+  // 2.0.2: live, glm-5.3-flash spent the whole 1800-token budget reasoning and streamed no answer after 100 s
+  // (ask_events.error "empty answer"). A non-reasoning model is the champion; reasoning models stay in the tuning space
+  // with a larger budget and must win the judged A/B to be adopted.
+  model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
   temperature: 0.3,
   max_tokens: 1800,
 };
@@ -47,12 +50,15 @@ var TUNE_SPACE = {
   kw_terms: [1, 2, 3],
   kw_title_score: [0.55, 0.62, 0.7],
   max_sources: [4, 6, 8],
-  model: ["@cf/zai-org/glm-5.3-flash", "@cf/qwen/qwen3-30b-a3b-fp8"],
+  model: ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/zai-org/glm-5.3-flash", "@cf/qwen/qwen3-30b-a3b-fp8"],
   temperature: [0.2, 0.3, 0.5],
 };
 var RETRIEVAL_KEYS = ["retrieval_limit", "kw_terms", "kw_title_score", "max_sources"];
 var GENERATION_KEYS = ["model", "temperature"];
 var FALLBACK_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+var FALLBACK_MODEL_2 = "@cf/zai-org/glm-5.3-flash";
+// Reasoning models think before they answer; their output budget must cover both.
+var REASONING_TOKENS = { "@cf/zai-org/glm-5.3-flash": 8000, "@cf/qwen/qwen3-30b-a3b-fp8": 8000 };
 var JUDGE_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
 var QGEN_MODEL = "@cf/zai-org/glm-5.3-flash";
 // Cloudflare neurons per 1M tokens [in, out] (same table as qnfo-ai __AI_ATTR_RATES).
@@ -587,8 +593,10 @@ async function ask(request, env, ctx) {
       var messages = buildMessages(query, sources, graph, history);
       var inTok = Math.ceil(JSON.stringify(messages).length / 3.5);
       var model = cfg.model, out;
-      try { out = await env.AI.run(model, { messages: messages, stream: true, max_tokens: cfg.max_tokens, temperature: cfg.temperature }); }
-      catch (e) { model = FALLBACK_MODEL; out = await env.AI.run(model, { messages: messages, stream: true, max_tokens: cfg.max_tokens, temperature: cfg.temperature }); }
+      var budget = function (m) { return Math.max(cfg.max_tokens, REASONING_TOKENS[m] || 0); };
+      try { out = await env.AI.run(model, { messages: messages, stream: true, max_tokens: budget(model), temperature: cfg.temperature }); }
+      catch (e) { model = model === FALLBACK_MODEL ? FALLBACK_MODEL_2 : FALLBACK_MODEL; out = await env.AI.run(model, { messages: messages, stream: true, max_tokens: budget(model), temperature: cfg.temperature }); }
+      var saidThinking = false;
       ev.model = model;
       var text = "", usage = null, buf = "", inThink = false, reader = out.getReader(), dec = new TextDecoder();
       for (;;) {
@@ -605,6 +613,8 @@ async function ask(request, env, ctx) {
           var j;
           try { j = JSON.parse(dd); } catch (e) { continue; }
           if (j.usage) usage = j.usage;
+          var dlt = j.choices && j.choices[0] && j.choices[0].delta;
+          if (!saidThinking && dlt && (dlt.reasoning_content || dlt.reasoning)) { saidThinking = true; await send("status", { stage: "thinking" }); }
           var piece = typeof j.response === "string" ? j.response : (j.choices && j.choices[0] && j.choices[0].delta && typeof j.choices[0].delta.content === "string" ? j.choices[0].delta.content : "");
           if (!piece) continue;
           if (piece.indexOf("<think>") >= 0) inThink = true;
@@ -1396,7 +1406,7 @@ function ask(q){
         parts.forEach(function(block){
           var ev = (block.match(/^event: (.+)$/m) || [])[1], dl = (block.match(/^data: (.*)$/m) || [])[1];
           if (!ev || dl == null) return; var d; try { d = JSON.parse(dl); } catch (e) { return; }
-          if (ev === "status") st.textContent = d.stage === "writing" ? "Writing from " + (meta ? meta.sources.length : "") + " sources" : "Searching the corpus";
+          if (ev === "status") st.textContent = d.stage === "writing" ? "Writing from " + (meta ? meta.sources.length : "") + " sources" : d.stage === "thinking" ? "Reasoning over " + (meta ? meta.sources.length : "") + " sources" : "Searching the corpus";
           else if (ev === "meta"){ meta = d; showMeta(el, d); st.textContent = "Writing from " + d.sources.length + " sources"; }
           else if (ev === "token"){ raw += d.t; schedule(); }
           else if (ev === "done"){ finish(d); }
