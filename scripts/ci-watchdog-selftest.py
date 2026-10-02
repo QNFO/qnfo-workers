@@ -208,9 +208,19 @@ def main() -> int:
     check("a trailing comment mentioning schedule: does not",
           cw.declares_schedule("on:\n  push:  # not a schedule: trigger\n") is False)
     check("no text -> no schedule", cw.declares_schedule("") is False)
-    check("a dynamic workflow path has no file -> None", cw.workflow_text("dynamic/github-code-scanning/codeql") is None)
-    check("the watchdog's own file is read from the checkout",
-          "workflow_run" in (cw.workflow_text(".github/workflows/ci-watchdog.yml") or ""))
+    # The sweep reads the checkout only when it runs on main; a PR run of this selftest has GITHUB_REF=refs/pull/N/merge,
+    # so pin the ref for these two checks (otherwise they would ask the API, and fail without a token).
+    _ref = os.environ.get("GITHUB_REF")
+    os.environ["GITHUB_REF"] = "refs/heads/main"
+    try:
+        check("a dynamic workflow path has no file -> None", cw.workflow_text("dynamic/github-code-scanning/codeql") is None)
+        check("the watchdog's own file is read from the checkout",
+              "workflow_run" in (cw.workflow_text(".github/workflows/ci-watchdog.yml") or ""))
+    finally:
+        if _ref is None:
+            os.environ.pop("GITHUB_REF", None)
+        else:
+            os.environ["GITHUB_REF"] = _ref
     try:
         import yaml  # parity with a real YAML parse over every workflow in the repository
         import glob
@@ -293,11 +303,16 @@ def main() -> int:
         check("a file missing from the checkout reads as None on main, with no call",
               cw.workflow_text(".github/workflows/gone.yml") is None and not calls, calls)
         import contextlib, io
-        with contextlib.redirect_stdout(io.StringIO()):
-            try:
-                cw.main()
-            except SystemExit:
-                pass
+        _cwd = os.getcwd()
+        os.chdir(ws)  # main() writes ci-watchdog-summary.json into the working directory: keep it out of the repository
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                try:
+                    cw.main()
+                except SystemExit:
+                    pass
+        finally:
+            os.chdir(_cwd)
         hist = [c for c in calls if "/actions/workflows/" in c[1] and "/runs" in c[1] and "branch=" not in c[1]]
         cont = [c for c in calls if "/contents/" in c[1]]
         check("history is fetched only for the 3 scheduled workflows", len(hist) == 3, len(hist))
