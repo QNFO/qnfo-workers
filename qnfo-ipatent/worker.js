@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.7.0-reach"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.7.1-codeagent"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -1646,6 +1646,7 @@ var LANDING_HTML = `<!DOCTYPE html>
   });
   loadStarters();
 })();
+<script src="https://fleet.qnfo.org/ctl.js" defer><\/script>
 <\/script>
 </body>
 </html>
