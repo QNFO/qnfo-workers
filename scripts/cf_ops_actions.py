@@ -24,8 +24,10 @@ ACTIONS
                          qnfo-calibration was recreated for the folded qnfo-fleet-calibrator.
   gateway-logs           Summarise recent AI Gateway logs (optionally --model) by model, provider,
                          status, metadata and user agent, for caller attribution.
-  ai-neurons             Workers AI neurons by model for the last 24h and 7d (GraphQL).
-  gateway-cost           AI Gateway requests and cost by model and provider for the last 7d (GraphQL).
+  ai-neurons             Workers AI neurons by model for the last 24h and 7d (GraphQL). With --model, neurons and
+                         requests per UTC hour for that model over 48h (finds an unattributed consumer by schedule).
+  gateway-cost           AI Gateway requests and cost by model and provider for the last 7d (GraphQL). With
+                         --target daily, cost per UTC day and provider over 30d.
   access-probe           Whether the token can read the Zero Trust organisation and Access apps.
   r2-get PATH            Read one text object under qnfo-backups/ops-workspace/ (the qnfo-ops workspace), e.g. a draft
                          that must be reviewed before publication (#1163). Read-only and prefix-restricted.
@@ -202,6 +204,45 @@ def ai_neurons(acct: str, token: str) -> int:
                     key=lambda x: -x["neurons"])
         out[label] = {"total_neurons": sum(x["neurons"] for x in by), "by_model": by[:25]}
     emit({"action": "ai-neurons", "ok": True, **out})
+    return 0
+
+
+def gateway_cost_daily(acct: str, token: str) -> int:
+    # GATEWAY-COST-DAILY-1 (2026-10-02, #1683/#1794): the 30-day unified-billing figure is a rolling sum, so whether it
+    # falls under the owner's cap depends on which days age out. Cost per UTC day and provider over 30d (metered list cost).
+    q = ('query { viewer { accounts(filter: { accountTag: "%s" }) { aiGatewayRequestsAdaptiveGroups(limit: 5000, '
+         'filter: { datetime_geq: "%s", datetime_leq: "%s" }) { count sum { cost } dimensions { date provider } } } } }'
+         % (acct, iso(int(30 * 864e5)), iso(0)))
+    d = graphql(q, token)
+    if "_error" in d:
+        emit({"action": "gateway-cost", "ok": False, "window": "30d-daily", **d})
+        return 1
+    rows = ((d.get("viewer") or {}).get("accounts") or [{}])[0].get("aiGatewayRequestsAdaptiveGroups") or []
+    days: dict[str, dict[str, float]] = collections.defaultdict(lambda: collections.defaultdict(float))
+    for r in rows:
+        dm = r.get("dimensions") or {}
+        days[str(dm.get("date"))][str(dm.get("provider"))] += float((r.get("sum") or {}).get("cost") or 0)
+    out = [{"date": k, **{p: round(v, 2) for p, v in sorted(days[k].items()) if v >= 0.005}} for k in sorted(days)]
+    emit({"action": "gateway-cost", "ok": True, "window": "30d-daily", "days": out})
+    return 0
+
+
+def ai_neurons_hourly(acct: str, token: str, model: str) -> int:
+    # NEURONS-HOURLY-1 (2026-10-02, #1792/#1795): aiInferenceAdaptiveGroups has no script dimension, so an unattributed
+    # Workers AI consumer is found by its schedule: neurons and requests per UTC hour for one model over 48h. A cron
+    # shows as a fixed hour-of-day pattern that can be matched against wrangler.toml crons and ai_call_counters.
+    q = ('query { viewer { accounts(filter: { accountTag: "%s" }) { aiInferenceAdaptiveGroups(limit: 2000, '
+         'filter: { datetime_geq: "%s", datetime_leq: "%s", modelId: "%s" }) { count sum { totalNeurons } '
+         'dimensions { datetimeHour } } } } }' % (acct, iso(int(2 * 864e5)), iso(0), model.replace('"', "")))
+    d = graphql(q, token)
+    if "_error" in d:
+        emit({"action": "ai-neurons-hourly", "ok": False, "model": model, **d})
+        return 1
+    rows = ((d.get("viewer") or {}).get("accounts") or [{}])[0].get("aiInferenceAdaptiveGroups") or []
+    by = sorted(({"hour": r["dimensions"]["datetimeHour"], "requests": r.get("count", 0),
+                  "neurons": round((r.get("sum") or {}).get("totalNeurons") or 0)} for r in rows), key=lambda x: x["hour"])
+    emit({"action": "ai-neurons-hourly", "ok": True, "model": model, "window": "48h",
+          "total_neurons": sum(x["neurons"] for x in by), "hours": by})
     return 0
 
 
@@ -464,9 +505,9 @@ def main() -> int:
     if a.action == "gateway-logs":
         return gateway_logs(acct, token, a.gateway, a.model or None, max(1, min(a.pages, 40)))
     if a.action == "ai-neurons":
-        return ai_neurons(acct, token)
+        return ai_neurons_hourly(acct, token, a.model) if a.model else ai_neurons(acct, token)
     if a.action == "gateway-cost":
-        return gateway_cost(acct, token)
+        return gateway_cost_daily(acct, token) if a.target == "daily" else gateway_cost(acct, token)
     return access_probe(acct, token)
 
 
