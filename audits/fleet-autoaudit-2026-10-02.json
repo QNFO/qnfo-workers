@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 14:03:48",
+  "audited_at": "2026-10-02 19:32:19",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -522,7 +522,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.7.0-single-trigger",
+        "version": "1.7.1-ping-hourly",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -532,7 +532,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.2.14-public-read-only",
+        "version": "1.2.15-escalate-on-cron",
         "worker": "qnfo-observability"
       },
       {
@@ -572,12 +572,12 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.32-card-release",
+        "version": "0.7.33-scan-pagesize",
         "worker": "qnfo-social"
       },
       {
         "dir": "qnfo-subscribers",
-        "version": "1.1.5-fleet-link",
+        "version": "1.1.6-client-ip",
         "worker": "qnfo-subscribers"
       },
       {
@@ -1248,9 +1248,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.7.0-single-trigger",
+      "before": "1.7.1-ping-hourly",
       "http": 200,
-      "live": "1.7.0-single-trigger",
+      "live": "1.7.1-ping-hourly",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1272,9 +1272,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.2.14-public-read-only",
+      "before": "1.2.15-escalate-on-cron",
       "http": 200,
-      "live": "1.2.14-public-read-only",
+      "live": "1.2.15-escalate-on-cron",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
@@ -1416,17 +1416,17 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.32-card-release",
+      "before": "0.7.33-scan-pagesize",
       "http": 200,
-      "live": "0.7.32-card-release",
+      "live": "0.7.33-scan-pagesize",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": "1.1.5-fleet-link",
+      "before": "1.1.6-client-ip",
       "http": 200,
-      "live": "1.1.5-fleet-link",
+      "live": "1.1.6-client-ip",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"
