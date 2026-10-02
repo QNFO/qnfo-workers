@@ -132,6 +132,10 @@ jobs:
       # the real handler and cron with stubbed AI Search, gateway, idea-hub and Workers AI over in-memory SQLite.
       - name: ASK-LOOP-1 offline suite (qnfo-ai-search)
         run: node qnfo-ai-search/ask-loop.test.mjs
+      # SELECTED-WORKS-OPENALEX-1 (#1786) + IMPACT-FAILCLOSED-2 (#1782): the daily citation pass measures all seven selected
+      # works (STRATEGY s2.4) whatever their age, and /run?commit=1 refuses callers while IMPACT_TOKEN is unset.
+      - name: SELECTED-WORKS-OPENALEX-1 offline suite (qnfo-paper-indexer)
+        run: node qnfo-paper-indexer/impact.test.mjs
       # UTF8-DEPLOY-1: worker source fetched from GitHub reaches the upload as the same UTF-8 text (no double encoding).
       - name: UTF8-DEPLOY-1 offline suite (qnfo-ops)
         run: node qnfo-ops/utf8-deploy.test.mjs

@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.9-impact-failclosed";
+var VERSION = "3.0.10-selected-works";
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -30,6 +30,11 @@ var DEFAULT_INDEX_LIMIT = 300;
 var CORPUS_STATUSES = ["published", "external_preprint", "distributed"];
 var CORPUS_IN = "('published','external_preprint','distributed')";
 var CORPUS_WHERE = "body_md IS NOT NULL AND body_md != '' AND status IN " + CORPUS_IN;
+// SELECTED-WORKS-OPENALEX-1 (2026-10-02, agent_issues #1786, trigger 414 / #1803): the seven selected works of
+// docs/STRATEGY.md s2.4. selected_works_citation_coverage counts how many have an OpenAlex reading in 3 days; it read 3
+// of 7 because runImpact measured only the newest papers and the ten most-downloaded DOIs, so older selected works fell
+// outside the window (STRATEGY s6.1: cover the selected works always). Keep this list equal to STRATEGY s2.4.
+var SELECTED_WORKS = ["10.5281/zenodo.21637028", "10.5281/zenodo.22261547", "10.5281/zenodo.21821767", "10.5281/zenodo.21945415", "10.5281/zenodo.21901984", "10.5281/zenodo.22026592", "10.5281/zenodo.23079905"];
 
 function auth(req, env) {
   if (!env.IMPACT_TOKEN) return false;
@@ -73,8 +78,10 @@ async function runImpact(env, commit, limit) {
   // flagship fell out of the window and the metric read 1 while that record has 5 versions (10.5281/zenodo.21979060,
   // last measured 2026-09-30). The flagship set is now always measured, whatever its age.
   const list = (papers.results || []).slice();
+  const have = new Set(list.map((p) => p.zenodo_doi || p.doi));
+  // SELECTED-WORKS-OPENALEX-1: the selected works are always measured, before and independent of the flagship query.
+  for (const doi of SELECTED_WORKS) if (!have.has(doi)) { have.add(doi); list.push({ slug: "selected:" + doi, doi, zenodo_doi: doi }); }
   try {
-    const have = new Set(list.map((p) => p.zenodo_doi || p.doi));
     const fl = await env.QNFO_AUDIT.prepare("SELECT doi FROM citation_stats WHERE source='zenodo' AND metric='downloads' GROUP BY doi ORDER BY MAX(value) DESC LIMIT 10").all();
     for (const f of fl.results || []) if (f.doi && !have.has(f.doi)) { have.add(f.doi); list.push({ slug: "flagship:" + f.doi, doi: f.doi, zenodo_doi: f.doi }); }
   } catch (e) {
