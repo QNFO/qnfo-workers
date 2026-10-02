@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.106-trigger-recovery"; /* 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.107-reach-ideation-6h"; /* 0.4.107 REACH-IDEATION-6H: reach ideation re-probes every 6 hours, not once per UTC day; 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -5455,6 +5455,7 @@ async function improvementLoopTick(env) {
 //     metric is higher-is-better. The delta is confounded by everything else that moved that week: a ranking prior, not a
 //     causal claim. reach_ideas_shipped_30d (ideas this loop closed with evidence in 30 days) grades the loop end to end.
 var IDEA_MAX_NEW = 3;
+var IDEA_RUN_EVERY_MS = 6 * 3600 * 1000;
 var IDEA_WIP_MAX = 4;
 var IDEA_GAP_MAX = 1;
 var IDEA_DISCOVER_MAX = 3;
@@ -5616,7 +5617,10 @@ async function reachIdeationTick(env, force) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS reach_idea_outcomes (issue_id INTEGER PRIMARY KEY, idea_key TEXT, check_key TEXT, surface TEXT, url TEXT, worker TEXT, metric TEXT, buildable INTEGER, score REAL, value_at_file REAL, filed_at TEXT, closed_at TEXT, value_at_close REAL, value_7d REAL, measured_7d_at TEXT)").run();
   if (!force) {
     var last = await charterOne(env, "SELECT ts FROM reach_idea_runs ORDER BY id DESC LIMIT 1");
-    if (last && String(last.ts).slice(0, 10) === new Date().toISOString().slice(0, 10)) return { ok: true, skipped: "already ran today", last: last.ts };
+    // REACH-IDEATION-6H (0.4.105): every 6 hours, not once a day, so a fix shipped after the morning run closes its idea
+    // the same day (2026-10-02: 12 gateway gaps fixed at ~10:30 UTC would otherwise wait until 09:00 the next day).
+    // Filing stays bounded by the open-issue limits (IDEA_WIP_MAX buildable, IDEA_GAP_MAX not buildable), not by cadence.
+    if (last && Date.now() - Date.parse(String(last.ts)) < IDEA_RUN_EVERY_MS) return { ok: true, skipped: "ran within the last 6 hours", last: last.ts };
   }
   var nowMs = Date.now(), nowIso = new Date(nowMs).toISOString(), filed = 0, closed = 0, measured7d = 0;
   // Learn first: fill the 7-day value for ideas closed at least 7 days ago, then read the per-check efficacy.
@@ -6218,7 +6222,7 @@ var worker_default2 = {
       var rio = await charterRows(env, "SELECT id, title, priority, created_at FROM agent_issues WHERE status = 'open' AND title LIKE 'REACH-IDEA-1:%' ORDER BY id");
       // REACH-IDEATION-2: the outcome ledger (metric at filing, at close, 7 days later) and the learned per-check efficacy.
       var rioc = await charterRows(env, "SELECT issue_id, check_key, surface, metric, buildable, score, value_at_file, filed_at, closed_at, value_at_close, value_7d FROM reach_idea_outcomes ORDER BY issue_id DESC LIMIT 50");
-      return json({ ok: true, worker_version: VERSION, last_run: rir, open_ideas: rio, outcomes: rioc, efficacy: ideaEfficacy(rioc), limits: { max_new_per_day: IDEA_MAX_NEW, wip_max_buildable: IDEA_WIP_MAX, gap_max_not_buildable: IDEA_GAP_MAX, discover_max: IDEA_DISCOVER_MAX, discover_days: IDEA_DISCOVER_DAYS } });
+      return json({ ok: true, worker_version: VERSION, last_run: rir, open_ideas: rio, outcomes: rioc, efficacy: ideaEfficacy(rioc), limits: { max_new_per_run: IDEA_MAX_NEW, run_every_hours: IDEA_RUN_EVERY_MS / 3600000, wip_max_buildable: IDEA_WIP_MAX, gap_max_not_buildable: IDEA_GAP_MAX, discover_max: IDEA_DISCOVER_MAX, discover_days: IDEA_DISCOVER_DAYS } });
     }
     if (p === "/reach-ideas/tick" && request.method === "POST") {
       var riah = request.headers.get("Authorization") || "";

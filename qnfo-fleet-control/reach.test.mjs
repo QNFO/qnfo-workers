@@ -87,5 +87,13 @@ const ci = R.reachIdeasEvaluate([], [{ key: "guide-drawings", url: "u", status: 
 const dsc = R.ideaDescription(ci);
 eq(/code-task:/.test(dsc), false, "content ideas carry no auto-build line (REACH-CONTENT-AUTHORED-1)");
 eq(/code-task:/.test(R.ideaDescription(R.reachIdeasEvaluate([{ surface: "qnfo-home", url: "u", status: 200, ms: 1, html: "<html></html>" }], [])[0])), false, "surface ideas without a known edit point carry no code-task line");
+// REACH-IDEATION-6H: runs every 6 hours (a fix shipped after the morning run closes its idea the same day); a no-form
+// page policy satisfies the subscribe-box check (REACH-LAYER-1, work-with-me).
+eq(vm.runInContext("typeof IDEA_RUN_EVERY_MS === 'number' ? IDEA_RUN_EVERY_MS : -1", sb), 6 * 3600 * 1000, "ideation cadence is 6 hours");
+eq(/Date\.now\(\) - Date\.parse\(String\(last\.ts\)\) < IDEA_RUN_EVERY_MS/.test(src), true, "the tick gate uses IDEA_RUN_EVERY_MS, not the calendar day");
+const noEmail = full.replace(/type=["']email["']/g, "");
+const sbx = (h) => R.reachIdeasEvaluate([{ surface: "work-with-me", url: "u", status: 200, ms: 1, html: h }], []).some((f) => f.check === "subscribe-box");
+eq(sbx(noEmail), true, "control: a page with no email input is flagged subscribe-box");
+eq(sbx(noEmail + '<aside data-reach-policy="no-form"></aside>'), false, "data-reach-policy=no-form satisfies subscribe-box");
 console.log(`${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
