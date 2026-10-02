@@ -174,7 +174,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   const rx = (src, name) => { const m = new RegExp("var " + name + " = (/.*/[a-z]*);\\n").exec(src); return m ? m[1] : null; };
   for (const [a, b] of [["MAIL_INTERNAL_RX", "SLA_INTERNAL_RX"], ["MAIL_MACHINE_RX", "SLA_MACHINE_RX"], ["MAIL_RECEIPT_RX", "SLA_RECEIPT_RX"], ["MAIL_SOLICIT_RX", "SLA_SOLICIT_RX"]]) ok(rx(dash, a) && rx(dash, a) === rx(orch, b), "M15 " + a + " is the orchestrator's " + b);
   const arr = (src, name) => { const i = src.indexOf("var " + name + " = ["); const j = src.indexOf("];", i); return i < 0 ? null : vm.runInNewContext("(" + src.slice(i + ("var " + name + " = ").length, j + 1) + ")"); };
-  ok(JSON.stringify(arr(dash, "MAIL_FUNDERS")) === JSON.stringify(arr(orch, "SLA_FUNDERS")) && JSON.stringify(arr(dash, "MAIL_FUNDERS")).includes("foresight.org"), "M16 the funder list is the orchestrator's SLA_FUNDERS");
+  ok(JSON.stringify(arr(dash, "MAIL_FUNDERS")) === JSON.stringify(arr(orch, "SLA_FUNDERS")) && arr(dash, "MAIL_FUNDERS").some((f) => Array.isArray(f.domains) && f.domains.indexOf("foresight.org") >= 0), "M16 the funder list is the orchestrator's SLA_FUNDERS");
 }
 // F. questions the fleet's data answers, failures that still answer
 {
@@ -197,7 +197,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   r = await cmd(env, "What are recent ipatent web queries?");
   j = await r.json();
   ok(r.status === 200 && calls.length === 0 && /^This dashboard cannot read ipatent-db, where ipatent\.qnfo\.org keeps its own records: it is not bound here/.test(j.text), "F9 the web-query question says plainly that this dashboard cannot read ipatent-db, instead of failing");
-  ok(/logged in ipatent-db's analytics table until 2026-07-12[^]*does not record a query today/.test(j.text) && /Where the answer lives: qnfo-ops' public read mode \(dataset ipatent_activity, OPS-PUBLIC-READ-1/.test(j.text) && j.text.includes("https://ipatent.qnfo.org/api/metrics"), "F10 it says where the answer lives (qnfo-ops ipatent_activity aggregates, ipatent /api/metrics)");
+  ok(/logged in ipatent-db's analytics table until 2026-07-12[^]*does not record a query today/.test(j.text) && /Where the answer lives: qnfo-ops' public read mode \(dataset ipatent_activity, OPS-PUBLIC-READ-1/.test(j.text) && (j.text.match(/https:\/\/[^\s),]+/g) || []).map((u) => u.replace(/[.;:]+$/, "")).some((u) => { try { const x = new URL(u); return x.protocol === "https:" && x.host === "ipatent.qnfo.org" && x.pathname === "/api/metrics"; } catch (e) { return false; } }), "F10 it says where the answer lives (qnfo-ops ipatent_activity aggregates, ipatent /api/metrics)");
   ok(/What this dashboard can read \(metric_registry[^]*ipatent_human_views_7d 0, ipatent_search_visits_7d 0/.test(j.text) && !/other_metric/.test(j.text), "F10b it gives the ipatent aggregates it can read");
   ok(/ask_events\): 1 question, the latest/.test(j.text) && /ask_queries_v2: 1 question, the latest 2026-06-22 15:53 UTC/.test(j.text) && !j.text.includes("PRIVATE-ASK-QUERY-TEXT"), "F11 it names the query logs that exist, without their text");
   ok(/Search engines sent 6 visits[^]*www\.google\.com 4, bing\.com 2/.test(j.text) && /do not pass the search terms/.test(j.text), "F12 it reports search-engine referrals and that their terms are unknown");

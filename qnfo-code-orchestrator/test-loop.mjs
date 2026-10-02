@@ -343,7 +343,21 @@ function fakeLoader(spinMs) {
 {
   const src = (await import("node:fs")).readFileSync(new URL("./worker.js", import.meta.url), "utf8");
   const m = /async function claim\(env\) \{[\s\S]*?\n\}/.exec(src);
-  check("claim order (source check): ORDER BY attempts ASC, created_at ASC in claim()", !!m && /ORDER BY attempts ASC, created_at ASC/.test(m[0]), m && m[0].slice(0, 300));
+  check("claim order (source check): waited-first, then attempts ASC, created_at ASC in claim()", !!m && /ORDER BY CASE WHEN updated_at < \? THEN 0 ELSE 1 END, attempts ASC, created_at ASC/.test(m[0]), m && m[0].slice(0, 300));
+  // CLAIM-AGE-1: run the shipped claim SQL on real SQL. A fresh task beats a retry that just failed (CLAIM-FAIRNESS-1),
+  // and a retry that has waited 20+ minutes beats a fresh one (no starvation under continuous intake).
+  const sql = /prepare\(\s*"(UPDATE code_tasks SET lease_until=\?[^"]+)"/.exec(m[0])[1];
+  const run = (rows, nowMs) => {
+    const d = new DatabaseSync(":memory:");
+    d.exec("CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, lease_until TEXT, attempts INTEGER, created_at TEXT, updated_at TEXT)");
+    for (const r of rows) d.prepare("INSERT INTO code_tasks VALUES (?,?,?,?,?,?)").run(r.id, "queued", null, r.attempts, r.created_at, r.updated_at);
+    const iso = (ms) => new Date(ms).toISOString();
+    return d.prepare(sql).get(iso(nowMs + 6e5), iso(nowMs), iso(nowMs), iso(nowMs - 20 * 6e4)).id;
+  };
+  const T = Date.parse("2026-10-02T08:00:00Z"), at = (min) => new Date(T - min * 6e4).toISOString();
+  check("claim: a fresh task goes before a retry that failed 5 minutes ago", run([{ id: "retry", attempts: 1, created_at: at(60), updated_at: at(5) }, { id: "fresh", attempts: 0, created_at: at(1), updated_at: at(1) }], T) === "fresh");
+  check("claim: a retry waiting 25 minutes goes before fresh intake (no starvation)", run([{ id: "retry", attempts: 1, created_at: at(60), updated_at: at(25) }, { id: "fresh", attempts: 0, created_at: at(1), updated_at: at(1) }], T) === "retry");
+  check("claim: among long-waiting tasks, fewest attempts then oldest still decide", run([{ id: "r2", attempts: 2, created_at: at(90), updated_at: at(30) }, { id: "r1", attempts: 1, created_at: at(60), updated_at: at(30) }], T) === "r1");
 }
 // ---- ISSUE-INTAKE-1: an opted-in open issue becomes exactly one queued task ----
 {
