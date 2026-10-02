@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-02 10:10:29",
+  "audited_at": "2026-10-02 10:14:49",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-dashboard"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -432,7 +439,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.30.1-fleet-ctl",
+        "version": "5.31.0-aig-embed",
         "worker": "qnfo-ai"
       },
       {
@@ -492,7 +499,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.18.7-grant-followup-honest",
+        "version": "1.18.8-pageviews-human",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -880,9 +887,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.30.1-fleet-ctl",
+      "before": "5.31.0-aig-embed",
       "http": 200,
-      "live": "5.30.1-fleet-ctl",
+      "live": "5.31.0-aig-embed",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1152,9 +1159,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.18.7-grant-followup-honest",
+      "before": "1.18.8-pageviews-human",
       "http": 200,
-      "live": "1.18.7-grant-followup-honest",
+      "live": "1.18.8-pageviews-human",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
