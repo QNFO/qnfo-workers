@@ -2,11 +2,34 @@ name = "qnfo-ai-search"
 main = "worker.js"
 compatibility_date = "2026-07-09"
 workers_dev = true
+# charter-pillar: reach
+# 2.0.0 (ASK-LOOP-1): also serves ask.qwav.tech (folded in from the static Pages project ask-qwav, so the worker count
+# does not grow) and runs the ask surface's measure-evaluate-improve loop on the hourly cron below.
 
 [[ai_search_namespaces]]
 binding = "AI_SEARCH"
 namespace = "default"
 remote = true
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "QNFO_AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
+# qnfo-gateway serves papers.qnfo.org and graph-api.qnfo.org by host; idea-hub serves the public idea threads.
+[[services]]
+binding = "GATEWAY"
+service = "qnfo-gateway"
+
+[[services]]
+binding = "IDEAS"
+service = "idea-hub"
+
+[triggers]
+crons = ["41 * * * *"]
 
 [observability]
 enabled = true
