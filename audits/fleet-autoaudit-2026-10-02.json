@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 13:04:03",
+  "audited_at": "2026-10-02 13:35:06",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -422,7 +422,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.8.0-qds",
+        "version": "0.8.2-metrics",
         "worker": "q08-signal-engine"
       },
       {
@@ -432,7 +432,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.31.0-aig-embed",
+        "version": "5.31.1-aig-metadata",
         "worker": "qnfo-ai"
       },
       {
@@ -442,7 +442,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.2.0-qds",
+        "version": "2.2.1-ctl-ellipsis",
         "worker": "qnfo-ai-search"
       },
       {
@@ -457,7 +457,7 @@
       },
       {
         "dir": "qnfo-backlog-exec",
-        "version": "2.0.2-capability-contract",
+        "version": "2.0.4-exception-evidence",
         "worker": "qnfo-backlog-exec"
       },
       {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.12-plan-wip-handoff",
+        "version": "0.3.14-plan-deny-negation",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -487,17 +487,17 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.106-trigger-recovery",
+        "version": "0.4.108-stale-requeue",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.20.0-qds",
+        "version": "1.20.3-render-health-watch",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.9.1-render-fix-3",
+        "version": "3.9.2-reading",
         "worker": "qnfo-gateway"
       },
       {
@@ -547,12 +547,12 @@
       },
       {
         "dir": "qnfo-paper-indexer",
-        "version": "3.0.9-impact-failclosed",
+        "version": "3.0.11-render-health",
         "worker": "qnfo-paper-indexer"
       },
       {
         "dir": "qnfo-paper-reviser",
-        "version": "1.2.6-license-one",
+        "version": "1.2.7-flagged-errata",
         "worker": "qnfo-paper-reviser"
       },
       {
@@ -572,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.31-sent-text",
+        "version": "0.7.32-card-release",
         "worker": "qnfo-social"
       },
       {
@@ -848,9 +848,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.8.0-qds",
+      "before": "0.8.2-metrics",
       "http": 200,
-      "live": "0.8.0-qds",
+      "live": "0.8.2-metrics",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -880,9 +880,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.31.0-aig-embed",
+      "before": "5.31.1-aig-metadata",
       "http": 200,
-      "live": "5.31.0-aig-embed",
+      "live": "5.31.1-aig-metadata",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -896,9 +896,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.2.0-qds",
+      "before": "2.2.1-ctl-ellipsis",
       "http": 200,
-      "live": "2.2.0-qds",
+      "live": "2.2.1-ctl-ellipsis",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -968,9 +968,9 @@
       "worker": "qnfo-autopilot"
     },
     "qnfo-backlog-exec": {
-      "before": "2.0.2-capability-contract",
+      "before": "2.0.4-exception-evidence",
       "http": 200,
-      "live": "2.0.2-capability-contract",
+      "live": "2.0.4-exception-evidence",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-backlog-exec"
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.12-plan-wip-handoff",
+      "before": "0.3.14-plan-deny-negation",
       "http": 200,
-      "live": "0.3.12-plan-wip-handoff",
+      "live": "0.3.14-plan-deny-negation",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.106-trigger-recovery",
+      "before": "0.4.108-stale-requeue",
       "http": 200,
-      "live": "0.4.106-trigger-recovery",
+      "live": "0.4.108-stale-requeue",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.20.0-qds",
+      "before": "1.20.3-render-health-watch",
       "http": 200,
-      "live": "1.20.0-qds",
+      "live": "1.20.3-render-health-watch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.9.1-render-fix-3",
+      "before": "3.9.2-reading",
       "http": 200,
-      "live": "3.9.1-render-fix-3",
+      "live": "3.9.2-reading",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1304,17 +1304,17 @@
       "worker": "qnfo-paper-explainer"
     },
     "qnfo-paper-indexer": {
-      "before": "3.0.9-impact-failclosed",
+      "before": "3.0.11-render-health",
       "http": 200,
-      "live": "3.0.9-impact-failclosed",
+      "live": "3.0.11-render-health",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-paper-indexer"
     },
     "qnfo-paper-reviser": {
-      "before": "1.2.6-license-one",
+      "before": "1.2.7-flagged-errata",
       "http": 200,
-      "live": "1.2.6-license-one",
+      "live": "1.2.7-flagged-errata",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-paper-reviser"
@@ -1416,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.31-sent-text",
+      "before": "0.7.32-card-release",
       "http": 200,
-      "live": "0.7.31-sent-text",
+      "live": "0.7.32-card-release",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
