@@ -89,6 +89,8 @@ const get = async (url) => { const res = await gw.fetch(new Request(url, { redir
 const og = await get("https://qnfo.org/og.jpg");
 ok(og.status === 200 && og.headers.get("Content-Type") === "image/jpeg", "GET qnfo.org/og.jpg -> 200 image/jpeg", og.status);
 ok((await get("https://papers.qnfo.org/og.jpg")).status === 200, "GET papers.qnfo.org/og.jpg -> 200");
+const ogh = await gw.fetch(new Request("https://qnfo.org/og.jpg", { method: "HEAD" }), env);
+ok(ogh.status === 200 && ogh.headers.get("Content-Type") === "image/jpeg", "HEAD qnfo.org/og.jpg -> 200 image/jpeg (crawler preflight)", ogh.status);
 
 // IDEA_CHECKS tests, copied from qnfo-fleet-control (REACH-IDEATION-1) so a drift there fails here too.
 const fc = readFileSync(join(here, "..", "qnfo-fleet-control", "worker.js"), "utf8");
