@@ -41,6 +41,9 @@ jobs:
       # ISSUE-PLANNER-1: prose issues from trusted sources become code tasks; everything else is refused or recorded.
       - name: Issue planner test
         run: node --no-warnings qnfo-code-orchestrator/planner.test.mjs
+      # PLAN-DENY-NEGATION-1 (#1807): advice that forbids a cap/secret/deletion change is planned; a request for one is refused.
+      - name: Planner deny rule (PLAN-DENY-NEGATION-1)
+        run: node --no-warnings qnfo-code-orchestrator/plan-deny-negation.test.mjs
       # No-final-newline patches (incl. appending after a final line without newline, 120 seeded random edits) apply via git.
       - name: No-final-newline patch round trips
         run: node --no-warnings qnfo-code-orchestrator/no-eol.test.mjs

@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.12-plan-wip-handoff"; // 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.14-plan-deny-negation"; // 0.3.14 PLAN-DENY-NEGATION-1: the issue planner refuses an issue that asks to raise a cap, rotate a secret or delete, not one whose advice forbids it ("never raise a cap"; agent_issues 1807; 0.3.13 was the rejected code task ct_fd830vzqefw1ti); 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -784,6 +784,37 @@ const PLAN_FILE_MAX = 900000;
 const PLAN_DENY_WORKERS = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot", "qnfo-gateway", "qnfo-ai", "qnfo-autonomy-scorer", "qnfo-code-orchestrator", "qnfo-code-agent"];
 const PLAN_DENY_CATEGORY = /^(security|governance|outreach|legal|finance|identity)$/i;
 const PLAN_DENY_TEXT = /\b(secret|credential|password|api[ _-]?key|private key|raise (the |a )?cap|increase (the |a )?cap|delete (all|every|the) |drop table|rotate|revoke)\b/i;
+// PLAN-DENY-NEGATION-1 (0.3.14, agent_issues 1807): an issue is refused when it ASKS for a deny phrase, not when its advice
+// FORBIDS one. The metric triggers' own remedies say "Never raise a cap to clear this" (unified_cost_usd_30d) and "Never buy
+// attention or raise a cap" (warm_conversations_30d), so the planner refused them as "mentions caps" and they never reached
+// the code loop. A mention counts as forbidden when a negator (never, no, not, nor, without, cannot, any n't form) stands at
+// most four words before it in the same clause, with no clause break between them (punctuation, or a word such as and,
+// then, but, unless) and no reversing word ("don't forget to", "never fail to", "no later than", "not only"); "whether or
+// not" negates nothing. Every other mention is still refused, and the model's goal is still held to PLAN_DENY_TEXT itself.
+const PLAN_DENY_ALL = new RegExp(PLAN_DENY_TEXT.source, "gi");
+const PLAN_NEGATOR = /^(never|no|not|nor|without|cannot|dont|[a-z]+n't)$/;
+const PLAN_SCOPE_END = /^(and|then|but|so|yet|instead|rather|unless|until|except|otherwise|also|if|when|after|before)$/;
+const PLAN_REVERSER = /^(forget|forgets|forgetting|forgot|fail|fails|failing|failed|hesitate|neglect|omit|wait|waiting|delay|delaying|skip|later|longer|sooner|only|matter|doubt)$/;
+function planDenyNegated(before) {
+  const clause = before.split(/[.;:!?,()[\]{}\n]|\s[-–—]+>?\s/).pop();
+  const words = clause.toLowerCase().match(/[a-z]+(?:'[a-z]+)*/g) || [];
+  for (let k = words.length - 1; k >= 0 && words.length - 1 - k <= 4; k--) {
+    const w = words[k];
+    if (PLAN_NEGATOR.test(w)) return !(w === "not" && words[k - 1] === "or");
+    if (PLAN_SCOPE_END.test(w) || PLAN_REVERSER.test(w)) return false;
+  }
+  return false;
+}
+// The first deny phrase in the text that is not forbidden by its own clause, or null when every mention is a prohibition.
+function planDenyHit(text) {
+  const t = String(text || "").replace(/[‘’]/g, "'");
+  PLAN_DENY_ALL.lastIndex = 0;
+  let m;
+  while ((m = PLAN_DENY_ALL.exec(t))) {
+    if (!planDenyNegated(t.slice(Math.max(0, m.index - 200), m.index))) return m[0].trim();
+  }
+  return null;
+}
 // Issue sources whose text may become code (the merge runner's trusted list, plus the fleet's own metric triggers).
 const PLAN_TRUSTED = [
   { src: "qnfo-fleet-dashboard:owner-request", title: "OWNER-TASK-" },
@@ -907,7 +938,8 @@ async function planIssues(env, opts) {
     const text = String(r.title || "") + "\n" + String(r.description || "");
     if (cheap >= PLAN_CHEAP_PER_TICK) break;
     if (PLAN_DENY_CATEGORY.test(String(r.category || ""))) { await record(r.id, "refused", "category " + r.category + " is never planned automatically"); cheap++; decided.push({ issue: r.id, outcome: "refused" }); continue; }
-    if (PLAN_DENY_TEXT.test(text)) { await record(r.id, "refused", "the issue mentions secrets, caps or deletions"); cheap++; decided.push({ issue: r.id, outcome: "refused" }); continue; }
+    const deny = planDenyHit(text);
+    if (deny) { await record(r.id, "refused", "the issue mentions secrets, caps or deletions (\"" + deny.slice(0, 40) + "\", not inside a prohibition)"); cheap++; decided.push({ issue: r.id, outcome: "refused" }); continue; }
     const seen = await env.AUDIT_DB.prepare("SELECT id FROM code_tasks WHERE goal LIKE ? LIMIT 1").bind("[issue #" + r.id + "]%").first();
     if (seen) { await record(r.id, "queued", "a code task already exists", seen.id); continue; }
     const workers = planWorkers(text, names);
