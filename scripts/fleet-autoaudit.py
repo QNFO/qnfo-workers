@@ -122,8 +122,30 @@ def _refresh_repo():
         before = git("rev-parse", "HEAD").stdout.strip()
         if git("fetch", "-q", "origin", "main").returncode != 0:
             return False
-        if git("merge", "-q", "--ff-only", "origin/main").returncode != 0:
+        # DRIFT-CONFIRM-DIRTY-1 (2026-10-02): the --apply pass runs after the --audit pass has rewritten
+        # audits/fleet-autoaudit-<date>.json. When main already carries a newer copy of that file (any other run's
+        # artifact commit), `merge --ff-only` refused ("local changes would be overwritten"), the refresh returned
+        # False, and the stale-tree DRIFT was reported unconfirmed (#52, 09:39Z: qnfo-fleet-control 0.4.98 in the
+        # checkout vs 0.4.99 live, already on main). This run's artifact is a snapshot that the artifact step writes
+        # again from this run's data, so set it aside, fast-forward, and put it back.
+        saved = {}
+        dirty = git("diff", "--name-only", "HEAD", "--", "audits").stdout.split()
+        for rel in dirty:
+            fp = os.path.join(ROOT, rel)
+            if os.path.isfile(fp):
+                with open(fp, "rb") as fh:
+                    saved[rel] = fh.read()
+        if dirty and git("checkout", "-q", "HEAD", "--", *dirty).returncode != 0:
             return False
+        try:
+            if git("merge", "-q", "--ff-only", "origin/main").returncode != 0:
+                return False
+        finally:
+            for rel, data in saved.items():
+                fp = os.path.join(ROOT, rel)
+                os.makedirs(os.path.dirname(fp), exist_ok=True)
+                with open(fp, "wb") as fh:
+                    fh.write(data)
         return git("rev-parse", "HEAD").stdout.strip() != before
     except Exception:
         return False

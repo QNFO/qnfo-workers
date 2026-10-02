@@ -148,6 +148,29 @@ try:
 finally:
     fa.ROOT = _real_root
 
+# DRIFT-CONFIRM-DIRTY-1: the refresh still fast-forwards when this run's audit artifact is modified in the working tree and
+# main carries a newer copy of the same file; this run's copy is kept (the artifact step writes it from this run's data).
+_r = os.path.join(_tmp, "remote"); _sp.run(["git", "clone", "-q", "--bare", _o, _r], check=True)
+_c = os.path.join(_tmp, "ci"); _sp.run(["git", "clone", "-q", _r, _c], check=True)
+_p = os.path.join(_tmp, "pusher"); _sp.run(["git", "clone", "-q", _r, _p], check=True)
+for _d in (_c, _p):
+    _g(_d, "config", "user.email", "a@b"); _g(_d, "config", "user.name", "t")
+os.makedirs(os.path.join(_p, "audits")); open(os.path.join(_p, "audits", "a.json"), "w").write("v1")
+_g(_p, "add", "."); _g(_p, "commit", "-qm", "artifact v1"); _g(_p, "push", "-q", "origin", "HEAD:main")
+_g(_c, "pull", "-q", "--ff-only", "origin", "main")
+open(os.path.join(_p, "audits", "a.json"), "w").write("v2-other-run"); open(os.path.join(_p, "new", "f"), "w").write("worker 0.4.99")
+_g(_p, "add", "."); _g(_p, "commit", "-qm", "newer artifact and a worker bump"); _g(_p, "push", "-q", "origin", "HEAD:main")
+open(os.path.join(_c, "audits", "a.json"), "w").write("this-run")
+# a fresh module: the scenario tests above replace fa._refresh_repo with a stub and never put the real one back
+_fa2 = importlib.util.module_from_spec(spec); spec.loader.exec_module(_fa2)
+_fa2.ROOT = _c
+moved = _fa2._refresh_repo()
+check("refresh fast-forwards past a newer audit artifact on main while this run's artifact is modified",
+      moved and open(os.path.join(_c, "new", "f")).read() == "worker 0.4.99", moved)
+check("this run's artifact is kept after the refresh", open(os.path.join(_c, "audits", "a.json")).read() == "this-run")
+check("a refresh with nothing new returns False and keeps the artifact",
+      _fa2._refresh_repo() is False and open(os.path.join(_c, "audits", "a.json")).read() == "this-run")
+
 
 # ---------------------------------------------------------------- RATELIMIT-RETRY-1
 import io, json as _json, urllib.error as _ue, urllib.request as _ur
