@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.87-improvement-loop";
+var VERSION = "0.4.88-surface-metrics";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -5029,6 +5029,51 @@ var IL_SELF_METRICS = [
     trigger: { operator: "lt", threshold: 0.8, priority: "high", title: "Fix durability gap: metric issues are closing but the metrics relapse",
       action: "Read https://qnfo-fleet-control.q08.workers.dev/improvement (relapses). Each METRIC-FIX-RELAPSED-1 issue names the closed issue whose remediation did not hold: replace that remediation with a structural fix, not a re-run, and add a remediation_contracts probe that would have caught the relapse. Close when metric_registry.fix_hold_rate_30d >= 0.8." } }
 ];
+// SURFACE-METRICS-1 (0.4.88): public surfaces that publish their own aggregate metrics (no personal data) are read into
+// metric_registry each tick, so the trend, regression and self-grade machinery above covers them like any other metric.
+// A surface that cannot be read writes nothing (unknown is never a value). Pillar: reach.
+var IL_SURFACES = [
+  { name: "ipatent", url: "https://ipatent.qnfo.org/api/metrics", metrics: [
+    { metric: "ipatent_human_views_7d", path: ["windows", "7d", "views_human"], formula: "GET / and /guide page loads in 7d, crawlers and same-site navigation excluded (qnfo-ipatent PAGE-METRICS-1 daily counters by source class)" },
+    { metric: "ipatent_search_visits_7d", path: ["windows", "7d", "views_search"], formula: "page loads in 7d whose referrer host is a search or answer engine (qnfo-ipatent PAGE-METRICS-1)" },
+    { metric: "ipatent_crawler_hits_7d", path: ["windows", "7d", "views_crawler"], formula: "page loads in 7d from crawler user agents: an indexing signal, not readership (qnfo-ipatent PAGE-METRICS-1)" },
+    { metric: "ipatent_drafters_7d", path: ["windows", "7d", "drafters"], formula: "distinct salted IP hashes that drafted in 7d, private drafts included (qnfo-ipatent submissions)" }
+  ] }
+];
+// Pure: one surface's JSON -> [{metric, value}] for the values that are finite numbers.
+function ilSurfaceValues(surface, body) {
+  var out = [];
+  if (!surface || !body || typeof body !== "object") return out;
+  surface.metrics.forEach(function(m) {
+    var v = body;
+    for (var i = 0; i < m.path.length && v !== null && v !== void 0; i++) v = v[m.path[i]];
+    var n = typeof v === "number" ? v : NaN;
+    if (isFinite(n)) out.push({ metric: m.metric, value: n });
+  });
+  return out;
+}
+async function ilRefreshSurfaces(env, nowIso) {
+  var written = 0;
+  for (var i = 0; i < IL_SURFACES.length; i++) {
+    var sf = IL_SURFACES[i], body = null;
+    try {
+      var r = await fetch(sf.url, { headers: { "User-Agent": "qnfo-fleet-control-metrics/" + VERSION }, signal: AbortSignal.timeout(1e4) });
+      if (r.ok) body = await r.json();
+    } catch (e) { body = null; }
+    var vals = ilSurfaceValues(sf, body);
+    for (var j = 0; j < sf.metrics.length; j++) {
+      var m = sf.metrics[j];
+      try {
+        await env.AUDIT.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, state) VALUES (?1, 'surface', 'lagging', ?2, ?3, 'maximize (trended by IMPROVEMENT-LOOP-1; pillar reach)', ?4, 'qnfo-fleet-control IMPROVEMENT-LOOP-1 files regressions', 'hourly', 'MEASURED')")
+          .bind(m.metric, m.formula, sf.url, "qnfo-" + sf.name).run();
+      } catch (e) {}
+    }
+    for (var k = 0; k < vals.length; k++) {
+      try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind(vals[k].metric, String(vals[k].value), nowIso).run(); written++; } catch (e) {}
+    }
+  }
+  return written;
+}
 // Pure: which way is good for a metric, from its registry target. Returns "up", "down" or null (no direction).
 function ilDirection(target) {
   var s = String(target === null || target === void 0 ? "" : target).trim().toLowerCase();
@@ -5164,6 +5209,7 @@ async function improvementLoopTick(env) {
   if (!env.AUDIT) return { ok: false, error: "no AUDIT binding" };
   await ilSchema(env);
   var nowMs = Date.now(), nowIso = new Date(nowMs).toISOString(), day = ilDay(nowMs);
+  var surfaced = await ilRefreshSurfaces(env, nowIso).catch(function() { return 0; });
   // 1. history: today's latest value per numeric, non-retired registry metric
   var reg = await charterRows(env, "SELECT metric, target, state, last_value FROM metric_registry");
   var snap = 0;
@@ -5228,7 +5274,7 @@ async function improvementLoopTick(env) {
     await env.AUDIT.prepare("INSERT INTO improvement_loop_runs (ts, worker_version, snapshotted, evaluable, improved, flat, regressed, fixes_judged, fixes_held, findings, filed, closed, state_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)")
       .bind(nowIso, VERSION, snap, x.evaluable, x.improved, x.flat, x.regressed, x.fixes_judged, x.fixes_held, x.findings.length, filed, closed, JSON.stringify(state).slice(0, 8000)).run();
   } catch (e) {}
-  return { ok: true, ts: nowIso, snapshotted: snap, evaluable: x.evaluable, improved: x.improved, flat: x.flat, regressed: x.regressed, improvement_rate_7d: x.improvement_rate_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, findings: x.findings.length, filed: filed, closed: closed };
+  return { ok: true, ts: nowIso, surfaced: surfaced, snapshotted: snap, evaluable: x.evaluable, improved: x.improved, flat: x.flat, regressed: x.regressed, improvement_rate_7d: x.improvement_rate_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, findings: x.findings.length, filed: filed, closed: closed };
 }
 // ---- IMPROVEMENT-LOOP-1:END ----
 var worker_default2 = {

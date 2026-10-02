@@ -1,6 +1,6 @@
 # qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)
 
-**Version:** 3.5.0 (2026-10-02; private by default, findable, honest copy) · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
+**Version:** 3.5.1 (2026-10-02; page metrics) · 3.5.0 private by default, findable, honest copy · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
 ## Purpose
 Free experimental US-provisional patent disclosure drafting assistant, grounded in the
 QNFO/QWAV patent corpus (33,500+ semantic segments). Turns an inventor description into
@@ -40,6 +40,13 @@ fields via `cleanField()` on `/api/suggest` + `/api/idea` display surfaces (SOFT
 - Copy now matches the record (STRATEGY-1 s2): no "real filings", "defensible", "zero-cost", stale model name or
   `ipatent.me`; the corpus is described as the author's own draft disclosures. Download (.html) and print buttons.
 
+## What v3.5.1 added (PAGE-METRICS-1, pillar reach)
+iPatent had no pageview measurement. Each GET of `/` or `/guide` adds 1 to `page_views(day, path, source)` where source is
+`search`, `qnfo`, `referral`, `direct`, `internal` or `crawler` (user-agent heuristic). No IP, user agent, cookie or
+referrer URL is stored. `GET /api/metrics` serves 7d and 30d aggregates (views by source, guide views, drafts, saved
+drafts, distinct drafters); qnfo-fleet-control IMPROVEMENT-LOOP-1 (SURFACE-METRICS-1) reads them hourly into
+`metric_registry` as `ipatent_human_views_7d`, `ipatent_search_visits_7d`, `ipatent_crawler_hits_7d`, `ipatent_drafters_7d`.
+
 ## Endpoints
 | Route | Method | Purpose |
 |---|---|---|
@@ -54,6 +61,7 @@ fields via `cleanField()` on `/api/suggest` + `/api/idea` display surfaces (SOFT
 | /d/:id | GET | Saved draft by capability link (noindex) |
 | /api/submission/:id | GET | One saved submission (private drafts 404) |
 | /api/status | GET | Version/model/stats |
+| /api/metrics | GET | 7d/30d aggregate page and draft metrics (no personal data) |
 
 ## Deploy
 - Canonical source: `QNFO/qnfo-workers/qnfo-ipatent` (restored 2026-09-03 from the
