@@ -26,7 +26,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.0.2-ask-loop";
+var VERSION = "2.0.3-codeagent";
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -1604,6 +1604,7 @@ window.addEventListener("popstate", function(){ if (!new URLSearchParams(locatio
 if (document.readyState === "complete") boot(); else window.addEventListener("load", boot);
 })();
 </script>
+<script src="https://fleet.qnfo.org/ctl.js" defer></script>
 </body>
 </html>
 `;
