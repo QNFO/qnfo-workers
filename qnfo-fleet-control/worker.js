@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.89-act-bridge";
+var VERSION = "0.4.90-fleet-run-rate";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -5040,6 +5040,51 @@ var IL_SURFACES = [
     { metric: "ipatent_drafters_7d", path: ["windows", "7d", "drafters"], formula: "distinct salted IP hashes that drafted in 7d, private drafts included (qnfo-ipatent submissions)" }
   ] }
 ];
+// FLEET-RUN-RATE-1 (0.4.90): cost_usd_30d (list cost, all providers, 30d) is dominated by spend the fleet cannot move:
+// a one-off gpt-5.5 session burst on 2026-09-26 (ages out about 2026-10-26) and the owner's own desktop client on BYOK
+// DeepSeek. A trigger on it files work no worker can do. fleet_ai_run_rate_30d_usd is the fleet's OWN live AI cost,
+// projected to 30 days from the most recent days of data: attributed Workers AI neurons (ai_call_counters, coverage in
+// workers_ai_attribution_coverage_pct) above the 10k/day free allocation at $0.011 per 1k, plus the qnfo-ai router's
+// non-Workers-AI provider spend (ai_spend_ledger; Workers AI rows are already in the neuron count). It excludes the
+// Cloudflare plan, the owner's own client keys and anything older than the window, so it moves when a worker changes.
+var IL_RUN_RATE_DAYS = 7;
+var IL_FREE_NEURONS_DAY = 10000;
+var IL_USD_PER_K_NEURONS = 0.011;
+var IL_RUN_RATE_METRIC = { metric: "fleet_ai_run_rate_30d_usd", kind: "leading",
+  target: "<= 15 (proposed 2026-10-02: Workers AI 7.50 + qnfo-ai router 7.50; the fleet's own live AI cost only)",
+  formula: "30 x [max(0, mean daily attributed Workers AI neurons - 10000) x $0.011/1k + mean daily qnfo-ai router spend on non-Workers-AI providers] over the last <= 7 days with data (ai_call_counters + ai_spend_ledger); excludes the Cloudflare plan, the owner's own client keys and one-off session bursts (FLEET-RUN-RATE-1, qnfo-fleet-control hourly)",
+  trigger: { operator: "gt", threshold: 15, priority: "high", title: "Fleet AI run-rate above $15/30d (the fleet's own live spend)",
+    action: "Read ai_call_counters for the last 7 days grouped by worker and model; the top neuron consumer is the lever (2026-10-02: qnfo-research-exec, glm-5.3 at max reasoning effort, about 4k neurons per call). Prefer reasoning_effort low or a cheaper model on stages whose output quality is verified downstream, and record the before/after quality check. Close when metric_registry.fleet_ai_run_rate_30d_usd <= 15." } };
+// Pure: daily neuron totals [{day, neurons}] and daily router spend [{day, usd}] -> projected 30d USD, or null.
+function ilRunRate(neuronDays, routerDays, todayIso) {
+  var today = String(todayIso || "").slice(0, 10);
+  var full = function(r) { return r && r.day && String(r.day).slice(0, 10) < today; };
+  var nd = (neuronDays || []).filter(full), rd = (routerDays || []).filter(full);
+  var days = {};
+  nd.forEach(function(r) { days[String(r.day).slice(0, 10)] = 1; });
+  rd.forEach(function(r) { days[String(r.day).slice(0, 10)] = 1; });
+  var n = Object.keys(days).length;
+  if (!n) return null;
+  var neur = 0, usd = 0;
+  nd.forEach(function(r) { neur += Number(r.neurons) || 0; });
+  rd.forEach(function(r) { usd += Number(r.usd) || 0; });
+  var wai = Math.max(0, neur / n - IL_FREE_NEURONS_DAY) * IL_USD_PER_K_NEURONS / 1000;
+  return { usd_30d: Math.round((wai + usd / n) * 30 * 100) / 100, days: n, workers_ai_usd_30d: Math.round(wai * 30 * 100) / 100, router_usd_30d: Math.round(usd / n * 30 * 100) / 100, neurons_per_day: Math.round(neur / n) };
+}
+async function ilRefreshRunRate(env, nowIso) {
+  var nd = await charterRows(env, "SELECT day, SUM(neurons) AS neurons FROM ai_call_counters WHERE day >= date('now', '-" + IL_RUN_RATE_DAYS + " days') GROUP BY day");
+  var rd = await charterRows(env, "SELECT day, SUM(usd) AS usd FROM ai_spend_ledger WHERE provider <> 'workers-ai' AND day >= date('now', '-" + IL_RUN_RATE_DAYS + " days') GROUP BY day");
+  var rr = ilRunRate(nd, rd, nowIso);
+  var m = IL_RUN_RATE_METRIC;
+  try {
+    await env.AUDIT.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state) VALUES (?1, 'fleet', ?2, ?3, 'qnfo-audit.ai_call_counters + ai_spend_ledger', ?4, 'qnfo-fleet-control', 'qnfo-fleet-control METRIC-TRIGGER-LOOP-1 files the breach; the top neuron consumer is the lever', 'hourly', '> 10', '> 15', 'MEASURED')")
+      .bind(m.metric, m.kind, m.formula, m.target).run();
+    await env.AUDIT.prepare("INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes) VALUES (?1, ?2, 'registry', ?3, ?4, ?5, ?6, 'qnfo-fleet-control', 'agent_issues', 168, 1, 'seeded by FLEET-RUN-RATE-1')")
+      .bind(m.metric, m.trigger.title, m.trigger.operator, m.trigger.threshold, m.trigger.priority, m.trigger.action).run();
+    if (rr) await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind(m.metric, String(rr.usd_30d), nowIso).run();
+  } catch (e) {}
+  return rr;
+}
 // Pure: one surface's JSON -> [{metric, value}] for the values that are finite numbers.
 function ilSurfaceValues(surface, body) {
   var out = [];
@@ -5210,6 +5255,7 @@ async function improvementLoopTick(env) {
   await ilSchema(env);
   var nowMs = Date.now(), nowIso = new Date(nowMs).toISOString(), day = ilDay(nowMs);
   var surfaced = await ilRefreshSurfaces(env, nowIso).catch(function() { return 0; });
+  var runRate = await ilRefreshRunRate(env, nowIso).catch(function() { return null; });
   // 1. history: today's latest value per numeric, non-retired registry metric
   var reg = await charterRows(env, "SELECT metric, target, state, last_value FROM metric_registry");
   var snap = 0;
@@ -5274,7 +5320,7 @@ async function improvementLoopTick(env) {
     await env.AUDIT.prepare("INSERT INTO improvement_loop_runs (ts, worker_version, snapshotted, evaluable, improved, flat, regressed, fixes_judged, fixes_held, findings, filed, closed, state_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)")
       .bind(nowIso, VERSION, snap, x.evaluable, x.improved, x.flat, x.regressed, x.fixes_judged, x.fixes_held, x.findings.length, filed, closed, JSON.stringify(state).slice(0, 8000)).run();
   } catch (e) {}
-  return { ok: true, ts: nowIso, surfaced: surfaced, snapshotted: snap, evaluable: x.evaluable, improved: x.improved, flat: x.flat, regressed: x.regressed, improvement_rate_7d: x.improvement_rate_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, findings: x.findings.length, filed: filed, closed: closed };
+  return { ok: true, ts: nowIso, surfaced: surfaced, run_rate: runRate, snapshotted: snap, evaluable: x.evaluable, improved: x.improved, flat: x.flat, regressed: x.regressed, improvement_rate_7d: x.improvement_rate_7d, fix_hold_rate_30d: x.fix_hold_rate_30d, findings: x.findings.length, filed: filed, closed: closed };
 }
 // ---- IMPROVEMENT-LOOP-1:END ----
 var worker_default2 = {
