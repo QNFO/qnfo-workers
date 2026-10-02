@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.10-reach-ideas"; // 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.11-verify-runtime"; // 0.3.11 JS-VERIFY-RUNTIME-1: a bare V8 runtime message (no error name) after the module parsed counts as syntax OK, so workers that read a binding at request time stop landing in needs_human; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -528,7 +528,12 @@ async function jsSyntaxCheck(env, src) {
   if (!env.LOADER) return { verdict: "no-verifier", error: "Dynamic Workers LOADER binding missing" };
   const err = await dynamicStart(env, src);
   if (err == null) return { verdict: "ok" };
-  const msg = String((err && err.message) || err);
+  // JS-VERIFY-RUNTIME-1 (2026-10-02): the platform reports a handler's runtime failure as the bare V8 message with no
+  // error name ("Cannot read properties of undefined (reading 'prepare')", ct_zktgotb2psgjbr and ct_qldqse7ngltdth), so
+  // the name is added back when the error carries one, and bare runtime-only messages are recognised below.
+  const raw = String((err && err.message) || err);
+  const nm = err && typeof err.name === "string" && err.name !== "Error" && raw.indexOf(err.name) === -1 ? err.name + ": " : "";
+  const msg = raw === "DYNAMIC_TIMEOUT" ? raw : nm + raw;
   if (msg === "DYNAMIC_TIMEOUT") return { verdict: "fail", error: "candidate did not finish starting within " + DYN_TIMEOUT_MS + "ms (top-level code spins?)" };
   if (/SyntaxError/.test(msg)) return { verdict: "fail", error: msg.replace(/\s+/g, " ").slice(0, 300) };
   // JS-VERIFY-FAIL-CLOSED-1 (2026-10-02, GitHub #445): "anything else => syntax OK" let a real syntax error through
@@ -540,7 +545,7 @@ async function jsSyntaxCheck(env, src) {
   await audit(env, "code-task.verify-unknown", msg.replace(/\s+/g, " ").slice(0, 400), null, "error");
   return { verdict: "no-verifier", error: "the JS verifier could not confirm the syntax (start failed with: " + msg.replace(/\s+/g, " ").slice(0, 200) + ")" };
 }
-const JS_PARSED_THEN_FAILED = /\b(ReferenceError|TypeError|RangeError|URIError)\b|No such module|not permitted to access the internet|Illegal invocation|Network connection lost/;
+const JS_PARSED_THEN_FAILED = /\b(ReferenceError|TypeError|RangeError|URIError)\b|No such module|not permitted to access the internet|Illegal invocation|Network connection lost|^Cannot (?:read|set) propert(?:y|ies) of (?:undefined|null)\b|^\S+(?: \S+)? is not (?:a function|defined|iterable|a constructor)$/;
 // Measures whether the platform enforces limits.cpuMs (a spinning module must be stopped well before the wall timeout).
 async function probeDynamicCpu(env) {
   if (!env.LOADER) return { ok: false, error: "LOADER binding missing" };

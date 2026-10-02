@@ -21,6 +21,11 @@ const cases = [
   ["Failed to start Worker:\nUncaught SyntaxError: Unexpected identifier 'https'\n  at m.js:934:545", "fail", "a syntax error fails"],
   ["TypeError: Cannot read properties of undefined (reading 'prepare')", "ok", "a runtime TypeError means it parsed"],
   ["ReferenceError: env is not defined", "ok", "a ReferenceError means it parsed"],
+  ["Cannot read properties of undefined (reading 'prepare')", "ok", "the bare V8 message the platform really sends means it parsed (JS-VERIFY-RUNTIME-1)"],
+  ["Cannot read properties of null (reading 'get')", "ok", "a bare null-property message means it parsed"],
+  ["env.DB.prepare is not a function", "ok", "a bare not-a-function message means it parsed"],
+  ["Uncaught SyntaxError: Cannot read properties of undefined", "fail", "a SyntaxError still fails even if it quotes a runtime message"],
+  ["Failed to start Worker: x is not defined in this bundle", "no-verifier", "a start failure that only resembles a runtime message is NOT a pass"],
   ['No such module "cloudflare:email".', "ok", "an unresolved import means it parsed"],
   ["Network connection lost.", "ok", "a lost connection after start is not a syntax problem"],
   ["Failed to start Worker: Worker exceeded CPU time limit.", "no-verifier", "a CPU-limit start failure is NOT a pass (it was the fail-open hole)"],
@@ -30,6 +35,12 @@ for (const [msg, want, label] of cases) {
   const r = await __js(envThrowing(msg), "export default {}");
   ok(r.verdict === want, label, { msg, r });
 }
-ok(audits.length === 2, "each unknown start failure is recorded for learning", audits.length);
+ok(audits.length === 3, "each unknown start failure is recorded for learning", audits.length);
+{
+  const env = envThrowing(null);
+  env.LOADER = { load: () => ({ getEntrypoint: () => ({ fetch: async () => { throw new TypeError("x.y is not iterable"); } }) }) };
+  const r = await __js(env, "export default {}");
+  ok(r.verdict === "ok" && /TypeError/.test(r.note || ""), "a real TypeError object passes and its name is kept in the note", r);
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
