@@ -11,11 +11,13 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "report | delete-worker | delete-vectorize-index | gateway-logs | ai-neurons | gateway-cost | access-probe | r2-get"
+        description: "report | worker-history | kv-secret-scan | delete-worker | delete-vectorize-index | gateway-logs | ai-neurons | gateway-cost | access-probe | r2-get"
         required: true
         type: choice
         options:
           - report
+          - worker-history
+          - kv-secret-scan
           - ops-intake-probe
           - r2-get
           - ai-neurons
@@ -25,7 +27,7 @@ on:
           - delete-worker
           - delete-vectorize-index
       target:
-        description: "worker name (delete-worker), index name (delete-vectorize-index) or ops-workspace path (r2-get)"
+        description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) or ops-workspace path (r2-get)"
         required: false
         default: ""
       model:

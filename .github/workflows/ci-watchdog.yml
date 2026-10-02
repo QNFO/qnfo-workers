@@ -43,6 +43,9 @@ on:
       - adversarial-workers-guard
       - code-loop-test
     types: [completed]
+    # MAIN-ONLY-FINDINGS-1: a pull-request run's red check belongs to that PR (scripts/ci_watchdog.py skips it), so
+    # it no longer starts a sweep either.
+    branches: [main]
   workflow_dispatch:
   repository_dispatch:
     types: [ci-watchdog]
@@ -73,7 +76,7 @@ jobs:
     #   * every dispatch (workflow_dispatch / repository_dispatch);
     #   * every mirror-sync completion: mirror-sync runs once per push to main, so the periodic sweep keeps
     #     the cadence of main (it was 4 sweeps per push: mirror-guard, version-compare, deploy-gate, mirror-sync);
-    #   * every watched run that did not succeed, on any branch (failure, timed_out, startup_failure, ...).
+    #   * every watched run on main that did not succeed (failure, timed_out, startup_failure, ...).
     # A green PR check no longer starts a repository-wide sweep on its own; a failure anywhere in the newest 100
     # runs is still picked up by the next sweep (6h window, unchanged). A skipped job costs no API call.
     if: >-

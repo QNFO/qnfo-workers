@@ -46,9 +46,12 @@ for (const d of readdirSync(root, { withFileTypes: true })) {
 }
 ok(swept >= 10, "S0 the sweep saw the fleet's scheduled workers", swept);
 const rh = tomlDeclaredCrons(readFileSync(join(root, "radar-hub", "wrangler.toml"), "utf8"));
-ok(Array.isArray(rh) && rh.includes("0 5 * * 2") && !rh.includes("0 5 * * 1") && rh.length === 9, "R1 radar-hub: the Monday events radar, 9 crons", rh);
+// CRON-SINGLE-TRIGGER-1 (#513) moved radar-hub's 9 crons into worker.js CRON_TABLE; the comment above its one trigger
+// still lists them, so this also proves a comment inside [triggers] is not read as the list.
+ok(eq(rh, ["0 * * * *"]), "R1 radar-hub: the single hourly trigger, not the former list in its comment", rh);
 const co = tomlDeclaredCrons(readFileSync(join(root, "qnfo-cloud-ops", "wrangler.toml"), "utf8"));
-ok(Array.isArray(co) && co.length === 21, "R2 qnfo-cloud-ops: 21 crons", co && co.length);
+// CRON-SINGLE-TRIGGER-1 (qnfo-cloud-ops 1.19.0, #510) folded its 21 per-slot crons into one 10-minute tick.
+ok(eq(co, ["*/10 * * * *"]), "R2 qnfo-cloud-ops: the single */10 tick", co);
 const fd = tomlDeclaredCrons(readFileSync(join(root, "qnfo-fleet-dashboard", "wrangler.toml"), "utf8"));
 ok(eq(fd, ["*/15 * * * *"]), "R3 qnfo-fleet-dashboard: */15", fd);
 

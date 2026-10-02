@@ -601,6 +601,11 @@ def main() -> int:
             if r.get("id") in closed_runs:
                 superseded.append((f"- `superseded` **{name}** — {_ev}", f"already closed as #{closed_runs[r['id']]}"))
                 continue
+            # MAIN-ONLY-FINDINGS-1 (2026-10-02): a red check on a pull-request branch belongs to that PR, which already
+            # shows it; filing a repository issue for it was noise, and run 36985122769 failed the whole watchdog when that
+            # issue create got HTTP 403 (code-loop-test on claude/js-verify-runtime-errors). Only main is watched here.
+            if (r.get("head_branch") or "main") != "main":
+                continue
             g = superseded_by_green(r, pool) or superseded_by_green(r, branch_runs(r.get("workflow_id"), r.get("head_branch") or ""))
             if g:
                 superseded.append((f"- `superseded` **{name}** — {_ev}", f"superseded by green run {g.get('id')} ({(g.get('created_at') or '')[:19]})"))

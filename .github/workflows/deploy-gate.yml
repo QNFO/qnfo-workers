@@ -173,6 +173,13 @@ jobs:
       # paid upstreams, caches, durable jobs and checkpoints stay behind the key.
       - name: OPS-PUBLIC-READ-1 offline suite (qnfo-ops)
         run: node qnfo-ops/public-read.test.mjs
+      # SECRET-CHANGE-WATCH-1: qnfo-ops records every worker secret change (never a value) and files one consumer check per
+      # worker per change day, with a heartbeat the watchmaker reads.
+      - name: SECRET-CHANGE-WATCH-1 offline suite (qnfo-ops)
+        run: node qnfo-ops/secret-watch.test.mjs
+      # GUARD-RCS-CANCELLED-1: a concurrency-cancelled or skipped guard run is not a guard that failed closed.
+      - name: GUARD-RCS-CANCELLED-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/guard-rcs.test.mjs
       # FLEET-CMD-1: the fleet command line (input outside the 10s refresh, open reads, emailed-code actions, 15-min step-up
       # for destructive ones, validated AI proposals, no hanging asks).
       - name: FLEET-CMD-1 offline suite (qnfo-fleet-dashboard)
