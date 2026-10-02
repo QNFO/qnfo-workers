@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.16.4-capability-contract"; /* OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.16.5-optout-evidence"; /* OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -1545,6 +1545,15 @@ async function outreachSuppressed(env, email) {
   return !!(c && Number(c.suppress) === 1);
 }
 __name(outreachSuppressed, "outreachSuppressed");
+/* OUTREACH-OPTOUT-EVIDENCE-1 (2026-10-02, #1710): outreach_log keeps no body, so the consent rule "an opt-out line in
+   every message" could not be measured (the dashboard's OWNER-VOICE-GUARD-1 says "opt-out line not checked").
+   Every send now records, in its cloud_ops_events meta, what was checked on the exact subject and body handed to
+   SEND_EMAIL: opt_out (body carries OUTREACH_OPT_OUT) and fake_re (subject starts "Re:"), keyed by message_id so
+   a probe can join outreach_log.message_id. Recording only; it changes nothing about what or when this job sends. */
+function outreachSendEvidence(email, res, send, subject, body) {
+  return { job: "outreach", email, message_id: res && res.messageId || "", send, opt_out: String(body || "").indexOf(OUTREACH_OPT_OUT) >= 0, fake_re: /^\s*Re:/i.test(String(subject || "")) };
+}
+__name(outreachSendEvidence, "outreachSendEvidence");
 // OUTREACH-SHARED-CAP-1 (2026-10-01, #1718): docs/STRATEGY.md s5 caps cold outreach at 8/day in total and 3/day per
 // recipient domain across BOTH engines (this job and qnfo-outreach). Each engine counted only its own sends, so together
 // they could send 16/day, and this job had no per-domain cap. The shared count reads both ledgers for the UTC day:
@@ -1680,7 +1689,7 @@ async function jobOutreach(env) {
       await env.AUDIT.prepare("INSERT INTO outreach_log (email, subject, message_id, sent_at, status) VALUES (?1,?2,?3, datetime('now'), 'sent')").bind(email, subject, res && res.messageId || "").run();
       await env.AUDIT.prepare("INSERT INTO contact_ledger (email, name, first_contact, last_contact, contact_count, status) VALUES (?1,?2,?3,?3,1,'outreach') ON CONFLICT(email) DO UPDATE SET last_contact=excluded.last_contact, contact_count=contact_count+1").bind(email, r.author || null, today).run();
       await env.AUDIT.prepare("UPDATE outreach_queue SET status='sent', sent_at=datetime('now') WHERE id=?1").bind(r.id).run();
-      await recordEvent(env, "outreach", "oq-sent-" + Date.now().toString(36), "outreach sent to " + email + " re " + (r.paper_id || ""), { job: "outreach", email });
+      await recordEvent(env, "outreach", "oq-sent-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), "outreach sent to " + email + " re " + (r.paper_id || ""), outreachSendEvidence(email, res, "first", subject, body));
       sentToday++;
       await stateSet(env, sentKey, String(sentToday));
       out.sent++;
@@ -1748,6 +1757,7 @@ async function jobOutreach(env) {
           ].join("\n");
           const res = await env.SEND_EMAIL.send({ to: f.email, from: OUTREACH_FROM, subject, text: body });
           await env.AUDIT.prepare("INSERT INTO outreach_log (email, subject, message_id, sent_at, status) VALUES (?1,?2,?3, datetime('now'), 'followup')").bind(f.email, subject, res && res.messageId || "").run();
+          await recordEvent(env, "outreach", "oq-followup-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), "outreach follow-up to " + f.email, outreachSendEvidence(f.email, res, "followup", subject, body));
           sentToday++;
           await stateSet(env, sentKey, String(sentToday));
           out.followups++;

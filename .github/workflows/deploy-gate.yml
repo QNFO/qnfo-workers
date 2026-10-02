@@ -134,3 +134,8 @@ jobs:
       # inputs), proves a sai_config weight change moves the SAI, and replays the DoD against an in-memory SQLite D1.
       - name: SAI-COMPOSITE-WEIGHTS-1 offline suite (qnfo-autonomy-scorer, parity with qnfo-fleet-dashboard)
         run: node --test qnfo-autonomy-scorer/sai.test.mjs
+
+      # OUTREACH-CONSENT-1 + OUTREACH-OPTOUT-EVIDENCE-1 (#1710): cold email carries the opt-out line, never a fake "Re:",
+      # honours suppression and the shared caps, and records per-send opt-out evidence the DoD probe reads.
+      - name: OUTREACH-CONSENT-1 offline suite (qnfo-cloud-ops)
+        run: node qnfo-cloud-ops/outreach-consent.test.mjs
