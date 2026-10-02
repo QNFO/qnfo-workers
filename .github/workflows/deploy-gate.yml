@@ -293,3 +293,6 @@ jobs:
         run: node qnfo-research-exec/grounding.test.mjs
       - name: Research poison-park offline suite (qnfo-research-exec)
         run: node qnfo-research-exec/poison-park.test.mjs
+      # RUN-INTERNAL-1 (#1783): research-exec's inline run and drain-v2 refuse public hostnames; service bindings still reach them.
+      - name: RUN-INTERNAL-1 offline suite (qnfo-research-exec)
+        run: node qnfo-research-exec/run-internal.test.mjs
