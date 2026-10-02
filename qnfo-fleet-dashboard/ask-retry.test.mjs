@@ -109,5 +109,14 @@ function seed(db) {
   const v = await W.__view(env);
   ok(v.some((x) => x.prompt === "is anything on fire?" && x.status === "answered") && v.length <= 8, "R9 the owner's history includes command-line asks", v.map((x) => x.prompt));
 }
+// R10 (ASK-TRUNCATED-JSON-1): a reply cut at max_tokens shows the answer and the complete actions, never raw JSON
+{
+  const cut = '{"answer":"Cannot auto-fix from here: line one.\\nline two.","actions":[{"op":"refresh","why":"x"},{"op":"note","key":"decision","note":"Auto-fix requested but not perfor';
+  const { env, db } = mk({ svc: async () => new Response(JSON.stringify({ choices: [{ message: { content: cut } }] }), { status: 200 }) });
+  seed(db);
+  await W.__askRetry(env);
+  const a = db.prepare("SELECT status, response FROM owner_prompts WHERE id='op-a'").get();
+  ok(a.status === "answered" && a.response.indexOf("Cannot auto-fix from here: line one.\nline two.") === 0 && a.response.indexOf('{"answer"') < 0 && /Refresh fleet state/.test(a.response), "R10 a truncated JSON reply is salvaged, never shown raw", a.response.slice(0, 200));
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
