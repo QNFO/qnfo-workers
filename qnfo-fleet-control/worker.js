@@ -2884,6 +2884,24 @@ async function evolveTick(env, force) {
   return await evPropose(env);
 }
 __name(evolveTick, "evolveTick");
+// EVOLVE-HEARTBEAT-1 (0.4.84, agent_issues 1726): evolveTick writes evolve_candidates only when it proposes. An idle loop
+// (no eligible issue, the 6h gap, the 3-rejection backoff) therefore looked stalled to the fleet-dashboard watchmaker
+// (fleet-defects) after 48h. Each completed tick upserts one cloud_ops_events row per UTC day, evolve-tick-<day>, status
+// 'ok', with its outcome. A tick that bails (no GITHUB_TOKEN, no AI binding), throws, or cannot reach GitHub for its
+// in-flight candidate writes nothing, so a broken loop still goes stale.
+async function evolveTickHeartbeat(env) {
+  var r = await evolveTick(env, false);
+  var stuck = r && r.advanced && /HTTP \d/.test(String(r.advanced.note || ""));
+  if (r && r.ok && !stuck) {
+    try {
+      var now = new Date().toISOString();
+      await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'evolve-tick', ?3, 'qnfo-fleet-control', 'ok') ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, status = 'ok'")
+        .bind("evolve-tick-" + now.slice(0, 10), now, JSON.stringify(r).slice(0, 300)).run();
+    } catch (e) {}
+  }
+  return r;
+}
+__name(evolveTickHeartbeat, "evolveTickHeartbeat");
 // Folded autopilot activity snapshot: one row per scheduled worker per day (dashboard req24).
 async function activitySnapshotDaily(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_activity_daily (id INTEGER PRIMARY KEY AUTOINCREMENT, worker_name TEXT NOT NULL, day TEXT NOT NULL, req24 INTEGER, source TEXT, ts TEXT)").run();
@@ -4417,7 +4435,7 @@ var worker_default2 = {
     ctx.waitUntil(pollObservability(env).catch((e) => console.error("pollObservability error:", e && e.message || e)));
     ctx.waitUntil(reassertObservability(env).catch((e) => console.error("reassertObservability error:", e && e.message || e)));
     ctx.waitUntil(refreshOwnedMetrics(env).catch((e) => console.error("refreshOwnedMetrics error:", e && e.message || e)));
-    ctx.waitUntil(evolveTick(env, false).catch((e) => console.error("evolveTick error:", e && e.message || e)));
+    ctx.waitUntil(evolveTickHeartbeat(env).catch((e) => console.error("evolveTick error:", e && e.message || e)));
     ctx.waitUntil(slaEscalate(env).catch((e) => console.error("slaEscalate error:", e && e.message || e)));
     ctx.waitUntil(evaluateMetricTriggers(env).catch((e) => console.error("evaluateMetricTriggers error:", e && e.message || e)));
     ctx.waitUntil(publicationPreflight(env).catch((e) => console.error("publicationPreflight error:", e && e.message || e)));

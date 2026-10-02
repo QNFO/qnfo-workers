@@ -1,6 +1,6 @@
 // WATCHMAKER-INDEX-1 offline suite: replays the watchmaker block from worker.js against an in-memory SQLite D1 with
 // synthetic ledgers and proves: a fully fresh fleet reads 0; a stalled runner, a never-run one, an unreadable ledger,
-// a research backlog and code-task merges a person still does (waiting now, or merged or closed by a person in the last 30
+// a research backlog, an evolve loop with neither a proposal nor a heartbeat, and code-task merges a person still does (waiting now, or merged or closed by a person in the last 30
 // days) each count; a first run not yet due, a code loop dormant for 30 days and the owner's by-policy approvals do not; the daily run writes one row and the metric once per day, never before 07:00Z; GET /api/watchmaker serves it.
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
 // stale zenodo_stats and job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
@@ -113,6 +113,18 @@ db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm3', 'pr_o
 m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "code-task-merge").counted && /^2 code tasks.*; 2 waiting now$/.test(op(m, "code-task-merge").state), "a PR waiting on a person counts at any age, and the orchestrator's own pr_open rows count");
 db.exec("DELETE FROM code_tasks");
+// EVOLVE-HEARTBEAT-1: an idle evolve loop (no proposal for days) is alive while its daily heartbeat is fresh; a heartbeat
+// that is not 'ok' proves nothing, and with neither the runner counts as stalled.
+db.prepare("UPDATE evolve_candidates SET ts = ?").run(ago(70));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('evolve-tick-2026-10-06', ?, 'ok')").run(ago(1));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('evolve-tickx', ?, 'ok')").run(ago(0));   // outside the id range
+m = await api.watchmakerMeasure(env, NOW);
+ok(!op(m, "fleet-defects").counted && op(m, "fleet-defects").age_h === 1, "an idle evolve loop with a fresh heartbeat is ok, not stalled");
+db.exec("UPDATE cloud_ops_events SET status = 'error' WHERE id = 'evolve-tick-2026-10-06'");
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "fleet-defects").counted && /stalled: last run 70h ago/.test(op(m, "fleet-defects").state) && m.index === 1, "no proposal and no ok heartbeat in 48h: the evolve loop counts as stalled");
+db.exec("DELETE FROM cloud_ops_events WHERE id IN ('evolve-tick-2026-10-06', 'evolve-tickx')");
+db.prepare("UPDATE evolve_candidates SET ts = ?").run(ago(9));
 ok(m.retired.length === 4, "retired claude.ai Routines are listed with what replaced them");
 ok(!op(m, "q08-review").counted && op(m, "q08-review").state === "no backlog", "the one-shot q08 review is not counted before it is 48h overdue (Q08-REVIEW-2026-10-31)");
 ok(op(m, "errata-watch").state.startsWith("ok") && op(m, "errata-respond").age_h === 1.2 && !op(m, "errata-publish").counted, "errata-hub ticks are read from errata_watch $.last_ok");
