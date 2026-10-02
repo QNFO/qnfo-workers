@@ -10,9 +10,16 @@
 // v0.7.19 POST-ID-UTM-1 (#1712, 2026-10-01): UTM tags on qnfo links, post ids persisted, weekly cadence cap
 //   (SOCIAL_WEEKLY_CAP, default 2) and the pipeline_flags.social_paused kill switch on both drains.
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
-// Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags). AI: env.AI.
+// Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
+// social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.7.27-run-ledger";
+var VERSION = "0.7.28-social-learner";
+// 0.7.28 (2026-10-02, pillar: reach): SOCIAL-DISTRIBUTION-LEARNER-1 (STRATEGY 6.4 "distribution allocation (weekly)",
+// owner directive 2026-10-02: measure external effectiveness and change itself to improve it). A Thompson-sampling bandit
+// over topic x format x time slot chooses which queued post goes next and in which slot, inside the weekly cap, pause flag
+// and content gates; it never adds a post. Rewards (72h Bluesky engagement plus attributed paper-page views) are credited
+// once per post in a weekly update; ops_config social_learner_enabled=0 restores the 0.7.27 order and timing. Daily
+// metric_registry social_engagement_rate_30d; public GET /learner. Full design at the SOCIAL-DISTRIBUTION-LEARNER-1 block.
 // 0.7.27 (2026-10-02, pillar: reach): SOCIAL-RUN-LEDGER-1. The profile sync, the posting drain with its Buffer cross-post,
 // the Zenodo scan and the engagement collector each record their run in cloud_ops_events (social-<op>-<day>), so the
 // watchmaker (qnfo-fleet-dashboard WATCHMAKER_OPS) can tell a quiet run from a dead one. The two drains no longer share a
@@ -908,7 +915,8 @@ async function httpStatus(url) {
     return 0;
   }
 }
-async function drainDissemination(env) {
+async function drainDissemination(env, opts) {
+  opts = opts || {};
   await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', updated_at=datetime('now') WHERE action='posting' AND updated_at < datetime('now','-1 hour')").run();
   await env.DB.prepare("UPDATE dissemination_tracker SET action='queued', retry_count=COALESCE(retry_count,0)+1, updated_at=datetime('now') WHERE action='failed' AND COALESCE(retry_count,0) < 3 AND updated_at < datetime('now','-30 minutes')").run();
   const cap = await env.DB.prepare("SELECT COUNT(*) n FROM dissemination_tracker WHERE action='posted' AND posted_at >= datetime('now','start of day')").first();
@@ -916,9 +924,18 @@ async function drainDissemination(env) {
   if (postedToday >= DRAIN_DAILY_CAP) return { skipped: 'daily-cap', posted_today: postedToday };
   const gate = await socialGate(env, 'drainDissemination');
   if (!gate.allowed) return { skipped: gate.reason || 'weekly-cap', posted_7d: gate.posted_7d, cap: gate.cap };
-  let posted = 0, failed = 0;
+  // SOCIAL-DISTRIBUTION-LEARNER-1: with the learner on, this queue posts only the row the learner chose, in its slot.
+  const lrn = await learnerEnabled(env);
+  let posted = 0, failed = 0, learner;
   for (let i = 0; i < DRAIN_PER_RUN && posted < gate.allowed; i++) {
-    const row = await env.DB.prepare("SELECT * FROM dissemination_tracker WHERE action='queued' AND channel='bluesky' ORDER BY created_at ASC LIMIT 1").first();
+    let row = null, decision = null;
+    if (lrn.on) {
+      const pk = await learnerPick(env, 'dissem', opts.nowMs);
+      if (pk.hold) { learner = learner && learner.posted ? learner : pk.summary; break; }
+      if (pk.row) { row = pk.row; decision = pk.decision; }
+      else if (pk.error) learner = { error: pk.error, fallback: 'old order' };
+    }
+    if (!row) row = await env.DB.prepare("SELECT * FROM dissemination_tracker WHERE action='queued' AND channel='bluesky' ORDER BY created_at ASC LIMIT 1").first();
     if (!row) break;
     try {
       await env.DB.prepare("UPDATE dissemination_tracker SET action='posting', updated_at=datetime('now') WHERE id=? AND action='queued'").bind(row.id).run();
@@ -953,12 +970,15 @@ async function drainDissemination(env) {
       const postUrl = handle && rkey ? 'https://bsky.app/profile/' + handle + '/post/' + rkey : r.uri;
       await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, updated_at=datetime('now') WHERE id=?").bind(postUrl, r.uri, row.id).run();
       posted++;
+      if (decision) learner = await learnerRecordPost(env, decision, r.uri, opts.nowMs);
     } catch (e) {
       failed++;
       await env.DB.prepare("UPDATE dissemination_tracker SET action='failed', post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(String(e).slice(0, 180), row.id).run();
     }
   }
-  return { posted, failed };
+  const out = { posted, failed };
+  if (lrn.on) out.learner = learner || { on: true };
+  return out;
 }
 // RETRACT-DEAD-LINKS-1 (2026-09-26): the post-side gate stops POSTING bad links, but a paper can be
 // published -> disseminated -> posted, then LATER reclassified (quarantined/duplicate/kg-backfill) by
@@ -1003,7 +1023,8 @@ async function restoreMisdeleted(env) {
   if (restored) console.log("RESTORED " + restored + " mis-deleted threads (link now resolves)");
   return { restored };
 }
-async function drainQueue(env) {
+async function drainQueue(env, opts) {
+  opts = opts || {};
   await env.DB.prepare(
     "UPDATE social_threads SET status = CASE WHEN retry_count < ? THEN 'queued' ELSE 'failed' END, retry_count = retry_count + 1 WHERE status = 'posting'"
   ).bind(MAX_RETRIES).run();
@@ -1017,10 +1038,21 @@ async function drainQueue(env) {
   if (postedToday >= DRAIN_DAILY_CAP) return { skipped: 'daily-cap', posted_today: postedToday };
   const gate = await socialGate(env, 'drainQueue');
   if (!gate.allowed) return { skipped: gate.reason || 'weekly-cap', posted_7d: gate.posted_7d, cap: gate.cap, posted_today: postedToday };
-  let posted = 0, failed = 0;
+  // SOCIAL-DISTRIBUTION-LEARNER-1: only now, with capacity granted by the gate above, may the learner choose the row and
+  // its slot. It holds (posts nothing) until the chosen slot, or while its choice belongs to the dissemination queue.
+  // Learner off, or no answer from it: the old order below (selected rows first, then oldest id).
+  const lrn = await learnerEnabled(env);
+  let posted = 0, failed = 0, learner;
   const buffer = [];
   for (let i = 0; i < DRAIN_PER_RUN && posted < gate.allowed; i++) {
-    const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY CASE WHEN COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%' THEN 0 ELSE 1 END, id ASC LIMIT 1").first();
+    let row = null, decision = null;
+    if (lrn.on) {
+      const pk = await learnerPick(env, 'thread', opts.nowMs);
+      if (pk.hold) { learner = learner && learner.posted ? learner : pk.summary; break; }
+      if (pk.row) { row = pk.row; decision = pk.decision; }
+      else if (pk.error) learner = { error: pk.error, fallback: 'old order' };
+    }
+    if (!row) row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY CASE WHEN COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%' THEN 0 ELSE 1 END, id ASC LIMIT 1").first();
     if (!row) break;
     try {
       await env.DB.prepare("UPDATE social_threads SET status='posting' WHERE id=? AND status='queued'").bind(row.id).run();
@@ -1064,6 +1096,7 @@ async function drainQueue(env) {
       // POST-ID-UTM-1 (#1712): status and platform ids in one write (markPosted falls back if the column is missing).
       await markPosted(env, row.id, postUriValue(uris[0], bufferResult));
       posted++;
+      if (decision) learner = await learnerRecordPost(env, decision, uris[0], opts.nowMs);
       // SOCIAL-RUN-LEDGER-1: what Buffer did with this post, per platform, for the run record.
       if (bufferResult && Array.isArray(bufferResult.results)) for (const br of bufferResult.results) buffer.push(String(br.platform || 'buffer') + ':' + String(br.status || '?'));
       else if (bufferResult) buffer.push('buffer:' + (bufferResult.skipped ? 'skipped' : 'error'));
@@ -1075,7 +1108,9 @@ async function drainQueue(env) {
       console.error('drain post failed', row.slug, String(e));
     }
   }
-  return { posted: posted, failed: failed, posted_today: postedToday + posted, buffer: buffer };
+  const out = { posted: posted, failed: failed, posted_today: postedToday + posted, buffer: buffer };
+  if (lrn.on) out.learner = learner || { on: true };
+  return out;
 }
 
 // SOCIAL-RUN-LEDGER-1 (0.7.27, pillar: reach; WATCHMAKER-INDEX-1). The profile sync, the posting drain (Bluesky plus the
@@ -1123,6 +1158,562 @@ function engagementRunStatus(o) {
   return o.errors ? 'degraded' : 'ok';
 }
 
+// ---------- SOCIAL-DISTRIBUTION-LEARNER-1 (0.7.28, pillar: reach; STRATEGY 6.4 "distribution allocation (weekly)") ----------
+// Owner directive 2026-10-02: the fleet measures its external effectiveness and changes itself to improve the metrics. This
+// bandit chooses WHICH queued post goes out next and WHEN. It never adds a post: it is asked only after socialGate granted
+// capacity (pause flag, weekly cap), it chooses among rows already queued (fact-checked threads and the dissemination
+// queue), every row it chooses still passes the content gate and link checks, and with the learner on its posts are at
+// least 24h apart (two posts two hours apart would spend the week's cap in one morning). It never rewrites text.
+//
+// Arms, factorised. Three independent Beta posteriors, one per dimension, instead of one per cell of the 3 x 3 x 3 cross
+// product: at 1-2 posts a week a 27-cell table would take years before most cells had a second observation, while every
+// post updates all three marginals at once, so each value has a few observations after about ten posts. The price is that
+// interactions (questions working only for one topic, say) are not modelled.
+//   topic  : energy (JPCUB, selected works 1-4), epistemics (works 5-6), operations (work 7): STRATEGY 2.3 pillars 1-3.
+//            Selected-work DOIs map directly, other rows by title and text keywords. Pillar 4 (ultrametric), q08 and
+//            anything unclassified are not arms: such a row keeps its old place behind every arm row and earns no reward.
+//   format : what the queue genuinely holds (the learner can only choose among them): single (one post: the launch-queue
+//            claim/test/status posts, the dissemination "title - link" card), thread (the composer's 5-post thread with a
+//            statement hook) and question (the first sentence of the first post is a question: the composer's "provocative
+//            question" hook, or a title that asks one).
+//   slot   : the :30 ticks of the 2-hourly cron in three UTC windows: eu-morning 08:30 and 10:30, us-morning 14:30 and
+//            16:30, us-afternoon 18:30 and 20:30. A chosen post waits for its slot (at most about 22h).
+// Decision. When capacity exists and the last learner post is 24h old: draw theta from every Beta, score each queued arm
+// row theta_topic x theta_format, take the best (ties keep the old order, selected rows first), take the slot with the
+// highest draw. The decision is kept in ops_config social_learner_pending until it is posted, its row leaves the queue or
+// it is 48h old (drawing again every tick would favour early slots), and logged as cloud_ops_events
+// social-learner-decision-* with every draw and the scored candidates.
+// Reward, once per post, after its 72h window, in the weekly update. social_learner_posts holds one row per post, status
+// pending -> credited | no-data (one UPDATE ... WHERE status = 'pending'), so no post counts twice:
+//   e = likes + reposts + quotes + replies from others on the root post at the last daily social_engagements snapshot
+//       inside 72h (a thread's own first reply is subtracted, or every thread would start with a free reply);
+//   v = paper-page views the post plausibly caused: CF RUM pageviews (reach_signals cf-rum, entity paper) of the linked
+//       papers.qnfo.org/papers/<slug> on the post day and the two days after, minus 3 x its mean daily views over the 7 days
+//       before; only when all 3 window days and 3+ baseline days were ingested, else e alone. Not available: UTM campaigns
+//       (RUM paths carry no query string and GA4 is retired), referrers per post (reach_signals referrer hosts are site-wide
+//       per day), subscriptions per post (the subscribers table has no campaign), impressions (Bluesky reports none) and
+//       Buffer channel metrics (none in D1).
+//   r = 1 - exp(-(e + v / 5) / 2), in [0, 1): one engagement 0.39, three 0.78; five extra views weigh as one engagement.
+//       Each dimension's Beta(1, 1) prior takes alpha += r, beta += 1 - r. The posterior is recomputed from the credited rows
+//       on every read, so there is no counter to drift or double-count.
+// Weekly update: Mondays in the 07:00Z cron after the engagement collector, or on a later day when the last completed
+// update is 7 or more days old. It also files Bluesky posts the learner did not choose (the dissemination drain, the HTTP
+// routes) so they teach it too, and records next week's allocation (the share of 2000 posterior draws each arm wins) in the
+// run ledger row social-learner-update-<day> (WATCHMAKER_OPS social-learner). metric_registry social_engagement_rate_30d
+// is refreshed daily in the same cron, whatever the switch says (it is measurement only).
+// Kill switch: ops_config social_learner_enabled ('0', 'off', 'false', 'no', 'disabled' = off; absent = on; unreadable =
+// off). Off is the 0.7.27 order and timing exactly, and the weekly update records 'skipped'.
+var LEARNER_TOPICS = ['energy', 'epistemics', 'operations'];
+var LEARNER_FORMATS = ['single', 'thread', 'question'];
+var LEARNER_SLOTS = { 'eu-morning': [8, 12], 'us-morning': [14, 18], 'us-afternoon': [18, 22] };   // UTC hours [from, to)
+var LEARNER_EPOCH_SQL = '2026-10-02 00:00:00';   // posts before the learner (and before the STRATEGY-1 cadence) are not arms
+var LEARNER_WINDOW_MS = 72 * 36e5;
+var LEARNER_SNAPSHOT_UTC_H = 7;                  // a day's snapshot counts when its 07:00Z collection is inside the window
+var LEARNER_CREDIT_GRACE_MS = 2 * 36e5;
+var LEARNER_REWARD_SCALE = 2;
+var LEARNER_VISITS_PER_ENGAGEMENT = 5;
+var LEARNER_DECISION_TTL_MS = 48 * 36e5;
+var LEARNER_MIN_GAP_MS = 24 * 36e5;              // learner posts at least 24h apart (so also one per tick)
+var LEARNER_PBEST_DRAWS = 2000;
+var LEARNER_METRIC = 'social_engagement_rate_30d';
+var LEARNER_SELECTED_TOPIC = {
+  '10.5281/zenodo.21637028': 'energy', '10.5281/zenodo.22261547': 'energy', '10.5281/zenodo.21821767': 'energy',
+  '10.5281/zenodo.21945415': 'energy', '10.5281/zenodo.21901984': 'epistemics', '10.5281/zenodo.22026592': 'epistemics',
+  '10.5281/zenodo.23079905': 'operations'
+};
+var LEARNER_TOPIC_RE = [
+  ['energy', /\b(?:jpcub|joules?\b|landauer|thermodynamic (?:floor|cost|limit)|energy[- ](?:honest|per|cost|floor|efficien|budget))/i],
+  ['epistemics', /\b(?:ignorance audits?|epistemic (?:legibility|repair|audit)|epistemics of ai|ai-assisted (?:science|claims?))\b/i],
+  ['operations', /\b(?:quniverse|autonomous (?:cloud )?research (?:system|operations|fleet)|research fleet|worker fleet|self-maintaining research)/i]
+];
+var LEARNER_NOT_ARM_RE = /\b(?:ultrametric|adelic|p-adic|autaxic|topos)\b/i;
+var learnerRng = Math.random;
+function setLearnerRng(f) { learnerRng = typeof f === 'function' ? f : Math.random; }
+function lr4(x) { return Math.round(x * 1e4) / 1e4; }
+function learnerSqlTs(ms) { return new Date(ms).toISOString().replace('T', ' ').slice(0, 19); }
+function learnerParseTs(v) {
+  const s = String(v || '').trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) return Date.parse(s.replace(' ', 'T') + 'Z');
+  return Date.parse(s);
+}
+function learnerShiftDay(day, n) { return new Date(Date.parse(day + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10); }
+function learnerChanges(r) { const c = r && r.meta && r.meta.changes; return typeof c === 'number' ? c : null; }
+
+// ---- classification ----
+function learnerPostsOf(raw) {
+  let arr = raw;
+  if (typeof raw === 'string') { try { arr = JSON.parse(raw); } catch (e) { arr = [raw]; } }
+  if (!Array.isArray(arr)) arr = [];
+  return arr.map(function(p) { return typeof p === 'string' ? p : String((p && p.text) || ''); }).filter(function(t) { return t.trim(); });
+}
+// Question-led: the first sentence (URLs removed; a decimal point is not a sentence end) ends with '?'.
+function learnerIsQuestion(text) {
+  const s = String(text || '').replace(/https?:\/\/\S+/g, ' ').trim();
+  const m = /[.!?](?=["')\]]*(?:\s|$))/.exec(s);
+  return !!m && m[0] === '?';
+}
+function learnerLinkSlug(text) {
+  const m = /https?:\/\/(?:[a-z0-9-]+\.)*qnfo\.org\/papers\/([^\/?#\s"'<>()\[\]]+)/i.exec(String(text || ''));
+  return m ? m[1] : null;
+}
+function learnerTopicOf(doi, text) {
+  const s = String(text || '');
+  if (Q08_LINK_RE.test(s)) return null;                       // never q08
+  const d = String(doi || '').trim().toLowerCase();
+  if (LEARNER_SELECTED_TOPIC[d]) return LEARNER_SELECTED_TOPIC[d];
+  if (LEARNER_NOT_ARM_RE.test(s)) return null;                // pillar 4 stays out of outreach (STRATEGY 2.3)
+  for (const t of LEARNER_TOPIC_RE) if (t[1].test(s)) return t[0];
+  return null;
+}
+function learnerClassify(row, source) {
+  row = row || {};
+  if (source === 'dissem') {
+    const title = String(row.paper_title || row.paper_slug || '');
+    const link = String(row.pages_url || '');
+    return { topic: learnerTopicOf(row.paper_doi, title + '\n' + link), format: learnerIsQuestion(title) ? 'question' : 'single', n_posts: 1,
+      link_slug: learnerLinkSlug(link) || (row.paper_slug ? String(row.paper_slug) : null), slug: String(row.paper_slug || row.id || '') };
+  }
+  const posts = learnerPostsOf(row.posts);
+  const all = posts.join('\n');
+  let link = null;
+  for (const p of posts) { link = learnerLinkSlug(p); if (link) break; }
+  const format = learnerIsQuestion(posts[0] || '') ? 'question' : (posts.length >= 2 ? 'thread' : 'single');
+  return { topic: learnerTopicOf(row.doi || findDoi(all), String(row.title || '') + '\n' + all), format: format, n_posts: posts.length, link_slug: link, slug: String(row.slug || row.id || '') };
+}
+function learnerSlotOf(ms) {
+  const h = new Date(ms).getUTCHours();
+  for (const k of Object.keys(LEARNER_SLOTS)) if (h >= LEARNER_SLOTS[k][0] && h < LEARNER_SLOTS[k][1]) return k;
+  return null;
+}
+
+// ---- Beta posterior and Thompson draws ----
+function learnerNormal(rng) {
+  let u = 0;
+  for (let k = 0; k < 64 && u <= 1e-12; k++) u = rng();
+  if (u <= 1e-12) u = 0.5;
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
+}
+// Marsaglia-Tsang gamma sampler; shape < 1 by the boost u^(1/k). Bounded loop: a pathological rng returns the mode.
+function learnerGamma(k, rng) {
+  if (!(k > 0)) return 0;
+  if (k < 1) { const u = rng(); return learnerGamma(k + 1, rng) * Math.pow(u > 1e-12 ? u : 1e-12, 1 / k); }
+  const d = k - 1 / 3, c = 1 / Math.sqrt(9 * d);
+  for (let it = 0; it < 256; it++) {
+    let x, v;
+    do { x = learnerNormal(rng); v = 1 + c * x; } while (v <= 0);
+    v = v * v * v;
+    const u = rng();
+    if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+    if (Math.log(u > 1e-300 ? u : 1e-300) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+  }
+  return d;
+}
+function learnerBeta(a, b, rng) {
+  rng = rng || learnerRng;
+  const x = learnerGamma(a, rng), y = learnerGamma(b, rng);
+  return x + y > 0 ? x / (x + y) : 0.5;
+}
+function learnerPrior() {
+  const mk = function(list) { const o = {}; for (const k of list) o[k] = { a: 1, b: 1, n: 0 }; return o; };
+  return { topic: mk(LEARNER_TOPICS), format: mk(LEARNER_FORMATS), slot: mk(Object.keys(LEARNER_SLOTS)) };
+}
+var LEARNER_SCHEMA_DBS = new WeakSet();
+async function ensureLearnerSchema(env) {
+  if (env.DB && typeof env.DB === 'object' && LEARNER_SCHEMA_DBS.has(env.DB)) return;
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS social_learner_posts (post_key TEXT PRIMARY KEY, slug TEXT, bsky_uri TEXT, link_slug TEXT, topic TEXT, format TEXT, slot TEXT, n_posts INTEGER, posted_at TEXT, chosen_by TEXT, decision TEXT, status TEXT, engagement REAL, visits REAL, reward REAL, reward_detail TEXT, credited_at TEXT, created_at TEXT)").run();
+  if (env.DB && typeof env.DB === 'object') LEARNER_SCHEMA_DBS.add(env.DB);
+}
+// alpha = 1 + sum(reward), beta = 1 + n - sum(reward) per dimension value, over credited posts only.
+async function learnerPosterior(env) {
+  const post = learnerPrior();
+  const r = await env.DB.prepare("SELECT 'topic' AS dim, topic AS arm, COUNT(*) AS n, SUM(reward) AS s FROM social_learner_posts WHERE status = 'credited' AND topic IS NOT NULL GROUP BY topic UNION ALL SELECT 'format', format, COUNT(*), SUM(reward) FROM social_learner_posts WHERE status = 'credited' AND format IS NOT NULL GROUP BY format UNION ALL SELECT 'slot', slot, COUNT(*), SUM(reward) FROM social_learner_posts WHERE status = 'credited' AND slot IS NOT NULL GROUP BY slot").all();
+  for (const x of (r && r.results) || []) {
+    const c = post[x.dim] && post[x.dim][x.arm];
+    if (!c) continue;
+    const n = Number(x.n) || 0, s = Math.min(n, Math.max(0, Number(x.s) || 0));
+    c.n = n; c.a = lr4(1 + s); c.b = lr4(1 + n - s);
+  }
+  return post;
+}
+function learnerPosteriorSummary(post) {
+  const out = {};
+  for (const dim of Object.keys(post)) {
+    out[dim] = {};
+    for (const k of Object.keys(post[dim])) { const c = post[dim][k]; out[dim][k] = { a: c.a, b: c.b, n: c.n, mean: Math.round(c.a / (c.a + c.b) * 1000) / 1000 }; }
+  }
+  return out;
+}
+// Next week's allocation: the share of posterior draws each arm wins (what Thompson sampling will pick, before the queue
+// restricts the choice).
+function learnerPBest(post, draws, rng) {
+  rng = rng || learnerRng;
+  const out = {};
+  for (const dim of Object.keys(post)) {
+    const keys = Object.keys(post[dim]), wins = {};
+    for (const k of keys) wins[k] = 0;
+    for (let i = 0; i < draws; i++) {
+      let best = null, bv = -1;
+      for (const k of keys) { const v = learnerBeta(post[dim][k].a, post[dim][k].b, rng); if (v > bv) { bv = v; best = k; } }
+      wins[best]++;
+    }
+    out[dim] = {};
+    for (const k of keys) out[dim][k] = Math.round(wins[k] / draws * 1000) / 1000;
+  }
+  return out;
+}
+// The decision: cands in the old order; returns the chosen candidate's arms, the slot and every draw.
+function learnerChoose(cands, post, rng, nowMs) {
+  rng = rng || learnerRng;
+  const samples = {};
+  for (const dim of ['topic', 'format', 'slot']) {
+    samples[dim] = {};
+    for (const k of Object.keys(post[dim])) samples[dim][k] = lr4(learnerBeta(post[dim][k].a, post[dim][k].b, rng));
+  }
+  const scored = cands.map(function(c, i) {
+    const a = c.arms || {};
+    return { c: c, i: i, score: a.topic && samples.topic[a.topic] !== undefined && samples.format[a.format] !== undefined ? lr4(samples.topic[a.topic] * samples.format[a.format]) : null };
+  });
+  let best = null;
+  for (const s of scored) if (s.score !== null && (!best || s.score > best.score)) best = s;   // strict: a tie keeps the old order
+  const viaArms = !!best;
+  if (!best) best = scored[0];   // no arm row queued: the old order, still in a sampled slot
+  let slot = null;
+  for (const k of Object.keys(samples.slot)) if (slot === null || samples.slot[k] > samples.slot[slot]) slot = k;
+  const a = best.c.arms || {};
+  return {
+    source: best.c.source, id: best.c.id, slug: a.slug || null, topic: a.topic || null, format: a.format || null, n_posts: a.n_posts || 1,
+    link_slug: a.link_slug || null, slot: slot, score: best.score, via_arms: viaArms, samples: samples,
+    candidates: scored.slice(0, 12).map(function(s) { return { source: s.c.source, id: s.c.id, topic: (s.c.arms || {}).topic || null, format: (s.c.arms || {}).format || null, score: s.score }; }),
+    decided_at: new Date(nowMs || Date.now()).toISOString(), version: VERSION
+  };
+}
+
+// ---- state, switch, logs ----
+async function learnerEnabled(env) {
+  try {
+    const f = await env.DB.prepare("SELECT value FROM ops_config WHERE key = 'social_learner_enabled'").first();
+    if (!f) return { on: true, reason: 'ops_config.social_learner_enabled absent (default on)' };
+    const v = String(f.value == null ? '' : f.value).trim().toLowerCase();
+    if (['0', 'off', 'false', 'no', 'disabled'].indexOf(v) >= 0) return { on: false, reason: 'ops_config.social_learner_enabled=' + v };
+    return { on: true, reason: 'ops_config.social_learner_enabled=' + v };
+  } catch (e) {
+    return { on: false, reason: 'switch unreadable, old order: ' + String(e && e.message || e).slice(0, 120) };
+  }
+}
+async function learnerState(env) {
+  const r = await env.DB.prepare("SELECT value FROM ops_config WHERE key = 'social_learner_pending'").first();
+  if (!r || !r.value) return {};
+  try { const o = JSON.parse(r.value); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; }
+}
+async function learnerSaveState(env, st) {
+  try {
+    await env.DB.prepare("INSERT INTO ops_config (key, value, note, updated_at) VALUES ('social_learner_pending', ?1, ?2, ?3) ON CONFLICT(key) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = excluded.updated_at").bind(JSON.stringify(st), 'SOCIAL-DISTRIBUTION-LEARNER-1 (qnfo-social): the post the learner chose next and when its last post left; written by the posting drain', new Date().toISOString()).run();
+    return true;
+  } catch (e) {
+    console.log('SOCIAL-DISTRIBUTION-LEARNER-1 state write failed: ' + String(e && e.message || e).slice(0, 160));
+    return false;
+  }
+}
+async function learnerLogEvent(env, id, kind, status, text, meta, nowMs) {
+  try {
+    let m = JSON.stringify(meta === undefined ? null : meta);
+    if (m.length > 6000) m = JSON.stringify({ clipped: true, head: m.slice(0, 5000) });
+    await env.DB.prepare("INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, 'qnfo-social', ?6)").bind(String(id).slice(0, 200), new Date(nowMs || Date.now()).toISOString(), kind, String(text || '').slice(0, 500), m, status).run();
+    return id;
+  } catch (e) {
+    console.log('SOCIAL-DISTRIBUTION-LEARNER-1 ' + kind + ' log failed: ' + String(e && e.message || e).slice(0, 160));
+    return null;
+  }
+}
+function learnerBrief(dec) {
+  return dec ? { source: dec.source, id: dec.id, slug: dec.slug, topic: dec.topic, format: dec.format, slot: dec.slot, decided_at: dec.decided_at } : null;
+}
+async function learnerCandidates(env) {
+  const out = [];
+  const a = await env.DB.prepare("SELECT id, slug, title, doi, posts, flags, notes, created_at FROM social_threads WHERE status='queued' ORDER BY CASE WHEN COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%' THEN 0 ELSE 1 END, id ASC LIMIT 50").all();
+  for (const r of (a && a.results) || []) out.push({ source: 'thread', id: r.id, row: r, arms: learnerClassify(r, 'thread') });
+  const b = await env.DB.prepare("SELECT * FROM dissemination_tracker WHERE action='queued' AND channel='bluesky' ORDER BY created_at ASC LIMIT 50").all();
+  for (const r of (b && b.results) || []) out.push({ source: 'dissem', id: r.id, row: r, arms: learnerClassify(r, 'dissem') });
+  return out;
+}
+
+// ---- the scheduler's question: which row now, from which queue ('thread' = drainQueue, 'dissem' = drainDissemination)?
+// Returns { row, decision } to post now, { hold, summary } to post nothing this tick, {} when the queues are empty, or
+// { error } (the caller then uses the old order). Called only after socialGate granted capacity.
+async function learnerPick(env, who, nowMs) {
+  const now = nowMs || Date.now();
+  try {
+    await ensureLearnerSchema(env);
+    const st = await learnerState(env);
+    const lastMs = st.last_post_at ? Date.parse(st.last_post_at) : NaN;
+    if (isFinite(lastMs) && now >= lastMs && now - lastMs < LEARNER_MIN_GAP_MS) return { hold: 'spacing', summary: { held: 'spacing', last_post_at: st.last_post_at, last_post_key: st.last_post_key || null, next_after: new Date(lastMs + LEARNER_MIN_GAP_MS).toISOString() } };
+    const cands = await learnerCandidates(env);
+    if (!cands.length) return {};
+    let dec = st.decision || null;
+    let cand = dec ? cands.find(function(c) { return c.source === dec.source && String(c.id) === String(dec.id); }) : null;
+    const decMs = dec ? Date.parse(dec.decided_at) : NaN;
+    if (!cand || !isFinite(decMs) || now - decMs > LEARNER_DECISION_TTL_MS) {
+      const post = await learnerPosterior(env);
+      dec = learnerChoose(cands, post, learnerRng, now);
+      cand = cands.find(function(c) { return c.source === dec.source && String(c.id) === String(dec.id); });
+      const logged = dec.candidates;
+      delete dec.candidates;
+      if (!(await learnerSaveState(env, { decision: dec, last_post_at: st.last_post_at || null, last_post_key: st.last_post_key || null }))) return { error: 'decision not persisted' };
+      await learnerLogEvent(env, 'social-learner-decision-' + dec.decided_at + '-' + dec.source + '-' + dec.id, 'social-learner-decision', 'decided',
+        'qnfo-social learner chose ' + dec.source + ':' + dec.id + ' (' + (dec.topic || 'not an arm') + ', ' + dec.format + ') for slot ' + dec.slot,
+        { decision: dec, candidates: logged, posterior: learnerPosteriorSummary(post) }, now);
+    }
+    const slotNow = learnerSlotOf(now);
+    if (slotNow !== dec.slot) return { hold: 'slot', summary: { held: 'slot', slot: dec.slot, now_slot: slotNow, chosen: learnerBrief(dec) } };
+    if (dec.source !== who) return { hold: 'other-queue', summary: { held: 'other-queue', chosen: learnerBrief(dec) } };
+    return { row: cand.row, decision: dec };
+  } catch (e) {
+    console.log('SOCIAL-DISTRIBUTION-LEARNER-1 pick failed, old order: ' + String(e && e.message || e).slice(0, 160));
+    return { error: String(e && e.message || e).slice(0, 160) };
+  }
+}
+// After the chosen post went out: its reward row (pending until the 72h window closes) and the 24h spacing marker.
+async function learnerRecordPost(env, dec, bskyUri, nowMs) {
+  const iso = new Date(nowMs || Date.now()).toISOString();
+  const key = (dec.source === 'dissem' ? 'dissem:' : 'thread:') + dec.id;
+  try {
+    await ensureLearnerSchema(env);
+    await env.DB.prepare("INSERT OR IGNORE INTO social_learner_posts (post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by, decision, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'learner', ?10, ?11, ?9)")
+      .bind(key, dec.slug || null, bskyUri || null, dec.link_slug || null, dec.topic || null, dec.format || null, dec.slot || null, Number(dec.n_posts) || 1, iso, JSON.stringify(dec), dec.topic ? 'pending' : 'not-arm').run();
+  } catch (e) { console.log('SOCIAL-DISTRIBUTION-LEARNER-1 post record failed ' + key + ': ' + String(e && e.message || e).slice(0, 160)); }
+  await learnerSaveState(env, { decision: null, last_post_at: iso, last_post_key: key });
+  return { posted: key, topic: dec.topic, format: dec.format, slot: dec.slot };
+}
+
+// ---- reward ----
+function learnerWindow(postedMs) {
+  const end = postedMs + LEARNER_WINDOW_MS;
+  return { from: new Date(postedMs).toISOString().slice(0, 10), to: new Date(end - LEARNER_SNAPSHOT_UTC_H * 36e5).toISOString().slice(0, 10), end: end };
+}
+// The snapshots inside each post's own window, 33 posts (99 bound parameters, D1 allows 100) per query: one D1 query per
+// 33 posts instead of one per post, so the 07:00Z cron stays far below the per-invocation query limit.
+async function learnerSnapshots(env, posts) {
+  const out = {};
+  for (let i = 0; i < posts.length; i += 33) {
+    const chunk = posts.slice(i, i + 33), args = [];
+    for (const p of chunk) { const w = learnerWindow(p.ms); args.push(String(p.uri), w.from, w.to); out[p.uri] = []; }
+    const values = chunk.map(function(p, k) { return '(?' + (3 * k + 1) + ', ?' + (3 * k + 2) + ', ?' + (3 * k + 3) + ')'; }).join(', ');
+    const r = await env.DB.prepare("WITH w(uri, f, t) AS (VALUES " + values + ") SELECT e.post_id, e.metric, e.value, e.collected_at FROM social_engagements e JOIN w ON e.post_id = w.uri AND e.collected_at >= w.f AND e.collected_at <= w.t WHERE e.platform = 'bluesky' ORDER BY e.collected_at DESC").bind(...args).all();
+    for (const x of (r && r.results) || []) if (out[x.post_id]) out[x.post_id].push(x);
+  }
+  return out;
+}
+// rows newest first; the latest snapshot inside the window per metric (counts are cumulative).
+function learnerEngagementOf(rows, nPosts) {
+  const latest = {};
+  let day = null;
+  for (const r of rows || []) {
+    const k = String(r.metric);
+    if (latest[k] === undefined) latest[k] = Number(r.value) || 0;
+    if (day === null || String(r.collected_at) > day) day = String(r.collected_at);
+  }
+  if (day === null) return null;
+  const self = Number(nPosts) >= 2 ? 1 : 0;
+  const likes = latest.likes || 0, reposts = latest.reposts || 0, quotes = latest.quotes || 0, replies = latest.replies || 0;
+  return { e: likes + reposts + quotes + Math.max(0, replies - self), likes: likes, reposts: reposts, quotes: quotes, replies: replies, self_replies: self, snapshot_day: day };
+}
+async function learnerVisits(env, slug, d0) {
+  if (!slug) return { visits: null, status: 'no papers.qnfo.org link' };
+  try {
+    const r = await env.DB.prepare("SELECT date, MAX(CASE WHEN entity_type = 'site' THEN 1 ELSE 0 END) AS rd, SUM(CASE WHEN entity_type = 'paper' THEN value ELSE 0 END) AS v FROM reach_signals WHERE source = 'cf-rum' AND metric = 'pageviews' AND date >= ?2 AND date <= ?3 AND ((entity_type = 'site' AND entity_id = '(all)') OR (entity_type = 'paper' AND entity_id = ?1)) GROUP BY date").bind(String(slug), learnerShiftDay(d0, -7), learnerShiftDay(d0, 2)).all();
+    const by = {};
+    for (const x of (r && r.results) || []) by[x.date] = { read: Number(x.rd) === 1, v: Number(x.v) || 0 };
+    let win = 0;
+    for (let k = 0; k < 3; k++) {
+      const d = by[learnerShiftDay(d0, k)];
+      if (!d || !d.read) return { visits: null, status: 'RUM day ' + learnerShiftDay(d0, k) + ' not ingested' };
+      win += d.v;
+    }
+    let bs = 0, bn = 0;
+    for (let k = 1; k <= 7; k++) { const d = by[learnerShiftDay(d0, -k)]; if (d && d.read) { bs += d.v; bn++; } }
+    if (bn < 3) return { visits: null, status: 'baseline has ' + bn + ' ingested days (needs 3)', window_views: win };
+    const base = bs / bn;
+    return { visits: Math.max(0, Math.round((win - 3 * base) * 100) / 100), window_views: win, baseline_daily: Math.round(base * 100) / 100, baseline_days: bn, status: 'ok' };
+  } catch (e) {
+    return { visits: null, status: 'reach_signals unreadable: ' + String(e && e.message || e).slice(0, 100) };
+  }
+}
+function learnerRewardOf(eng, visits) {
+  const x = eng.e + (visits !== null && visits !== undefined ? visits / LEARNER_VISITS_PER_ENGAGEMENT : 0);
+  return { x: lr4(x), reward: lr4(1 - Math.exp(-x / LEARNER_REWARD_SCALE)) };
+}
+
+// ---- weekly update ----
+// Files every Bluesky post since the epoch that has no learner row yet (posts the learner did not choose teach it too).
+async function learnerDiscover(env, nowMs) {
+  const iso = new Date(nowMs || Date.now()).toISOString();
+  const ins = "INSERT OR IGNORE INTO social_learner_posts (post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'scheduler', ?10, ?11)";
+  const stmts = [];
+  const add = function(key, arms, uri, postedAt) {
+    const ms = learnerParseTs(postedAt);
+    if (!uri || !isFinite(ms)) return;
+    stmts.push(env.DB.prepare(ins).bind(key, arms.slug || null, uri, arms.link_slug || null, arms.topic || null, arms.format || null, learnerSlotOf(ms), Number(arms.n_posts) || 1, new Date(ms).toISOString(), arms.topic ? 'pending' : 'not-arm', iso));
+  };
+  const a = await env.DB.prepare("SELECT id, slug, title, doi, posts, post_uri, posted_at FROM social_threads WHERE status = 'posted' AND post_uri IS NOT NULL AND post_uri <> '' AND posted_at >= ?1 AND NOT EXISTS (SELECT 1 FROM social_learner_posts l WHERE l.post_key = 'thread:' || social_threads.id) ORDER BY posted_at ASC LIMIT 200").bind(LEARNER_EPOCH_SQL).all();
+  for (const r of (a && a.results) || []) add('thread:' + r.id, learnerClassify(r, 'thread'), blueskyUriOf(r.post_uri), r.posted_at);
+  const b = await env.DB.prepare("SELECT id, paper_slug, paper_doi, paper_title, pages_url, post_id, posted_at FROM dissemination_tracker WHERE action = 'posted' AND channel = 'bluesky' AND post_id LIKE 'at://%' AND posted_at >= ?1 AND NOT EXISTS (SELECT 1 FROM social_learner_posts l WHERE l.post_key = 'dissem:' || dissemination_tracker.id) ORDER BY posted_at ASC LIMIT 200").bind(LEARNER_EPOCH_SQL).all();
+  for (const r of (b && b.results) || []) add('dissem:' + r.id, learnerClassify(r, 'dissem'), blueskyUriOf(r.post_id), r.posted_at);
+  if (stmts.length) await env.DB.batch(stmts);
+  return stmts.length;
+}
+async function learnerCount(env) {
+  const r = await env.DB.prepare("SELECT COUNT(*) AS n FROM social_learner_posts").first();
+  return Number((r && r.n) || 0);
+}
+async function learnerWeeklyUpdate(env, nowMs) {
+  const now = nowMs || Date.now();
+  const iso = new Date(now).toISOString();
+  await ensureLearnerSchema(env);
+  const before = await learnerCount(env);
+  await learnerDiscover(env, now);
+  const out = { version: VERSION, epoch: LEARNER_EPOCH_SQL, discovered: (await learnerCount(env)) - before, credited: 0, no_data: 0, waiting: 0, rewards: [] };
+  const pend = await env.DB.prepare("SELECT post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by FROM social_learner_posts WHERE status = 'pending' ORDER BY posted_at ASC LIMIT 60").all();
+  for (const p of (pend && pend.results) || []) {
+    const t0 = learnerParseTs(p.posted_at);
+    if (!isFinite(t0)) continue;
+    const w = learnerWindow(t0);
+    if (now < w.end + LEARNER_CREDIT_GRACE_MS) { out.waiting++; continue; }
+    const arms = { topic: p.topic, format: p.format, slot: p.slot };
+    const snaps = p.bsky_uri ? (await learnerSnapshots(env, [{ uri: String(p.bsky_uri), ms: t0 }]))[String(p.bsky_uri)] : [];
+    const eng = learnerEngagementOf(snaps, p.n_posts);
+    if (!eng) {
+      // Snapshots are written for the collection day only, so a closed window with none will never get one: final.
+      const detail = { window: [w.from, w.to], reason: 'no social_engagements snapshot inside the 72h window; posterior unchanged' };
+      const u = await env.DB.prepare("UPDATE social_learner_posts SET status = 'no-data', reward_detail = ?2, credited_at = ?3 WHERE post_key = ?1 AND status = 'pending'").bind(p.post_key, JSON.stringify(detail), iso).run();
+      if (learnerChanges(u) === 0) continue;
+      out.no_data++;
+      await learnerLogEvent(env, 'social-learner-reward-' + p.post_key, 'social-learner-reward', 'no-data', 'qnfo-social learner: ' + p.post_key + ' has no engagement snapshot inside its 72h window; no update', { post_key: p.post_key, arms: arms, detail: detail }, now);
+      continue;
+    }
+    const vis = await learnerVisits(env, p.link_slug, w.from);
+    const rw = learnerRewardOf(eng, vis.visits);
+    const detail = { engagement: eng, visits: vis, x: rw.x, reward: rw.reward, window: [w.from, w.to], chosen_by: p.chosen_by };
+    const u = await env.DB.prepare("UPDATE social_learner_posts SET status = 'credited', engagement = ?2, visits = ?3, reward = ?4, reward_detail = ?5, credited_at = ?6 WHERE post_key = ?1 AND status = 'pending'").bind(p.post_key, eng.e, vis.visits, rw.reward, JSON.stringify(detail), iso).run();
+    if (learnerChanges(u) === 0) continue;
+    out.credited++;
+    out.rewards.push({ post: p.post_key, topic: p.topic, format: p.format, slot: p.slot, e: eng.e, v: vis.visits, r: rw.reward });
+    await learnerLogEvent(env, 'social-learner-reward-' + p.post_key, 'social-learner-reward', 'credited',
+      'qnfo-social learner: ' + p.post_key + ' (' + p.topic + ', ' + p.format + ', ' + (p.slot || 'no slot') + ') e=' + eng.e + ' v=' + vis.visits + ' reward ' + rw.reward,
+      { post_key: p.post_key, arms: arms, update: { alpha_plus: rw.reward, beta_plus: lr4(1 - rw.reward) }, detail: detail }, now);
+  }
+  const post = await learnerPosterior(env);
+  const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM social_learner_posts WHERE status = 'pending'").first();
+  out.pending = Number((left && left.n) || 0);
+  out.rewards = out.rewards.slice(0, 10);
+  out.posterior = learnerPosteriorSummary(post);
+  out.next_week_allocation = learnerPBest(post, LEARNER_PBEST_DRAWS, learnerRng);
+  return out;
+}
+// Mondays, or any later day once the last completed update is 7+ days old. Records social-learner-update-<day>.
+async function learnerWeeklyTick(env, nowMs) {
+  const now = nowMs || Date.now();
+  let last = null;
+  try {
+    const r = await env.DB.prepare("SELECT MAX(json_extract(meta, '$.last_ok')) AS last FROM cloud_ops_events WHERE id >= 'social-learner-update-' AND id < 'social-learner-update.'").first();
+    last = r && r.last ? String(r.last) : null;
+  } catch (e) {}
+  const lastMs = last ? Date.parse(last) : NaN;
+  const due = new Date(now).getUTCDay() === 1 || !isFinite(lastMs) || now - lastMs >= 7 * 864e5 - 36e5;
+  if (!due) return { not_due: true, last_ok: last };
+  const lrn = await learnerEnabled(env);
+  if (!lrn.on) {
+    const res = { disabled: true, reason: lrn.reason };
+    await recordSocialRun(env, 'learner-update', 'skipped', res, now);
+    return res;
+  }
+  let res;
+  try { res = await learnerWeeklyUpdate(env, now); } catch (e) { res = { error: String(e && e.message || e).slice(0, 200) }; }
+  await recordSocialRun(env, 'learner-update', res.error ? 'error' : 'ok', res, now);
+  return res;
+}
+
+// ---- metric_registry social_engagement_rate_30d (daily, 07:00Z) ----
+// Engagements per Bluesky post: Bluesky reports no impressions, so the STRATEGY 6.3 "engagement rate" is read per post.
+// Every Bluesky post counts (not only arm posts), from the learner epoch on: the September q08 flood before it is a
+// different channel that no remedy can move now. A post without a snapshot inside its window is left out (a missing
+// measurement is not a zero), and with none the value is 'n/a: ...', which v_metric_trigger_state reads as unreadable,
+// never 0. The row is created only if absent (migrations/2026-10-02-social-distribution-learner.sql inserts the same
+// definition and its METRIC-CLOSED-LOOP-1 trigger), and the value is written only while qnfo-social owns the row, so a
+// definition another change registers centrally is never overwritten. metric_history (qnfo-fleet-control
+// IMPROVEMENT-LOOP-1) then keeps its daily trend and judges regressions like any other metric.
+var LEARNER_METRIC_DEF = {
+  formula: "mean, over Bluesky posts (social_threads + dissemination_tracker) posted since 2026-10-02 and in the 30 days ending 74h ago that have a social_engagements snapshot inside their first 72h, of likes + reposts + quotes + replies from others (a thread's own first reply subtracted) at the last daily snapshot within 72h of posting; engagements per post, since Bluesky reports no impressions",
+  source: "qnfo-audit.social_engagements x social_threads.post_uri / dissemination_tracker.post_id (qnfo-social SOCIAL-DISTRIBUTION-LEARNER-1, GET https://qnfo-social.q08.workers.dev/learner)",
+  baseline: "about 0.1 (2026-10-01 audit: 1 reaction across the last 10 posts); reset from the first full week of 72h-window data (STRATEGY 6.3)",
+  target: ">= 0.2 engagements per post, then x2 on the first-week baseline by 2026-12-31 (STRATEGY 9); never by volume or paid attention",
+  actor: "qnfo-social distribution learner: Thompson sampling over topic, format and time slot inside the cadence caps (STRATEGY 6.4)",
+  warning: "< 0.2", kill: "< 0.05"
+};
+async function learnerEngagementRate(env, nowMs) {
+  const now = nowMs || Date.now();
+  const to = learnerSqlTs(now - LEARNER_WINDOW_MS - LEARNER_CREDIT_GRACE_MS);
+  let from = learnerSqlTs(now - LEARNER_WINDOW_MS - LEARNER_CREDIT_GRACE_MS - 30 * 864e5);
+  if (from < LEARNER_EPOCH_SQL) from = LEARNER_EPOCH_SQL;
+  const posts = [], seen = {};
+  const add = function(uri, postedAt, n) {
+    const ms = learnerParseTs(postedAt);
+    if (uri && !seen[uri] && isFinite(ms)) { seen[uri] = 1; posts.push({ uri: uri, ms: ms, n: n }); }
+  };
+  const a = await env.DB.prepare("SELECT posts, post_uri, posted_at FROM social_threads WHERE status = 'posted' AND post_uri IS NOT NULL AND post_uri <> '' AND posted_at >= ?1 AND posted_at <= ?2 ORDER BY posted_at DESC LIMIT 300").bind(from, to).all();
+  for (const r of (a && a.results) || []) add(blueskyUriOf(r.post_uri), r.posted_at, learnerPostsOf(r.posts).length);
+  const b = await env.DB.prepare("SELECT post_id, posted_at FROM dissemination_tracker WHERE action = 'posted' AND channel = 'bluesky' AND post_id LIKE 'at://%' AND posted_at >= ?1 AND posted_at <= ?2 ORDER BY posted_at DESC LIMIT 300").bind(from, to).all();
+  for (const r of (b && b.results) || []) add(blueskyUriOf(r.post_id), r.posted_at, 1);
+  let withData = 0, sum = 0;
+  const snaps = await learnerSnapshots(env, posts);
+  for (const p of posts) {
+    const eng = learnerEngagementOf(snaps[p.uri], p.n);
+    if (eng) { withData++; sum += eng.e; }
+  }
+  const rate = withData ? Math.round(sum / withData * 1000) / 1000 : null;
+  const value = rate === null ? 'n/a: no Bluesky post since 2026-10-02 has a closed 72h window with an engagement snapshot yet' : String(rate);
+  return { posts: posts.length, with_data: withData, engagements: sum, rate: rate, window: [from, to], registry: await learnerWriteMetric(env, value, now) };
+}
+async function learnerWriteMetric(env, value, nowMs) {
+  const D = LEARNER_METRIC_DEF;
+  try {
+    await env.DB.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES (?1, 'fleet', 'leading', ?2, ?3, ?4, ?5, 'qnfo-social', ?6, 'daily', ?7, ?8, 'MEASURED', 'computed')")
+      .bind(LEARNER_METRIC, D.formula, D.source, D.baseline, D.target, D.actor, D.warning, D.kill).run();
+    const u = await env.DB.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1 AND COALESCE(owner, 'qnfo-social') = 'qnfo-social'").bind(LEARNER_METRIC, value, new Date(nowMs || Date.now()).toISOString()).run();
+    if (learnerChanges(u) === 0) {
+      const o = await env.DB.prepare("SELECT owner FROM metric_registry WHERE metric = ?1").bind(LEARNER_METRIC).first();
+      return { written: false, reason: o ? 'row owned by ' + String(o.owner || '?') + '; its owner refreshes it' : 'row absent after insert' };
+    }
+    return { written: true, value: value };
+  } catch (e) {
+    return { written: false, error: String(e && e.message || e).slice(0, 160) };
+  }
+}
+
+// ---- public read (OPEN-ACCESS-1): GET /learner ----
+async function learnerReport(env) {
+  const lrn = await learnerEnabled(env);
+  const out = { worker: 'qnfo-social', version: VERSION, learner: 'SOCIAL-DISTRIBUTION-LEARNER-1', enabled: lrn.on, switch: lrn.reason,
+    arms: { topic: LEARNER_TOPICS, format: LEARNER_FORMATS, slot_utc_hours: LEARNER_SLOTS },
+    reward: 'r = 1 - exp(-(e + v/' + LEARNER_VISITS_PER_ENGAGEMENT + ')/' + LEARNER_REWARD_SCALE + '); e = 72h Bluesky likes + reposts + quotes + replies from others; v = attributed papers.qnfo.org paper views over baseline (CF RUM), when ingested; credited once per post',
+    limits: ['chooses only among queued posts, inside the weekly cap, pause flag and content gates; never posts more', 'learner posts at least 24h apart'] };
+  // Read-only: before the first learner run (no table yet) the posterior is the prior.
+  let post;
+  try { post = await learnerPosterior(env); } catch (e) {
+    if (/no such table/i.test(String(e && e.message || e))) { post = learnerPrior(); out.note = 'no learner rows yet: the posterior is the Beta(1,1) prior'; }
+    else out.posterior_error = String(e && e.message || e).slice(0, 160);
+  }
+  if (post) { out.posterior = learnerPosteriorSummary(post); out.next_week_allocation = learnerPBest(post, 1000, learnerRng); }
+  try { const st = await learnerState(env); out.pending = learnerBrief(st.decision); out.last_post_at = st.last_post_at || null; } catch (e) { out.pending_error = String(e && e.message || e).slice(0, 160); }
+  try {
+    const r = await env.DB.prepare("SELECT post_key, slug, topic, format, slot, posted_at, chosen_by, status, engagement, visits, reward, credited_at FROM social_learner_posts ORDER BY posted_at DESC LIMIT 20").all();
+    out.recent = (r && r.results) || [];
+  } catch (e) {
+    if (/no such table/i.test(String(e && e.message || e))) out.recent = [];
+    else out.recent_error = String(e && e.message || e).slice(0, 160);
+  }
+  return out;
+}
+
 export default {
   async scheduled(event, env) {
     // SOCIAL-RUN-LEDGER-1: every operation below records its run with recordSocialRun (defined after drainQueue).
@@ -1135,7 +1726,11 @@ export default {
       await alertDigest(env);
       let eo;
       try { eo = await collectEngagement(env); } catch (e) { eo = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'engagement', 'error', 'SOCIAL-ENGAGEMENT-SELF-1 ' + String(e).slice(0, 300)); }
+      // SOCIAL-DISTRIBUTION-LEARNER-1: the 30-day engagement rate from the snapshots just taken (measurement only, never
+      // switched off), then the learner's weekly update (Mondays, or catch-up), which records its own ledger row.
+      try { eo.rate_30d = await learnerEngagementRate(env); } catch (e) { eo.rate_30d = { error: String(e && e.message || e).slice(0, 160) }; }
       await recordSocialRun(env, 'engagement', engagementRunStatus(eo), eo);
+      try { await learnerWeeklyTick(env); } catch (e) { console.log('SOCIAL-DISTRIBUTION-LEARNER-1 weekly tick threw: ' + String(e && e.message || e).slice(0, 200)); }
       return;
     }
     try { await bufferChannelAudit(env); } catch (e) { await logAlert(env, 'buffer-channels', 'error', 'BUFFER-CHANNEL-AUDIT-1 ' + String(e).slice(0, 300)); }
@@ -1160,7 +1755,13 @@ export default {
     const p = url.pathname, m = request.method;
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Ops-Key' };
     if (m === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, capabilities: ["bluesky-posting", "linkedin-via-buffer", "dissemination-drain", "engagement-collection", "profile-sync", "buffer-channel-audit"], limitations: ["every route except /health needs the social token", "posting, the dissemination drain, profile sync and the audits run only on its crons (every 2 hours at :30, 06:00 and 07:00)", "LinkedIn is reached only through the Buffer queue, never LinkedIn's API; pipeline_flags.linkedin_mode 'draft' keeps those posts as drafts", "the profile sync never overwrites a bio the owner edited"], handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, capabilities: ["bluesky-posting", "linkedin-via-buffer", "dissemination-drain", "engagement-collection", "profile-sync", "buffer-channel-audit", "distribution-learner"], limitations: ["every route except /health and GET /learner needs the social token", "posting, the dissemination drain, profile sync and the audits run only on its crons (every 2 hours at :30, 06:00 and 07:00)", "LinkedIn is reached only through the Buffer queue, never LinkedIn's API; pipeline_flags.linkedin_mode 'draft' keeps those posts as drafts", "the profile sync never overwrites a bio the owner edited", "the distribution learner only chooses which queued post goes next and in which slot, inside the weekly cap and content gates; ops_config social_learner_enabled=0 turns it off"], handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    // SOCIAL-DISTRIBUTION-LEARNER-1 (OPEN-ACCESS-1): the learner's posterior, next decision and recent rewards, read-only.
+    if (p === '/learner' && m === 'GET') {
+      let body;
+      try { body = await learnerReport(env); } catch (e) { body = { error: String(e && e.message || e).slice(0, 200) }; }
+      return new Response(JSON.stringify(body), { status: body.error ? 500 : 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300', ...cors } });
+    }
     if (!auth(request, env)) return new Response('unauthorized', { status: 401, headers: cors });
     try {
       if (p === '/drain-dissemination') {
@@ -1365,4 +1966,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan };
+export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
+  learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
+  learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick,
+  learnerEngagementRate, learnerReport, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF };

@@ -74,6 +74,7 @@ socialRow("profile-sync", "2026-10-06", "ok", 1);
 socialRow("drain", "2026-10-06", "ok", 1.5);
 socialRow("scan", "2026-10-06", "ok", 2);
 socialRow("engagement", "2026-10-06", "ok", 1);
+socialRow("learner-update", "2026-10-05", "ok", 25);   // SOCIAL-DISTRIBUTION-LEARNER-1: Monday's weekly update
 db.prepare("INSERT INTO social_channels (channel_id, service, connected, checked_at, checked_day) VALUES ('chL', 'linkedin', 1, ?, '2026-10-06')").run(ago(7));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-engagement-e1', ?, 'ok')").run(ago(3));
 db.prepare("INSERT INTO zenodo_stats (doi, updated_at) VALUES ('10.5281/zenodo.1', '2026-10-04 07:03:00')").run();   // Sunday's run, space format
@@ -221,7 +222,7 @@ m = await api.watchmakerMeasure(env, NOW);
 ok(!op(m, "grant-followup").counted && m.index === 0, "a fresh full grant-followup run is not counted");
 
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops.
-const REACH = ["social-profile-sync", "social-posting", "social-scan", "buffer-channel-audit", "social-engagement", "engagement-feed", "zenodo-stats", "email-triage", "mention-radar", "cloud-ops-radar", "job-market-watch", "events-radar"];
+const REACH = ["social-profile-sync", "social-posting", "social-scan", "buffer-channel-audit", "social-engagement", "social-learner", "engagement-feed", "zenodo-stats", "email-triage", "mention-radar", "cloud-ops-radar", "job-market-watch", "events-radar"];
 m = await api.watchmakerMeasure(env, NOW);
 ok(REACH.every((k) => op(m, k) && op(m, k).state.startsWith("ok")) && m.index === 0, "every reach loop is listed and reads fresh (" + REACH.filter((k) => !op(m, k) || !op(m, k).state.startsWith("ok")).join(",") + ")");
 ok(op(m, "social-posting").runner === "cron:qnfo-social" && op(m, "job-market-watch").runner === "cron:radar-hub" && op(m, "zenodo-stats").runner === "cron:qnfo-cloud-ops", "each loop names its Cloudflare runner");
@@ -241,6 +242,17 @@ ok(op(m, "social-profile-sync").counted && op(m, "social-profile-sync").state ==
 const early2 = await api.watchmakerMeasure(env, Date.parse("2026-10-03T08:00:00Z"));
 ok(!op(early2, "social-profile-sync").counted && /^first run due 2026-10-03T12:00/.test(op(early2, "social-profile-sync").state), "before the ledger's first due date it is not counted");
 socialRow("profile-sync", "2026-10-06", "ok", 1);
+// SOCIAL-DISTRIBUTION-LEARNER-1: a weekly op; 'skipped' (learner switched off) carries no last_ok and proves nothing.
+ok(op(m, "social-learner").runner === "cron:qnfo-social" && op(m, "social-learner").age_h === 25 && !op(m, "social-learner").counted, "the learner's weekly update reads its ledger row by meta.last_ok");
+socialRow("learner-update", "2026-10-05", "ok", 340);
+m = await api.watchmakerMeasure(env, NOW);
+ok(op(m, "social-learner").counted && /stalled: last run 340h ago, cadence 168h/.test(op(m, "social-learner").state), "a learner update silent for over two weeks counts as stalled");
+db.exec("DELETE FROM cloud_ops_events WHERE id LIKE 'social-learner-update-%'");
+socialRow("learner-update", "2026-10-05", "skipped", null, 25);
+m = await api.watchmakerMeasure(env, Date.parse("2026-10-14T08:00:00Z"));
+ok(op(m, "social-learner").counted && op(m, "social-learner").state === "never ran", "a learner that only ever recorded 'skipped' (switched off) counts once its first run is due");
+ok(!op(await api.watchmakerMeasure(env, NOW), "social-learner").counted && /^first run due 2026-10-13T12:00/.test(op(await api.watchmakerMeasure(env, NOW), "social-learner").state), "before its first due date it is not counted");
+socialRow("learner-update", "2026-10-05", "ok", 25);
 // Mention radar: an error run proves nothing; degraded (a source refused) is a run.
 db.exec("UPDATE cloud_ops_events SET status = 'error' WHERE id = 'mention-radar-2026-10-05'");
 m = await api.watchmakerMeasure(env, NOW);

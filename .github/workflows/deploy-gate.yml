@@ -168,6 +168,13 @@ jobs:
       # ZENODO-UA-1 (honest User-Agent); radar-hub JOB-MARKET-INLINE-1, MENTION-RADAR-LEDGER-1, EVENTS-RADAR-CF-DOW-1.
       - name: SOCIAL-RUN-LEDGER-1 offline suite (qnfo-social)
         run: node qnfo-social/run-ledger.test.mjs
+      # SOCIAL-DISTRIBUTION-LEARNER-1 (STRATEGY 6.4): the Thompson-sampling distribution learner chooses only among queued
+      # posts inside the weekly cap, pause flag and content gates, credits each post's 72h reward once, and its kill switch
+      # restores the old order. The drain's own gate suite runs with it, since the learner changes how the drain picks.
+      - name: SOCIAL-DISTRIBUTION-LEARNER-1 offline suite (qnfo-social)
+        run: node qnfo-social/social-learner.test.mjs
+      - name: qnfo-social posting gates offline suite (POST-ID-UTM-1, OWNER-VOICE-CONTENT-GATE-1, SOCIAL-ADHOC-GATE-1)
+        run: node qnfo-social/social-gates.test.mjs
       - name: EMAIL-TRIAGE-D1-1 and ZENODO-UA-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/email-zenodo.test.mjs
       - name: Job market, mention radar ledger and events cron offline suite (radar-hub)
