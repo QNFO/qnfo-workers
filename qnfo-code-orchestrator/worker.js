@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.4-issue-planner"; // 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.5-issue-planner"; // 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -684,6 +684,7 @@ const PLAN_DAILY_CAP = 8;
 const PLAN_WIP = 3;
 const PLAN_RECHECK_DAYS = 7;
 const PLAN_MIN_AGE_MS = 15 * 60 * 1000;
+const PLAN_CHEAP_PER_TICK = 10; // refusals and "names no worker" decisions need no model call, so several fit in one tick
 const PLAN_SNIPPET_CHARS = 14000;
 const PLAN_FILE_MAX = 900000;
 // Mirrors qnfo-fleet-control CM_DENY (EVOLVE_DENY + the code loop): workers that never auto-merge are never planned.
@@ -775,7 +776,8 @@ async function planIssues(env, opts) {
   await ensurePlanSchema(env);
   const now = Date.now();
   const today = new Date(now).toISOString().slice(0, 10);
-  const used = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM issue_plans WHERE planned_at >= ?").bind(today).first();
+  // The cap counts model calls only: a refusal or a "names no worker" decision costs nothing and must not use it up.
+  const used = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM issue_plans WHERE planned_at >= ? AND model IS NOT NULL").bind(today).first();
   if (used && Number(used.n) >= PLAN_DAILY_CAP) return { planned: false, why: "daily cap " + PLAN_DAILY_CAP };
   const wip = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM code_tasks WHERE status NOT IN ('merged','closed','publish_failed','needs_human','failed','reverted')").first();
   if (wip && Number(wip.n) >= PLAN_WIP) return { planned: false, why: "work in progress " + wip.n + " >= " + PLAN_WIP };
@@ -792,6 +794,8 @@ async function planIssues(env, opts) {
       .bind(id, new Date().toISOString(), outcome, String(detail || "").slice(0, 600), taskId || null, path || null, model || null).run();
     await audit(env, "code-task.plan", "[issue #" + id + "] " + outcome + ": " + String(detail || "").slice(0, 200), { issue: id, task: taskId || null }, outcome === "queued" ? "ok" : "skip");
   };
+  let cheap = 0;
+  const decided = [];
   let names = [];
   try {
     names = ((await env.AUDIT_DB.prepare("SELECT service FROM service_registry WHERE state = 'live' AND kind = 'worker'").all()).results || [])
@@ -802,15 +806,16 @@ async function planIssues(env, opts) {
     if (created && now - created < PLAN_MIN_AGE_MS) continue;
     if (!planTrusted(r.source, r.title)) continue;                      // untrusted text never becomes code
     const text = String(r.title || "") + "\n" + String(r.description || "");
-    if (PLAN_DENY_CATEGORY.test(String(r.category || ""))) { await record(r.id, "refused", "category " + r.category + " is never planned automatically"); return { planned: true, issue: r.id, outcome: "refused" }; }
-    if (PLAN_DENY_TEXT.test(text)) { await record(r.id, "refused", "the issue mentions secrets, caps or deletions"); return { planned: true, issue: r.id, outcome: "refused" }; }
+    if (cheap >= PLAN_CHEAP_PER_TICK) break;
+    if (PLAN_DENY_CATEGORY.test(String(r.category || ""))) { await record(r.id, "refused", "category " + r.category + " is never planned automatically"); cheap++; decided.push({ issue: r.id, outcome: "refused" }); continue; }
+    if (PLAN_DENY_TEXT.test(text)) { await record(r.id, "refused", "the issue mentions secrets, caps or deletions"); cheap++; decided.push({ issue: r.id, outcome: "refused" }); continue; }
     const seen = await env.AUDIT_DB.prepare("SELECT id FROM code_tasks WHERE goal LIKE ? LIMIT 1").bind("[issue #" + r.id + "]%").first();
     if (seen) { await record(r.id, "queued", "a code task already exists", seen.id); continue; }
     const workers = planWorkers(text, names);
-    if (!workers.length) { await record(r.id, "not-code", "the issue names no worker the code loop may change"); return { planned: true, issue: r.id, outcome: "not-code" }; }
+    if (!workers.length) { await record(r.id, "not-code", "the issue names no worker the code loop may change"); cheap++; decided.push({ issue: r.id, outcome: "not-code" }); continue; }
     const worker = workers[0], path = worker + "/worker.js";
     const f = await readRepoFile(env, "qnfo-workers", path, PLAN_FILE_MAX + 1);
-    if (!f || !f.ok || f.truncated) { await record(r.id, "not-code", "could not read " + path + (f && f.error ? ": " + f.error : ""), null, path); return { planned: true, issue: r.id, outcome: "not-code" }; }
+    if (!f || !f.ok || f.truncated) { await record(r.id, "not-code", "could not read " + path + (f && f.error ? ": " + f.error : ""), null, path); cheap++; decided.push({ issue: r.id, outcome: "not-code" }); continue; }
     const file = String(f.content || "");
     const sn = planSnippets(file, planKeywords(text));
     const model = env.PLAN_MODEL || PLAN_MODEL_DEFAULT;
@@ -831,7 +836,7 @@ async function planIssues(env, opts) {
     await record(r.id, "queued", String(p.reason || "single-file change").slice(0, 300), res.id, path, model);
     return { planned: true, issue: r.id, outcome: "queued", task: res.id, path: path };
   }
-  return { planned: false, why: "no plannable issue" };
+  return decided.length ? { planned: true, issue: decided[decided.length - 1].issue, outcome: decided[decided.length - 1].outcome, decided: decided } : { planned: false, why: "no plannable issue" };
 }
 // Runs steps until the budget or step cap is hit. Called by cron and by POST /v1/tick.
 async function tick(env, opts) {

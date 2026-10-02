@@ -124,9 +124,23 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
   ok(!r.planned && /work in progress/.test(r.why) && prompts.length === 0, "7a no planning while 3 code tasks are unfinished", r);
   d.exec("DELETE FROM code_tasks");
   const today = new Date().toISOString();
-  for (let i = 0; i < 8; i++) d.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome) VALUES (?, ?, 'not-code')").run(9000 + i, today);
+  for (let i = 0; i < 8; i++) d.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome, model) VALUES (?, ?, 'not-code', 'm')").run(9000 + i, today);
   r = await plan(env);
   ok(!r.planned && /daily cap/.test(r.why) && prompts.length === 0, "7b at most 8 plans a day", r);
+}
+// 7c. refusals cost no model call: several are decided in one tick, they do not use the daily cap, and the tick still plans
+{
+  const { env, prompts } = envWith([FIX('  if (path === "/api/f") {')]);
+  const d = env.AUDIT_DB._db;
+  await plan(env);
+  const today = new Date().toISOString();
+  for (let i = 0; i < 20; i++) d.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome) VALUES (?, ?, 'refused')").run(8000 + i, today);
+  const s1 = issue(env, { title: "METRIC-TRIGGER-20-S: q08-signal-engine auth", category: "security" });
+  const s2 = issue(env, { title: "METRIC-TRIGGER-21-T: cost", description: "nothing named here" });
+  const s3 = issue(env, { title: "METRIC-TRIGGER-22-U: q08-signal-engine votes", description: "/api/f accepts GET" });
+  const r = await plan(env);
+  const out = Object.fromEntries(plans(env).filter((p) => p.issue_id < 8000).map((p) => [p.issue_id, p.outcome]));
+  ok(out[s1] === "refused" && out[s2] === "not-code" && out[s3] === "queued" && prompts.length === 1 && tasks(env).length === 1, "7c two cheap decisions and one model plan in a single tick, past 20 refusals today", { r, out });
 }
 // 8. a recorded 'not-code' is re-planned only after 7 days; fresh issues wait 15 minutes; code-task issues are left to intake
 {
