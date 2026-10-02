@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-02 10:14:49",
+  "audited_at": "2026-10-02 10:46:04",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-dashboard"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -494,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.102-reach-intake",
+        "version": "0.4.104-reach-policy-no-form",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -504,7 +497,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.8.5-pandoc-code",
+        "version": "3.8.6-reach-layer",
         "worker": "qnfo-gateway"
       },
       {
@@ -519,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.8.2-usage-topics",
+        "version": "3.9.0-guide-pages",
         "worker": "qnfo-ipatent"
       },
       {
@@ -1151,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.102-reach-intake",
+      "before": "0.4.104-reach-policy-no-form",
       "http": 200,
-      "live": "0.4.102-reach-intake",
+      "live": "0.4.104-reach-policy-no-form",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1183,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.8.5-pandoc-code",
+      "before": "3.8.6-reach-layer",
       "http": 200,
-      "live": "3.8.5-pandoc-code",
+      "live": "3.8.6-reach-layer",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1239,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.8.2-usage-topics",
+      "before": "3.9.0-guide-pages",
       "http": 200,
-      "live": "3.8.2-usage-topics",
+      "live": "3.9.0-guide-pages",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
