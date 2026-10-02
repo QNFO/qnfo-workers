@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.18.3-watchmaker-reach-ideation"; /* 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.18.4-ask-retry"; /* 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2474,7 +2474,9 @@ var worker_default = {
       // waitUntil. The unconditional loopSync that followed here bypassed that claim, so every
       // cron ran the sync twice concurrently (double GitHub traffic, duplicate-comment risk).
       const st = await runRefresh(env, ctx);
-      ctx.waitUntil(within(cmdSweep(env)));
+      ctx.waitUntil(within(cmdSweep(env).then(function() {
+        return askRetry(env);
+      })));
       ctx.waitUntil(within(persistWeeklyReportCard(env, st).catch(function() {
       })));
       ctx.waitUntil(within(persistRoiSnapshot(env).catch(function() {
@@ -5091,7 +5093,10 @@ var ASK_VISITOR_CAP = 5;
 var OWNER_CLOSED_MSG = "This control changes the fleet, so it is not open to the public. Reading everything and Ask now are open to everyone.";
 var OWNER_LOGIN_MAX_FAILS = 10;
 var OWNER_LOGIN_WINDOW_MS = 10 * 60 * 1e3;
-var ASK_MODELS = ["glm-5.3-flash", "glm-5.2"];
+// ASK-RETRY-1 (2026-10-02): fastest first. Measured live: glm-5.3-flash answered in 13.4s (05:55Z) and then timed out at
+// the 13s per-call abort on both command-line asks (06:55Z, 07:09Z), so every answer spent 13s waiting before glm-5.2
+// (routed by qnfo-ai to deepseek-v4-flash, 2.0-2.2s in ai_queries) answered: 16s total. glm-5.3-flash stays as the fallback.
+var ASK_MODELS = ["glm-5.2", "glm-5.3-flash"];
 async function sha256hex(s) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
   return Array.from(new Uint8Array(d)).map(function(b) {
@@ -5161,7 +5166,17 @@ async function ownerPromptsView(env) {
     await ensureOwnerTables(env);
     await ownerRequestColumns(env);
     const rows = await d1all(env.AUDIT, "SELECT p.id, p.ts, p.mode, p.prompt, p.status, p.response, p.model, p.error, i.status AS intent_status, i.triage_decision, p.issue_id, a.status AS issue_status FROM owner_prompts p LEFT JOIN intents i ON i.id = p.intent_id LEFT JOIN agent_issues a ON a.id = p.issue_id ORDER BY p.ts DESC LIMIT 6");
-    return rows;
+    // ASK-RETRY-1: the owner's command-line questions belong in the same history (they were in cmd_log only).
+    let cmds = [];
+    try {
+      await cmdEnsure(env);
+      cmds = (await d1all(env.AUDIT, "SELECT id, ts, 'ask' AS mode, text AS prompt, status, answer AS response, model, error FROM cmd_log WHERE kind = 'ai' AND owner = 1 ORDER BY ts DESC LIMIT 6")) || [];
+    } catch (e) {
+      cmds = [];
+    }
+    return rows.concat(cmds).sort(function(x, y) {
+      return String(y.ts || "") < String(x.ts || "") ? -1 : String(y.ts || "") > String(x.ts || "") ? 1 : 0;
+    }).slice(0, 8);
   } catch (e) {
     return [];
   }
@@ -6060,7 +6075,8 @@ async function cmdModelCall(env, model, messages, timeoutMs) {
     clearTimeout(timer);
   }
 }
-async function cmdRunAi(env, id, text, c) {
+// One plain-English answer: models in order within the budget; returns the parsed answer or the honest fallback.
+async function cmdAnswer(env, text, c) {
   const t0 = Date.now();
   // OWNER-SURFACE-HONESTY-1: the stored facts of any message the question names (public or owner fields, by c.holder).
   c.mail = await mailAskFacts(env, text, c.v, !!c.holder);
@@ -6072,13 +6088,58 @@ async function cmdRunAi(env, id, text, c) {
     const r = await cmdModelCall(env, model, messages, Math.min(CMD_AI_TIMEOUT_MS, left));
     if (r.ok) {
       const p = cmdParseAi(r.text, c);
-      await env.AUDIT.prepare("UPDATE cmd_log SET status='answered', answer=?1, actions_json=?2, model=?3, done_ms=?4 WHERE id=?5").bind(p.answer, JSON.stringify(p.actions), model, Date.now(), id).run();
-      return;
+      return { ok: true, answer: p.answer, actions: p.actions, model };
     }
     last = r.error;
   }
   // OWNER-SURFACE-HONESTY-1: never a bare failure; the model's error is kept in `error`, the owner reads a plain answer.
-  await env.AUDIT.prepare("UPDATE cmd_log SET status='fallback', answer=?1, error=?2, done_ms=?3 WHERE id=?4").bind(cmdFallback(c, last), String(last).slice(0, 300), Date.now(), id).run();
+  return { ok: false, answer: cmdFallback(c, last), actions: [], error: String(last).slice(0, 300) };
+}
+async function cmdRunAi(env, id, text, c) {
+  const a = await cmdAnswer(env, text, c);
+  if (a.ok) await env.AUDIT.prepare("UPDATE cmd_log SET status='answered', answer=?1, actions_json=?2, model=?3, done_ms=?4 WHERE id=?5").bind(a.answer, JSON.stringify(a.actions), a.model, Date.now(), id).run();
+  else await env.AUDIT.prepare("UPDATE cmd_log SET status='fallback', answer=?1, error=?2, done_ms=?3 WHERE id=?4").bind(a.answer, a.error, Date.now(), id).run();
+}
+// ASK-RETRY-1 (2026-10-02, owner: "Audit and remediate 'abandoned: the worker stopped before answering'"). Audit: 3 rows
+// carry that label (owner_prompts 02:47, 02:48, 05:25Z on 2026-10-02), all asked through the old panel before FLEET-CMD-1
+// (06:23Z); the sweep closed them honestly but nobody ever answered them, so the owner's questions were lost. Since then
+// 0 asks were abandoned. Self-heal: on each */15 cron, after the sweep, up to ASK_RETRY_PER_RUN abandoned asks (old panel
+// and command line) are answered again by the current pipeline, at most ASK_RETRY_MAX times each; the row then shows the
+// answer, the model marked "(retried)", and any proposed actions as text to run from the command line.
+var ASK_RETRY_MAX = 2;
+var ASK_RETRY_PER_RUN = 3;
+var ABANDONED_LIKE = "abandoned%";
+async function askRetry(env) {
+  const out = { retried: [], skipped: null };
+  try {
+    await cmdEnsure(env);
+    await ensureOwnerTables(env);
+    for (const t of ["owner_prompts", "cmd_log"]) await env.AUDIT.prepare("ALTER TABLE " + t + " ADD COLUMN retries INTEGER DEFAULT 0").run().catch(function() {
+    });
+    const rows = (await d1all(env.AUDIT, "SELECT 'owner_prompts' AS tbl, id, prompt AS text, ts FROM owner_prompts WHERE mode = 'ask' AND status = 'failed' AND error LIKE ? AND COALESCE(retries, 0) < ? UNION ALL SELECT 'cmd_log', id, text, ts FROM cmd_log WHERE kind = 'ai' AND status = 'failed' AND error LIKE ? AND COALESCE(retries, 0) < ? ORDER BY ts DESC LIMIT ?", [ABANDONED_LIKE, ASK_RETRY_MAX, ABANDONED_LIKE, ASK_RETRY_MAX, ASK_RETRY_PER_RUN])) || [];
+    if (!rows.length) return out;
+    const c = await cmdContext(env, "");
+    c.holder = false; // a retried answer never adds owner-only fields, whoever asked
+    for (const r of rows) {
+      // claim: only one run may retry a row
+      const claim = await env.AUDIT.prepare("UPDATE " + r.tbl + " SET status = 'retrying', retries = COALESCE(retries, 0) + 1 WHERE id = ?1 AND status = 'failed'").bind(r.id).run();
+      if (!(claim.meta && claim.meta.changes)) continue;
+      const a = await cmdAnswer(env, String(r.text || ""), Object.assign({}, c));
+      const acts = (a.actions || []).map(function(x) {
+        return x.label;
+      });
+      if (r.tbl === "owner_prompts") {
+        const body = a.answer + (acts.length ? "\n\nProposed actions (ask this again in the command line to run them): " + acts.join("; ") : "");
+        await env.AUDIT.prepare("UPDATE owner_prompts SET status = ?1, response = ?2, model = ?3, error = ?4 WHERE id = ?5").bind(a.ok ? "answered" : "fallback", body.slice(0, 4e3), a.ok ? a.model + " (retried)" : null, a.ok ? null : "retried: " + a.error, r.id).run();
+      } else {
+        await env.AUDIT.prepare("UPDATE cmd_log SET status = ?1, answer = ?2, actions_json = ?3, model = ?4, error = ?5, done_ms = ?6 WHERE id = ?7").bind(a.ok ? "answered" : "fallback", a.answer, JSON.stringify(a.actions || []), a.ok ? a.model + " (retried)" : null, a.ok ? null : "retried: " + a.error, Date.now(), r.id).run();
+      }
+      out.retried.push({ id: r.id, ok: a.ok });
+    }
+  } catch (e) {
+    out.skipped = String(e && e.message || e).slice(0, 200);
+  }
+  return out;
 }
 // Close rows a stopped invocation left 'running' (cmd_log and the legacy owner_prompts Ask), so nothing hangs forever.
 async function cmdSweep(env) {

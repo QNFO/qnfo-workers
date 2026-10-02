@@ -159,6 +159,9 @@ jobs:
       # for destructive ones, validated AI proposals, no hanging asks).
       - name: FLEET-CMD-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/fleet-cmd.test.mjs
+      # ASK-RETRY-1: asks abandoned by a stopped worker are answered again by the cron (bounded), fastest model first.
+      - name: ASK-RETRY-1 offline suite (qnfo-fleet-dashboard)
+        run: node qnfo-fleet-dashboard/ask-retry.test.mjs
       # Q08-REVIEW-2026-10-31 (#1716): the one-shot q08 decision on bot-filtered RUM page views and the cadence cap
       # q08-signal-engine reads (Q08-CADENCE-CAP-1); a deferral never satisfies the remediation probe.
       - name: Q08-REVIEW-2026-10-31 offline suite (qnfo-fleet-dashboard + q08-signal-engine)
