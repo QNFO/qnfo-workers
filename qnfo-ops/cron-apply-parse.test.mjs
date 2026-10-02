@@ -46,9 +46,12 @@ for (const d of readdirSync(root, { withFileTypes: true })) {
 }
 ok(swept >= 10, "S0 the sweep saw the fleet's scheduled workers", swept);
 const rh = tomlDeclaredCrons(readFileSync(join(root, "radar-hub", "wrangler.toml"), "utf8"));
-ok(Array.isArray(rh) && rh.includes("0 5 * * 2") && !rh.includes("0 5 * * 1") && rh.length === 9, "R1 radar-hub: the Monday events radar, 9 crons", rh);
+// GATE-FIXTURE-DRIFT-1 (2026-10-02): R1 and R2 pinned 9 and 21 crons while CRON-SINGLE-TRIGGER-1 (#1785, merged two
+// minutes apart from this suite) collapsed both workers to one trigger, so deploy-gate went red on main and every pull
+// request inherited the failure. They now assert the single declared trigger the workers really carry.
+ok(eq(rh, ["0 * * * *"]), "R1 radar-hub: one hourly trigger (CRON-SINGLE-TRIGGER-1)", rh);
 const co = tomlDeclaredCrons(readFileSync(join(root, "qnfo-cloud-ops", "wrangler.toml"), "utf8"));
-ok(Array.isArray(co) && co.length === 21, "R2 qnfo-cloud-ops: 21 crons", co && co.length);
+ok(eq(co, ["*/10 * * * *"]), "R2 qnfo-cloud-ops: one 10-minute trigger (CRON-SINGLE-TRIGGER-1)", co);
 const fd = tomlDeclaredCrons(readFileSync(join(root, "qnfo-fleet-dashboard", "wrangler.toml"), "utf8"));
 ok(eq(fd, ["*/15 * * * *"]), "R3 qnfo-fleet-dashboard: */15", fd);
 
