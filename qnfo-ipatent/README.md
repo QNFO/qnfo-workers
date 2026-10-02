@@ -67,6 +67,11 @@ drafts, distinct drafters); qnfo-fleet-control IMPROVEMENT-LOOP-1 (SURFACE-METRI
 - **Byline and contact:** the author, ORCID and a "Work with me" link (qnfo.org/work-with-me, UTM-tagged) on the landing
   page, the guide, the example and under every draft.
 
+## What v3.8.0 added (pillar: reach)
+- **SUBSCRIBE-1:** a subscribe box on the landing page posts to `/api/subscribe`, forwarded to qnfo-subscribers (double
+  opt-in, honeypot, its own rate limit) with source `ipatent`, the same path as qnfo.org.
+- **LLMS-1:** `/llms.txt` describes the tool, its pages, its limits and the contact path for AI answer engines.
+
 ## Endpoints
 | Route | Method | Purpose |
 |---|---|---|
