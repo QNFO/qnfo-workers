@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.5, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.6, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three owner-ratified objective constraints are graded and enforced, section 3.1). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -107,6 +107,18 @@ dimensions is a different number, `autonomy_scores.overall`, shown as the "Auton
 dimensions, not the objective, and no weight revision moves it. When the SAI cannot be measured (dashboard state older
 than six hours, a missing weight), `survival_state.sai` is NULL and the composite shows its last scoring date.
 
+**Owner-ratified constraints (OBJECTIVE-CONSTRAINTS-1, 1.0.6).** The owner ratified three revisions on 2026-10-01 that
+are constraints, not weight changes. `qnfo-fleet-control` measures each one every hour, writes it to `metric_registry`
+(graded in 3.2), files `OBJECTIVE-CONSTRAINT-BREACH-1: <metric>` when it is out of bounds and closes that issue with
+evidence when it is back. A constraint whose inputs cannot be read is reported as unmeasured, never as zero.
+`GET https://qnfo-fleet-control.q08.workers.dev/constraints` serves the live verdict.
+
+| Goal | Constraint | Definition (the `metric_registry` row is canonical) |
+|---|---|---|
+| 41 | `capability_contract_conformance >= 1.0` | share of live workers whose `/health` advertises non-empty `capabilities[]` and `limitations[]`, snapshot under 26h (gate C6). OBJECTIVE-LIMITS-REVIEW-1 re-evaluates the terminal objectives once a day: a graded term with no decidable target (formal limit) or no observed value (knowledge limit) becomes a proposed revision on fleet.qnfo.org, deduplicated, never re-proposed after the owner decides it. |
+| 43 | `energy_efficiency >= 0.8` | a compute proxy, not an energy meter (the fleet has no energy telemetry): the share of metered Workers AI neurons over 7 days that went to calls which returned, a failed call being charged its row's mean compute (energy per correct answer, JPCUB; "returned" is an upper bound on "correct"). External providers expose no compute unit and are not covered. |
+| 57 | `unmanaged_direct_spend_share <= 0.5` | (gateway BYOK list cost + qnfo-ai direct DeepSeek) / (all-provider AI list cost + that direct key + the Cloudflare plan baseline), 30 days. The owner's own client keys (`cost_daily` scope `external`) are declared, not metered, and sit outside fleet cost; the share they would add is shown, not graded. |
+
 ### 3.2 Pillars
 
 The charter grades the system on seven pillars. Each maps to a terminal objective, a set of `metric_registry` metrics
@@ -118,10 +130,10 @@ roadmap item names one. The keys are the contract: `scripts/charter-guard.py` fa
 | Pillar | Name | Objective | Graded by | Serves (roadmap artifact types) |
 |---|---|---|---|---|
 | `core` | Smallest verified core | mission | worker_count, drift_total, probe_coverage_pct, deploy_freshness_h, cron_compliance, guard_rcs | core, gate |
-| `autonomy` | Human as override, never dependency | objective-function | open_agent_issues, fleet_context_tokens, portfolio_hygiene (synthetic: last portfolio sync, target >= 0.9), autonomy composite | autonomy, governance, observability |
+| `autonomy` | Human as override, never dependency | objective-function | open_agent_issues, fleet_context_tokens, portfolio_hygiene (synthetic: last portfolio sync, target >= 0.9), capability_contract_conformance (goal 41, target >= 1.0), autonomy composite | autonomy, governance, observability |
 | `research` | Research that is read and cited | return-on-spend | publications_30d, full_reports_live_30d, zenodo_versions_per_flagship, indexed_surface | research-product |
 | `reach` | Credible reach | return-on-spend | distribution_posts_30d, subscribers_growth_monthly, pageviews_30d, referral_30d, external_impact_per_dollar, zenodo_views_total | impact, web |
-| `cost` | Cost that returns | cost-ceiling | cost_usd_30d, workers_ai_cost_30d_usd, gateway_cap_30d_usd, cost_per_successful_task_by_class, workers_ai_attribution_coverage_pct | cost |
+| `cost` | Cost that returns | cost-ceiling | cost_usd_30d, workers_ai_cost_30d_usd, gateway_cap_30d_usd, cost_per_successful_task_by_class, workers_ai_attribution_coverage_pct, energy_efficiency (goal 43, compute proxy, target >= 0.8), unmanaged_direct_spend_share (goal 57, target <= 0.5) | cost |
 | `security` | A trust boundary that holds | mission | security_open_issues (synthetic: open SEC-* or category `security` issues, target 0) | security |
 | `personal` | Personal utility layer | mission | personal_mvp_serving (synthetic: qnfo-email, personal-api, calendar-api serving, target 3 of 3; outside the research P&L) | personal |
 <!-- CHARTER-PILLARS:END -->
@@ -366,6 +378,10 @@ close-evidence trigger) and stated here for the rest.
   own ledgers (`charter_snapshots`, `portfolio_sync_runs`) and files `CHARTER-TICK-STALE-1`, `CHARTER-COMMIT-FAILED-1`,
   `PORTFOLIO-SYNC-STALE-1` or `PORTFOLIO-WRITE-FAILED-1` as deduped issues, closing them with evidence when the loop
   recovers; `GET /loops` serves the verdict. Agent sessions may read these surfaces; nothing waits for one.
+- **Ratified constraints are enforced, not quoted (OBJECTIVE-CONSTRAINTS-1, 1.0.5).** The same hourly cron measures the
+  owner-ratified constraints in 3.1, writes one `objective_constraint_runs` row per tick (listed in the dashboard's
+  watchmaker index), files and closes `OBJECTIVE-CONSTRAINT-BREACH-1` issues, and once a day proposes objective
+  revisions for terms the fleet cannot decide or observe. `GET /constraints` serves the verdict and the review preview.
 - **Failure modes it accepts.** If GitHub is unreachable the snapshot still lands in D1 and the next day retries. If a
   register is missing the loop reports the fact as unmeasured rather than failing. If the kernel itself is down, the
   staleness of the timestamp below is the alarm (`RM-MONITOR-THE-MONITORS-1` is the roadmap item that makes it one).

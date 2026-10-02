@@ -85,6 +85,20 @@ jobs:
           echo "$out" | grep -q "0 failed" \
             || { echo "::error::loop watchdog suite reported failures"; exit 1; }
 
+      # OBJECTIVE-CONSTRAINTS-1 (owner-ratified goals 41, 43, 57): the suite replays the hourly tick against an in-memory
+      # SQLite D1 (node:sqlite needs Node 22, so this step switches runtime; the steps after it are Python).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Replay the objective constraints offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/constraints.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "0 failed" \
+            || { echo "::error::objective constraints suite reported failures"; exit 1; }
+
       - name: Resolve the diff range
         id: range
         run: |

@@ -21,6 +21,7 @@ CREATE TABLE portfolio_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, run_date TEXT
 CREATE TABLE charter_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE portfolio_sync_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT);
 CREATE TABLE evolve_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
+CREATE TABLE objective_constraint_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, last_attempt_at TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
 CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
@@ -38,6 +39,7 @@ db.prepare("INSERT INTO portfolio_runs (run_date, kind, created_at) VALUES ('202
 db.prepare("INSERT INTO charter_snapshots (ts) VALUES (?)").run(ago(5));
 db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(ago(1));
 db.prepare("INSERT INTO evolve_candidates (ts) VALUES (?)").run(ago(9));
+db.prepare("INSERT INTO objective_constraint_runs (ts) VALUES (?)").run(ago(1));
 db.prepare("INSERT INTO remediation_contracts (class, last_attempt_at) VALUES ('EVID-1', ?)").run(new Date(NOW - 2 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pending', 'research', ?)").run(ago(10));
 // errata-hub hourly ticks (#1747): the watchmaker reads $.last_ok, which a failed tick carries forward.
@@ -80,6 +82,7 @@ db.prepare("UPDATE errata_watch SET value = ? WHERE key = 'tick:errata-respond'"
 m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "errata-respond").counted && /stalled: last run 3h ago, cadence 1h/.test(op(m, "errata-respond").state) && m.index === 1, "an errata member with no successful tick for over 2h counts as stalled");
 db.prepare("UPDATE errata_watch SET value = ? WHERE key = 'tick:errata-respond'").run(JSON.stringify({ ts: ago(0.2), ok: true, last_ok: ago(0.2) }));
+ok(op(m, "objective-constraints").state.startsWith("ok") && op(m, "objective-constraints").runner === "cron:qnfo-fleet-control", "OBJECTIVE-CONSTRAINTS-1 is listed with its hourly kernel ledger");
 
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('t1', 'pending', 'task', ?)").run(ago(5));
 m = await api.watchmakerMeasure(env, NOW);
