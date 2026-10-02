@@ -135,6 +135,10 @@ jobs:
       # UTF8-DEPLOY-1: worker source fetched from GitHub reaches the upload as the same UTF-8 text (no double encoding).
       - name: UTF8-DEPLOY-1 offline suite (qnfo-ops)
         run: node qnfo-ops/utf8-deploy.test.mjs
+      # CRON-APPLY-PARSE-1: the canonical deploy applies the [triggers] crons assignment, not the first "crons" in a comment
+      # (radar-hub, qnfo-cloud-ops and qnfo-fleet-dashboard schedules were never applied); sweeps every live wrangler.toml.
+      - name: CRON-APPLY-PARSE-1 offline suite (qnfo-ops)
+        run: node qnfo-ops/cron-apply-parse.test.mjs
       # MATH-DELIM-1 / TABLE-SEP-1: paper renderer regressions from the 2026-10-02 full-corpus sweep (qnfo-gateway).
       - name: Paper renderer suite (qnfo-gateway)
         run: node qnfo-gateway/render.test.mjs
