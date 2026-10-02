@@ -16,7 +16,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // LIMITATION (stated, not hidden): the tarball fallback produces NO .git directory,
 // so it is returned with method:"tarball", git:false and is only usable for
 // read/build workloads, not for git_op on that checkout.
-var VERSION = "1.0.10-props-caller";
+var VERSION = "1.0.11-command-exit-honest";
 var RATE_PER_MINUTE = 60;
 var RATE_PER_HOUR = 600;
 var MAX_INFLIGHT = 8;
@@ -71,6 +71,23 @@ async function logEvent(env, kind, text, meta, status) {
   }
 }
 __name(logEvent, "logEvent");
+// COMMAND-EXIT-HONEST-1 (2026-10-02): /sh, /exec and /workspace/exec run the caller's command verbatim, and a container
+// fault never reaches these lines (exec throws, which is container.error, still status "error"). A non-zero exit here
+// means the container worked and the caller's command failed: research-exec's generated verification script, or a
+// session's grep with no match. They were recorded as status "error" (255 container.sh, 24 container.exec and 14
+// container.workspace_exec rows from 2026-09-26 to 2026-09-30), the class qnfo-ops already reports as "command exited N"
+// and tool_error_exclusions classifies as agent-input-error. They are recorded as "warn" with the exit code and an
+// outcome, so a fault of the pilot itself stays the only "error" it writes.
+function commandEventStatus(exitCode) {
+  return exitCode === 0 ? "ok" : "warn";
+}
+__name(commandEventStatus, "commandEventStatus");
+function commandEventMeta(exitCode, extra) {
+  const m = Object.assign({ exitCode }, extra || {});
+  if (exitCode !== 0) m.outcome = "command-exit-nonzero";
+  return m;
+}
+__name(commandEventMeta, "commandEventMeta");
 class ShellContainer {
   static {
     __name(this, "ShellContainer");
@@ -205,7 +222,7 @@ class ShellContainer {
         await this.ensureStarted();
         const cdPrefix = cwd ? "cd " + JSON.stringify(cwd) + " && " : "";
         const out = await this.run(["bash", "-c", cdPrefix + cmd]);
-        await logEvent(this.env, "container.sh", cmd.slice(0, 200), { exitCode: out.exitCode }, out.exitCode === 0 ? "ok" : "error");
+        await logEvent(this.env, "container.sh", cmd.slice(0, 200), commandEventMeta(out.exitCode), commandEventStatus(out.exitCode));
         return json({ ok: out.exitCode === 0, result: out });
       }
       if (path === "/exec") {
@@ -216,7 +233,7 @@ class ShellContainer {
         if (!code) return json({ ok: false, error: "body.code required" }, 400);
         await this.ensureStarted();
         const out = await this.run(["python3", "-c", code, ...argv]);
-        await logEvent(this.env, "container.exec", "python3 -c", { exitCode: out.exitCode }, out.exitCode === 0 ? "ok" : "error");
+        await logEvent(this.env, "container.exec", "python3 -c", commandEventMeta(out.exitCode), commandEventStatus(out.exitCode));
         return json({ ok: out.exitCode === 0, result: out });
       }
       if (path === "/node") {
@@ -369,7 +386,7 @@ class ShellContainer {
         const cwd = rel ? WORKSPACE + "/" + rel : WORKSPACE;
         await this.ensureStarted();
         const out = await this.run(["bash", "-c", "cd " + JSON.stringify(cwd) + " && " + cmd]);
-        await logEvent(this.env, "container.workspace_exec", cmd.slice(0, 200), { exitCode: out.exitCode, dir: rel || "/" }, out.exitCode === 0 ? "ok" : "error");
+        await logEvent(this.env, "container.workspace_exec", cmd.slice(0, 200), commandEventMeta(out.exitCode, { dir: rel || "/" }), commandEventStatus(out.exitCode));
         return json({ ok: out.exitCode === 0, dir: cwd, result: out });
       }
       if (path === "/status") {

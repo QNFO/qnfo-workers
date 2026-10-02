@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.18.2-utf8-github"; /* 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.18.4-worker-health-auth"; /* 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -449,7 +449,11 @@ var F_WAITING = "GTD-Waiting For";
 var F_SOMEDAY = "GTD-Someday Maybe";
 var F_REF = "GTD-Reference";
 async function jobGmailTriage(env) {
-  if (!env.GMAIL_PASS) return { status: "error", notes: { error: "GMAIL_PASS secret missing" } };
+  // GMAIL-TRIAGE-UNCONFIGURED-1 (2026-10-02): GMAIL_PASS (a Gmail app password only the owner can mint, a tier-2 credential
+  // under charter rule 4) is absent on this worker since its 2026-09-26 recreation (#1468). The job cannot log in, knows
+  // it, and stops before any network call; it was recorded as status "error" every weekday run. It is recorded as
+  // "skipped" with the reason (parked with its default: no Gmail triage), and becomes a real run once the secret exists.
+  if (!env.GMAIL_PASS) return { status: "skipped", notes: { reason: "GMAIL_PASS is not set on this worker; Gmail triage needs the account's app password (#1468)" } };
   const out = { checked: 0, counts: { ACTION: 0, WAITING: 0, SOMEDAY: 0, REFERENCE: 0, NOISE: 0 }, moved: 0, actions: [], waiting: [] };
   let imap;
   try {
@@ -1234,7 +1238,10 @@ __name(jobPortfolioSync, "jobPortfolioSync");
 // Chrome User-Agent, which Zenodo now refuses with 403 "unusual traffic from your network"; the same request with an
 // honest client name returns 200 (probed 2026-10-02), and qnfo-paper-indexer and qnfo-social read the same API from
 // Cloudflare with honest names. Failures are now counted by HTTP status in the run notes, so a refusal is visible.
+// ZENODO-REFUSAL-STOP-1 (1.18.3): ZENODO-CATCHUP-1 retries a failed week daily, so a run whose first ZENODO_REFUSAL_STOP
+// record reads all failed stops there (notes.stopped_after) instead of sending a few hundred more requests Zenodo refuses.
 var ZENODO_UA = "qnfo-cloud-ops/" + VERSION + " (+https://qnfo.org; zenodo-stats)";
+var ZENODO_REFUSAL_STOP = 20;
 async function jobZenodoStats(env) {
   const corpus = await env.LIVING.prepare("SELECT zenodo_doi, slug FROM papers WHERE zenodo_doi IS NOT NULL AND zenodo_doi != '' AND status IN ('published','distributed')").all();
   const byDoi = {};
@@ -1259,7 +1266,12 @@ async function jobZenodoStats(env) {
   const UA = { "User-Agent": ZENODO_UA, Accept: "application/json" };
   const movers = [];
   const auditViolations = [];
+  let stoppedAfter = 0;
   for (const doi of todo) {
+    if (fetched === 0 && errors >= ZENODO_REFUSAL_STOP) {
+      stoppedAfter = errors;
+      break;
+    }
     const rid = doi.split(".").pop();
     try {
       const r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA });
@@ -1308,7 +1320,7 @@ async function jobZenodoStats(env) {
   const tot = await env.AUDIT.prepare("SELECT COALESCE(SUM(downloads),0) AS dl, COALESCE(SUM(views),0) AS vw, COUNT(*) AS n FROM zenodo_stats").first();
   movers.sort((a, b) => b.g - a.g);
   const L = ["QNFO Zenodo stats delta \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
-  L.push("Corpus " + Object.keys(byDoi).length + " DOIs; fetched " + fetched + " today, errors " + errors + (errors ? " " + JSON.stringify(failures) : "") + ".");
+  L.push("Corpus " + Object.keys(byDoi).length + " DOIs; fetched " + fetched + " today, errors " + errors + (errors ? " " + JSON.stringify(failures) : "") + "." + (stoppedAfter ? " Stopped after " + stoppedAfter + " refused reads (ZENODO-REFUSAL-STOP-1)." : ""));
   L.push("downloads: " + prevDl + " -> " + (tot.dl || 0) + " (+" + ((tot.dl || 0) - prevDl) + ")");
   L.push("views:     " + prevVw + " -> " + (tot.vw || 0) + " (+" + ((tot.vw || 0) - prevVw) + ")");
   if (movers.length) {
@@ -1322,7 +1334,10 @@ async function jobZenodoStats(env) {
     L.push("", "ADR-014 attribution audit: 0 creator violations (sole-author mandate holds).");
   }
   const d = await storeDigest(env, "zenodo-stats", "QNFO Zenodo stats delta \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
-  return { status: fetched > 0 || errors === 0 ? "ok" : "error", notes: { fetched, errors, failures, corpus: Object.keys(byDoi).length, audit_violations: auditViolations.length, digest: d } };
+  const zStatus = fetched > 0 || errors === 0 ? "ok" : "error";
+  const zNotes = { fetched, errors, failures, corpus: Object.keys(byDoi).length, audit_violations: auditViolations.length, digest: d };
+  if (stoppedAfter) zNotes.stopped_after = stoppedAfter;
+  return { status: zStatus, reason: zStatus === "ok" ? void 0 : "no Zenodo record read: " + errors + " failed " + JSON.stringify(failures) + (stoppedAfter ? ", stopped after " + stoppedAfter : ""), notes: zNotes };
 }
 __name(jobZenodoStats, "jobZenodoStats");
 async function jobBoardSync(env) {
@@ -2505,18 +2520,43 @@ async function jobOutreachLearner(env) {
   return { status, notes };
 }
 // OUTREACH-LEARNER-1 end
-async function jobWorkerHealth(env) {
-  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
-  const endpoints = [
+// WORKER-HEALTH-PROBE-AUTH-1 (2026-10-02): the two chat probes sent "Bearer " + ROUTER_AUTH_KEY and "Bearer " + PL_API_KEY,
+// and this worker holds neither secret since its 2026-09-26 recreation (agent_issues #1468: live secret_text is CF_TOKEN,
+// DIGEST_TO, OUTREACH_TOKEN, REGISTRY_TOKEN, GH_TOKEN). Every run from 2026-09-30 15:05Z therefore reported both chat
+// endpoints FAILED with 401, raised an alerts row and mailed the owner an "AI endpoint health alert", while the endpoints
+// were up and refusing an empty key as they should. The qnfo-ai chat probe now goes through the QNFO_AI service binding,
+// authenticated by its props caller (INTERNAL-CALLER-PROPS-1, #1703), so the chat route is really checked again. A probe
+// whose credential this worker does not hold is reported as skipped with the reason, never as a failure of the endpoint.
+function workerHealthEndpoints(env, UA) {
+  const chat = (model) => ({ model, messages: [{ role: "user", content: "ping" }], max_tokens: 5 });
+  const aiChat = env.QNFO_AI && typeof env.QNFO_AI.fetch === "function"
+    ? { worker: "qnfo-ai-chat", url: "https://ai.qnfo.org/v1/chat/completions", binding: "QNFO_AI", headers: { "Content-Type": "application/json", "User-Agent": UA }, body: chat("deepseek-v4-flash") }
+    : env.ROUTER_AUTH_KEY
+      ? { worker: "qnfo-ai-chat", url: "https://ai.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.ROUTER_AUTH_KEY, "User-Agent": UA }, body: chat("deepseek-v4-flash") }
+      : { worker: "qnfo-ai-chat", skip: "no QNFO_AI service binding and no ROUTER_AUTH_KEY on this worker" };
+  const personalChat = env.PL_API_KEY
+    ? { worker: "personal-api-chat", url: "https://personal.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.PL_API_KEY, "User-Agent": UA }, body: chat("personal-twin-chat") }
+    : { worker: "personal-api-chat", skip: "PL_API_KEY is not set on this worker; personal-api /health is still probed" };
+  return [
     { worker: "qnfo-ai", url: "https://ai.qnfo.org/health", headers: { "User-Agent": UA } },
     { worker: "personal-api", url: "https://personal.qnfo.org/health", headers: { "User-Agent": UA } },
     { worker: "qnfo-idea-factory", url: "https://ideas.qnfo.org/health", headers: { "User-Agent": UA } },
-    { worker: "qnfo-ai-chat", url: "https://ai.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.ROUTER_AUTH_KEY || ""), "User-Agent": UA }, body: { model: "deepseek-v4-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } },
-    { worker: "personal-api-chat", url: "https://personal.qnfo.org/v1/chat/completions", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.PL_API_KEY || ""), "User-Agent": UA }, body: { model: "personal-twin-chat", messages: [{ role: "user", content: "ping" }], max_tokens: 5 } }
+    aiChat,
+    personalChat
   ];
-  const out = { checks: [], failed: [] };
+}
+__name(workerHealthEndpoints, "workerHealthEndpoints");
+async function jobWorkerHealth(env) {
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+  const endpoints = workerHealthEndpoints(env, UA);
+  // failed and skipped lead the notes: the dispatcher records the first 300 characters of them as the job-run text.
+  const out = { failed: [], skipped: [], checks: [] };
   const now = (/* @__PURE__ */ new Date()).toISOString();
   for (const ep of endpoints) {
+    if (ep.skip) {
+      out.skipped.push({ worker: ep.worker, reason: ep.skip });
+      continue;
+    }
     const t0 = Date.now();
     let status = 0, dur = 0, error = "", body = "";
     try {
@@ -2560,10 +2600,10 @@ async function jobWorkerHealth(env) {
       await env.AUDIT.prepare("INSERT INTO alerts (source, level, message, digested) VALUES ('worker-health', 'error', ?1, 1)").bind(L.join(NL).slice(0, 2e3)).run();
     } catch (e) {
     }
-    await recordEvent(env, "job-run", "jr-worker-health-" + Date.now().toString(36), "worker-health FAILED " + JSON.stringify(out.failed), { job: "worker-health", status: "error" });
+    // The caller (scheduled dispatch or POST /run) records the job-run row from this return value; recording it here as
+    // well wrote two rows per run ("worker-health FAILED" and "worker-health error").
     return { status: "error", notes: out };
   }
-  await recordEvent(env, "job-run", "jr-worker-health-" + Date.now().toString(36), "worker-health ok " + out.checks.length + " endpoints", { job: "worker-health", status: "ok" });
   return { status: "ok", notes: out };
 }
 __name(jobWorkerHealth, "jobWorkerHealth");
@@ -3110,15 +3150,62 @@ var JOBS = {
 // Amsterdam). OUTREACH-LEARNER-1 (1.18.0): outreach-learner rides the daily engagement slot (07:15 Amsterdam, every day)
 // and runs before it, so the sent-as-you digest inside engagement reports that day's learner tick.
 var CRON_COMPANIONS = { "worker-health": ["grant-followup"], "engagement": ["outreach-learner"] };
-async function runCompanion(env, job) {
+// JOB-REASON-1 (1.18.3): the job-run row's meta carries the job's own one-line reason when a run is not 'ok', and 'via'
+// when a catch-up ran it, so a ledger query can say why without parsing the truncated text column.
+function jobRunMeta(job, out, extra) {
+  const m = Object.assign({ job, status: out.status }, extra || {});
+  if (out.reason && out.status !== "ok") m.reason = String(out.reason).slice(0, 300);
+  return m;
+}
+async function runCompanion(env, job, extra) {
   try {
     const out = await JOBS[job](env);
     await logRun(env, job, out.status, out.notes || {});
-    await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), { job, status: out.status });
+    await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), jobRunMeta(job, out, extra));
   } catch (e) {
     await logRun(env, job, "error", { error: String(e && e.message || e) });
-    await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " error " + String(e && e.message || e), { job, status: "error" });
+    await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " error " + String(e && e.message || e), jobRunMeta(job, { status: "error", reason: String(e && e.message || e) }, extra));
   }
+}
+// ZENODO-CATCHUP-1 (1.18.3, pillar: reach; WATCHMAKER_OPS zenodo-stats "stalled: last run 815.9h ago"). zenodo-stats has one
+// weekly slot (Sunday 09:00 Amsterdam), and nothing re-ran a week it missed or failed. Its 2026-09-26 run never happened:
+// every qnfo-cloud-ops trigger was removed live on 2026-09-25 between board-sync's 06:01Z run and worker-health's missing
+// 15:05Z run (only "30 5 * * 1" stayed, committed on 09-26 as 5afe051d) until 1.15.3-schedules-live-1 restored all 21 on
+// 2026-09-30 08:49Z with the CF-DOW-1 spellings, which moved zenodo-stats from Saturday ("0 7 * * 7") to Sunday
+// ("0 7 * * 1"). The three runs before it (09-05, 09-12, 09-19) fetched 0 records (Zenodo 403, ZENODO-UA-1), so
+// zenodo_stats stayed at 2026-08-29 for five weeks. Now each slot listed here checks its catch-ups after its own job:
+// one runs (logged as its own job-run row, meta.via) when its data is older than stale_h and no run of it started in
+// retry_h. 180h is past the weekly cadence (a Sunday run is 165h old at the next Sunday's 04:15Z check) and 20h keeps it to
+// once a day; release-check is one GitHub call, so the slot has room. No new cron (charter rule 2).
+var CRON_CATCHUP = { "release-check": [{ job: "zenodo-stats", stale_h: 180, retry_h: 20, data_sql: "SELECT MAX(updated_at) AS last FROM zenodo_stats" }] };
+function cloudOpsUtcMs(v) {
+  if (v == null || v === "") return NaN;
+  let s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) s = s.replace(" ", "T") + "Z";
+  return Date.parse(s);
+}
+async function catchupDue(env, c, nowMs) {
+  const d = await env.AUDIT.prepare(c.data_sql).first();
+  const r = await env.AUDIT.prepare("SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= ?1 AND id < ?2").bind("jr-" + c.job + "-", "jr-" + c.job + ".").first();
+  const dataMs = cloudOpsUtcMs(d && d.last), runMs = cloudOpsUtcMs(r && r.last);
+  const stale = !(dataMs >= nowMs - c.stale_h * 36e5);
+  const rested = !(runMs >= nowMs - c.retry_h * 36e5);
+  return { due: stale && rested, stale, rested, data_last: d && d.last || null, run_last: r && r.last || null };
+}
+async function runCatchups(env, slot, nowMs) {
+  const done = [];
+  for (const c of CRON_CATCHUP[slot] || []) {
+    if (!JOBS[c.job]) continue;
+    try {
+      const due = await catchupDue(env, c, nowMs || Date.now());
+      if (!due.due) continue;
+      await runCompanion(env, c.job, { via: "catch-up:" + slot, data_last: due.data_last });
+      done.push(c.job);
+    } catch (e) {
+      console.log("catch-up", c.job, "check failed", String(e && e.message || e));
+    }
+  }
+  return done;
 }
 function cfDowToIso(spec) {
   const s = String(spec == null ? "*" : spec).trim();
@@ -3526,7 +3613,13 @@ async function jobGrantFollowup(env, deps) {
     }
   }
   const okD1 = channels.qnfo_email.indexOf("ok:") === 0, okGmail = channels.gmail.indexOf("ok:") === 0;
-  return { status: okD1 && okGmail && !out.issue_error ? "ok" : okD1 || okGmail ? "degraded" : "error", notes: Object.assign({ channels }, out) };
+  // JOB-REASON-1 (1.18.3): a run that is not 'ok' says why in one line, which runCompanion stores in the job-run row's meta
+  // (meta.reason), so the ledger and WATCHMAKER_OPS grant-followup name the unread mailbox instead of "never ran".
+  const why = [];
+  if (!okD1) why.push("qnfo.org mail not read (" + channels.qnfo_email + ")");
+  if (!okGmail) why.push(g.status === "no-credential" ? "Gmail not read: the GMAIL_PASS secret is unset" : "Gmail not read (" + channels.gmail + ")");
+  if (out.issue_error) why.push("issue filing failed: " + out.issue_error);
+  return { status: okD1 && okGmail && !out.issue_error ? "ok" : okD1 || okGmail ? "degraded" : "error", reason: why.length ? why.join("; ") : void 0, notes: Object.assign({ channels }, out) };
 }
 // GRANT-FOLLOWUP-1 end
 var CORS = {
@@ -3585,7 +3678,7 @@ var worker_default = {
     try {
       const out = await JOBS[job](env);
       await logRun(env, job, out.status, out.notes || {});
-      await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), { job, status: out.status });
+      await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), jobRunMeta(job, out));
       console.log("cloud-ops", job, out.status, JSON.stringify(out.notes || {}).slice(0, 200));
     } catch (e) {
       await logRun(env, job, "error", { error: String(e && e.message || e) });
@@ -3596,6 +3689,8 @@ var worker_default = {
       } catch (e2) {
       }
     }
+    // ZENODO-CATCHUP-1: after the slot's own job, so a catch-up never delays or hides it.
+    if (CRON_CATCHUP[job]) await runCatchups(env, job, Date.now());
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -3646,7 +3741,7 @@ var worker_default = {
       try {
         const out = await JOBS[job](env);
         await logRun(env, job, out.status, out.notes || {});
-        await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), { job, status: out.status });
+        await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), jobRunMeta(job, out, { via: "manual" }));
         return new Response(JSON.stringify({ ok: true, job, ...out }), { headers: { "Content-Type": "application/json", ...CORS } });
       } catch (e) {
         return new Response(JSON.stringify({ ok: false, job, error: String(e && e.message || e) }), { status: 500, headers: { "Content-Type": "application/json", ...CORS } });

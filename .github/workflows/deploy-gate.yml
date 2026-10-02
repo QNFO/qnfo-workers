@@ -217,6 +217,15 @@ jobs:
         run: node qnfo-social/social-gates.test.mjs
       - name: EMAIL-TRIAGE-D1-1 and ZENODO-UA-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/email-zenodo.test.mjs
+      # WORKER-HEALTH-PROBE-AUTH-1 + GMAIL-TRIAGE-UNCONFIGURED-1 (qnfo-cloud-ops 1.18.2): the qnfo-ai chat probe uses the
+      # props-authenticated QNFO_AI binding, a probe without its credential is skipped (never a 401 false alarm), real
+      # failures still alert, one job-run row per run, and gmail-triage without GMAIL_PASS is skipped rather than an error.
+      - name: WORKER-HEALTH-PROBE-AUTH-1 offline suite (qnfo-cloud-ops)
+        run: node qnfo-cloud-ops/worker-health.test.mjs
+      # COMMAND-EXIT-HONEST-1 (qnfo-containers-pilot 1.0.11): a caller's command that exits non-zero is recorded as warn
+      # with its exit code; a container fault is still container.error with status error.
+      - name: COMMAND-EXIT-HONEST-1 offline suite (qnfo-containers-pilot)
+        run: node qnfo-containers-pilot/command-exit.test.mjs
       - name: Job market, mention radar ledger and events cron offline suite (radar-hub)
         run: node radar-hub/radar-hub.test.mjs
 

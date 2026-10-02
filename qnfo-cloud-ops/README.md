@@ -64,9 +64,18 @@ headers only, BODY.PEEK; nothing is sent, moved or flagged). Each new message fr
 the submission, becomes one `cloud_ops_events` row (`grant-reply-<message-id>`, status reply, message or receipt; no body
 text). Each reply or message without an issue opens or extends `GRANT-REPLY-<APPLICATION>` in `agent_issues`, or notes
 the application's tracking issue while it is open (Lightcone: 1750). The run is `ok` only when both mailboxes were read;
-without the `GMAIL_PASS` secret it is `degraded`, and WATCHMAKER_OPS (`grant-followup`) keeps counting it. Add a new
-application to `GRANT_APPLICATIONS` in the same PR that records its submission in `funding/APPLICATIONS.md`.
+without the `GMAIL_PASS` secret it is `degraded`, its job-run row's `meta.reason` reads "Gmail not read: the GMAIL_PASS
+secret is unset" (JOB-REASON-1, 1.18.3), and WATCHMAKER_OPS (`grant-followup`) keeps counting it with that reason. Add a
+new application to `GRANT_APPLICATIONS` in the same PR that records its submission in `funding/APPLICATIONS.md`.
 Test: `node qnfo-cloud-ops/grant-followup.test.mjs`.
+
+## Catch-ups (ZENODO-CATCHUP-1, 1.18.3, pillar: reach)
+
+`CRON_CATCHUP` lets a daily slot re-run a weekly job whose week was missed or failed, with no new cron. `release-check`
+(06:15 Amsterdam) runs `zenodo-stats` after its own job when `zenodo_stats` is older than 180h and no `jr-zenodo-stats-*`
+run started in the last 20h, so a missed Sunday is retried the next morning and at most once a day; the run is logged as
+its own job-run row with `meta.via = "catch-up:release-check"`. A zenodo-stats run whose first 20 record reads all fail
+stops there (ZENODO-REFUSAL-STOP-1) and says why in `meta.reason`. Test: `node qnfo-cloud-ops/zenodo-catchup.test.mjs`.
 
 ## Manual / API trigger (diagnostics only — normal operation is cron-only)
 
