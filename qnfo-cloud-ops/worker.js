@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.18.1-outreach-learner"; /* 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.18.2-utf8-github"; /* 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -134,6 +134,20 @@ function ghHeaders(env, extra) {
   return { Authorization: "Bearer " + (env.GH_TOKEN || ""), "User-Agent": "qnfo-cloud-ops/" + VERSION, Accept: "application/vnd.github+json", ...extra || {} };
 }
 __name(ghHeaders, "ghHeaders");
+// UTF8-DEPLOY-1: GitHub contents are base64 of UTF-8 bytes. atob() alone gives Latin-1 (so a file with any non-ASCII
+// character never compared equal and was rewritten as drift), and btoa() throws above U+00FF.
+function ghB64Text(b64) {
+  const bin = atob(String(b64 || "").replace(/\s/g, ""));
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return new TextDecoder("utf-8").decode(u);
+}
+function ghTextB64(text) {
+  const u = new TextEncoder().encode(String(text));
+  let bin = "";
+  for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
 async function ghGet(env, path) {
   const r = await fetch("https://api.github.com" + path, { headers: ghHeaders(env) });
   const txt = await r.text().catch(() => "");
@@ -1197,7 +1211,7 @@ async function jobPortfolioSync(env) {
   let curText = "";
   if (cur.status === 200 && cur.body && cur.body.content) {
     try {
-      curText = atob(cur.body.content.replace(/\s/g, ""));
+      curText = ghB64Text(cur.body.content);
     } catch (e) {
       curText = "";
     }
@@ -1207,7 +1221,7 @@ async function jobPortfolioSync(env) {
     return { status: "ok", notes: { drift: false, ...out, digest: { stored: true } } };
   }
   const sha = cur.status === 200 && cur.body && cur.body.sha ? cur.body.sha : void 0;
-  const putBody = { message: "Portfolio status " + now.slice(0, 10), content: btoa(md) };
+  const putBody = { message: "Portfolio status " + now.slice(0, 10), content: ghTextB64(md) };
   if (sha) putBody.sha = sha;
   const putR = await ghPut(env, "/repos/QNFO/.github/contents/PORTFOLIO-STATUS.md", putBody);
   if (putR.status !== 200 && putR.status !== 201) return { status: "error", notes: { error: "file put failed " + putR.status + " " + (putR.body && putR.body.message ? putR.body.message : "") + " (R2 direct-main)", ...out } };
@@ -1431,14 +1445,14 @@ async function jobNlnet(env) {
   const p = await ghGet(env, "/repos/QNFO/qnfo-workers/contents/funding/NLNET_PROPOSAL.md");
   if (p.status === 200 && p.body && p.body.content) {
     try {
-      proposal = atob(p.body.content.replace(/\s/g, ""));
+      proposal = ghB64Text(p.body.content);
     } catch (e) {
     }
   }
   const dd = await ghGet(env, "/repos/QNFO/qnfo-workers/contents/funding/DOSSIER.md");
   if (dd.status === 200 && dd.body && dd.body.content) {
     try {
-      dossier = atob(dd.body.content.replace(/\s/g, ""));
+      dossier = ghB64Text(dd.body.content);
     } catch (e) {
     }
   }

@@ -29,7 +29,19 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.36-secret-change-watch";
+var VERSION = "2.38.37-secret-change-watch";
+// ---- UTF8-DEPLOY-1:BEGIN (2.38.36, 2026-10-02, pillar core) ----
+// The GitHub contents API returns base64 of the file's UTF-8 bytes. atob() alone gives one character per BYTE
+// (Latin-1), and fetch() then encodes that string as UTF-8 again, so every non-ASCII character in a worker was
+// uploaded double-encoded: live qnfo-research-exec matched "\u00c3\u2014" where its source says "\u00d7", and
+// fleet.qnfo.org printed mojibake for an arrow (measured 2026-10-02). Decode the bytes as UTF-8 before use.
+function b64Utf8(b64) {
+  const bin = atob(String(b64 || "").replace(/[^A-Za-z0-9+/=]/g, ""));
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return new TextDecoder("utf-8").decode(u);
+}
+// ---- UTF8-DEPLOY-1:END ----
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2780,7 +2792,7 @@ async function installDeclaredBindings(env, worker) {
       });
       const b64 = tj && tj.content ? String(tj.content).replace(/[^A-Za-z0-9+/=]/g, "") : "";
       if (b64) {
-        toml = atob(b64);
+        toml = b64Utf8(b64);
         break;
       }
     }
@@ -6398,7 +6410,7 @@ async function opsDeploy(env, args) {
         }
         log.push({ step: "github-blob", status: br.status, sha: gj.sha, len: b64.length });
       }
-      const content = atob(b64);
+      const content = b64Utf8(b64);
       const srcVer = (content.match(/(?:var|const|let)\s+VERSION\s*=\s*["']([^"']+)["']/) || [])[1] || null;
       log.push({ step: "github", status: gr.status, len: content.length, source_version: srcVer });
       if (toVer && srcVer && srcVer !== toVer) {
@@ -6467,7 +6479,7 @@ async function opsDeploy(env, args) {
           var wr = await fetch("https://api.github.com/repos/" + repo + "/contents/" + wtPath + "?ref=" + encodeURIComponent(ref), { headers: hdrs });
           if (wr.ok) {
             var wj = await wr.json();
-            var wt = atob(String(wj.content || "").replace(/[^A-Za-z0-9+/=]/g, ""));
+            var wt = b64Utf8(wj.content);
             var ci = wt.indexOf("crons");
             var arrStart = ci >= 0 ? wt.indexOf("[", ci) : -1;
             var arrEnd = arrStart >= 0 ? wt.indexOf("]", arrStart) : -1;

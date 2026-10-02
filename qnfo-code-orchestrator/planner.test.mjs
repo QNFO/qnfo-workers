@@ -123,6 +123,17 @@ const FIX = (anchor, extra) => JSON.stringify(Object.assign({ code_fixable: true
   let r = await plan(env);
   ok(!r.planned && /work in progress/.test(r.why) && prompts.length === 0, "7a no planning while 3 code tasks are unfinished", r);
   d.exec("DELETE FROM code_tasks");
+  // PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner are not this worker's work in progress, but are bounded.
+  for (let i = 0; i < 10; i++) d.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?, 'qnfo-workers', 'x/worker.js', 'g', ?, 'done', 0, 'n', 'n')").run("ct_h" + i, ["branch_pushed", "published", "pr_open"][i % 3]);
+  r = await plan(env);
+  ok(!/work in progress|merge backlog/.test(String(r.why || "")), "7a2 ten tasks waiting on the merge runner do not lock the planner out", r);
+  ok(prompts.length === 1, "7a2 the planner reached the model for the waiting issue", prompts.length);
+  prompts.length = 0;
+  for (let i = 10; i < 12; i++) d.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?, 'qnfo-workers', 'x/worker.js', 'g', 'branch_pushed', 'done', 0, 'n', 'n')").run("ct_h" + i);
+  issue(env, { title: "METRIC-TRIGGER-13-C: q08-signal-engine", description: "/api/f" });
+  r = await plan(env);
+  ok(!r.planned && /merge backlog/.test(r.why), "7a3 twelve tasks waiting on the merge runner pause planning", r);
+  d.exec("DELETE FROM code_tasks");
   const today = new Date().toISOString();
   for (let i = 0; i < 8; i++) d.prepare("INSERT INTO issue_plans (issue_id, planned_at, outcome, model) VALUES (?, ?, 'not-code', 'm')").run(9000 + i, today);
   r = await plan(env);

@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.93-reach-ideation"; /* 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.96-utf8-decode"; /* 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -1978,7 +1978,7 @@ async function declaredCrons(env, worker) {
           }
         }
         if (b64) {
-          var ta = atob(b64);
+          var ta = evDecode(b64); // UTF8-DEPLOY-1: decode the bytes as UTF-8, not Latin-1
           if (ta && ta.indexOf("crons") >= 0) return tomlCrons(ta);
         }
       }
@@ -3279,12 +3279,16 @@ async function cmIntegrity(env, t, head, names, sc, mergeBase) {
 }
 __name(cmIntegrity, "cmIntegrity");
 async function cmConfig(env) {
-  var cfg = { enabled: CM_DEFAULT_ENABLED, raw: "absent (default " + (CM_DEFAULT_ENABLED ? "on" : "off") + ")", trusted: CM_TRUSTED_SOURCES };
+  var cfg = { enabled: CM_DEFAULT_ENABLED, raw: "absent (default " + (CM_DEFAULT_ENABLED ? "on" : "off") + ")", trusted: CM_TRUSTED_SOURCES, maxMerges: CM_MAX_MERGES };
   try {
-    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('code_merge_runner_enabled', 'code_merge_trusted_sources')").all()).results || [];
+    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('code_merge_runner_enabled', 'code_merge_trusted_sources', 'code_merge_max_merges_per_tick')").all()).results || [];
     rows.forEach(function(r) {
       if (r.key === "code_merge_runner_enabled" && r.value != null) { cfg.raw = String(r.value); cfg.enabled = ["0", "off", "false", "no", "disabled"].indexOf(String(r.value).trim().toLowerCase()) < 0; }
       if (r.key === "code_merge_trusted_sources" && r.value) cfg.trusted = String(r.value);
+      // MERGE-THROUGHPUT-1 (2026-10-02): at one merge per hourly tick, six verified codeagent branches waited most of a day
+      // (measured 08:35Z: 6 branch_pushed, 1 open PR). The limit is a dial, 1 to 5, default CM_MAX_MERGES; the rule that a
+      // worker with a change in flight gets no second merge is unchanged, so parallel merges always land on different workers.
+      if (r.key === "code_merge_max_merges_per_tick") { var mm = parseInt(r.value, 10); if (isFinite(mm)) cfg.maxMerges = Math.max(1, Math.min(5, mm)); }
     });
   } catch (e) {}
   return cfg;
@@ -3432,8 +3436,9 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
     }
   }
   var res = { id: t.id, pr: num, action: d.action, why: d.why };
-  if (d.action === "merge" && (out.merges >= CM_MAX_MERGES || (d.worker && busy[d.worker]))) {
-    d = { action: "wait", green: true, why: "green; merge deferred (" + (out.merges >= CM_MAX_MERGES ? "one merge per tick" : d.worker + " has a change in flight") + ")" };
+  var cmLimit = out.maxMerges || CM_MAX_MERGES;
+  if (d.action === "merge" && (out.merges >= cmLimit || (d.worker && busy[d.worker]))) {
+    d = { action: "wait", green: true, why: "green; merge deferred (" + (out.merges >= cmLimit ? (cmLimit === 1 ? "one merge per tick" : cmLimit + " merges per tick") : d.worker + " has a change in flight") + ")" };
     res.action = "wait"; res.why = d.why;
   }
   var greenSince = d.green ? (t.green_since || cx.iso) : null;
@@ -3545,7 +3550,7 @@ async function codeMergeTick(env, opts) {
   var cfg = await cmConfig(env);
   if (!cfg.enabled) { await cmHeartbeat(env, cx, "disabled", { disabled: cfg.raw }); return { ok: true, disabled: true, why: "ops_config code_merge_runner_enabled = " + cfg.raw }; }
   if (!(await cmSchema(env))) { await cmHeartbeat(env, cx, "ok", { idle: "no code_tasks table" }); return { ok: true, idle: "no code_tasks table" }; }
-  var out = { ok: true, ts: cx.iso, advanced: [], opened: [], decided: [], reconciled: [], merges: 0, merge_failures: 0, errors: 0 };
+  var out = { ok: true, ts: cx.iso, advanced: [], opened: [], decided: [], reconciled: [], merges: 0, merge_failures: 0, errors: 0, maxMerges: cfg.maxMerges };
   var all = function(sql, args) { var st = env.AUDIT.prepare(sql); return (args && args.length ? st.bind.apply(st, args) : st).all().then(function(r) { return r.results || []; }); };
   var inflight = await all("SELECT * FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting') ORDER BY merged_at ASC LIMIT 10", [CM_RUNNER]);
   for (var i = 0; i < inflight.length; i++) out.advanced.push(await cmAdvance(env, cx, inflight[i]));
@@ -6067,7 +6072,7 @@ var worker_default2 = {
       var cmr = await env.AUDIT.prepare("SELECT id, path, status, merge_state, merged_by, pr_url, pr_opened_by, green_since, nochecks_since, version_to, merge_note, last_error, updated_at FROM code_tasks ORDER BY updated_at DESC LIMIT 20").all().catch(function() { return { results: [] }; });
       var cmh = await env.AUDIT.prepare("SELECT id, ts, status, text FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
       var cmf = await env.AUDIT.prepare("SELECT ts FROM cloud_ops_events WHERE id = 'code-merge-first-ok'").first().catch(function() { return null; });
-      return json({ ok: true, version: VERSION, loop: "CODE-TASK-MERGE-RUNNER-1", enabled: cmc.enabled, switch: "ops_config code_merge_runner_enabled = " + cmc.raw, trusted_sources: cmc.trusted, deny: CM_DENY, max_merges_per_tick: CM_MAX_MERGES, checks_wait_hours: CM_CHECKS_WAIT_H, deploy_wait_hours: CM_DEPLOY_WAIT_H, first_ok_tick: cmf ? cmf.ts : null, last_tick: cmh, tasks: cmr.results || [] });
+      return json({ ok: true, version: VERSION, loop: "CODE-TASK-MERGE-RUNNER-1", enabled: cmc.enabled, switch: "ops_config code_merge_runner_enabled = " + cmc.raw, trusted_sources: cmc.trusted, deny: CM_DENY, max_merges_per_tick: cmc.maxMerges, checks_wait_hours: CM_CHECKS_WAIT_H, deploy_wait_hours: CM_DEPLOY_WAIT_H, first_ok_tick: cmf ? cmf.ts : null, last_tick: cmh, tasks: cmr.results || [] });
     }
     if (p === "/code-merge/tick" && request.method === "POST") {
       var cah2 = request.headers.get("Authorization") || "";
@@ -6709,6 +6714,16 @@ function triggerIssueDescription(summaryHead, action, summaryTail) {
   var anchor = task.length ? marks.filter(function (l) { return /code-anchor:/.test(l); }).slice(0, 1).map(function (l) { return l.trim(); }) : [];
   return summaryHead + prose.slice(0, 300) + summaryTail + (task.length ? "\n" + task.concat(anchor).join("\n") : "");
 }
+// TRIGGER-DISPATCH-1 (2026-10-02): analytics_metric_triggers.priority is an integer 1..9 on 44 of 50 agent_issues
+// triggers, and agent_issues accepts only priority_canon values (agent_issues_enum_guard_ins). String(7) was refused with
+// SQLITE_CONSTRAINT_TRIGGER, so 11 breaches were logged dispatch-failed and no issue was filed. Map to the canon here.
+function triggerIssuePriority(p) {
+  var s = String(p == null ? "" : p).trim().toLowerCase();
+  if (s === "critical" || s === "high" || s === "medium" || s === "low") return s;
+  var n = Number(s);
+  if (s === "" || !isFinite(n)) return "medium";
+  return n >= 9 ? "critical" : n >= 7 ? "high" : n >= 5 ? "medium" : "low";
+}
 // ---- ACT-BRIDGE-1:END ----
 async function evaluateMetricTriggers(env) {
   var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
@@ -6725,7 +6740,7 @@ async function evaluateMetricTriggers(env) {
     var hit = op === "gt" ? v > thr : op === "lte" ? v <= thr : op === "lt" ? v < thr : op === "eq" ? v === thr : v >= thr;
     if (!hit) continue;
     var cd = Math.max(1, Number(t.cooldown_hours) || 24);
-    var recent = await db.prepare("SELECT id FROM analytics_action_log WHERE trigger_id = ?1 AND fired_at > datetime('now', ?2) LIMIT 1").bind(t.id, "-" + cd + " hours").first().catch(function () { return null; });
+    var recent = await db.prepare("SELECT id FROM analytics_action_log WHERE trigger_id = ?1 AND fired_at > datetime('now', ?2) AND status <> 'dispatch-failed' LIMIT 1").bind(t.id, "-" + cd + " hours").first().catch(function () { return null; });
     if (recent) continue;
     var target = String(t.queue_target || "none");
     var summary = triggerIssueDescription("METRIC-TRIGGER #" + t.id + " " + t.metric_key + "=" + v + " " + op + " " + thr + " -> ", t.action, " (owner " + (t.owner || "-") + ", target " + target + ")");
@@ -6737,7 +6752,7 @@ async function evaluateMetricTriggers(env) {
         if (open) { status = "deduped"; note = "open issue " + open.id; }
         else {
           var nowMs = Date.now();
-          await db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', ?3, 'open', ?4, ?4)").bind(title, summary, String(t.priority || "medium"), nowMs).run();
+          await db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'reliability', ?3, 'open', ?4, ?4)").bind(title, summary, triggerIssuePriority(t.priority), nowMs).run();
           note = "agent_issues filed";
         }
       } else {

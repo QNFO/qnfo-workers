@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.10-reach-ideas"; // 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.12-plan-wip-handoff"; // 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -536,11 +536,18 @@ async function jsSyntaxCheck(env, src) {
   // only happen AFTER the module parsed count as a pass; any other start failure (CPU or size limits, platform errors)
   // means the syntax was not verified, so the task stops for review instead of becoming a PR. The message is kept
   // (verify_note, audit code-task.verify-unknown) so the allowlist can learn from what the platform really says.
-  if (JS_PARSED_THEN_FAILED.test(msg)) return { verdict: "ok", note: msg.replace(/\s+/g, " ").slice(0, 200) };
+  // JS-VERIFY-RUNTIME-SHAPE-1 (0.3.11): the platform passes only err.message across the sandbox boundary, so a handler that
+  // touched a missing binding arrived as "Cannot read properties of undefined (reading 'prepare')" with no class name and
+  // was refused as unverified (ct_qldqse7ngltdth, 2026-10-02 08:20Z, needs_human again). The error's name and V8's own
+  // runtime wording count too; code-task-publish's node --check (PUBLISH-JS-CHECK-1) still parses every file before a push.
+  const nm = String((err && err.name) || "");
+  if (JS_PARSED_THEN_FAILED.test(nm + ": " + msg) || JS_RUNTIME_SHAPE.test(msg)) return { verdict: "ok", note: (nm ? nm + ": " : "") + msg.replace(/\s+/g, " ").slice(0, 200) };
   await audit(env, "code-task.verify-unknown", msg.replace(/\s+/g, " ").slice(0, 400), null, "error");
   return { verdict: "no-verifier", error: "the JS verifier could not confirm the syntax (start failed with: " + msg.replace(/\s+/g, " ").slice(0, 200) + ")" };
 }
 const JS_PARSED_THEN_FAILED = /\b(ReferenceError|TypeError|RangeError|URIError)\b|No such module|not permitted to access the internet|Illegal invocation|Network connection lost/;
+// V8's runtime messages, which only arise once the module has parsed and run (a handler using env bindings the sandbox lacks).
+const JS_RUNTIME_SHAPE = /^Cannot read propert(y|ies) of (undefined|null)\b|^Cannot set propert(y|ies) of (undefined|null)\b|\bis not a function\b|\bis not defined$|\bis not iterable\b|\bis not a constructor\b|^Cannot access '[^']+' before initialization|^Assignment to constant variable/;
 // Measures whether the platform enforces limits.cpuMs (a spinning module must be stopped well before the wall timeout).
 async function probeDynamicCpu(env) {
   if (!env.LOADER) return { ok: false, error: "LOADER binding missing" };
@@ -767,6 +774,7 @@ async function intakeIssues(env, maxNew) {
 const PLAN_MODEL_DEFAULT = "@cf/zai-org/glm-5.3-flash";
 const PLAN_DAILY_CAP = 8;
 const PLAN_WIP = 3;
+const PLAN_HANDOFF_MAX = 12; // branches and pull requests waiting on the merge runner
 const PLAN_RECHECK_DAYS = 7;
 const PLAN_MIN_AGE_MS = 15 * 60 * 1000;
 const PLAN_CHEAP_PER_TICK = 10; // refusals and "names no worker" decisions need no model call, so several fit in one tick
@@ -865,8 +873,13 @@ async function planIssues(env, opts) {
   // The cap counts model calls only: a refusal or a "names no worker" decision costs nothing and must not use it up.
   const used = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM issue_plans WHERE planned_at >= ? AND model IS NOT NULL").bind(today).first();
   if (used && Number(used.n) >= PLAN_DAILY_CAP) return { planned: false, why: "daily cap " + PLAN_DAILY_CAP };
-  const wip = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM code_tasks WHERE status NOT IN ('merged','closed','publish_failed','needs_human','failed','reverted')").first();
+  // PLAN-WIP-HANDOFF-1 (0.3.12, agent_issues 1788): a pushed branch or an open pull request waits on the merge runner, not
+  // on this worker, yet it counted as work in progress, so ten hand-filed tasks awaiting merge locked the planner out and
+  // no metric breach was planned (issue_plans held 1 row in its life on 2026-10-02). PLAN_WIP now counts only tasks this
+  // worker still has to carry; tasks handed to the merge runner are bounded separately by PLAN_HANDOFF_MAX.
+  const wip = await env.AUDIT_DB.prepare("SELECT SUM(CASE WHEN status IN ('branch_pushed','published','pr_open') THEN 0 ELSE 1 END) AS n, SUM(CASE WHEN status IN ('branch_pushed','published','pr_open') THEN 1 ELSE 0 END) AS h FROM code_tasks WHERE status NOT IN ('merged','closed','publish_failed','needs_human','failed','reverted')").first();
   if (wip && Number(wip.n) >= PLAN_WIP) return { planned: false, why: "work in progress " + wip.n + " >= " + PLAN_WIP };
+  if (wip && Number(wip.h) >= PLAN_HANDOFF_MAX) return { planned: false, why: "merge backlog " + wip.h + " >= " + PLAN_HANDOFF_MAX };
   let rows;
   try {
     rows = (await env.AUDIT_DB.prepare(

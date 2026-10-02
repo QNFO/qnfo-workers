@@ -107,6 +107,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   doer; `code_task_success_rate_30d` grades the doer (migrations/2026-10-02-act-bridge-doer-metrics.sql). A loop that acts
   on its own metrics (ASK-LOOP-1 in qnfo-ai-search: measure, golden-set eval, judged A/B with revert, ASK-FIX-1 code tasks
   that close themselves on recovery) points its triggers at the digest so a breach is not filed twice.
+- Guard metrics (INTEGRITY-GUARDS-1, `metric_registry.kind = 'guard'`: `issue_wontfix_share_7d`,
+  `remediation_latest_pass_pct_7d`) keep the loop honest. A target metric that improves while a guard metric worsens is
+  a regression: do not close issues as `wontfix` to lower `open_agent_issues`, and do not count a fix whose latest
+  `remediation_verifications` row fails. See migrations/2026-10-02-integrity-guard-metrics.sql.
 - Every agent session writes one `qnfo-audit.session_records` row at closeout (wbs_code, summary, decisions_made,
   handoff_notes, total_tasks, completed_tasks, execution_ratio, started_at, completed_at): what it was asked, what it
   finished, what it left and why. `session_execution_ratio_30d` and `session_records_30d` are graded from these rows.

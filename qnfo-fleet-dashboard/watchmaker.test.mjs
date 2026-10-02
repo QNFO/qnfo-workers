@@ -55,7 +55,7 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('reach-ingest-
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jo-qnfo-backlog-exec-abc', ?, 'ok')").run(ago(7));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-grant-followup-ok1', ?, 'ok')").run(ago(4));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
-// SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.36): the */30 heartbeat.
+// SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.37): the */30 heartbeat.
 db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('evt-secret-watch-1', ?, 'secret-watch-tick', 'qnfo-ops', 'ok')").run(ago(0.3));
 db.prepare("INSERT INTO portfolio_runs (run_date, kind, created_at) VALUES ('2026-10-05', 'identity-weekly', ?)").run(new Date(NOW - 26 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO charter_snapshots (ts) VALUES (?)").run(ago(5));
