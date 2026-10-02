@@ -136,6 +136,10 @@ jobs:
       # works (STRATEGY s2.4) whatever their age, and /run?commit=1 refuses callers while IMPACT_TOKEN is unset.
       - name: SELECTED-WORKS-OPENALEX-1 offline suite (qnfo-paper-indexer)
         run: node qnfo-paper-indexer/impact.test.mjs
+      # AIG-BINDING-1 (#1784): qnfo-ai embedding calls go through AI Gateway default (24h cache, metadata worker/purpose on
+      # the log entry, one plain-binding retry on a gateway error); chat calls and caller options are unchanged.
+      - name: AIG-BINDING-1 offline suite (qnfo-ai)
+        run: node qnfo-ai/aig-binding.test.mjs
       # UTF8-DEPLOY-1: worker source fetched from GitHub reaches the upload as the same UTF-8 text (no double encoding).
       - name: UTF8-DEPLOY-1 offline suite (qnfo-ops)
         run: node qnfo-ops/utf8-deploy.test.mjs
