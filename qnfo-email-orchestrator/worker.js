@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.5.0-inbound-sla"; /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
+var VERSION = "0.5.1-inbound-sla"; // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
 var CAPS = ["reply-drafts", "cadence-log", "email-filters", "inbound-sla"];
 var LIMS = ["cron-only: no public route; the reply-draft pass runs on its */15 and 3-hourly crons, INBOUND-SLA-1 on */15, its metrics on the 3-hourly cron", "never sends outreach or follow-ups; replies only to inbound mail, through qnfo-email /send", "INBOUND-SLA-1 mails nobody outside the research-outreach campaign and never a funder or hiring manager (docs/STRATEGY.md section 5): those messages are held and recorded for the weekly identity review", "publishes this capability row from the cron"];
 var NAMESPACE = "email-orchestrator";
@@ -354,7 +354,16 @@ async function slaSendOnce(env, row, f, kind, body) {
   // A failed send frees the thread claim (renamed to a failure row, which also counts the attempts) and clears the
   // draft, so qnfo-email's drain does not keep stamping a row that holds an unsent text.
   var fail = async function(why) {
-    await slaRun(env.AUDIT_DB, "UPDATE cloud_ops_events SET id = ?1, status = 'failed', text = ?2 WHERE id = ?3", ["inbound-sla-fail-" + row.qid + "-" + Date.now(), ("INBOUND-SLA-1 " + kind + " q" + row.qid + " failed: " + why).slice(0, 200), claim]);
+    // The failure id must be unique: two failures in the same millisecond collided on the primary key, the rename
+    // threw, and the leftover 'sending' claim then counted as an acknowledgement already sent to this sender.
+    var fid = "inbound-sla-fail-" + row.qid + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+    var ftext = ("INBOUND-SLA-1 " + kind + " q" + row.qid + " failed: " + why).slice(0, 200);
+    try {
+      await slaRun(env.AUDIT_DB, "UPDATE cloud_ops_events SET id = ?1, status = 'failed', text = ?2 WHERE id = ?3", [fid, ftext, claim]);
+    } catch (e) {
+      try { await slaRun(env.AUDIT_DB, "DELETE FROM cloud_ops_events WHERE id = ?1 AND status = 'sending'", [claim]); } catch (e2) {}
+      try { await slaRun(env.AUDIT_DB, "INSERT OR IGNORE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'inbound-sla-send', ?3, ?4, 'qnfo-email-orchestrator', 'failed')", [fid + "-r", new Date().toISOString(), ftext, meta]); } catch (e3) {}
+    }
     try { await slaRun(env.AUDIT_DB, "UPDATE email_reply_queue SET draft_text = NULL WHERE id = ?1 AND sent_at IS NULL", [row.qid]); } catch (e) {}
     return { sent: false, error: why };
   };
