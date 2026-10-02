@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.2-capability-contract";
+var VERSION = "2.0.4-exception-evidence";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -57,11 +57,78 @@ function transportTrusted(tr) {
   if (TRUSTED_TRANSPORTS.has(t)) return true;
   return TRUSTED_TRANSPORTS.has(t.split(":")[0].trim());
 }
-async function closeIssue(env, id, now, target) {
+async function closeIssue(env, id, now, target, evidence) {
   const stamp = new Date().toISOString();
-  const ev = "backlog-exec v1.6.1 evidence-first auto-close " + stamp + (target ? " | target=" + target : "");
+  const ev = "backlog-exec v1.6.1 evidence-first auto-close " + stamp + (target ? " | target=" + target : "") + (evidence ? " | " + evidence : "");
   await env.AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, close_evidence, triaged_at) VALUES (?1,'RC-03','closed','qnfo-backlog-exec',datetime('now'),'auto-close by qnfo-backlog-exec v1.6.0 drain',?2,datetime('now')) ON CONFLICT(issue_id) DO UPDATE SET triage_state='closed', close_evidence=?2, triaged_at=datetime('now')").bind(id, ev).run();
   return env.AUDIT.prepare("UPDATE agent_issues SET status='closed', updated_at=?1 WHERE id=?2 AND status='open'").bind(now, id).run();
+}
+// BACKLOG-EXEC-EVIDENCE-1 (2.0.4, agent_issues 1808): exception-class issues (WORKER-EXCEPTION-DETECTED <worker>,
+// ALERT-STORM-DETECTED <worker>, filed by qnfo-error-selfheal until it was retired on 2026-10-01) closed when alerts held no
+// qnfo-error-selfheal row naming the worker in 24 h. That worker is retired and alerts holds 0 of its rows, so the count was
+// always 0 and every such issue older than 24 h closed, even while the worker kept failing; the health probe was read and
+// then ignored. The target was also wrong: the first fleet name in title+description, which is the filer itself whenever the
+// title names a worker the pattern misses (issue 509, job-market-watch, closed as "qnfo-error-selfheal" recovered), and any
+// prose issue with "exception" in its title was treated as one (#1826, and #1808 itself as "qnfo-workers").
+// Now: only a detector-shaped title counts, its subject is the worker the title names ("__unknown__" is no worker), and the
+// issue closes only when all of these hold, written into close_evidence by the statement that closes it:
+//   errors stopped: the latest worker_usage_daily snapshot (qnfo-fleet-control refreshScriptUsage, Cloudflare
+//     workersInvocationsAdaptive per script, where errors are counted now) is under 36 h old, covers >= 10 scripts, has
+//     the worker's row with errors_24h = 0, and its 24 h window began after the issue was filed;
+//   no exception rows for the worker in worker_logs in 24 h (outcome other than ok/canceled, or exceptions_json);
+//   no alert flood from the worker in 24 h (at most 4 alerts in any clock hour; the detector's storm was > 8 in 60 min,
+//     which always puts >= 5 into one clock hour);
+//   the health probe passed: see exceptionProbe (trusted transports only; a same-zone fetch never counts).
+var EXC_TITLE = /\b(?:WORKER-EXCEPTION-DETECTED|ALERT-STORM-DETECTED|ERROR-BURST(?:-DETECTED)?)\s+(\S+)/i;
+var EXC_SCRIPT = /^[a-z0-9][a-z0-9-]{0,62}$/;
+var EXC_PROBE_MAX_MIN = 30;
+var EXC_SNAPSHOT_MAX_H = 36;
+var EXC_SNAPSHOT_MIN_SCRIPTS = 10;
+var EXC_ALERTS_PER_HOUR_MAX = 4;
+function exceptionTarget(title) {
+  const m = String(title || "").match(EXC_TITLE);
+  if (!m) return { detector: false, target: null };
+  const n = m[1].replace(/[),.;:]+$/, "");
+  return { detector: true, target: EXC_SCRIPT.test(n) ? n : null, named: n };
+}
+async function exceptionRecurrence(env, name, createdMs) {
+  const out = { ok: false, why: "", ev: "" };
+  const snap = await env.AUDIT.prepare("SELECT day, COUNT(*) AS n, MAX(ts) AS ts FROM worker_usage_daily WHERE day = (SELECT MAX(day) FROM worker_usage_daily) GROUP BY day").first();
+  if (!snap) { out.why = "unmeasured: worker_usage_daily is empty"; return out; }
+  const snapMs = Date.parse(String(snap.ts || ""));
+  if (!Number.isFinite(snapMs) || Date.now() - snapMs > EXC_SNAPSHOT_MAX_H * 36e5) { out.why = "unmeasured: worker_usage_daily snapshot " + snap.day + " is stale (ts " + snap.ts + ")"; return out; }
+  if (Number(snap.n) < EXC_SNAPSHOT_MIN_SCRIPTS) { out.why = "unmeasured: worker_usage_daily snapshot " + snap.day + " covers " + snap.n + " scripts (< " + EXC_SNAPSHOT_MIN_SCRIPTS + ")"; return out; }
+  const u = await env.AUDIT.prepare("SELECT requests_24h, errors_24h, ts FROM worker_usage_daily WHERE day = ?1 AND script = ?2").bind(snap.day, name).first();
+  if (!u) { out.why = "unmeasured: no worker_usage_daily row for " + name + " in snapshot " + snap.day; return out; }
+  const uMs = Date.parse(String(u.ts || ""));
+  if (!Number.isFinite(uMs) || uMs - 864e5 < createdMs) { out.why = "unmeasured: the snapshot's 24h window (to " + u.ts + ") began before the issue was filed (" + new Date(createdMs).toISOString() + ")"; return out; }
+  const wl = await env.AUDIT.prepare("SELECT COUNT(*) AS c, MAX(ingested_at) AS last FROM worker_logs WHERE script_name = ?1 AND ts_ms >= ?2 AND (COALESCE(outcome, 'ok') NOT IN ('ok', 'canceled') OR (exceptions_json IS NOT NULL AND exceptions_json NOT IN ('', '[]')))").bind(name, Date.now() - 864e5).first();
+  const al = await env.AUDIT.prepare("SELECT COALESCE(MAX(n), 0) AS m FROM (SELECT strftime('%Y-%m-%d %H', created_at) AS h, COUNT(*) AS n FROM alerts WHERE source = ?1 AND julianday(created_at) >= julianday('now', '-24 hours') GROUP BY h)").bind(name).first();
+  const errors = Number(u.errors_24h || 0), logErr = wl ? Number(wl.c || 0) : 0, perHour = al ? Number(al.m || 0) : 0;
+  out.ev = "worker_usage_daily day=" + snap.day + " ts=" + u.ts + " errors_24h=" + errors + " requests_24h=" + Number(u.requests_24h || 0) + " (window after filing " + new Date(createdMs).toISOString() + "); worker_logs error rows 24h=" + logErr + "; alerts max/h 24h=" + perHour;
+  if (errors > 0 || logErr > 0 || perHour > EXC_ALERTS_PER_HOUR_MAX) { out.why = "errors recur: " + out.ev; return out; }
+  out.ok = true;
+  return out;
+}
+// The health probe: the newest trusted-transport fleet_probe_log row (qnfo-fleet-dashboard probes most workers over http
+// every 5-15 min) decides when it is under 30 min old, pass or fail. Only when there is none (the dashboard does not probe
+// itself) does the external /health probe in worker_live_audit (scripts/fleet-autoaudit.py) count, if under 6 h old.
+var EXC_LIVE_AUDIT_MAX_H = 6;
+async function exceptionProbe(env, name) {
+  const rs = await env.AUDIT.prepare("SELECT ok, status, ts, transport, source FROM fleet_probe_log WHERE name = ?1 ORDER BY id DESC LIMIT 12").bind(name).all();
+  const row = (rs.results || []).find((r) => transportTrusted(r.transport));
+  let why = "no trusted-transport fleet_probe_log row for " + name;
+  if (row) {
+    const ageMin = (Date.now() - new Date(row.ts).getTime()) / 6e4;
+    const ev = "probe ok=" + Number(row.ok) + " status=" + row.status + " transport=" + row.transport + " ts=" + row.ts + " source=" + row.source;
+    if (ageMin <= EXC_PROBE_MAX_MIN) return { ok: Number(row.ok) === 1, ev: ev };
+    why = ev + " (older than " + EXC_PROBE_MAX_MIN + "m)";
+  }
+  let la = null;
+  try { la = await env.AUDIT.prepare("SELECT http, live_version, probed_at FROM worker_live_audit WHERE worker = ?1").bind(name).first(); } catch (e) { la = null; }
+  const laMs = la ? Date.parse(String(la.probed_at || "").replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(la.probed_at || "")) ? "" : "Z")) : NaN;
+  if (la && Number(la.http) === 200 && Number.isFinite(laMs) && Date.now() - laMs <= EXC_LIVE_AUDIT_MAX_H * 36e5) return { ok: true, ev: "probe ok=1 status=200 transport=external-https ts=" + la.probed_at + " source=worker_live_audit live_version=" + la.live_version };
+  return { ok: false, ev: why + (la ? "; worker_live_audit http=" + la.http + " probed_at=" + la.probed_at + " (needs 200 within " + EXC_LIVE_AUDIT_MAX_H + "h)" : "") };
 }
 async function recheckRecentCloses(env) {
   let reopened = 0;
@@ -320,24 +387,31 @@ async function run(env) {
       detail.push({ id: row.id, target: optIn.target, action: "escalate", note: "no close-authorizing evidence (ok=" + p.ok + ", transport=" + (p.transport || "none") + "): same-zone/binding evidence cannot authorize a close" });
       continue;
     }
-    const isExceptionClass = !isHealthAvailability && name && /alert-storm|exception|error-burst|worker-exception|recurring fail/i.test(title);
-    if (isExceptionClass && name) {
+    // BACKLOG-EXEC-EVIDENCE-1: see exceptionRecurrence. A detector issue that is not proven recovered falls through to the
+    // other predicates (a verified remediation can still close it) and is rechecked with the measured reason.
+    const exc = !isHealthAvailability ? exceptionTarget(title) : { detector: false };
+    let excNote = null;
+    if (exc.detector) {
       const ageMs = createdAgeMs(row.created_at, now);
-      if (ageMs > 24 * 3600 * 1e3) {
-        let rec = 0;
+      if (!exc.target) excNote = "exception-class: '" + String(exc.named || "").slice(0, 40) + "' names no worker, so no recurrence can be measured";
+      else if (ageMs <= 24 * 3600 * 1e3) excNote = "exception-class: under 24h old";
+      else {
+        let rec, pr;
         try {
-          const ar = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM alerts WHERE source='qnfo-error-selfheal' AND message LIKE ?1 AND julianday(created_at) >= julianday('now', '-24 hours')").bind("%" + name + "%").first();
-          rec = ar ? Number(ar.c || 0) : 0;
+          rec = await exceptionRecurrence(env, exc.target, now - ageMs);
+          pr = rec.ok ? await exceptionProbe(env, exc.target) : null;
         } catch (e) {
+          rec = { ok: false, why: "recurrence query failed: " + String(e && e.message || e).slice(0, 160) };
         }
-        if (rec === 0) {
-          const ev = await probeHealthyViaLog(env, name) || await probeHealth(name);
-          await closeIssue(env, row.id, now);
+        if (rec.ok && pr && pr.ok) {
+          const evidence = "BACKLOG-EXEC-EVIDENCE-1 (" + VERSION + ") exception-class closed on evidence: " + rec.ev + "; " + pr.ev;
+          await closeIssue(env, row.id, now, exc.target, evidence);
           closed++;
-          detail.push({ id: row.id, target: name, action: "closed", note: "exception-class recovered: no error-selfheal recurrence 24h, age>24h" + (ev && ev.ok ? ", health ev " + ev.host : "") });
-          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + name + "): exception-class recovered", { id: row.id, target: name, action: "closed", reason: "no error-selfheal recurrence in 24h" }, WORKER, "ok");
+          detail.push({ id: row.id, target: exc.target, action: "closed", note: evidence.slice(0, 400) });
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (" + exc.target + "): exception-class closed on evidence", { id: row.id, target: exc.target, action: "closed", reason: "BACKLOG-EXEC-EVIDENCE-1: errors stopped and probe passed" }, WORKER, "ok");
           continue;
         }
+        excNote = "exception-class " + exc.target + " not closed: " + (rec.ok ? "errors stopped (" + rec.ev + ") but " + (pr ? pr.ev : "no probe") : rec.why);
       }
     }
     const isModelHealth = /^MODEL-DEGRADED\b/i.test(title);
@@ -454,11 +528,11 @@ async function run(env) {
     }
     await env.AUDIT.prepare("UPDATE agent_issues SET updated_at=?1 WHERE id=?2 AND status='open'").bind(now, row.id).run();
     rechecked++;
-    detail.push({ id: row.id, title: title.slice(0, 60), action: "recheck", note: name ? "probe target " + name : "no probe target" });
+    detail.push(excNote ? { id: row.id, title: title.slice(0, 60), target: exc.target || null, action: "recheck", note: excNote.slice(0, 400) } : { id: row.id, title: title.slice(0, 60), action: "recheck", note: name ? "probe target " + name : "no probe target" });
   }
   const summary = { registers, inventory, noiseClosed, ledgerResolved, jobsReaped, processed: items.length, closed, rechecked, escalated, detail: detail.slice(0, MAX_ROW) };
   if (escalated > 0) await alert(env, WORKER, "warning", "backlog-exec: " + escalated + " health issue(s) still failing: " + detail.filter((d) => d.action === "escalate").map((d) => d.target).join(", "));
-  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ noiseClosed, ledgerResolved, jobsReaped, processed: items.length, closed, rechecked, escalated }), { noiseClosed, ledgerResolved, jobsReaped, processed: items.length, closed, rechecked, escalated }, WORKER, "ok");
+  await recordEvent(env, "job-run", "backlog-exec " + JSON.stringify({ noiseClosed, ledgerResolved, jobsReaped, processed: items.length, closed, rechecked, escalated }), { exceptionRule: "BACKLOG-EXEC-EVIDENCE-1", version: VERSION, noiseClosed, ledgerResolved, jobsReaped, processed: items.length, closed, rechecked, escalated }, WORKER, "ok");
   return { status: "ok", notes: summary };
 }
 __name(run, "run");
