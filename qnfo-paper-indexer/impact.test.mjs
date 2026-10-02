@@ -40,7 +40,8 @@ const LIVING_PAPER = d1((sql) => {
 globalThis.fetch = async (url) => {
   url = String(url);
   fetched.push(url);
-  const body = url.includes("api.openalex.org") ? { cited_by_count: 2 } : url.includes("zenodo.org/api/records") ? { hits: { hits: [] } } : null;
+  const u = new URL(url);
+  const body = u.hostname === "api.openalex.org" ? { cited_by_count: 2 } : (u.hostname === "zenodo.org" && u.pathname.startsWith("/api/records")) ? { hits: { hits: [] } } : null;
   return new Response(JSON.stringify(body), { status: body ? 200 : 404, headers: { "content-type": "application/json" } });
 };
 
@@ -66,7 +67,8 @@ await worker.scheduled({ cron: "0 4 * * *" }, env, { waitUntil() {} });
 const oa = new Set(inserts.filter((r) => r.source === "openalex" && r.metric === "cited_by_count").map((r) => r.doi));
 ok(SELECTED.every((d) => oa.has(d)), "the daily pass records an OpenAlex reading for all seven selected works (got " + SELECTED.filter((d) => oa.has(d)).length + ")");
 ok(oa.has("10.5281/zenodo.30000001") && oa.has("10.5281/zenodo.99999999"), "the newest papers and the flagship set are still measured");
-const oaCalls = fetched.filter((u) => u.includes("api.openalex.org"));
+const isOpenAlex = (u) => { try { return new URL(u).hostname === "api.openalex.org"; } catch (e) { return false; } };
+const oaCalls = fetched.filter(isOpenAlex);
 ok(oaCalls.length === new Set(oaCalls).size && oaCalls.length === 9, "each DOI is fetched once (2 newest + 7 selected + 1 flagship, overlaps deduplicated): " + oaCalls.length);
 
 // 3. the selected works do not depend on the flagship query
