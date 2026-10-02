@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.50-ground-or-slot";
+var VERSION = "0.9.51-terminal-selfclose";
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -296,11 +296,36 @@ async function markError(env, row, msg) {
       var _ex = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 LIMIT 1").bind("RESEARCH-TERMINAL " + _rid + "%").first();
       if (!_ex) {
         await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1,?2,'qnfo-research-exec','pipeline','medium','open',CAST(strftime('%s','now') AS INTEGER)*1000,CAST(strftime('%s','now') AS INTEGER)*1000)").bind("RESEARCH-TERMINAL " + _rid + ": " + String(msg).slice(0, 110), "research_queue row " + row.id + " went terminal at recover_count>=3: " + String(msg).slice(0, 280)).run();
+        await terminalContentContract(env, row, msg, _rid);
       }
       await logEvent(env, "terminal-issue", "filed agent_issue for terminal row " + _rid, "error");
     } catch (eF) {}
   }
 }
+// RESEARCH-TERMINAL-SELFCLOSE-1 (2026-10-02): a row parked for a content failure only (verify mismatch, every gate passed)
+// is the integrity gate working: the paper's numbers did not survive the independent check, so it stays off Zenodo. Its
+// RESEARCH-TERMINAL issue gets a remediation_contracts probe that qnfo-fleet-control's hourly tick (REMEDIATION-TICK-1)
+// passes once the row is parked with its reason and the queue is still advancing, so the issue closes itself with that
+// evidence instead of waiting for a session. A gate failure (gates=<name>) can be a pipeline bug (1751: gate-refcount),
+// so it gets no contract and stays open for a fix.
+function isContentOnlyTerminal(msg) {
+  return /mismatch=true gates=\s*$/.test(String(msg || ""));
+}
+async function terminalContentContract(env, row, msg, rid) {
+  if (!isContentOnlyTerminal(msg)) return null;
+  var id = String(row && row.id || "");
+  if (!/^[0-9a-f-]{8,64}$/i.test(id)) return null;
+  try {
+    var iss = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 AND status = 'open' ORDER BY id DESC LIMIT 1").bind("RESEARCH-TERMINAL " + rid + "%").first();
+    if (!iss || !iss.id) return null;
+    var probe = "SELECT 'parked+queue-moving' AS expected, CASE WHEN EXISTS (SELECT 1 FROM research_queue WHERE id = '" + id + "' AND stage = 'parked' AND error LIKE 'PARKED-POISON-1:%mismatch=true%') AND EXISTS (SELECT 1 FROM cloud_ops_events WHERE job = 'qnfo-research-exec' AND status = 'ok' AND text LIKE '%->%' AND ts >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-6 hours')) THEN 'parked+queue-moving' ELSE 'pending' END AS observed";
+    await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status, next_due_at) VALUES (?1, ?2, 'row parked for a verify mismatch with every gate passing', 'none: the integrity gate withheld the paper; evidence is the parked row and an advancing queue', ?3, 'd1-query', 3, 'qnfo-research-exec', 1, 'active', datetime('now'))").bind("research-terminal-" + rid, Number(iss.id), probe).run();
+    return Number(iss.id);
+  } catch (e) {
+    return null;
+  }
+}
+__name(terminalContentContract, "terminalContentContract");
 __name(markError, "markError");
 __name2(markError, "markError");
 __name22(markError, "markError");
