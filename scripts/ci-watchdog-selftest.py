@@ -154,6 +154,52 @@ def main() -> int:
     check("closed finding bodies yield run id -> issue number", ids == {36860029746: 332}, ids)
     check("branch_runs without a workflow id makes no call", cw.branch_runs(None, "main") == [])
 
+    # API-BUDGET-1: the per-workflow history and contents calls are made only for workflows that declare a schedule.
+    import tempfile
+    ws = tempfile.mkdtemp(prefix="wd-")
+    os.makedirs(os.path.join(ws, ".github", "workflows"))
+    wf_list = []
+    for i in range(1, 41):
+        rel = ".github/workflows/w%d.yml" % i
+        with open(os.path.join(ws, rel), "w", encoding="utf-8") as fh:
+            fh.write("on:\n  push:\n" + ("  schedule:\n    - cron: '0 6 * * *'\n" if i <= 3 else ""))
+        wf_list.append({"id": i, "name": "w%d" % i, "path": rel, "state": "active"})
+    wf_list.append({"id": 99, "name": "gone", "path": ".github/workflows/gone.yml", "state": "active"})
+    calls: list = []
+
+    def fake_gh(path, method="GET", body=None):
+        calls.append((method, path))
+        if "/actions/workflows?" in path:
+            return 200, {"workflows": wf_list}
+        if "/actions/workflows/" in path and "/runs" in path:
+            return 200, {"workflow_runs": [{"id": 1, "event": "push", "created_at": "2026-10-01T00:00:00Z"}]}
+        return 200, {}
+
+    old_ws, old_gh, old_tok = os.environ.get("GITHUB_WORKSPACE"), cw.gh, cw.TOKEN
+    os.environ["GITHUB_WORKSPACE"] = ws
+    cw.gh, cw.TOKEN = fake_gh, "t"
+    try:
+        check("a workflow file with a schedule is read from the checkout", cw.declares_schedule(".github/workflows/w1.yml") is True)
+        check("a workflow file without one is read from the checkout", cw.declares_schedule(".github/workflows/w9.yml") is False)
+        check("a file missing from the checkout is unknown, not False", cw.declares_schedule(".github/workflows/gone.yml") is None)
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            try:
+                cw.main()
+            except SystemExit:
+                pass
+        hist = [c for c in calls if "/actions/workflows/" in c[1] and "/runs" in c[1] and "branch=" not in c[1]]
+        cont = [c for c in calls if "/contents/" in c[1]]
+        check("history is fetched only for the 3 scheduled workflows and the 1 unknown file", len(hist) == 4, len(hist))
+        check("contents is asked only for the file missing from the checkout", len(cont) == 1 and "gone.yml" in cont[0][1], cont)
+        check("41 workflows cost under 30 API calls in total (was about 2 per workflow)", len(calls) < 30, len(calls))
+    finally:
+        cw.gh, cw.TOKEN = old_gh, old_tok
+        if old_ws is None:
+            os.environ.pop("GITHUB_WORKSPACE", None)
+        else:
+            os.environ["GITHUB_WORKSPACE"] = old_ws
+
     print("\n%d failure(s)" % len(fails))
     return 1 if fails else 0
 

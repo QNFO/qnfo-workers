@@ -124,6 +124,15 @@ because each one was broken at least once; the linked issue holds the evidence.
   (zenodo_versions_per_flagship read 1 while the true minimum was 3: two flagships were unmeasured, #1754). An action the
   session is refused is handed to the owner with the reason, not retried.
 
+## Claim before you change (WORK-CLAIMS-1)
+- Before changing a file, look for in-flight work on it:
+  `SELECT kind, intent, holder, pr FROM v_work_claims_active WHERE path = '<repo path>'` (D1 `qnfo-audit`; the view also
+  lists the code loop's unfinished tasks). If a row describes the same defect, do not write a second fix: review that
+  change, or add what is missing to it. If the rows are about something else, go ahead and expect a VERSION-line rebase.
+- Then say what you are doing: `INSERT INTO work_claims (path, intent, holder, issue_id) VALUES (...)`. A claim is
+  advisory and expires after two hours; renew it by inserting again. When the PR merges or closes, set `released_at`,
+  `pr` and `outcome` (`merged`, `closed`, `duplicate`). See migrations/2026-10-02-work-claims.sql.
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
