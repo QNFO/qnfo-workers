@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.6, 2026-10-02 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5; 1.6: funder replies watched by the fleet, applications use the qnfo.org address, section 5). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.7, 2026-10-02 (1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5; 1.6: funder replies watched by the fleet, applications use the qnfo.org address, section 5; 1.7: the fleet measures and improves its own effectiveness: the distribution and outreach learners, the reward they can actually measure, and inbound mail answered within 72h, section 6.4). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -266,15 +266,42 @@ message; suppression list honoured by both engines; one honest follow-up (`Follo
 Baselines are set from the first full week of ingested data; targets are in section 9.
 
 ### 6.4 Loops that act on the signals
-- **Distribution allocation (weekly):** a Thompson-sampling bandit over topic x format x time slot, rewarded by engaged
-  sessions and subscriptions attributed through UTM. It decides next week's schedule inside the cadence caps.
+- **Distribution allocation (weekly, SOCIAL-DISTRIBUTION-LEARNER-1, qnfo-social 0.7.28):** Thompson sampling with one
+  Beta posterior each for topic (energy, epistemics, operations), format (single, thread, question-led) and time slot
+  (EU morning, US morning, US afternoon). It chooses which queued post goes next and when, only after the pause flag and
+  the weekly cap have granted room, and never rewrites text. Reward, credited once per post after 72h: engagement from
+  others (likes, reposts, quotes, replies) plus views of the linked paper page above its 7-day baseline, as
+  1 - exp(-(engagement + visits/5)/2). UTM-attributed sessions and subscriptions, the reward version 1.0 named, are not
+  measurable (RUM paths carry no query string, GA4 is retired, `subscribers` has no campaign), so they are not used.
+  Kill switch `ops_config.social_learner_enabled`; public view `GET qnfo-social.q08.workers.dev/learner`; metric
+  `social_engagement_rate_30d` (trigger below 0.2 per post). At 2 posts a week it needs months to separate arms.
+- **Inbound handling (every 15 minutes, INBOUND-SLA-1, qnfo-email-orchestrator 0.5.0):** every human message to a fleet
+  inbox gets a fleet action within 72h, inside section 5: funders, employers and commercial offers get no automatic
+  reply and are listed in the weekly identity review; a research correspondent inside the research-outreach campaign may
+  get a short answer that passes the section 5 gates, else a holding acknowledgement; both disclose AI drafting and commit
+  nothing. Metrics `inbound_unactioned_72h` (target 0) and
+  `inbound_first_response_h_median_30d` (target 24h or less); kill switch `ops_config.inbound_sla_enabled`.
 - **Search loop (weekly):** pages with high search impressions and low CTR get a rewritten title and description; pages ranked
   8-20 get internal links and a short FAQ; each change is logged and compared over 28 days.
 - **Content loop (monthly):** topics that combine search demand and engagement choose the next explainer for a selected work.
-- **Outreach loop (weekly):** reply rate by segment and template moves the daily cap toward the segments that answer; any
-  segment under 1% after 50 sends stops.
+- **Outreach loop (daily, OUTREACH-LEARNER-1, qnfo-cloud-ops 1.18.0):** six segments, paper topic (energy, QEC, other)
+  by recipient type (institutional, personal). Thompson sampling on positive replies matched to our own sends chooses who
+  takes each slot under the unchanged caps (8 a day, 3 per domain); it never raises them. Any segment under 1% after 50
+  sends stops, and `ops_config outreach_learner_resume:<segment>` resumes it. There is one first-contact template (v2 from
+  2026-10-02, recorded per send), so template is not yet a dimension. Metrics `outreach_reply_rate_30d` (trigger under 2%)
+  and `warm_conversations_30d` (trigger under 2); kill switch `ops_config.outreach_learner_enabled`. The daily "sent as
+  you" digest goes through the `SEND_EMAIL` binding to rowan.quni@qnfo.org.
 - **Integrity:** bot-quality flags exclude automated traffic from every KPI; no metric is ever optimised by buying
   attention or by volume.
+- **Self-improvement (owner directive 2026-10-02: "automatically measure and improve internal and external performance
+  and effectiveness metrics systemwide ... and constantly and consistently improve, adapt, and change yourself and the
+  system"):** every metric in `metric_registry` is measured on a worker cron and carries a trigger row (threshold, owner,
+  lever, definition of done) in `analytics_metric_triggers`. A breach files one deduplicated `agent_issues` row
+  (METRIC-CLOSED-LOOP-1); `metric_history`, regressions and fix durability are tracked hourly by qnfo-fleet-control
+  (IMPROVEMENT-LOOP-1, `GET /improvement`); a remedy that does not move its metric within 7 days is replaced, not
+  repeated (`remedy_efficacy_30d`). The loops above are the external learners; the watchmaker index (target 0) counts
+  any recurring step that still needs a person or a session. No learner may move a metric by relaxing a section 5 gate,
+  raising a cadence cap or adding claims the record does not support.
 
 ---
 

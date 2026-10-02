@@ -10,11 +10,24 @@
 ## Current state (read from worker.js and wrangler.toml, 2026-10-01)
 This section resolves the contradiction below between "Monday = autonomous outreach SEND wave ... (cap 5/day)" and
 "Never sends external outreach". **The second is true for the current code: this worker sends no outreach.**
-- Code version `0.4.2-heartbeat`. wrangler.toml crons: `0 */3 * * *` and `*/15 * * * *`.
+- Code version `0.5.0-inbound-sla`. wrangler.toml crons: `0 */3 * * *` and `*/15 * * * *` (unchanged).
 - The cron handler runs only the reply drafter and the fleet heartbeat. The reply drafter reads `email_reply_queue`
   (inbound mail), sends a 1-2 sentence acknowledgment from qnfo@qnfo.org to the inbound sender via qnfo-email `/send`
   only for simple logistical messages, and escalates anything technical, scientific, licensing, legal, financial or
   opinion-seeking. These are replies to mail received, not outreach.
+- **INBOUND-SLA-1 (0.5.0, 2026-10-02, pillar: reach).** qnfo-email enqueues every human inbound message as
+  `email_reply_queue` 'escalate' and nothing but a person or a session used to move those rows. On the `*/15` cron this
+  worker now gives each one a fleet action within 72h, inside docs/STRATEGY.md section 5. `INBOUND_SLA_RULES` in
+  `worker.js` is the category->action map: answered, automated, solicitation, opt-out, thread-closing thanks and recorded
+  funder decisions are closed with a reason; funders, hiring managers, commercial offers and anyone outside the
+  research-outreach campaign get no mail at all (section 5 "never automatic") and are held for the weekly identity
+  review; research correspondents get one gated short answer from the drafter or one holding acknowledgement per thread;
+  legal, personal, money and press topics never get a substantive answer. Each decision is a `cloud_ops_events` row
+  `inbound-sla-q-<queue id>` (sender domain only), each run upserts `inbound-sla-run-<day>`. Kill switch:
+  `ops_config.inbound_sla_enabled` = `0` (absent = on); every send also needs qnfo-outreach
+  `pipeline_state.external_sends_enabled`. Metrics (3-hourly): `inbound_first_response_h_median_30d`,
+  `inbound_unactioned_72h`. Watched by qnfo-fleet-dashboard WATCHMAKER_OPS `inbound-sla`. Suite:
+  `node qnfo-email-orchestrator/inbound-sla.test.mjs`.
 - `/run/cadence` is manual and authenticated (per a code comment the worker has no workers.dev route, CRON_ONLY #1402).
   Apart from qnfo-email `/stats`, it calls `/outreach/replies`, `/outreach/followup`, `/scan` and `/outreach/weekly`,
   which qnfo-email (`qnfo-email/worker.js`) does not implement; qnfo-email answers an unknown GET with its route list, so

@@ -26,14 +26,34 @@ Digest recipient = `DIGEST_TO` secret (default rwnquni@outlook.com).
 The `outreach` job drains `qnfo-audit.outreach_queue` and mails researchers in the owner's voice, plus one follow-up. It is
 one of the two cold-email engines (the other is qnfo-outreach); owner-voice sending is gated T1
 (docs/AUTONOMY-DECISION-POLICY.md). Rules, changed 2026-10-01 (STRATEGY-1):
-- Caps: at most 8/day **in total across both engines** and 3/day per domain. In the code as of 2026-10-01 this job counts
-  only its own sends against 8/day and has no per-domain cap, so the shared total and the per-domain cap are policy that the
-  code does not yet enforce here.
+- Caps: at most 8/day **in total across both engines** and 3/day per domain, enforced in this job since
+  OUTREACH-SHARED-CAP-1 (both ledgers are counted; a read error stops the run).
 - Consent: a real reason tied to the recipient's own work; an opt-out line in every message; the suppression list is
   honoured by both engines; one honest follow-up (`Following up:`, never a fake `Re:`); no repeat contact after an opt-out,
   bounce or reply.
 - Kill switch: qnfo-outreach D1 `pipeline_state.external_sends_enabled` (shared with qnfo-outreach). Paused 2026-10-01;
   resumes after OUTREACH-CONSENT-1 deploys.
+
+## Outreach learner (OUTREACH-LEARNER-1, 1.18.0, pillar: reach)
+
+docs/STRATEGY.md s6.4: reply rate by segment moves the daily cap toward the segments that answer; a segment under 1% after
+50 sends stops. Segments are topic (energy, qec, other; from the paper title in `outreach_queue.reason`) x recipient type
+(institutional, personal webmail; from the address domain). Every first contact gets one row in
+`qnfo-audit.outreach_learner_sends` (history backfilled from `outreach_queue`), resolved from `qnfo-audit.emails` to
+positive, negative (a decline), optout (also suppressed), bounce (also suppressed) or no-reply after 21 days; auto-replies
+are ignored. `outreach_learner_arms` holds Beta(1 + positives, 1 + failures) per segment. Each weekday `outreach` run draws
+from the posteriors per slot (Thompson sampling) to order the candidates; the 8/day shared cap, 3/day per domain,
+suppression and dedupe are applied unchanged to that order. A segment with >= 50 sends and < 1% positive replies is
+stopped: its candidates go to `held-segment-stopped` and its follow-ups are skipped. Switches in `qnfo-audit.ops_config`:
+`outreach_learner_enabled` (absent = on; `0` = the previous oldest-first order, holds released) and
+`outreach_learner_resume:<segment>` = `1` (override a stop). The daily tick (`outreach-learner`, a companion in the
+engagement slot, no new cron) also writes `outreach_reply_rate_30d` and `warm_conversations_30d` to `metric_registry`
+(rows and their METRIC-CLOSED-LOOP-1 triggers: migrations/2026-10-02-outreach-learner-metrics.sql). Logs:
+`cloud_ops_events` `ol-tick-<day>` (heartbeat, WATCHMAKER_OPS `outreach-learner`), `ol-alloc-*`, `ol-post-*`
+(posterior updates), `ol-stop-*` / `ol-resume-*`, `ol-release-*`. Test: `node qnfo-cloud-ops/outreach-learner.test.mjs`.
+
+The daily "sent as you" digest (SENT-AS-YOU-DIGEST-1) is mailed through `SEND_EMAIL` from alerts@qnfo.org to the owner's
+qnfo.org address only, once per UTC day (SENT-AS-YOU-DELIVERY-1); it no longer needs `EMAIL_API_KEY`.
 
 ## Grant follow-up job (GRANT-FOLLOWUP-1, 1.17.0, pillar: reach)
 

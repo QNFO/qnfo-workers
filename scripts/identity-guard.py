@@ -6,7 +6,9 @@ Fails when a live worker's source carries a retired identity label or a claim th
 These strings reached public pages, paper metadata and profiles before, and a background check fails on them.
 
 Scope: text files in worker directories that are not RETIRED or FOLDED, excluding deployed-current.worker.js (a mirror
-of worker.js) and *.test.mjs. Skipped on purpose:
+of worker.js), *.test.mjs and *.fixture.json (recorded external data, e.g. a GitHub project name as read on a date).
+2026-10-02: also QNFO described as "a research collective/foundation/group/program" in running text (the cold-email
+template carried it), and the misspelling JPCub. Skipped on purpose:
   * comment lines (//, /*, *, #): rationale text may name what it removes;
   * lines that define a detector (regex literals with flags, RegExp(, .test(, .match(): the review gates must be able
     to name the claims they block;
@@ -21,6 +23,8 @@ PATTERNS = [
     (re.compile(r"Quniverse Research Foundation", re.I), "retired label (Quniverse Research Foundation)"),
     (re.compile(r"QNFO Research (Collective|Foundation)", re.I), "retired label (QNFO Research Collective/Foundation)"),
     (re.compile(r"QNFO\s*(--|—|-)\s*Research Foundation", re.I), "retired label (QNFO - Research Foundation)"),
+    (re.compile(r"QNFO,?\s+(is\s+)?an?\s+(open\s+)?research\s+(collective|foundation|group|program)\b", re.I), "retired label (QNFO as a research collective/foundation/group/program; STRATEGY 2.1: an independent research imprint)"),
+    (re.compile(r"\bJPCub\b"), "misspelt benchmark name (JPCub; the name is JPCUB)"),
     (re.compile(r"patent portfolio|patents developed|foundational (US )?patents", re.I), "patent claim without application numbers"),
     (re.compile(r"clearance[- ]eligible", re.I), "clearance-eligible claim"),
     (re.compile(r"featured in national media", re.I), "unlinked media claim"),
@@ -68,7 +72,7 @@ def main():
         for dirpath, dirnames, filenames in os.walk(wd):
             dirnames[:] = [x for x in dirnames if x not in ("node_modules", ".wrangler", "dist")]
             for fn in filenames:
-                if fn == "deployed-current.worker.js" or fn.endswith(".test.mjs") or not fn.endswith(TEXT_EXT):
+                if fn == "deployed-current.worker.js" or fn.endswith((".test.mjs", ".fixture.json")) or not fn.endswith(TEXT_EXT):
                     continue
                 findings += scan_file(os.path.join(dirpath, fn))
     for path, n, why, hit in findings:
