@@ -99,6 +99,16 @@ jobs:
           echo "$out" | grep -q "0 failed" \
             || { echo "::error::objective constraints suite reported failures"; exit 1; }
 
+      # IMPROVEMENT-LOOP-1: metric history, week-on-week trends, regressions and fix durability (pure half and the hourly
+      # tick against an in-memory SQLite D1 with the live integrity and close-evidence triggers).
+      - name: Replay the improvement loop offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/improvement.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "0 failed" \
+            || { echo "::error::improvement loop suite reported failures"; exit 1; }
+
       - name: Resolve the diff range
         id: range
         run: |

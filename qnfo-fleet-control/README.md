@@ -57,3 +57,20 @@ merges and verifies).
 - **Watchmaker**: qnfo-fleet-dashboard 1.16.4 counts `code-task-merge` only when the runner is stalled or disabled or
   leaves work for a person (a person's merge or close counts only after `code-merge-first-ok`). Tests:
   `code-merge.test.mjs` (deploy-gate, Node 22).
+
+## IMPROVEMENT-LOOP-1 (0.4.87, 2026-10-02, pillar autonomy)
+Owner directive: measure internal and external performance systemwide and keep improving against it. The fleet already
+measured (metric_registry) and filed off-target graded metrics (METRIC-TRIGGER-LOOP-1, OBJECTIVE-CONSTRAINTS-1). It could
+not tell whether anything was getting better. The hourly tick now:
+- writes `metric_history` (one row per metric per UTC day: value, met target or not);
+- compares each metric's 7d mean with the prior 7d in its good direction (from the target: `<=` down, `>=`/`+N`/`maximize`
+  up) and files `METRIC-REGRESSION-1: <metric>` on a >= 15% worsening, including `maximize` metrics that have no trigger
+  (pageviews, referrals, Zenodo views, impact per dollar); it closes itself, with hysteresis, when the decline stops;
+- re-checks metric issues closed in the last 30 days and files `METRIC-FIX-RELAPSED-1: <metric>` naming the issue whose
+  remediation did not hold;
+- grades itself in `metric_registry`: `improvement_rate_7d` (>= 0.5), `metric_regressions_7d` (<= 1), `fix_hold_rate_30d`
+  (>= 0.8), with seeded triggers so a loop that stops improving things files its own issue.
+Unknown is never a finding (4 daily points per window, so about 10 days of history before the first verdict). One issue per
+metric: a finding already carried by an open trigger or constraint issue is not filed twice. At most 3 new issues per tick.
+Read: `GET /improvement`. Run now: `POST /improvement/tick` (admin token). Ledger: `improvement_loop_runs`. Suite:
+`improvement.test.mjs` (pure half plus the tick on an in-memory D1 with the live integrity and close-evidence triggers).
