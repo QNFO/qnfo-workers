@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.96-utf8-decode"; /* 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.98-evolve-no-double"; /* 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2063,10 +2063,51 @@ __name(cronDrift, "cronDrift");
 // Every scan/optimize refreshes fleet_budget.current for workers from the live CF script list and,
 // when a class is at/over cap, files a disposition row + report line. NET-ZERO RULE: at/over cap a
 // NEW worker registration must name a same-class retirement; growth is never silently absorbed.
+// ---- BUDGET-LIVE-1:BEGIN (pure; replayed by budget-live.test.mjs)
+// BUDGET-LIVE-1 (2026-10-02): only fleet_budget.workers and the ai_spend rows were ever refreshed. Every other class kept
+// the number typed on 2026-09-26, so a cap could be breached unseen (cron_schedules read 69 with 84 expressions
+// registered; d1_databases read 10 with 11 databases live against a cap of 10). These classes are counted from the account.
+var BUDGET_LIVE_SOURCES = {
+  d1_databases: "/d1/database?per_page=100",
+  kv_namespaces: "/storage/kv/namespaces?per_page=100",
+  r2_buckets: "/r2/buckets?per_page=1000",
+  queues: "/queues?per_page=100",
+  vectorize_indexes: "/vectorize/v2/indexes?per_page=100"
+};
+// The count a Cloudflare list response states: result_info.total_count when it is at least the listed rows, else the
+// listed rows. null = unreadable (never a zero, so a failed read cannot hide a breach).
+function budgetLiveCount(j) {
+  if (!j || j.success !== true) return null;
+  var res = j.result, rows = Array.isArray(res) ? res : res && Array.isArray(res.buckets) ? res.buckets : null;
+  if (!rows) return null;
+  var tc = j.result_info ? Number(j.result_info.total_count) : NaN;
+  return isFinite(tc) && tc >= rows.length ? tc : rows.length;
+}
+// ---- BUDGET-LIVE-1:END
+async function budgetLiveCounts(env) {
+  var live = {};
+  try {
+    var cr = await env.AUDIT.prepare("SELECT SUM(json_array_length(crons_json)) AS n, MAX(refreshed_at) AS at FROM worker_schedules WHERE json_valid(crons_json)").first();
+    if (cr && cr.n != null && cr.at && Date.parse(cr.at) > Date.now() - 36 * 36e5) live.cron_schedules = Number(cr.n);
+  } catch (e) {
+  }
+  await Promise.all(Object.keys(BUDGET_LIVE_SOURCES).map(async function (k) {
+    try {
+      var r = await timedFetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + BUDGET_LIVE_SOURCES[k], { headers: { Authorization: "Bearer " + (env.CF_DEPLOY_TOKEN || "") } }, 8e3);
+      if (!r || !r.ok) return;
+      var n = budgetLiveCount(await r.json());
+      if (n != null) live[k] = n;
+    } catch (e) {
+    }
+  }));
+  return live;
+}
 async function budgetAudit(env, names) {
   var out = { classes: 0, over: [] };
   try {
     var live = Array.isArray(names) ? names.length : null;
+    var liveBy = await budgetLiveCounts(env);
+    out.live = liveBy;
     var rows = await env.AUDIT.prepare("SELECT node_class, cap, target, current FROM fleet_budget").all();
     var rs = rows && rows.results || [];
     for (var i = 0; i < rs.length; i++) {
@@ -2078,6 +2119,13 @@ async function budgetAudit(env, names) {
         } catch (e) {
         }
         if (live > Number(r.cap)) out.over.push("workers live=" + live + " cap=" + r.cap + " (+" + (live - Number(r.cap)) + ")");
+      } else if (liveBy[r.node_class] != null) {
+        var lv = liveBy[r.node_class];
+        try {
+          await env.AUDIT.prepare("UPDATE fleet_budget SET current=?1, updated_at=datetime('now') WHERE node_class=?2").bind(lv, r.node_class).run();
+        } catch (e) {
+        }
+        if (lv > Number(r.cap)) out.over.push(r.node_class + " live=" + lv + " cap=" + r.cap + " (+" + (lv - Number(r.cap)) + ")");
       } else if (Number(r.current) > Number(r.cap)) {
         out.over.push(r.node_class + " cur=" + r.current + " cap=" + r.cap);
       }
@@ -2760,10 +2808,12 @@ async function evLand(env, cid, worker, dir, anchor, replacement, title, bodyLin
   return { ok: true, pr: pr.pr, branch: pr.branch, head: pr.head, from: bumped.from, to: bumped.to, path: path };
 }
 __name(evLand, "evLand");
+// EVOLVE-NO-DOUBLE-1 (2026-10-02): an issue with a `code-task:` line already has a doer (qnfo-code-orchestrator ISSUE-INTAKE-1).
+// Proposing a second edit for it here opened two pull requests against one worker and one VERSION line.
 async function evPropose(env) {
   var model = env.EVOLVE_MODEL || "@cf/moonshotai/kimi-k2.7-code";
   var reviewer = env.REVIEW_MODEL || "@cf/openai/gpt-oss-120b";
-  var cands = (await env.AUDIT.prepare("SELECT a.id, a.title, substr(a.description,1,1500) d, t.owner FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND a.priority IN ('high','medium','low') AND a.title NOT LIKE 'SEC-%' AND a.category IN (" + EVOLVE_CATEGORIES.map(function(c) { return "'" + c + "'"; }).join(",") + ") AND a.id NOT IN (SELECT issue_id FROM evolve_candidates WHERE issue_id IS NOT NULL AND ts > datetime('now','-14 day')) ORDER BY CASE a.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, a.id LIMIT 40").all()).results || [];
+  var cands = (await env.AUDIT.prepare("SELECT a.id, a.title, substr(a.description,1,1500) d, t.owner FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND a.priority IN ('high','medium','low') AND a.title NOT LIKE 'SEC-%' AND COALESCE(a.description,'') NOT LIKE '%code-task:%' AND a.category IN (" + EVOLVE_CATEGORIES.map(function(c) { return "'" + c + "'"; }).join(",") + ") AND a.id NOT IN (SELECT issue_id FROM evolve_candidates WHERE issue_id IS NOT NULL AND ts > datetime('now','-14 day')) ORDER BY CASE a.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, a.id LIMIT 40").all()).results || [];
   for (var i = 0; i < cands.length; i++) {
     var iss = cands[i], worker = String(iss.owner || "");
     if (!/^[a-z0-9-]+$/.test(worker) || EVOLVE_DENY.indexOf(worker) >= 0) continue;

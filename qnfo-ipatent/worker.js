@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.8.1-utf8-redeploy"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.8.2-usage-topics"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -70,6 +70,26 @@ async function countPageView(env, path, source) {
   } catch (e) { console.error("page view count failed:", e && e.message); }
 }
 __name(countPageView, "countPageView");
+// IPATENT-USAGE-1 (2026-10-02, owner question "What are recent ipatent web queries?"): searches and drafts were not
+// measured at all. Each one now adds 1 to a daily counter keyed by kind and broad topic (one of FIELD_SUGGESTIONS, from
+// the same FIELD_RULES the idea bank uses, or "Other"). The query, title and description are never stored; only the
+// topic label is counted, and automated clients are not counted. GET /api/metrics serves the 7d and 30d totals.
+var USAGE_READY = false;
+function usageTopic(text) {
+  const t = String(text || "");
+  for (const r of FIELD_RULES) if (r[1].test(t)) return r[0];
+  return "Other";
+}
+async function countUsage(env, kind, text, ua) {
+  if (!env.IPATENT_DB || !ua || PV_BOT.test(ua)) return;
+  try {
+    if (!USAGE_READY) {
+      await env.IPATENT_DB.prepare("CREATE TABLE IF NOT EXISTS usage_counts (day TEXT NOT NULL, kind TEXT NOT NULL, field TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, kind, field))").run();
+      USAGE_READY = true;
+    }
+    await env.IPATENT_DB.prepare("INSERT INTO usage_counts (day, kind, field, n) VALUES (date('now'), ?1, ?2, 1) ON CONFLICT(day, kind, field) DO UPDATE SET n = n + 1").bind(kind, usageTopic(text)).run();
+  } catch (e) { console.error("usage count failed:", e && e.message); }
+}
 async function handleMetrics(env) {
   const out = { ok: true, worker: "qnfo-ipatent", version: VERSION, windows: {} };
   for (const d of [7, 30]) {
@@ -84,6 +104,12 @@ async function handleMetrics(env) {
       const s = await env.IPATENT_DB.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN title <> '[private]' THEN 1 ELSE 0 END) AS saved, COUNT(DISTINCT ip_address) AS u FROM submissions WHERE created_at >= datetime('now', ?1)").bind("-" + d + " days").first();
       Object.assign(w, { drafts: Number(s && s.n) || 0, drafts_saved: Number(s && s.saved) || 0, drafters: Number(s && s.u) || 0 });
     } catch (e) { w.drafts_error = String(e && e.message || e).slice(0, 120); }
+    try {
+      const u = (await env.IPATENT_DB.prepare("SELECT kind, field, SUM(n) AS n FROM usage_counts WHERE day >= date('now', ?1) GROUP BY kind, field ORDER BY n DESC").bind("-" + (d - 1) + " days").all()).results || [];
+      const usage = { searches: 0, drafts: 0, searches_by_topic: {}, drafts_by_topic: {} };
+      u.forEach((r) => { const n = Number(r.n) || 0; if (r.kind === "search") { usage.searches += n; usage.searches_by_topic[r.field] = n; } else if (r.kind === "draft") { usage.drafts += n; usage.drafts_by_topic[r.field] = n; } });
+      w.usage = usage;
+    } catch (e) { w.usage = { measured_since: "2026-10-02", note: "no search or draft counted yet" }; }
     out.windows[d + "d"] = w;
   }
   return json(out);
@@ -608,6 +634,7 @@ async function handleDraft(request, env, ctx) {
     return json({ error: "Rate limit exceeded. Please try again later.", rate_limit: rateLimit }, 429);
   }
   const searchQuery = `${title} ${technicalField} ${description.slice(0, 1e3)}`;
+  ctx?.waitUntil?.(countUsage(env, "draft", searchQuery, request.headers.get("User-Agent") || ""));
   const ragContext = await searchDisclosures(env, searchQuery);
   const topRag = ragContext && ragContext.length ? ragContext[0] : null;
   const priorArt = topRag && Number(topRag.score) >= 0.8 ? { flag: true, top_title: topRag.title, top_score: Math.round(Number(topRag.score) * 100) / 100, section: topRag.section || "", message: "Very close to an existing corpus filing - refine the distinguishing features before filing." } : null;
@@ -1386,7 +1413,7 @@ var LANDING_HTML = `<!DOCTYPE html>
           <button type="button" id="inventBtn" class="invent" title="Load an example from the corpus and draft it">\u26A1 Try an example</button>
         </div>
         <div class="status" id="status"></div>
-        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);cursor:pointer"><input type="checkbox" id="keepCopy" style="margin-top:2px"> <span>Keep a private copy I can reopen by link. Off by default: unless you tick this, your description and draft are not stored.</span></label>
+        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);cursor:pointer"><input type="checkbox" id="keepCopy" style="margin-top:2px"> <span>Keep a private copy I can reopen by link. Off by default: unless you tick this, your description and draft are not stored (iPatent only counts drafts by broad topic, never their text).</span></label>
         <div class="note"><b>Good practice:</b> include components, operating principle, at least one alternative embodiment, and what each drawing would show. <b>Before you file:</b> don\u2019t publish, pitch or post the idea \u2014 Europe and most other countries have no grace period. Rate-limited to 20 drafts/hour. <b>DRAFT ONLY</b> \u2014 not legal advice; have a registered patent attorney or agent review it before filing.</div>
       </div>
     </form>
@@ -1738,8 +1765,8 @@ var qnfo_ipatent_default = {
           status: "ok",
           worker: "qnfo-ipatent",
           version: VERSION,
-          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics", "support-map", "completeness-meter", "subscribe", "llms-txt"],
-          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token", "page metrics are daily counts by source class only (no IP, user agent or cookie); crawler detection is a user-agent heuristic", "the support map is a lexical check of claim wording against numbered paragraphs, not a legal opinion", "at most 150 drafts in 24 hours across all users"],
+          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics", "usage-topics", "support-map", "completeness-meter", "subscribe", "llms-txt"],
+          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token", "searches and drafts are counted per day by broad topic only (usage_counts); their text is never stored (IPATENT-USAGE-1)", "page metrics are daily counts by source class only (no IP, user agent or cookie); crawler detection is a user-agent heuristic", "the support map is a lexical check of claim wording against numbered paragraphs, not a legal opinion", "at most 150 drafts in 24 hours across all users"],
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
             r2: !!env.IPATENT_R2 ? "ipatent" : null,
@@ -1782,7 +1809,10 @@ var qnfo_ipatent_default = {
         return new Response(row.document_html, { headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store" } });
       }
       if (path === "/api/draft" && request.method === "POST") return handleDraft(request, env, ctx);
-      if (path === "/api/search" && request.method === "GET") return handleSearch(env, url);
+      if (path === "/api/search" && request.method === "GET") {
+        ctx?.waitUntil?.(countUsage(env, "search", url.searchParams.get("q") || url.searchParams.get("query") || "", request.headers.get("User-Agent") || ""));
+        return handleSearch(env, url);
+      }
       // DISCLOSURE-LIST-CLOSED-1 (3.5.0): listing inventors' submissions publicly is a pre-filing disclosure risk.
       if (path === "/api/disclosures" && request.method === "GET") {
         if (!adminOk(request, env)) return json({ error: "Not found" }, 404);
