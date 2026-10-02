@@ -197,6 +197,24 @@ jobs:
         if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'audit') && vars.FLEET_AUTODEPLOY != 'false' }}
         run: python scripts/fleet-autoaudit.py --apply
 
+      # STATUS-THROTTLE-1 (ACTIONS-QUOTA-1, 2026-10-02): every run's snapshot is kept as an artifact, because the
+      # commit below now batches same-outcome snapshots (this file was 105 of main's 648 commits in the 24h to
+      # 2026-10-02 09Z, and [skip ci] does not stop the CodeQL analysis each of them started).
+      - name: stage today's self-audit snapshot for upload
+        if: always()
+        run: |
+          mkdir -p /tmp/fleet-autoaudit
+          cp "audits/fleet-autoaudit-$(date -u +%Y-%m-%d).json" /tmp/fleet-autoaudit/ 2>/dev/null || echo "no audit snapshot for today"
+
+      - name: upload the self-audit snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fleet-autoaudit
+          path: /tmp/fleet-autoaudit/
+          if-no-files-found: ignore
+          retention-days: 30
+
       # COMMITBACK-PUSH-RACE-1 (#1386, 2026-09-29): the artifact commit used a single
       # unconditional `git push`, so any concurrent push to main (this repo receives one
       # every few minutes) made the push non-fast-forward and the step failed AFTER the
@@ -218,6 +236,16 @@ jobs:
           set -euo pipefail
           git config user.name  "qnfo-fleet-bot"
           git config user.email "fleet-bot@qnfo.org"
+          # STATUS-THROTTLE-1: when today's snapshot is the only change, its outcome keys (D1 write failures, purge
+          # error) equal main's copy, and main's copy is younger than 30 min, the commit waits for a later run.
+          # The audit itself is not throttled: worker_live_audit (D1) and issue #52 are written on every run above.
+          today="audits/fleet-autoaudit-$(date -u +%Y-%m-%d).json"
+          git fetch -q origin main || true
+          others="$(git status --porcelain -- audits/ | grep -vF " $today" || true)"
+          if [ -z "$others" ] && [ -f "$today" ] && python3 scripts/status_unchanged.py "$today" --ref origin/main --ignore audited_at --stamp-key audited_at --throttle-min 30 --outcome d1_write_failures,purge_error; then
+            echo "self-audit snapshot throttled (same outcome, main's copy younger than 30 min); this run's copy is the uploaded artifact"
+            exit 0
+          fi
           git add audits/ || true
           if git diff --cached --quiet; then
             echo "no audit artifact change"
