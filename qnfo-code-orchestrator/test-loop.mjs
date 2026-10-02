@@ -115,7 +115,7 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
   check("verifier error was fed back to the stronger model", sawError);
 }
 
-// ===== 3. exhausts attempts -> needs_human, no PR =====
+// ===== 3. exhausts a round of attempts -> waits for a backoff (SELF-REPAIR-1), never an owner card, no PR =====
 {
   const calls = installCodeAgent({ "qnfo-workers/scripts/z.py": "x = 1\n" });
   const bad = fileBlock("def (:\n");
@@ -123,7 +123,8 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
   const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "scripts/z.py", goal: "g" });
   await call(env, "POST", "/v1/tick", { maxSteps: 12 });
   const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
-  check("3 failed verifies -> needs_human", got.body.task.status === "needs_human" && got.body.task.attempts === 3, got.body.task);
+  const lease = (await env.AUDIT_DB.prepare("SELECT lease_until FROM code_tasks WHERE id=?").bind(enq.body.id).first()).lease_until;
+  check("3 failed verifies -> queued behind a backoff, not needs_human", got.body.task.status === "queued" && got.body.task.attempts === 3 && Date.parse(lease) > Date.now() + 50 * 60000 && /round 1 of 3/.test(got.body.task.last_error), { t: got.body.task, lease });
   check("no PR / commit for unverified code", calls.edit.length === 0);
 }
 
@@ -144,7 +145,7 @@ const call = async (env, method, p, body) => { const r = await worker.fetch(auth
   const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "docs/a.md", goal: "tidy" });
   await call(env, "POST", "/v1/tick", { maxSteps: 12 });
   const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
-  check("truncated markdown rewrite is rejected, ends needs_human", got.body.task.status === "needs_human" && /size changed/.test(got.body.task.last_error), got.body.task);
+  check("truncated markdown rewrite is rejected, the round ends in a backoff (not needs_human)", got.body.task.status === "queued" && got.body.task.attempts === 3 && /size changed/.test(got.body.task.last_error), got.body.task);
 }
 
 // ===== 6. no-op proposal is terminal (not a PR) =====
@@ -249,7 +250,7 @@ function fakeLoader(spinMs) {
   const enq = await call(env, "POST", "/v1/tasks", { repo: "qnfo-workers", path: "a/w.js", goal: "g" });
   await call(env, "POST", "/v1/tick", { maxSteps: 12 });
   const got = await call(env, "GET", "/v1/tasks/" + enq.body.id);
-  check("JS syntax error (real workerd message) blocks the PR and carries line:col", got.body.task.status === "needs_human" && /SyntaxError.*m\.js:1:52/.test(got.body.task.last_error) && calls.edit.length === 0, got.body.task.last_error);
+  check("JS syntax error (real workerd message) blocks the PR and carries line:col", got.body.task.status === "queued" && got.body.task.attempts === 3 && /SyntaxError.*m\.js:1:52/.test(got.body.task.last_error) && calls.edit.length === 0, got.body.task.last_error);
 }
 {
   const calls = installCodeAgent({ "qnfo-workers/a/i.mjs": "export default {}\n" });

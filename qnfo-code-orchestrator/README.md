@@ -21,7 +21,8 @@ One task = one file edit, verified deterministically, delivered as a **PR (never
 ```
 queued --read--> propose --> verify --(fail, attempts<3)--> propose  (NEXT model on the ladder, error fed back)
                                 |--(ok)--> commit --> pr_open
-                                |--(3 failed attempts | no verifier | no-op proposal | file too large)--> needs_human
+                                |--(3 failed attempts)--> queued after a backoff (1 h, then 6 h), first rung again; after 3 rounds: failed + one fleet agent_issue (SELF-REPAIR-1, 0.3.6)
+                                |--(no verifier | no-op proposal | file too large | refused path or anchor)--> needs_human
 ```
 - **State**: D1 `code_tasks` (migration `migrations/2026-10-01-code-tasks.sql`; the worker also creates it lazily). Every step is
   bounded and idempotent; a crashed isolate's 90 s lease expires and the next tick resumes the task. FIFO claim.
@@ -74,6 +75,25 @@ Every deployed `worker.js` is larger than the 60,000-char whole-file cap, so unt
   It proves SYNTAX only; CI on the pull request is the behaviour gate, and nothing here merges.
 - **Limits that remain.** One file (plus its mirror) per task; no verifier that runs tests; the window must contain everything the
   model needs; no self-merge.
+
+### v0.3.7: a model that fails is the fleet's problem, not the owner's (SELF-REPAIR-1, agent_issues #1768)
+The owner's note on the dashboard card for `ct_qldqse7ngltdth` was "this is not a user problem audit and fix yourself". Measured:
+the task's three attempts ran in one 26 s tick on 0.3.1 (qwen2.5-coder's SEARCH matched both of two near-identical lines, then
+llama-3.3-70b twice replied with no block). The task went to `needs_human`, which the dashboard shows as an owner card. The frontier
+rungs (0.3.3) deployed 5.5 minutes later, but `needs_human` is never retried. In 0.3.7:
+- **Rounds with backoff.** A round is `MAX_ATTEMPTS` (3) failed attempts. At the end of a round the task stays `queued` with
+  `lease_until` 1 h (then 6 h) ahead, and the next round climbs the ladder from its first rung again, with the last error still fed back.
+  After `RETRY_ROUNDS` (3) rounds it is `failed`, and one deduped `agent_issues` row (`CODE-LOOP-EXHAUSTED-1: <task> <path>`, source
+  `qnfo-code-orchestrator`) gives the fleet the evidence, the lever, the requeue statement and a definition of done.
+  It is never an owner card. `needs_human` stays for refusals no model can fix: path, anchor, verifier coverage, no-op, and the merge runner.
+- **Feedback that names the places.** A SEARCH that matches several times is reported with the line numbers and the start of each line.
+- **Diagnosable no-block replies.** The error says whether the reply was empty, cut off inside `<think>`, held an unclosed SEARCH,
+  or was prose, and the head of the reply is kept in `ctx.lastReply`.
+- **Offline proof.** `node --no-warnings qnfo-code-orchestrator/self-repair.test.mjs` replays the task on a 93 KB fixture with q08's
+  two lines verbatim, through to a patch that `git apply`s, and runs the dashboard's own owner-card query against the result.
+  Against 0.3.5 it fails 24 of 34. Wired into `deploy-gate`, `code-loop-test` and `deploy-code-orchestrator`.
+- **Metric.** `code_task_success_rate_30d` counts `failed` as finished and not merged
+  (`migrations/2026-10-02-code-loop-self-repair.sql`), so a hand-off cannot make the rate look better.
 
 ### Status (what is and is not true)
 - **Verified offline** (`node --no-warnings qnfo-code-orchestrator/test-loop.mjs`, 35 assertions, also run in CI as `code-loop-test`):
