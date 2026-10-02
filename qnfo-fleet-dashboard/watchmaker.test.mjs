@@ -94,6 +94,7 @@ socialRow("scan", "2026-10-06", "ok", 2);
 socialRow("engagement", "2026-10-06", "ok", 1);
 socialRow("learner-update", "2026-10-05", "ok", 25);   // SOCIAL-DISTRIBUTION-LEARNER-1: Monday's weekly update
 db.prepare("INSERT INTO social_channels (channel_id, service, connected, checked_at, checked_day) VALUES ('chL', 'linkedin', 1, ?, '2026-10-06')").run(ago(7));
+db.prepare("INSERT INTO metric_registry (metric, layer, kind, source_of_truth, disposition_actor, refresh_cadence, last_value, last_refreshed, state) VALUES ('paper_render_defect_pages', 'product', 'guard', 's', 'a', 'daily', '0', ?, 'ok')").run(ago(2));   // RENDER-HEALTH-1
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-engagement-e1', ?, 'ok')").run(ago(3));
 db.prepare("INSERT INTO zenodo_stats (doi, updated_at) VALUES ('10.5281/zenodo.1', '2026-10-04 07:03:00')").run();   // Sunday's run, space format
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-email-triage-t1', ?, 'ok')").run(ago(20));

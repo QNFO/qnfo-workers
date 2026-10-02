@@ -266,6 +266,8 @@ jobs:
         run: node qnfo-social/social-learner.test.mjs
       - name: qnfo-social posting gates offline suite (POST-ID-UTM-1, OWNER-VOICE-CONTENT-GATE-1, SOCIAL-ADHOC-GATE-1)
         run: node qnfo-social/social-gates.test.mjs
+      - name: CARD-RELEASE-1 offline suite (qnfo-social; an owner queue card releases a waiting post)
+        run: node qnfo-social/card-release.test.mjs
       - name: EMAIL-TRIAGE-D1-1 and ZENODO-UA-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/email-zenodo.test.mjs
       # WORKER-HEALTH-PROBE-AUTH-1 + GMAIL-TRIAGE-UNCONFIGURED-1 (qnfo-cloud-ops 1.18.2): the qnfo-ai chat probe uses the

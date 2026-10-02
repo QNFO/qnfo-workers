@@ -5,8 +5,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), "gwr-"));
-writeFileSync(join(dir, "w.mjs"), readFileSync(join(here, "worker.js"), "utf8") + "\nexport { renderMarkdown, lpStructure, lpDoi };\n");
-const { renderMarkdown, lpStructure, lpDoi } = await import(pathToFileURL(join(dir, "w.mjs")).href);
+writeFileSync(join(dir, "w.mjs"), readFileSync(join(here, "worker.js"), "utf8") + "\nexport { renderMarkdown, lpStructure, lpDoi, renderDefectCount, subscribeSource, renderReadingHTML };\n");
+const { renderMarkdown, lpStructure, lpDoi, renderDefectCount, subscribeSource, renderReadingHTML } = await import(pathToFileURL(join(dir, "w.mjs")).href);
 let fails = 0;
 const ok = (c, m, x) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) { fails++; if (x) console.log("   ", JSON.stringify(x).slice(0, 400)); } };
 const math = (h) => (h.replace(/<span class="usd">\$<\/span>/g, "\u00a4").replace(/<[^>]+>/g, " ").match(/\$[^$]+\$/g) || []);
@@ -50,5 +50,15 @@ h = renderMarkdown("**Table 2: Cost**\n\nScenario |\nFab Yield |\nCost (\\$M) |\
 ok(/<table><thead><tr><th>Scenario<\/th><th>Fab Yield<\/th><th>Cost/.test(h) && (h.match(/<tr>/g) || []).length === 3 && /<strong>Topological \(Baseline\)<\/strong>/.test(h) && /<p>After the table\.<\/p>/.test(h) && !/\|/.test(h), "FLAT-TABLE-1: docx tables flattened into 'cell |' paragraphs become tables", h);
 h = renderMarkdown("The construction proceeds through inverse limits: |\n\nNext paragraph.");
 ok(!/<table>/.test(h) && /inverse limits:<\/p>/.test(h), "FLAT-TABLE-1: a one-cell row is prose without its stray pipe", h);
+// RENDER-HEALTH-1, SUBSCRIBE-SOURCE-1, LIVING-PAPERS-PAGE-1 (3.9.2)
+ok(renderDefectCount(renderMarkdown("## A\n\nText with **bold** and $x$ and a [ref](https://x).\n\n| a | b |\n|---|---|\n| 1 | 2 |")) === 0, "RENDER-HEALTH-1: a clean page has no defects");
+ok(renderDefectCount("<p>raw **bold and ## Heading and | --- | and $x</p>") === 4, "RENDER-HEALTH-1: each of the four raw-Markdown tests counts");
+ok(renderDefectCount("<pre><code>x = r**2  # comment</code></pre><p>cost <span class=\"usd\">$</span>5 and (r**2)</p>") === 0, "RENDER-HEALTH-1: code, currency and exponent operators are not defects");
+const req = (ref) => new Request("https://papers.qnfo.org/api/subscribe", { method: "POST", headers: ref ? { Referer: ref } : {} });
+ok(subscribeSource(req("https://papers.qnfo.org/reading?utm_source=bluesky&utm_medium=social&utm_campaign=living-papers"), { source: "papers" }) === "papers|/reading|living-papers", "SUBSCRIBE-SOURCE-1: form, page and campaign are recorded");
+ok(subscribeSource(req(null), { source: "papers" }) === "papers", "SUBSCRIBE-SOURCE-1: without a Referer the form label alone, as before");
+ok(subscribeSource(req("https://papers.qnfo.org/x?utm_campaign=a%22%3Cb"), {}).length <= 80 && !/[<"]/.test(subscribeSource(req("https://papers.qnfo.org/x?utm_campaign=a%22%3Cb"), {})), "SUBSCRIBE-SOURCE-1: the campaign is sanitised and the value fits the column");
+const rd = await renderReadingHTML().text();
+ok(/Research papers you can actually read/.test(rd) && /href="\/papers\/joules-per-solution-metric"/.test(rd) && /not peer reviewed/.test(rd) && /canonical" href="https:\/\/papers\.qnfo\.org\/reading"/.test(rd), "LIVING-PAPERS-PAGE-1: /reading states the format, the sample, the limits and its canonical URL", rd.slice(0, 300));
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);
