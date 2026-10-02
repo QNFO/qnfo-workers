@@ -1,7 +1,6 @@
 # qnfo-ipatent — Inventor Disclosure Assistant (ipatent.qnfo.org)
 
-**Version:** 3.4.4 (2026-10-01; footer label per STRATEGY-1 s2.1; /health reports the VERSION constant) · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
-
+**Version:** 3.5.0 (2026-10-02; private by default, findable, honest copy) · **Worker:** qnfo-ipatent · **Live:** https://ipatent.qnfo.org
 ## Purpose
 Free experimental US-provisional patent disclosure drafting assistant, grounded in the
 QNFO/QWAV patent corpus (33,500+ semantic segments). Turns an inventor description into
@@ -25,6 +24,22 @@ fields via `cleanField()` on `/api/suggest` + `/api/idea` display surfaces (SOFT
 - Landing page: STARTERS chips (corpus examples, load into the form for editing),
   WHILE YOU TYPE corpus-guidance strip, and a Technical Field datalist.
 
+## What v3.5.0 changed (pillars: security, reach)
+- **PRIVATE-BY-DEFAULT-1.** An unfiled invention is confidential: a public listing of it is a pre-filing disclosure
+  (fatal to novelty under EPC Art. 54). Nothing is stored unless the inventor ticks "keep a private copy"; a private
+  draft writes only a metadata row (`title = '[private]'`, empty text) so the rate limit still counts. Every new row
+  stores a salted SHA-256 of the IP, never the raw IP. Submission ids use `crypto.getRandomValues`.
+- **DISCLOSURE-LIST-CLOSED-1.** `/api/disclosures` needs `X-Admin-Token` (secret `IPATENT_ADMIN_TOKEN`; 404 when unset).
+  `/api/status` no longer lists recent titles. A saved draft is reachable only by its capability link `/d/<id>` (noindex).
+- **CANONICAL-HOST-1.** `qnfo.org/ipatent*` pages 301 to `ipatent.qnfo.org` (they served a 200 duplicate);
+  `/ipatent/api/*` still answers. HEAD is answered on pages.
+- **FINDABLE-1.** `/robots.txt`, `/sitemap.xml`, canonical, Open Graph, JSON-LD (WebApplication, Article) with the
+  ORCID author, and an indexable `/guide` (what a provisional protects, what to include, fees, pre-filing secrecy).
+- **SUPPORT-GAPS-1.** Drafts end with a ninth section listing under-described features, needed drawings and statements
+  that go beyond the inventor's text — the 35 U.S.C. 112(a) support problem a provisional exists to solve.
+- Copy now matches the record (STRATEGY-1 s2): no "real filings", "defensible", "zero-cost", stale model name or
+  `ipatent.me`; the corpus is described as the author's own draft disclosures. Download (.html) and print buttons.
+
 ## Endpoints
 | Route | Method | Purpose |
 |---|---|---|
@@ -33,8 +48,11 @@ fields via `cleanField()` on `/api/suggest` + `/api/idea` display surfaces (SOFT
 | /api/suggest | GET | Adaptive IP-domain suggestions |
 | /api/idea?i=N | GET | Corpus example (random or by index) |
 | /api/search?q= | GET | Corpus semantic search |
-| /api/disclosures | GET | Recent submissions list |
-| /api/submission/:id | GET | One submission |
+| /api/disclosures | GET | Submissions list (X-Admin-Token only) |
+| /guide | GET | Provisional application guide (indexable) |
+| /robots.txt, /sitemap.xml | GET | Crawl surface |
+| /d/:id | GET | Saved draft by capability link (noindex) |
+| /api/submission/:id | GET | One saved submission (private drafts 404) |
 | /api/status | GET | Version/model/stats |
 
 ## Deploy
