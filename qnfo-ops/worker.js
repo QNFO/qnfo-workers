@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.39-secret-change-watch";
+var VERSION = "2.38.40-error-detail-capture";
 // ---- UTF8-DEPLOY-1:BEGIN (2.38.36, 2026-10-02, pillar core) ----
 // The GitHub contents API returns base64 of the file's UTF-8 bytes. atob() alone gives one character per BYTE
 // (Latin-1), and fetch() then encodes that string as UTF-8 again, so every non-ASCII character in a worker was
@@ -5643,6 +5643,108 @@ async function secretChangeWatch(env, lookbackMs) {
   return out;
 }
 __name(secretChangeWatch, "secretChangeWatch");
+// ---- ERROR-DETAIL-CAPTURE-1:BEGIN (2.38.40, 2026-10-02, pillar core, agent_issues 1826) ----
+// The dashboard counted 33 worker errors in 24h (Cloudflare analytics) while worker_logs held no non-ok row and no
+// exception text for any of them, so no error could be diagnosed from D1. worker_logs is filled from Workers Trace
+// Logpush files in R2, and only 2 of 46 workers set logpush = true (memory-mcp, qnfo-error-selfheal); the last file
+// landed 2026-10-01 21:40Z. Turning Logpush on fleet-wide would bill per event. Workers Logs already stores every
+// invocation of the workers with [observability] enabled, exception text included, for 7 days. Each */30 tick queries
+// the Workers Observability telemetry API for the last 35 minutes of error events and copies them into worker_logs
+// (event_type telemetry:<trigger>, the real outcome, exceptions_json = [{name, message}]), deduplicated by the event id,
+// so the existing digest, anomaly alerts and the /workers/logs route see them. worker_logs is served publicly
+// (qnfo-observability /workers/logs, OPEN-ACCESS-1), so the URL keeps origin and path only, and emails, long tokens and
+// long numbers in a message are masked. Each tick writes an error-capture-tick heartbeat, with the API status and the
+// reason when it fails, which WATCHMAKER_OPS reads.
+var EDC_WINDOW_MS = 35 * 60e3;
+function edcRedact(s, n) {
+  // Token by token, with single-class patterns only (linear on any input).
+  var parts = String(s == null ? "" : s).slice(0, 2000).split(/(\s+)/);
+  for (var i = 0; i < parts.length; i++) {
+    var w = parts[i], at = w.indexOf("http");
+    if (!w || w.trim() === "") continue;
+    if (at >= 0 && w.indexOf("://", at) > at) {
+      try { var x = new URL(w.slice(at)); parts[i] = w.slice(0, at) + x.origin + x.pathname; } catch (e) { parts[i] = w.slice(0, at) + "[url]"; }
+    } else if (w.indexOf("@") >= 0) {
+      parts[i] = "[email]";
+    } else {
+      parts[i] = w.replace(/[A-Za-z0-9_-]{32,}/g, "[token]").replace(/[0-9]{7,}/g, "[n]");
+    }
+  }
+  return parts.join("").slice(0, n || 300);
+}
+function edcRow(ev, ingestedAt) {
+  var w = ev && ev.$workers || {}, m = ev && ev.$metadata || {};
+  var script = String(w.scriptName || m.service || "").slice(0, 120);
+  if (!script) return null;
+  var errText = String(m.error || (String(m.level || "").toLowerCase() === "error" ? m.message || "" : "") || "");
+  var outcome = String(w.outcome || (errText ? "exception" : "")).slice(0, 40);
+  if (!errText && (!outcome || outcome === "ok")) return null;
+  var ts = Number(ev.timestamp || m.timestamp || 0) || Date.now();
+  if (ts < 1e12) ts = ts * 1e3;
+  var ev2 = w.event || {}, rq = ev2.request || {}, rs = ev2.response || {};
+  var url = null, raw = rq.url || m.url || "";
+  if (raw) { try { var u = new URL(raw); url = u.origin + u.pathname; } catch (e) { url = null; } }
+  var nm = (/^([A-Za-z]*(?:Error|Exception))\b/.exec(errText) || [])[1] || (outcome && outcome !== "ok" ? outcome : "error");
+  var msg = errText.replace(/^[A-Za-z]*(?:Error|Exception):\s*/, "");
+  var id = m.id ? "t:" + String(m.id).slice(0, 120) : "t:" + script + ":" + ts + ":" + fnv32(errText.slice(0, 200));
+  return {
+    hash: id, ts: Math.round(ts), ingestedAt: ingestedAt, script: script,
+    type: "telemetry:" + String(w.eventType || m.trigger && String(m.trigger).split(" ")[0] || "unknown").slice(0, 30),
+    outcome: outcome || "exception", url: url, method: rq.method ? String(rq.method).slice(0, 12) : null,
+    status: rs.status == null ? null : Number(rs.status),
+    cpu: w.cpuTimeMs == null ? null : Number(w.cpuTimeMs), wall: w.wallTimeMs == null ? null : Number(w.wallTimeMs),
+    exc: JSON.stringify([{ name: nm.slice(0, 60), message: edcRedact(msg, 300) }])
+  };
+}
+async function errorDetailCapture(env, windowMs) {
+  if (!env.CF_API_TOKEN || !env.QNFO_AUDIT) return { ran: false, reason: "CF_API_TOKEN or QNFO_AUDIT missing" };
+  var to = Date.now(), from = to - (windowMs || EDC_WINDOW_MS);
+  var out = { ran: true, http: null, events: 0, inserted: 0, scripts: {} }, j = null;
+  try {
+    var r = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/observability/telemetry/query", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        queryId: "error-detail-capture-1", view: "events", limit: 200, timeframe: { from: from, to: to },
+        parameters: { datasets: ["cloudflare-workers"], filterCombination: "or", filters: [
+          { key: "$metadata.error", operation: "exists", type: "string" },
+          { key: "$workers.outcome", operation: "neq", type: "string", value: "ok" }
+        ] }
+      })
+    });
+    out.http = r.status;
+    j = await r.json().catch(function() { return null; });
+    if (!r.ok || !j || j.success === false) {
+      var er = j && j.errors && j.errors[0];
+      out.error = String(er && (er.message || er.code) || "http " + r.status).slice(0, 200);
+    }
+  } catch (e) {
+    out.error = "query failed: " + String(e && e.message || e).slice(0, 160);
+  }
+  var res = j && j.result || {}, evs = res.events && (Array.isArray(res.events) ? res.events : res.events.events) || [];
+  out.events = evs.length;
+  var ingestedAt = iso();
+  for (var i = 0; i < evs.length; i++) {
+    var row = edcRow(evs[i], ingestedAt);
+    if (!row) continue;
+    try {
+      var ins = await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO worker_logs (event_hash, ts_ms, ingested_at, script_name, event_type, outcome, url, method, status, cpu_ms, wall_ms, logs_json, exceptions_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, NULL, ?12)")
+        .bind(row.hash, row.ts, row.ingestedAt, row.script, row.type, row.outcome, row.url, row.method, row.status, row.cpu, row.wall, row.exc).run();
+      if (ins && ins.meta && ins.meta.changes) { out.inserted++; out.scripts[row.script] = (out.scripts[row.script] || 0) + 1; }
+    } catch (e) {
+      out.write_error = String(e && e.message || e).slice(0, 160);
+    }
+  }
+  try {
+    var st = out.error || out.write_error ? "error" : "ok";
+    var txt = "error capture: http " + out.http + ", " + out.events + " error event(s) in " + Math.round((to - from) / 6e4) + " min, " + out.inserted + " new worker_logs row(s) across " + Object.keys(out.scripts).length + " worker(s)" + (out.error ? "; " + out.error : "") + (out.write_error ? "; write: " + out.write_error : "");
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'error-capture-tick', ?3, ?4, 'qnfo-ops', ?5)")
+      .bind(randId("evt-"), iso(), txt.slice(0, 500), JSON.stringify(out).slice(0, 2000), st).run();
+  } catch (e) { }
+  return out;
+}
+__name(errorDetailCapture, "errorDetailCapture");
+// ---- ERROR-DETAIL-CAPTURE-1:END ----
 async function backlogStatus(env) {
   if (!env.BACKLOG) return { ok: false, error: "backlog binding missing" };
   const h = await probeService(env, { binding: "BACKLOG", name: "qnfo-backlog-exec", timeoutMs: 15e3 }, "/health");
@@ -7013,6 +7115,11 @@ var worker_default = {
       await secretChangeWatch(env);
     } catch (e) {
       console.log("secret watch failed:", e && e.message || e);
+    }
+    try {
+      await errorDetailCapture(env);
+    } catch (e) {
+      console.log("error capture failed:", e && e.message || e);
     }
     try {
       if (env.QNFO_AUDIT) {

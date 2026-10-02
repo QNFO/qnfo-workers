@@ -181,6 +181,10 @@ jobs:
       # worker per change day, with a heartbeat the watchmaker reads.
       - name: SECRET-CHANGE-WATCH-1 offline suite (qnfo-ops)
         run: node qnfo-ops/secret-watch.test.mjs
+      # ERROR-DETAIL-CAPTURE-1: qnfo-ops copies Workers Logs error events into worker_logs (outcome, exception name and
+      # message; URL path only, emails, tokens and long numbers masked, as worker_logs is served publicly).
+      - name: ERROR-DETAIL-CAPTURE-1 offline suite (qnfo-ops)
+        run: node qnfo-ops/error-capture.test.mjs
       # GUARD-RCS-CANCELLED-1: a concurrency-cancelled or skipped guard run is not a guard that failed closed.
       - name: GUARD-RCS-CANCELLED-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/guard-rcs.test.mjs
