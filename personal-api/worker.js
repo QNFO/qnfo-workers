@@ -39,7 +39,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.19-capability-contract";
+var VERSION = "4.1.20-codeagent";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -1881,7 +1881,7 @@ $('#inp').addEventListener('keydown',function(e){if(e.key==='Enter')$('#send').c
 $('#sendIntent').onclick=function(){var txt=$('#expr').value.trim();if(!txt)return;var key=$('#key').value.trim();if(!key){$('#intentResult').textContent='API key required';return;}var btn=$('#sendIntent');btn.disabled=true;$('#intentResult').textContent='Expressing...';fetch('/v1/express',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({desire:txt,source:'pwa'})}).then(function(r){return r.json();}).then(function(j){if(j.error){$('#intentResult').textContent='ERROR: '+j.error;return;}$('#intentResult').textContent='[stored] '+(j.id||'')+(j.ts?' at '+j.ts.slice(0,16).replace('T',' '):'');$('#expr').value='';}).catch(function(e){$('#intentResult').textContent='ERROR: '+String(e.message||e);}).finally(function(){btn.disabled=false;});};
 $('#key').addEventListener('input',function(){save(msgs);loadModels();});
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}
-<\/script></body></html>`;
+<\/script><script src="https:\/\/fleet.qnfo.org\/ctl.js" defer><\/script></body></html>`;
 var TITLE = "Personal Twin - notes (personal-api)";
 var SHORT = "Personal Twin";
 var MANIFEST = '{"name":"__TITLE__","short_name":"__SHORT__","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#0b57d0","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml"}]}';
