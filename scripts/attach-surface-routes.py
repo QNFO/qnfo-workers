@@ -17,7 +17,7 @@ HOW (the zone-route path proven by ASK-QWAV-ROUTE-1 on 2026-10-02)
   3. create a route only when the hostname has a proxied DNS record (a route is otherwise inert); never
      creates or changes DNS, never touches the Pages projects
   4. verify from outside: https://<host>/health must name qnfo-gateway and https://<host>/ must be the QDS page
-     (data-brand) within 120 s; a route created by this run that fails verification is deleted again
+     (data-brand) in time (7 minutes after a DNS switch, else 2); a route created by this run that fails verification is deleted again
 
 REVERSIBLE
   DELETE /zones/{zone}/workers/routes/{id} for any id in the report puts that host back on its Pages project.
@@ -39,7 +39,7 @@ ORIGIN_HEALTH = "https://qnfo.org/health"
 MIN_VERSION = (3, 9)  # 3.9.0-qds is the first gateway that renders these hosts (3.8.x would serve its default page)
 # (zone, hostname). www.qwav.tech is left out: a zone redirect rule already sends it to qwav.tech.
 HOSTS = [("qnfo.org", "archive.qnfo.org"), ("qwav.org", "qwav.org"), ("qwav.org", "www.qwav.org"), ("qwav.tech", "qwav.tech")]
-UA = "qnfo-ops-surface-routes/1.2"
+UA = "qnfo-ops-surface-routes/1.3"
 # SURFACE-ROUTES-PROXY-1 (2026-10-02): qwav.org and www.qwav.org are DNS-only CNAMEs to qwav.pages.dev, so a zone route never
 # runs on them (first run: "no proxied DNS record"). For these hosts only, a single CNAME to *.pages.dev is switched to
 # proxied (Cloudflare serves the Pages site exactly as before until the route takes over), and switched back if the
@@ -165,7 +165,10 @@ def attach(zone_name, host, zones):
 
 def verify(host):
     h = RESULT["hosts"][host]
-    for i in range(1, 13):
+    # A record just switched to proxied keeps its old DNS-only answer in resolvers for up to its TTL (auto = 300 s), so
+    # those hosts get 7 minutes instead of 2 before the route is judged (run 37011152668 rolled qwav.org back at 2 min).
+    tries = 42 if h.get("dns_proxied_from") is False else 12
+    for i in range(1, tries + 1):
         try:
             st, j = get_json("https://%s/health" % host)
             if st == 200 and j.get("worker") == SERVICE:
