@@ -30,6 +30,8 @@ ok(tomlDeclaredCrons('[vars]\ncrons = ["0 * * * *"]\n') === null, "P6 a crons ke
 ok(eq(tomlDeclaredCrons("[triggers] # schedules\ncrons = ['*/15 * * * *']\n"), ["*/15 * * * *"]), "P7 single quotes and a comment after the section header");
 ok(eq(tomlDeclaredCrons('[triggers]\r\ncrons = ["0 3 * * *"]\r\n'), ["0 3 * * *"]), "P8 CRLF line endings");
 ok(eq(tomlDeclaredCrons('[[services]]\nbinding = "A"\n[triggers]\n  crons = ["0 1 * * *"]\n'), ["0 1 * * *"]), "P9 an indented key after an array-of-tables section");
+// The radar-hub shape after CRON-SINGLE-TRIGGER-1 (#513): a comment inside [triggers] lists the former crons.
+ok(eq(tomlDeclaredCrons('[triggers]\n# CRON-SINGLE-TRIGGER-1: worker.js CRON_TABLE holds the former list\n# (0 5 * * 2, 30 8 * * *, "0 6 1 * *")\ncrons = ["0 * * * *"]\n'), ["0 * * * *"]), "P10 a comment inside [triggers] that lists crons is not the list");
 
 // Every live worker's wrangler.toml: a [triggers] section parses into well-formed 5-field crons.
 const CRON = /^\S+ \S+ \S+ \S+ \S+$/;
@@ -45,15 +47,36 @@ for (const d of readdirSync(root, { withFileTypes: true })) {
   ok(Array.isArray(got) && got.length > 0 && got.every((c) => CRON.test(c)), "S " + d.name + " declares well-formed crons", got);
 }
 ok(swept >= 10, "S0 the sweep saw the fleet's scheduled workers", swept);
-const rh = tomlDeclaredCrons(readFileSync(join(root, "radar-hub", "wrangler.toml"), "utf8"));
-// CRON-SINGLE-TRIGGER-1 (#513) moved radar-hub's 9 crons into worker.js CRON_TABLE; the comment above its one trigger
-// still lists them, so this also proves a comment inside [triggers] is not read as the list.
-ok(eq(rh, ["0 * * * *"]), "R1 radar-hub: the single hourly trigger, not the former list in its comment", rh);
-const co = tomlDeclaredCrons(readFileSync(join(root, "qnfo-cloud-ops", "wrangler.toml"), "utf8"));
-// CRON-SINGLE-TRIGGER-1 (qnfo-cloud-ops 1.19.0, #510) folded its 21 per-slot crons into one 10-minute tick.
-ok(eq(co, ["*/10 * * * *"]), "R2 qnfo-cloud-ops: the single */10 tick", co);
-const fd = tomlDeclaredCrons(readFileSync(join(root, "qnfo-fleet-dashboard", "wrangler.toml"), "utf8"));
-ok(eq(fd, ["*/15 * * * *"]), "R3 qnfo-fleet-dashboard: */15", fd);
+// An independent reference reader (section scan + regex), so the sweep checks the parser against a second
+// implementation rather than against any worker's current cron count, which other changes move (CRON-SINGLE-TRIGGER-1
+// collapsed qnfo-cloud-ops from 21 crons to one the minute after this suite first ran on main).
+function refCrons(wt) {
+  const sec = /^\s*\[triggers\][^\n]*$/m.exec(wt);
+  if (!sec) return null;
+  const rest = wt.slice(sec.index + sec[0].length);
+  const next = /^\s*\[/m.exec(rest);
+  const body = next ? rest.slice(0, next.index) : rest;
+  const m = /^\s*crons\s*=\s*\[([\s\S]*?)\]/m.exec(body);
+  if (!m) return null;
+  return [...m[1].replace(/#[^\n]*/g, "").matchAll(/"([^"]*)"|'([^']*)'/g)].map((x) => x[1] ?? x[2]).filter(Boolean);
+}
+let cross = 0;
+for (const d of readdirSync(root, { withFileTypes: true })) {
+  if (!d.isDirectory() || d.name.startsWith(".")) continue;
+  const f = join(root, d.name, "wrangler.toml");
+  if (!existsSync(f) || existsSync(join(root, d.name, "RETIRED")) || existsSync(join(root, d.name, "FOLDED"))) continue;
+  const wt = readFileSync(f, "utf8");
+  const ref = refCrons(wt);
+  if (ref === null) continue;
+  cross++;
+  ok(eq(tomlDeclaredCrons(wt), ref), "X " + d.name + " matches the reference reader", { got: tomlDeclaredCrons(wt), ref });
+}
+ok(cross >= 10, "X0 the cross-check covered the scheduled workers", cross);
+// The three workers whose crons the old parse never applied (2026-10-02) now parse to a non-empty list.
+for (const w of ["radar-hub", "qnfo-cloud-ops", "qnfo-fleet-dashboard"]) {
+  const got = tomlDeclaredCrons(readFileSync(join(root, w, "wrangler.toml"), "utf8"));
+  ok(Array.isArray(got) && got.length > 0, "R " + w + " declares at least one cron", got);
+}
 
 // Wiring: the deploy path uses the parser, and the old indexOf parse is gone.
 ok(/var crons = tomlDeclaredCrons\(wt\) \|\| \[\];/.test(src), "W1 the canonical deploy reads crons through tomlDeclaredCrons");
