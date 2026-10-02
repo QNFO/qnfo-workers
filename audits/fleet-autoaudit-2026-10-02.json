@@ -1,12 +1,11 @@
 {
-  "audited_at": "2026-10-02 07:40:34",
+  "audited_at": "2026-10-02 07:52:37",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-code-orchestrator",
-        "qnfo-ipatent"
+        "qnfo-social"
       ],
       "refreshed": true,
       "second_pass": []
@@ -500,7 +499,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.17.7-performance-loop",
+        "version": "1.17.8-ctl-print-safe",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -580,7 +579,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.29-social-learner",
+        "version": "0.7.30-cap-epoch",
         "worker": "qnfo-social"
       },
       {
@@ -1160,9 +1159,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.17.7-performance-loop",
+      "before": "1.17.8-ctl-print-safe",
       "http": 200,
-      "live": "1.17.7-performance-loop",
+      "live": "1.17.8-ctl-print-safe",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1424,9 +1423,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.29-social-learner",
+      "before": "0.7.30-cap-epoch",
       "http": 200,
-      "live": "0.7.29-social-learner",
+      "live": "0.7.30-cap-epoch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
