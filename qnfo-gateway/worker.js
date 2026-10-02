@@ -1,4 +1,10 @@
-var VERSION="3.8.1-living-papers";
+var VERSION="3.8.4-ask-model";
+// MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
+// causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
+// the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
+// $5.61"); a formula that starts with a digit may not close right before another digit ("$1,032 ... $5"; spaces inside stay legal), and a
+// literal dollar is emitted as <span class="usd">$</span>, which MathJax cannot pair. (3) 219 papers use "#" for
+// section headings (and TABLE-SEP-1: short GFM delimiter rows now make tables; DOI-HYGIENE-1: only real DOIs are shown); their headings are shifted one level down so sections are h2 and appear in the contents.
 // LIVING-PAPERS-1 (3.8.0, 2026-10-02, pillar reach): papers.qnfo.org index and paper pages rebuilt as living papers in the
 // QNFO design system shared with ask.qwav.tech; GET /api/paper-context/<slug>. See the LIVING-PAPERS-1 block.
 // WORK-WITH-ME-1 (3.7.27, 2026-10-02, pillar reach): qnfo.org/work-with-me, the offers and a tagged mailto per offer;
@@ -311,13 +317,14 @@ function _mdInline(t) {
   t = t.replace(/\$\$([^\n$]+?)\$\$/g, function(m, c) {
     return saveMath(c, true);
   });
-  t = t.replace(/\$([^$\n]+?)\$/g, function(m, c) {
+  t = t.replace(/([^\s$])\$\$(?=[\^_])/g, "$1");
+  t = t.replace(/\$((?=\s*\d)[^$\n]+?(?=\$(?!\d))|(?!\s*\d)[^$\n]+?)\$/g, function(m, c) {
     return saveMath(c, false);
   });
   t = t.replace(/\\\(([^\n]*?)\\\)/g, function(m, c) {
     return saveMath(c, false);
   });
-  t = esc(t);
+  t = esc(t).replace(/\$/g, "\u0007");
   t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
   t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
@@ -332,7 +339,7 @@ function _mdInline(t) {
     var disp = c.charAt(0) === "D";
     return (disp ? "$$" : "$") + texSafe(disp ? c.slice(1) : c) + (disp ? "$$" : "$");
   });
-  return t;
+  return t.replace(/\u0007/g, '<span class="usd">$</span>');
 }
 __name(_mdInline, "_mdInline");
 __name2(_mdInline, "_mdInline");
@@ -407,6 +414,7 @@ function renderMarkdown(md) {
     mb.push("<pre" + (l2 ? ' class="lang-' + l2 + '"' : "") + "><code>" + esc(c) + "</code></pre>");
     return "B" + mb.length + "";
   });
+  m = m.replace(/([^\s$])\$\$(?=[\^_])/g, "$1").replace(/([^\s$])\$\$(?=[\\A-Za-z0-9{(])/g, "$1$ $");
   m = m.replace(/\$\$([\s\S]*?)\$\$/g, function(_, c) {
     mb.push('<div class="math-display">$$' + texSafe(c) + "$$</div>");
     return "B" + mb.length + "";
@@ -415,7 +423,7 @@ function renderMarkdown(md) {
     mb.push('<div class="math-display">$$' + texSafe(c) + "$$</div>");
     return "B" + mb.length + "";
   });
-  m = m.replace(/\$([^$\n]+?)\$/g, function(_, c) {
+  m = m.replace(/\$((?=\s*\d)[^$\n]+?(?=\$(?!\d))|(?!\s*\d)[^$\n]+?)\$/g, function(_, c) {
     mi.push(c);
     return "M" + (mi.length - 1) + "";
   });
@@ -425,7 +433,13 @@ function renderMarkdown(md) {
   });
   m = m.replace(/\\\$/g, "\x07");
   function isTableSep(s) {
-    return /^\|?[\s:]*-{3,}[\s:]*\|/.test(s) && /-/.test(s);
+    // TABLE-SEP-1 (3.8.2): any GFM delimiter row, e.g. "|:--|:---|" (the old test needed 3 dashes in the first cell,
+    // so 32 papers printed their tables as raw pipes). Every cell is :?-+:? and the row has at least 3 dashes.
+    var t = String(s || "").trim();
+    if (t.indexOf("|") < 0 || (t.match(/-/g) || []).length < 3) return false;
+    var cells = t.replace(/^\|/, "").replace(/\|$/, "").split("|");
+    for (var c = 0; c < cells.length; c++) if (!/^\s*:?-+:?\s*$/.test(cells[c])) return false;
+    return true;
   }
   __name(isTableSep, "isTableSep");
   __name2(isTableSep, "isTableSep");
@@ -623,7 +637,7 @@ function renderMarkdown(md) {
   o = o.replace(/\u0001M(\d+)\u0001/g, function(mm, n) {
     return "$" + texSafe(mi[+n]) + "$";
   });
-  o = o.replace(/\u0007/g, "$");
+  o = o.replace(/\u0007/g, '<span class="usd">$</span>');
   o = o.replace(/\u0001B(\d+)\u0001/g, function(mm, n) {
     return mb[+n - 1] || "";
   });
@@ -906,6 +920,8 @@ async function handlePapers(request, env) {
     sql += " ORDER BY created_at DESC";
     const res = await env.LIVING_PAPER.prepare(sql).bind(...params).all();
     let all = res.results || [];
+    for (const p of all) p.doi = lpDoi(p.doi);
+    const withDoi = all.filter((p) => p.doi).length;
     // LIVING-PAPERS-1: topic facets (before the topic filter, so every chip shows its count), a 12-month histogram,
     // the newest date and the unfiltered total feed the index; ?sort=new|old|title.
     const facets = {};
@@ -931,7 +947,7 @@ async function handlePapers(request, env) {
     }
     const accept = request.headers.get("Accept") || "";
     if (accept.includes("text/html") || !accept.includes("application/json")) {
-      return new Response(renderIndexHTML(page, total, offset, hasMore, category || null, search, { facets, months, latest, all_total: allTotal, sort }), {
+      return new Response(renderIndexHTML(page, total, offset, hasMore, category || null, search, { facets, months, latest, all_total: allTotal, sort, with_doi: search ? null : withDoi }), {
         headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" }
       });
     }
@@ -1049,6 +1065,7 @@ async function handlePaperDetail(request, env, path) {
       "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version,pdf_path FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
     ).bind(slug).first();
     if (!paper) return json({ error: "Paper not found", slug }, 404);
+    paper.doi = lpDoi(paper.doi);
     const accept = request.headers.get("Accept") || "";
     if (accept.includes("text/html") || !accept.includes("application/json")) {
       const _rec = zenodoRecId(paper.doi);
@@ -1480,7 +1497,7 @@ async function handleLlmsTxt(env) {
     const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 200").all();
     const base = "https://papers.qnfo.org";
     let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n- [Work with me: assessments, reviews, talks, collaboration and roles](https://qnfo.org/work-with-me)\n\n## Papers\n\n";
-    body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (p.doi ? " (DOI: " + p.doi + ")" : "")).join("\n");
+    body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (lpDoi(p.doi) ? " (DOI: " + lpDoi(p.doi) + ")" : "")).join("\n");
     return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   } catch (e) {
     return new Response(
@@ -1535,7 +1552,7 @@ __name22222222(handleRss, "handleRss");
 __name222222222(handleRss, "handleRss");
 __name2222222222(handleRss, "handleRss");
 function health() {
-  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "legal-pages", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Ask-a-paper uses one model (glm-5.3-flash) with a 2048-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
+  return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "legal-pages", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Ask-a-paper (POST /api/ask) uses one model (llama-3.3-70b-instruct-fp8-fast) with a 1200-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
 }
 __name(health, "health");
 __name2(health, "health");
@@ -1627,14 +1644,18 @@ async function handleAskAI(request, env) {
         paperBody = (stripFrontmatter(paper.body_md) || paper.abstract || "").slice(0, 6e3);
       }
     }
-    const result = await env.AI.run("@cf/zai-org/glm-5.3-flash", {
+    // ASK-MODEL-1 (3.8.4): glm-5.3-flash is a reasoning model; within 2048 tokens it often returned no answer at all
+    // (measured on ask.qwav.tech, ASK-LOOP-1 2.0.2). Same non-reasoning model as ask.qwav.tech's champion; any <think>
+    // block is removed. Paper pages ask through ask.qwav.tech; this route stays for API callers.
+    const result = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
       messages: [
-        { role: "system", content: 'You are a research assistant for a QNFO paper titled "' + paperTitle + '".' },
+        { role: "system", content: 'You are a research assistant for a QNFO paper titled "' + paperTitle + '". Answer from the paper content; say plainly when it does not cover the question.' },
         { role: "user", content: question + "\n\nPaper content: " + paperBody }
       ],
-      max_tokens: 2048
+      max_tokens: 1200
     });
-    return json({ answer: result?.response || "No response generated.", slug: slug || null });
+    const text = String(result && (result.response || (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content)) || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    return json({ answer: text || "No response generated.", slug: slug || null, model: "llama-3.3-70b-instruct-fp8-fast" });
   } catch (e) {
     return json({ error: "The model call failed; try again later." }, 502);
   }
@@ -2063,10 +2084,16 @@ function lpHeader(current) {
   }).join("") + "</nav>" + LP_THEME_BTN + "</div></header>";
 }
 function lpFooter() {
-  return '<footer class="q-foot"><div class="wrap"><span>QNFO Papers: open research, every paper with a permanent DOI</span><a href="/rss.xml">RSS</a><a href="/sitemap.xml">Sitemap</a><a href="/llms.txt">llms.txt</a><a href="' + LP_ASK + '">Ask the corpus</a><a href="https://legal.qnfo.org">License: QNFO-ULA v2.0</a><a href="https://orcid.org/' + OWNER_ORCID + '">ORCID</a></div></footer><div class="q-toast" id="q-toast" role="status" aria-live="polite"></div>';
+  return '<footer class="q-foot"><div class="wrap"><span>QNFO Papers: open research from the QNFO program</span><a href="/rss.xml">RSS</a><a href="/sitemap.xml">Sitemap</a><a href="/llms.txt">llms.txt</a><a href="' + LP_ASK + '">Ask the corpus</a><a href="https://legal.qnfo.org">License: QNFO-ULA v2.0</a><a href="https://orcid.org/' + OWNER_ORCID + '">ORCID</a></div></footer><div class="q-toast" id="q-toast" role="status" aria-live="polite"></div>';
 }
 function lpDoc(o) {
   return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)">' + LP_THEME_BOOT + (o.head || "") + LP_FONTS + (o.math ? LP_MATHJAX : "") + "<style>" + LP_DS + LP_CSS + "</style>" + LP_GA + '</head><body class="' + (o.cls || "") + '">' + lpHeader(o.nav) + o.body + lpFooter() + "<script>" + LP_COMMON_JS + "<\/script>" + (o.js ? "<script>" + o.js + "<\/script>" : "") + "</body></html>";
+}
+// DOI-HYGIENE-1 (3.8.2): the doi column held "pending" (2 rows) and a full https://doi.org/ URL (1 row); both were
+// printed as dead doi.org links and sent to Scholar as citation_doi. Only a real DOI (10.<registrant>/<suffix>) is used.
+function lpDoi(d) {
+  const x = String(d || "").trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "");
+  return /^10\.\d{4,9}\/\S+$/.test(x) ? x : null;
 }
 function lpDate(s) {
   const d = String(s || "").slice(0, 10);
@@ -2140,8 +2167,8 @@ function lpIndexHTML(papers, total, offset, hasMore, activeCategory, searchQuery
   const heading = searchQuery ? "Results for \u201c" + esc(searchQuery) + "\u201d" : activeCategory ? esc(CATEGORY_LABELS[activeCategory] || activeCategory) + " papers" : "All papers";
   const latest = extra.latest ? lpDate(extra.latest) : "";
   const title = searchQuery ? 'Search: "' + esc(searchQuery) + '" \u2014 QNFO Papers' : activeCategory ? (CATEGORY_LABELS[activeCategory] || activeCategory) + " Papers \u2014 QNFO" : "QNFO Papers \u2014 open research with permanent DOIs";
-  const head = "<title>" + title + '</title><meta name="description" content="' + escAttr(all + " open-access papers from the QNFO research program: p-adic and adelic physics, ultrametric information, topological quantum computing and computer science. Every paper has a Zenodo DOI.") + '"><link rel="canonical" href="https://papers.qnfo.org/papers"><link rel="alternate" type="application/rss+xml" title="QNFO Papers RSS" href="/rss.xml"><meta property="og:title" content="QNFO Papers"><meta property="og:type" content="website"><meta property="og:url" content="https://papers.qnfo.org/papers"><meta property="og:description" content="' + escAttr(all + " open research papers, each with a permanent DOI.") + '">';
-  const body = '<main id="main"><section class="wrap ix-hero"><div class="ix-intro"><p class="q-eyebrow">Open research library</p><h1>Papers you can read, cite and question</h1><p class="lede">' + all + ' papers from the QNFO program on p-adic and adelic physics, ultrametric information, topological quantum computing and the computer science around them. Each one has a permanent Zenodo DOI, renders its mathematics, and can be questioned in place.</p><form class="ix-search" method="get" action="/papers" role="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><label class="sr" for="ix-q">Search papers</label><input id="ix-q" type="search" name="search" value="' + (searchQuery ? escAttr(searchQuery) : "") + '" placeholder="Search titles and abstracts" autocomplete="off">' + (activeCategory ? '<input type="hidden" name="category" value="' + escAttr(activeCategory) + '">' : "") + '<kbd>/</kbd></form><p class="ix-hint">Looking for an answer rather than a paper? <a href="' + LP_ASK + '">Ask the whole corpus</a>: answers cite the papers they come from.</p></div><aside class="ix-stats q-card" aria-label="Library at a glance"><div class="ix-n"><b>' + all + "</b><span>papers" + (latest ? "<br>newest " + esc(latest) : "") + "</span></div>" + lpHistogram(extra.months) + '<p class="ix-cap">Published per month</p>' + bar + '<ul class="ix-legend">' + LP_CAT_ORDER.map(function(c) {
+  const head = "<title>" + title + '</title><meta name="description" content="' + escAttr(all + " open-access papers from the QNFO research program: p-adic and adelic physics, ultrametric information, topological quantum computing and computer science, most with a permanent Zenodo DOI.") + '"><link rel="canonical" href="https://papers.qnfo.org/papers"><link rel="alternate" type="application/rss+xml" title="QNFO Papers RSS" href="/rss.xml"><meta property="og:title" content="QNFO Papers"><meta property="og:type" content="website"><meta property="og:url" content="https://papers.qnfo.org/papers"><meta property="og:description" content="' + escAttr(all + " open research papers from the QNFO program.") + '">';
+  const body = '<main id="main"><section class="wrap ix-hero"><div class="ix-intro"><p class="q-eyebrow">Open research library</p><h1>Papers you can read, cite and question</h1><p class="lede">' + all + ' papers from the QNFO program on p-adic and adelic physics, ultrametric information, topological quantum computing and the computer science around them' + (extra.with_doi != null ? ", " + extra.with_doi + " of them with a permanent Zenodo DOI" : "") + '. Every page renders its mathematics and can be questioned in place.</p><form class="ix-search" method="get" action="/papers" role="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><label class="sr" for="ix-q">Search papers</label><input id="ix-q" type="search" name="search" value="' + (searchQuery ? escAttr(searchQuery) : "") + '" placeholder="Search titles and abstracts" autocomplete="off">' + (activeCategory ? '<input type="hidden" name="category" value="' + escAttr(activeCategory) + '">' : "") + '<kbd>/</kbd></form><p class="ix-hint">Looking for an answer rather than a paper? <a href="' + LP_ASK + '">Ask the whole corpus</a>: answers cite the papers they come from.</p></div><aside class="ix-stats q-card" aria-label="Library at a glance"><div class="ix-n"><b>' + all + "</b><span>papers" + (latest ? "<br>newest " + esc(latest) : "") + "</span></div>" + lpHistogram(extra.months) + '<p class="ix-cap">Published per month</p>' + bar + '<ul class="ix-legend">' + LP_CAT_ORDER.map(function(c) {
     return '<li><i class="dot" style="--c:var(' + LP_CAT_VAR[c] + ')"></i>' + esc(CATEGORY_LABELS[c] || c) + " <b>" + (facets[c] || 0) + "</b></li>";
   }).join("") + '</ul></aside></section><section class="ix-controls"><div class="wrap"><div class="ix-chips" id="ix-chips" role="group" aria-label="Topic">' + chips + '</div><label class="ix-sort"><span>Sort</span><select id="ix-sort" aria-label="Sort papers"><option value="new"' + (sort === "new" ? " selected" : "") + '>Newest</option><option value="old"' + (sort === "old" ? " selected" : "") + '>Oldest</option><option value="title"' + (sort === "title" ? " selected" : "") + '>Title A\u2013Z</option></select></label></div></section><section class="wrap ix-list"><h2 class="ix-h"><span id="ix-head">' + heading + '</span> <span class="ix-count" id="paper-count">' + total + " paper" + (total === 1 ? "" : "s") + '</span></h2><ol class="plist paper-list" id="plist" data-offset="' + (offset + papers.length) + '" data-more="' + (hasMore ? "1" : "0") + '">' + (papers.length ? papers.map(lpPaperRow).join("") : '<li class="empty">No paper matches. <a href="' + LP_ASK + "/?q=" + encodeURIComponent(searchQuery || "") + '">Ask the corpus instead</a>.</li>') + '</ol><div class="ix-more" id="ix-more">' + (hasMore ? '<button class="q-btn" id="load-more" type="button">Load more papers</button>' : "") + "</div>" + lpSubscribe("papers") + "</section></main>";
   return lpDoc({ head, body, math: true, nav: "papers", cls: "ix", js: LP_INDEX_JS });
@@ -2166,6 +2193,7 @@ function lpStripTitle(md, title) {
 // Section ids + contents list from the rendered HTML; the Abstract section becomes the lede.
 function lpStructure(html) {
   const used = new Set(), toc = [];
+  if (/<h1>/.test(html)) html = html.replace(/<(\/?)h([1-5])>/g, function(m, sl, n) { return "<" + sl + "h" + (Number(n) + 1) + ">"; });
   html = html.replace(/<h([234])>([\s\S]*?)<\/h\1>/g, function(m, lv, inner) {
     const id = lpSlug(inner, used);
     if (lv !== "4") toc.push({ lv: Number(lv), id, html: inner });
@@ -2254,7 +2282,7 @@ async function handlePaperContext(env, slug) {
     return k >= 2 || long ? k : 0;
   };
   const versions = (res[0].results || []).filter(function(r) { return lpNorm(r.title) === norm; }).map(function(r) {
-    return { slug: r.slug, title: displayTitle(r.title), version: String(r.version || "").replace(/^v/i, "") || null, date: String(r.created_at || "").slice(0, 10), doi: r.doi || null, current: r.slug === slug };
+    return { slug: r.slug, title: displayTitle(r.title), version: String(r.version || "").replace(/^v/i, "") || null, date: String(r.created_at || "").slice(0, 10), doi: lpDoi(r.doi), current: r.slug === slug };
   });
   const seen = new Set([norm]);
   const related = [];
@@ -2262,7 +2290,7 @@ async function handlePaperContext(env, slug) {
     const n = lpNorm(r.title);
     if (seen.has(n) || related.length >= 6) return;
     seen.add(n);
-    related.push({ slug: r.slug, title: displayTitle(r.title), date: String(r.created_at || "").slice(0, 10), doi: r.doi || null, cat: CATEGORY_LABELS[detectCategory(r.title, r.abstract)] || "Other", excerpt: lpExcerpt(r.abstract, 170) });
+    related.push({ slug: r.slug, title: displayTitle(r.title), date: String(r.created_at || "").slice(0, 10), doi: lpDoi(r.doi), cat: CATEGORY_LABELS[detectCategory(r.title, r.abstract)] || "Other", excerpt: lpExcerpt(r.abstract, 170) });
   });
   const rank = { Concept: 0, ResearchQuestion: 1, Finding: 2, Theorem: 3 };
   const cseen = new Set();

@@ -7,8 +7,7 @@ name: deploy-gate
 #
 # Gates enforced (see scripts/deploy_gate.py):
 #   WORKER-BUILD-GATE-1     `wrangler deploy --dry-run` -- a REAL bundle build
-#   CONFLICT-MARKER-GATE-1  <<<<<<< / ======= / >>>>>>> in any worker source
-# The coordinated + logged deploy itself happens LOCALLY under
+#   CONFLICT-MARKER-GATE-1  # The coordinated + logged deploy itself happens LOCALLY under
 # `deploy_guard.py with-lock` (DEPLOY-GUARD-BYPASS-1); CI validates the artifact, it does
 # not deploy.
 
@@ -136,6 +135,9 @@ jobs:
       # UTF8-DEPLOY-1: worker source fetched from GitHub reaches the upload as the same UTF-8 text (no double encoding).
       - name: UTF8-DEPLOY-1 offline suite (qnfo-ops)
         run: node qnfo-ops/utf8-deploy.test.mjs
+      # MATH-DELIM-1 / TABLE-SEP-1: paper renderer regressions from the 2026-10-02 full-corpus sweep (qnfo-gateway).
+      - name: Paper renderer suite (qnfo-gateway)
+        run: node qnfo-gateway/render.test.mjs
       # CODE-TASK-MERGE-RUNNER-1: qnfo-fleet-control merges code-loop PRs itself. The suite replays the merge decision (every
       # refusal), the CI kick, merge, deploy and live verification and the inverse-patch revert against a scripted GitHub and
       # an in-memory D1 (node:sqlite, so it runs here after the Node 22 switch).
