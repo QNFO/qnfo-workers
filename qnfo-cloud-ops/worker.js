@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.18.4-worker-health-auth"; /* 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.19.0-single-trigger"; /* 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -201,6 +201,55 @@ var AMS_SCHEDULE = {
   "quality-score": { times: ["06:20"], days: "*", fixed: null },
   "overdue-guard": { times: ["05:10"], days: "*", fixed: null }
 };
+// ---- CRON-SINGLE-TRIGGER-1:BEGIN (pure; replayed by single-trigger.test.mjs)
+// CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785, pillar: core). The worker used to register one Cloudflare cron trigger per
+// AMS_SCHEDULE slot (21 expressions, rebuilt and PUT again at every daylight-saving change). The account held 84
+// expressions against the fleet budget of 50, and on 2026-09-25 the whole list was removed live and every weekly job
+// stopped unseen. There is now ONE trigger, TICK_CRON, and each tick asks the table below which jobs are due in
+// Amsterdam local time, so the trigger list never changes again (no offset re-sync, nothing to drift).
+// The tick is every 10 minutes, the fastest the owner's CRON-RATE-CEILING-1 allows (scripts/cron_rate_guard.py: no cron
+// closer than 10 minutes, at most 144 fires a day). The table keeps its 5-minute slots: a job on a :05 or :15 mark runs
+// on the next tick, at most 5 minutes late.
+var TICK_CRON = "*/10 * * * *";
+var TICK_MS = 5 * 60 * 1000;
+// A tick covers its own slot and the three before it (15 minutes), so one lost tick loses no job; claimSlot keeps every
+// job to one run per slot.
+var TICK_LOOKBACK_SLOTS = 3;
+function amsParts(ms) {
+  var dtf = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Amsterdam", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short" });
+  var m = {};
+  dtf.formatToParts(new Date(ms)).forEach(function (p) { m[p.type] = p.value; });
+  var dow = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[m.weekday];
+  return { y: Number(m.year), mo: Number(m.month), d: Number(m.day), hm: m.hour + ":" + m.minute, isoDow: dow, date: m.year + "-" + m.month + "-" + m.day };
+}
+// ISO day spec of AMS_SCHEDULE ("*", "5", "1-5", "1,3"): 1 = Monday .. 7 = Sunday.
+function isoDayMatch(spec, isoDow) {
+  var s = String(spec == null ? "*" : spec).trim();
+  if (s === "*" || s === "") return true;
+  return s.split(",").some(function (part) {
+    var r = /^(\d+)-(\d+)$/.exec(part.trim());
+    if (r) return isoDow >= Number(r[1]) && isoDow <= Number(r[2]);
+    return Number(part) === isoDow;
+  });
+}
+// The jobs whose slot is the 5-minute slot containing `ms`: [{ job, slot }], slot = "YYYY-MM-DD HH:MM" Amsterdam time.
+function dueJobs(schedule, ms) {
+  var p = amsParts(Math.floor(ms / TICK_MS) * TICK_MS), out = [];
+  Object.keys(schedule).forEach(function (job) {
+    var s = schedule[job];
+    if (!s || !Array.isArray(s.times) || s.times.indexOf(p.hm) < 0) return;
+    var ok = s.fixed ? Number(s.fixed.dom) === p.d && (String(s.fixed.mon) === "*" || Number(s.fixed.mon) === p.mo) : isoDayMatch(s.days, p.isoDow);
+    if (ok) out.push({ job: job, slot: p.date + " " + p.hm });
+  });
+  return out;
+}
+// Everything a tick at `ms` is responsible for: its own slot and the TICK_LOOKBACK_SLOTS before it, oldest first.
+function tickDue(schedule, ms) {
+  var out = [];
+  for (var k = TICK_LOOKBACK_SLOTS; k >= 0; k--) out = out.concat(dueJobs(schedule, ms - k * TICK_MS));
+  return out;
+}
+// ---- CRON-SINGLE-TRIGGER-1:END
 function isoDowToCf(spec) {
   const s = String(spec == null ? "*" : spec).trim();
   if (s === "*" || s === "") return "*";
@@ -261,8 +310,7 @@ function amsOffset(instant) {
 __name(amsOffset, "amsOffset");
 async function syncSchedules(env, force) {
   const off = amsOffset(/* @__PURE__ */ new Date());
-  const crons = buildCrons(off);
-  const list = crons.map((c) => c.cron);
+  const list = [TICK_CRON];
   const fp = list.slice().sort().join("|");
   const stored = await stateGet(env, "cron_offset", "");
   const storedFp = await stateGet(env, "cron_fingerprint", "");
@@ -3157,6 +3205,40 @@ function jobRunMeta(job, out, extra) {
   if (out.reason && out.status !== "ok") m.reason = String(out.reason).slice(0, 300);
   return m;
 }
+// One scheduled job with its companions, ledger rows, failure digest and catch-ups (the body of the old per-cron handler).
+async function runScheduledJob(env, job) {
+  for (const companion of CRON_COMPANIONS[job] || []) {
+    if (JOBS[companion]) await runCompanion(env, companion);
+  }
+  try {
+    const out = await JOBS[job](env);
+    await logRun(env, job, out.status, out.notes || {});
+    await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), jobRunMeta(job, out));
+    console.log("cloud-ops", job, out.status, JSON.stringify(out.notes || {}).slice(0, 200));
+  } catch (e) {
+    await logRun(env, job, "error", { error: String(e && e.message || e) });
+    await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " error " + String(e && e.message || e), { job, status: "error" });
+    console.error("cloud-ops", job, "error", String(e && e.message || e));
+    try {
+      await sendDigest(env, "QNFO cloud job failure \u2014 " + job, "Job " + job + " failed: " + String(e && e.message || e));
+    } catch (e2) {
+    }
+  }
+  // ZENODO-CATCHUP-1: after the slot's own job, so a catch-up never delays or hides it.
+  if (CRON_CATCHUP[job]) await runCatchups(env, job, Date.now());
+}
+// At most one run per job and slot: the tick's lookback, a legacy per-slot trigger still registered during the switch, or
+// a tick Cloudflare delivers twice all meet the same key. A state read or write that fails lets the job run (a job run
+// twice is recoverable; a job silently skipped is the failure this change removes).
+async function claimSlot(env, job, slot) {
+  try {
+    if (String(await stateGet(env, "slot:" + job, "")) === slot) return false;
+    await stateSet(env, "slot:" + job, slot);
+  } catch (e) {
+    console.log("claimSlot err", job, e && e.message || e);
+  }
+  return true;
+}
 async function runCompanion(env, job, extra) {
   try {
     const out = await JOBS[job](env);
@@ -3651,8 +3733,6 @@ __name(selfRegister, "selfRegister");
 var worker_default = {
   async scheduled(event, env, ctx) {
     const cron = event.cron;
-    const off = Number(await stateGet(env, "cron_offset", "2")) || 2;
-    const map = dispatchMap(off);
     try {
       const sr = await syncSchedules(env, false);
       if (sr && sr.changed) {
@@ -3664,33 +3744,32 @@ var worker_default = {
         await stateSet(env, "cron_sync_error", "threw: " + String(e && e.message || e).slice(0, 200));
       } catch (e2) {}
     }
-    const job = map[cron];
-    if (!job || !JOBS[job]) {
-      console.log("no job for cron", cron, "offset", off);
+    const at = Number(event.scheduledTime) || Date.now();
+    if (cron !== TICK_CRON) {
+      // A per-slot trigger from before CRON-SINGLE-TRIGGER-1 that is still registered: dispatch it as before and record
+      // its slot, so a tick that looks back over the same slot does not run the job a second time.
+      const off = Number(await stateGet(env, "cron_offset", "2")) || 2;
+      const job = dispatchMap(off)[cron];
+      if (!job || !JOBS[job]) {
+        console.log("no job for cron", cron, "offset", off);
+        try {
+          await recordEvent(env, "cron-noop", "cn-" + String(cron).replace(/[^0-9a-z]/gi, "") + "-" + Date.now().toString(36), "CRON-DISPATCH-NOOP-1: no job mapped for registered cron " + cron + " (offset " + off + ")", { cron, offset: off });
+        } catch (e) {}
+        return;
+      }
+      const lp = amsParts(Math.floor(at / TICK_MS) * TICK_MS);
       try {
-        await recordEvent(env, "cron-noop", "cn-" + String(cron).replace(/[^0-9a-z]/gi, "") + "-" + Date.now().toString(36), "CRON-DISPATCH-NOOP-1: no job mapped for registered cron " + cron + " (offset " + off + ")", { cron, offset: off });
+        await stateSet(env, "slot:" + job, lp.date + " " + lp.hm);
       } catch (e) {}
+      await runScheduledJob(env, job);
       return;
     }
-    for (const companion of CRON_COMPANIONS[job] || []) {
-      if (JOBS[companion]) await runCompanion(env, companion);
+    const runs = [];
+    for (const d of tickDue(AMS_SCHEDULE, at)) {
+      if (!JOBS[d.job]) continue;
+      if (await claimSlot(env, d.job, d.slot)) runs.push(runScheduledJob(env, d.job));
     }
-    try {
-      const out = await JOBS[job](env);
-      await logRun(env, job, out.status, out.notes || {});
-      await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " " + out.status + " " + JSON.stringify(out.notes || {}).slice(0, 300), jobRunMeta(job, out));
-      console.log("cloud-ops", job, out.status, JSON.stringify(out.notes || {}).slice(0, 200));
-    } catch (e) {
-      await logRun(env, job, "error", { error: String(e && e.message || e) });
-      await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " error " + String(e && e.message || e), { job, status: "error" });
-      console.error("cloud-ops", job, "error", String(e && e.message || e));
-      try {
-        await sendDigest(env, "QNFO cloud job failure \u2014 " + job, "Job " + job + " failed: " + String(e && e.message || e));
-      } catch (e2) {
-      }
-    }
-    // ZENODO-CATCHUP-1: after the slot's own job, so a catch-up never delays or hides it.
-    if (CRON_CATCHUP[job]) await runCatchups(env, job, Date.now());
+    await Promise.allSettled(runs);
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);

@@ -223,6 +223,13 @@ jobs:
       # failures still alert, one job-run row per run, and gmail-triage without GMAIL_PASS is skipped rather than an error.
       - name: WORKER-HEALTH-PROBE-AUTH-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/worker-health.test.mjs
+      # CRON-SINGLE-TRIGGER-1 (qnfo-cloud-ops 1.19.0): one 10-minute tick and an in-code due table fire exactly the slots
+      # the 21 per-slot cron triggers fired, once each, in both daylight-saving states and with ticks lost; the second
+      # suite drives the real scheduled handler (tick, lookback, legacy trigger, ZENODO-CATCHUP-1).
+      - name: CRON-SINGLE-TRIGGER-1 offline suite (qnfo-cloud-ops)
+        run: node qnfo-cloud-ops/single-trigger.test.mjs
+      - name: ZENODO-CATCHUP-1 and tick handler offline suite (qnfo-cloud-ops)
+        run: node --no-warnings qnfo-cloud-ops/zenodo-catchup.test.mjs
       # COMMAND-EXIT-HONEST-1 (qnfo-containers-pilot 1.0.11): a caller's command that exits non-zero is recorded as warn
       # with its exit code; a container fault is still container.error with status error.
       - name: COMMAND-EXIT-HONEST-1 offline suite (qnfo-containers-pilot)

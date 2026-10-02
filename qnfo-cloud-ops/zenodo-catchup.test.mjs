@@ -161,5 +161,25 @@ audit.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status, meta) VA
 st = audit.prepare(gop.stuck_sql).get(...params);
 ok(Number(st.stuck) === 0, "once a run reads both mailboxes the op is clear");
 
+// CRON-SINGLE-TRIGGER-1: the one tick drives the real handler. Sunday 2026-10-04 07:00Z is 09:00 in Amsterdam: zenodo-stats.
+const TICK = "*/10 * * * *", SUN0900 = Date.UTC(2026, 9, 4, 7, 0);
+zenodoMode = "ok";
+audit.exec("DELETE FROM zenodo_stats; DELETE FROM cloud_ops_events; DELETE FROM scheduler_state WHERE key LIKE 'slot:%'");
+calls.length = 0;
+await W.scheduled({ cron: TICK, scheduledTime: SUN0900 }, env, ctx);
+z = runs("zenodo-stats");
+ok(z.length === 1 && z[0].status === "ok" && zCalls() === 3, "the tick at Sunday 09:00 Amsterdam runs zenodo-stats (" + z.length + " run(s), " + zCalls() + " reads)");
+ok(audit.prepare("SELECT value FROM scheduler_state WHERE key = 'slot:zenodo-stats'").get().value === "2026-10-04 09:00", "the slot is recorded");
+await W.scheduled({ cron: TICK, scheduledTime: SUN0900 + 600000 }, env, ctx);
+ok(runs("zenodo-stats").length === 1, "the next tick looks back over the same slot and does not run it again");
+await W.scheduled({ cron: TICK, scheduledTime: SUN0900 + 1800000 }, env, ctx);
+ok(runs("zenodo-stats").length === 1 && audit.prepare("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'job-run'").get().n === 1, "a tick with nothing due runs nothing");
+audit.exec("DELETE FROM cloud_ops_events; DELETE FROM scheduler_state WHERE key LIKE 'slot:%'");
+await W.scheduled({ cron: TICK, scheduledTime: Date.UTC(2026, 9, 5, 3, 10) }, env, ctx);   // Monday 05:10 Amsterdam
+const mon = audit.prepare("SELECT job FROM cloud_ops_events WHERE kind = 'job-run' ORDER BY job").all().map((r) => r.job);
+ok(mon.includes("worker-health") && mon.includes("overdue-guard") && mon.includes("grant-followup"), "the 05:10 tick runs worker-health (05:05) with its companion and overdue-guard (05:10): " + mon.join(","));
+await W.scheduled({ cron: "0 7 * * 1", scheduledTime: SUN0900 + 7 * 864e5 }, env, ctx);   // a per-slot trigger still registered
+await W.scheduled({ cron: TICK, scheduledTime: SUN0900 + 7 * 864e5 }, env, ctx);
+ok(runs("zenodo-stats").length === 1, "a legacy per-slot trigger and the tick on the same slot run the job once");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
