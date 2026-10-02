@@ -321,3 +321,7 @@ jobs:
       # RUN-INTERNAL-1 (#1783): research-exec's inline run and drain-v2 refuse public hostnames; service bindings still reach them.
       - name: RUN-INTERNAL-1 offline suite (qnfo-research-exec)
         run: node qnfo-research-exec/run-internal.test.mjs
+      # IDEA-CHAIN-SINGLE-PRODUCER-1: qnfo-signal-loop proposes at most 2 signals x 3 questions a run and never pushes the
+      # idea backlog above the 30 ceiling (it wrote 55 rows in one run on 2026-10-02 and flooded triage).
+      - name: IDEA-CHAIN-SINGLE-PRODUCER-1 offline suite (qnfo-signal-loop)
+        run: node qnfo-signal-loop/consume-bound.test.mjs
