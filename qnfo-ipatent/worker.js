@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.4.6-capability-contract"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.5.0-private-findable"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -19,6 +19,21 @@ var AI_DRAFT_MODELS = [
   "@cf/openai/gpt-oss-120b"
 ];
 var IDEA_BANK = JSON.parse(`[{"title": "Analog Quantum Observation And Simulation System Using Non Collapsing Probabilistic States (1)", "technical_field": "99_Brutal_Cleanup", "description": "OF THE DISCLOSURE A system for analog quantum information processing is disclosed, configured to operate on quantum states without inducing immediate projective collapse. The system comprises an engineered Wave-Sustaining Medium (WSM) designed to sculpt and sustain delocalized resonant quantum field patterns, functioning at elevated temperatures (10K-30K) due to an integrated multi-modal nanoscale noise mitigation system. Information is encoded and manipulated via precisely tuned analog electromagnetic fields, interpreting quantum superposition as a complex chord of frequencies. A non-destructive measurement system performs resonant selection by selectively interacting with specific\u2026"}, {"title": "Apparatus For Harmonic Resonance Computing Resonant Field Comput Non Provisional 2025 07 24", "technical_field": "General", "description": "field detection and analysis components configured to measure final quantum states of the resonant wave fields to extract computational results; and a classical control system configured to orchestrate said field generation components, field modulation components, and field detection and analysis components, and further configured to implement controlled decoherence as a computational mechanism for inherent error self-correction and state stabilization by engineering dissipative processes within the apparatus. 2. The apparatus of embodiment 1, wherein the quantum properties comprise at least one of quantized energy states, phase relationships, amplitude distributions, polarization\u2026"}, {"title": "Autaxys Ontological Framework And Generative Engine Provisional Patent Application 20250719 222735", "technical_field": "General", "description": "A computer-implemented system and method for generating emergent patterns and simulating physical phenomena are disclosed. The system operates based on the principle of Autaxys, defined as the intrinsic capacity for self-ordering, self-arranging, and self-generating patterned existence. A \\"generative engine\\" computationally processes relational data through core operational dynamics including relational processing, spontaneous symmetry breaking, feedback dynamics, resonance, and critical state transitions. These dynamics are guided by meta-logical principles such as intrinsic coherence, conservation of distinguishability, parsimony, intrinsic determinacy/emergent probabilism, and\u2026"}, {"title": "Computational System And Method For Generating Emergent Patterns Provisional Patent Application 20250720 050637", "technical_field": "General", "description": "OF THE INVENTION The present invention provides a computer-implemented system and method for generating emergent patterns and simulating physical phenomena based on an intrinsic generative computational process. The system employs a \\"Generative Pattern Discovery System\\" (GPDS) comprising one or more interconnected computational modules configured to execute core operational dynamics, including relational processing, controlled perturbation, iterative refinement, pattern amplification, and phase transition detection. These dynamics are guided by computationally defined principles such as optimizing pattern coherence, preserving distinct elements, promoting structural parsimony,\u2026"}, {"title": "Harmonic Quantum Computing Platform And Method For Optimization And Universal Computation V1", "technical_field": "Generic and Mixed", "description": "OF THE INVENTION The present invention provides a comprehensive and robust quantum computing solution that addresses critical challenges of scalability, operating cost, and environmental stability. The disclosed quantum computing platform leverages a room-temperature, harmonic computing architecture realized on a scalable silicon photonics platform. This configuration provides a pathway to practical quantum advantage. The present quantum computing platform is a scalable, room-temperature, dual-mode quantum computing platform fabricated on a monolithic silicon photonics integrated circuit (PIC). The platform encodes and processes information through the manipulation of coherent harmonic\u2026"}, {"title": "Harmonic Resonance Computer Hrc System On Chip With Self Optimiz Non Provisional Patent Application 20250728 192001", "technical_field": "General", "description": "## ABSTRACT OF THE DISCLOSURE A hybrid, room-temperature computational System-on-Chip (SoC) is disclosed, integrating a general-purpose digital processing unit, a real-time digital control unit, and a self-optimizing photonic co-processor. The photonic co-processor employs a dynamically reconfigurable optical energy landscape, generated by a spatially programmable optical modulator, to represent computational problems. A closed-loop feedback process, managed by the real-time digital control unit, continuously measures the light state within the photonic co-processor. This measurement is used to iteratively calculate and apply updates to both the coherent light drive signal and the\u2026"}, {"title": "Harmonic Resonance Computer System On Chip With Self Optimizing Photonic Co Processor", "technical_field": "Wave Based Computing", "description": "OF THE DISCLOSURE A hybrid, room-temperature computational System-on-Chip (SoC) is disclosed, integrating a general-purpose digital processing unit, a real-time digital control unit, and a self-optimizing photonic co-processor. The photonic co-processor employs a dynamically reconfigurable optical energy landscape, generated by a spatially programmable optical modulator, to represent computational problems. A closed-loop feedback process, managed by the real-time digital control unit, continuously measures the light state within the photonic co-processor. This measurement is used to iteratively calculate and apply updates to both the coherent light drive signal and the optical modulation\u2026"}, {"title": "Harmonic Resonance Computing And Architectures For Quantum Information Processing", "technical_field": "Quantum Resonance Computing", "description": "dalities. \u2022 Initial Content Input: Accepts diverse content, including unstructured (user prompts, existing documents), semi-structured (XML, JSON), or structured data (databases, APIs, real-time streams), across modalities (textual, visual, auditory). \u2022 Iterative Refinement toward Target/Emergent Output State: The system iteratively refines the input content. The target can be a predefined output state or, uniquely, an \\"emergent output state\\" (dynamically determined optimal content quality, structure, or thematic coherence, balancing multiple attributes, e.g., 'most engaging marketing ad'). This is achieved through continuous internal evaluation and adaptive modification. \u2022 Optimization\u2026"}, {"title": "Harmonic Resonance Computing And Resonant Field Computers For Frequency Based Quantum", "technical_field": "Wave Based Computing", "description": "A novel computational paradigm, Harmonic Resonance Computing (HRC), and associated systems, Resonant Field Computers (RFCs), are disclosed for frequency-based quantum computation. Unlike particle- centric quantum computing, HRC encodes quantum information into the quantized energy states, phase relationships, and amplitude distributions of resonant wave fields, such as electromagnetic (e.g., photons in cavity modes) or acoustic fields (e.g., phonons). RFCs comprise resonance chambers, field generators, modulators, and detectors configured to manipulate these quantized fields through precisely tuned resonant quantum interactions. This approach leverages the collective properties and high\u2026"}, {"title": "Harmonic Resonance Computing And Resonant Field Computers Provisional Patent Application 20250723 070750 (1)", "technical_field": "General", "description": "# ABSTRACT A novel computational paradigm, Harmonic Resonance Computing (HRC), and associated systems, Resonant Field Computers (RFCs), are disclosed for frequency-based quantum computation. Unlike particle-centric quantum computing, HRC encodes quantum information into the quantized energy states, phase relationships, and amplitude distributions of resonant wave fields, such as electromagnetic (e.g., photons in cavity modes) or acoustic fields (e.g., phonons). RFCs comprise resonance chambers, field generators, modulators, and detectors configured to manipulate these quantized fields through precisely tuned resonant quantum interactions. This approach leverages the collective properties\u2026"}, {"title": "Harmonic Resonance Computing Hrc System And Method Utilizing A W Provisional Patent Application 20250719 004536", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE A Harmonic Resonance Computing (HRC) system and method are disclosed, shifting from particle-centric models to a field-theoretic approach. The system utilizes an engineered Wave-Sustaining Medium (WSM) configured to support delocalized quantum resonant electromagnetic field state patterns, termed \\"h-qubits,\\" as fundamental computational units. A control system applies tailored electromagnetic fields to the WSM, inducing controlled interactions and evolution of these h-qubit patterns, thereby performing computation based on their collective resonant behavior. The HRC architecture operates on a \\"frequency ontology,\\" where information is encoded and processed based on\u2026"}, {"title": "Harmonic Resonance Computing Provisional Patent Application 20250713 202546", "technical_field": "General", "description": "OF THE INVENTION The present disclosure introduces Harmonic Resonance Computing (HRC), a novel computing paradigm that realizes computation by establishing, manipulating, and interpreting resonant energy states within specifically structured physical media or by leveraging the intrinsic dynamics of large-scale distributed networks. This approach fundamentally departs from particle-centric, binary qubit models by utilizing a physical medium engineered with a precise geometry, such as a three-dimensional (3D) toroidal configuration, or by repurposing the intrinsic electromagnetic dynamics of existing network infrastructure, such as telecommunications networks. In the engineered toroidal\u2026"}, {"title": "Harmonic Resonance Computing System And Method For Field Theoretic Computation", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE A Harmonic Resonance Computing (HRC) system and method are disclosed, shifting from particle-centric models to a field-theoretic approach. The system utilizes an engineered Wave-Sustaining Medium (WSM) configured to support delocalized quantum resonant electromagnetic field state patterns, termed \\"h-qubits,\\" as fundamental computational units. A control system applies tailored electromagnetic fields to the WSM, inducing controlled interactions and evolution of these h-qubit patterns, thereby performing computation based on their collective resonant behavior. The HRC architecture operates on a \\"frequency ontology,\\" where information is encoded and processed based on\u2026"}, {"title": "Harmonic Resonance Computing System And Method Using Engineered Field State Qubits", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE A harmonic resonance quantum computing system utilizes a precisely engineered Wave-Sustaining Medium (WSM) to sculpt and support delocalized, resonant electromagnetic field state patterns as h-qubits. The WSM comprises High-Temperature Superconductors and ultra-low-loss dielectric materials, engineered for high quality factors and low loss tangents, enabling operation at elevated cryogenic temperatures between 10K and 30K. The system integrates a multi-modal nanoscale noise mitigation system co-fabricated within the WSM, providing intrinsic coherence enhancement. Computation and communication are seamlessly unified through the WSM's inherent field dynamics, addressing\u2026"}, {"title": "Harmonic Resonance Computing System And Method Utilizing A Physical Medium With 3D", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE A Harmonic Resonance Computing system and method are disclosed, utilizing a physical medium engineered with a three-dimensional (3D) toroidal geometry. This unique geometry supports quantum states characterized by a spectrum of semi-harmonic energy levels, which arise from the geometry's periodic boundary conditions and inherent non-linearity. A precise mathematical model, including a GM-function and a second equation, predicts the exact positions of stable quantum states (constructive interference) and unstable nodes (destructive interference) within this geometry. Computation is performed by applying resonant fields corresponding to these predicted semi-harmonic\u2026"}, {"title": "Integrated Nanoscale Quantum Shield For Enhanced Coherent Operation At Elevated Temperatures", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE An integrated nanoscale quantum shield is disclosed for enhancing coherent operation of quantum systems at elevated temperatures. The shield comprises a multi-modal noise mitigation system that integrates photonic bandgap structures, phononic bandgap structures, integrated quasiparticle traps, topological protection layers, liquid dielectric shielding layers, and geometric frustration lattices. This sophisticated integration is configured to simultaneously mitigate various environmental noise sources, including electromagnetic, phononic, thermal, particle, spin, and chemical noise, thereby enabling quantum systems to maintain high coherence, such as a T2 coherence time\u2026"}, {"title": "Liquid Shielded Quantum Device Provisional 2025 07 24", "technical_field": "General", "description": "allenges with environmental noise and efficient light-matter coupling. These stringent environmental requirements make quantum devices impractical for widespread deployment, especially in applications requiring ambient temperature operation, portability, or integration into existing infrastructure. Biological systems, however, exhibit remarkable examples of coherent quantum processes occurring at physiological temperatures. Photosynthesis, olfaction, and enzyme catalysis are believed to involve quantum mechanical phenomena that persist despite the warm, noisy environment of a living cell. Research suggests that the highly ordered, structured water environments within cells play a crucial\u2026"}, {"title": "Machine Learning Architecture Design And Training", "technical_field": "Topological Computing Systems", "description": "OF THE DISCLOSURE A system and method for designing and training machine learning models based on generative first principles is disclosed. A method for designing a machine learning architecture involves calculating a topological stability score for a candidate architecture using a predefined resonance metric. The resonance metric evaluates stability based on number-theoretic properties of the architecture's parameter count (N), allowing for principled architecture selection prior to training. A method for training a machine learning model involves encoding input data into a number-theoretic representation by mapping semantic features to distinct prime numbers. The model is trained by\u2026"}, {"title": "Mass Frequency Identity M For Unifying Relativity And Quantum Me Non Provisional Patent Application 20250730 123228", "technical_field": "General", "description": "## ABSTRACT OF THE DISCLOSURE An Autaxys framework proposes reality as an intrinsically self-ordering, self-arranging, and self-generating system, fundamentally an evolving algorithm. This framework shifts from substance-based ontologies to a process-centric view, emphasizing dynamic processes and emergent patterns. Central to Autaxys is the Mass-Frequency Identity (m=\u03C9), which unifies General Relativity and Quantum Mechanics by reinterpreting mass as an intrinsic processing frequency of fundamental patterns within a Universal Relational Graph (URG). The Autaxic Trilemma (Novelty, Efficiency, Persistence) acts as the core generative engine, driving cosmic evolution and defining physical\u2026"}, {"title": "Mechanical Oscillator Networks For Computation Non Provisional Patent Application 20250728 105346", "technical_field": "General", "description": "## ABSTRACT OF THE DISCLOSURE A novel computational paradigm redefines computation as an emergent property of dynamic, interacting frequency fields, moving beyond particle-centric models. This approach leverages principles of resonance, phase alignment, and time non-locality for information processing. Exemplary architectures include Harmonic Resonance Computing (HRC), which utilizes complex vibration patterns within a continuous field, and Memcomputing, which integrates memory and processing functions using interacting memprocessors and frequency encoding. This paradigm offers inherent scalability, enhanced stability, and integrated error resilience over qubit-based systems. It also\u2026"}, {"title": "Mechanical Oscillator Networks For Computation Provisional Patent Application 20250728 104705", "technical_field": "General", "description": "# SUMMARY OF THE INVENTION The present invention introduces a novel computational paradigm, termed harmonic computing, which fundamentally reinterprets computation as an emergent property of dynamic, interacting frequency fields. This paradigm diverges significantly from traditional particle-centric views, embracing a continuous, field-theoretic perspective. The invention leverages principles of resonance, phase alignment, and time non-locality for information processing, offering a profound shift in how computational operations are conceived and executed. Key architectural embodiments, such as Resonant Field Computing (RFC), Recursive Resonant Architecture (RRA), and Memcomputing, are\u2026"}, {"title": "Method For Fabricating Superconducting Qubits With Integrate Product 20250618 212321", "technical_field": "99_Brutal_Cleanup", "description": "Claims constitute the operative legal definition of the invention, delineating the precise scope of the exclusive rights conferred by the patent. Their formulation demands exceptional precision, rigorous support within the specification, and adherence to the substantive requirements of patentability: eligible subject matter (\xA7 101), novelty (\xA7 102), and non-obviousness (\xA7 103) over the pertinent prior art. During examination, claims are interpreted by the USPTO according to their **Broadest Reasonable Interpretation (BRI)** consistent with the specification, as understood by a **Person Having Ordinary Skill in the Art (PHOSITA)**. Following patent issuance, claims are subject to a\u2026"}, {"title": "Method For Solving Optimization Problems Via Dynamic Optical Ene Provisional Patent Application 20250728 191634", "technical_field": "General", "description": "# SUMMARY OF THE INVENTION The present invention introduces a novel computational system-on-chip (SoC), herein referred to as a hybrid opto-electronic optimization system, which functions as a hybrid, room-temperature, self-optimizing photonic co-processor. This system is specifically designed to achieve unprecedented computational speed and power efficiency for complex optimization problems by utilizing a dynamically reconfigurable optical energy landscape, precisely controlled by a real-time digital feedback loop. This architecture is physically plausible, commercially manufacturable using existing CMOS-compatible technologies, and represents a fundamental paradigm shift in\u2026"}, {"title": "Methods For Programming Non Electronic Media In Harmonic Resonance Computing", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE Disclosed are methods for programming Harmonic Resonance Computing (HRC) units by applying structured non-electrical physical fields to a Wave-Sustaining Medium (WSM). These fields induce reconfigurable physical state changes or resonant adjustments within the WSM, thereby directly embedding computational instructions or problem definitions without reliance on traditional electronic signaling. This enables highly energy-efficient, compact, and reconfigurable computational units for various applications, including IoT and mobile environments."}, {"title": "Nexus Recursive Harmonic Framework Provisional Patent Application 20250720 053709", "technical_field": "General", "description": "# SUMMARY OF THE INVENTION The present invention provides computer-implemented methods and systems for leveraging emergent harmonic constants to stabilize, optimize, and analyze recursive computational processes and data structures. In one aspect, the invention introduces a novel framework, referred to herein as the Nexus Recursive Harmonic Framework, which posits that fundamental constants such as pi (\u03C0) and the golden ratio (\u03C6) are not static values but rather emerge as solutions to structural imbalances within dynamic recursive feedback loops. The invention provides methods for dynamically determining and applying a universal harmonic constant (H), such as H=0.35, derived from\u2026"}, {"title": "Parametric Adiabatic Coherent Optimizer For Combinatorial Optimization V4", "technical_field": "Quantum Resonance Computing", "description": "ngths), and receive raw output data (e.g., measured phase states) at terabit-per-second rates. The optical signals are converted to electrical signals at the **PCP** interface using integrated optoelectronic transceivers. This high-bandwidth, low-latency interconnection enables the rapid programming of large-scale **PCP** arrays and the efficient transfer of vast amounts of solution data for post-processing, minimizing communication bottlenecks between the classical and co-processing units. * **3. Alternative Problem Formulation Software:** * **Identified Function:** Problem Pre-processing and Formulation software within the **CHC**. * **Proposed Alternative:** The **CHC** executes an\u2026"}, {"title": "Passive Photonic Quasi Crystal Apparatus For Robust Fractal Spectral Filtering And Method Of Manufacture Thereof V1", "technical_field": "Photonic Computing", "description": "OF THE DISCLOSURE [0112] A passive photonic apparatus comprises a substrate and a photonic lattice with optical resonators. A physical dimension of each resonator is modulated by a deterministic irrational function relative to its spatial index, inducing an Aubry-Andr\xE9-Harper potential and generating a fractal transmission spectrum with topologically protected spectral gaps. A negative-tone polymer cladding passively athermalizes the apparatus. A method of manufacture includes defining a Hamiltonian with an irrational parameter, mapping modulated resonator dimensions to a lithographic layout with modulation depth exceeding fabrication grid resolution, and fabricating the apparatus. This\u2026"}, {"title": "Phase Encoded Information System For Unified Storage And Processing", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE A unified information processing system is disclosed, which integrates data storage and processing within a Wave-Sustaining Medium (WSM). Information is encoded in the phase, amplitude, and spatial distribution of complex standing wave patterns or resonant field states within the WSM. The system utilizes a three-dimensional periodic lattice of superconducting resonators, such as Tantalum, designed for high internal quality factors and supporting topologically protected patterns. Computational operations are performed directly within the stored information via localized electromagnetic fields at terahertz frequencies, inducing non-linear optical effects, thereby\u2026"}, {"title": "Probabilistic Information Unit For Data Encoding And Error Correction", "technical_field": "99_Brutal_Cleanup", "description": "This invention discloses a novel method and system for encoding and processing information using probabilistic states in classical systems. The system utilizes stochastic probability distributions and error-correcting codes to achieve high-fidelity information processing without relying on quantum superposition or entanglement. The invention is particularly useful for applications in data storage, communication, and machine learning."}, {"title": "Probabilistic Quantum Information Processing Via Information States", "technical_field": "Niche and Undeveloped", "description": "Information Units: Configurable to represent quantum states as continuous probabilistic distributions (e.g., geometric superpositions in lattice structures). Functional Equivalents: Implementations include microtubule-inspired lattices, photonic arrays, or superconducting qubits (Fig. 1A-1C, not shown). [0008] Enablement: The invention is enabled by principles from quantum information theory (e.g., continuous-variable systems) and experimental work in bio-inspired quantum coherence. For example: Microtubule Lattices: Tubulin subunit arrangements (13-protofilament topology) enable geometric superpositions. Dielectric Shielding: High-permittivity materials (\u03B5 > 50, e.g., SrTiO\u2083) suppress\u2026"}, {"title": "Qpu Provisional Patent", "technical_field": "Bio Inspired", "description": "1 Abstract 23 KB Warning: One or more pages are missing page numbering. Page numbering will be automatically applied after submission. Comments were found and have been removed. Text must be in a single column. Please review and revise if necessary. rowan-quni-doc-19749- SPEC.docx 8 Specification 32 KB Warning: Comments were found and have been removed. Paragraph numbering is missing from the specification. Please review the specification and revise if necessary. Text must be in a single column. Please review and revise if necessary. Page 1 of 2 Digest DOCUMENT MESSAGE DIGEST(SHA-512) generatedADS68995359.pdf 25F5218432127A97EC2F1CB2F3FE28378480D2E05B4F0BDB2\u2026"}, {"title": "Quantum Biology Inspires Computing Inventions", "technical_field": "General", "description": "herence could be used to design more stable and robust qubits. For example, researchers are exploring the use of photosynthetic proteins as qubits . * **Quantum algorithms:** Quantum entanglement could be used to develop new quantum algorithms that are more efficient than classical algorithms. For example, researchers are exploring the use of bird navigation mechanisms to develop new quantum algorithms for optimization problems . * **Error correction:** Quantum tunneling could be used to develop new error correction protocols for quantum computers. For example, researchers are exploring the use of enzyme catalysis mechanisms to develop new quantum error correction codes . Furthermore,\u2026"}, {"title": "Quantum Computing Patentability Memo Diffs 20250628 104311", "technical_field": "General", "description": "lexity, latency, and I/O count, enabling more complex control and feedback. However, these electronics are sources of electromagnetic noise (switching noise, digital noise, amplifier noise) and heat dissipation. PC shielding is critical for isolating the sensitive qubits from these sources via robust electromagnetic and thermal barriers. PC bandgaps are designed to target the noise spectrum of the electronics. Routing signals between the electronics layer and the qubit layer requires careful design of vias, airbridges, or waveguides passing through PC structures, ensuring minimal noise coupling and signal degradation. The noise floor and heat dissipation profile of the cryogenic\u2026"}, {"title": "Quantum Computing System With Liquid Helium Operation And Hardware Level Bosonic Error Correction", "technical_field": "63940352 Quantum Computing", "description": "on (175), a Feedback-Controlled Active Isolation (176) system, or a Pneumatic Isolation Platform (177). A kit (K100) includes a plurality of vibration isolation components (171). #### 2.7 Control Electronics (190) [0036] Control Electronics (190) are electrically coupled to the Three-Dimensional Microwave Cavity (110). These electronics (190) generate and deliver precise control pulses necessary for quantum operations, including qubit initialization, quantum gate execution, and state readout. [0037] The Control Electronics (190) receive instructions from a Classical Computing Interface (180). They translate these instructions into microwave pulses (D8.1), flux pulses (D8.2), optical\u2026"}, {"title": "Quantum Entanglement Generator With Enhanced Coherence  Bb84 Product 20250619 095627", "technical_field": "99_Brutal_Cleanup", "description": "--- generation_timestamp: 2025-06-19T04:11:27.193Z project_name: \\"Quantum Entanglement Generator With Enhanced Coherence (BB84)\\" autologos_process_mode: distillation initial_prompt_summary: \\"--- FILE: Quantum Entanglement Generator With Enhanced Coherence.md --- Quantum Entanglement Generator With Enhanced Coherence [0001] The present i...\\" final_iteration_count: 1 max_iterations_setting: 10 prompt_input_type: direct_text prompt_source_details: \\"log_import_Quantum_Claim_Wherein_Shield_Medium_log_20250617_133956.json\\" model_configuration: model_name: 'gemini-2.5-flash-preview-04-17' temperature: 0.20 top_p: 0.82 top_k: 15 --- Decoherence constrains quantum systems, conventionally\u2026"}, {"title": "Quantum Key Distribution With Machine Learning Enhanced Eavesdropping Detection", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE The present invention enhances Quantum Key Distribution (QKD) systems by transforming decoherence from a vulnerability into an active security mechanism for eavesdropping detection. It introduces a novel approach where a decoherence control module actively induces a predetermined, non-Markovian decoherence signature into quantum states transmitted through the channel. A processing unit then utilizes a specialized machine learning algorithm to analyze deviations from this signature, accurately classifying them as either natural environmental noise or a malicious eavesdropping attempt. This method, potentially employing terahertz-frequency pulse generators for controlled\u2026"}, {"title": "Quantum Key Distribution With Machine Learning V4", "technical_field": "Quantum Resonance Computing", "description": "OF THE INVENTION The present invention addresses critical limitations inherent in Quantum Key Distribution (QKD) systems, including restricted transmission range, susceptibility to environmental noise, and vulnerabilities arising from device imperfections, particularly in the context of advanced threat vectors and emerging computational challenges such as Harmonic Resonance Computing (HRC). The invention introduces a novel paradigm that transforms quantum decoherence from a passive vulnerability into an active, robust security mechanism, leveraging controlled decoherence and machine learning for enhanced eavesdropping detection. In a primary embodiment, a Quantum Key Distribution (QKD)\u2026"}, {"title": "Quantum Processing Unit With Bio Inspired Lattice Structure For Enhanced Qubit Coherence And Scalability", "technical_field": "Bio Inspired", "description": "OF THE INVENTION The invention's novelty lies in its bio-inspired design that mimics the structure of neuronal microtubules to create a uniquely tailored electromagnetic environment for enhancing qubit coherence and enabling higher temperature operation than conventional quantum computing architectures. Specifically, the invention combines the following new elements: * A Microtubule-Inspired Lattice Structure: A cylindrical lattice fabricated using CMOS-compatible processes and high-temperature superconductors (HTS), designed to mimic the geometry of biological microtubules. This structure is unlike any current qubit architecture (which are typically planar or use simple multi-chip\u2026"}, {"title": "Quantum Resonance Computing Systems And Methods For Stable Quantum Computation", "technical_field": "Quantum Resonance Computing", "description": "A Quantum Resonance Computing (QRC) system and method are disclosed for stable quantum computation. The invention leverages intrinsic, stable resonant frequencies within quantum systems to encode and process quantum information, addressing limitations of conventional gate-based quantum computing, particularly quantum decoherence. Inspired by classical resonant computing devices such as the parametron, QRC utilizes continuous parametric excitation to establish and sustain robust quantum resonant states for information processing, thereby enhancing coherence and stability."}, {"title": "Quantum Resonance Dynamics Framework For Stabilized Qubits And Non Collapsing Wavefunctions", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE A Quantum Resonance Dynamics (QRD) framework is disclosed for quantum information processing. This framework reinterprets fundamental quantum phenomena, stabilizing quantum information units through inherent resonance rather than traditional error correction. Wavefunction collapse is re-envisioned as a structured phase-selection process, and decoherence as a transition to a stable phase-locked resonance state. The system utilizes a Wave-Sustaining Medium (WSM) with engineered three-dimensional toroidal physical geometry and chiral lattice structures. These properties facilitate chiral phase-locking resonance and topological protection, enabling robust quantum coherence\u2026"}, {"title": "Quantum Resonance Dynamics Qrd Framework For Stabilized Qubits A Provisional Patent Application 20250719 150841", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE A Quantum Resonance Dynamics (QRD) framework is disclosed for quantum information processing. This framework reinterprets fundamental quantum phenomena, stabilizing quantum information units through inherent resonance rather than traditional error correction. Wavefunction collapse is re-envisioned as a structured phase-selection process, and decoherence as a transition to a stable phase-locked resonance state. The system utilizes a Wave-Sustaining Medium (WSM) with engineered three-dimensional toroidal physical geometry and chiral lattice structures. These properties facilitate chiral phase-locking resonance and topological protection, enabling robust quantum coherence\u2026"}, {"title": "Resonance Breach Analysis Methodology And System For Quantum Key Distribution", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE The present disclosure introduces a novel Resonance Breach Analysis (RBA) methodology and system designed to identify latent security vulnerabilities within practical Quantum Key Distribution (QKD) systems. Despite QKD's theoretical robustness, physical implementation flaws can lead to exploitable side-channel attacks. The RBA method systematically addresses this by identifying potential resonant interaction points within QKD hardware components, applying precisely controlled physical stimuli tailored to these points, and monitoring for disproportionate, non-linear technical responses. Detecting such unexpected changes indicates a latent security vulnerability, enabling\u2026"}, {"title": "Resonance Breach Analysis Rba Methodology And System For Qkd Vul Provisional Patent Application 20250719 001733", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE The present disclosure introduces a novel Resonance Breach Analysis (RBA) methodology and system designed to identify latent security vulnerabilities within practical Quantum Key Distribution (QKD) systems. Despite QKD's theoretical robustness, physical implementation flaws can lead to exploitable side-channel attacks. The RBA method systematically addresses this by identifying potential resonant interaction points within QKD hardware components, applying precisely controlled physical stimuli tailored to these points, and monitoring for disproportionate, non-linear technical responses. Detecting such unexpected changes indicates a latent security vulnerability, enabling\u2026"}, {"title": "Resonance Breach Analysis System And Method For Quantum Key Distribution V2", "technical_field": "Quantum Resonance Computing", "description": "OF THE INVENTION The present disclosure relates generally to security assessment, and more particularly, to systems and methods for identifying latent security characteristics within Quantum Key Distribution (QKD) systems. Practical implementations of QKD systems, while possessing robust theoretical security guarantees, exhibit specific characteristics at the physical implementation layer that are precisely characterized and exploited to circumvent conventional cryptographic and computational security models. These characteristics manifest as subtle physical phenomena or intricate system-level interactions, frequently leading to sophisticated side-channel attacks that exploit specific\u2026"}, {"title": "Resonant Field Cipher Product 1.1 Title Of The Invention 0708 0543", "technical_field": "General", "description": "## SUMMARY OF THE INVENTION The present invention introduces Resonant Field Computing (RFC), a novel quantum computing paradigm that fundamentally shifts from manipulating discrete particles to manipulating coherent resonant electromagnetic field states within a continuous, engineered medium. Conceptually inspired by a proposed process ontology (Autaxys) where reality is a dynamically self-organizing computational system and mass is fundamentally a manifestation of frequency ($m=\\\\omega$ in natural units), RFC seeks to embody principles of Persistence (maintaining stable structures/states) and Efficiency (optimizing configurations for low loss/high performance) in engineered physical\u2026"}, {"title": "Resonant Field Computing Rfc Based On Autaxys Principles Non Provisional Patent Application 20250730 124831", "technical_field": "General", "description": "## ABSTRACT OF THE DISCLOSURE The disclosure presents the Autaxys framework, modeling reality as an intrinsically self-ordering, self-generating evolving algorithm. It shifts from substance-based ontologies to a process-centric view, emphasizing dynamic patterns. Central is the Mass-Frequency Identity (m=\\\\u03c9), reinterpreting mass as an intrinsic processing frequency of fundamental patterns within a Universal Relational Graph (URG). The Autaxic Trilemma (Novelty, Efficiency, Persistence) drives cosmic evolution and defines physical laws through continuous, self-validating computation. This framework provides a coherent explanation for spacetime, gravity, and particles, and has\u2026"}, {"title": "Resonant Field Computing Rfc Based On Autaxys Principles Provisional Patent Application 20250730 124004", "technical_field": "General", "description": "# SUMMARY OF THE INVENTION The present disclosure introduces a novel computational paradigm, herein referred to as **Resonant Field Information Processing (RFIP)**, or more broadly, **Resonant Field Computing (RFC)**. This paradigm leverages the principles of resonant interactions within various types of physical fields (e.g., electromagnetic, acoustic, quantum) to perform computational operations. In this context, \\"computing\\" is broadly defined as any process involving the transformation, manipulation, storage, or transmission of information, states, or energy within a system. This encompasses, but is not limited to, data processing, pattern recognition, simulation, optimization,\u2026"}, {"title": "Resonant Field Computing Rfc Based On The Autaxys Framework Provisional Patent Application 20250730 115649", "technical_field": "General", "description": "# SUMMARY OF THE INVENTION The present invention introduces novel systems and methods for field-based computation, which leverages dynamic interactions within and between computational fields to process information and model complex systems. This approach is underpinned by a unified dynamic process ontology, which conceptualizes reality and its computational manifestations as an interconnected network of evolving processes rather than discrete, static entities. This dynamic process ontology provides a structured yet flexible architecture for defining, manipulating, and observing these computational fields and their resonant interactions. In one aspect, the invention provides a\u2026"}, {"title": "Resonant Field Computing System And Method Using Engineered Field State Qubits (1)", "technical_field": "General", "description": "OF THE DISCLOSURE A quantum computing system utilizes a precisely engineered wave-sustaining medium (WSM) to sculpt and support addressable coherent resonant electromagnetic field state patterns, termed h-qubits, where quantum information is encoded in the delocalized quantum state of these patterns. The WSM comprises a three-dimensional superconducting lattice structure and a high-permittitivity, ultra-low-loss dielectric material, and integrates co-fabricated multi-modal nanoscale noise mitigation systems to enhance intrinsic coherence and enable operation at elevated cryogenic temperatures, such as between 10K and 30K. The WSM also functions as a seamless computational space and\u2026"}, {"title": "Spectral Resonance Computing Src System For Intractable Problems Provisional Patent Application 20250719 232423", "technical_field": "General", "description": "OF THE INVENTION The present invention introduces Spectral Resonance Computing (SRC), a novel computational paradigm engineered to efficiently resolve computationally intractable problems, particularly those within the NP (Non-deterministic Polynomial time) complexity class. Unlike conventional digital computing architectures that rely on sequential processing and discrete logic, or established quantum computing techniques that leverage quantum mechanical phenomena for direct calculation, SRC operates by harnessing the intrinsic principles of harmonic resonance and the spontaneous emergence of complex geometric configurations within a dynamic physical system. This system functions as a\u2026"}, {"title": "Spectral Resonance Computing System And Method For Solving Computationally Intractable Problems", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE The present disclosure introduces Spectral Resonance Computing (SRC), a novel computational paradigm designed to solve computationally intractable problems, particularly those in the NP complexity class, such as large integer factorization and the 3-Satisfiability problem. Unlike conventional digital or quantum computing, SRC operates by harnessing the intrinsic principles of harmonic resonance and the spontaneous emergence of complex geometric configurations within a dynamic physical system. Problem parameters are encoded into the initial phase and amplitude relationships of pure resonance harmonics generated by elements like nanoscale piezoelectric vibrators, which\u2026"}, {"title": "System And Method For Controlled Non Markovian Decoherence In Quantum Computing V2", "technical_field": "Quantum Resonance Computing", "description": "## SUMMARY OF THE INVENTION The present invention provides a novel system and method for inducing, controlling, and actively harnessing non-Markovian decoherence as a valuable computational resource in quantum computing and communication. The invention provides a solution to the limitations of conventional quantum systems, which predominantly treat decoherence as an error to be suppressed, by instead utilizing its inherent properties for computational advantage. A core aspect of the invention is the **Decoherence Control Module (DCM)**, which employs engineered noise sources to generate non-Markovian noise. This noise features precisely tailored frequency spectra and temporal profiles,\u2026"}, {"title": "System And Method For Harnessing Controlled Non Markovian Decoherence", "technical_field": "Early_Drafts_202507", "description": "OF THE DISCLOSURE A system and method for harnessing controlled, non-Markovian decoherence in quantum computing and communication. The system includes a decoherence control module configured to intentionally induce decoherence via engineered non-Markovian noise channels. This controlled decoherence is leveraged for various applications, including quantum annealing for optimization, enhanced quantum sensing, advanced error mitigation, and temporal data storage. The system further incorporates dynamic qubit state control and a hybrid quantum-classical interface to precisely manage and utilize these decoherence pathways."}, {"title": "System And Method For High Temperature Topological Quantum Processing", "technical_field": "High Temperature Topological Chiral", "description": "representation. [0332] FAILURE MODES In the event of Thermal Failures, the system tolerates and mitigates a Cooling Failure. The intrinsic error suppression via the large superconducting gap ensures a grace period before decoherence becomes catastrophic, allowing for recovery. [0333] Temperature Fluctuation is another Thermal Failure. While the Pulse Tube Cryocooler [104] provides stable 4K operation, minor fluctuations occur. The topological protection and large gap buffer these fluctuations, preventing immediate loss of quantum coherence. Localized Peltier stages or feedback loops further stabilize temperature. [0334] If the Heat Load Exceeds, the system gracefully degrades or pauses.\u2026"}, {"title": "System And Method For Low Energy Nuclear Reactions For Energy Pr Non Provisional 2025 07 25", "technical_field": "General", "description": "OF THE DISCLOSURE A computer-implemented system and method for generating energy through low-energy nuclear reactions (LENR) at room temperature or near-room temperature conditions. The method involves initiating a nuclear reaction, such as by electrochemical loading of hydrogen isotopes into a metallic lattice, plasma discharge, acoustic cavitation, or laser interaction, and producing energy therefrom. The system comprises a reaction chamber, which can be configured as an electrochemical cell, a plasma chamber, or a solid-state device, designed to facilitate these reactions. An energy extraction mechanism, such as a heat exchanger or thermoelectric generator, is coupled to the chamber\u2026"}, {"title": "System And Method For Probabilistic Quantum Information Processing Via Abstract Information States", "technical_field": "Niche and Undeveloped", "description": "Information Units: Configurable to represent quantum states as continuous probabilistic distributions (e.g., via geometric superpositions in lattice structures). Functional Equivalents: Implementations may include microtubule-inspired lattices, photonic arrays, or superconducting qubits, but the claims are not limited to these embodiments. 2. Probabilistic Processing Mechanisms [0006] Processing means include: Analog Controls: Electromagnetic fields, acoustic waves, or mechanical stress modulate lattice parameters to steer state evolution. Non-Demolition Measurements: Interferometric detectors reconstruct probabilistic distributions via inverse Fourier transforms without collapse. 3.\u2026"}, {"title": "System And Method For Solving Optimization Problems", "technical_field": "Wave Based Computing", "description": "OF THE INVENTION The present invention introduces a novel computational system-on-chip (SoC), herein referred to as a hybrid opto-electronic optimization system, which functions as a hybrid, room-temperature, self-optimizing photonic co-processor. This system is specifically designed to achieve unprecedented computational speed and power efficiency for complex optimization problems by utilizing a dynamically reconfigurable optical energy landscape, precisely controlled by a real-time digital feedback loop. This architecture is physically plausible, commercially manufacturable using existing CMOS-compatible technologies, and represents a fundamental paradigm shift in high-performance\u2026"}, {"title": "System And Method For Topological Scale Invariant Photonic Computation With Analog Emulation Of Quantum Behavior V1", "technical_field": "Photonic Computing", "description": "sed, comprising a substrate, a quasi-periodic photonic lattice defined on the substrate exhibiting discrete scale invariance, a superlattice structure creating a moir\xE9 potential, a topological interface configured to support protected optical modes, a nonlinear optical element configured to generate emergent particle-like excitations, and a detection system configured to interpret interactions of said excitations as computational results. [0011] A photonic system for emulating quantum statistical behavior is disclosed, the system including a light source, an integrated photonic circuit having a reconfigurable topological scale-invariant waveguide architecture, means for generating and\u2026"}, {"title": "System And Method For Unsupervised Iterative Content Refinement Provisional Patent Application 20250722 175720", "technical_field": "General", "description": "# SUMMARY OF THE INVENTION The present invention provides a novel computer-implemented system and method for autonomous, iterative content generation and refinement using artificial intelligence. The core innovation lies in its ability to accept a diverse initial content input, which may include unstructured data such as a user prompt, existing documents, or a partial draft; semi-structured data like XML or JSON files; or structured data from databases, APIs, or real-time data streams. Crucially, this input can encompass various modalities, including textual, visual (e.g., images, video frames), or auditory (e.g., audio clips, speech segments) data. The system then automatically,\u2026"}, {"title": "Systems And Methods For Aperiodic Waveform Modulation Based On Number Theoretic Geometries", "technical_field": "Generic and Mixed", "description": "OF THE INVENTION [0006] The present invention provides a system and method for generating aperiodic communication waveforms based on the geometric encoding of prime numbers. This approach overcomes the limitations of conventional periodic modulation schemes by leveraging the inherent structural stability of prime number distributions mapped onto a geometric manifold. [0007] A primary object of the present invention is to provide a physical layer security mechanism, termed Symbol Waveform Hopping (SWH), that is based on physical resolution limits rather than computational complexity, rendering it immune to quantum and classical computational attacks. The SWH mechanism dynamically changes\u2026"}, {"title": "Systems And Methods For Computation Using Engineered Intrinsic Topological Media", "technical_field": "Topological Broad Typo", "description": "OF THE DISCLOSURE A system for performing a computational operation includes a Physical Medium (PM) engineered to possess an Intrinsic Topological State (ITS) characterized by a protective energy gap for thermal robustness. Information is encoded in a global property of the ITS. A Control System (CS) induces a native dynamical process of the ITS to execute the computational operation, and a Readout System (RS) measures a property of the PM to determine the result. The system operates without active error correction and can function at room temperature. A specialized, non-programmable co-processor is also disclosed. Methods for manufacturing and operating such systems are included."}, {"title": "Systems And Methods For Distributed Quantum Resonance Computing V4", "technical_field": "Quantum Resonance Computing", "description": "## SUMMARY OF THE INVENTION The present invention provides a complete, end-to-end system and method for what is termed herein as Quantum Resonance Computing (QRC), which transforms heterogeneous, geographically distributed telecommunications infrastructure into a programmable, large-scale physical information processing substrate. The invention overcomes the profound and long-standing limitations of the prior art through a synergistic integration of several novel and non-obvious subsystems, signal processing protocols, and control architectures, each of which represents a distinct inventive concept, as well as inventive combinations thereof. A primary object of the invention is to\u2026"}, {"title": "Systems And Methods For Topological Computation", "technical_field": "Topological Broad Typo", "description": "odiment, the low-temperature bonding process is a hybrid bonding process performed at a temperature below 150\xB0 Celsius to preserve a magnetic property of a ferromagnetic layer within the moir\xE9 heterostructure. This specifies the temperature constraint for the final integration step to avoid degrading sensitive materials. [0067] The system of claim [0041] is further described. In this embodiment, the zero-dimensional topologically protected corner state has a coherence time that is at least an order of magnitude longer than a coherence time of edge states on the Physical Medium (PM). This highlights the enhanced stability of the specific corner state used in the HOTI qubit. [0068] A\u2026"}, {"title": "Topological Quantum Computation Using Number Theoretic Pattern Operations V1.0", "technical_field": "99_Brutal_Cleanup", "description": "OF THE DISCLOSURE A system and method for topological quantum computation are disclosed. The method performs computation through a sequence of pattern operations on a quantum state represented as a topological loop on a circle manifold, the loop being characterized by an integer winding number. A pattern writing operation encodes information based on a prime factorization of the winding number. A pattern evolution operation applies a rotation operator to evolve the state. A pattern projection operation extracts a computational result. The invention further discloses a method for designing a quantum device by calculating a resonance metric based on prime factors of a system parameter to\u2026"}]`);
+var CANONICAL_ORIGIN = "https://ipatent.qnfo.org";
+var ORCID_URL = "https://orcid.org/0009-0002-4317-5604";
+// PRIVATE-BY-DEFAULT-1 (3.5.0): an inventor's text is confidential until filed. Nothing is stored unless the inventor
+// opts in, stored rows hold a salted IP hash (never the raw IP), and no public route lists submissions.
+async function hashIp(ip) {
+  const data = new TextEncoder().encode("ipatent-rl-v1:" + String(ip || "unknown"));
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return "h:" + Array.from(new Uint8Array(buf)).slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(hashIp, "hashIp");
+function adminOk(request, env) {
+  const t = env.IPATENT_ADMIN_TOKEN;
+  return !!t && request.headers.get("X-Admin-Token") === t;
+}
+__name(adminOk, "adminOk");
 var VZ_TOP_K = 8;
 var MAX_DESCRIPTION_LEN = 5e3;
 var RATE_LIMIT_WINDOW_MS = 60 * 60 * 1e3;
@@ -39,7 +54,7 @@ __name222(corsHeaders, "corsHeaders");
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: corsHeaders({ "Content-Type": "application/json" })
+    headers: corsHeaders({ "Content-Type": "application/json", "X-Robots-Tag": "noindex" })
   });
 }
 __name(json, "json");
@@ -59,7 +74,9 @@ __name222(html, "html");
 function generateId() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let id = "USP-";
-  for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  const rnd = new Uint8Array(12);
+  crypto.getRandomValues(rnd);
+  for (let i = 0; i < 12; i++) id += chars[rnd[i] % chars.length];
   return id + "-" + Date.now().toString(36).toUpperCase();
 }
 __name(generateId, "generateId");
@@ -182,6 +199,9 @@ Output the disclosure with these numbered sections:
 ## 8. INVENTOR DECLARATION
 [A statement that the inventor believes this to be a novel invention]
 
+## 9. SUPPORT GAPS
+[A bullet list for the inventor, not for filing: each feature, variant or claim element that the description mentions but does not explain well enough for a skilled person to make and use it; each drawing the specification should include and what it should show; and any statement in the draft that goes beyond what the inventor described. Be specific; if there are none, say so.]
+
 IMPORTANT:
 - Write ORIGINAL content based ONLY on the inventor's description \u2014 do NOT copy from the examples.
 - Use formal patent language appropriate for USPTO filings.
@@ -196,7 +216,7 @@ IMPORTANT:
           { role: "system", content: "You are an expert US patent attorney and drafter. Write formal, precise, and defensible patent disclosures. Output only the disclosure text \u2014 no preamble or meta-commentary.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; expose at least one concrete limitation or failure mode in the drafted output (e.g. claims that may lack enablement or written-description support); label uncertainty, never inflate confidence." },
           { role: "user", content: prompt }
         ],
-        max_tokens: 8e3,
+        max_tokens: 9e3,
         temperature: 0.7
       });
       text = result?.response || result?.choices?.[0]?.message?.content || "";
@@ -237,7 +257,8 @@ function parseDisclosureSections(text) {
     { key: "detailed_description", regex: /(?:##\s*)?5\.?\s*DETAILED\s*DESCRIPTION\s*\n+(.+?)(?=\n*(?:##\s*)?6\.)/si },
     { key: "claims", regex: /(?:##\s*)?6\.?\s*CLAIMS\s*\n+(.+?)(?=\n*(?:##\s*)?7\.)/si },
     { key: "abstract", regex: /(?:##\s*)?7\.?\s*ABSTRACT\s*\n+(.+?)(?=\n*(?:##\s*)?8\.)/si },
-    { key: "declaration", regex: /(?:##\s*)?8\.?\s*INVENTOR\s*DECLARATION\s*\n+(.+?)$/si }
+    { key: "declaration", regex: /(?:##\s*)?8\.?\s*INVENTOR\s*DECLARATION\s*\n+(.+?)(?=\n*(?:##\s*)?9\.|$)/si },
+    { key: "support_gaps", regex: /(?:##\s*)?9\.?\s*SUPPORT\s*GAPS\s*\n+(.+?)$/si }
   ];
   for (const { key, regex } of patterns) {
     const match = text.match(regex);
@@ -312,15 +333,17 @@ ${sections.detailed_description ? `<h2>5. Detailed Description</h2><div class="s
 ${sections.claims ? `<h2>6. Claims</h2><div class="section claims">${formatClaims(sections.claims)}</div>` : ""}
 ${sections.abstract ? `<h2>7. Abstract</h2><div class="section">${esc(sections.abstract)}</div>` : ""}
 ${sections.declaration ? `<h2>8. Inventor Declaration</h2><div class="section">${esc(sections.declaration)}</div>` : ""}
+${sections.support_gaps ? `<h2>Reviewer notes: support gaps (remove before filing)</h2><div class="section" style="border-color:#a97b1d">${esc(sections.support_gaps)}</div>` : ""}
 <h2>Next Steps</h2>
 <ol>
   <li>Review and refine this disclosure carefully</li>
-  <li>Add drawings, diagrams, or schematics to support the claims</li>
-  <li>File as USPTO provisional application (Forms SB/16, specification, drawings, fee)</li>
+  <li>Add drawings wherever they help a skilled reader understand the invention (35 U.S.C. 113)</li>
+  <li>Check that every feature you may later claim is described here: a provisional only secures priority for what it discloses</li>
+  <li>File as a USPTO provisional application (cover sheet SB/16, specification, drawings, fee)</li>
   <li>Consult a registered patent attorney or agent before filing</li>
 </ol>
 <div class="footer">
-  <p>Generated by ipatent.me \u2014 AI-Powered US Provisional Disclosure Tool</p>
+  <p>Generated by ipatent.qnfo.org \u2014 a free experimental drafting assistant from QNFO. Machine-generated; review every sentence.</p>
   <p>This is NOT a filed patent application. No USPTO filing date has been established.</p>
   <p>Generated: ${esc(date)} | Submission ID: ${esc(submissionId)}</p>
 </div>
@@ -344,10 +367,11 @@ async function handleDraft(request, env, ctx) {
   const description = sanitize(body.description, MAX_DESCRIPTION_LEN);
   const inventorName = sanitize(body.inventor_name, 200);
   const inventorEmail = sanitize(body.inventor_email, 200);
+  const keepCopy = body.save === true;
   if (!title || !description || description.length < 50) {
     return json({ error: "title and description (min 50 chars) are required" }, 400);
   }
-  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const ip = await hashIp(request.headers.get("CF-Connecting-IP") || "unknown");
   const rateLimit = await checkRateLimit(env, ip);
   if (!rateLimit.allowed) {
     return json({ error: "Rate limit exceeded. Please try again later.", rate_limit: rateLimit }, 429);
@@ -375,7 +399,7 @@ async function handleDraft(request, env, ctx) {
     sections.abstract
   ].filter(Boolean).join("\n\n");
   const r2Key = "disclosures/" + submissionId + ".html";
-  const ua = (request.headers.get("User-Agent") || "").slice(0, 500);
+  const ua = keepCopy ? (request.headers.get("User-Agent") || "").slice(0, 120) : null;
   const country = request.headers.get("CF-IPCountry") || "XX";
   const sessionId = crypto.randomUUID();
   try {
@@ -386,26 +410,26 @@ async function handleDraft(request, env, ctx) {
       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'draft', ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
     `).bind(
       submissionId,
-      inventorName,
-      inventorEmail,
-      title,
-      disclosureText,
-      documentHtml,
-      r2Key,
+      keepCopy ? inventorName : null,
+      keepCopy ? inventorEmail : null,
+      keepCopy ? title : "[private]",
+      keepCopy ? disclosureText : "",
+      keepCopy ? documentHtml : null,
+      keepCopy ? r2Key : null,
       ip,
       ua,
       country,
       sessionId,
-      sections.technical_field || null,
-      sections.abstract || null,
-      sections.claims || null,
-      sections.summary || null,
-      sections.background || null
+      keepCopy ? sections.technical_field || null : null,
+      keepCopy ? sections.abstract || null : null,
+      keepCopy ? sections.claims || null : null,
+      keepCopy ? sections.summary || null : null,
+      keepCopy ? sections.background || null : null
     ).run();
   } catch (err) {
     console.error("D1 insert failed:", err.message);
   }
-  if (env.IPATENT_R2) {
+  if (keepCopy && env.IPATENT_R2) {
     ctx?.waitUntil?.(
       env.IPATENT_R2.put(r2Key, documentHtml, { httpMetadata: { contentType: "text/html" } }).catch((err) => console.error("R2 put failed:", err.message))
     );
@@ -417,6 +441,8 @@ async function handleDraft(request, env, ctx) {
     document_html: documentHtml,
     rag_sources: ragContext.map((r) => ({ title: r.title, score: r.score, section: r.section })),
     prior_art: priorArt,
+    saved: keepCopy,
+    private_link: keepCopy ? CANONICAL_ORIGIN + "/d/" + submissionId : null,
     rate_limit: rateLimit
   });
 }
@@ -449,7 +475,7 @@ __name22(handleDisclosures, "handleDisclosures");
 __name222(handleDisclosures, "handleDisclosures");
 async function handleSubmission(env, id) {
   const row = await env.IPATENT_DB.prepare("SELECT submission_id, inventor_name, title, disclosure_text, document_html, status, technical_field, abstract, claims, summary, background, created_at FROM submissions WHERE submission_id = ?1" /* SUBMISSION-PII-1 (2026-10-01): no email, IP, user agent, country or session id on a public route */).bind(id).first();
-  if (!row) return json({ error: "Submission not found: " + id }, 404);
+  if (!row || row.title === "[private]") return json({ error: "Submission not found" }, 404);
   return json(row);
 }
 __name(handleSubmission, "handleSubmission");
@@ -459,7 +485,7 @@ __name222(handleSubmission, "handleSubmission");
 async function handleStatus(env) {
   const [subCount, recent] = await Promise.all([
     env.IPATENT_DB.prepare("SELECT COUNT(*) as cnt FROM submissions").first(),
-    env.IPATENT_DB.prepare("SELECT submission_id, title, created_at FROM submissions ORDER BY created_at DESC LIMIT 5").all()
+    Promise.resolve(null)
   ]);
   return json({
     status: "ok",
@@ -469,7 +495,6 @@ async function handleStatus(env) {
     embed_model: AI_EMBED_MODEL,
     draft_models: AI_DRAFT_MODELS,
     stats: { total_submissions: subCount?.cnt || 0 },
-    recent: recent?.results || [],
     bindings: {
       d1: !!env.IPATENT_DB,
       r2: !!env.IPATENT_R2,
@@ -584,13 +609,129 @@ async function handleSuggest(env, url) {
   return json(out);
 }
 __name(handleSuggest, "handleSuggest");
+var GUIDE_UPDATED = "2026-10-02";
+var GUIDE_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Provisional patent applications: what they protect and how to draft one \xB7 iPatent</title>
+<meta name="description" content="A plain-language guide to US provisional patent applications: what a provisional protects, what to put in it, drawings, fees, the 12-month deadline, and why you should not publish before filing.">
+<link rel="canonical" href="https://ipatent.qnfo.org/guide">
+<meta name="author" content="Rowan Brad Quni-Gudzinas">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="QNFO">
+<meta property="og:title" content="Provisional patent applications: what they protect and how to draft one">
+<meta property="og:description" content="A provisional secures a filing date only for what it describes. A plain-language guide for inventors.">
+<meta property="og:url" content="https://ipatent.qnfo.org/guide">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Provisional patent applications: what they protect and how to draft one","url":"https://ipatent.qnfo.org/guide","dateModified":"2026-10-02","inLanguage":"en","author":{"@type":"Person","name":"Rowan Brad Quni-Gudzinas","sameAs":["https://orcid.org/0009-0002-4317-5604"]},"publisher":{"@type":"Organization","name":"QNFO","url":"https://qnfo.org"},"isPartOf":{"@type":"WebSite","name":"iPatent","url":"https://ipatent.qnfo.org/"}}<\/script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#f6f3ea;--ink:#16181d;--ink-soft:#4a4d55;--green:#0e5c3f;--amber:#a97b1d;--line:#d8d2c2;--white:#fffdf8}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Fraunces',Georgia,serif;background:var(--paper);color:var(--ink);line-height:1.7;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:740px;margin:0 auto;padding:0 20px 60px}
+  header{display:flex;justify-content:space-between;align-items:center;padding:20px 0;border-bottom:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.06em}
+  header a{color:var(--green);text-decoration:none;font-weight:600}
+  .kicker{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin:44px 0 12px}
+  h1{font-size:clamp(30px,6vw,46px);line-height:1.1;letter-spacing:-.02em;margin:0 0 18px;font-weight:600}
+  .lede{font-size:19px;color:var(--ink-soft)}
+  h2{font-size:23px;margin:42px 0 8px;font-weight:600}
+  h2 .n{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--amber);margin-right:10px;vertical-align:middle}
+  p,li{font-size:16.5px}
+  ul{padding-left:22px}
+  li{margin:6px 0}
+  a{color:var(--green)}
+  .box{background:var(--white);border:1px solid var(--line);border-left:4px solid var(--green);padding:16px 20px;margin:22px 0}
+  .box.warn{border-left-color:var(--amber)}
+  .box b{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--green)}
+  .box.warn b{color:var(--amber)}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:15px;background:var(--white)}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left}
+  th{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--green)}
+  .cta{display:inline-block;margin-top:10px;background:var(--green);color:var(--white);text-decoration:none;padding:13px 20px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:600}
+  footer{border-top:1px solid var(--line);margin-top:56px;padding-top:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><a href="/">iPatent \xB7 ipatent.qnfo.org</a><span>GUIDE \xB7 UPDATED 2 OCT 2026</span></header>
+
+<div class="kicker">A guide for independent inventors</div>
+<h1>Provisional patent applications: what they protect, and how to draft one that holds up</h1>
+<p class="lede">A US provisional application is the cheapest way to put a date on an invention. It is also easy to get wrong in a way you only discover years later: a provisional protects exactly what it describes, and nothing else.</p>
+
+<h2><span class="n">01</span>What a provisional is</h2>
+<p>A provisional application (35 U.S.C. 111(b)) is a US filing that gives your invention an early effective filing date for twelve months. It is never examined and never becomes a patent on its own. It needs no claims, no inventor oath and no prior-art disclosure. To keep the date, you must file a regular (nonprovisional) US application, or an international PCT application, that claims the provisional's benefit within twelve months. Limited restoration of a missed deadline exists, but plan on twelve months.</p>
+<p>While it is pending you may mark the invention "patent pending". The provisional itself is not published; it becomes public only if a later application that relies on it is published.</p>
+
+<h2><span class="n">02</span>What it actually protects</h2>
+<p>A later claim gets the provisional's filing date only if the provisional describes that claimed invention in writing and teaches a skilled person how to make and use it (the written-description and enablement requirements of 35 U.S.C. 112(a); see <i>New Railhead Mfg. v. Vermeer Mfg.</i>, Fed. Cir. 2002). If the feature that turns out to matter is missing or only gestured at, the early date does not cover it, and anything published in between can be used against you.</p>
+<div class="box"><b>The rule of thumb</b><br>Write the provisional as if it were the only document a court will ever read about your invention. Breadth of description beats polish.</div>
+<p>This is why iPatent puts the detailed description first and ends every draft with a <b>support gaps</b> list: the features, variants and drawings your description mentions but does not yet explain well enough. Closing those gaps is the most valuable thing you can do before filing.</p>
+
+<h2><span class="n">03</span>What to put in it</h2>
+<ul>
+  <li><b>The problem and context:</b> what existing approaches do and where they fall short.</li>
+  <li><b>The parts and how they connect:</b> every component, what it does and what it talks to.</li>
+  <li><b>How and why it works:</b> the operating principle, not just the result.</li>
+  <li><b>At least one fully worked embodiment:</b> concrete materials, dimensions, values, steps, code paths or parameters.</li>
+  <li><b>Alternatives and variants:</b> every substitution you might later want to claim (other materials, ranges, configurations, orders of steps). Unmentioned variants are unprotected.</li>
+  <li><b>Drawings:</b> required where they help understanding (35 U.S.C. 113). Describe each figure in the text, with reference numbers.</li>
+  <li><b>Data or test results,</b> if you have them, and the uses you foresee.</li>
+  <li><b>Claims and an abstract (optional):</b> not required for a provisional, but a draft claim set is a useful checklist of what the description must support.</li>
+</ul>
+
+<h2><span class="n">04</span>Filing it</h2>
+<p>File through USPTO Patent Center with a cover sheet (form PTO/SB/16, or an application data sheet) naming every inventor, the specification and any drawings, and the fee. Fees in effect since 19 January 2025:</p>
+<table>
+  <tr><th>Entity status</th><th>Provisional filing fee</th></tr>
+  <tr><td>Large entity</td><td>$325</td></tr>
+  <tr><td>Small entity</td><td>$130</td></tr>
+  <tr><td>Micro entity (income and filing limits apply)</td><td>$65</td></tr>
+</table>
+<p>A size fee applies above 100 sheets. Always confirm against the current <a href="https://www.uspto.gov/learning-and-resources/fees-and-payment/uspto-fee-schedule" rel="noopener">USPTO fee schedule</a> before you pay.</p>
+
+<h2><span class="n">05</span>Keep it secret until it is filed</h2>
+<div class="box warn"><b>Before you post, pitch or publish</b><br>The US gives inventors a one-year grace period for their own disclosures (35 U.S.C. 102(b)(1)). Europe and most other countries do not: under the European Patent Convention (Art. 54) anything made public before your filing date, including your own blog post, talk, preprint or demo, can destroy novelty there.</div>
+<p>The same applies to software. Pasting an unfiled invention into a tool that stores, shares or publishes what you type can be a disclosure. The USPTO's 2024 guidance on AI tools warns practitioners about exactly this confidentiality risk. iPatent stores nothing unless you tick "keep a private copy", and never lists or publishes submissions.</p>
+
+<h2><span class="n">06</span>What iPatent does, and what it does not</h2>
+<ul>
+  <li><b>It drafts.</b> It turns your description into a structured disclosure in patent register, grounded in the structure of a 33,500-segment corpus of the author's own draft disclosures.</li>
+  <li><b>It does not search prior art.</b> Its closeness warning compares your text with that corpus only. It is not a novelty or freedom-to-operate opinion.</li>
+  <li><b>It is not legal advice.</b> Machine-generated text can be wrong or invent details. Under USPTO rules a person, not a tool, signs and is responsible for every statement filed. Have a registered patent attorney or agent review the draft.</li>
+  <li><b>Inventors are people.</b> US law names only natural persons as inventors (<i>Thaler v. Vidal</i>, Fed. Cir. 2022). The invention has to be yours; the tool only helps you write it down.</li>
+</ul>
+<a class="cta" href="/#draft">Draft a disclosure</a>
+
+<footer>
+iPatent is a free, open experiment from <a href="https://qnfo.org">QNFO</a> by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID</a>). Source code is public at <a href="https://github.com/QNFO/qnfo-workers/tree/main/qnfo-ipatent">github.com/QNFO/qnfo-workers</a>. This guide is general information, not legal advice, and reflects US law and USPTO fees as of 2 October 2026.
+</footer>
+</div>
+</body>
+</html>`;
+
 var LANDING_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>iPatent \u2014 Inventor Disclosure Assistant \xB7 qnfo.org</title>
-<meta name="description" content="Draft a US provisional patent disclosure in minutes. Free AI drafting grounded in a corpus of real filings \u2014 powered by ipatent.qnfo.org.">
+<title>iPatent \u2014 free, private US provisional patent disclosure drafting \xB7 QNFO</title>
+<meta name="description" content="Draft a US provisional patent application disclosure for free: specification, drawings checklist, optional claims and abstract. Private by default, nothing published. An open experiment from QNFO.">
+<link rel="canonical" href="https://ipatent.qnfo.org/">
+<meta name="robots" content="index,follow">
+<meta name="author" content="Rowan Brad Quni-Gudzinas">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="QNFO">
+<meta property="og:title" content="iPatent \u2014 free, private provisional patent disclosure drafting">
+<meta property="og:description" content="Describe your invention; get a complete, reviewable US provisional disclosure draft. Private by default. Not legal advice.">
+<meta property="og:url" content="https://ipatent.qnfo.org/">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"iPatent","url":"https://ipatent.qnfo.org/","applicationCategory":"BusinessApplication","operatingSystem":"Any (web)","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"description":"Free, private-by-default assistant that drafts US provisional patent application disclosures for review by a registered practitioner.","author":{"@type":"Person","name":"Rowan Brad Quni-Gudzinas","sameAs":["https://orcid.org/0009-0002-4317-5604"]},"publisher":{"@type":"Organization","name":"QNFO","url":"https://qnfo.org"}}<\/script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -820,7 +961,7 @@ var LANDING_HTML = `<!DOCTYPE html>
   .g-note{margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--ink-soft)}
     .close-warn{display:none;margin:0 0 18px;border:1px solid var(--amber);border-left:4px solid var(--amber);background:rgba(169,123,29,.08);padding:12px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.65;color:var(--ink)}
   .close-warn b{color:var(--amber);letter-spacing:.06em}
-@media print{.docket,.hero,.chips,.actions,.status,.how,footer,.suggest{display:none}.form-card{box-shadow:none}}
+@media print{.docket,.hero,.chips,.actions,.status,.how,footer,.suggest,.form-card,#dlBar{display:none}}
 </style>
 </head>
 <body>
@@ -839,13 +980,13 @@ var LANDING_HTML = `<!DOCTYPE html>
 
   <!-- Hero -->
   <section class="hero">
-    <div class="kicker">Free \xB7 US Provisional Patent Drafting \xB7 Grounded in real filings</div>
-    <h1>Turn your idea into a<br><span class="amp">defensible</span> disclosure.</h1>
-    <p class="sub">Describe your invention. iPatent drafts a complete US provisional disclosure \u2014 title, field, background, summary, detailed description, claims and abstract \u2014 in USPTO style, informed by a corpus of actual patent filings.</p>
+    <div class="kicker">Free \xB7 Private by default \xB7 US provisional patent disclosures</div>
+    <h1>Turn your idea into a<br><span class="amp">complete</span> disclosure.</h1>
+    <p class="sub">Describe your invention. iPatent drafts a US provisional disclosure \u2014 field, background, summary, detailed description, optional claims and abstract \u2014 for you and a registered practitioner to review. A provisional only protects what it describes, so the draft aims for completeness first. <a href="/guide" style="color:var(--green)">Read the guide</a>.</p>
     <div class="chips">
-      <span class="chip">33,500+ filing segments in the knowledge base</span>
-      <span class="chip">Free AI \xB7 zero-cost at scale</span>
-      <span class="chip">8-section USPTO format</span>
+      <span class="chip">Private by default \xB7 nothing published</span>
+      <span class="chip">Style-grounded in a 33,500-segment drafting corpus</span>
+      <span class="chip">Download or print for attorney review</span>
     </div>
   </section>
 
@@ -904,10 +1045,11 @@ var LANDING_HTML = `<!DOCTYPE html>
       <div class="actions">
         <div class="actions-row">
           <button type="submit" id="generateBtn">Draft Disclosure</button>
-          <button type="button" id="inventBtn" class="invent" title="Pick a real invention concept from the corpus and draft it">\u26A1 Invent Something</button>
+          <button type="button" id="inventBtn" class="invent" title="Load an example from the corpus and draft it">\u26A1 Try an example</button>
         </div>
         <div class="status" id="status"></div>
-        <div class="note"><b>Good practice:</b> include components, operating principle, and at least one alternative embodiment. Rate-limited to 20 drafts/hour per IP. <b>DRAFT ONLY</b> \u2014 not legal advice; consult a registered patent attorney before filing.</div>
+        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);cursor:pointer"><input type="checkbox" id="keepCopy" style="margin-top:2px"> <span>Keep a private copy I can reopen by link. Off by default: unless you tick this, your description and draft are not stored.</span></label>
+        <div class="note"><b>Good practice:</b> include components, operating principle, at least one alternative embodiment, and what each drawing would show. <b>Before you file:</b> don\u2019t publish, pitch or post the idea \u2014 Europe and most other countries have no grace period. Rate-limited to 20 drafts/hour. <b>DRAFT ONLY</b> \u2014 not legal advice; have a registered patent attorney or agent review it before filing.</div>
       </div>
     </form>
   </section>
@@ -917,6 +1059,10 @@ var LANDING_HTML = `<!DOCTYPE html>
     <div class="result-head">
       <span>DRAFT DISCLOSURE \xB7 FOR REVIEW</span>
       <span id="resultId"></span>
+    </div>
+    <div id="dlBar" style="display:none;gap:10px;flex-wrap:wrap;margin:0 0 14px">
+      <button type="button" id="dlHtml" class="invent" style="width:auto;padding:10px 16px">Download draft (.html)</button>
+      <button type="button" id="dlPrint" class="invent" style="width:auto;padding:10px 16px">Print / save as PDF</button>
     </div>
     <div class="close-warn" id="closeWarn" style="display:none"></div>
     <div class="paper">
@@ -934,17 +1080,17 @@ var LANDING_HTML = `<!DOCTYPE html>
       <div class="step">
         <div class="sno">STEP 01 \u2014 RETRIEVE</div>
         <h3>Ground in prior filings</h3>
-        <p>Your description is matched against 33,500+ semantic segments from the real QNFO/QWAV patent corpus \u2014 so the draft reflects proven disclosure structure.</p>
+        <p>Your description is matched against 33,500+ segments of the author\u2019s own draft disclosures, used only for structure and register. Nothing is copied into your draft.</p>
       </div>
       <div class="step">
         <div class="sno">STEP 02 \u2014 DRAFT</div>
         <h3>Reason like a patent drafter</h3>
-        <p>deepseek-r1 (free) writes all eight sections in formal USPTO register, with claims in standard dependent/independent format.</p>
+        <p>An open-weights model on Cloudflare Workers AI drafts every section in formal patent register, then flags where support for later claims looks thin.</p>
       </div>
       <div class="step">
         <div class="sno">STEP 03 \u2014 OWN</div>
-        <h3>Export and file</h3>
-        <p>Your draft is stored under a unique submission ID and rendered as a clean HTML document you can save, print, and take to a practitioner.</p>
+        <h3>Review, then file</h3>
+        <p>Download the draft or print it to PDF and take it to a registered practitioner. Nothing is kept unless you ask for a private copy.</p>
       </div>
     </div>
   </section>
@@ -953,9 +1099,9 @@ var LANDING_HTML = `<!DOCTYPE html>
     <div class="foot">
       <div class="f-brand">iPatent<em>.</em>qnfo.org <span style="font-weight:400;color:var(--ink-soft)">\xB7 an open research project</span></div>
       <nav>
+        <a href="/guide">Provisional guide</a>
         <a href="https://qnfo.org">QNFO</a>
-        <a href="https://qwav.org">QWAV</a>
-        <a href="https://archive.qnfo.org">Archive</a>
+        <a href="https://qnfo.org/papers">Papers</a>
         <a href="https://qnfo.org/legal">License</a>
       </nav>
       <div class="f-legal">
@@ -978,6 +1124,20 @@ var LANDING_HTML = `<!DOCTYPE html>
   const API_BASE = location.pathname.startsWith('/ipatent') ? '/ipatent/api' : '/api';
 
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  var lastDoc = null;
+  function downloadDoc(){
+    if(!lastDoc || !lastDoc.html) return;
+    var blob = new Blob([lastDoc.html], {type:'text/html'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'provisional-disclosure-' + lastDoc.id + '.html';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  document.addEventListener('click', function(ev){
+    var t = ev.target;
+    if(t && t.id === 'dlHtml') downloadDoc();
+    if(t && t.id === 'dlPrint') window.print();
+  });
 
   function renderSections(s){
     const blocks = [
@@ -988,7 +1148,8 @@ var LANDING_HTML = `<!DOCTYPE html>
       ['5. DETAILED DESCRIPTION', s.detailed_description],
       ['6. CLAIMS', s.claims],
       ['7. ABSTRACT', s.abstract],
-      ['8. INVENTOR DECLARATION', s.declaration]
+      ['8. INVENTOR DECLARATION', s.declaration],
+      ['REVIEWER NOTES \u2014 SUPPORT GAPS (REMOVE BEFORE FILING)', s.support_gaps]
     ];
     return blocks.filter(([,v])=>v).map(([h,v])=>{
       if(h.startsWith('6.')){
@@ -1084,7 +1245,8 @@ var LANDING_HTML = `<!DOCTYPE html>
           technical_field: document.getElementById('technicalField').value.trim(),
           description: document.getElementById('description').value.trim(),
           inventor_name: document.getElementById('inventorName').value.trim(),
-          inventor_email: document.getElementById('inventorEmail').value.trim()
+          inventor_email: document.getElementById('inventorEmail').value.trim(),
+          save: !!(document.getElementById('keepCopy') && document.getElementById('keepCopy').checked)
         })
       });
       const data = await resp.json();
@@ -1104,7 +1266,12 @@ var LANDING_HTML = `<!DOCTYPE html>
           cw.innerHTML = '<b>PRIOR-ART CLOSENESS WARNING</b> &mdash; your description is very close to &ldquo;' + esc(data.prior_art.top_title || '') + '&rdquo; (' + Math.round((Number(data.prior_art.top_score) || 0) * 100) + '% similar, section ' + esc(data.prior_art.section || 'n/a') + '). ' + esc(data.prior_art.message || 'Refine the distinguishing features before filing.') + ' This is a style/prior-art reference, not a clearance opinion.';
         } else { cw.style.display = 'none'; }
       }
-      status.textContent = 'Draft generated \xB7 submission ' + data.submission_id;
+      lastDoc = { html: data.document_html || '', id: data.submission_id };
+      var dl = document.getElementById('dlBar');
+      if(dl) dl.style.display = 'flex';
+      status.textContent = data.saved
+        ? 'Draft generated \xB7 private copy kept \xB7 reopen at ' + data.private_link
+        : 'Draft generated \xB7 not stored \u2014 download or print it now';
       document.getElementById('result').scrollIntoView({behavior:'smooth'});
     }catch(err){
       status.className = 'status err';
@@ -1113,7 +1280,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       btn.disabled = false;
       btn.textContent = 'Draft Disclosure';
       const ib = document.getElementById('inventBtn');
-      if(ib){ ib.disabled = false; ib.textContent = '\u26A1 Invent Something'; }
+      if(ib){ ib.disabled = false; ib.textContent = '\u26A1 Try an example'; }
     }
   });
 
@@ -1137,7 +1304,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       status.className = 'status err';
       status.textContent = 'Error: ' + err.message;
       inventBtn.disabled = false;
-      inventBtn.textContent = '\u26A1 Invent Something';
+      inventBtn.textContent = '\u26A1 Try an example';
     }
   });
   loadStarters();
@@ -1150,7 +1317,16 @@ var qnfo_ipatent_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     let path = url.pathname;
-    if (path === "/ipatent" || path.startsWith("/ipatent/")) path = path.slice("/ipatent".length) || "/";
+    // CANONICAL-HOST-1 (3.5.0): qnfo.org/ipatent served a duplicate of the app (200, no canonical). Pages now 301 to
+    // the subdomain; the /ipatent/api/* paths keep answering so an already-open page still works.
+    if (path === "/ipatent" || path.startsWith("/ipatent/")) {
+      const rest = path.slice("/ipatent".length) || "/";
+      const isApi = rest.startsWith("/api/");
+      if (url.hostname !== "ipatent.qnfo.org" && !isApi && (request.method === "GET" || request.method === "HEAD")) {
+        return new Response(null, { status: 301, headers: { Location: CANONICAL_ORIGIN + rest + url.search } });
+      }
+      path = rest;
+    }
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS });
     }
@@ -1160,8 +1336,8 @@ var qnfo_ipatent_default = {
           status: "ok",
           worker: "qnfo-ipatent",
           version: VERSION,
-          capabilities: ["disclosure-drafting", "prior-art-search", "disclosures-list", "submission-view"],
-          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents"],
+          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide"],
+          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token"],
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
             r2: !!env.IPATENT_R2 ? "ipatent" : null,
@@ -1170,10 +1346,28 @@ var qnfo_ipatent_default = {
           }
         });
       }
-      if (path === "/" && request.method === "GET") return html(LANDING_HTML);
+      const isRead = request.method === "GET" || request.method === "HEAD";
+      if (path === "/" && isRead) return html(LANDING_HTML);
+      if ((path === "/guide" || path === "/guide/") && isRead) return html(GUIDE_HTML);
+      if (path === "/robots.txt" && isRead) {
+        return new Response("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /d/\nSitemap: " + CANONICAL_ORIGIN + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+      }
+      if (path === "/sitemap.xml" && isRead) {
+        const urls = ["/", "/guide"].map((p) => "<url><loc>" + CANONICAL_ORIGIN + p + "</loc><lastmod>" + GUIDE_UPDATED + "</lastmod></url>").join("");
+        return new Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls + "</urlset>", { headers: { "Content-Type": "application/xml; charset=utf-8" } });
+      }
+      if (path.startsWith("/d/") && isRead) {
+        const row = await env.IPATENT_DB.prepare("SELECT document_html, title FROM submissions WHERE submission_id = ?1").bind(path.slice(3)).first();
+        if (!row || row.title === "[private]" || !row.document_html) return new Response("Not found", { status: 404, headers: { "X-Robots-Tag": "noindex" } });
+        return new Response(row.document_html, { headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store" } });
+      }
       if (path === "/api/draft" && request.method === "POST") return handleDraft(request, env, ctx);
       if (path === "/api/search" && request.method === "GET") return handleSearch(env, url);
-      if (path === "/api/disclosures" && request.method === "GET") return handleDisclosures(env, url);
+      // DISCLOSURE-LIST-CLOSED-1 (3.5.0): listing inventors' submissions publicly is a pre-filing disclosure risk.
+      if (path === "/api/disclosures" && request.method === "GET") {
+        if (!adminOk(request, env)) return json({ error: "Not found" }, 404);
+        return handleDisclosures(env, url);
+      }
       if (path.startsWith("/api/submission/") && request.method === "GET") {
         const id = path.split("/api/submission/")[1];
         if (!id) return json({ error: "Missing submission ID" }, 400);
