@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.5-issue-planner"; // 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.6-codeagent"; // 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -137,6 +137,7 @@ const MAX_FILE_CHARS = 60000;
 // around a verbatim ANCHOR supplied with the task) and answers with exact SEARCH/REPLACE edits; the worker applies them to the
 // full file, bumps VERSION, mirrors the change to deployed-current.worker.js and stores a minimal hunk diff.
 const MAX_PATCH_FILE_CHARS = 900000; // base + ctx must stay inside one D1 row
+// PATCH-MODE-LIVE-1: patch mode first exercised on a deployed worker source on 2026-10-02 (code task ct_patchproof20261002).
 const WINDOW_CHARS = 24000;
 const PATCH_MIN_CHARS = 12000;
 const MAX_ANCHOR_CHARS = 300;
