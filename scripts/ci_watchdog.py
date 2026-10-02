@@ -283,7 +283,7 @@ def classify_structural(name: str, run: dict) -> tuple[str, str]:
             return "missing-module", "the workflow runs a module/suite that is not committed; land it or retire the workflow"
         return "comparator-regression", "the fail-closed comparator invariant regressed; do NOT relax rule 5"
     if name in ("deploy-drift", "indexnow-submit"):
-        return "external-runner", "driven by the watchdog because GitHub `schedule` never fires on this repo"
+        return "external-runner", "driven by the watchdog because GitHub `schedule` fires rarely and late on this repo"
     return "unknown", "inspect the job log"
 
 
@@ -666,7 +666,7 @@ def main() -> int:
                 (tracked).append((line, "workflow file removed; cannot re-run (retired)"))
                 continue
             body = (f"{f['evidence']}\n\n**Suggested fix:** {f.get('hint','inspect')}\n\n"
-                    f"Filed by `scripts/ci_watchdog.py` (event-driven; GitHub `schedule` has never fired on this repo).")
+                    f"Filed by `scripts/ci_watchdog.py` (event-driven; GitHub `schedule` fires rarely and late on this repo).")
             res = file_or_refresh(k, subj, body)
             (tracked if "FAILED" not in res else unactionable).append((line, res))
 

@@ -140,4 +140,5 @@ because each one was broken at least once; the linked issue holds the evidence.
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").
-- GitHub `schedule` triggers never fire on this repository; periodic work belongs in worker crons.
+- GitHub `schedule` triggers fire rarely and late on this repository (95 schedule runs in total by 2026-10-02; mirror-autosync
+  ran 9 times), so no periodic work may depend on one; periodic work belongs in worker crons.
