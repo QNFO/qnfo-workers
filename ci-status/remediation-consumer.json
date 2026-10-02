@@ -1,53 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@4c81b03604b2",
- "due": 5,
- "pass": 2,
- "fail": 2,
- "skipped": 1,
- "contracts": [
-  {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
-   "verdict": "fail",
-   "expected": "seven-days",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1730",
-   "issue_id": 1730,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "EVID-1649-BRIEF",
-   "issue_id": 1649,
-   "verdict": "pass",
-   "expected": "recorded",
-   "observed": "recorded",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "vacuous-probe-result",
-   "expected": "fixed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "research-terminal-ba0d6cdf",
-   "issue_id": 1844,
-   "verdict": "pass",
-   "expected": "parked+queue-moving",
-   "observed": "parked+queue-moving",
-   "written": true
-  }
- ],
+ "verifier": "remediation-consumer@5c2160fc21c6",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
+ "skipped": 0,
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -64,8 +23,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 12573,
- "head": "4c81b03604b20ce190a622b48534110043308d03",
+ "spent_ms": 2486,
+ "head": "5c2160fc21c6d7efa7cc4f26d8970bd5a929fe12",
  "job_status": "success",
- "ts": "2026-10-02T13:36:40Z"
+ "ts": "2026-10-02T14:08:08Z"
 }
