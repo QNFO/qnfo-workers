@@ -1,8 +1,18 @@
-# personal-api - Agentic Personal Twin (v3.0.4)
+# personal-api - Agentic Personal Twin (v4.2.0)
 
 Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-compatible).
 RAG + live-web + live-weather over the personal-life D1 + Vectorize archive, now with an
 AGENTIC TOOL LOOP. Never calls the QNFO records oracle (PERSONAL-QNFO-SEPARATION-1).
+
+## v4.2.0 (2026-10-02) - photos work, no tool-call text leaks (pillar: personal)
+- TWIN-VISION-1: image turns go to `VISION_MODELS` = glm-5.3-flash ($0.15/$0.50 per M) then kimi-k2.6. The old path
+  picked text-only glm-5.3 first, so the twin said "I cannot see this image" (personal-life.chat 2026-09-26 x6).
+  Image parts from OpenAI, Responses and Anthropic-style clients are normalised; only the last 2 image turns keep
+  pixels. The separate OCR call is removed from chat (it called an undefined function and an unprefixed gateway
+  model, so it never ran); image_to_calendar and POST /v1/media/:id use the binding-based `visionRun`.
+- TOOL-LEAK-1: XML `<invoke>` and `{"action":...}` tool calls are parsed; the final-answer call no longer carries
+  the tool protocol; every exit passes `finalizeText`, which replaces tool syntax or bare JSON with a plain summary
+  of what the tools did.
 
 ## v3.0.4 (2026-09-03) - harvest suppression
 When the calendar_add tool succeeds in a request, the legacy chat-harvest no longer writes

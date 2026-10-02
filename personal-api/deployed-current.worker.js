@@ -23,6 +23,12 @@ var BRIEF_MODELS = [
 var REASON_MODEL = "@cf/openai/gpt-oss-120b";
 var GW_COMPAT = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 var VISION_OCR_MODEL = "@cf/zai-org/glm-5.3-flash";
+// TWIN-VISION-1 (2026-10-02): image turns must go to a model that takes image input. The old image path filtered
+// CHAT_MODELS by "glm-5.3", which matched the TEXT-ONLY @cf/zai-org/glm-5.3 first, so the twin answered "I cannot see
+// this image" (personal-life.chat, 2026-09-26 x6, 2026-09-27). Cloudflare's catalog lists vision for glm-5.3-flash
+// ($0.15/$0.50 per M) and kimi-k2.6 ($0.95/$4.00 per M); deepseek-v4-pro and glm-5.3 have none. Cheapest first.
+var VISION_MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/moonshotai/kimi-k2.6"];
+var MAX_IMAGE_TURNS = 2;
 var MODEL_TIMEOUT_MS = 3e4;
 var EMBED_MODEL = "bge-base-en-v1.5";
 var MAX_EMBED_BATCH = 32;
@@ -39,7 +45,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.1.19-capability-contract";
+var VERSION = "4.2.0-vision-toolleak";
 // AIG-CALLER-METADATA-1 (2026-10-01, issue 1684): the AI Gateway 'default' logged 22,665 req/7d to provider deepseek
 // model 'deepseek-flash' (about 65x what any local log records) with no caller identity, because no request carried
 // cf-aig-metadata. Tag every gateway.ai.cloudflare.com request from this worker with {"worker": <name>} so gateway
@@ -311,37 +317,33 @@ async function fetchWxForLocation(lat, lon, tz) {
   }
 }
 __name(fetchWxForLocation, "fetchWxForLocation");
+// TWIN-VISION-1: OCR now runs through the Workers AI binding (no token). The old call posted to the AI Gateway compat
+// endpoint with model "@cf/..." and no "workers-ai/" provider prefix (qnfo-ai sends "workers-ai/" + id), authenticated
+// only by cf-aig-authorization, and its caller referenced an undefined extractImagesFromMessages, so it never ran.
+async function visionRun(env, content, maxTokens) {
+  const errors = [];
+  for (const model of VISION_MODELS) {
+    try {
+      const resp = await env.AI.run(model, { messages: [{ role: "user", content }], max_tokens: maxTokens || 2048, temperature: 0.2 }, { gateway: { id: "default" }, signal: AbortSignal.timeout(MODEL_TIMEOUT_MS) });
+      const text = parseResp(resp);
+      if (text) return { ok: true, model, text };
+      errors.push(model + ":empty");
+    } catch (e) {
+      errors.push(model + ":" + String(e && e.message || e).slice(0, 160));
+    }
+  }
+  return { ok: false, error: errors.join(" | ") };
+}
+__name(visionRun, "visionRun");
 async function ocrImage(env, b64, mime) {
   const dataUrl = "data:" + mime + ";base64," + b64;
-  try {
-    const resp = await fetch(GW_COMPAT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_TOKEN || "") },
-      body: JSON.stringify({
-        model: VISION_OCR_MODEL,
-        messages: [{ role: "user", content: [
-          { type: "text", text: 'Extract ALL visible text from this image. If it is an event poster or flyer, also extract: event title, date(s), time(s), venue/location, URL, ticket price. Format as JSON: {"text": "...", "event": {"title": ..., "date": ..., "time": ..., "venue": ..., "url": ..., "price": ...}} where event fields are null if not found. If not an event, set event to null. If it is a receipt, set event to null and add "receipt": {"merchant": ..., "amount": ..., "date": ..., "currency": ...}.' },
-          { type: "image_url", image_url: { url: dataUrl } }
-        ] }],
-        max_tokens: 2048
-      }),
-      signal: AbortSignal.timeout(2e4)
-    });
-    if (!resp.ok) return { ok: false, error: "vision model HTTP " + resp.status };
-    const j = await resp.json();
-    const content = String(j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || "").trim();
-    let parsed = null;
-    const m = content.match(/\{[\s\S]*\}/);
-    if (m) {
-      try {
-        parsed = JSON.parse(m[0]);
-      } catch (e) {
-      }
-    }
-    return { ok: true, raw_text: content, parsed };
-  } catch (e) {
-    return { ok: false, error: String(e && e.message || e).slice(0, 200) };
-  }
+  const r = await visionRun(env, [
+    { type: "text", text: 'Extract ALL visible text from this image. If it is an event poster or flyer, also extract: event title, date(s), time(s), venue/location, URL, ticket price. Format as JSON: {"text": "...", "event": {"title": ..., "date": ..., "time": ..., "venue": ..., "url": ..., "price": ...}} where event fields are null if not found. If not an event, set event to null. If it is a receipt, set event to null and add "receipt": {"merchant": ..., "amount": ..., "date": ..., "currency": ...}.' },
+    { type: "image_url", image_url: { url: dataUrl } }
+  ], 2048);
+  if (!r.ok) return { ok: false, error: "vision models failed: " + r.error };
+  const content = String(r.text || "").trim();
+  return { ok: true, raw_text: content, parsed: extractJsonObject(content, null), model: r.model };
 }
 __name(ocrImage, "ocrImage");
 async function imageToCalendar(env, args) {
@@ -963,9 +965,44 @@ function toolCallFromObj(obj) {
 __name(toolCallFromObj, "toolCallFromObj");
 __name2(toolCallFromObj, "toolCallFromObj");
 __name22(toolCallFromObj, "toolCallFromObj");
+// TOOL-LEAK-1 (2026-10-02): models also emit Anthropic-style XML (<invoke name="web_fetch"><parameter name="url">..)
+// and bare {"action":"search","query":..}. Both reached Rowan verbatim (personal-life.chat 2026-09-30T06:46Z,
+// 2026-09-30T06:35Z). They are now parsed as tool calls.
+function parseXmlToolCall(s) {
+  const m = /<invoke\s+name\s*=\s*["']([^"']+)["']\s*>([\s\S]*?)<\/invoke>/i.exec(String(s || ""));
+  if (!m || !TOOLS[m[1]]) return null;
+  const args = {};
+  const re = /<parameter\s+name\s*=\s*["']([^"']+)["']\s*>([\s\S]*?)<\/parameter>/gi;
+  let pm;
+  while ((pm = re.exec(m[2])) !== null) {
+    const raw = pm[2].trim();
+    let v = raw;
+    if (/^-?\d+(\.\d+)?$/.test(raw)) v = Number(raw);
+    else if (raw === "true" || raw === "false") v = raw === "true";
+    args[pm[1]] = v;
+  }
+  return { name: m[1], args };
+}
+__name(parseXmlToolCall, "parseXmlToolCall");
+var TOOL_ACTION_ALIASES = { search: "web_search", web_search: "web_search", fetch: "web_fetch", browse: "web_fetch" };
 function parseToolCall(text) {
   let s = String(text || "");
   if (!s) return null;
+  const xml = parseXmlToolCall(s);
+  if (xml) return xml;
+  try {
+    const t = s.trim();
+    if (t.charAt(0) === "{") {
+      const o = JSON.parse(t);
+      const an = o && typeof o.action === "string" ? TOOL_ACTION_ALIASES[o.action] || (TOOLS[o.action] ? o.action : null) : null;
+      if (an) {
+        const a = Object.assign({}, o.args || o.arguments || o);
+        delete a.action;
+        if (an === "web_search" && a.q == null && a.query != null) a.q = a.query;
+        return { name: an, args: a };
+      }
+    }
+  } catch (e) {}
   const open1 = "<|tool_call_begin|>";
   const close1 = "<|tool_call_end|>";
   const open2 = "<|tool_calls_section_begin|>";
@@ -1049,6 +1086,37 @@ function sanitizeToolArtifacts(text) {
 __name(sanitizeToolArtifacts, "sanitizeToolArtifacts");
 __name2(sanitizeToolArtifacts, "sanitizeToolArtifacts");
 __name22(sanitizeToolArtifacts, "sanitizeToolArtifacts");
+// TOOL-LEAK-1: the last line of defence. Whatever the model returns as a final answer, Rowan never sees tool-call
+// syntax or a bare JSON object; if nothing readable is left, he gets a plain summary of what the tools actually did.
+function looksLikeToolText(t) {
+  const x = String(t || "").trim();
+  if (!x) return true;
+  if (parseToolCall(x)) return true;
+  if (/<\/?(tool_calls?|invoke|function_calls)\b/i.test(x)) return true;
+  if (x.charAt(0) === "{" && x.charAt(x.length - 1) === "}") { try { JSON.parse(x); return true; } catch (e) {} }
+  return false;
+}
+__name(looksLikeToolText, "looksLikeToolText");
+function summarizeToolRounds(rounds) {
+  if (!rounds || !rounds.length) return "I could not produce an answer this time (the model returned only an unfinished action). Please ask again.";
+  const lines = ["Here is what I did:"];
+  for (const r of rounds) {
+    const res = r.result || {};
+    if (!res.ok) { lines.push("- " + r.name + " failed: " + String(res.error || "unknown error").slice(0, 200)); continue; }
+    const bits = [];
+    for (const k of ["title", "dtstart", "location", "count", "saved", "id", "duplicate", "note"]) if (res[k] != null && typeof res[k] !== "object") bits.push(k + " " + String(res[k]).slice(0, 120));
+    if (Array.isArray(res.events)) bits.push(res.events.slice(0, 8).map((e) => String(e.dtstart || "").slice(0, 16) + " " + (e.title || "")).join("; "));
+    if (Array.isArray(res.results)) bits.push(res.results.slice(0, 3).map((x) => (x.title || "") + " " + (x.url || "")).join("; "));
+    lines.push("- " + r.name + " ok" + (bits.length ? ": " + bits.join(", ") : ""));
+  }
+  return lines.join("\n");
+}
+__name(summarizeToolRounds, "summarizeToolRounds");
+function finalizeText(text, rounds) {
+  const t = sanitizeToolArtifacts(text);
+  return looksLikeToolText(t) ? summarizeToolRounds(rounds) : t;
+}
+__name(finalizeText, "finalizeText");
 async function runTool(env, name, args) {
   const t = TOOLS[name];
   if (!t) return { ok: false, error: "unknown tool: " + name };
@@ -1467,16 +1535,60 @@ async function personalMediaCapture(env, messages, meta) {
 __name(personalMediaCapture, "personalMediaCapture");
 __name2(personalMediaCapture, "personalMediaCapture");
 __name22(personalMediaCapture, "personalMediaCapture");
+// TWIN-VISION-1: one image shape for every client. DeepChat/Chatbox/OpenWebUI send OpenAI {type:"image_url"}; the
+// Responses API sends {type:"input_image", image_url}; Anthropic-style clients send {type:"image", source:{type:"base64"}}.
+// All become {type:"image_url", image_url:{url}}. Only the last MAX_IMAGE_TURNS user turns keep their pixels; older
+// images become a text marker so a long thread does not resend every photo on every tool round.
+function imagePartUrl(p) {
+  if (!p || typeof p !== "object") return null;
+  if (p.type === "image" && p.source && typeof p.source === "object") {
+    if (p.source.type === "base64" && p.source.data) return "data:" + (p.source.media_type || "image/jpeg") + ";base64," + p.source.data;
+    if (p.source.type === "url" && p.source.url) return String(p.source.url);
+  }
+  const iu = p.image_url;
+  if (typeof iu === "string" && iu) return iu;
+  if (iu && typeof iu === "object" && typeof iu.url === "string" && iu.url) return iu.url;
+  if ((p.type === "input_image" || p.type === "image") && typeof p.url === "string") return p.url;
+  return null;
+}
+__name(imagePartUrl, "imagePartUrl");
+function isImagePart(p) {
+  return !!(p && typeof p === "object" && (p.type === "image_url" || p.type === "input_image" || p.type === "image" || p.image_url));
+}
+__name(isImagePart, "isImagePart");
+function normalizeImageMessages(messages) {
+  if (!Array.isArray(messages)) return [];
+  const imgTurns = [];
+  messages.forEach((m, i) => { if (m && m.role === "user" && Array.isArray(m.content) && m.content.some(isImagePart)) imgTurns.push(i); });
+  const keep = new Set(imgTurns.slice(-MAX_IMAGE_TURNS));
+  return messages.map((m, i) => {
+    if (!m || !Array.isArray(m.content)) return m;
+    const parts = [];
+    for (const p of m.content) {
+      if (!p || typeof p !== "object") continue;
+      if (isImagePart(p)) {
+        const u = imagePartUrl(p);
+        if (u && keep.has(i) && /^(data:image\/|https?:\/\/)/i.test(u)) parts.push({ type: "image_url", image_url: { url: u } });
+        else parts.push({ type: "text", text: "[earlier image omitted]" });
+      } else if (typeof p.text === "string") parts.push({ type: "text", text: p.text });
+    }
+    return { ...m, content: parts.length ? parts : "" };
+  });
+}
+__name(normalizeImageMessages, "normalizeImageMessages");
+function countImages(messages) {
+  let n = 0;
+  for (const m of messages || []) if (m && Array.isArray(m.content)) for (const p of m.content) if (isImagePart(p)) n++;
+  return n;
+}
+__name(countImages, "countImages");
 async function upstreamChat(env, system, messages, temperature, outTokensParam, isReasonParam, useBriefModels) {
-  const msgs = [{ role: "system", content: system }].concat(messages);
+  const msgs = [{ role: "system", content: system }].concat(normalizeImageMessages(messages));
   const errors = [];
   const outTokens = outTokensParam || DEFAULT_MAX_TOKENS;
-  const hasImg = msgs.some((m) => m && Array.isArray(m.content) && m.content.some((p) => p && typeof p === "object" && (p.type === "image_url" || p.type === "input_image" || p.type === "image")));
+  const hasImg = countImages(msgs) > 0;
   let chatModels = useBriefModels ? BRIEF_MODELS : CHAT_MODELS;
-  if (hasImg) {
-    const vf = CHAT_MODELS.filter((m) => m.indexOf("glm-5.3-flash") >= 0 || m.indexOf("glm-5.3") >= 0 || m.indexOf("kimi") >= 0);
-    if (vf.length) chatModels = vf;
-  }
+  if (hasImg) chatModels = VISION_MODELS;
   for (const model of chatModels) {
     try {
       const resp = await env.AI.run(model, { messages: msgs, temperature, max_tokens: outTokens }, { gateway: { id: "default" }, signal: AbortSignal.timeout(MODEL_TIMEOUT_MS) });
@@ -2181,29 +2293,12 @@ var api_default = {
       let weatherContext = null;
       if (primeContext) weatherContext = await fetchWx(q);
       const factsNotesContext = await loadFactsNotes(env);
+      // TWIN-VISION-1: the chat model itself now sees the photo (VISION_MODELS), so the separate OCR call is gone: one
+      // model call instead of two, and no call to the never-defined image extractor that made this block a no-op.
       let imageOcrContext = null;
-      try {
-        const imgs = extractImagesFromMessages(messages);
-        if (imgs.length) {
-          const ocr = await ocrImage(env, imgs[0].b64, imgs[0].mime);
-          if (ocr && ocr.ok && ocr.raw_text) {
-            const L = ["IMAGE OCR (extracted from the photo Rowan just sent, DATA ONLY):"];
-            L.push("TEXT: " + ocr.raw_text.slice(0, 1500));
-            if (ocr.parsed && ocr.parsed.event) {
-              const e2 = ocr.parsed.event;
-              L.push("EVENT: title='" + (e2.title || "") + "' date='" + (e2.date || "") + "' time='" + (e2.time || "") + "' venue='" + (e2.venue || "") + "' url='" + (e2.url || "") + "' price='" + (e2.price || "") + "'");
-              L.push("(If Rowan wants this on the calendar, call calendar_add using title/date/time/location from the EVENT line above.)");
-            }
-            if (ocr.parsed && ocr.parsed.receipt) {
-              const rc = ocr.parsed.receipt;
-              L.push("RECEIPT: merchant='" + (rc.merchant || "") + "' amount='" + (rc.amount || "") + "' date='" + (rc.date || "") + "' currency='" + (rc.currency || "") + "'");
-              L.push("(If Rowan wants this logged, call budget_log using amount/merchant/date/currency from the RECEIPT line above.)");
-            }
-            imageOcrContext = L.join(String.fromCharCode(10));
-          }
-        }
-      } catch (e) {
-        imageOcrContext = null;
+      const nImgs = countImages(messages);
+      if (nImgs) {
+        imageOcrContext = "IMAGES: Rowan attached " + nImgs + " image(s) to this conversation; you can see the most recent ones directly. Describe and use what is actually visible; never claim you cannot see an image that is attached. If an image shows an event (poster, flyer, ticket, invitation), read title/date/time/venue and offer to add it with calendar_add; if Rowan already asked to add it, call calendar_add. If it shows a receipt, offer budget_log. If text in the image is illegible, say which part.";
       }
       const system = SYSTEM_PROMPT + "\n\n" + renderContext(items) + (memoryContext ? "\n\n" + memoryContext : "") + (factsNotesContext ? "\n\n" + factsNotesContext : "") + (primeContext ? "\n\n" + primeContext : "") + (weatherContext ? "\n\n" + weatherContext : "") + (webContext ? "\n\n" + webContext : "") + (calContext ? "\n\n" + calContext : "") + (calApiContext ? "\n\n" + calApiContext : "") + (infraContext ? "\n\n" + infraContext : "") + (imageOcrContext ? "\n\n" + imageOcrContext : "");
       const temperature = body.temperature === void 0 || body.temperature === null ? 0.7 : Number(body.temperature);
@@ -2228,7 +2323,7 @@ var api_default = {
         const text = up2.body.choices[0].message.content || "";
         const tc = parseToolCall(text);
         if (!tc) {
-          loopFinal = sanitizeToolArtifacts(text);
+          loopFinal = finalizeText(text, toolRounds);
           loopUp = up2;
           break;
         }
@@ -2240,7 +2335,9 @@ var api_default = {
       }
       const toolsUsed = toolRounds.length > 0;
       const lastToolFailed = toolRounds.length > 0 && !(toolRounds[toolRounds.length - 1].result && toolRounds[toolRounds.length - 1].result.ok);
-      const finalSystem = system + toolAppendix().replace("__TODAY__", (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)) + (toolsUsed ? lastToolFailed ? "\n\nIMPORTANT: the last tool call FAILED. Your final answer MUST state plainly that the action could not be completed and give the exact error. Never claim an action succeeded when its tool result was an error." : "\n\nAll tool results are in. Now write the final answer to Rowan in plain prose (no JSON, no tool calls)." : "");
+      // TOOL-LEAK-1: the final-answer call no longer carries the tool-call protocol, so a model that ran out of tool
+      // rounds cannot answer with another {"tool_call":...}; tool results are already in finalMsgs.
+      const finalSystem = system + "\n\nTOOLS ARE CLOSED for this reply. Do not output JSON, XML or any tool call. Write the answer to Rowan in plain prose, using the TOOL RESULT messages above as the record of what was done." + (toolsUsed ? lastToolFailed ? "\n\nIMPORTANT: the last tool call FAILED. Your final answer MUST state plainly that the action could not be completed and give the exact error. Never claim an action succeeded when its tool result was an error." : "\n\nAll tool results are in. Now write the final answer to Rowan in plain prose (no JSON, no tool calls)." : "");
       const finalMsgs = loopMessages;
       ctx.waitUntil(harvestIntent(env, q, messages, toolRounds.some((tr) => tr.name === "calendar_add" && tr.result && tr.result.ok)));
       if (body.stream) {
@@ -2254,7 +2351,7 @@ var api_default = {
           const upS = await upstreamChat(env, finalSystem, finalMsgs, temperature, clampMaxTokens(body && body.max_tokens, isReasonL), isReasonL);
           if (upS && upS.ok) _sText = upS.body.choices && upS.body.choices[0] && upS.body.choices[0].message && upS.body.choices[0].message.content || "";
         } catch (e) { _sText = ""; }
-        if (!_sText) _sText = "I could not generate a response right now. Please try again.";
+        _sText = finalizeText(_sText, toolRounds);
         ctx.waitUntil(logChat(env, q, _sText, thread, ua, "personal-twin-chat"));
         return sseText(_sText, "chatcmpl-" + Date.now());
       }
@@ -2274,13 +2371,14 @@ var api_default = {
       const choice = up.body.choices && up.body.choices[0] || {};
       const usage = up.body.usage || {};
       const elapsedMs = Date.now() - t0;
-      ctx.waitUntil(logChat(env, q, choice.message ? choice.message.content || "" : "", thread, request.headers.get("User-Agent") || "", up.model));
+      const finalText = finalizeText(choice.message ? choice.message.content || "" : "", toolRounds);
+      ctx.waitUntil(logChat(env, q, finalText, thread, request.headers.get("User-Agent") || "", up.model));
       return json({
         id: "chatcmpl-" + (await sha16(q + Date.now())).slice(0, 24),
         object: "chat.completion",
         created: Math.floor(Date.now() / 1e3),
         model: "personal-twin-chat",
-        choices: [{ index: 0, message: { role: "assistant", content: choice.message ? choice.message.content || "" : "" }, finish_reason: choice.finish_reason || "stop" }],
+        choices: [{ index: 0, message: { role: "assistant", content: finalText }, finish_reason: choice.finish_reason || "stop" }],
         usage: { prompt_tokens: usage.prompt_tokens || 0, completion_tokens: usage.completion_tokens || 0, total_tokens: usage.total_tokens || 0 },
         _meta: { model: up.model, elapsedMs, retrieved: items.length, degraded, toolsUsed: toolRounds.length },
         ...webSources ? { _web: { query: q.slice(0, 300), sources: webSources } } : {}
@@ -2606,26 +2704,16 @@ var api_default = {
       const obj = await env.MEDIA.get(row.key);
       if (!obj) return json({ error: { message: "object missing in R2", type: "invalid_request_error" } }, 404);
       const buf = await obj.arrayBuffer();
-      const b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
-      const dataUrl = "data:" + (row.mime || "image/png") + ";base64," + b64;
+      // TWIN-VISION-1: chunked base64 (apply() over a whole photo overflows the call stack) and the binding-based
+      // vision helper instead of the unprefixed AI Gateway compat call.
+      const u8 = new Uint8Array(buf);
+      let bin = "";
+      for (let i = 0; i < u8.length; i += 32768) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 32768));
+      const dataUrl = "data:" + (row.mime || "image/png") + ";base64," + btoa(bin);
       let text = "";
-      try {
-        const gw = await fetch(GW_COMPAT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + env.CF_TOKEN },
-          body: JSON.stringify({
-            model: VISION_OCR_MODEL,
-            messages: [{ role: "user", content: [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }] }],
-            max_tokens: 2048
-          })
-        });
-        if (gw.ok) {
-          const gj = await gw.json();
-          text = String(gj && gj.choices && gj.choices[0] && gj.choices[0].message && gj.choices[0].message.content || "").trim();
-        }
-      } catch (e) {
-        text = "";
-      }
+      const vr = await visionRun(env, [{ type: "text", text: "Transcribe ALL text visible in this image (posters, notes, handwriting if legible). If there is no text, describe the image in one sentence." }, { type: "image_url", image_url: { url: dataUrl } }], 2048);
+      if (vr.ok) text = String(vr.text || "").trim();
+      else return json({ ok: false, id, error: vr.error }, 502);
       await env.PERSONAL.prepare("UPDATE media_objects SET extracted_text = ?1, processed = 1 WHERE id = ?2").bind(text.slice(0, 8e3), id).run();
       return json({ ok: true, id, extracted_text: text.slice(0, 8e3) });
     }
