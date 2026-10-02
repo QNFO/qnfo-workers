@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.30.0-spend-gov";
+var VERSION = "5.30.1-fleet-ctl"; // 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2807,7 +2807,7 @@ $('#inp').addEventListener('keydown',function(e){if(e.key==='Enter')$('#send').c
 $('#sendIntent').onclick=function(){var txt=$('#expr').value.trim();if(!txt)return;var key=$('#key').value.trim();if(!key){$('#intentResult').textContent='API key required';return;}var btn=$('#sendIntent');btn.disabled=true;$('#intentResult').textContent='Expressing...';fetch('https://qnfo-intent-orchestrator.q08.workers.dev/intent?source=pwa&device=windows',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({desire:txt,source:'pwa'})}).then(function(r){return r.json();}).then(function(j){if(j.error){$('#intentResult').textContent='ERROR: '+j.error;return;}$('#intentResult').textContent='['+j.type+' | '+j.domain+'] '+j.summary+(j.status==='done'?' - stored in Vectorize':' - queued'+(j.due?' (due '+j.due+')':''));$('#expr').value='';}).catch(function(e){$('#intentResult').textContent='ERROR: '+String(e.message||e);}).finally(function(){btn.disabled=false;});};
 $('#key').addEventListener('input',function(){save(msgs);loadModels();});
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}
-<\/script></body></html>`;
+<\/script><script src="https://fleet.qnfo.org/ctl.js" defer><\/script></body></html>`;
 var TITLE = "QNFO Notes - research chat (qnfo-ai router)";
 var SHORT = "QNFO Notes";
 var MANIFEST = '{"name":"__TITLE__","short_name":"__SHORT__","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#0b57d0","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml"}]}';
