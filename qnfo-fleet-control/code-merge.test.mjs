@@ -213,12 +213,15 @@ const refuses = [
   ["an untrusted origin", task(), g({ provenance: { ok: false, why: "source issue #50 came from 'kaizen-ai'" } })],
   ["a failed required check", task(), g({ checks: green("h1", ["gate", "mirror-guard", "comparator"]).concat([{ id: 300, name: "guard", status: "completed", conclusion: "failure" }]) })],
   ["a failing commit status", task(), g({ status: { state: "failure", total_count: 1 } })],
-  ["a merge conflict", task(), g({ pr: prJson({ mergeable: false, mergeable_state: "dirty" }) })],
   ["content other than the verified patch", task(), g({ integrity: { ok: false, why: "qnfo-demo/worker.js at the PR head is not the verified patch" } })],
   ["a container worker", task(), g({ integrity: { ok: true, revertible: true, containers: true } })],
   ["a worker that cannot be auto-reverted", task(), g({ integrity: { ok: true, revertible: false, revert_why: "no single var VERSION" } })],
 ];
 for (const [label, t, gg] of refuses) ok(act(t, gg).action === "refuse", "refuse: " + label, act(t, gg));
+// STALE-BASE-REBUILD-1: a conflict is a rebuild, decided before the check gates (a conflicted PR never gets its checks)
+ok(act(task(), g({ pr: prJson({ mergeable: false, mergeable_state: "dirty" }) })).action === "rebuild", "rebuild: a merge conflict");
+ok(act(task(), g({ pr: prJson({ mergeable: false, mergeable_state: "dirty" }), checks: [] })).action === "rebuild", "rebuild: a merge conflict with no checks started (was: wait for checks that never come)");
+ok(act(task(), g({ pr: prJson({ mergeable: false, mergeable_state: "dirty" }), provenance: { ok: false, why: "source issue #50 came from 'kaizen-ai'" } })).action === "refuse", "an untrusted origin is still refused, not rebuilt");
 const waits = [
   ["a draft", g({ pr: prJson({ draft: true }) })],
   ["a required check still running", g({ checks: green("h1", ["gate", "mirror-guard", "comparator"]).concat([{ id: 301, name: "guard", status: "in_progress", conclusion: null }]) })],
@@ -426,6 +429,38 @@ ok(d2.status === "published" && d2.green_since === new Date(NOW).toISOString() &
 r = J(await W.codeMergeTick(env, { now: NOW + 36e5 }));
 ok(gh.merges.length === 2 && one("SELECT status FROM code_tasks WHERE id = 'ct_doc000000002'").status === "merged", "the next tick merges it");
 
+// STALE-BASE-REBUILD-1 end to end: a conflicted code-loop PR is closed, its branch deleted, its task re-queued from read
+{
+  freshDb(); freshGh();
+  const id = "ct_stale0000001", br = "codeagent-" + id.slice(3, 15), num = 430;
+  db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, pr_url, created_at, updated_at) VALUES (?, 'qnfo-workers', 'docs/x.md', 'doc', 'published', 'done', 1, ?, ?, ?, ?, ?)").run(id, JSON.stringify({ anchor: "near here", base: "old", patch: WHOLE }), br, "https://github.com/QNFO/qnfo-workers/pull/" + num, "2026-10-02T00:00:00Z", "2026-10-02T00:00:00Z");
+  gh.pulls[num] = prJson({ number: num, mergeable: false, mergeable_state: "dirty", head: { ref: br, sha: "s1", repo: { full_name: "QNFO/qnfo-workers" } } });
+  gh.files[num] = [{ filename: "docs/x.md", status: "modified" }];
+  const e2 = Object.assign({}, env, { CM_MERGEABLE_RETRY_MS: 0 });
+  let r3 = J(await W.codeMergeTick(e2, { now: NOW }));
+  let row = one("SELECT * FROM code_tasks WHERE id = '" + id + "'");
+  const succ = one("SELECT * FROM code_tasks WHERE id <> '" + id + "'");
+  ok(row.status === "closed" && /rebuild 1\/2 as ct_/.test(row.merge_note) && succ && succ.status === "queued" && succ.step === "read" && succ.attempts === 0 && succ.rebuilds === 1 && succ.pr_url === null && succ.branch === null && succ.goal === row.goal && succ.path === row.path && /^ct_[a-z0-9]{14}$/.test(succ.id) && JSON.parse(succ.ctx).anchor === "near here" && !JSON.parse(succ.ctx).patch, "rebuild: the old task closes and a successor is queued from read with only the anchor", { row, succ });
+  ok(gh.calls.includes("PATCH /pulls/" + num) && gh.calls.includes("DELETE /git/refs/heads/" + br) && gh.comments.some((c) => c.pr === num && /rebuilds the edit on current main/.test(c.body)) && gh.merges.length === 0, "rebuild: the stale PR is closed with a comment and its branch deleted, nothing merged", gh.calls.slice(-6));
+  // after two rebuilds a third conflict is refused for a person
+  db.prepare("UPDATE code_tasks SET status = 'published', step = 'done', rebuilds = 2, branch = ?, pr_url = ?, ctx = ? WHERE id = ?").run(br, "https://github.com/QNFO/qnfo-workers/pull/" + num, JSON.stringify({ anchor: "near here", patch: WHOLE }), id);
+  r3 = J(await W.codeMergeTick(e2, { now: NOW + 36e5 }));
+  row = one("SELECT * FROM code_tasks WHERE id = '" + id + "'");
+  ok(row.status === "needs_human" && /already rebuilt 2 times/.test(row.last_error || ""), "rebuild: bounded at two, then refused", row);
+  // mergeability null on the first read is re-read inside the tick
+  freshDb(); freshGh();
+  const id2 = "ct_lazy00000001", br2 = "codeagent-" + id2.slice(3, 15), num2 = 431;
+  db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, pr_url, created_at, updated_at) VALUES (?, 'qnfo-workers', 'docs/x.md', 'doc', 'published', 'done', 0, ?, ?, ?, ?, ?)").run(id2, JSON.stringify({ patch: WHOLE }), br2, "https://github.com/QNFO/qnfo-workers/pull/" + num2, "2026-10-02T00:00:00Z", "2026-10-02T00:00:00Z");
+  const lazy = prJson({ number: num2, mergeable: null, mergeable_state: "unknown", head: { ref: br2, sha: "z1", repo: { full_name: "QNFO/qnfo-workers" } } });
+  let reads = 0;
+  Object.defineProperty(gh.pulls, String(num2), { enumerable: true, configurable: true, get() { reads++; if (reads >= 2) { lazy.mergeable = true; lazy.mergeable_state = "clean"; } return lazy; } });
+  gh.files[num2] = [{ filename: "docs/x.md", status: "modified" }];
+  gh.checks["z1"] = green("z1", ["gate", "mirror-guard", "comparator"]);
+  gh.contents["base0:docs/x.md"] = "one\ntwo\n"; gh.contents["z1:docs/x.md"] = "one\ntwo\nthree\n";
+  r3 = J(await W.codeMergeTick(e2, { now: NOW }));
+  ok(gh.merges.length === 1 && one("SELECT status FROM code_tasks WHERE id = '" + id2 + "'").status === "merged", "lazy mergeability: a null first read is re-read in the same tick and the green PR merges", { merges: gh.merges.length, reads });
+  freshDb(); freshGh();
+}
 // MERGE-THROUGHPUT-1: the limit is an ops_config dial (clamped 1..5); both green doc PRs merge in one tick when it is 2
 {
   freshDb(); freshGh();

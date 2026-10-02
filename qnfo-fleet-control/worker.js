@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.104-reach-policy-no-form"; /* 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.105-stale-base-rebuild"; /* 0.4.105 STALE-BASE-REBUILD-1: a code-loop PR that conflicts with main is rebuilt on current main instead of parked; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3023,7 +3023,18 @@ var CM_MAX_CANDIDATES = 5;
 var CM_MAX_MERGES = 1;
 var CM_OK = ["success", "neutral", "skipped"];
 var CM_INFLIGHT = ["deploying", "deployed", "reverting"];
-var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"];
+var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT", "rebuilds INTEGER"];
+// STALE-BASE-REBUILD-1 (2026-10-02, agent_issues #1726). Measured 10:50Z: of nine open code-loop pull requests, PR 443, 471,
+// 472 and 473 were mergeable=false/dirty because main had moved the same worker (every worker edit rewrites the VERSION
+// line, so any two changes to one worker conflict), and autonomous_fixes_30d was 0. A conflicted pull request gets no
+// pull_request checks, so the runner waited on "no required check has started" for hours and then parked the task as
+// needs_human; and one hourly read of a pull request whose mergeability GitHub had not computed yet cost a whole tick.
+// Now: mergeability is re-read inside the tick, and a conflicted code-loop pull request is closed, its branch deleted
+// and its task re-queued from the read step (anchor kept), so the code loop rebuilds the edit on current main. At most
+// CM_MAX_REBUILDS times per task; after that it is refused as before.
+var CM_MAX_REBUILDS = 2;
+var CM_MERGEABLE_RETRIES = 2;
+var CM_MERGEABLE_RETRY_MS = 2500;
 var CM_VDECL = /^(?:var|const|let) VERSION = "/;
 function cmCtx(t) {
   try { return t && t.ctx ? JSON.parse(t.ctx) : {}; } catch (e) { return null; }
@@ -3250,6 +3261,7 @@ function cmDecide(t, g, nowMs) {
   if (tg) return tg;
   var sc = cmScope(String(t.path || "")), names = (g.files || []).map(function(f) { return f.filename; });
   if (pr.draft) return wait("the pull request is a draft");
+  if (pr.mergeable === false || pr.mergeable_state === "dirty") return { action: "rebuild", why: "the pull request conflicts with main (mergeable_state " + pr.mergeable_state + ")" };
   var req = cmRequired(names), ck = cmChecks(g.checks, g.status, req), sha7 = String(head.sha || "").slice(0, 7);
   if (ck.failed.length) return refuse("required check(s) failed on " + sha7 + ": " + ck.failed.join(", "));
   if (ck.status === "failure" || ck.status === "error") return refuse("the commit status on " + sha7 + " is " + ck.status);
@@ -3468,6 +3480,12 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
     var pr = await evApi(env, "GET", "/pulls/" + num);
     if (!pr.ok || !pr.j) { out.errors++; return { id: t.id, action: "error", why: "pull HTTP " + pr.status }; }
     g.pr = pr.j;
+    // GitHub computes mergeability lazily: the first read after main moved returns null, a read seconds later has it.
+    for (var mr = 0; mr < CM_MERGEABLE_RETRIES && g.pr && g.pr.state === "open" && !g.pr.merged && g.pr.mergeable == null; mr++) {
+      await new Promise(function(r) { setTimeout(r, env.CM_MERGEABLE_RETRY_MS != null ? Number(env.CM_MERGEABLE_RETRY_MS) : CM_MERGEABLE_RETRY_MS); });
+      var pr2 = await evApi(env, "GET", "/pulls/" + num);
+      if (pr2.ok && pr2.j) { pr = pr2; g.pr = pr2.j; }
+    }
     if (!pr.j.merged && pr.j.state === "open" && pr.j.head && pr.j.head.sha) {
       var head = pr.j.head.sha;
       var fl = await evApi(env, "GET", "/pulls/" + num + "/files?per_page=100");
@@ -3483,6 +3501,28 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
     if (d.action === "need-integrity") {
       g.integrity = await cmIntegrity(env, t, g.pr.head.sha, g.files.map(function(f) { return f.filename; }), cmScope(t.path));
       d = cmDecide(t, g, cx.now);
+    }
+  }
+  if (d.action === "rebuild") {
+    var nRe = Number(t.rebuilds || 0);
+    if (nRe >= CM_MAX_REBUILDS) d = cmRefuse(d.why + "; already rebuilt " + nRe + " times on a newer main");
+    else {
+      var keep = null;
+      try { var cj = JSON.parse(t.ctx || "{}"); if (cj && cj.anchor) keep = JSON.stringify({ anchor: cj.anchor }); } catch (e) {}
+      // The rebuilt edit needs a NEW task id: the branch name is derived from the id, and both the publish script and
+      // the PR opener adopt any pull request (open or closed) that already exists for a branch, so reusing the id would
+      // attach the rebuild to the closed pull request. The old task is closed and names its successor.
+      var nid = "ct_" + (Math.random().toString(36).slice(2, 12) + "0000000000").slice(0, 10) + Date.now().toString(36).slice(-4);
+      var rb = await cmSave(env, cx, t.id, { status: "closed", last_error: null, green_since: null, merge_note: ("rebuild " + (nRe + 1) + "/" + CM_MAX_REBUILDS + " as " + nid + ": " + d.why).slice(0, 500), merge_checked_at: cx.iso }, { touch: true, ifStatus: t.status });
+      if (rb) {
+        await env.AUDIT.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, created_at, updated_at, rebuilds, merge_note) VALUES (?1, ?2, ?3, ?4, 'queued', 'read', 0, ?5, ?6, ?6, ?7, ?8)")
+          .bind(nid, t.repo, t.path, t.goal, keep, cx.iso, nRe + 1, "rebuild of " + t.id + " on current main").run();
+        await evApi(env, "POST", "/issues/" + num + "/comments", { body: "CODE-TASK-MERGE-RUNNER-1 (qnfo-fleet-control) closed this pull request: " + d.why + ". The code loop rebuilds the edit on current main as code task `" + nid + "` (rebuild " + (nRe + 1) + " of " + CM_MAX_REBUILDS + ")." });
+        await evApi(env, "PATCH", "/pulls/" + num, { state: "closed" });
+        if (t.branch && /^codeagent-/.test(t.branch)) await evApi(env, "DELETE", "/git/refs/heads/" + t.branch);
+        await cmEvent(env, cx, "rebuild", t, t.pr_url + " -> " + nid + ": " + d.why, "ok");
+      }
+      return { id: t.id, pr: num, action: "rebuild", why: d.why };
     }
   }
   var res = { id: t.id, pr: num, action: d.action, why: d.why };
