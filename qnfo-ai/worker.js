@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.30.1-fleet-ctl"; // 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.30.2-codeagent"; // 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3447,7 +3447,8 @@ var worker_default = {
 var AI_ATTR_DB_BINDINGS = ["AUDIT_DB","AUDIT","DB_AUDIT","QNFO_AUDIT"];
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
   var t0 = Date.now(), ok = 1, res;
-  try { res = await env.AI.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+    var gwOpts = opts || { gateway: String(purpose).indexOf("embed") === 0 ? { id: "default", cacheTtl: 86400 } : { id: "default", skipCache: true } };
+  try { try { res = await env.AI.run(model, input, gwOpts); } catch (eg) { if (opts) throw eg; res = await env.AI.run(model, input); } return res; } catch (e) { ok = 0; throw e; }
   finally {
     // SPEND-GOVERNOR-1: price every binding call into ai_spend_ledger (fail-soft, not awaited).
     try {
