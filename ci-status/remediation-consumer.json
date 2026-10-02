@@ -1,21 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@d108c7666ece",
- "due": 1,
- "pass": 1,
+ "verifier": "remediation-consumer@3c9e9f95a8ed",
+ "due": 0,
+ "pass": 0,
  "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "EVID-C6-CONFORMANCE",
-   "issue_id": 1735,
-   "verdict": "pass",
-   "expected": "conforming>=40",
-   "observed": "conforming>=40",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -32,7 +23,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 3527,
- "head": "d108c7666ece93074f0c6530c112cc92bcd802dd",
+ "spent_ms": 2930,
+ "head": "3c9e9f95a8ed3d48f5128e6f67f439d0e2e8ffcf",
  "job_status": "success"
 }
