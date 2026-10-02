@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 06:47:58",
+  "audited_at": "2026-10-02 06:53:42",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.1-capability-contract",
+        "version": "0.3.2-hunk-no-eol",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.1-capability-contract",
+      "before": "0.3.2-hunk-no-eol",
       "http": 200,
-      "live": "0.3.1-capability-contract",
+      "live": "0.3.2-hunk-no-eol",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
