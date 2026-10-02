@@ -1,21 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@6bd7a47cde6e",
- "due": 1,
+ "verifier": "remediation-consumer@074e14000f81",
+ "due": 0,
  "pass": 0,
- "fail": 1,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "fail",
-   "expected": "fixed",
-   "observed": "awaiting-image-traffic",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -32,7 +23,7 @@
   "external-https",
   "http"
  ],
- "spent_ms": 4082,
- "head": "6bd7a47cde6e3c66361e1f76d59abf1410ddf3b4",
+ "spent_ms": 1738,
+ "head": "074e14000f81e09ff2cc377db9d2fb6f87d7d526",
  "job_status": "success"
 }
