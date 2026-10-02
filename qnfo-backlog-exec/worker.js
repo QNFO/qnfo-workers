@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.2-capability-contract";
+var VERSION = "2.0.3-codeagent";
 var WORKER = "qnfo-backlog-exec";
 var MAX_ROW = 40;
 var PROBE_TIMEOUT = 8e3;
@@ -326,7 +326,8 @@ async function run(env) {
       if (ageMs > 24 * 3600 * 1e3) {
         let rec = 0;
         try {
-          const ar = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM alerts WHERE source='qnfo-error-selfheal' AND message LIKE ?1 AND julianday(created_at) >= julianday('now', '-24 hours')").bind("%" + name + "%").first();
+          const ar = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM worker_usage_daily WHERE worker_name = ?1 AND error_count > 0 AND date >= date('now', '-24 hours')").bind(name).first();
+if (!ar) ar = await env.AUDIT.prepare("SELECT COUNT(*) AS c FROM worker_logs WHERE worker_name = ?1 AND log_level = 'error' AND timestamp >= datetime('now', '-24 hours')").bind(name).first();
           rec = ar ? Number(ar.c || 0) : 0;
         } catch (e) {
         }
