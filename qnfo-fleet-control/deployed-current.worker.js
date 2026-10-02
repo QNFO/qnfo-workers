@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.104-reach-policy-no-form"; /* 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.105-evolve-json"; /* 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2726,11 +2726,59 @@ function evAiText(r) {
   return typeof r === "string" ? r : "";
 }
 __name(evAiText, "evAiText");
+// ---- EVOLVE-JSON-1:BEGIN (pure; replayed by evolve-json.test.mjs)
+// EVOLVE-JSON-1 (2026-10-02): the first EVOLVE-PR-1 candidate after AUTOTRIAGE-OWNER-ROUTE-1 (evolve_candidates 117,
+// issue 1753) ended "no usable JSON" and nothing recorded what the model had said. The reply is code inside a JSON
+// string, and models write that code with real line breaks and tabs, which JSON.parse refuses. evParseJson takes the
+// first balanced object (ignoring code fences and prose around it) and, if it does not parse, escapes the control
+// characters that sit inside string literals and tries once more. It never invents a field: an object that still does
+// not parse is null.
+function evFirstObject(t) {
+  var s = String(t || ""), a = s.indexOf("{");
+  if (a < 0) return null;
+  var depth = 0, inStr = false, esc = false;
+  for (var i = a; i < s.length; i++) {
+    var c = s[i];
+    if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true;
+    else if (c === "{") depth++;
+    else if (c === "}") { depth--; if (depth === 0) return s.slice(a, i + 1); }
+  }
+  return null;
+}
+function evEscapeControlsInStrings(s) {
+  var out = "", inStr = false, esc = false;
+  for (var i = 0; i < s.length; i++) {
+    var c = s[i], code = s.charCodeAt(i);
+    if (inStr) {
+      if (esc) { esc = false; out += c; continue; }
+      if (c === "\\") { esc = true; out += c; continue; }
+      if (c === '"') { inStr = false; out += c; continue; }
+      if (code < 32) { out += c === "\n" ? "\\n" : c === "\r" ? "\\r" : c === "\t" ? "\\t" : "\\u" + ("000" + code.toString(16)).slice(-4); continue; }
+      out += c;
+    } else { if (c === '"') inStr = true; out += c; }
+  }
+  return out;
+}
+function evParseJson(t) {
+  var o = evFirstObject(t);
+  if (!o) return null;
+  try { return JSON.parse(o); } catch (e) {}
+  try { return JSON.parse(evEscapeControlsInStrings(o)); } catch (e2) { return null; }
+}
+// ---- EVOLVE-JSON-1:END
+// The head of the last model reply that gave no object, so a model-skip row says what came back.
+var EV_LAST_RAW = "";
 async function evModelJson(env, model, system, user) {
   var r = await aiRunAttr(env, "qnfo-fleet-control", "patch-gen", model, { messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: 2500, temperature: 0.1 });
-  var t = evAiText(r), m = t.match(/\{[\s\S]*\}/);
-  if (!m) return null;
-  try { return JSON.parse(m[0]); } catch (e) { return null; }
+  var t = evAiText(r), p = evParseJson(t);
+  if (!p) {
+    var msg = r && r.choices && r.choices[0] && r.choices[0].message || {};
+    var why = r && r.choices && r.choices[0] && r.choices[0].finish_reason || "";
+    if (!t && msg.reasoning_content) p = evParseJson(msg.reasoning_content);
+    if (!p) EV_LAST_RAW = (t ? "reply " + t.length + " chars" : "empty reply") + (why ? ", finish " + why : "") + (t ? ": " + t.replace(/\s+/g, " ").slice(0, 160) : "");
+  }
+  return p;
 }
 __name(evModelJson, "evModelJson");
 function evDefs(content, text, max) {
@@ -2829,7 +2877,7 @@ async function evPropose(env) {
     var sys = "You are a careful senior engineer making the smallest correct fix to a Cloudflare Worker (JavaScript module). Output strict JSON only: {\"anchor\": \"<exact contiguous text copied verbatim from the EXCERPT, at least 40 characters, occurring once>\", \"replacement\": \"<text that replaces the anchor>\", \"rationale\": \"<=200 chars\", \"confidence\": 0-1}. Never touch the VERSION line. If the excerpt does not contain the code that must change, output {\"skip\": \"<reason>\"}.";
     var user = "ISSUE #" + iss.id + ": " + iss.title + "\n" + iss.d + "\n\nEXCERPT of " + worker + "/worker.js:\n" + excerpt;
     var p = await evModelJson(env, model, sys, user).catch(function() { return null; });
-    if (!p || p.skip || !p.anchor || p.replacement == null) { await evSet(env, cid, "model-skip", p && p.skip ? String(p.skip) : "no usable JSON from " + model); return { ok: true, cid: cid, status: "model-skip" }; }
+    if (!p || p.skip || !p.anchor || p.replacement == null) { await evSet(env, cid, "model-skip", p && p.skip ? String(p.skip) : ("no usable JSON from " + model + (EV_LAST_RAW ? " (" + EV_LAST_RAW + ")" : "")).slice(0, 400)); EV_LAST_RAW = ""; return { ok: true, cid: cid, status: "model-skip" }; }
     var anchor = String(p.anchor), repl = String(p.replacement), why = null;
     if (anchor.length < 40) why = "anchor shorter than 40 chars";
     else if (content.split(anchor).length !== 2) why = "anchor occurs " + (content.split(anchor).length - 1) + " times";
