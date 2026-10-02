@@ -14981,7 +14981,7 @@ function renderFullHTML(md, opts) {
 __name(renderFullHTML, "renderFullHTML");
 
 // worker.js
-var VERSION = "1.0.1-render-internal";
+var VERSION = "1.0.2-utf8-redeploy"; // UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

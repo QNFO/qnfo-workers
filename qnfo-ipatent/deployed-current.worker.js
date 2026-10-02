@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.8.0-subscribe-llms"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.8.1-utf8-redeploy"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
