@@ -39,7 +39,7 @@ ORIGIN_HEALTH = "https://qnfo.org/health"
 MIN_VERSION = (3, 9)  # 3.9.0-qds is the first gateway that renders these hosts (3.8.x would serve its default page)
 # (zone, hostname). www.qwav.tech is left out: a zone redirect rule already sends it to qwav.tech.
 HOSTS = [("qnfo.org", "archive.qnfo.org"), ("qwav.org", "qwav.org"), ("qwav.org", "www.qwav.org"), ("qwav.tech", "qwav.tech")]
-UA = "qnfo-ops-surface-routes/1.1"
+UA = "qnfo-ops-surface-routes/1.2"
 # SURFACE-ROUTES-PROXY-1 (2026-10-02): qwav.org and www.qwav.org are DNS-only CNAMEs to qwav.pages.dev, so a zone route never
 # runs on them (first run: "no proxied DNS record"). For these hosts only, a single CNAME to *.pages.dev is switched to
 # proxied (Cloudflare serves the Pages site exactly as before until the route takes over), and switched back if the
@@ -136,8 +136,11 @@ def attach(zone_name, host, zones):
             return True
     st, j = req("GET", "/zones/%s/dns_records?name=%s" % (zone, host))
     recs = (j.get("result") or []) if st == 200 else []
-    if not any(x.get("proxied") for x in recs) and host in PROXY_ALLOWED and len(recs) == 1 and recs[0].get("type") == "CNAME" \
-            and str(recs[0].get("content", "")).endswith(".pages.dev"):
+    # Only address records decide whether traffic is proxied; a TXT or MX on the same name does not (qwav.org has one).
+    addr = [x for x in recs if x.get("type") in ("CNAME", "A", "AAAA")]
+    if not any(x.get("proxied") for x in addr) and host in PROXY_ALLOWED and len(addr) == 1 and addr[0].get("type") == "CNAME" \
+            and str(addr[0].get("content", "")).endswith(".pages.dev"):
+        recs = addr
         rid = recs[0].get("id")
         st, pj = req("PATCH", "/zones/%s/dns_records/%s" % (zone, rid), {"proxied": True})
         if st == 200 and pj.get("success"):
@@ -149,7 +152,7 @@ def attach(zone_name, host, zones):
             h.update(status="failed", detail="could not proxy the DNS record http=%s body=%s" % (st, json.dumps(pj)[:300]))
             return False
     if not any(x.get("proxied") for x in recs):
-        h.update(status="failed", detail="no proxied DNS record; a route would be inert (records: %s)" % json.dumps(recs)[:300])
+        h.update(status="failed", detail="no proxied DNS record; a route would be inert (records: %s)" % json.dumps([{k: x.get(k) for k in ("type", "content", "proxied")} for x in recs])[:300])
         return False
     st, j = req("POST", "/zones/%s/workers/routes" % zone, {"pattern": host + "/*", "script": SERVICE})
     if st not in (200, 201) or not j.get("success"):
