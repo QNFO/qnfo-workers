@@ -515,11 +515,18 @@ def paper_body_from_zenodo(acct: str, token: str, target: str) -> int:
     if not (ok and ok2):
         emit({"action": "paper-body-from-zenodo", "ok": False, "error": "backup failed", "detail": [r1, r2]})
         return 1
-    ok3, r3 = d1q(acct, token, "UPDATE papers SET body_md = ?1 WHERE slug = ?2", [text, slug])
+    # The D1 query API refused a single 53 KB parameter (phase-1, run 37012985309), so the body is written in 16 000-character
+    # pieces: the first replaces the body, the rest are appended; the read-back hash below proves the whole.
+    chunks = [text[i:i + 16000] for i in range(0, len(text), 16000)]
+    ok3, r3 = d1q(acct, token, "UPDATE papers SET body_md = ?1 WHERE slug = ?2", [chunks[0], slug])
+    for c in chunks[1:]:
+        if not ok3:
+            break
+        ok3, r3 = d1q(acct, token, "UPDATE papers SET body_md = body_md || ?1 WHERE slug = ?2", [c, slug])
     ok4, back = d1q(acct, token, "SELECT body_md FROM papers WHERE slug = ?1", [slug])
     want = hashlib.sha256(text.encode()).hexdigest()
     got = hashlib.sha256((back[0].get("body_md") or "").encode()).hexdigest() if ok4 and back else ""
-    emit({"action": "paper-body-from-zenodo", "ok": ok3 and want == got, "slug": slug, "record": rid, "file": key, "old_len": rows[0].get("n"), "new_len": len(text), "sha256": want, "read_back_match": want == got})
+    emit({"action": "paper-body-from-zenodo", "ok": ok3 and want == got, "slug": slug, "record": rid, "file": key, "old_len": rows[0].get("n"), "new_len": len(text), "sha256": want, "read_back_match": want == got, "write_error": None if ok3 else str(r3)[:300]})
     return 0 if (ok3 and want == got) else 1
 
 
