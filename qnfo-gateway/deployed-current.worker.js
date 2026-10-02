@@ -1,4 +1,4 @@
-var VERSION="3.7.27-work-with-me";
+var VERSION="3.7.28-fleet-ctl";
 // WORK-WITH-ME-1 (3.7.27, 2026-10-02, pillar reach): qnfo.org/work-with-me, the offers and a tagged mailto per offer;
 // linked from the home page, /about, the sitemap and llms.txt. /contact redirects to it.
 // ORG-LABEL-1 (2026-10-01, docs/STRATEGY.md s2.1): there is no legal entity and the work is one researcher with an
@@ -2031,8 +2031,25 @@ async function handleUnsubscribeProxy(request, env) {
 }
 __name(handleUnsubscribeProxy, "handleUnsubscribeProxy");
 __name2(handleUnsubscribeProxy, "handleUnsubscribeProxy");
+// FLEET-CTL-ROLLOUT-1 (2026-10-02, owner request, agent_issues 1757): every HTML page this worker serves (qnfo.org,
+// papers.qnfo.org, legal.qnfo.org, ...) gets the discreet fleet command-line link, appended at the end of <body> by
+// HTMLRewriter so every page, present and future, carries it without editing each template. Non-HTML responses (PDF, JSON,
+// XML, feeds) pass through untouched. The link itself is https://fleet.qnfo.org/ctl.js (qnfo-fleet-dashboard FLEET-CMD-1).
+var FLEET_CTL_TAG = '<script src="https://fleet.qnfo.org/ctl.js" defer></script>';
+function withFleetCtl(res) {
+  try {
+    const ct = res && res.headers && res.headers.get("Content-Type") || "";
+    if (!res || res.status !== 200 || ct.indexOf("text/html") !== 0 || typeof HTMLRewriter === "undefined") return res;
+    return new HTMLRewriter().on("body", { element(el) { el.append(FLEET_CTL_TAG, { html: true }); } }).transform(res);
+  } catch (e) {
+    return res;
+  }
+}
 var gateway_worker_default = {
   async fetch(request, env) {
+    return withFleetCtl(await gateway_worker_default.serve(request, env));
+  },
+  async serve(request, env) {
     const u = new URL(request.url);
     const p = u.pathname.replace(/\/+$/, "") || "/";
     const origin = request.headers.get("Origin") || "https://qnfo.org";
