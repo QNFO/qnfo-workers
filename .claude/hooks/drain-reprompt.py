@@ -9,6 +9,10 @@ FIX-IN-OPEN-PR-1 (2026-10-02): an item whose fix already sits in an open PR wait
 so it is not re-prompted: an issue whose number an open PR's title or body cites (#N), and a DRIFT row whose
 repo-ahead worker directory an open PR touches. Without this a session was re-prompted 16 times for #451/#452 and
 autoaudit #52 while their fix (PR #453) only waited on the owner's merge.
+LIVE-RECHECK-1 (2026-10-02): the audit table is a reading taken up to ~10 minutes before the issue is rewritten, so a
+repo-ahead row whose deploy landed after that reading kept re-prompting (qnfo-ipatent 3.9.2: deployed 11:15:32Z, issue
+written 11:16:25Z still said live 3.9.1, three rounds). A repo-ahead row whose worker's /health now reports the repo
+version is a stale reading, not open work.
 Fails open: any error -> exit 0.
 """
 import glob, json, os, re, sys, urllib.request
@@ -73,6 +77,14 @@ def issues():
         out.append(f"#{i['number']} {i['title']}")
     return out
 
+def live_version(worker):
+    """LIVE-RECHECK-1: the version a worker's workers.dev /health reports now; None when it cannot be read."""
+    try:
+        req = urllib.request.Request(f"https://{worker}.q08.workers.dev/health", headers={"User-Agent": "qnfo-drain-hook"})
+        return str(json.load(urllib.request.urlopen(req, timeout=6)).get("version") or "") or None
+    except Exception:
+        return None
+
 def live_audit():
     """Class table of the live fleet-autoaudit issue; None if unavailable (artifact file lags it)."""
     tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
@@ -84,14 +96,16 @@ def live_audit():
     if not rows:
         return None
     body = rows[0].get("body") or ""
-    # Repo-ahead rows read "- `worker` (dir `dir`) repo `x` > live `y`": a DRIFT whose every repo-ahead dir is touched by
-    # an open PR waits on that PR's merge and deploy.
-    ahead = re.findall(r"\(dir `([^`]+)`\)", body.split("## Repo-ahead", 1)[1]) if "## Repo-ahead" in body else []
+    # Repo-ahead rows read "- `worker` (dir `dir`) repo `x` > live `y`": a DRIFT whose every repo-ahead row either has
+    # its dir touched by an open PR (waits on that PR's merge and deploy) or is already live (LIVE-RECHECK-1) is not open.
+    tail = body.split("## Repo-ahead", 1)[1] if "## Repo-ahead" in body else ""
+    ahead = re.findall(r"- `([^`]+)` \(dir `([^`]+)`\) repo `([^`]+)`", tail)
     out = []
     for line in body.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) == 2 and cells[0] in BAD and cells[1].isdigit() and int(cells[1]) > 0:
-            if cells[0] == "DRIFT" and ahead and int(cells[1]) <= len(ahead) and all(fixed_by_open_pr(worker_dirs=[d]) for d in ahead):
+            if cells[0] == "DRIFT" and ahead and int(cells[1]) <= len(ahead) and all(
+                    fixed_by_open_pr(worker_dirs=[d]) or live_version(w) == v for w, d, v in ahead):
                 continue
             out.append(f"autoaudit #{rows[0]['number']}: {cells[1]} x {cells[0]}")
     return out
