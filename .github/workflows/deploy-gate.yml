@@ -128,3 +128,9 @@ jobs:
       # q08-signal-engine reads (Q08-CADENCE-CAP-1); a deferral never satisfies the remediation probe.
       - name: Q08-REVIEW-2026-10-31 offline suite (qnfo-fleet-dashboard + q08-signal-engine)
         run: node qnfo-fleet-dashboard/q08-review.test.mjs
+
+      # SAI-COMPOSITE-WEIGHTS-1 (#1739): survival_state.sai and the charter's Autonomy composite are the owner-weighted SAI.
+      # The suite locks the scorer's SAI formula to the dashboard's computeSai (parity on a live fixture and 400 random
+      # inputs), proves a sai_config weight change moves the SAI, and replays the DoD against an in-memory SQLite D1.
+      - name: SAI-COMPOSITE-WEIGHTS-1 offline suite (qnfo-autonomy-scorer, parity with qnfo-fleet-dashboard)
+        run: node --test qnfo-autonomy-scorer/sai.test.mjs

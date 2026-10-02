@@ -1032,7 +1032,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.83-capability-contract";
+var VERSION = "0.4.84-charter-sai-composite";
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -2924,7 +2924,7 @@ __name(activitySnapshotDaily, "activitySnapshotDaily");
 //              GitHub Contents API (the same GITHUB_TOKEN write path LAND-CODE-FIX-1 proved), at most once per UTC day
 //              and only when the block changed. A doc without both markers is never written (nothing to anchor to).
 // The pure functions take no env and touch no I/O, so qnfo-fleet-control/charter.test.mjs exercises them offline.
-var CHARTER_VERSION = "1.0.4";
+var CHARTER_VERSION = "1.0.5";
 // CHARTER-ON-CLOUDFLARE-1 (#1727, owner directive 2026-10-01: all data on Cloudflare): every tick also writes the
 // whole charter (hand-written sections + the live block) to R2 qnfo-canonical under this key, so the document is
 // readable from Cloudflare storage (GET /charter/full.md) when GitHub or any agent session is not.
@@ -3084,12 +3084,19 @@ function charterEvaluate(f, nowIso) {
   // 5. issues
   var issues = allIssues;
   var highIssues = issues.filter(function(i) { return i.priority === "high" || i.priority === "critical"; });
-  // 6. autonomy
+  // 6. autonomy. SAI-COMPOSITE-WEIGHTS-1 (1.0.5, issue 1739): the "Autonomy composite" is the owner-weighted SAI
+  // (sai_config w_* x the eight objective-function terms, 0-5 = SAI/20), which qnfo-autonomy-scorer publishes as the
+  // sai_weighted row and survival_state.sai. The unweighted mean of the dimensions (the overall row) is reported
+  // beside it as the dimension mean; a ratified weight revision moves the first and never the second.
   var dims = f.autonomy_scores || [];
-  var composite = null;
-  dims.forEach(function(d) { if (d.dimension === "overall") composite = charterNum(d.score); });
-  var weakDims = dims.filter(function(d) { return charterNum(d.score) !== null && charterNum(d.score) < 3 && d.dimension !== "overall"; });
-  var strongDims = dims.filter(function(d) { return charterNum(d.score) !== null && charterNum(d.score) >= 4.5 && d.dimension !== "overall"; });
+  var composite = null, compositeAt = null, dimMean = null;
+  dims.forEach(function(d) {
+    if (d.dimension === "sai_weighted") { composite = charterNum(d.score); compositeAt = d.scored_at || null; }
+    if (d.dimension === "overall") dimMean = charterNum(d.score);
+  });
+  var derivedDim = function(d) { return d.dimension === "overall" || d.dimension === "sai_weighted"; };
+  var weakDims = dims.filter(function(d) { return charterNum(d.score) !== null && charterNum(d.score) < 3 && !derivedDim(d); });
+  var strongDims = dims.filter(function(d) { return charterNum(d.score) !== null && charterNum(d.score) >= 4.5 && !derivedDim(d); });
   // 7. review gate (the 2026-12-31 gate from docs/STRATEGY.md s9, as recorded in impact_thresholds)
   var gate = null;
   (f.impact_thresholds || []).forEach(function(r) { if (r.metric === "review_gate_2026_12_31") gate = { state: r.state, due: r.due, baseline: r.baseline, description: r.description }; });
@@ -3117,7 +3124,7 @@ function charterEvaluate(f, nowIso) {
   var healthVals = pillars.filter(function(p) { return p.health !== null; }).map(function(p) { return p.health; });
   var health = healthVals.length ? charterRound(healthVals.reduce(function(a, b) { return a + b; }, 0) / healthVals.length) : null;
   return {
-    charter_version: CHARTER_VERSION, ts: now, health: health, composite_autonomy: composite,
+    charter_version: CHARTER_VERSION, ts: now, health: health, composite_autonomy: composite, composite_autonomy_at: compositeAt, autonomy_dimension_mean: dimMean,
     pillars: pillars, metrics: metrics, mvp: mvp, mvp_up: mvpUp, budget_over: over,
     roadmap: roadmap, horizons: horizons, open_issues: issues.length, high_issues: highIssues.length, security_issues: secIssues.length,
     review_gate: gate, objectives: f.objectives || [], survival: f.survival || null, shutdown: f.shutdown_manifest || [],
@@ -3142,7 +3149,8 @@ function charterRender(ev) {
   L.push("| Signal | Value |");
   L.push("|---|---|");
   L.push("| Charter health (mean pillar health, metrics meeting target) | " + (ev.health === null ? "n/a" : ev.health) + " |");
-  L.push("| Autonomy composite (qnfo-autonomy-scorer) | " + (ev.composite_autonomy === null ? "n/a" : ev.composite_autonomy + " / 5") + " |");
+  L.push("| Autonomy composite (owner-weighted SAI / 20, sai_config weights; qnfo-autonomy-scorer sai_weighted = survival_state.sai) | " + (ev.composite_autonomy === null ? "n/a" : ev.composite_autonomy + " / 5" + (ev.composite_autonomy_at ? " (scored " + charterCell(ev.composite_autonomy_at) + ")" : "")) + " |");
+  L.push("| Autonomy dimension mean (unweighted, autonomy_scores.overall) | " + (ev.autonomy_dimension_mean === null || ev.autonomy_dimension_mean === void 0 ? "n/a" : ev.autonomy_dimension_mean + " / 5") + " |");
   L.push("| MVP components serving | " + ev.mvp_up + " / " + ev.mvp.length + " |");
   L.push("| Live workers (service_registry) | " + charterCell(ev.live_workers) + " |");
   L.push("| Open agent issues (high) | " + ev.open_issues + " (" + ev.high_issues + ") |");

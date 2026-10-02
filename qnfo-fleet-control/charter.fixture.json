@@ -66,7 +66,7 @@
     {"node_class":"ai_spend:workers-ai","cap":25,"target":15,"current":58.15,"unit":"usd_30d_list_estimate"},
     {"node_class":"ai_spend:anthropic","cap":15,"target":10,"current":25.96,"unit":"usd_30d_list_estimate"}
   ],
-  "survival": {"ts":"2026-10-01 10:32:55","sai":4.1,"survival_score":0.6424137931034483,"graded_score":0},
+  "survival": {"ts":"2026-10-01 10:32:55","sai":3.24,"survival_score":0.6424137931034483,"graded_score":0},
   "shutdown_manifest": [
     {"phase":0,"component":"EARLY-TRIGGER","state":"DISARMED","due_date":"continuous","condition":"AI gateway spend >= 150 USD in 30d window AND publish_events == 0"},
     {"phase":0,"component":"OWNER-KILL","state":"ARMED","due_date":"continuous","condition":"owner email command shutdown to qnfo@qnfo.org"},
@@ -85,6 +85,7 @@
     {"dimension":"independent_decision","framework":"AGI-LoA","score":4,"scored_at":"2026-09-15","gap":"Self-authored value ADOPTION remains human-ratified by design (residual-consent #3)"},
     {"dimension":"watchmaker_inverted","framework":"fleet","score":4.8,"scored_at":"2026-09-24","gap":"Objective ratification (1 residual, human by design)."},
     {"dimension":"overall","framework":"composite","score":4.1,"scored_at":"2026-10-01","gap":"none measured"},
+    {"dimension":"sai_weighted","framework":"composite","score":3.24,"scored_at":"2026-10-02","gap":"largest weighted shortfall: self_improv (0.2 x (1 - 0.45) = 0.11 of 1.00)"},
     {"dimension":"self_heal","framework":"fleet","score":4.8,"scored_at":"2026-10-01","gap":"42 acted row(s) unverified or failed"},
     {"dimension":"issue_flow","framework":"fleet","score":2.3,"scored_at":"2026-10-01","gap":"open backlog 96 above ceiling 50"},
     {"dimension":"s3_star_audit","framework":"VSM","score":4.7,"scored_at":"2026-10-01","gap":"4 guard(s) unverified"},
