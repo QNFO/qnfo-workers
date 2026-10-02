@@ -12,7 +12,11 @@
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags). AI: env.AI.
 
-var VERSION = "0.7.26-capability-contract";
+var VERSION = "0.7.27-run-ledger";
+// 0.7.27 (2026-10-02, pillar: reach): SOCIAL-RUN-LEDGER-1. The profile sync, the posting drain with its Buffer cross-post,
+// the Zenodo scan and the engagement collector each record their run in cloud_ops_events (social-<op>-<day>), so the
+// watchmaker (qnfo-fleet-dashboard WATCHMAKER_OPS) can tell a quiet run from a dead one. The two drains no longer share a
+// try: a throw in one ended the tick before the other drain and the link checks ran.
 // 0.7.25 (2026-10-01, #1713): LINKEDIN-OWNER-DELEGATED-1 and BUFFER-CHANNEL-AUDIT-1. The owner directed (2026-10-01 21:35Z,
 // in addition to OWNER-DELEGATION-SOCIAL-1) that LinkedIn be managed without any manual step. LinkedIn is connected in
 // Buffer (engagement run 2026-09-20: channels linkedin, twitter, mastodon). The fleet never calls LinkedIn's API; Buffer,
@@ -543,7 +547,7 @@ async function autoScan(env) {
     const r = await fetch('https://zenodo.org/api/records?q=' + encodeURIComponent(q) + '&sort=mostrecent&size=50', {
       headers: { 'User-Agent': 'Mozilla/5.0 (qnfo-social)' }
     });
-    if (!r.ok) { console.error('auto-scan zenodo fetch failed', r.status); return; }
+    if (!r.ok) { console.error('auto-scan zenodo fetch failed', r.status); return { error: 'zenodo ' + r.status }; }
     const d = await r.json();
     const hits = (d.hits && d.hits.hits) || [];
     const st = await env.DB.prepare("SELECT value FROM scan_state WHERE key='last_scanned'").first();
@@ -607,9 +611,11 @@ async function autoScan(env) {
       if (posts30 < pubs30) await logAlert(env, 'scan', 'warning', 'DISTRIBUTION-RECONCILE-1: posts_30d=' + posts30 + ' < publications_30d=' + pubs30 + ' (Zenodo); distribution is not keeping up');
     } catch (e) {}
     console.log('auto-scan: drafted', drafted, '(reconciled', reconciled + ') draft threads; last_scanned', newest, 'publications_30d', pubs30);
+    return { records: hits.length, drafted: drafted, reconciled: reconciled, publications_30d: pubs30, last_scanned: newest };
   } catch (e) {
     await logAlert(env, 'scan', 'error', String(e));
     console.error('auto-scan failed', String(e));
+    return { error: String(e && e.message || e).slice(0, 200) };
   }
 }
 
@@ -1012,6 +1018,7 @@ async function drainQueue(env) {
   const gate = await socialGate(env, 'drainQueue');
   if (!gate.allowed) return { skipped: gate.reason || 'weekly-cap', posted_7d: gate.posted_7d, cap: gate.cap, posted_today: postedToday };
   let posted = 0, failed = 0;
+  const buffer = [];
   for (let i = 0; i < DRAIN_PER_RUN && posted < gate.allowed; i++) {
     const row = await env.DB.prepare("SELECT * FROM social_threads WHERE status='queued' ORDER BY CASE WHEN COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%' THEN 0 ELSE 1 END, id ASC LIMIT 1").first();
     if (!row) break;
@@ -1057,6 +1064,9 @@ async function drainQueue(env) {
       // POST-ID-UTM-1 (#1712): status and platform ids in one write (markPosted falls back if the column is missing).
       await markPosted(env, row.id, postUriValue(uris[0], bufferResult));
       posted++;
+      // SOCIAL-RUN-LEDGER-1: what Buffer did with this post, per platform, for the run record.
+      if (bufferResult && Array.isArray(bufferResult.results)) for (const br of bufferResult.results) buffer.push(String(br.platform || 'buffer') + ':' + String(br.status || '?'));
+      else if (bufferResult) buffer.push('buffer:' + (bufferResult.skipped ? 'skipped' : 'error'));
       console.log('drain posted thread', row.slug, uris[0], 'buffer:', JSON.stringify(bufferResult).slice(0, 200));
     } catch (e) {
       failed++;
@@ -1065,25 +1075,82 @@ async function drainQueue(env) {
       console.error('drain post failed', row.slug, String(e));
     }
   }
-  return { posted: posted, failed: failed, posted_today: postedToday + posted };
+  return { posted: posted, failed: failed, posted_today: postedToday + posted, buffer: buffer };
+}
+
+// SOCIAL-RUN-LEDGER-1 (0.7.27, pillar: reach; WATCHMAKER-INDEX-1). The profile sync, the posting drain (Bluesky plus the
+// Buffer cross-post to Mastodon, LinkedIn and X), the Zenodo scan and the engagement collector logged only to the console,
+// so the fleet could not tell a quiet run from a dead one. Each run now upserts ONE cloud_ops_events row per operation
+// per UTC day, id social-<op>-<yyyy-mm-dd> (kind social-run, job qnfo-social): ts, status and text describe the latest
+// run, meta.runs counts the day's runs, and meta.last_ok carries forward the time of the last run that completed
+// ('ok' or 'degraded'), so a later failed run never hides the last good one. Status: ok | degraded (ran, but a part
+// failed, e.g. a Buffer channel refused a post) | error | skipped (no credentials). Two rows a day for the 2-hourly
+// tick, one each for the daily scan and collector. A ledger write failure is logged and never stops the run.
+// Watchmaker proof: SELECT MAX(json_extract(meta, '$.last_ok')) FROM cloud_ops_events WHERE id range social-<op>-.
+function socialRunJson(op, status, result, iso) {
+  const done = status === 'ok' || status === 'degraded';
+  let r = result === undefined ? null : result;
+  let s = JSON.stringify({ op: op, version: VERSION, result: r, last_ok: done ? iso : null, runs: 1 });
+  if (s.length > 3000) s = JSON.stringify({ op: op, version: VERSION, result: String(JSON.stringify(r)).slice(0, 2500), last_ok: done ? iso : null, runs: 1 });
+  return s;
+}
+async function recordSocialRun(env, op, status, result, nowMs) {
+  const iso = new Date(nowMs || Date.now()).toISOString();
+  const id = 'social-' + op + '-' + iso.slice(0, 10);
+  const text = ('qnfo-social ' + op + ' ' + status + ' ' + JSON.stringify(result === undefined ? null : result)).slice(0, 500);
+  try {
+    await env.DB.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'social-run', ?3, ?4, 'qnfo-social', ?5) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, status = excluded.status, meta = json_set(excluded.meta, '$.last_ok', COALESCE(json_extract(excluded.meta, '$.last_ok'), json_extract(cloud_ops_events.meta, '$.last_ok')), '$.runs', COALESCE(json_extract(cloud_ops_events.meta, '$.runs'), 0) + 1)").bind(id, iso, text, socialRunJson(op, status, result, iso), status).run();
+    return id;
+  } catch (e) {
+    console.log('SOCIAL-RUN-LEDGER-1 ' + op + ' record failed: ' + String(e && e.message || e).slice(0, 160));
+    return null;
+  }
+}
+function profileRunStatus(ps) {
+  if (!ps || ps.error) return 'error';
+  if (ps.skipped) return 'skipped';
+  return 'ok';   // updated, unchanged, or held because the owner edited the bio
+}
+function drainRunStatus(q, d) {
+  const bad = function(x) { return !x || x.error || x.skipped === 'gate-error'; };
+  if (bad(q) || bad(d)) return 'error';
+  if (q.failed || d.failed || (q.buffer || []).some(function(b) { return /:(error|no-channel)$/.test(b); })) return 'degraded';
+  return 'ok';
+}
+function engagementRunStatus(o) {
+  if (!o || o.error) return 'error';
+  if (o.errors && !o.posts_found) return 'error';
+  return o.errors ? 'degraded' : 'ok';
 }
 
 export default {
   async scheduled(event, env) {
-    if (event.cron === '0 6 * * *') { await autoScan(env); return; }
+    // SOCIAL-RUN-LEDGER-1: every operation below records its run with recordSocialRun (defined after drainQueue).
+    if (event.cron === '0 6 * * *') {
+      const sc = await autoScan(env);
+      await recordSocialRun(env, 'scan', sc && !sc.error ? 'ok' : 'error', sc || { error: 'no result' });
+      return;
+    }
     if (event.cron === '0 7 * * *') {
       await alertDigest(env);
-      try { await collectEngagement(env); } catch (e) { await logAlert(env, 'engagement', 'error', 'SOCIAL-ENGAGEMENT-SELF-1 ' + String(e).slice(0, 300)); }
+      let eo;
+      try { eo = await collectEngagement(env); } catch (e) { eo = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'engagement', 'error', 'SOCIAL-ENGAGEMENT-SELF-1 ' + String(e).slice(0, 300)); }
+      await recordSocialRun(env, 'engagement', engagementRunStatus(eo), eo);
       return;
     }
     try { await bufferChannelAudit(env); } catch (e) { await logAlert(env, 'buffer-channels', 'error', 'BUFFER-CHANNEL-AUDIT-1 ' + String(e).slice(0, 300)); }
+    let ps;
     try {
-      const ps = await syncProfile(env);
+      ps = await syncProfile(env);
       if (ps && (ps.updated || ps.error || ps.held)) console.log('[qnfo-social] profile-sync', JSON.stringify(ps));
-    } catch (e) { console.log('[qnfo-social] profile-sync threw', String(e && e.message || e).slice(0, 200)); }
-    await recheckDrafts(env);
-    await drainQueue(env);
-    await drainDissemination(env);
+    } catch (e) { ps = { error: 'threw: ' + String(e && e.message || e).slice(0, 200) }; console.log('[qnfo-social] profile-sync threw', ps.error); }
+    await recordSocialRun(env, 'profile-sync', profileRunStatus(ps), ps);
+    try { await recheckDrafts(env); } catch (e) { console.log('[qnfo-social] recheck threw', String(e && e.message || e).slice(0, 200)); }
+    // Each drain is isolated: a throw in one used to end the tick before the other drain and the link checks ran.
+    let q, d;
+    try { q = await drainQueue(env); } catch (e) { q = { error: String(e && e.message || e).slice(0, 200) }; }
+    try { d = await drainDissemination(env); } catch (e) { d = { error: String(e && e.message || e).slice(0, 200) }; }
+    await recordSocialRun(env, 'drain', drainRunStatus(q, d), { queue: q, dissemination: d });
     await retractDeadLinks(env);
     await restoreMisdeleted(env);
   },
@@ -1298,4 +1365,4 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode };
+export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmTag, utmTagText, fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan };
