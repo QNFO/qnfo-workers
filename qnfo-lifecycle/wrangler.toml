@@ -47,6 +47,8 @@ database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
 # CRON-CONSOLIDATE-1 (2026-09-27): 8 -> 5 crons. The four lightweight daily D1 tasks
 # (lifecycle 0 3, memory-maintain 0 4, ula-check 0 7, drift-audit) are bundled into the
 # single 0 3 fire. The former "9 6 * * *" was DEAD (handler keyed on "0 6 * * *").
-crons = ["0 * * * *", "0 0 1 * *", "0 3 * * *", "0 5 * * *", "0 8 * * 1"]
+# CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
+# (0 * * * *, 0 0 1 * *, 0 3 * * *, 0 5 * * *, 0 8 * * 1) and runs each entry in the hour it fired.
+crons = ["0 * * * *"]
 
 # Secrets (wrangler secret put): CF_API_TOKEN

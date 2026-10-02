@@ -114,7 +114,7 @@ ok(pageNode && pageNode.url === "https://qnfo.org/work-with-me" && pageNode.main
 const meta = (attr, name) => { const m = new RegExp('<meta ' + attr + '="' + name + '" content="([^"]*)"').exec(html); return m ? decode(m[1]) : null; };
 ok(/<title>Work with me · Rowan Brad Quni-Gudzinas · QNFO<\/title>/.test(html) && (meta("name", "description") || "").length > 80, "title and description");
 ok(/<link rel="canonical" href="https:\/\/qnfo.org\/work-with-me">/.test(html) && meta("property", "og:url") === "https://qnfo.org/work-with-me", "canonical and og:url");
-ok(meta("property", "og:title") && meta("property", "og:description") && meta("property", "og:type") && meta("name", "twitter:card") === "summary" && /name="viewport"/.test(html), "OpenGraph, Twitter card and viewport");
+ok(meta("property", "og:title") && meta("property", "og:description") && meta("property", "og:type") && meta("name", "twitter:card") === "summary_large_image" && meta("property", "og:image") === "https://qnfo.org/og.jpg" && /name="viewport"/.test(html), "OpenGraph, share image (REACH-LAYER-1), Twitter card and viewport");
 ok(/googletagmanager\.com\/gtag\/js\?id=G-LV7RHRVW6R/.test(html) && /gtag\("config","G-LV7RHRVW6R"\)/.test(html) && /G-LV7RHRVW6R/.test(home.text), "the same GA4 tag as the home page (the Cloudflare RUM beacon is added by the zone)");
 ok(!/cloudflareinsights/.test(html), "no hand-added RUM beacon (the zone injects one; two would double count)");
 ok(/prepared with an AI-assisted research pipeline; the author is responsible for the content\./i.test(text), "the STRATEGY 2.5 AI disclosure line");

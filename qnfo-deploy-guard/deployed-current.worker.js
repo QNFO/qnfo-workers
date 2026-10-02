@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.21 - deploy lock + secret lock + work claims + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1)
+// qnfo-deploy-guard v1.3.22 - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.21-work-claims";
+var VERSION = "1.3.22-work-claim-unify";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -422,6 +422,30 @@ function workKey(k) {
 }
 function isoMs(v) { var n = Number(v); return (isFinite(n) && n > 0) ? new Date(n).toISOString() : (v == null ? null : String(v)); }
 var WORK_KEY_ERROR = "key must be issue:<agent_issues id> or file:<repo-relative path>";
+// WORK-CLAIM-UNIFY-1 (2026-10-02): a second claim procedure landed the same day (WORK-CLAIMS-1, PR 480: the D1 table
+// work_claims and the view v_work_claims_active, which also lists the code loop's unfinished code_tasks). Neither saw the
+// other: the sessions holding scripts/ci_watchdog.py (work_claims) and qnfo-fleet-dashboard (work-lock) each fixed the same
+// API-quota defect in parallel (PRs 480 and 495). Now /work-lock is the one procedure and the D1 ledger is its record:
+//  * a fresh acquire is refused when another session holds an unexpired work_claims row on the same path (or issue);
+//  * every acquire and refusal returns in_flight: the code loop's unfinished tasks on that path, to review, not duplicate;
+//  * an acquire writes the work_claims row (path, intent, holder, issue_id, pr, expires_at); a renewal extends it; a
+//    release sets released_at, pr and outcome. GET /work-locks lists the ledger rows and code-loop tasks too.
+// Both tables are optional: when one is absent the claim degrades to the WORK-CLAIM-1 lease alone.
+var CODE_TASK_DONE = ["merged", "closed", "publish_failed", "needs_human", "failed", "reverted"];
+function holderId(s) { var m = /session_[A-Za-z0-9]+/.exec(String(s || "")); return m ? m[0] : String(s || "").trim().toLowerCase(); }
+function isoS(ms) { return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z"); }
+function claimTarget(wk) { return wk.indexOf("file:") === 0 ? { path: wk.slice(5), issue: null } : { path: wk, issue: Number(wk.slice(6)) }; }
+async function ledgerRows(env, wk, nowMs) {
+  var t = claimTarget(wk);
+  return await auditAll(env, "SELECT id, path, intent, holder, issue_id, pr, claimed_at, expires_at FROM work_claims WHERE released_at IS NULL AND expires_at > ?1 AND (path = ?2 OR (?3 IS NOT NULL AND issue_id = ?3)) ORDER BY claimed_at", [isoS(nowMs), t.path, t.issue]);
+}
+// The issue id is bound as text for the LIKE: a JS number can bind as REAL, and '[issue #' || 1810.0 never matches.
+async function codeLoopRows(env, wk) {
+  var t = claimTarget(wk); var ph = CODE_TASK_DONE.map(function (_, i) { return "?" + (i + 3); }).join(",");
+  var rows = await auditAll(env, "SELECT id, path, substr(goal,1,200) AS goal, status, created_at FROM code_tasks WHERE status NOT IN (" + ph + ") AND (path = ?1 OR (?2 IS NOT NULL AND goal LIKE '[issue #' || ?2 || ']%')) ORDER BY created_at", [t.path, t.issue == null ? null : String(t.issue)].concat(CODE_TASK_DONE));
+  return rows.map(function (x) { return { kind: "code-loop", path: x.path, intent: x.goal, holder: "qnfo-code-orchestrator:" + x.id, status: x.status, since: x.created_at }; });
+}
+function ledgerView(x) { return { kind: "session", path: x.path, intent: x.intent, holder: x.holder, issue_id: x.issue_id, pr: x.pr, since: x.claimed_at, expires_at: x.expires_at }; }
 async function workAcquire(env, b) {
   b = (b && typeof b === "object") ? b : {};
   var wk = workKey(b.key);
@@ -431,18 +455,34 @@ async function workAcquire(env, b) {
   var lk = WORK_PREFIX + wk;
   var tn = Number(b.ttl_sec || WORK_DEFAULT_TTL); if (!isFinite(tn)) tn = WORK_DEFAULT_TTL;
   var ttl = Math.min(Math.max(tn, 60), MAX_TTL);
+  var tgt = claimTarget(wk);
+  var intent = String(b.intent || "").trim().slice(0, 300) || ("claimed via /work-lock by " + wo);
+  var prN = Number(b.pr); prN = (isFinite(prN) && prN > 0) ? Math.floor(prN) : null;
+  var nowA = Date.now();
+  var loop = await codeLoopRows(env, wk);
   if (b.token) {
-    var nowR = Date.now();
-    var up = await auditRun(env, "UPDATE deploy_locks SET expires_at=?1 WHERE worker=?2 AND token_hash=?3 AND typeof(expires_at) IN ('integer','real') AND expires_at > ?4", [nowR + ttl * 1000, lk, await sha256hex(String(b.token)), nowR]);
+    var up = await auditRun(env, "UPDATE deploy_locks SET expires_at=?1 WHERE worker=?2 AND token_hash=?3 AND typeof(expires_at) IN ('integer','real') AND expires_at > ?4", [nowA + ttl * 1000, lk, await sha256hex(String(b.token)), nowA]);
     if (changes(up)) {
       var held = await readLock(env, lk);
-      return [200, { acquired: true, renewed: true, key: wk, token: String(b.token), holder: held ? held.owner : wo, expires_at: new Date(nowR + ttl * 1000).toISOString() }];
+      var hOwner = held ? held.owner : wo;
+      await auditRun(env, "UPDATE work_claims SET expires_at=?1, pr=COALESCE(?2, pr) WHERE released_at IS NULL AND path=?3 AND holder=?4", [isoS(nowA + ttl * 1000), prN, tgt.path, hOwner]);
+      return [200, { acquired: true, renewed: true, key: wk, token: String(b.token), holder: hOwner, expires_at: new Date(nowA + ttl * 1000).toISOString(), in_flight: loop }];
     }
     // The token no longer holds the claim (expired or reaped): fall through to a fresh acquire, which issues a new token.
+  }
+  var me = holderId(wo);
+  var others = (await ledgerRows(env, wk, nowA)).filter(function (x) { return holderId(x.holder) !== me; });
+  if (others.length) {
+    var o1 = others[0];
+    return [409, { key: wk, acquired: false, reason: "work_claims", holder: o1.holder, since: o1.claimed_at, expires_at: o1.expires_at, intent: o1.intent, pr: o1.pr, in_flight: others.map(ledgerView).concat(loop) }];
   }
   var r = await acquireLease(env, { worker: lk, owner: wo, actor: wo, ttl_sec: ttl }, true);
   var out = Object.assign({ key: wk }, r[1]); delete out.held_by;
   if (r[0] === 409 && out.held_since != null) { out.since = isoMs(out.held_since); delete out.held_since; }
+  out.in_flight = loop;
+  if (r[0] === 200) {
+    await auditRun(env, "INSERT INTO work_claims (path, intent, holder, issue_id, pr, claimed_at, expires_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", [tgt.path, intent, wo, tgt.issue, prN, isoS(nowA), isoS(nowA + ttl * 1000)]);
+  }
   if (r[0] === 200 && wk.indexOf("issue:") === 0) {
     var iid = Number(wk.slice(6));
     var ir = await auditAll(env, "SELECT status FROM agent_issues WHERE id=?1", [iid]);
@@ -461,7 +501,12 @@ async function workList(env) {
     rows = ((await st6.bind(now6).all()) || {}).results || [];
   } catch (e) { return [503, { error: "lock_db_unavailable" }]; }
   var claims = rows.map(function (x) { return { key: String(x.worker).slice(WORK_PREFIX.length), holder: x.owner, since: isoMs(x.since), expires_at: isoMs(x.expires_at), ttl_left_sec: Math.max(0, Math.round((Number(x.expires_at) - now6) / 1000)) }; });
-  return [200, { claims: claims, count: claims.length, now: new Date(now6).toISOString(), rule: "take POST /work-lock/acquire before starting an issue or a worker's file; skip a key another session holds" }];
+  // WORK-CLAIM-UNIFY-1: the ledger rows (including ones written straight into work_claims) and the code loop's tasks.
+  var led = (await auditAll(env, "SELECT path, intent, holder, issue_id, pr, claimed_at, expires_at FROM work_claims WHERE released_at IS NULL AND expires_at > ?1 ORDER BY claimed_at", [isoS(now6)])).map(ledgerView);
+  var ph6 = CODE_TASK_DONE.map(function (_, i) { return "?" + (i + 1); }).join(",");
+  var cl = (await auditAll(env, "SELECT id, path, substr(goal,1,200) AS goal, status, created_at FROM code_tasks WHERE status NOT IN (" + ph6 + ") ORDER BY created_at", CODE_TASK_DONE)).map(function (x) { return { kind: "code-loop", path: x.path, intent: x.goal, holder: "qnfo-code-orchestrator:" + x.id, status: x.status, since: x.created_at }; });
+  var inf = led.concat(cl);
+  return [200, { claims: claims, count: claims.length, in_flight: inf, in_flight_count: inf.length, now: new Date(now6).toISOString(), rule: "take POST /work-lock/acquire {key, owner, intent} before starting an issue or a file; skip a key another session holds; review in_flight work on the same path instead of writing a second fix" }];
 }
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(scan(env).catch(function () {})); ctx.waitUntil(capabilitySnapshot(env, false).catch(function () {})); },
@@ -478,13 +523,20 @@ export default {
       p = "/lock/" + p.slice("/secret-lock/".length);
       request = new Request(url.origin + p, { method: "POST", body: JSON.stringify(sb) });
     }
-    // WORK-CLAIM-1: POST /work-lock/acquire {key, owner, ttl_sec<=7200[, token to renew]}, POST /work-lock/release {key, token},
-    // GET /work-locks (open; never a token).
+    // WORK-CLAIM-1: POST /work-lock/acquire {key, owner, ttl_sec<=7200[, intent, pr, token to renew]},
+    // POST /work-lock/release {key, token[, pr, outcome]}, GET /work-locks (open; never a token).
     if (p === "/work-lock/acquire" && request.method === "POST") { var wa = await workAcquire(env, await request.json().catch(function () { return {}; })); return json(wa[1], wa[0]); }
     if (p === "/work-lock/release" && request.method === "POST") {
       var wrb = (await request.json().catch(function () { return {}; })) || {}; var wrk = workKey(wrb.key);
       if (!wrk) return json({ error: WORK_KEY_ERROR }, 400);
+      var wHeld = await readLock(env, WORK_PREFIX + wrk);
       var wr = await releaseLease(env, WORK_PREFIX + wrk, String(wrb.token || ""));
+      if (wr[0] === 200 && wHeld) {
+        // WORK-CLAIM-UNIFY-1: close the ledger row with what came of the work.
+        var wpr = Number(wrb.pr); wpr = (isFinite(wpr) && wpr > 0) ? Math.floor(wpr) : null;
+        var wout = /^(merged|closed|duplicate|abandoned|done)$/.test(String(wrb.outcome || "")) ? String(wrb.outcome) : null;
+        await auditRun(env, "UPDATE work_claims SET released_at=?1, pr=COALESCE(?2, pr), outcome=COALESCE(?3, outcome) WHERE released_at IS NULL AND path=?4 AND holder=?5", [isoS(Date.now()), wpr, wout, claimTarget(wrk).path, wHeld.owner]);
+      }
       return json(Object.assign({ key: wrk }, wr[1]), wr[0]);
     }
     if (p === "/work-locks" && request.method === "GET") { var wl = await workList(env); return json(wl[1], wl[0]); }

@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.1.3";
+var VERSION = "1.2.0"; // 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1591,6 +1591,49 @@ export { JobMarketWatchWorkflow };
 // -> /health returned CF error 1101 (the old hardcoded "1.0.0" literal had masked it).
 // Module scope also makes the deploy tooling's "first VERSION in file" extraction report the
 // HUB version rather than events-radar's.
+// ---- CRON-SINGLE-TRIGGER-1:BEGIN (pure; replayed by scripts/cron-single-trigger.test.mjs)
+// CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785, pillar: core). The account held 84 cron expressions against the fleet budget
+// of 50. This worker now registers ONE hourly trigger; each tick runs every entry of CRON_TABLE (the former trigger list,
+// unchanged) that fired in the hour ending at the tick, through the same dispatcher as before. An entry on the hour runs
+// at its minute; one at :15 or :30 runs at the next full hour. Hourly keeps the 15-minute CPU limit of a cron trigger.
+var TICK_CRON = "0 * * * *";
+var CRON_TABLE = ["0 5 * * 2", "30 8 * * *", "0 6 1 * *", "0 8 * * 7", "0 9 * * 7", "0 11 1,15 * *", "0 7 * * 2", "30 5 * * 2", "0 6 * * *"];
+var TICK_PARALLEL = true;
+function cronFieldMatch(spec, v) {
+  return String(spec).split(",").some(function (part) {
+    var st = /^(.+)\/(\d+)$/.exec(part), step = st ? Number(st[2]) : 1, base = st ? st[1] : part;
+    var r = /^(\d+)-(\d+)$/.exec(base), lo, hi;
+    if (base === "*") { lo = 0; hi = 1e9; } else if (r) { lo = Number(r[1]); hi = Number(r[2]); } else { lo = Number(base); hi = st ? 1e9 : lo; }
+    return v >= lo && v <= hi && (v - (base === "*" ? 0 : lo)) % step === 0;
+  });
+}
+// Cloudflare cron fields in UTC; day of week 1 = Sunday .. 7 = Saturday.
+function cronMatchesAt(expr, ms) {
+  var f = String(expr).trim().split(/\s+/), d = new Date(ms);
+  return f.length === 5 && cronFieldMatch(f[0], d.getUTCMinutes()) && cronFieldMatch(f[1], d.getUTCHours()) && cronFieldMatch(f[2], d.getUTCDate()) && cronFieldMatch(f[3], d.getUTCMonth() + 1) && cronFieldMatch(f[4], d.getUTCDay() + 1);
+}
+// The table entries that fired in the 60 minutes ending at the tick (tick minute included), in table order.
+function cronDueAtTick(table, tickMs) {
+  var t = Math.floor(tickMs / 60000) * 60000;
+  return table.filter(function (expr) {
+    for (var k = 0; k < 60; k++) if (cronMatchesAt(expr, t - k * 60000)) return true;
+    return false;
+  });
+}
+// ---- CRON-SINGLE-TRIGGER-1:END
+// `one` is the dispatcher this worker always had (one cron expression in, its job run). A trigger other than the tick
+// (a former per-job trigger still registered) goes straight to it, and so does an event marked tickEntry: that is how
+// the tick hands each table entry on, and how a test runs one entry whose expression equals the tick's.
+async function cronTickDispatch(event, one) {
+  if (!event || event.cron !== TICK_CRON || event.tickEntry) return one(event);
+  var at = Number(event.scheduledTime) || Date.now();
+  var due = cronDueAtTick(CRON_TABLE, at);
+  var run = function (expr) {
+    return Promise.resolve().then(function () { return one({ cron: expr, scheduledTime: at, type: "scheduled", tickEntry: true }); }).catch(function (e) { console.error("cron " + expr + ": " + String(e && e.message || e)); });
+  };
+  if (TICK_PARALLEL) { await Promise.all(due.map(run)); return; }
+  for (var i = 0; i < due.length; i++) await run(due[i]);
+}
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
@@ -1626,6 +1669,7 @@ export default {
     return new Response("radar-hub", { status: 200 });
   },
   async scheduled(event, env, ctx) {
+    return cronTickDispatch(event, async function (event) {
     const c = event.cron;
     // EVENTS-RADAR-CF-DOW-1 (1.1.3): the events radar scans its 34 weekly sources only when strftime('%w') is 1 (Monday),
     // but "0 5 * * 1" is Sunday in Cloudflare's numbering (1=Sunday..7=Saturday): every run (events_radar 2026-09-06, 13,
@@ -1644,5 +1688,6 @@ export default {
     if (c === "0 7 * * 2") return jmwMod.default.scheduled(event, env, ctx);
     if (c === "30 5 * * 2") return perMod.default.scheduled(event, env, ctx);
     if (c === "0 6 * * *") return perMod.default.scheduled(event, env, ctx);
+    });
   },
 };

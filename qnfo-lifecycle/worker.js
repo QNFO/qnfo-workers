@@ -1,4 +1,4 @@
-var VERSION = "1.6.7-run-internal"; // Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.7.0-single-trigger"; // 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -28,6 +28,49 @@ __name22(corsHeaders, "corsHeaders");
 __name222(corsHeaders, "corsHeaders");
 __name2222(corsHeaders, "corsHeaders");
 __name22222(corsHeaders, "corsHeaders");
+// ---- CRON-SINGLE-TRIGGER-1:BEGIN (pure; replayed by scripts/cron-single-trigger.test.mjs)
+// CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785, pillar: core). The account held 84 cron expressions against the fleet budget
+// of 50. This worker now registers ONE hourly trigger; each tick runs every entry of CRON_TABLE (the former trigger list,
+// unchanged) that fired in the hour ending at the tick, through the same dispatcher as before. An entry on the hour runs
+// at its minute; one at :15 or :30 runs at the next full hour. Hourly keeps the 15-minute CPU limit of a cron trigger.
+var TICK_CRON = "0 * * * *";
+var CRON_TABLE = ["0 * * * *", "0 0 1 * *", "0 3 * * *", "0 5 * * *", "0 8 * * 1"];
+var TICK_PARALLEL = false;
+function cronFieldMatch(spec, v) {
+  return String(spec).split(",").some(function (part) {
+    var st = /^(.+)\/(\d+)$/.exec(part), step = st ? Number(st[2]) : 1, base = st ? st[1] : part;
+    var r = /^(\d+)-(\d+)$/.exec(base), lo, hi;
+    if (base === "*") { lo = 0; hi = 1e9; } else if (r) { lo = Number(r[1]); hi = Number(r[2]); } else { lo = Number(base); hi = st ? 1e9 : lo; }
+    return v >= lo && v <= hi && (v - (base === "*" ? 0 : lo)) % step === 0;
+  });
+}
+// Cloudflare cron fields in UTC; day of week 1 = Sunday .. 7 = Saturday.
+function cronMatchesAt(expr, ms) {
+  var f = String(expr).trim().split(/\s+/), d = new Date(ms);
+  return f.length === 5 && cronFieldMatch(f[0], d.getUTCMinutes()) && cronFieldMatch(f[1], d.getUTCHours()) && cronFieldMatch(f[2], d.getUTCDate()) && cronFieldMatch(f[3], d.getUTCMonth() + 1) && cronFieldMatch(f[4], d.getUTCDay() + 1);
+}
+// The table entries that fired in the 60 minutes ending at the tick (tick minute included), in table order.
+function cronDueAtTick(table, tickMs) {
+  var t = Math.floor(tickMs / 60000) * 60000;
+  return table.filter(function (expr) {
+    for (var k = 0; k < 60; k++) if (cronMatchesAt(expr, t - k * 60000)) return true;
+    return false;
+  });
+}
+// ---- CRON-SINGLE-TRIGGER-1:END
+// `one` is the dispatcher this worker always had (one cron expression in, its job run). A trigger other than the tick
+// (a former per-job trigger still registered) goes straight to it, and so does an event marked tickEntry: that is how
+// the tick hands each table entry on, and how a test runs one entry whose expression equals the tick's.
+async function cronTickDispatch(event, one) {
+  if (!event || event.cron !== TICK_CRON || event.tickEntry) return one(event);
+  var at = Number(event.scheduledTime) || Date.now();
+  var due = cronDueAtTick(CRON_TABLE, at);
+  var run = function (expr) {
+    return Promise.resolve().then(function () { return one({ cron: expr, scheduledTime: at, type: "scheduled", tickEntry: true }); }).catch(function (e) { console.error("cron " + expr + ": " + String(e && e.message || e)); });
+  };
+  if (TICK_PARALLEL) { await Promise.all(due.map(run)); return; }
+  for (var i = 0; i < due.length; i++) await run(due[i]);
+}
 var worker_default = {
   async fetch(request, env, ctx) {
     const u = new URL(request.url), p = u.pathname;
@@ -54,6 +97,7 @@ var worker_default = {
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: h });
   },
   async scheduled(event, env, ctx) {
+    return cronTickDispatch(event, async function (event) {
     const cron = event.cron;
     console.log("[qnfo-lifecycle] cron triggered:", cron);
      try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?, ?, ?, 1)").bind("qnfo-lifecycle", QNFO_VERSION, new Date().toISOString()).run(); } catch (e) {}
@@ -77,6 +121,7 @@ var worker_default = {
     } catch (e) {
       console.error("[qnfo-lifecycle] cron error:", e.message);
     }
+    });
   }
 };
 function health(env, origin) {

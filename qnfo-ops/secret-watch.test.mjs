@@ -1,4 +1,4 @@
-// SECRET-CHANGE-WATCH-1 offline suite (qnfo-ops 2.38.38).
+// SECRET-CHANGE-WATCH-1 offline suite (qnfo-ops 2.38.39).
 // Loads the real worker.js (the cloudflare:workers import swapped for stubs) and drives its scheduled handler against an
 // in-memory SQLite qnfo-audit and a scripted Cloudflare API. Proves: a secret-triggered version inside the look-back
 // window is recorded once in cloud_ops_events (worker, version, time; never a value) and opens one agent_issues row
