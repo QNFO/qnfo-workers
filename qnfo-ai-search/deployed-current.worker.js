@@ -899,7 +899,18 @@ async function fixDispatch(env) {
       }
       continue;
     }
-    if (!m.fix) continue; // tunable metrics are ASK-TUNE-1's job, not a code change
+    if (!m.fix) {
+      // Tunable metrics are ASK-TUNE-1's job, not a code change. If tuning has not moved one out of its kill band on 6 of
+      // the last 7 daily readings, the owner decides; the default keeps the current champion running.
+      var daily = (await d.prepare("SELECT note FROM ask_loop_runs WHERE kind='measure' AND ok=1 AND ts >= ?1 AND substr(ts,12,2)='03'").bind(new Date(nowMs - 7 * 864e5).toISOString()).all()).results || [];
+      var killDays = daily.filter(function (r) { var mm = String(r.note || "").match(new RegExp(m.metric + "=([-\\d.]+)")); return mm && bandBreached(m.kill, mm[1]); }).length;
+      if (killDays >= 6) {
+        var ins = await d.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, source) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'normal', 'qnfo-ai-search ASK-TUNE-1') ON CONFLICT(slug) DO NOTHING")
+          .bind("ask-tune-" + m.metric, "ask.qwav.tech: tuning has not moved " + m.metric + " out of its kill band in 7 days", m.metric + " = " + v + " (kill band " + m.kill + ") on " + killDays + " of the last 7 daily readings; ASK-TUNE-1 experiments are in the experiments table.", "ASK-TUNE-1 keeps experimenting within its search space and keeps the best champion; nothing else changes.", "Widen the search space (for example allow a stronger model), accept the level by editing the band, or change the approach.", "https://fleet.qnfo.org").run();
+        if (ins && ins.meta && ins.meta.changes) out.escalated.push(m.metric);
+      }
+      continue;
+    }
     // Two consecutive daily kill readings: the previous eval's measure run must show the same breach.
     var prevRun = await d.prepare("SELECT note FROM ask_loop_runs WHERE kind='measure' AND ts < ?1 AND ts >= ?2 ORDER BY id DESC LIMIT 1").bind(new Date(nowMs - 20 * 36e5).toISOString(), new Date(nowMs - 30 * 36e5).toISOString()).first();
     var pm = prevRun && String(prevRun.note || "").match(new RegExp(m.metric + "=([-\\d.]+)"));
