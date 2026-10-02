@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-02 09:39:22",
+  "audited_at": "2026-10-02 09:47:58",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -33,14 +33,7 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [
-      {
-        "dir": "qnfo-fleet-control",
-        "live": "0.4.99-reach-priority",
-        "repo": "0.4.98-evolve-no-double",
-        "worker": "qnfo-fleet-control"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -395,7 +388,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 40,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -469,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.18.2-utf8-github",
+        "version": "1.18.4-worker-health-auth",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -479,7 +472,7 @@
       },
       {
         "dir": "qnfo-containers-pilot",
-        "version": "1.0.10-props-caller",
+        "version": "1.0.11-command-exit-honest",
         "worker": "qnfo-containers-pilot"
       },
       {
@@ -493,8 +486,13 @@
         "worker": "qnfo-email"
       },
       {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.100-trigger-parse",
+        "worker": "qnfo-fleet-control"
+      },
+      {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.18.6-ipatent-usage",
+        "version": "1.18.7-grant-followup-honest",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -574,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.30-cap-epoch",
+        "version": "0.7.31-sent-text",
         "worker": "qnfo-social"
       },
       {
@@ -1018,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.18.2-utf8-github",
+      "before": "1.18.4-worker-health-auth",
       "http": 200,
-      "live": "1.18.2-utf8-github",
+      "live": "1.18.4-worker-health-auth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1042,9 +1040,9 @@
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
-      "before": "1.0.10-props-caller",
+      "before": "1.0.11-command-exit-honest",
       "http": 200,
-      "live": "1.0.10-props-caller",
+      "live": "1.0.11-command-exit-honest",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-containers-pilot"
@@ -1146,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.98-evolve-no-double",
+      "before": "0.4.100-trigger-parse",
       "http": 200,
-      "live": "0.4.99-reach-priority",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "0.4.100-trigger-parse",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.18.6-ipatent-usage",
+      "before": "1.18.7-grant-followup-honest",
       "http": 200,
-      "live": "1.18.6-ipatent-usage",
+      "live": "1.18.7-grant-followup-honest",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1418,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.30-cap-epoch",
+      "before": "0.7.31-sent-text",
       "http": 200,
-      "live": "0.7.30-cap-epoch",
+      "live": "0.7.31-sent-text",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
