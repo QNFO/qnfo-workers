@@ -122,6 +122,16 @@ jobs:
       # WATCHMAKER-INDEX-1: the fleet's own daily count of recurring operations that still need a person or a session.
       - name: WATCHMAKER-INDEX-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/watchmaker.test.mjs
+      # CODE-TASK-MERGE-RUNNER-1: qnfo-fleet-control merges code-loop PRs itself. The suite replays the merge decision (every
+      # refusal), the CI kick, merge, deploy and live verification and the inverse-patch revert against a scripted GitHub and
+      # an in-memory D1 (node:sqlite, so it runs here after the Node 22 switch).
+      - name: CODE-TASK-MERGE-RUNNER-1 offline suite (qnfo-fleet-control)
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/code-merge.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q " 0 failed" \
+            || { echo "::error::code-merge runner suite reported failures"; exit 1; }
       - name: OPEN-ACCESS-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/open-access.test.mjs
       # Q08-REVIEW-2026-10-31 (#1716): the one-shot q08 decision on bot-filtered RUM page views and the cadence cap

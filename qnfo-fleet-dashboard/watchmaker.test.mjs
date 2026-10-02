@@ -1,7 +1,10 @@
 // WATCHMAKER-INDEX-1 offline suite: replays the watchmaker block from worker.js against an in-memory SQLite D1 with
 // synthetic ledgers and proves: a fully fresh fleet reads 0; a stalled runner, a never-run one, an unreadable ledger,
-// a research backlog, an evolve loop with neither a proposal nor a heartbeat, and code-task merges a person still does (waiting now, or merged or closed by a person in the last 30
-// days) each count; a first run not yet due, a code loop dormant for 30 days and the owner's by-policy approvals do not; the daily run writes one row and the metric once per day, never before 07:00Z; GET /api/watchmaker serves it.
+// a research backlog, an evolve loop with neither a proposal nor a heartbeat, and the code-task merge runner when it is
+// stalled or disabled or leaves work for a person (a PR green for 6h or waiting 48h, needs_human, branch_pushed, a merge
+// or close outside the runner in 30 days, a failed revert) each count; a first run not yet due, runner merges and the
+// owner's by-policy approvals do not; the daily run writes one row and the metric once per day, never before 07:00Z;
+// GET /api/watchmaker serves it.
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
 // stale zenodo_stats and job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
 // Run: node qnfo-fleet-dashboard/watchmaker.test.mjs   -> prints "N passed, 0 failed"
@@ -26,7 +29,7 @@ CREATE TABLE evolve_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE objective_constraint_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, last_attempt_at TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
-CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
+CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merged_by TEXT, merge_state TEXT, green_since TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
 CREATE TABLE errata_watch (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE social_channels (channel_id TEXT PRIMARY KEY, service TEXT, name TEXT, connected INTEGER, checked_at TEXT, checked_day TEXT);
@@ -42,6 +45,7 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('portfolio-dai
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('reach-ingest-2026-10-06', ?, 'ok')").run(ago(6));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jo-qnfo-backlog-exec-abc', ?, 'ok')").run(ago(7));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-grant-followup-ok1', ?, 'ok')").run(ago(4));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
 db.prepare("INSERT INTO portfolio_runs (run_date, kind, created_at) VALUES ('2026-10-05', 'identity-weekly', ?)").run(new Date(NOW - 26 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO charter_snapshots (ts) VALUES (?)").run(ago(5));
 db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(ago(1));
@@ -97,22 +101,51 @@ ok(m.index === 0 && m.counted.length === 0, "a fully fresh fleet reads 0 (got " 
 ok(op(m, "portfolio-daily").state.startsWith("ok") && op(m, "portfolio-daily").age_h === 3, "the id range picks the real portfolio-daily row");
 ok(op(m, "identity-weekly").state.startsWith("ok") && op(m, "time-gated-verification").state.startsWith("ok"), "space-format timestamps are read as UTC");
 ok(!op(m, "linkedin-draft-approval").counted && /by policy/.test(op(m, "linkedin-draft-approval").state), "by-policy owner approvals are listed, not counted");
-ok(!op(m, "code-task-merge").counted && /^0 code tasks.*; 0 waiting now$/.test(op(m, "code-task-merge").state), "no code-task PRs at all: merging is dormant, not counted");
-// WATCHMAKER-CODE-MERGE-1: a PR a person merged or closed is person work; only a code loop quiet for 30 days is dormant.
+ok(!op(m, "code-task-merge").counted && op(m, "code-task-merge").runner === "cron:qnfo-fleet-control" && /^ok, last run 0.5h ago$/.test(op(m, "code-task-merge").state), "a fresh merge-runner heartbeat with nothing for a person: not counted");
+// CODE-TASK-MERGE-RUNNER-1: the runner merges; what a person still did or must do counts.
+const cm = async () => op(await api.watchmakerMeasure(env, NOW), "code-task-merge");
+db.prepare("INSERT INTO code_tasks (id, status, updated_at, merged_by, merge_state) VALUES ('cm0', 'merged', ?, 'qnfo-fleet-control', 'verified')").run(ago(10));
+let c = await cm();
+ok(!c.counted && /\(by_runner 1\)$/.test(c.state), "a PR the runner merged is not person work", c.state);
 db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm1', 'merged', ?)").run(ago(10));
 m = await api.watchmakerMeasure(env, NOW);
-ok(op(m, "code-task-merge").counted && /^1 code tasks that needed a person.*; 0 waiting now$/.test(op(m, "code-task-merge").state) && m.index === 1, "a code-loop PR a person merged in the last 30 days counts although nothing waits now");
-db.exec("UPDATE code_tasks SET status = 'closed' WHERE id = 'cm1'");
-m = await api.watchmakerMeasure(env, NOW);
-ok(op(m, "code-task-merge").counted, "a code-loop PR a person closed in the last 30 days counts");
+ok(op(m, "code-task-merge").counted && /^1 code-loop PRs or tasks that needed a person \(by_person 1, by_runner 1\)$/.test(op(m, "code-task-merge").state) && m.index === 1, "a code-loop PR merged outside the runner (merged_by empty) in the last 30 days counts", op(m, "code-task-merge").state);
+db.exec("UPDATE code_tasks SET merged_by = 'gh:rwnq8' WHERE id = 'cm1'");
+ok((await cm()).counted, "a PR merged by a person's GitHub login counts");
+db.exec("UPDATE code_tasks SET status = 'closed', merged_by = NULL WHERE id = 'cm1'");
+ok((await cm()).counted, "a code-loop PR a person closed in the last 30 days counts");
 db.prepare("UPDATE code_tasks SET status = 'merged', updated_at = ? WHERE id = 'cm1'").run(ago(31 * 24));
-m = await api.watchmakerMeasure(env, NOW);
-ok(!op(m, "code-task-merge").counted && m.index === 0, "a merge older than 30 days with nothing waiting is dormant, not counted");
-db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm2', 'published', ?)").run(ago(40 * 24));
-db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm3', 'pr_open', ?)").run(ago(2));
-m = await api.watchmakerMeasure(env, NOW);
-ok(op(m, "code-task-merge").counted && /^2 code tasks.*; 2 waiting now$/.test(op(m, "code-task-merge").state), "a PR waiting on a person counts at any age, and the orchestrator's own pr_open rows count");
+ok(!(await cm()).counted, "a person merge older than 30 days no longer counts");
+db.prepare("INSERT INTO code_tasks (id, status, updated_at, green_since) VALUES ('cm2', 'published', ?, ?)").run(ago(8), ago(5));
+ok(!(await cm()).counted, "a PR green for 5h is still the runner's to merge");
+db.prepare("UPDATE code_tasks SET green_since = ? WHERE id = 'cm2'").run(ago(7));
+c = await cm();
+ok(c.counted && /\(stuck_prs 1/.test(c.state), "a PR green for more than 6h and unmerged counts as stuck", c.state);
+db.prepare("UPDATE code_tasks SET green_since = NULL, updated_at = ? WHERE id = 'cm2'").run(ago(49));
+ok((await cm()).counted, "a PR waiting more than 48h (checks never green) counts as stuck");
+db.prepare("UPDATE code_tasks SET status = 'pr_open', updated_at = ? WHERE id = 'cm2'").run(ago(2));
+ok(!(await cm()).counted, "a fresh pr_open row (code-agent path) is the runner's to merge");
+db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('cm3', 'needs_human', ?)").run(ago(40 * 24));
+c = await cm();
+ok(c.counted && /needs_person 1/.test(c.state), "a code task in needs_human counts at any age (a refused PR or an unverifiable task)", c.state);
+db.exec("UPDATE code_tasks SET status = 'branch_pushed' WHERE id = 'cm3'");
+ok((await cm()).counted, "a branch with no PR (branch_pushed) counts");
+db.prepare("UPDATE code_tasks SET status = 'merged', merged_by = 'qnfo-fleet-control', merge_state = 'revert-failed', updated_at = ? WHERE id = 'cm3'").run(ago(3));
+c = await cm();
+ok(c.counted && /revert_failed 1/.test(c.state), "a failed automatic revert counts", c.state);
 db.exec("DELETE FROM code_tasks");
+db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'code-merge-tick-2026-10-06'").run(ago(3));
+c = await cm();
+ok(c.counted && /^stalled: last run 3h ago, cadence 1h$/.test(c.state), "a runner silent for more than 2h counts as stalled", c.state);
+db.prepare("UPDATE cloud_ops_events SET ts = ?, status = 'disabled' WHERE id = 'code-merge-tick-2026-10-06'").run(ago(0.2));
+c = await cm();
+ok(c.counted && /^runner disabled; never ran$/.test(c.state), "the kill switch off: counted, and the state says the runner is disabled", c.state);
+db.prepare("UPDATE cloud_ops_events SET ts = ?, status = 'ok' WHERE id = 'code-merge-tick-2026-10-06'").run(ago(0.5));
+db.exec("ALTER TABLE code_tasks RENAME TO code_tasks_full; CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT)");
+c = await cm();
+ok(c.counted && /^unmeasured/.test(c.state), "before the runner adds its columns the op is unmeasured, so counted", c.state);
+db.exec("DROP TABLE code_tasks; ALTER TABLE code_tasks_full RENAME TO code_tasks");
+ok(!(await cm()).counted, "back to a healthy runner with nothing for a person");
 // EVOLVE-HEARTBEAT-1: an idle evolve loop (no proposal for days) is alive while its daily heartbeat is fresh; a heartbeat
 // that is not 'ok' proves nothing, and with neither the runner counts as stalled.
 db.prepare("UPDATE evolve_candidates SET ts = ?").run(ago(70));
@@ -210,13 +243,13 @@ ok(m.index === 0, "the fixture is fresh again before the stall checks (" + m.cou
 db.prepare("UPDATE cloud_ops_events SET ts = ? WHERE id = 'portfolio-daily-2026-10-06'").run(ago(60));
 db.exec("DELETE FROM charter_snapshots");
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i2', 'pending', 'research', ?)").run(ago(72));
-db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('c1', 'published', ?)").run(ago(48));
+db.prepare("INSERT INTO code_tasks (id, status, updated_at) VALUES ('c1', 'published', ?)").run(ago(49));
 db.exec("DROP TABLE evolve_candidates");
 m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "portfolio-daily").counted && /stalled: last run 60h ago, cadence 24h/.test(op(m, "portfolio-daily").state), "a runner silent for over twice its cadence counts as stalled");
 ok(op(m, "charter-loop").counted && op(m, "charter-loop").state === "never ran", "a runner past its first due date that never ran counts");
 ok(op(m, "research-intent-triage").counted && /^1 pending research intents older than 48h/.test(op(m, "research-intent-triage").state), "a research backlog older than 48h counts");
-ok(op(m, "code-task-merge").counted && /^1 code tasks.*; 1 waiting now$/.test(op(m, "code-task-merge").state), "a code task waiting on a person counts");
+ok(op(m, "code-task-merge").counted && /^1 code-loop PRs or tasks that needed a person \(stuck_prs 1\)$/.test(op(m, "code-task-merge").state), "a code-loop PR the runner left waiting for 49h counts");
 ok(op(m, "fleet-defects").counted && /^unmeasured/.test(op(m, "fleet-defects").state), "an unreadable ledger counts as unmeasured");
 ok(m.index === 5 && m.counted.join(",") === "charter-loop,fleet-defects,portfolio-daily,research-intent-triage,code-task-merge".split(",").sort((x, y) => m.counted.indexOf(x) - m.counted.indexOf(y)).join(","), "the index is the number of counted operations (" + m.index + ")");
 // first_due in the future: not counted
