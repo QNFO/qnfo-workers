@@ -138,6 +138,11 @@ jobs:
       # MATH-DELIM-1 / TABLE-SEP-1: paper renderer regressions from the 2026-10-02 full-corpus sweep (qnfo-gateway).
       - name: Paper renderer suite (qnfo-gateway)
         run: node qnfo-gateway/render.test.mjs
+      # REACH-LAYER-1 (pillar reach): every qnfo.org / papers.qnfo.org HTML page carries a share image, canonical, JSON-LD
+      # with the owner's ORCID, the author credit, Work with me, the iPatent link and a subscribe box (or the declared
+      # no-form link on work-with-me), and passes the REACH-IDEATION checks copied from qnfo-fleet-control.
+      - name: REACH-LAYER-1 offline suite (qnfo-gateway)
+        run: node qnfo-gateway/reach-layer.test.mjs
       # CODE-TASK-MERGE-RUNNER-1: qnfo-fleet-control merges code-loop PRs itself. The suite replays the merge decision (every
       # refusal), the CI kick, merge, deploy and live verification and the inverse-patch revert against a scripted GitHub and
       # an in-memory D1 (node:sqlite, so it runs here after the Node 22 switch).
