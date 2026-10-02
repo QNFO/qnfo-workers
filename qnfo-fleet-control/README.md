@@ -74,3 +74,9 @@ Unknown is never a finding (4 daily points per window, so about 10 days of histo
 metric: a finding already carried by an open trigger or constraint issue is not filed twice. At most 3 new issues per tick.
 Read: `GET /improvement`. Run now: `POST /improvement/tick` (admin token). Ledger: `improvement_loop_runs`. Suite:
 `improvement.test.mjs` (pure half plus the tick on an in-memory D1 with the live integrity and close-evidence triggers).
+
+## SURFACE-METRICS-1 (0.4.88, 2026-10-02, pillar reach)
+`IL_SURFACES` lists public surfaces that publish aggregate metrics. Each improvement tick reads them into `metric_registry`
+(seeded idempotently past the integrity triggers, target `maximize`), so they get history, trends and regression issues.
+First surface: iPatent (`https://ipatent.qnfo.org/api/metrics`): human views, search visits, crawler hits, drafters (7d).
+An unreadable surface writes nothing.

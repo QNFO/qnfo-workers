@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.5.0-private-findable"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.5.1-page-metrics"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -34,6 +34,55 @@ function adminOk(request, env) {
   return !!t && request.headers.get("X-Admin-Token") === t;
 }
 __name(adminOk, "adminOk");
+// PAGE-METRICS-1 (3.5.1): iPatent had no pageview measurement at all (no beacon; the D1 analytics table stopped on
+// 2026-07-12). Each GET of / or /guide adds 1 to a daily counter keyed by path and source class. No IP, user agent,
+// cookie or referrer URL is stored: only the class (search, qnfo, referral, direct, crawler). GET /api/metrics serves
+// 7d and 30d aggregates; qnfo-fleet-control IMPROVEMENT-LOOP-1 reads them into metric_registry every hour.
+var PV_BOT = /bot|crawl|spider|slurp|preview|headless|curl|wget|python|httpclient|go-http|java\/|okhttp|axios|node-fetch|lighthouse|pingdom|uptime|monitor|scanner|facebookexternalhit|embedly|whatsapp|telegram/i;
+var PV_SEARCH = /(^|\.)(google|bing|duckduckgo|yahoo|ecosia|qwant|yandex|baidu|startpage|search\.brave|kagi|perplexity|chatgpt|you)\./i;
+var PV_READY = false;
+function pageSource(request) {
+  const ua = request.headers.get("User-Agent") || "";
+  if (!ua || PV_BOT.test(ua)) return "crawler";
+  let host = "";
+  try { host = new URL(request.headers.get("Referer") || "").hostname.toLowerCase(); } catch (e) { host = ""; }
+  if (!host) return "direct";
+  if (host === "ipatent.qnfo.org") return "internal";
+  if (PV_SEARCH.test(host + ".")) return "search";
+  if (host === "qnfo.org" || host.endsWith(".qnfo.org")) return "qnfo";
+  return "referral";
+}
+__name(pageSource, "pageSource");
+async function countPageView(env, path, source) {
+  if (!env.IPATENT_DB) return;
+  try {
+    if (!PV_READY) {
+      await env.IPATENT_DB.prepare("CREATE TABLE IF NOT EXISTS page_views (day TEXT NOT NULL, path TEXT NOT NULL, source TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, path, source))").run();
+      PV_READY = true;
+    }
+    await env.IPATENT_DB.prepare("INSERT INTO page_views (day, path, source, n) VALUES (date('now'), ?1, ?2, 1) ON CONFLICT(day, path, source) DO UPDATE SET n = n + 1").bind(path, source).run();
+  } catch (e) { console.error("page view count failed:", e && e.message); }
+}
+__name(countPageView, "countPageView");
+async function handleMetrics(env) {
+  const out = { ok: true, worker: "qnfo-ipatent", version: VERSION, windows: {} };
+  for (const d of [7, 30]) {
+    const w = { views_human: null, views_search: null, views_qnfo: null, views_referral: null, views_direct: null, views_crawler: null, guide_views_human: null, drafts: null, drafts_saved: null, drafters: null };
+    try {
+      const rows = (await env.IPATENT_DB.prepare("SELECT path, source, SUM(n) AS n FROM page_views WHERE day >= date('now', ?1) GROUP BY path, source").bind("-" + (d - 1) + " days").all()).results || [];
+      let human = 0, guide = 0; const by = { search: 0, qnfo: 0, referral: 0, direct: 0, crawler: 0 };
+      rows.forEach((r) => { const n = Number(r.n) || 0; if (r.source in by) by[r.source] += n; if (r.source !== "crawler" && r.source !== "internal") { human += n; if (r.path === "/guide") guide += n; } });
+      Object.assign(w, { views_human: human, views_search: by.search, views_qnfo: by.qnfo, views_referral: by.referral, views_direct: by.direct, views_crawler: by.crawler, guide_views_human: guide });
+    } catch (e) { w.views_error = "page_views not yet created"; }
+    try {
+      const s = await env.IPATENT_DB.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN title <> '[private]' THEN 1 ELSE 0 END) AS saved, COUNT(DISTINCT ip_address) AS u FROM submissions WHERE created_at >= datetime('now', ?1)").bind("-" + d + " days").first();
+      Object.assign(w, { drafts: Number(s && s.n) || 0, drafts_saved: Number(s && s.saved) || 0, drafters: Number(s && s.u) || 0 });
+    } catch (e) { w.drafts_error = String(e && e.message || e).slice(0, 120); }
+    out.windows[d + "d"] = w;
+  }
+  return json(out);
+}
+__name(handleMetrics, "handleMetrics");
 var VZ_TOP_K = 8;
 var MAX_DESCRIPTION_LEN = 5e3;
 var RATE_LIMIT_WINDOW_MS = 60 * 60 * 1e3;
@@ -1336,8 +1385,8 @@ var qnfo_ipatent_default = {
           status: "ok",
           worker: "qnfo-ipatent",
           version: VERSION,
-          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide"],
-          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token"],
+          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics"],
+          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token", "page metrics are daily counts by source class only (no IP, user agent or cookie); crawler detection is a user-agent heuristic"],
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
             r2: !!env.IPATENT_R2 ? "ipatent" : null,
@@ -1347,8 +1396,15 @@ var qnfo_ipatent_default = {
         });
       }
       const isRead = request.method === "GET" || request.method === "HEAD";
-      if (path === "/" && isRead) return html(LANDING_HTML);
-      if ((path === "/guide" || path === "/guide/") && isRead) return html(GUIDE_HTML);
+      if (path === "/" && isRead) {
+        if (request.method === "GET") ctx?.waitUntil?.(countPageView(env, "/", pageSource(request)));
+        return html(LANDING_HTML);
+      }
+      if ((path === "/guide" || path === "/guide/") && isRead) {
+        if (request.method === "GET") ctx?.waitUntil?.(countPageView(env, "/guide", pageSource(request)));
+        return html(GUIDE_HTML);
+      }
+      if (path === "/api/metrics" && request.method === "GET") return handleMetrics(env);
       if (path === "/robots.txt" && isRead) {
         return new Response("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /d/\nSitemap: " + CANONICAL_ORIGIN + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       }

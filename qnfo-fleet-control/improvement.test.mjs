@@ -16,9 +16,9 @@ const a = src.indexOf(BEGIN), b = src.indexOf(END);
 if (a < 0 || b < 0 || b < a) { console.error("FAIL improvement block markers missing"); console.log("1 failed"); process.exit(1); }
 const ca = src.indexOf("// ---- CHARTER-LOOP-1:BEGIN"), cb = src.indexOf("// ---- CHARTER-LOOP-1:END ----");
 if (ca < 0 || cb < 0) { console.error("FAIL charter block markers missing"); console.log("1 failed"); process.exit(1); }
-const sandbox = { VERSION: "test", timedFetch: null, b64encode: null, sha256: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, isFinite, TextDecoder, atob, __export: null };
+const sandbox = { fetch: async () => { throw new Error("offline"); }, AbortSignal, VERSION: "test", timedFetch: null, b64encode: null, sha256: null, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, isFinite, TextDecoder, atob, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(ca, cb + "// ---- CHARTER-LOOP-1:END ----".length) + "\n" + src.slice(a, b + END.length) + "\n__export = { improvementEvaluate, improvementLoopTick, ilDirection, ilIssueMetric, IL_SELF_METRICS };", sandbox, { filename: "improvement-block.js" });
+vm.runInContext(src.slice(ca, cb + "// ---- CHARTER-LOOP-1:END ----".length) + "\n" + src.slice(a, b + END.length) + "\n__export = { improvementEvaluate, improvementLoopTick, ilDirection, ilIssueMetric, IL_SELF_METRICS, ilSurfaceValues, IL_SURFACES };", sandbox, { filename: "improvement-block.js" });
 const I = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -118,6 +118,13 @@ x = I.improvementEvaluate({
 }, NOW);
 eq(x.fix_hold_rate_30d, 0, "a dip after closure counts against the hold rate");
 eq(x.findings.filter((fd) => fd.key.indexOf("METRIC-FIX-RELAPSED-1") === 0).length, 0, "recovered relapse is not filed");
+
+// surface metrics: finite numbers only, unknown writes nothing
+const ip = I.IL_SURFACES.find((x) => x.name === "ipatent");
+eq(I.ilSurfaceValues(ip, { windows: { "7d": { views_human: 12, views_search: 3, views_crawler: 40, drafters: 0 } } }).map((v) => v.metric + "=" + v.value).join(","), "ipatent_human_views_7d=12,ipatent_search_visits_7d=3,ipatent_crawler_hits_7d=40,ipatent_drafters_7d=0", "all four iPatent metrics read, zero kept");
+eq(I.ilSurfaceValues(ip, { windows: { "7d": { views_human: null, views_error: "x" } } }).length, 0, "null values are not written");
+eq(I.ilSurfaceValues(ip, null).length, 0, "unreadable surface writes nothing");
+eq(I.ilDirection("maximize (trended by IMPROVEMENT-LOOP-1; pillar reach)"), "up", "surface target trends upward");
 
 // self metrics declare targets and triggers the trigger loop can read
 eq(I.IL_SELF_METRICS.length, 3, "three self metrics");
