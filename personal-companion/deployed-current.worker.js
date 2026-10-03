@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.9.0-prompts"; // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.9.1-questions"; // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -2145,7 +2145,7 @@ var VaultIndexer = (function() {
 })();
 
 // OWNER-PROMPTS-1 (2026-10-03, pillar: personal): the personal system asks Rowan questions instead of waiting to be asked.
-// Producers (calendar-api) write rows into qnfo-audit.owner_prompts with the message and its one-tap links already composed;
+// Producers (calendar-api) write rows into qnfo-audit.owner_questions with the message and its one-tap links already composed;
 // this worker only DELIVERS, from its existing hourly tick (no new cron, no model call). Owner notices go through
 // qnfo-email /send with handoff:true, the owner-notice path HANDOFF-ALLOWLIST-1 that qnfo-email already defines; the digest
 // opt-out list (email_suppression) is left untouched. Caps: PROMPT_DAILY_CAP per Amsterdam day, one mail per tick,
@@ -2163,14 +2163,14 @@ async function deliverOwnerPrompts(env, nowMs) {
   if (!env.EMAIL) { out.skipped = "no EMAIL binding"; return out; }
   nowMs = nowMs || Date.now();
   try {
-    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS owner_prompts (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))").run();
+    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS owner_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))").run();
     if (promptQuietHour(nowMs)) { out.skipped = "quiet hours"; return out; }
     var nowStr = new Date(nowMs).toISOString().replace("T", " ").slice(0, 19);
     var day = amsDayKey(new Date(nowMs));
     var startUtc = new Date(day + "T00:00:00Z").getTime() - 2 * 36e5;
-    var cnt = await env.AUDIT.prepare("SELECT count(*) n FROM owner_prompts WHERE sent_at >= ?1").bind(new Date(startUtc).toISOString().replace("T", " ").slice(0, 19)).first();
+    var cnt = await env.AUDIT.prepare("SELECT count(*) n FROM owner_questions WHERE sent_at >= ?1").bind(new Date(startUtc).toISOString().replace("T", " ").slice(0, 19)).first();
     if (cnt && cnt.n >= PROMPT_DAILY_CAP) { out.skipped = "daily cap"; return out; }
-    var row = await env.AUDIT.prepare("SELECT id, subject, body FROM owner_prompts WHERE sent_at IS NULL AND attempts < ?1 AND (not_before IS NULL OR not_before <= ?2) ORDER BY priority, id LIMIT 1").bind(PROMPT_MAX_ATTEMPTS, nowStr).first();
+    var row = await env.AUDIT.prepare("SELECT id, subject, body FROM owner_questions WHERE sent_at IS NULL AND attempts < ?1 AND (not_before IS NULL OR not_before <= ?2) ORDER BY priority, id LIMIT 1").bind(PROMPT_MAX_ATTEMPTS, nowStr).first();
     if (!row) { out.skipped = "queue empty"; return out; }
     var err = null;
     try {
@@ -2182,10 +2182,10 @@ async function deliverOwnerPrompts(env, nowMs) {
       if (!resp.ok) err = "email " + resp.status + " " + String(await resp.text().catch(function () { return ""; })).slice(0, 200);
     } catch (e) { err = String(e && e.message || e).slice(0, 240); }
     if (err) {
-      await env.AUDIT.prepare("UPDATE owner_prompts SET attempts = attempts + 1, last_error = ?2 WHERE id = ?1").bind(row.id, err).run();
+      await env.AUDIT.prepare("UPDATE owner_questions SET attempts = attempts + 1, last_error = ?2 WHERE id = ?1").bind(row.id, err).run();
       out.error = err;
     } else {
-      await env.AUDIT.prepare("UPDATE owner_prompts SET sent_at = ?2, attempts = attempts + 1, last_error = NULL WHERE id = ?1").bind(row.id, nowStr).run();
+      await env.AUDIT.prepare("UPDATE owner_questions SET sent_at = ?2, attempts = attempts + 1, last_error = NULL WHERE id = ?1").bind(row.id, nowStr).run();
       out.sent = 1;
     }
   } catch (e) { out.error = String(e && e.message || e).slice(0, 240); }
