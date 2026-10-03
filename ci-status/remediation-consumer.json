@@ -1,87 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@1c317defadfe",
- "due": 12,
+ "verifier": "remediation-consumer@8292fa4fc253",
+ "due": 0,
  "pass": 0,
- "fail": 1,
- "skipped": 11,
- "contracts": [
-  {
-   "class": "detect-threshold-blindspot",
-   "issue_id": 1165,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "act-half-unverified",
-   "issue_id": 1207,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "closure-evidence-unbacked",
-   "issue_id": 1263,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "remediation-class-death",
-   "issue_id": 1200,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "capability-precondition-missing",
-   "issue_id": 1118,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "mixed-type-timestamp",
-   "issue_id": 1283,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "timestamp-seconds-bypass",
-   "issue_id": 1298,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "router-calib-agent-class",
-   "issue_id": 1293,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "outreach-selector-drift",
-   "issue_id": 1294,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "outreach-drain-scheduled",
-   "issue_id": 1295,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "close-predicate-monotone",
-   "issue_id": 1297,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
-  },
-  {
-   "class": "cron-registry-truth",
-   "issue_id": 1494,
-   "verdict": "fail",
-   "expected": 17,
-   "observed": 0,
-   "written": true
-  }
- ],
+ "fail": 0,
+ "skipped": 0,
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -98,8 +23,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 11997,
- "head": "1c317defadfedb209dcb390623d82eeb39d3b67e",
+ "spent_ms": 1558,
+ "head": "8292fa4fc2535bb143239f2a4a9896cc73c04813",
  "job_status": "success",
- "ts": "2026-10-03T07:51:54Z"
+ "ts": "2026-10-03T08:22:57Z"
 }
