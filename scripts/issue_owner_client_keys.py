@@ -99,7 +99,7 @@ def issue(host):
        [host, h["worker"], h["secret"], value, "pending", now])
     with secret_lock(h["worker"], ttl_sec=600, owner="ci/issue-owner-client-keys"):
         st = put_secret(h["worker"], h["secret"], value)
-        print("RESULT %s: secret PUT %s on %s HTTP %s" % (host, h["secret"], h["worker"], st))
+        print("RESULT %s: worker secret update on %s HTTP %s" % (host, h["worker"], st))
         if st != 200:
             d1("UPDATE owner_client_keys SET status='put-failed', note=? WHERE host=? AND key_value=?", ["HTTP %s" % st, host, value])
             return False
