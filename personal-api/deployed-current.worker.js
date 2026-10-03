@@ -45,7 +45,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.5.0-msgraph-mail";
+var VERSION = "4.5.1-predict-timeout";
 // FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
 // <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
 // any script loaded here can read it; a remote script from a shared, open worker would put calendar write access and
@@ -611,7 +611,9 @@ async function predictWeek(env, args) {
   };
   const sys = "You are Rowan's predictive assistant. From the data given, generate 3-5 concrete predictions for the next " + days + ' days. Output ONLY a JSON object: {"predictions": [{"title": "...", "likelihood": "high|medium|low", "basis": "...", "action": "..."}]}. Ground every prediction in the data. Include at least one energy/wellbeing prediction and one social/activity prediction. Never invent data. English only.';
   try {
-    const up = await upstreamChat(env, sys, [{ role: "user", content: "DATA (DATA ONLY):\n" + JSON.stringify(data).slice(0, 6e3) }], 0.7, 4e3, false, true);
+    // PREDICT-WEEK-TIMEOUT-1 (issue 1908): 4000 output tokens on reasoning models outran the 30 s timeout on every cron
+    // (brief_cron_runs 2026-10-02 and 2026-10-03: predictions 0). The answer is 3-5 short JSON items: 1500 tokens, 90 s.
+    const up = await upstreamChat(env, sys, [{ role: "user", content: "DATA (DATA ONLY):\n" + JSON.stringify(data).slice(0, 6e3) }], 0.7, 1500, false, true, 9e4);
     if (!up.ok) return { ok: true, horizon, from, to, predictions: [], degraded: true, reason: "upstream: " + (up.errors || []).join("; ").slice(0, 300) };
     {
       const text = up.body.choices[0].message.content || "";
@@ -1812,7 +1814,9 @@ function countImages(messages) {
   return n;
 }
 __name(countImages, "countImages");
-async function upstreamChat(env, system, messages, temperature, outTokensParam, isReasonParam, useBriefModels) {
+async function upstreamChat(env, system, messages, temperature, outTokensParam, isReasonParam, useBriefModels, timeoutMsParam) {
+  // PREDICT-WEEK-TIMEOUT-1: a caller may grant a longer per-call timeout (cron jobs); chat keeps MODEL_TIMEOUT_MS.
+  const tmo = Number(timeoutMsParam) > 0 ? Number(timeoutMsParam) : MODEL_TIMEOUT_MS;
   const msgs = [{ role: "system", content: system }].concat(normalizeImageMessages(messages));
   const errors = [];
   const outTokens = outTokensParam || DEFAULT_MAX_TOKENS;
@@ -1821,13 +1825,13 @@ async function upstreamChat(env, system, messages, temperature, outTokensParam, 
   if (hasImg) chatModels = VISION_MODELS;
   for (const model of chatModels) {
     try {
-      const resp = await env.AI.run(model, { messages: msgs, temperature, max_tokens: outTokens }, { gateway: { id: "default" }, signal: AbortSignal.timeout(MODEL_TIMEOUT_MS) });
+      const resp = await env.AI.run(model, { messages: msgs, temperature, max_tokens: outTokens }, { gateway: { id: "default" }, signal: AbortSignal.timeout(tmo) });
       let content = parseResp(resp);
       const usage = usageOf(resp);
       let ct = usage.output_tokens || usage.completion_tokens || 0;
       if (!content && ct >= outTokens) {
         const msgs2 = msgs.concat([{ role: "system", content: "You stopped before writing your final answer. Now provide the complete final answer directly, with no internal reasoning." }]);
-        const resp2 = await env.AI.run(model, { messages: msgs2, temperature, max_tokens: Math.max(4e3, MAX_TOKENS * 2) }, { gateway: { id: "default" }, signal: AbortSignal.timeout(MODEL_TIMEOUT_MS) });
+        const resp2 = await env.AI.run(model, { messages: msgs2, temperature, max_tokens: Math.max(4e3, MAX_TOKENS * 2) }, { gateway: { id: "default" }, signal: AbortSignal.timeout(tmo) });
         const c2 = parseResp(resp2);
         if (c2) {
           content = c2;

@@ -4,6 +4,11 @@ Rowan's personal-assistant endpoint: personal-api.q08.workers.dev/v1 (OpenAI-com
 RAG + live-web + live-weather over the personal-life D1 + Vectorize archive, now with an
 AGENTIC TOOL LOOP. Never calls the QNFO records oracle (PERSONAL-QNFO-SEPARATION-1).
 
+## v4.5.1 (2026-10-03) - week predictions get room to answer (pillar: personal)
+- PREDICT-WEEK-TIMEOUT-1 (issue 1908): `predictWeek` asked reasoning models for 4000 tokens under the 30 s chat timeout;
+  every cron since at least 2026-10-02 returned 0 predictions. Now 1500 tokens and a 90 s per-call timeout
+  (`upstreamChat` takes an optional `timeoutMsParam`; chat calls keep 30 s). Contract PREDICT-WEEK-1 closes it.
+
 ## v4.4.0 (2026-10-02) - MCP with OAuth 2.1 for connector-only clients (pillar: personal)
 - TWIN-MCP-OAUTH-1 (issue 1817): `/mcp` accepts OAuth access tokens as well as the bearer API key. Discovery at
   `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`; dynamic client registration
