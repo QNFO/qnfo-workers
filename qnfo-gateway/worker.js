@@ -1,4 +1,4 @@
-var VERSION="3.9.2-reading";
+var VERSION="3.9.6-math-typeset";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -720,6 +720,268 @@ __name2(cleanPunct, "cleanPunct");
 __name22(cleanPunct, "cleanPunct");
 __name222(cleanPunct, "cleanPunct");
 __name2222(cleanPunct, "cleanPunct");
+// MATH-TYPESET-1 (3.9.3, 2026-10-03, pillar reach): plain-text pseudo-math ("D_C = e^{2\u03c0i c / 8}", "\u03ba = dim(A)\u00b2", "10\u207b\u2074")
+// carries no $ delimiters, so MathJax has nothing to typeset and the reader sees raw underscores and carets. A live sweep of
+// the 458 paper pages on 2026-10-03 found 47 pages with plain-text math only and 160 more with LaTeX plus leftover plain text;
+// paper_render_defect_pages read 0 because none of its four tests looks at math. pseudoMath() finds runs of such notation in
+// running text (after real $...$ and \(...\) are saved, outside code spans and link targets) and hands each to saveMath as TeX.
+// Conservative by design: a run needs an anchor (subscript or superscript on a single letter, a Unicode script character, a Greek
+// letter or a math symbol), words of three or more letters break it, URLs, DOIs and snake_case identifiers are never touched, and a
+// run that would not be valid TeX (unbalanced braces, a double script, a stray backslash, a non-ASCII leftover) is left as text.
+// Offline corpus check: scripts/math-corpus-check.mjs (9,056 runs over 458 pages, 0 KaTeX parse errors; 8,023 -> 1,204 residual).
+// MATH-TYPESET-1 prototype: plain-text pseudo-math -> TeX spans, conservative.
+// pseudoMath(line, save) returns the line with each detected run replaced by save(tex).
+var PM_GREEK = {"\u03b1":"\\alpha","\u03b2":"\\beta","\u03b3":"\\gamma","\u03b4":"\\delta","\u03b5":"\\varepsilon","\u03f5":"\\epsilon","\u03b6":"\\zeta","\u03b7":"\\eta","\u03b8":"\\theta","\u03d1":"\\vartheta","\u03b9":"\\iota","\u03ba":"\\kappa","\u03bb":"\\lambda","\u03bc":"\\mu","\u00b5":"\\mu","\u03bd":"\\nu","\u03be":"\\xi","\u03c0":"\\pi","\u03d6":"\\varpi","\u03c1":"\\rho","\u03f1":"\\varrho","\u03c3":"\\sigma","\u03c2":"\\varsigma","\u03c4":"\\tau","\u03c5":"\\upsilon","\u03c6":"\\varphi","\u03d5":"\\phi","\u03c7":"\\chi","\u03c8":"\\psi","\u03c9":"\\omega","\u0393":"\\Gamma","\u0394":"\\Delta","\u0398":"\\Theta","\u039b":"\\Lambda","\u039e":"\\Xi","\u03a0":"\\Pi","\u03a3":"\\Sigma","\u03a5":"\\Upsilon","\u03a6":"\\Phi","\u03a8":"\\Psi","\u03a9":"\\Omega","\u0391":"A","\u0392":"B","\u0395":"E","\u0396":"Z","\u0397":"H","\u0399":"I","\u039a":"K","\u039c":"M","\u039d":"N","\u039f":"O","\u03a1":"P","\u03a4":"T","\u03a7":"X"};
+var PM_SYM = {"\u00d7":"\\times ","\u00b7":"\\cdot ","\u22c5":"\\cdot ","\u2212":"-","\u2013":"-","\u2264":"\\leq ","\u2265":"\\geq ","\u2248":"\\approx ","\u2260":"\\neq ","\u226a":"\\ll ","\u226b":"\\gg ","\u2208":"\\in ","\u2209":"\\notin ","\u2295":"\\oplus ","\u2297":"\\otimes ","\u2192":"\\to ","\u2190":"\\leftarrow ","\u2194":"\\leftrightarrow ","\u21d2":"\\Rightarrow ","\u21d4":"\\Leftrightarrow ","\u221e":"\\infty ","\u2202":"\\partial ","\u2207":"\\nabla ","\u2211":"\\sum ","\u220f":"\\prod ","\u211a":"\\mathbb{Q}","\u211d":"\\mathbb{R}","\u2124":"\\mathbb{Z}","\u2102":"\\mathbb{C}","\u2115":"\\mathbb{N}","\u27e8":"\\langle ","\u27e9":"\\rangle ","\u2016":"\\Vert ","\u223c":"\\sim ","\u2261":"\\equiv ","\u00b1":"\\pm ","\u2213":"\\mp ","\u221d":"\\propto ","\u2200":"\\forall ","\u2203":"\\exists ","\u2227":"\\wedge ","\u2228":"\\vee ","\u00ac":"\\neg ","\u2282":"\\subset ","\u2286":"\\subseteq ","\u2283":"\\supset ","\u222a":"\\cup ","\u2229":"\\cap ","\u2205":"\\emptyset ","\u2218":"\\circ ","\u22a5":"\\perp ","\u2245":"\\cong ","\u2243":"\\simeq ","\u2032":"'","\u02b9":"'","\u02bc":"'","\u2026":"\\ldots ","\u2020":"\\dagger ","\u00b0":"^{\\circ}","\u2223":"\\mid ","\u2308":"\\lceil ","\u2309":"\\rceil ","\u230a":"\\lfloor ","\u230b":"\\rfloor ","\u2272":"\\lesssim ","\u2273":"\\gtrsim "};
+var PM_SUPM = {"\u2070":"0","\u00b9":"1","\u00b2":"2","\u00b3":"3","\u2074":"4","\u2075":"5","\u2076":"6","\u2077":"7","\u2078":"8","\u2079":"9","\u207a":"+","\u207b":"-","\u207c":"=","\u207d":"(","\u207e":")","\u207f":"n","\u2071":"i","\u1d43":"a","\u1d47":"b","\u1d9c":"c","\u1d48":"d","\u1d49":"e","\u1da0":"f","\u1d4d":"g","\u02b0":"h","\u02b2":"j","\u1d4f":"k","\u02e1":"l","\u1d50":"m","\u1d52":"o","\u1d56":"p","\u02b3":"r","\u02e2":"s","\u1d57":"t","\u1d58":"u","\u1d5b":"v","\u02b7":"w","\u02e3":"x","\u02b8":"y","\u1dbb":"z"};
+var PM_SUBM = {"\u2080":"0","\u2081":"1","\u2082":"2","\u2083":"3","\u2084":"4","\u2085":"5","\u2086":"6","\u2087":"7","\u2088":"8","\u2089":"9","\u208a":"+","\u208b":"-","\u208c":"=","\u208d":"(","\u208e":")","\u2090":"a","\u2091":"e","\u2092":"o","\u2093":"x","\u2095":"h","\u2096":"k","\u2097":"l","\u2098":"m","\u2099":"n","\u209a":"p","\u209b":"s","\u209c":"t","\u1d62":"i","\u2c7c":"j","\u1d63":"r","\u1d64":"u","\u1d65":"v"};
+var PM_SUPC = Object.keys(PM_SUPM).join(""), PM_SUBC = Object.keys(PM_SUBM).join("");
+var PM_FUNCS = "dim|log|ln|exp|sin|cos|tan|sinh|cosh|tanh|max|min|det|gcd|lim|sup|inf|tr|Tr|deg|arg|ord|val|rank|Re|Im|mod|Pr|Var|Cov";
+var PM_FUNC_RE = new RegExp("^(" + PM_FUNCS + ")$");
+var PM_UNITS = "fJ|pJ|nJ|\u00b5J|mJ|J|fs|ps|ns|\u00b5s|ms|s|Hz|kHz|MHz|GHz|THz|mK|K|eV|meV|keV|MeV|GeV|TeV|nm|\u00b5m|mm|cm|m|W|mW|\u00b5W|nW|pW|V|mV|A|mA|dB|kB|MB|GB|Gb|bits?|qubits?";
+var PM_UNIT_RE = new RegExp("^(" + PM_UNITS + ")$");
+var PM_GREEK_CLASS = "[\u0391-\u03a9\u03b1-\u03c9\u03d1\u03d5\u03d6\u03f1\u03f5\u00b5]";
+var PM_SYM_CLASS = "[" + Object.keys(PM_SYM).filter(function (k) { return !/^[\u00d7\u00b7\u22c5\u2212\u2013\u2032\u2026\u00b0]$/.test(k); }).join("") + "]";
+var PM_OPS = new Set(["=", "\u2248", "\u2260", "\u2264", "\u2265", "<", ">", "\u226a", "\u226b", "+", "\u2212", "\u00d7", "\u00b7", "\u22c5", "\u2295", "\u2297", "\u2208", "\u2209", "\u2192", "\u2190", "\u2194", "\u21d2", "\u21d4", "\u223c", "\u2261", "\u00b1", "/", "*", "\u2218", "\u221d", "\u2282", "\u2286", "\u222a", "\u2229", "\u2243", "\u2245", "\u2272", "\u2273", "-", "\u2013", "|", "\u2223"]);
+var PM_EQ_OPS = new Set(["=", "\u2248", "\u2260", "\u2264", "\u2265", "<", ">", "\u226a", "\u226b", "\u2208", "\u2261", "\u223c"]);
+var PM_SUBBASE = "(?:\ud835[\udd38-\udd6b]|[A-Za-z\u0391-\u03a9\u03b1-\u03c9\u2115\u211a\u211d\u2124\u2102\u220f\u2211\\)\\]])";
+var PM_RE_SUB = new RegExp("(?<![A-Za-z0-9_\\\\])" + PM_SUBBASE + "\\\\?_(?:\\{[^{}]{1,40}\\}|[A-Za-z0-9\u03b1-\u03c9\u0391-\u03a9]{1,8}(?![A-Za-z0-9_\u03b1-\u03c9]))");
+var PM_RE_PIPE_SUB = /\|[^|\s]{1,12}\|_[A-Za-z0-9]{1,4}/;
+var PM_RE_CARET = /(?<![A-Za-z0-9_\\])[A-Za-z0-9\u0391-\u03a9\u03b1-\u03c9\)\]]\^(?:\{[^{}\s]{1,40}\}|\([^()\s]{1,30}\)|[A-Za-z0-9\u03b1-\u03c9\-\u2212]{1,6}(?![A-Za-z0-9_]))/;
+var PM_RE_UNI = new RegExp("(?<![a-z][A-Za-z\\u0370-\\u03ff]|[A-Za-z\\u0370-\\u03ff][a-z])(?<=[A-Za-z0-9\\u0370-\\u03ff\\)\\]" + PM_SUPC + PM_SUBC + "])[" + PM_SUPC + PM_SUBC + "]");
+var PM_RE_GREEK = new RegExp(PM_GREEK_CLASS);
+var PM_RE_SYM = new RegExp(PM_SYM_CLASS + "|\u221a");
+
+function pmBalanced(s) {
+  var d = 0, c = 0;
+  for (var i = 0; i < s.length; i++) {
+    var ch = s[i];
+    if (ch === "(") d++; else if (ch === ")") { d--; if (d < 0) return false; }
+    else if (ch === "{") c++; else if (ch === "}") { c--; if (c < 0) return false; }
+  }
+  return d === 0 && c === 0;
+}
+function pmStripPunct(w) {
+  var lead = "", trail = "";
+  var m = /^[(\[{"'\u201c\u2018*]+/.exec(w);
+  if (m) { lead = m[0]; w = w.slice(lead.length); }
+  var changed = true;
+  while (changed && w.length) {
+    changed = false;
+    var last = w[w.length - 1];
+    if (/[.,;:!?"'\u201d\u2019*]/.test(last)) { trail = last + trail; w = w.slice(0, -1); changed = true; }
+    else if ((last === ")" || last === "]" || last === "}") && !pmBalanced(w)) { trail = last + trail; w = w.slice(0, -1); changed = true; }
+  }
+  // a leading paren that never closes inside the core stays out
+  while (w[0] === "(" && !pmBalanced(w)) { lead += "("; w = w.slice(1); }
+  return { lead: lead, core: w, trail: trail };
+}
+function pmIsStrong(c) {
+  return new RegExp("^(?:" + PM_UNITS + ")[" + PM_SUPC + "]+$").test(c) || PM_RE_SUB.test(c) || PM_RE_PIPE_SUB.test(c) || PM_RE_CARET.test(c) || PM_RE_UNI.test(c) || PM_RE_GREEK.test(c) || PM_RE_SYM.test(c) || /\u221a/.test(c);
+}
+function pmAtomish(c) {
+  if (!/^[()\[\]A-Za-z0-9.,+\-\u2212\u00b7\u00d7\u22c5*\/]{1,30}$/.test(c)) return false;
+  if (/[A-Za-z]\.[A-Za-z]/.test(c)) return false;
+  var r = c.replace(new RegExp("(?:" + PM_FUNCS + "|" + PM_UNITS + ")", "g"), "");
+  if (/[A-Za-z]{2,}/.test(r)) return false;
+  return /[0-9()\/]/.test(c) && /[A-Za-z0-9]/.test(c);
+}
+function pmIsAtom(c) {
+  if (pmAtomish(c)) return true;
+  if (/^[+\u2212-]?\d[\d.,]*%?$/.test(c)) return true;            // number
+  if (/^[A-Za-z]$/.test(c)) return true;                           // single variable
+  if (/^\(?[\d.]+\/[\d.]+\)?$/.test(c)) return true;               // 8/64
+  if (PM_FUNC_RE.test(c) || PM_UNIT_RE.test(c)) return true;
+  if (/^(?:[A-Za-z]|\d+(?:\.\d+)?)(?:\([^()\s]{1,30}\))$/.test(c) && pmBalanced(c)) return true;    // f(p), dim(A), p(k)
+  if (new RegExp("^(?:" + PM_FUNCS + ")\\([^()\\s]{1,30}\\)$").test(c) && pmBalanced(c)) return true;
+  if (/^\([A-Za-z0-9+\-\u2212*\/.,=\u2264\u2265]{1,30}\)$/.test(c)) return true; // (a+b) (8/64)
+  return false;
+}
+function pmWordLike(core) {
+  var c = core.replace(/\\?_\{[^{}]*\}|\\?_[A-Za-z0-9\u03b1-\u03c9\u0391-\u03a9]+|\^\{[^{}]*\}|\^[A-Za-z0-9\-]+/g, " ").replace(/[^A-Za-z]+/g, " ").trim().split(" ");
+  for (var i = 0; i < c.length; i++) {
+    var w = c[i];
+    if (w.length >= 3 && !PM_FUNC_RE.test(w) && !PM_UNIT_RE.test(w)) return true;
+    if (w.length === 2 && /^[A-Z][a-z]$/.test(w)) return true;
+  }
+  return false;
+}
+function pmGreekWord(core) { return /[\u1f00-\u1fff\u0386\u0388-\u038a\u038c\u038e-\u0390\u03ac-\u03b0\u03ca-\u03ce]/.test(core); }
+function pmClassify(core) {
+  if (!core) return "break";
+  if (/^\u0003/.test(core) || /\u0003/.test(core)) return "break";    // existing math placeholder
+  if (/:\/\/|^www\.|@|^10\.\d{4,}\//.test(core)) return "break";
+  if (PM_OPS.has(core)) return "op";
+  if (pmGreekWord(core)) return "break";
+  if (pmIsStrong(core)) {
+    if (pmWordLike(core)) return "break";
+    // multi-letter plain prefix words (snake_case) must not be strong: base must be a single token char
+    return "strong";
+  }
+  if (pmIsAtom(core)) return "atom";
+  return "break";
+}
+
+function pmToTex(s) {
+  s = s.replace(/\\([_*#])/g, "$1");
+  s = s.replace(/\\/g, "\\backslash ");
+  s = s.replace(/(.)\u0303/gu, "\\tilde{$1}").replace(/(.)\u0304/gu, "\\bar{$1}").replace(/(.)\u0302/gu, "\\hat{$1}").replace(/(.)\u0307/gu, "\\dot{$1}");
+  // sqrt
+  var out = "";
+  for (var i = 0; i < s.length; i++) {
+    var ch = s[i];
+    if (ch === "\u221a") {
+      var rest = s.slice(i + 1), m;
+      if (rest[0] === "(") {
+        var d = 0, j = 0;
+        for (; j < rest.length; j++) { if (rest[j] === "(") d++; else if (rest[j] === ")") { d--; if (d === 0) break; } }
+        out += "\\sqrt{" + pmToTex(rest.slice(1, j)) + "}"; i += j + 1; continue;
+      }
+      m = /^[A-Za-z0-9.\u03b1-\u03c9\u0391-\u03a9]+(?:[_^](?:\{[^{}]+\}|[A-Za-z0-9]+))?/.exec(rest);
+      if (m) { out += "\\sqrt{" + pmToTex(m[0]) + "}"; i += m[0].length; continue; }
+      out += "\\surd "; continue;
+    }
+    out += ch;
+  }
+  s = out;
+  // unicode super/subscript runs
+  s = s.replace(new RegExp("[" + PM_SUPC + "]+", "g"), function (m) { return "^{" + m.split("").map(function (c) { return PM_SUPM[c]; }).join("") + "}"; });
+  s = s.replace(new RegExp("[" + PM_SUBC + "]+", "g"), function (m) { return "_{" + m.split("").map(function (c) { return PM_SUBM[c]; }).join("") + "}"; });
+  // bare _sub and ^sup: braces, \mathrm for multi-letter words (recursive for nested subscripts)
+  function scripts(x) {
+    return x.replace(/_\{([^{}]+)\}|_([A-Za-z0-9\u03b1-\u03c9\u0391-\u03a9]+)/g, function (m, a, b) {
+      var t = a != null ? scripts(a) : b;
+      if (a == null && /^[A-Za-z]{2,}$/.test(t) && !/^[a-z]{2}$/.test(t)) t = "\\mathrm{" + t + "}";
+      else if (a != null && /^[A-Za-z]{3,}$/.test(t)) t = "\\mathrm{" + t + "}";
+      return "_{" + t + "}";
+    });
+  }
+  s = scripts(s);
+  s = s.replace(/\^\(([^()]+)\)/g, "^{$1}");
+  s = s.replace(/\^(-?\d+|\u2212\d+|[A-Za-z](?![A-Za-z])|[A-Za-z]{2,6}(?![A-Za-z]))/g, function (m, a) { return "^{" + a.replace(/\u2212/g, "-") + "}"; });
+  s = s.replace(/[\u{1D538}-\u{1D56B}]/gu, function (c) { var o = c.codePointAt(0) - 0x1D538; return "\\mathbb{" + String.fromCharCode(o < 26 ? 65 + o : 97 + o - 26) + "}"; });
+  // greek and symbols
+  s = s.replace(/[\u0391-\u03a9\u03b1-\u03c9\u03d1\u03d5\u03d6\u03f1\u03f5\u00b5]/g, function (c) { return PM_GREEK[c] != null ? PM_GREEK[c] + (/[A-Za-z]$/.test(PM_GREEK[c]) && PM_GREEK[c].length > 1 ? " " : "") : c; });
+  s = s.replace(/[^\x00-\x7f]/g, function (c) { return PM_SYM[c] != null ? PM_SYM[c] : c; });
+  // functions and units
+  s = s.replace(new RegExp("(?<![A-Za-z\\\\])(" + PM_FUNCS + ")(?![A-Za-z])", "g"), function (m, f) { return f === "mod" ? "\\bmod " : "\\" + (f === "Tr" || f === "tr" ? "operatorname{" + f + "}" : f === "ord" || f === "val" || f === "rank" || f === "Var" || f === "Cov" || f === "Pr" || f === "Re" || f === "Im" ? "operatorname{" + f + "}" : f); });
+  s = s.replace(new RegExp("(?<![A-Za-z\\\\{])(" + PM_UNITS + ")(?![A-Za-z\\\\}])", "g"), function (m, u, off, str) {
+    // only treat as unit when it follows a number token
+    var before = str.slice(0, off);
+    if (u.length > 1) return (/(\d|\})\s*$/.test(before) ? "\\," : "") + "\\mathrm{" + u + "}";
+    if (/\d\s*$/.test(before)) return "\\,\\mathrm{" + u + "}";
+    return u;
+  });
+  s = s.replace(/~/g, "\\sim ");
+  s = s.replace(/[%#&]/g, function(ch) {
+    return String.fromCharCode(92) + ch;
+  });
+  s = s.replace(/\s+/g, " ").trim();
+  return s;
+}
+
+function pseudoMath(text, save, stats) {
+  // protect code spans and link targets
+  var keep = [];
+  var t = String(text).replace(/`[^`]*`|\]\([^)]*\)/g, function (m) { keep.push(m); return "\u0001" + (keep.length - 1) + "\u0001"; });
+  var parts0 = t.split(/(\s+)/);          // words and whitespace
+  var parts = [];
+  for (var pi = 0; pi < parts0.length; pi++) {
+    var cur = parts0[pi];
+    if (pi % 2 === 0 && (cur.split("{").length - 1) > (cur.split("}").length - 1)) {
+      var tmp = cur, pj = pi;
+      while ((tmp.split("{").length - 1) > (tmp.split("}").length - 1) && pj + 2 < parts0.length && pj - pi < 12) { tmp += parts0[pj + 1] + parts0[pj + 2]; pj += 2; }
+      if ((tmp.split("{").length - 1) === (tmp.split("}").length - 1)) { cur = tmp; pi = pj; }
+    }
+    parts.push(cur);
+    if (pi + 1 < parts0.length) { parts.push(parts0[pi + 1]); pi++; }
+  }
+  var words = [];                       // {i, w, kind, lead, core, trail}
+  for (var i = 0; i < parts.length; i++) {
+    if (i % 2 === 1 || parts[i] === "") continue;
+    var sp = pmStripPunct(parts[i]);
+    var hs = /^(.+?)(-[A-Za-z]{3,}(?:-[A-Za-z]+)*)$/.exec(sp.core);
+    if (hs && pmClassify(hs[1]) === "strong" && !/^[A-Za-z]+$/.test(hs[1])) { sp = { lead: sp.lead, core: hs[1], trail: hs[2] + sp.trail }; }
+    var kind = /\u0001/.test(sp.core) ? "break" : pmClassify(sp.core);
+    words.push({ idx: i, sp: sp, kind: kind });
+  }
+  var res = parts.slice();
+  var n = 0;
+  function emit(a, b) {
+    // a..b inclusive indices into words
+    while (a <= b && words[a].kind === "op" && !/^[+\u2212-]$/.test(words[a].sp.core) ) a++;
+    while (b >= a && words[b].kind === "op") b--;
+    // drop edge ambiguous lone letters (article "a"/"A", pronoun "I") not next to an operator
+    while (a < b && words[a].kind === "atom" && /^[aAI]$/.test(words[a].sp.core) && words[a + 1].kind !== "op") a++;
+    while (b > a && words[b].kind === "atom" && /^[aAI]$/.test(words[b].sp.core) && words[b - 1].kind !== "op") b--;
+    if (a > b) return;
+    var kinds = words.slice(a, b + 1).map(function (x) { return x.kind; });
+    var strong = kinds.indexOf("strong") >= 0;
+    var eqs = words.slice(a, b + 1).some(function (x) { return x.kind === "op" && PM_EQ_OPS.has(x.sp.core); });
+    var atoms = kinds.filter(function (k) { return k === "atom"; }).length;
+    if (!strong && !(eqs && atoms >= 2)) return;
+    var segs = [];
+    for (var k = a; k <= b; k++) {
+      var w = words[k];
+      var core = w.sp.core;
+      var firstSeg = k === a, lastSeg = k === b;
+      segs.push({ k: k, core: core, lead: firstSeg ? w.sp.lead : "", trail: lastSeg ? w.sp.trail : "" });
+    }
+    // glue: inner words keep their own lead/trail (parens balance); only the run edges release punctuation
+    var raw = [];
+    for (var q = a; q <= b; q++) {
+      var ww = words[q];
+      raw.push((q === a ? "" : ww.sp.lead) + ww.sp.core + (q === b ? "" : ww.sp.trail));
+    }
+    var src = raw.join(" ");
+    if (/\$/.test(src)) return;
+    var tailx = words[b].sp.trail;
+    while (!pmBalanced(src) && /^[)\]}]/.test(tailx)) { src += tailx[0]; tailx = tailx.slice(1); }
+    if (!pmBalanced(src)) return;
+    var tex;
+    try { tex = pmToTex(src); } catch (e) { return; }
+    if (!tex || /[^\x00-\x7f]/.test(tex) || /\\/.test(src.replace(/\\([_*#])/g, "$1")) || !pmScriptsOk(tex) || /[\u0000-\u0008]/.test(tex) || !pmBalanced(tex) || /\\[^a-zA-Z,;:!%#&{} ]|[\u0300-\u036f]/.test(tex.replace(/\\(?=[A-Za-z,;:!%#&{}\\ ])/g, ""))) return;
+    var token = save(tex, src);
+    // replace in res: first word gets lead + token + ... last word's trail kept
+    var fw = words[a], lw = words[b];
+    res[fw.idx] = fw.sp.lead + token + tailx;
+    for (var z = fw.idx + 1; z <= lw.idx; z++) res[z] = "";
+    n++;
+  }
+  var a = -1;
+  for (var j = 0; j <= words.length; j++) {
+    var kd = j < words.length ? words[j].kind : "break";
+    if (kd === "break") { if (a >= 0) { emit(a, j - 1); a = -1; } }
+    else if (a < 0) a = j;
+    // a word with trailing sentence punctuation ends the run after itself
+    if (j < words.length && kd !== "break" && /[.;:!?]$/.test(words[j].sp.trail) ) { if (a >= 0) { emit(a, j); a = -1; } }
+  }
+  if (stats) stats.n = n;
+  return res.join("").replace(/\u0001(\d+)\u0001/g, function (m, i) { return keep[+i]; });
+}
+
+function pmScriptsOk(tex) {
+  var i = 0, n = tex.length, used = { _: false, "^": false };
+  function skipArg(j) {
+    while (tex[j] === " ") j++;
+    if (tex[j] === "{") { var d = 0; for (; j < n; j++) { if (tex[j] === "{") d++; else if (tex[j] === "}") { d--; if (d === 0) return j + 1; } } return n; }
+    if (tex[j] === "\\") { j++; while (j < n && /[A-Za-z]/.test(tex[j])) j++; return j; }
+    return j + 1;
+  }
+  while (i < n) {
+    var c = tex[i];
+    if (c === "_" || c === "^") {
+      if (used[c]) return false;
+      used[c] = true; i = skipArg(i + 1);
+      var k = i; while (tex[k] === " ") k++;
+      if (tex[k] !== "_" && tex[k] !== "^") { used._ = false; used["^"] = false; }
+      continue;
+    }
+    if (c !== " ") { used._ = false; used["^"] = false; }
+    i++;
+  }
+  return true;
+}
 function _mdInline(t) {
   t = String(t || "");
   var _math = [];
@@ -741,6 +1003,9 @@ function _mdInline(t) {
   });
   t = t.replace(/\\\(([^\n]*?)\\\)/g, function(m, c) {
     return saveMath(c, false);
+  });
+  t = pseudoMath(t, function(tex) {
+    return saveMath(tex, false);
   });
   t = esc(t).replace(/\$/g, "\u0007");
   t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
@@ -1949,7 +2214,9 @@ function renderDefectCount(html) {
   const head = (t.match(/(^|\s)#{1,6}\s+\w/g) || []).length;
   const rule = (t.match(/\|\s*:?-{3,}/g) || []).length;
   const odd = (t.replace(/\\\$/g, "").split("$").length - 1) % 2;
-  return bold + head + rule + odd;
+  const noMath = t.replace(/\$\$[\s\S]*?\$\$/g, " ").replace(/\$[^$\n]+\$/g, " ");
+  const resid = (noMath.match(/[A-Za-z\u0370-\u03ff\)\]][_^][{(]?[A-Za-z0-9+\-]|[\u00b2\u00b3\u00b9\u2070-\u209f]/g) || []).length;
+  return bold + head + rule + odd + (resid >= 3 ? 1 : 0);
 }
 function paperRenderHtml(row) {
   const stripped = stripFrontmatter(String(row.body_md || "")).trim();
