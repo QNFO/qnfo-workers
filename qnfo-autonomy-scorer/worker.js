@@ -22,7 +22,10 @@
 // survival_state.sai is set NULL, sai_weighted keeps its last measured value and date, and an alert is written.
 // GET /preview?w_autonomy=0.20&w_self_improv=0.15 recomputes the SAI with what-if weights next to the live ones and
 // writes nothing, so a weight change can be shown to move the SAI without touching the ratified weights.
-var VERSION = "1.2.0-sai-weighted";
+var VERSION = "1.2.1-priority-queue";
+// PRIORITY-QUEUE-1 (2026-10-03, owner directive "dates aren't important, the order of priority is"): the OODA decide stage
+// no longer counts issues past an SLA date (every issue is now due on arrival and worked in v_issue_queue order). It counts
+// open issues with no next action: no code-task line, no active remediation contract, no triage remediation. Stricter.
 var WORKER = "qnfo-autonomy-scorer";
 var DAY = 86400000;
 var SAI_TERMS = ["autonomy", "thinking", "decision", "self_improv", "reliability", "integration", "external_impact", "governance"];
@@ -121,7 +124,7 @@ function scoreFromFacts(f, nowMs) {
   if (fgT > 0) stages.push(["observe", f.fg_fresh / fgT, "freshness_guard fresh " + f.fg_fresh + "/" + fgT]);
   if (f.open_now > 0) stages.push(["orient", f.triaged / f.open_now, "open issues triaged " + f.triaged + "/" + f.open_now]);
   else stages.push(["orient", 1, "no open issues"]);
-  if (f.triaged > 0) stages.push(["decide", 1 - f.breached / f.triaged, "triaged issues within SLA " + (f.triaged - f.breached) + "/" + f.triaged]);
+  if (f.triaged > 0) stages.push(["decide", 1 - f.breached / f.triaged, "open issues with a next action (code task, active closing contract or remediation) " + (f.triaged - f.breached) + "/" + f.triaged]);
   var actR = f.filed7 > 0 ? Math.min(1, f.closed7 / f.filed7) : 1;
   stages.push(["act", actR, "7d closed/filed " + f.closed7 + "/" + f.filed7]);
   var weakest = null;
@@ -290,7 +293,7 @@ var FACT_SQL3 = "SELECT " +
   "(SELECT count(*) FROM impact_thresholds WHERE state != 'RETIRED') AS gates_n," +
   "(SELECT count(*) FROM impact_thresholds WHERE state='MET') AS gates_met," +
   "(SELECT count(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open') AS triaged," +
-  "(SELECT count(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND replace(t.sla_due_at,'T',' ') < datetime('now')) AS breached";
+  "(SELECT count(*) FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND COALESCE(a.description,'') NOT LIKE '%code-task:%' AND COALESCE(t.remediation,'') = '' AND NOT EXISTS (SELECT 1 FROM remediation_contracts c WHERE c.issue_id=a.id AND c.status='active')) AS breached";
 function json(o, s) { return new Response(JSON.stringify(o, null, 1), { status: s || 200, headers: { "content-type": "application/json" } }); }
 async function collect(env) {
   var r = await env.AUDIT.prepare(FACT_SQL).first();
