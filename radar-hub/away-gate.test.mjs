@@ -61,7 +61,7 @@ function makeEnv(opts) {
   return { db, audit, env, posted };
 }
 globalThis.fetch = async (url) => {
-  if (String(url).startsWith("https://www.concertgebouw.nl")) return new Response(page, { status: 200, headers: { "content-type": "text/html" } });
+  if (new URL(String(url)).hostname === "www.concertgebouw.nl") return new Response(page, { status: 200, headers: { "content-type": "text/html" } });
   return new Response("not found", { status: 404 });
 };
 const runRadar = async (env) => (await W.fetch(new Request("https://radar-hub.example/personal/?run=1", { headers: { authorization: "Bearer t" } }), env, {})).json();
