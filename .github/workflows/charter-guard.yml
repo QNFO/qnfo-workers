@@ -89,6 +89,15 @@ jobs:
           echo "$out" | grep -q "0 failed" \
             || { echo "::error::loop watchdog suite reported failures"; exit 1; }
 
+      # CF-CHANGELOG-LOOP-1: parse, match, classify and schedule the Cloudflare changelog audit on real feed items.
+      - name: Replay the Cloudflare changelog audit offline
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/cf-changelog.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q "0 failed" \
+            || { echo "::error::cloudflare changelog audit suite reported failures"; exit 1; }
+
       # OBJECTIVE-CONSTRAINTS-1 (owner-ratified goals 41, 43, 57): the suite replays the hourly tick against an in-memory
       # SQLite D1 (node:sqlite needs Node 22, so this step switches runtime; the steps after it are Python).
       - uses: actions/setup-node@v4
