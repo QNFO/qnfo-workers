@@ -126,6 +126,11 @@ jobs:
       # dashboard's own emailed-code gate (qnfo-tools-mcp owner_queue / owner_code / owner_act); the code never reaches mcp_log.
       - name: OWNER-QUEUE-MCP-1 offline suite (qnfo-tools-mcp)
         run: node qnfo-tools-mcp/owner-queue.test.mjs
+
+      # MSGRAPH-MAIL-1 + MSGRAPH-NO-CODES-1 (pillar personal): Outlook.com mail through Microsoft Graph into email_index.
+      # Mocked Microsoft login and Graph over a node:sqlite D1; one-time codes must never be indexed.
+      - name: MSGRAPH-MAIL-1 offline suite (personal-api)
+        run: node --test personal-api/msgraph/msgraph.test.mjs
       # WORK-WITH-ME-1 + WORK-WITH-ME-METRIC-1 (pillar reach): qnfo.org/work-with-me makes no claim STRATEGY s2.2 rules out,
       # every offer mails rowan.quni@qnfo.org with a [work-with-me:<offer>] subject tag and valid JSON-LD; the reach ingest
       # counts those tagged contacts and the page's RUM views over 30 days, idempotently, into reach_signals and metric_registry.
