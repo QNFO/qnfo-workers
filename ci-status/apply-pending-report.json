@@ -1,14 +1,17 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "3df7a86fadb53ad0ddc6b11e25f662a7504f9ac7",
-  "total": 76,
+  "head": "156b1199424c82d3af69c63eb7e37bd83f915708",
+  "total": 77,
   "summary": {
-    "already-applied": 73,
-    "error": 2,
-    "stale-anchor": 1
+    "already-applied": 71,
+    "error": 3,
+    "stale-anchor": 2,
+    "landed": 1
   },
-  "landed": [],
+  "landed": [
+    "owner-sender-no-reply-1-patch.py"
+  ],
   "retired": [],
   "reverted": [],
   "results": [
@@ -18,7 +21,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "OK: ADR-009-AUDIT-TRAIL-UNWRITTEN-1 complete, 0 target(s) changed"
     },
     {
@@ -54,7 +57,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.21,
+      "seconds": 0.04,
       "tail": "ALREADY APPLIED (SELFHEAL-EXCLUSION-TABLE-1 present)"
     },
     {
@@ -81,7 +84,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.2,
+      "seconds": 0.14,
       "tail": "POST_CONDITIONS_OK /home/runner/work/qnfo-workers/qnfo-workers/scripts/applier-doctor.py"
     },
     {
@@ -90,7 +93,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.11,
+      "seconds": 0.04,
       "tail": "ALREADY APPLIED - no change"
     },
     {
@@ -99,7 +102,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "OK applied=0"
     },
     {
@@ -108,7 +111,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "already patched: scripts/ci_watchdog.py contains '_raw_log'; no change"
     },
     {
@@ -176,12 +179,12 @@
     },
     {
       "script": "dashboard-agissue-undercount-patch.py",
-      "rc": 0,
-      "verdict": "already-applied",
+      "rc": 3,
+      "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
       "seconds": 0.03,
-      "tail": "ALREADY APPLIED (DASHBOARD-AGENT-ISSUES-UNDERCOUNT-1 present)"
+      "tail": "FAIL-CLOSED: anchor A1 occurs 0 times (expected exactly 1) - nothing written"
     },
     {
       "script": "deploy-guard-ms-failclosed-patch.py",
@@ -189,7 +192,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY APPLIED - nothing to do"
     },
     {
@@ -270,7 +273,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "parity: source==mirror"
     },
     {
@@ -288,7 +291,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "changed=false"
     },
     {
@@ -302,12 +305,12 @@
     },
     {
       "script": "math-sym-escape-patch.py",
-      "rc": 0,
-      "verdict": "already-applied",
+      "rc": 1,
+      "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
-      "tail": "MATH-SYM-UTF8-ESCAPE-1: 2 artifact(s) processed"
+      "seconds": 0.05,
+      "tail": "VERSION-NOT-BUMPED qnfo-gateway/worker.js: neither 3.7.15-latex-feed nor 3.7.16-utf8-escape found"
     },
     {
       "script": "notdeployed-existence-probe-patch.py",
@@ -324,8 +327,8 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
-      "tail": "  deployed-current.worker.js bytes=434596 marker=1"
+      "seconds": 0.04,
+      "tail": "  deployed-current.worker.js bytes=465166 marker=1"
     },
     {
       "script": "outreach-cap-status-1-patch.py",
@@ -346,12 +349,21 @@
       "tail": "already applied (marker present) - nothing written"
     },
     {
+      "script": "owner-sender-no-reply-1-patch.py",
+      "rc": 0,
+      "verdict": "landed",
+      "changed": true,
+      "reverted": [],
+      "seconds": 0.03,
+      "tail": "TOTAL_EDITS 6"
+    },
+    {
       "script": "patch-404hint-list-1.py",
       "rc": 0,
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.06,
+      "seconds": 0.07,
       "tail": "OK"
     },
     {
@@ -405,7 +417,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "OK FLEET-EXEC-TICK-UNAUTH-1"
     },
     {
@@ -459,7 +471,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.1,
+      "seconds": 0.12,
       "tail": "SYNC-VERSION-CAPTURE-1: APPLIED AND VERIFIED (guard emits version; consumer captures it)"
     },
     {
@@ -531,7 +543,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.17,
+      "seconds": 0.25,
       "tail": "POST-CONDITIONS OK (4/4 literals extracted, incl. single-quoted)"
     },
     {
@@ -540,7 +552,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "::error file=qnfo-research-exec/worker.js::RESCUE-ANCHOR-MISSING-1 D1 markError terminal UPDATE not found"
     },
     {
@@ -558,8 +570,8 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
-      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=a649354d1f7ea514"
+      "seconds": 0.04,
+      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=655742e3a152f108"
     },
     {
       "script": "routerfetch-host-order-correction-patch.py",
@@ -567,8 +579,8 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
-      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=a649354d1f7ea514"
+      "seconds": 0.04,
+      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=655742e3a152f108"
     },
     {
       "script": "samezone-fetch-fallback-patch.py",
@@ -594,7 +606,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.03,
       "tail": "nothing to do"
     },
     {
@@ -621,8 +633,8 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
-      "tail": "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 214530}"
+      "seconds": 0.04,
+      "tail": "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 551323}"
     },
     {
       "script": "tool-budget-pending-toolcalls-patch.py",
@@ -639,7 +651,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.08,
+      "seconds": 0.09,
       "tail": "TOOLBUDGET-BAIL-1: APPLIED AND VERIFIED (0 target(s) changed)"
     },
     {
@@ -648,7 +660,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "TOOLBUDGET-BAIL-RECORD-1: complete, 0 target(s) changed"
     },
     {
@@ -684,7 +696,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "TOOLBUDGET-SOURCE-LOCK-1: no change - worker.js already satisfies all canonical invariants"
     },
     {
@@ -697,5 +709,5 @@
       "tail": "SUPERSEDED: UNAUTH-TRIGGER-1 already closed by patch-fleet-exec-tick-unauth-1.py (commit 81581bf); no-op"
     }
   ],
-  "ts": "2026-10-01T10:19:46Z"
+  "ts": "2026-10-03T13:15:56Z"
 }
