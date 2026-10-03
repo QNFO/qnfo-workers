@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-03 08:24:54",
+  "audited_at": "2026-10-03 09:13:40",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -412,12 +412,12 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.5.0-msgraph-mail",
+        "version": "4.5.1-predict-timeout",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.9.1-questions",
+        "version": "1.9.2-direct",
         "worker": "personal-companion"
       },
       {
@@ -487,12 +487,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.109-cost-and-advisor",
+        "version": "0.4.111-priority-queue",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.20.3-render-health-watch",
+        "version": "1.21.1-branch-hygiene-watch",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -800,17 +800,17 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.5.0-msgraph-mail",
+      "before": "4.5.1-predict-timeout",
       "http": 200,
-      "live": "4.5.0-msgraph-mail",
+      "live": "4.5.1-predict-timeout",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.9.1-questions",
+      "before": "1.9.2-direct",
       "http": 200,
-      "live": "1.9.1-questions",
+      "live": "1.9.2-direct",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.109-cost-and-advisor",
+      "before": "0.4.111-priority-queue",
       "http": 200,
-      "live": "0.4.109-cost-and-advisor",
+      "live": "0.4.111-priority-queue",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.20.3-render-health-watch",
+      "before": "1.21.1-branch-hygiene-watch",
       "http": 200,
-      "live": "1.20.3-render-health-watch",
+      "live": "1.21.1-branch-hygiene-watch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
