@@ -56,8 +56,9 @@ So the fleet does not get risk-free by stacking models. It gets lower risk by (1
 
 - q08-signal-engine 0.8.5: writer -> gate -> panel -> editor (other family) -> fresh panel -> publish. Reference implementation.
 - Other writers, filed as `agent_issues` with a `code-task` line: qnfo-paper-explainer (single model, llama), qnfo-errata-respond
-  (single model, glm-5.3-flash), qnfo-email-orchestrator (llama). qnfo-social already separates composer (deepseek) from checker
-  (llama) and is not reopened.
+  (single model, glm-5.3-flash), and the qnfo-ai ensemble pools (two deepseek and two zai entries; investigate pairwise agreement
+  first). qnfo-social already separates composer (deepseek) from checker (llama) and is not reopened. qnfo-email-orchestrator
+  (llama) was not reviewed in depth and is not filed.
 
 ## Counter-evidence and failure modes (kept here on purpose)
 
