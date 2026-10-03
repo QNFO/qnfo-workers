@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.4.3-feed-rotation";
+var VERSION = "0.5.0-feedback";
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
 // recreated as a separate worker. Its EXECUTE leg already wrote this worker's `calendar` table, and both share the
@@ -291,6 +291,8 @@ async function ensureSchema(env) {
     "CREATE TABLE IF NOT EXISTS calendar (id INTEGER PRIMARY KEY AUTOINCREMENT, plane TEXT NOT NULL, uid TEXT UNIQUE, title TEXT NOT NULL, description TEXT, location TEXT, dtstart TEXT NOT NULL, dtend TEXT, all_day INTEGER DEFAULT 0, url TEXT, source TEXT DEFAULT 'manual', domain TEXT, relevance REAL, friction REAL, status TEXT DEFAULT 'confirmed', created TEXT DEFAULT (datetime('now')), updated TEXT DEFAULT (datetime('now')))"
   ).run();
   await env.CAL_DB.prepare("CREATE TABLE IF NOT EXISTS calendar_meta (k TEXT PRIMARY KEY, v TEXT)").run();
+  // FEEDBACK-1 (2026-10-03, charter pillar: personal): what Rowan said about a suggested event, written by the /e/<id> page.
+  await env.CAL_DB.prepare("CREATE TABLE IF NOT EXISTS calendar_feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, cal_id INTEGER NOT NULL, uid TEXT, action TEXT NOT NULL, reason TEXT, met TEXT, note TEXT, title TEXT, location TEXT, domain TEXT, source TEXT, dtstart TEXT, relevance REAL, friction REAL, ts TEXT DEFAULT (datetime('now')), synced_to_ledger INTEGER DEFAULT 0)").run();
 }
 __name(ensureSchema, "ensureSchema");
 async function runQuery(env, sql, params) {
@@ -318,8 +320,15 @@ async function buildICS(env, plane, fromIso) {
     if (e.dtend) L.push("DTEND" + (e.all_day ? ";VALUE=DATE:" : ":") + fmtDate(e.dtend, e.all_day));
     L.push("SUMMARY:" + escICal(e.title));
     if (e.location) L.push("LOCATION:" + escICal(e.location));
-    if (e.description) L.push("DESCRIPTION:" + escICal(e.description));
-    if (e.url) L.push("URL:" + e.url);
+    let desc = e.description || "";
+    let fbUrl = null;
+    if (plane === "personal" && FB_SOURCES.indexOf(e.source) >= 0 && e.id != null) {
+      fbUrl = await fbLink(env, e.id);
+      if (fbUrl) desc = (desc ? desc + "\n\n" : "") + "Not for me / keep / I went: " + fbUrl;
+    }
+    if (desc) L.push("DESCRIPTION:" + escICal(desc));
+    const evUrl = e.url || fbUrl;
+    if (evUrl) L.push("URL:" + evUrl);
     L.push("END:VEVENT");
   }
   L.push("END:VCALENDAR");
@@ -349,6 +358,80 @@ async function publishICS(env) {
   return out;
 }
 __name(publishICS, "publishICS");
+// ---- FEEDBACK-1 (2026-10-03, charter pillar: personal) ----
+// Every suggested event in the personal feed links to /e/<id>?s=<sig>. The page shows the event and three choices
+// (keep, I went, not for me). It runs on this worker, so it works from any calendar app with no session and no login:
+// the link carries an HMAC of the event id made with CAL_TOKEN (nothing new to store or rotate). A GET only shows the
+// page; a change needs a POST, so a link scanner that prefetches the URL cannot remove an event. "Not for me" sets
+// status=cancelled (the radar dedupes on all statuses, so it is not re-suggested); keep and went set confirmed.
+// Every answer is also stored in calendar_feedback for the radar to learn from.
+var FB_SOURCES = ["personal-radar", "personal-twin"];
+var FB_ACTIONS = ["keep", "nope", "went"];
+var FB_REASONS = [["not-my-thing", "Not my kind of thing"], ["bad-timing", "Bad timing"], ["too-much-effort", "Too much effort"], ["not-my-crowd", "Not my crowd"]];
+var PUBLIC_BASE = "https://calendar-api.q08.workers.dev";
+function hexOf(buf, n) {
+  return Array.from(new Uint8Array(buf).slice(0, n)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+}
+__name(hexOf, "hexOf");
+async function fbSig(env, id) {
+  if (!env.CAL_TOKEN) return null;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("calendar-feedback|" + env.CAL_TOKEN), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return hexOf(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode("fb|" + id)), 12);
+}
+__name(fbSig, "fbSig");
+async function fbLink(env, id) {
+  const s = await fbSig(env, id);
+  return s ? PUBLIC_BASE + "/e/" + id + "?s=" + s : null;
+}
+__name(fbLink, "fbLink");
+function htmlEsc(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+__name(htmlEsc, "htmlEsc");
+var FB_CSS = "body{font:18px/1.5 system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem;color:#1c1c1c;background:#fafafa}h1{font-size:1.25rem}.meta{color:#555}button{font:inherit;padding:.7rem 1rem;margin:.3rem .3rem .3rem 0;border:1px solid #888;border-radius:.5rem;background:#fff;color:#1c1c1c;cursor:pointer}button.main{background:#1c1c1c;color:#fff}fieldset{border:0;border-top:1px solid #ccc;padding:.8rem 0;margin:0}label{display:block;margin:.2rem 0}input[type=text]{font:inherit;width:100%;padding:.5rem;box-sizing:border-box}@media(prefers-color-scheme:dark){body{background:#151515;color:#eee}.meta{color:#aaa}fieldset{border-color:#444}button{background:#222;color:#eee;border-color:#666}button.main{background:#eee;color:#111}}";
+function fbPage(title, body, status) {
+  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>' + htmlEsc(title) + "</title><style>" + FB_CSS + "</style></head><body>" + body + "</body></html>";
+  return new Response(html, { status: status || 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex", "referrer-policy": "no-referrer", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'" } });
+}
+__name(fbPage, "fbPage");
+function fbEventHtml(row, sig, message) {
+  const when = String(row.dtstart || "").replace("T", " ").slice(0, 16);
+  let h = "<h1>" + htmlEsc(row.title) + '</h1><p class="meta">' + htmlEsc(when) + (row.location ? " &middot; " + htmlEsc(row.location) : "") + " &middot; now: " + htmlEsc(row.status) + "</p>";
+  if (message) h += "<p><strong>" + htmlEsc(message) + "</strong></p>";
+  h += '<form method="post" action="/e/' + row.id + "?s=" + sig + '">';
+  h += '<fieldset><button class="main" name="a" value="keep">Interested, keep it</button></fieldset>';
+  h += '<fieldset><legend>If you went (both fields optional)</legend><label>Who did you talk to?<input type="text" name="met" maxlength="80" autocomplete="off"></label><label>One line to remember<input type="text" name="note" maxlength="200" autocomplete="off"></label><button name="a" value="went">I went</button></fieldset>';
+  h += "<fieldset><legend>Not for me. Why? (optional)</legend>";
+  for (const r of FB_REASONS) h += '<label><input type="radio" name="why" value="' + r[0] + '"> ' + htmlEsc(r[1]) + "</label>";
+  h += '<button name="a" value="nope">Not for me, remove it</button></fieldset></form>';
+  return h;
+}
+__name(fbEventHtml, "fbEventHtml");
+async function fbHandle(request, env, id, sig) {
+  const want = await fbSig(env, id);
+  if (!want || !tokenEq(String(sig || ""), want)) return fbPage("Link not valid", "<h1>This link is not valid</h1><p>Open the event from your calendar again.</p>", 403);
+  const row = await env.CAL_DB.prepare("SELECT * FROM calendar WHERE id=? AND plane='personal'").bind(id).first();
+  if (!row || FB_SOURCES.indexOf(row.source) < 0) return fbPage("Not found", "<h1>No such event</h1>", 404);
+  if (request.method === "GET") return fbPage(row.title, fbEventHtml(row, want, null));
+  if (request.method !== "POST") return fbPage("Method not allowed", "<h1>Use the buttons on the page</h1>", 405);
+  let form;
+  try { form = await request.formData(); } catch (e) { return fbPage("Bad request", "<h1>Could not read the form</h1>", 400); }
+  const action = String(form.get("a") || "");
+  if (FB_ACTIONS.indexOf(action) < 0) return fbPage("Bad request", "<h1>Unknown choice</h1>", 400);
+  const why = String(form.get("why") || "");
+  const reason = action === "nope" && FB_REASONS.some(function (r) { return r[0] === why; }) ? why : null;
+  const met = action === "went" ? String(form.get("met") || "").trim().slice(0, 80) || null : null;
+  const note = action === "went" ? String(form.get("note") || "").trim().slice(0, 200) || null : null;
+  const newStatus = action === "nope" ? "cancelled" : "confirmed";
+  await env.CAL_DB.batch([
+    env.CAL_DB.prepare("UPDATE calendar SET status=?, updated=datetime('now') WHERE id=?").bind(newStatus, id),
+    env.CAL_DB.prepare("INSERT INTO calendar_feedback (cal_id, uid, action, reason, met, note, title, location, domain, source, dtstart, relevance, friction) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id, row.uid, action, reason, met, note, row.title, row.location, row.domain, row.source, row.dtstart, row.relevance, row.friction)
+  ]);
+  await publishICS(env).catch(function () { return null; });
+  const say = { keep: "Kept. It stays on your calendar.", went: "Logged that you went." + (met ? " Noted: " + met + "." : ""), nope: "Removed from your calendar. Your answer is saved." };
+  return fbPage(row.title, fbEventHtml(Object.assign({}, row, { status: newStatus }), want, say[action]));
+}
+__name(fbHandle, "fbHandle");
 var worker_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -373,7 +456,7 @@ var worker_default = {
         const tok = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + p).first();
         urls.push({ plane: p, url: tok && tok.v ? R2_PUBLIC + "/calendar/" + p + "-" + tok.v + ".ics" : null });
       }
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN), and /health lists feed URLs only to a CAL_TOKEN caller", "ICS feeds are republished to R2 by the hourly :17 cron", "two planes only: qnfo and personal"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake", "event-feedback"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN), and /health lists feed URLs only to a CAL_TOKEN caller", "ICS feeds are republished to R2 by the hourly :17 cron", "two planes only: qnfo and personal"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
     }
     if (path === "/publish") {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
@@ -401,7 +484,15 @@ var worker_default = {
       const ics = await buildICS(env, plane, fromIso);
       return new Response(ics, { headers: { "content-type": "text/calendar; charset=utf-8" } });
     }
+    const mFb = path.match(new RegExp("^/e/([0-9]+)$"));
+    if (mFb) return fbHandle(request, env, parseInt(mFb[1], 10), url.searchParams.get("s"));
     if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+    if (path === "/feedback" && method === "GET") {
+      const lim = Math.min(500, Math.max(1, parseInt(url.searchParams.get("limit") || "200", 10) || 200));
+      const since = url.searchParams.get("since") || "1970-01-01";
+      const rows = await runQuery(env, "SELECT * FROM calendar_feedback WHERE ts>=? ORDER BY id DESC LIMIT ?", [since, lim]);
+      return json({ ok: true, count: rows.length, feedback: rows });
+    }
     if (path === "/events" && method === "GET") {
       const from = url.searchParams.get("from");
       const to = url.searchParams.get("to");
