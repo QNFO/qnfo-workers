@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-03 09:13:40",
+  "audited_at": "2026-10-03 13:18:24",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -482,7 +482,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.2.4-handoff-claim-sheet",
+        "version": "2.2.5-owner-sender-no-reply",
         "worker": "qnfo-email"
       },
       {
@@ -1064,9 +1064,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.2.4-handoff-claim-sheet",
+      "before": "2.2.5-owner-sender-no-reply",
       "http": 200,
-      "live": "2.2.4-handoff-claim-sheet",
+      "live": "2.2.5-owner-sender-no-reply",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
