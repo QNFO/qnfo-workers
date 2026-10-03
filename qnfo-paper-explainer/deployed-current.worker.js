@@ -17,7 +17,8 @@
 //   DAILY-CAP-1       max 1 thread/day (DAILY_CAP).
 //   KILL-SWITCH-1     paper_explain_state.enabled=0 halts posting (still logs dry runs).
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1-codeagent";
+const MODEL_FAMILY = "@cf/meta";
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"; // non-reasoning, fp8-fast (24k ctx), fast + cheap
 const BSKY = "https://bsky.social/xrpc";
 const UA = "Mozilla/5.0 (qnfo-paper-explainer)";
