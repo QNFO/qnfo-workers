@@ -1,4 +1,5 @@
-const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
+const MODEL = "@cf/zai-org/glm-5.3-flash";
+const JUDGE_MODEL = "@cf/other-org/judge-model"; // 2026-09-08 model audit swap
 
 function json(data, status) {
   if (status === void 0) status = 200;
