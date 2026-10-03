@@ -892,7 +892,7 @@ async function judge(env, max) {
       var t = stripThink(String((out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content))) || ""));
       recordSpend(env, null, JUDGE_MODEL, Math.ceil((r.context.length + r.answer.length) / 3.5), 150, "judge");
       var m = t.match(/\{[\s\S]*\}/);
-      if (!m) { noJson++; if (head === null) head = t.slice(0, 160); continue; }
+      if (!m) { noJson++; if (head === null) head = t.replace(/\s+/g, " ").slice(0, 80); continue; }
       var j = JSON.parse(m[0]);
       var s = Math.max(0, Math.floor(Number(j.supported) || 0)), n = Math.max(0, Math.floor(Number(j.total) || 0));
       if (!n || s > n) { badCounts++; continue; }
