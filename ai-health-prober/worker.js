@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.10-capability-self-report";
+var VERSION = "2.3.11-text-writers-probed"; // 2.3.11 PROBER-MODELS-1 (pillar: reach): probes the 4 text models the writing loops depend on and nobody watched (nemotron-3-120b = q08 primary writer; gemma-4-26b-a4b, qwen3-30b-a3b, llama-3.3-70b = q08 panel judges / ask writers); healthy models are probed every 9h instead of 6h so the unique-id calls per day do not rise (9 ids x 4 = 36 before, 13 ids x 2.67 = 34.7 after; fleet_budget ai_spend caps are breached, so no net model calls). Shared ids were already probed once per tick (byId), so the repeated deepseek-v4-pro-0813 row costs no extra call;
 var CAPS = ["model-health-probe", "freshness-check", "health-coverage"];
 var LIMS = ["cron-only: no public route; runs every 20 minutes", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron"];
 // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
@@ -25,7 +25,7 @@ var LIMS = ["cron-only: no public route; runs every 20 minutes", "a healthy mode
 // consecutive_failures 0) that no prober can ever clear -> MODEL-DEGRADED refiled every
 // */20 cron. MODELS was also 15 entries for 10 distinct models, with one entry recording
 // GLM-5.3's probe result against kimi-k2.6.
-var MODELS = [{ "internal": "qwen3.8-27b", "id": "@cf/qwen/qwen3.8-27b", "kind": "text" }, { "internal": "bge-base-en-v1.5", "id": "@cf/baai/bge-base-en-v1.5", "kind": "embed" }, { "internal": "deepseek-v4-pro", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "deepseek-v4-flash-wa", "id": "@cf/deepseek-ai/deepseek-v4-flash-0731", "kind": "text" }, { "internal": "deepseek-v4-pro-wa", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text" }, { "internal": "kimi-k2.6", "id": "@cf/moonshotai/kimi-k2.6", "kind": "text" }, { "internal": "glm-5.3", "id": "@cf/zai-org/glm-5.3", "kind": "text" }, { "internal": "gpt-oss-120b", "id": "@cf/openai/gpt-oss-120b", "kind": "text" }, { "internal": "kimi-k2.7-code", "id": "@cf/moonshotai/kimi-k2.7-code", "kind": "text" }];
+var MODELS = [{ "internal": "qwen3.8-27b", "id": "@cf/qwen/qwen3.8-27b", "kind": "text" }, { "internal": "bge-base-en-v1.5", "id": "@cf/baai/bge-base-en-v1.5", "kind": "embed" }, { "internal": "deepseek-v4-pro", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "deepseek-v4-flash-wa", "id": "@cf/deepseek-ai/deepseek-v4-flash-0731", "kind": "text" }, { "internal": "deepseek-v4-pro-wa", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text" }, { "internal": "kimi-k2.6", "id": "@cf/moonshotai/kimi-k2.6", "kind": "text" }, { "internal": "glm-5.3", "id": "@cf/zai-org/glm-5.3", "kind": "text" }, { "internal": "gpt-oss-120b", "id": "@cf/openai/gpt-oss-120b", "kind": "text" }, { "internal": "kimi-k2.7-code", "id": "@cf/moonshotai/kimi-k2.7-code", "kind": "text" }, { "internal": "nemotron-3-120b-a12b", "id": "@cf/nvidia/nemotron-3-120b-a12b", "kind": "text" }, { "internal": "gemma-4-26b-a4b-it", "id": "@cf/google/gemma-4-26b-a4b-it", "kind": "text" }, { "internal": "qwen3-30b-a3b-fp8", "id": "@cf/qwen/qwen3-30b-a3b-fp8", "kind": "text" }, { "internal": "llama-3.3-70b-instruct-fp8-fast", "id": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "kind": "text" }];
 var SIGNALS = [["cal_loop", "fleet_cal_state", "updated_at", 24, "heartbeat"], ["kaizen", "kaizen_candidates", "created_at", 192, "heartbeat"], ["evolve", "evolve_candidates", "ts", 168, "event"], ["pipeline_status", "pipeline_status", "last_updated", 24, "event"], ["amh_models", "ai_model_health", "updated_at", 26, "heartbeat"], ["heartbeat", "fleet_heartbeat", "ts", 6, "heartbeat"], ["cloud_ops", "cloud_ops_events", "ts", 24, "heartbeat"], ["fleet_runs", "fleet_runs", "started_at", 24, "heartbeat"], ["research_queue", "research_queue", "created_at", 72, "heartbeat"], ["version_queue", "version_queue", "created_at", 72, "heartbeat"], ["paper_revision", "paper_revision_log", "created_at", 96, "heartbeat"], ["agent_issues", "agent_issues", "updated_at", 96, "heartbeat"], ["self_heal", "self_heal_actions", "ts", 48, "event"], ["outreach", "outreach_log", "sent_at", 72, "event"]];
 function json(o, s) {
   return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json" } });
@@ -108,7 +108,7 @@ __name(reconcileHealth, "reconcileHealth");
 // deepseek-v4-pro-wa) are probed once per run and the result written to both keys. ?force=1 on /run
 // probes everything.
 // PROBE-COST-TIER-2 (2026-10-01, issue 1682): OK interval 2h -> 6h (coverage gate is 26h; degraded/failing/unknown still probed every 20-min run).
-var PROBE_OK_INTERVAL_MS = 6 * 36e5;
+var PROBE_OK_INTERVAL_MS = 9 * 36e5;
 async function runProbe(env, force) {
   const now = Date.now();
   const results = [];
