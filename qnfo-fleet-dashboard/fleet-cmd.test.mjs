@@ -239,6 +239,12 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   ok(!(j.executed === "verdict"), "Q10 'no' outside a q08 article page is not a verdict");
   j = await (await cmd(env, "good", C, PAGE)).json();
   ok(j.ok && db.prepare("SELECT signal FROM q08_owner_verdicts").get().signal === "good" && db.prepare("SELECT COUNT(*) n FROM q08_editor_notes").get().n === 2, "Q11 a later verdict replaces the earlier one for that article; 'good' adds no direction");
+  j = await (await cmd(env, "no idea what this paragraph means?", C, PAGE)).json();
+  ok(!(j.executed === "verdict"), "Q11b a question that merely starts with 'no' is not a verdict");
+  j = await (await cmd(env, "style off", C)).json();
+  ok(!(j.executed === "style") && db.prepare("SELECT COUNT(*) n FROM q08_editor_notes WHERE active = 1").get().n >= 1, "Q11c a bare 'style off' retires nothing");
+  j = await (await cmd(env, "no: the opening is a label", C, PAGE)).json();
+  ok(j.executed === "verdict" && db.prepare("SELECT signal FROM q08_owner_verdicts").get().signal === "no", "Q11d 'no: <why>' on an article is a verdict");
   j = await (await cmd(env, "style list", C)).json();
   ok(j.ok && /#1 shorter sentences/.test(j.text), "Q12 style list shows the directions");
   j = await (await cmd(env, "style off 1", C)).json();

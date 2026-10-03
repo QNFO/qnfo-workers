@@ -5834,18 +5834,18 @@ function cmdParse(text, c, holder) {
     return { actions: [cmdAction("note", { key: res.item.key, note: m[2].trim().slice(0, 500), title: res.item.title })], auto: true, text: "Note on " + res.item.title + ": " + m[2].trim() };
   }
   // FLEET-CMD-Q08-1: standing editorial direction and per-article verdicts for q08 (owner session only: ops are not open).
-  if ((m = /^style\s+(list|off(?:\s+(?:all|\d+))?)$/i.exec(t))) {
+  if ((m = /^style\s+(list|off\s+(?:all|\d+))$/i.exec(t))) {
     if (/^list$/i.test(m[1])) return { actions: [cmdAction("style", { mode: "list" })], auto: true, text: "Listing editorial directions." };
     const idm = /(\d+)$/.exec(m[1]);
     return { actions: [cmdAction("style", { mode: "off", id: idm ? Number(idm[1]) : 0, text: idm ? "#" + idm[1] : "all" })], auto: true, text: "Retiring editorial directions: " + (idm ? "#" + idm[1] : "all") };
   }
-  if ((m = /^(?:style|editor|directive)\s*:?\s+([\s\S]{3,})$/i.exec(t))) {
+  if ((m = /^(?:style|editor|directive)\s*:?\s+(?!(?:list|off)\s*$)([\s\S]{3,})$/i.exec(t))) {
     return { actions: [cmdAction("style", { mode: "add", text: m[1].trim().slice(0, 400), from: c.scope && c.scope.url || "" })], auto: true, text: "Adding editorial direction: " + m[1].trim() };
   }
   const q08slug = c.scope && c.scope.url ? (/^https?:\/\/(?:www\.)?q08\.org\/p\/([a-z0-9][a-z0-9-]{0,120})\/?$/i.exec(c.scope.url) || [])[1] : null;
-  if (q08slug && (m = /^(good|great|flat|meh|no|bad|slop)\b[\s:,.\-]*([\s\S]*)$/i.exec(t))) {
-    const w = m[1].toLowerCase(), sig = w === "good" || w === "great" ? "good" : w === "flat" || w === "meh" ? "flat" : "no";
-    return { actions: [cmdAction("verdict", { slug: q08slug.toLowerCase(), signal: sig, note: m[2].trim().slice(0, 400) })], auto: true, text: "Recording your verdict on " + q08slug + ": " + sig + (m[2].trim() ? " - " + m[2].trim() : "") };
+  if (q08slug && (m = /^(?:(good|great|flat|meh|slop)\b[\s:,.\-]*([\s\S]*)|(no|bad)(?:\s*[:,.\-]\s*([\s\S]*)|\s*$))/i.exec(t))) {
+    const w = (m[1] || m[3]).toLowerCase(), why = String(m[1] ? m[2] : m[4] || "").trim(), sig = w === "good" || w === "great" ? "good" : w === "flat" || w === "meh" ? "flat" : "no";
+    return { actions: [cmdAction("verdict", { slug: q08slug.toLowerCase(), signal: sig, note: why.slice(0, 400) })], auto: true, text: "Recording your verdict on " + q08slug + ": " + sig + (why ? " - " + why : "") };
   }
   if (/^(?:task:?|todo:|tell the fleet(?: to)?)\s+[\s\S]{3,}$/i.test(t)) {
     const body = t.replace(/^(?:task:?|todo:|tell the fleet(?: to)?)\s+/i, "").trim();
