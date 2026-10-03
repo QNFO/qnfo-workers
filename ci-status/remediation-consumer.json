@@ -1,34 +1,82 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@8b605a404d7b",
- "due": 3,
- "pass": 1,
- "fail": 1,
- "skipped": 1,
+ "verifier": "remediation-consumer@095ff5d14ce4",
+ "due": 9,
+ "pass": 0,
+ "fail": 7,
+ "skipped": 2,
  "contracts": [
   {
-   "class": "EVID-1649-BRIEF",
-   "issue_id": 1649,
-   "verdict": "pass",
-   "expected": "recorded",
-   "observed": "recorded",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
+   "class": "GCAL-CONNECTED-1",
+   "issue_id": 1816,
    "verdict": "vacuous-probe-result",
-   "expected": "fixed",
+   "expected": "connected",
    "observed": null,
    "reason": "probe returned no expected/observed pair"
   },
   {
-   "class": "issue-1783",
-   "issue_id": 1783,
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "vacuous-probe-result",
+   "expected": "connected",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-1683",
+   "issue_id": 1683,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1836",
+   "issue_id": 1836,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1711",
+   "issue_id": 1711,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1780",
+   "issue_id": 1780,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1726",
+   "issue_id": 1726,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "4",
+   "written": true
+  },
+  {
+   "class": "issue-1700",
+   "issue_id": 1700,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "3",
+   "written": true
+  },
+  {
+   "class": "issue-1713",
+   "issue_id": 1713,
+   "verdict": "fail",
+   "expected": "linkedin-connected+buffer-id+digest-3d",
+   "observed": "linkedin-rows=1,linkedin-buffer-posts=1,digest-days-since-2026-10-03=1,last-delivered=2026-10-03",
    "written": true
   }
  ],
@@ -48,8 +96,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 6418,
- "head": "8b605a404d7bb13e5cf3d615d1a12c9c08e06b15",
+ "spent_ms": 21705,
+ "head": "095ff5d14ce488ec27658bd64f653e320990a721",
  "job_status": "success",
- "ts": "2026-10-03T11:00:54Z"
+ "ts": "2026-10-03T11:42:56Z"
 }
