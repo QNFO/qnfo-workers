@@ -49,13 +49,15 @@ ins.run("qnfo", "u4@x", "QNFO meeting", "online", "2099-10-10", "manual", null, 
 const idOf = (uid) => T.db.prepare("SELECT id FROM calendar WHERE uid=?").get(uid).id;
 const id1 = idOf("u1@x"), id2 = idOf("u2@x"), id3 = idOf("u3@x");
 
+// RFC 5545 TEXT escaping: backslash first, then comma and semicolon
+const icsEsc = (t) => t.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,");
 // ---- the personal feed carries the link on suggestions only ----
 const icsRes = await call(T.env, "GET", "/events.ics?plane=personal&from=2099-01-01", { headers: { Authorization: "Bearer test-token-123" } });
 const ics = await icsRes.text();
 ok(icsRes.status === 200 && ics.includes("BEGIN:VCALENDAR"), "authorised personal feed is served");
 const link1 = "https://calendar-api.q08.workers.dev/e/" + id1 + "?s=";
 ok(ics.includes("URL:" + link1), "a suggestion without its own url gets the feedback page as its URL");
-ok(ics.includes("Not for me / keep / I went: " + link1.replace(/,/g, "\\,")), "the feedback link is also in the description");
+ok(ics.includes("Not for me / keep / I went: " + icsEsc(link1)), "the feedback link is also in the description");
 ok(ics.includes("URL:https://bimhuis.nl/x") && ics.includes("/e/" + id2 + "?s="), "a suggestion with its own url keeps it as URL and still gets the link in the description");
 ok(!ics.includes("/e/" + id3), "trip rows (source manual) get no feedback link");
 const icsNoTok = makeEnv(undefined);
