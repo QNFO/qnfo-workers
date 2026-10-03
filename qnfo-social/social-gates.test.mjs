@@ -263,14 +263,14 @@ function baseState(over) {
   const r = await mod.drainQueue(env);
   assert.equal(r.posted, 1);
   const rec = JSON.parse(calls.find(c => c.u.includes('createRecord')).body).record;
-  assert.ok(rec.text.includes('https://ipatent.qnfo.org/example') && !rec.text.includes('utm_'), 'ipatent link shown short on Bluesky');
+  assert.deepEqual(mod.extractUrls(rec.text), ['https://ipatent.qnfo.org/example']); assert.ok(!rec.text.includes('utm_'), 'ipatent link shown short on Bluesky');
   assert.equal(rec.facets[0].features[0].uri, 'https://ipatent.qnfo.org/example?utm_source=bluesky&utm_medium=social&utm_campaign=ipatent-example', 'ipatent link tagged in the facet uri');
   const upd = log.find(l => l.sql.includes("SET status='posted'") && l.sql.includes('posts=COALESCE(?3, posts)'));
   assert.ok(upd, 'posted write stores the sent text');
   assert.equal(upd.args[1], 153);
   const stored = JSON.parse(upd.args[2]);
   assert.equal(stored.length, 1);
-  assert.equal(stored[0], rec.text.replace('https://ipatent.qnfo.org/example', rec.facets[0].features[0].uri), 'stored text is the posted text with the link as the facet resolves it');
+  assert.equal(stored[0], rec.text.split('https://ipatent.qnfo.org/example').join(rec.facets[0].features[0].uri), 'stored text is the posted text with the link as the facet resolves it');
   assert.ok(/utm_source=/.test(upd.args[2]), 'a probe on social_threads.posts LIKE %utm_source=% now sees the tag');
   const cps = calls.filter(c => c.body.includes('createPost'));
   assert.ok(cps.length === 2 && cps.every(c => c.body.includes('ipatent.qnfo.org/example?utm_source=')), 'Buffer channels get the tagged ipatent link too');
