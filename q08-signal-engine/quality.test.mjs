@@ -94,3 +94,32 @@ assert.ok(q.effectiveVotes(indep).n_eff >= 1.95);
 assert.equal(q.effectiveVotes(same.slice(0, 10)).n_eff, null);
 assert.equal(q.OWNER_VERDICT_WEIGHT, 3);
 console.log("quality.test.mjs ok");
+
+// 12. /api/ensemble read-out (Q08-ENSEMBLE-1): per family, per round, n_eff and recurring tells, from a real SQLite table
+import { DatabaseSync } from "node:sqlite";
+{
+  const db = new DatabaseSync(":memory:");
+  const shim = { prepare: (sql) => { let a = []; const st = { bind: (...x) => { a = x; return st; }, run: async () => db.prepare(sql).run(...a), first: async () => db.prepare(sql).get(...a) || null, all: async () => ({ results: db.prepare(sql).all(...a) }) }; return st; } };
+  const env = { DB: shim };
+  const empty = await q.ensembleReport(env);
+  assert.equal(empty.recorded, false); assert.equal(empty.effective_votes.n_eff, null);
+  const rows = [];
+  for (let i = 0; i < 24; i++) {
+    const v = i % 3 !== 0;
+    rows.push({ round: 1, role: "judge", model: "m1", family: "google", would_read: v, score: v ? 4 : 2, tells: ["the same dynamic", "a structural tension"], fix: "", pass: v });
+    rows.push({ round: 1, role: "judge", model: "m2", family: "zai", would_read: i % 2 === 0, score: i % 2 === 0 ? 4 : 3, tells: ["the same dynamic"], fix: "", pass: i % 2 === 0 });
+  }
+  rows.push({ round: 2, role: "editor", model: "e", family: "openai", pass: true });
+  for (let i = 0; i < 24; i += 2) await q.saveReaderTests(env, "p" + (i % 8), rows.slice(i * 2, i * 2 + 2).map((r) => Object.assign({}, r, { round: 1 + (i % 2) })));
+  await q.saveReaderTests(env, "pz", rows);
+  const rep = await q.ensembleReport(env);
+  assert.equal(rep.recorded, true);
+  assert.ok(rep.by_family.some((f) => f.family === "google" && f.role === "judge" && f.n > 0));
+  assert.ok(rep.by_round.length >= 1);
+  assert.equal(rep.top_tells[0].phrase, "the same dynamic");
+  const w = (await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "worker.js")).href)).default;
+  const resp = await w.fetch(new Request("https://q08.org/api/ensemble", { headers: { "user-agent": "Mozilla/5.0 Firefox/130" } }), env, { waitUntil() {} });
+  const body = await resp.json();
+  assert.equal(body.ok, true); assert.equal(body.window_days, 30); assert.ok(!JSON.stringify(body).match(/ip_key|cf-connecting/i));
+}
+console.log("quality.test.mjs section 12 ok");
