@@ -94,7 +94,6 @@ def put_secret(worker, name, value):
 def issue(host):
     h = HOSTS[host]
     value = h["prefix"] + secrets.token_hex(24)
-    print("::add-mask::" + value)
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     d1("INSERT INTO owner_client_keys (host, worker, secret_name, key_value, status, issued_at) VALUES (?,?,?,?,?,?)",
        [host, h["worker"], h["secret"], value, "pending", now])
