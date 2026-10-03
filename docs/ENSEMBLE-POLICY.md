@@ -55,10 +55,12 @@ So the fleet does not get risk-free by stacking models. It gets lower risk by (1
 ## Adoption
 
 - q08-signal-engine 0.8.5: writer -> gate -> panel -> editor (other family) -> fresh panel -> publish. Reference implementation.
-- Other writers, filed as `agent_issues` with a `code-task` line: qnfo-paper-explainer (single model, llama), qnfo-errata-respond
-  (single model, glm-5.3-flash), and the qnfo-ai ensemble pools (two deepseek and two zai entries; investigate pairwise agreement
-  first). qnfo-social already separates composer (deepseek) from checker (llama) and is not reopened. qnfo-email-orchestrator
-  (llama) was not reviewed in depth and is not filed.
+- Other writers. errata corrections (single model, glm-5.3-flash) now go through errata-hub, because qnfo-errata-respond is FOLDED into
+  it: a cross-family judge (gemma-4) reads every low-risk draft and the read FAILS CLOSED (no verdict = high risk = never auto-published),
+  PR 571 / ERRATA-JUDGE-1. qnfo-paper-explainer is RETIRED, so it needs no change. The qnfo-ai ensemble pools (two deepseek and two zai
+  entries) are filed to investigate pairwise agreement first. qnfo-social already separates composer (deepseek) from checker (llama) and
+  is not reopened. qnfo-email-orchestrator (llama) and research-exec (MATH-LATEX-1, #1891) were not reviewed in depth; they stay on the
+  fleet-wide generator inventory (issue 1895).
 
 ## Counter-evidence and failure modes (kept here on purpose)
 
@@ -80,7 +82,7 @@ Kept here, in the repository, because the fleet must not depend on a session's m
 | 3 | The PERFORMANCE-LOOP-1 lever `q08-cadence` mirrors `ops_config` with compare-and-swap, so the manual cap of 3 is read back as the current value and is not fought. No experiment is running (`perf_experiments` empty). | `perf_levers`, qnfo-fleet-control perf block | no conflict |
 | 4 | ASK-LOOP-1 (the closest existing loop for generated text) has never judged a row: `ask_evals` 0 rows, `ask_events` 25 rows, 4 flagged for judging, 0 judged; the 03:43Z tick logged `judged:0` because `judge()` swallowed every failure. Writer families (meta, zai, alibaba) and the judge (deepseek) are already disjoint, so the design follows this policy; the loop is not running. | qnfo-audit `ask_loop_runs`, `ask_events` | PR 566 (visibility + 3000-token budget); cause unverified |
 | 5 | Even a working ask judge cannot drive its A/B: it needs 30 judged answers per arm and traffic is about 25 asks a week. | `MIN_ARM_JUDGED = 30` | open decision, not changed |
-| 6 | `ai-health-prober` does not probe four models that text-writing loops depend on: nemotron-3-120b (q08's primary writer), gemma-4-26b-a4b, qwen3-30b-a3b and llama-3.3-70b (q08 panel judges and the ask writers). It probes `deepseek-v4-pro-0813` twice. | `ai_model_health`, `ai-health-prober/worker.js` MODELS | issue filed; net-neutral change (dedupe pays for the added probes) |
+| 6 | `ai-health-prober` does not probe four models that text-writing loops depend on: nemotron-3-120b (q08's primary writer), gemma-4-26b-a4b, qwen3-30b-a3b and llama-3.3-70b (q08 panel judges and the ask writers). It lists `deepseek-v4-pro-0813` twice (the prober dedupes by id, so this costs no extra call). | `ai_model_health`, `ai-health-prober/worker.js` MODELS | issue filed; adds four probes; offset by a longer OK-probe interval (PR 570) |
 | 7 | Reader votes cannot calibrate q08: about 1 valid vote in 106 human reads. The owner's verdict (weight 3) and the panel are the only usable text-quality signals for weeks. | q08 `/api/metrics` | PR 559 (owner verdict), PR 562 (panel) |
 | 8 | `calibration_register` is not a loop input (no worker reads it; its rows are research predictions due 2027-2028). Predictions for this work are recorded as metric triggers and issue probes instead. | repository grep, D1 | note |
 
