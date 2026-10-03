@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.9.1-questions"; // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.9.2-direct"; // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -2147,8 +2147,8 @@ var VaultIndexer = (function() {
 // OWNER-PROMPTS-1 (2026-10-03, pillar: personal): the personal system asks Rowan questions instead of waiting to be asked.
 // Producers (calendar-api) write rows into qnfo-audit.owner_questions with the message and its one-tap links already composed;
 // this worker only DELIVERS, from its existing hourly tick (no new cron, no model call). Owner notices go through
-// qnfo-email /send with handoff:true, the owner-notice path HANDOFF-ALLOWLIST-1 that qnfo-email already defines; the digest
-// opt-out list (email_suppression) is left untouched. Caps: PROMPT_DAILY_CAP per Amsterdam day, one mail per tick,
+// the native SEND_EMAIL binding (fallback: qnfo-email /send with handoff:true, the owner-notice path HANDOFF-ALLOWLIST-1); the
+// digest opt-out list (email_suppression) is left untouched. Caps: PROMPT_DAILY_CAP per Amsterdam day, one mail per tick,
 // PROMPT_MAX_ATTEMPTS tries per row, quiet hours 22:00-08:00 Amsterdam. Failures are written to the row, never swallowed.
 var PROMPT_DAILY_CAP = 2;
 var PROMPT_MAX_ATTEMPTS = 5;
@@ -2160,7 +2160,7 @@ function promptQuietHour(ms) {
 async function deliverOwnerPrompts(env, nowMs) {
   var out = { sent: 0, skipped: "", error: null };
   if (!env.AUDIT) { out.skipped = "no AUDIT binding"; return out; }
-  if (!env.EMAIL) { out.skipped = "no EMAIL binding"; return out; }
+  if (!env.SEND_EMAIL && !env.EMAIL) { out.skipped = "no mail binding"; return out; }
   nowMs = nowMs || Date.now();
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS owner_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))").run();
@@ -2174,12 +2174,16 @@ async function deliverOwnerPrompts(env, nowMs) {
     if (!row) { out.skipped = "queue empty"; return out; }
     var err = null;
     try {
-      var resp = await env.EMAIL.fetch("https://email.internal/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
-        body: JSON.stringify({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: row.subject, body: row.body, handoff: true })
-      });
-      if (!resp.ok) err = "email " + resp.status + " " + String(await resp.text().catch(function () { return ""; })).slice(0, 200);
+      if (env.SEND_EMAIL) {
+        await env.SEND_EMAIL.send({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: row.subject, text: row.body });
+      } else {
+        var resp = await env.EMAIL.fetch("https://email.internal/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
+          body: JSON.stringify({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: row.subject, body: row.body, handoff: true })
+        });
+        if (!resp.ok) err = "email " + resp.status + " " + String(await resp.text().catch(function () { return ""; })).slice(0, 200);
+      }
     } catch (e) { err = String(e && e.message || e).slice(0, 240); }
     if (err) {
       await env.AUDIT.prepare("UPDATE owner_questions SET attempts = attempts + 1, last_error = ?2 WHERE id = ?1").bind(row.id, err).run();
