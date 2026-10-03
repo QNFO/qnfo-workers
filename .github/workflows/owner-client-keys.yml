@@ -1,0 +1,55 @@
+name: owner-client-keys
+
+# OWNER-CLIENT-KEY-DRIFT-1 (#1886, charter pillar security). The owner's Chatbox and DeepChat providers lost access when the
+# 2026-10-01 rotation skipped client consumers. This dispatch-only workflow issues a dedicated owner-client key per host
+# (second secret slot, so no other consumer changes), stores it in the private D1 qnfo-identity.owner_client_keys, and
+# verifies NEW -> 200 live. "check" re-probes the three hosts with the stored keys and fails the run on a 401 or on
+# public-read mode, which is the owner-client regression probe. Never prints a key value: this repository's logs are public.
+# Style: step names colon-free, no heredocs, no inline python (workflow-lint.py).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "issue | check"
+        required: true
+        type: choice
+        options:
+          - check
+          - issue
+      hosts:
+        description: "issue only: space separated subset of ai ops personal (empty means all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: owner-client-keys
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      IN_MODE: ${{ github.event.inputs.mode }}
+      IN_HOSTS: ${{ github.event.inputs.hosts }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run owner client key action
+        run: |
+          set -uo pipefail
+          if [ "$IN_MODE" = "issue" ]; then
+            python3 scripts/issue_owner_client_keys.py issue $IN_HOSTS
+          else
+            python3 scripts/issue_owner_client_keys.py check
+          fi
