@@ -1,12 +1,12 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.3.0-single-trigger"; // 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.3.1-errata-judge"; // 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
 var WATCH_VERSION = "0.2.3";
-var RESPOND_VERSION = "0.4.2-ai-disclosed";
+var RESPOND_VERSION = "0.4.3-judge";
 var PUBLISH_VERSION = "0.8.0-publish-gate";
 // ERRATA-HUB-CRONS-UNDECLARED-1 (2026-10-02, #1747, pillar research): wrangler.toml now declares the three hourly members
 // (watch :00, respond :15, publish :30). Every cron tick upserts qnfo-audit errata_watch key 'tick:<member>' with its
@@ -187,6 +187,51 @@ async function resolvePaper(env, doi) {
   return null;
 }
 __name(resolvePaper, "resolvePaper");
+// ERRATA-JUDGE-1 (docs/ENSEMBLE-POLICY.md). The drafting model's own risk flag is a same-family opinion. Before a correction can stay
+// "low" (the only value errata-publish sends), a small model from a different family (google, not zai) answers two questions about
+// it. Unlike a q08 essay this fails CLOSED: no verdict, an unparseable verdict or a "no" makes the action high risk, so it is kept as a
+// proposal for the owner. The non-model layers stay first: a verbatim anchor, the surgical-edit rules, and the publish gate flag.
+var ERRATA_JUDGE_MODEL = "@cf/google/gemma-4-26b-a4b-it";
+function parseJudgeVerdict(text) {
+  var t = String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "");
+  var a = t.indexOf("{"), b = t.lastIndexOf("}");
+  if (a < 0 || b <= a) return null;
+  try {
+    var o = JSON.parse(t.slice(a, b + 1));
+    if (typeof o.changes_result !== "boolean" || typeof o.supported_by_email !== "boolean") return null;
+    return { pass: o.changes_result === false && o.supported_by_email === true, reason: String(o.reason || "").replace(/\s+/g, " ").slice(0, 200) };
+  } catch (e) { return null; }
+}
+async function judgeCorrection(env, item, paper, corr) {
+  var prompt = [
+    "CORRECTION REVIEW. A drafting model proposed a small correction to a published scientific paper after an errata email. You are an independent reviewer from a different model family. Answer two questions.",
+    "1. changes_result: does the proposed text change, add or remove any result, number, equation, data, claim of novelty or conclusion of the paper? (true or false)",
+    "2. supported_by_email: is the proposed clarification supported by what the errata email says, and nothing more? (true or false)",
+    "Reply with ONLY one JSON object: {\"changes_result\": true|false, \"supported_by_email\": true|false, \"reason\": \"one sentence\"}",
+    "",
+    "ERRATA EMAIL SUBJECT: " + String(item.subject || "").slice(0, 200),
+    "ERRATA EMAIL CLAIM: " + String(item.claim || item.subject || "").slice(0, 1500),
+    "ANCHOR SENTENCE IN THE PAPER: " + String(corr.anchor || "").slice(0, 600),
+    "PROPOSED CLARIFICATION: " + String(corr.clarification || "").slice(0, 800),
+    "PROPOSED ACKNOWLEDGEMENT: " + String(corr.acknowledgement || "").slice(0, 300),
+    "PROPOSED CHANGELOG: " + String(corr.changelog || "").slice(0, 300)
+  ].join("\n");
+  try {
+    var res = await env.AI.run(ERRATA_JUDGE_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 1500, temperature: 0 }, { gateway: { id: "default" } });
+    var text = String(res && (res.response || res.result || (res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content)) || "");
+    var v = parseJudgeVerdict(text);
+    if (!v) return { pass: false, model: ERRATA_JUDGE_MODEL, reason: "judge gave no usable verdict" };
+    return { pass: v.pass, model: ERRATA_JUDGE_MODEL, reason: v.reason };
+  } catch (e) {
+    return { pass: false, model: ERRATA_JUDGE_MODEL, reason: "judge unavailable: " + String(e && e.message || e).slice(0, 100) };
+  }
+}
+async function logJudge(env, queueId, j) {
+  try {
+    await env.WATCH_DB.prepare("CREATE TABLE IF NOT EXISTS errata_judge_log (id INTEGER PRIMARY KEY AUTOINCREMENT, queue_id INTEGER, model TEXT, pass INTEGER, reason TEXT, created_at TEXT DEFAULT (datetime('now')))").run();
+    await env.WATCH_DB.prepare("INSERT INTO errata_judge_log (queue_id, model, pass, reason) VALUES (?,?,?,?)").bind(queueId, j.model, j.pass ? 1 : 0, j.reason || "").run();
+  } catch (e) { console.error("errata_judge_log write failed: " + String(e && e.message || e).slice(0, 160)); }
+}
 async function draftCorrection(env, item, paper) {
   const prompt = [
     "You are QNFO's errata-implementation assistant. Given (1) an errata email and (2) a QNFO published paper (markdown), produce a SURGICAL, MINIMAL correction.",
@@ -283,6 +328,12 @@ async function respondToItem(env, item) {
     return { error: "paper not found for " + item.paper_doi, item_id: item.id };
   }
   const corr = await draftCorrection(env, item, paper);
+  if ((corr.risk || "high") === "low" && corr.clarification && corr.anchor) {
+    const j = await judgeCorrection(env, item, paper, corr);
+    await logJudge(env, item.id, j);
+    corr.judge_note = (j.pass ? "pass" : "FAIL") + " (" + j.model + "): " + (j.reason || "");
+    if (!j.pass) corr.risk = "high";
+  }
   const applied = applyCorrection(paper.body_md, corr);
   const risk = corr.risk || "high";
   await env.WATCH_DB.prepare("INSERT INTO errata_actions (queue_id, email_id, paper_doi, slug, version_from, version_to, risk, clarification, acknowledgement, changelog, corrected_md, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'drafted', datetime('now'), datetime('now'))").bind(item.id, item.email_id, paper.doi || item.paper_doi, paper.slug, paper.version, corr.version, risk, corr.clarification || null, corr.acknowledgement || null, corr.changelog || null, applied.md).run();
@@ -302,6 +353,7 @@ async function notifyUser(env, paper, corr, action) {
       "",
       "Paper: " + (paper.slug || "") + " (" + (paper.doi || "") + ")",
       "Risk: " + (corr.risk || "high"),
+      "Cross-family read: " + (corr.judge_note || "(not run: the drafting model already rated it high risk)"),
       "Clarification: " + (corr.clarification || "(none)"),
       "Acknowledgement: " + (corr.acknowledgement || "(none)"),
       "Changelog: " + (corr.changelog || "(none)"),
