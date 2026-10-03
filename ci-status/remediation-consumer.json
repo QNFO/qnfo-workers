@@ -1,34 +1,84 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@98f495184ad1",
- "due": 3,
- "pass": 1,
+ "verifier": "remediation-consumer@1c317defadfe",
+ "due": 12,
+ "pass": 0,
  "fail": 1,
- "skipped": 1,
+ "skipped": 11,
  "contracts": [
   {
-   "class": "EVID-1649-BRIEF",
-   "issue_id": 1649,
-   "verdict": "pass",
-   "expected": "recorded",
-   "observed": "recorded",
-   "written": true
+   "class": "detect-threshold-blindspot",
+   "issue_id": 1165,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
   },
   {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "vacuous-probe-result",
-   "expected": "fixed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
+   "class": "act-half-unverified",
+   "issue_id": 1207,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
   },
   {
-   "class": "issue-1800",
-   "issue_id": 1800,
+   "class": "closure-evidence-unbacked",
+   "issue_id": 1263,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "remediation-class-death",
+   "issue_id": 1200,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "capability-precondition-missing",
+   "issue_id": 1118,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "mixed-type-timestamp",
+   "issue_id": 1283,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "timestamp-seconds-bypass",
+   "issue_id": 1298,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "router-calib-agent-class",
+   "issue_id": 1293,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "outreach-selector-drift",
+   "issue_id": 1294,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "outreach-drain-scheduled",
+   "issue_id": 1295,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "close-predicate-monotone",
+   "issue_id": 1297,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "cron-registry-truth",
+   "issue_id": 1494,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": 17,
+   "observed": 0,
    "written": true
   }
  ],
@@ -48,8 +98,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 6214,
- "head": "98f495184ad13eefb0f694d40491bb332f15bc7e",
+ "spent_ms": 11997,
+ "head": "1c317defadfedb209dcb390623d82eeb39d3b67e",
  "job_status": "success",
- "ts": "2026-10-03T07:01:43Z"
+ "ts": "2026-10-03T07:51:54Z"
 }

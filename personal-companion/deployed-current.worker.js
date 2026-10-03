@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.8.1-codeagent"; // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.9.1-questions"; // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -1669,7 +1669,7 @@ var worker_default = {
         last = (r2.results || [])[0] || null;
       } catch (e) {
       }
-      return json({ ok: true, version: VERSION, capabilities: ["companion-writing", "morning-brief", "subscriber-feed", "feedback"], limitations: ["every route except /health needs the companion key (?k=)", "writes at most 5 pieces a day, only at the generation hours (UTC) listed here", "the writer is DeepSeek via the personal plane's own key (BYOK), outside the qnfo AI router", "the morning brief goes only to the owner's address"], pieces: n, last, rhythm: RHYTHM, writer: WRITER_MODEL, writer_essay: WRITER_MODEL_ESSAY, topics: TOPICS.length, gen_hours_utc: GEN_HOURS_UTC, max_per_day: MAX_PIECES_PER_DAY, models: MODELS });
+      return json({ ok: true, version: VERSION, capabilities: ["companion-writing", "morning-brief", "subscriber-feed", "feedback", "owner-prompts"], limitations: ["every route except /health needs the companion key (?k=)", "writes at most 5 pieces a day, only at the generation hours (UTC) listed here", "the writer is DeepSeek via the personal plane's own key (BYOK), outside the qnfo AI router", "the morning brief goes only to the owner's address"], pieces: n, last, rhythm: RHYTHM, writer: WRITER_MODEL, writer_essay: WRITER_MODEL_ESSAY, topics: TOPICS.length, gen_hours_utc: GEN_HOURS_UTC, max_per_day: MAX_PIECES_PER_DAY, models: MODELS });
     }
     if (!authorized(request, env)) {
       return json({ error: { message: "unauthorized: append ?k=KEY" } }, 401);
@@ -1888,6 +1888,7 @@ var worker_default = {
         }
         await steward(env);
         if (utcHour >= 6) await sendMorningBrief(env);
+        try { var _op = await deliverOwnerPrompts(env); if (_op.error) console.error("owner-prompts:", _op.error); } catch (eOp) { console.error("owner-prompts:", String(eOp && eOp.message || eOp)); }
       } catch (e) {
       }
     })());
@@ -2142,6 +2143,54 @@ var VaultIndexer = (function() {
   }
   return { run: run, VERSION: VERSION };
 })();
+
+// OWNER-PROMPTS-1 (2026-10-03, pillar: personal): the personal system asks Rowan questions instead of waiting to be asked.
+// Producers (calendar-api) write rows into qnfo-audit.owner_questions with the message and its one-tap links already composed;
+// this worker only DELIVERS, from its existing hourly tick (no new cron, no model call). Owner notices go through
+// qnfo-email /send with handoff:true, the owner-notice path HANDOFF-ALLOWLIST-1 that qnfo-email already defines; the digest
+// opt-out list (email_suppression) is left untouched. Caps: PROMPT_DAILY_CAP per Amsterdam day, one mail per tick,
+// PROMPT_MAX_ATTEMPTS tries per row, quiet hours 22:00-08:00 Amsterdam. Failures are written to the row, never swallowed.
+var PROMPT_DAILY_CAP = 2;
+var PROMPT_MAX_ATTEMPTS = 5;
+var PROMPT_OWNER = "rwnquni@outlook.com";
+function promptQuietHour(ms) {
+  var h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Amsterdam", hour: "2-digit", hour12: false }).format(new Date(ms)));
+  return h >= 22 || h < 8;
+}
+async function deliverOwnerPrompts(env, nowMs) {
+  var out = { sent: 0, skipped: "", error: null };
+  if (!env.AUDIT) { out.skipped = "no AUDIT binding"; return out; }
+  if (!env.EMAIL) { out.skipped = "no EMAIL binding"; return out; }
+  nowMs = nowMs || Date.now();
+  try {
+    await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS owner_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))").run();
+    if (promptQuietHour(nowMs)) { out.skipped = "quiet hours"; return out; }
+    var nowStr = new Date(nowMs).toISOString().replace("T", " ").slice(0, 19);
+    var day = amsDayKey(new Date(nowMs));
+    var startUtc = new Date(day + "T00:00:00Z").getTime() - 2 * 36e5;
+    var cnt = await env.AUDIT.prepare("SELECT count(*) n FROM owner_questions WHERE sent_at >= ?1").bind(new Date(startUtc).toISOString().replace("T", " ").slice(0, 19)).first();
+    if (cnt && cnt.n >= PROMPT_DAILY_CAP) { out.skipped = "daily cap"; return out; }
+    var row = await env.AUDIT.prepare("SELECT id, subject, body FROM owner_questions WHERE sent_at IS NULL AND attempts < ?1 AND (not_before IS NULL OR not_before <= ?2) ORDER BY priority, id LIMIT 1").bind(PROMPT_MAX_ATTEMPTS, nowStr).first();
+    if (!row) { out.skipped = "queue empty"; return out; }
+    var err = null;
+    try {
+      var resp = await env.EMAIL.fetch("https://email.internal/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
+        body: JSON.stringify({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: row.subject, body: row.body, handoff: true })
+      });
+      if (!resp.ok) err = "email " + resp.status + " " + String(await resp.text().catch(function () { return ""; })).slice(0, 200);
+    } catch (e) { err = String(e && e.message || e).slice(0, 240); }
+    if (err) {
+      await env.AUDIT.prepare("UPDATE owner_questions SET attempts = attempts + 1, last_error = ?2 WHERE id = ?1").bind(row.id, err).run();
+      out.error = err;
+    } else {
+      await env.AUDIT.prepare("UPDATE owner_questions SET sent_at = ?2, attempts = attempts + 1, last_error = NULL WHERE id = ?1").bind(row.id, nowStr).run();
+      out.sent = 1;
+    }
+  } catch (e) { out.error = String(e && e.message || e).slice(0, 240); }
+  return out;
+}
 async function sendMorningBrief(env) {
   try {
     await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_morning_brief (date TEXT PRIMARY KEY, sent_at TEXT NOT NULL)").run();
@@ -2291,6 +2340,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
 // end aiRunAttr
 export {
   GenerationFlow,
+  deliverOwnerPrompts,
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
