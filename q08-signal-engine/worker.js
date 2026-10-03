@@ -792,7 +792,7 @@ function gate(text, banned) {
   // site already overuses is rejected so the next essay finds a different case.
   var tw = title.split(/\s+/).filter(Boolean);
   if (tw.length >= 4 && tw.filter(function (w) { return /^[A-Z]/.test(w); }).length / tw.length >= 0.75) problems.push("Title Case title reads as a label, not a sentence: '" + title.slice(0, 60) + "'");
-  if (/\b(?:signal[ _]strength|friction_point|core_concept)\b/i.test(text)) problems.push("pipeline metadata in the essay ('signal strength', 'friction_point' or 'core_concept') - open with what happened instead");
+  if (/\b(?:signal_strength|friction_point|core_concept)\b|\bsignal strength (?:of|was|is|value)\s+[0-9.]+/i.test(text)) problems.push("pipeline metadata in the essay ('signal_strength', 'friction_point', 'core_concept' or a signal strength value) - open with what happened instead");
   if (banned && banned.length) {
     for (var bp of banned) { if (bp.re.test(text)) { problems.push("overused precedent on this site: " + bp.label + " - use a different real case, or none"); break; } }
   }
