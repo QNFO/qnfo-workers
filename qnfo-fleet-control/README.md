@@ -114,3 +114,14 @@ rose and x0.5 if not (confounded by everything else that moved that week: a rank
 `reach_ideas_shipped_30d` grades the loop end to end (n/a for the first 14 days; trigger in
 `migrations/2026-10-02-reach-ideation-2.sql`). `GET /reach-ideas` also returns `outcomes`, `efficacy` and `limits`.
 No model call, worker, cron or binding is added: all `fleet_budget` AI caps were in breach on 2026-10-02.
+
+## CF-CHANGELOG-LOOP-1 (0.4.112, 2026-10-03, pillar autonomy)
+
+Once a day, inside the hourly tick, the kernel reads Cloudflare's changelog RSS and acts on it: at most 2 deduped
+`agent_issues` a day for billing / deprecation / breaking changes to a product the fleet uses, rejected catalog rows reopened when
+their product launches (max 2), `not_considered` rows for unknown products (max 5). No model call, no new worker or cron.
+`GET /cf-changelog` is the digest, `POST /cf-changelog/run` forces a run (admin token). Metrics `cf_changelog_audit_age_h` and
+`cf_changelog_open_proposals_14d` are registered with triggers in `migrations/2026-10-03-cf-changelog-loop.sql`. Tests:
+`cf-changelog.test.mjs` replays real feed items (`cf-changelog.fixture.xml`); the feed shape, not the code, is what changes, so
+a feed that stops parsing shows up as `parse-empty` in `cf_changelog_runs` and breaches the age metric within 48 hours.
+
