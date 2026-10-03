@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.2.0"; // 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.2.1"; // 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -854,7 +854,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.4";
+var VERSION = "1.2.5";
 var WORKER = "personal-events-radar";
 var TAB = String.fromCharCode(9);
 var LF = String.fromCharCode(10);
@@ -1103,15 +1103,47 @@ async function computeBudget(env) {
       booked += 1;
     }
   }
-  return { h1InPersonBooked: booked, h1SlotsLeft: Math.max(0, ENERGY.maxInPersonPerHalfYear - booked) };
+  return { h1InPersonBooked: booked, h1SlotsLeft: Math.max(0, ENERGY.maxInPersonPerHalfYear - booked), away: await loadAwayWindows(env, (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)) };
 }
 __name(computeBudget, "computeBudget");
+// AWAY-GATE-1 (2026-10-03, charter pillar: personal). Where the owner is comes from personal-life.events rows with
+// category 'lodging' (start_date = check-in, end_date = check-out, city = where). A lodging row outside Amsterdam is an
+// away window; the check-out day is not part of it (end date exclusive), so the day the owner is home again is not hidden.
+// Nothing is deleted: the radar just stops suggesting Amsterdam events that start inside a window.
+async function loadAwayWindows(env, fromDate) {
+  try {
+    const r = await env.PERSONAL_DB.prepare("SELECT city, country, start_date, end_date FROM events WHERE category = 'lodging' AND end_date >= ? ORDER BY start_date").bind(fromDate).all();
+    const out = [];
+    for (const w of r.results || []) {
+      const st = String(w.start_date || "").slice(0, 10);
+      const en = String(w.end_date || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(st) || !/^\d{4}-\d{2}-\d{2}$/.test(en) || en <= st) continue;
+      const city = String(w.city || "").trim();
+      if (/^amsterdam$/i.test(city)) continue;
+      out.push({ city: city || "elsewhere", start: st, end: en });
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+__name(loadAwayWindows, "loadAwayWindows");
+function awayReason(startIso, windows) {
+  const d = String(startIso || "").slice(0, 10);
+  for (const w of windows || []) if (d >= w.start && d < w.end) return "away:" + w.city;
+  return null;
+}
+__name(awayReason, "awayReason");
 function gateEvent(e, budget) {
   const reasons = [];
   const text = ((e.snippet || "") + " " + e.venue).toLowerCase();
   if (STANDING_DROP.test(text)) reasons.push("standing-filter:QPL/CWI");
   if (e.delivery === "onsite" && SCHENGEN_VENUES.includes(e.venue) && e.startIso >= SCHENGEN_EXIT) {
     reasons.push("schengen-exit:" + SCHENGEN_EXIT);
+  }
+  if (e.delivery === "onsite" && LOCAL_VENUES.includes(e.venue)) {
+    const away = awayReason(e.startIso, budget.away);
+    if (away) reasons.push(away);
   }
   if (e.delivery === "onsite" && TRAVEL_KINDS.includes(e.kind) && !LOCAL_VENUES.includes(e.venue)) {
     if (ENERGY.h2_2026_spent && e.startIso < ENERGY.nextEligibility) reasons.push("energy-budget:H2-2026-spent");
@@ -1187,6 +1219,7 @@ function renderReport(scannedAt, horizon, gated, budget, stats, posted) {
   L.push("## Budget and gates");
   L.push("- in-person TRAVEL budget: H2 2026 SPENT (LoF26 + QPL26); H1 2027 ledger shows " + budget.h1InPersonBooked + " booked, " + budget.h1SlotsLeft + " slot(s) left.");
   L.push("- local Amsterdam events do NOT consume the travel budget; the gate enforces only non-local travel kinds.");
+  L.push("- away windows (lodging rows outside Amsterdam): " + ((budget.away || []).length ? budget.away.map((w) => w.city + " " + w.start + ".." + w.end).join("; ") + ". Onsite Amsterdam events inside a window are gated (check-out day not included)." : "none."));
   L.push("- Schengen exit deadline: 2026-10-17. Onsite Amsterdam events on/after that date are blocked.");
   L.push("- standing filter: QPL / CWI topics excluded from personal recommendations.");
   L.push("- posted to calendar-api plane=personal: " + posted.posted + " new (dedupe skipped " + posted.skipped + ").");
