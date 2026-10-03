@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-03 13:18:24",
+  "audited_at": "2026-10-03 16:03:15",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -422,7 +422,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.8.2-metrics",
+        "version": "0.8.3-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -848,9 +848,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.8.2-metrics",
+      "before": "0.8.3-codeagent",
       "http": 200,
-      "live": "0.8.2-metrics",
+      "live": "0.8.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
