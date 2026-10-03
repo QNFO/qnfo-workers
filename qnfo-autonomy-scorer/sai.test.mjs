@@ -147,13 +147,14 @@ function makeDb() {
   db.exec(`CREATE TABLE fleet_deploys (ts TEXT, ok INTEGER);
 CREATE TABLE worker_live_audit (worker TEXT, note TEXT, http INTEGER);
 CREATE TABLE self_heal_actions (ts TEXT, status TEXT, verified_at TEXT);
-CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
+CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, status TEXT);
 CREATE TABLE research_queue (published_at TEXT);
 CREATE TABLE freshness_guard (status TEXT);
 CREATE TABLE guard_registry (status TEXT);
 CREATE TABLE signals (created_at TEXT, ts TEXT, status TEXT);
 CREATE TABLE impact_thresholds (metric TEXT, state TEXT);
-CREATE TABLE issue_triage (issue_id INTEGER, sla_due_at TEXT);
+CREATE TABLE issue_triage (issue_id INTEGER, sla_due_at TEXT, remediation TEXT);
 CREATE TABLE autonomy_scores (dimension TEXT PRIMARY KEY, framework TEXT, score REAL, scale TEXT, evidence TEXT, gap TEXT, confidence TEXT, scored_at TEXT, next_score TEXT);
 CREATE TABLE survival_state (id INTEGER PRIMARY KEY CHECK (id=1), ts TEXT, sai REAL, survival_score REAL, graded_score REAL, gates_json TEXT, leading_json TEXT, note TEXT);
 CREATE TABLE fleet_heartbeat (worker TEXT PRIMARY KEY, version TEXT, ts TEXT, ok INTEGER);
