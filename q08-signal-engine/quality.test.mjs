@@ -127,3 +127,84 @@ import { DatabaseSync } from "node:sqlite";
   assert.equal(body.ok, true); assert.equal(body.window_days, 30); assert.ok(!JSON.stringify(body).match(/ip_key|cf-connecting/i));
 }
 console.log("quality.test.mjs section 12 ok");
+
+// 13. runLevels (Q08-ENSEMBLE-1): the writer -> panel -> editor -> fresh panel chain, with a scripted model
+{
+  const para = "A small shipping office in Rotterdam stopped answering its phone in March, and by April the buyers who had relied on it were calling each other instead. One buyer kept a spreadsheet of who had paid, a second kept the same list in a notebook, and a third trusted neither and simply drove to the dock to look at the crates. Nobody had decided to replace the office; each person fixed the one problem in front of them, and the fixes added up to a second system. When the office reopened in June it found that nobody needed it for the thing it used to do, only for the thing it had never done, which was to say no. ";
+  const essay = (title) => "# " + title + "\n\n" + new Array(8).fill(para).join("\n\n") + "\n\nworth your time: yes — it shows a replacement growing before anyone chose it.";
+  const DRAFT = essay("The shipping office that nobody called any more");
+  const EDITED = essay("The buyers who stopped phoning the office");
+  const W = "@cf/nvidia/nemotron-3-120b-a12b";
+  const verdict = (score, wr) => ({ response: JSON.stringify({ would_read_to_end: wr, score, slop_tells: ["x"], fix: "open with the spreadsheet" }) });
+  // script: judgeScore(model, call#) and editor text
+  function mkEnv(opt) {
+    const calls = [];
+    const AI = { run: async (model, args) => {
+      const prompt = args.messages[0].content;
+      const isJudge = /busy, intelligent reader/.test(prompt);
+      calls.push({ model, judge: isJudge });
+      if (isJudge) { const r = opt.judge(model, calls.filter((c) => c.judge).length); if (r instanceof Error) throw r; return r; }
+      if (opt.editor instanceof Error) throw opt.editor;
+      return { response: opt.editor };
+    } };
+    return { env: { AI }, calls };
+  }
+  const base = () => ({ piece: { text: DRAFT, model: W }, prompt: "P", banned: [], seedText: "story one", gateResult: { ok: true, problems: [] } });
+  // A. first panel passes: nothing else runs
+  let { env, calls } = mkEnv({ judge: () => verdict(5, true), editor: EDITED });
+  let r = await q.runLevels(env, base());
+  assert.equal(r.gateResult.ok, true); assert.equal(r.piece.text, DRAFT); assert.equal(calls.filter((c) => !c.judge).length, 0, "no editor call when the panel passes");
+  assert.equal(r.rows.length, 2); assert.ok(r.rows.every((x) => x.role === "judge" && x.family !== "nvidia"));
+  // B. first panel fails, the editor (other family) fixes it, a fresh panel passes
+  ({ env, calls } = mkEnv({ judge: (m, n) => (n <= 2 ? verdict(2, false) : verdict(5, true)), editor: EDITED }));
+  r = await q.runLevels(env, base());
+  assert.equal(r.gateResult.ok, true); assert.equal(r.piece.text, EDITED);
+  const ed = calls.find((c) => !c.judge); assert.notEqual(q.familyOf(ed.model), "nvidia", "the editor is not the writer's family");
+  const j1 = calls.filter((c) => c.judge).slice(0, 2).map((c) => q.familyOf(c.model)), j2 = calls.filter((c) => c.judge).slice(2, 4).map((c) => q.familyOf(c.model));
+  assert.ok(j2.every((f) => !j1.includes(f)), "the second panel is fresh: " + j1 + " vs " + j2);
+  assert.ok(r.rows.some((x) => x.role === "editor" && x.round === 2) && r.rows.filter((x) => x.role === "judge").length === 4);
+  // C. the edited draft still fails the panel: the piece is dropped with a reason
+  ({ env } = mkEnv({ judge: () => verdict(2, false), editor: EDITED }));
+  r = await q.runLevels(env, base());
+  assert.equal(r.gateResult.ok, false); assert.match(r.gateResult.problems[0], /still not worth reading/);
+  // D. every judge errors: fail open, and the gap is written down
+  ({ env } = mkEnv({ judge: () => new Error("down"), editor: EDITED }));
+  r = await q.runLevels(env, base());
+  assert.equal(r.gateResult.ok, true); assert.equal(r.piece.text, DRAFT); assert.equal(r.rows.length, 1); assert.equal(r.rows[0].role, "panel_unavailable");
+  // E. the editor returns something that fails the gate
+  ({ env } = mkEnv({ judge: () => verdict(2, false), editor: "too short" }));
+  r = await q.runLevels(env, base());
+  assert.equal(r.gateResult.ok, false); assert.match(r.gateResult.problems[0], /editor's draft failed the gate/);
+  // F. first panel fails, the editor works, the second panel is unavailable: edited draft publishes and the gap is written down
+  ({ env } = mkEnv({ judge: (m, n) => (n <= 2 ? verdict(2, false) : new Error("down")), editor: EDITED }));
+  r = await q.runLevels(env, base());
+  assert.equal(r.gateResult.ok, true); assert.equal(r.piece.text, EDITED); assert.ok(r.rows.some((x) => x.role === "panel_unavailable" && x.round === 2));
+  // G. a gate that already failed is passed through untouched
+  const g0 = base(); g0.gateResult = { ok: false, problems: ["x"] };
+  r = await q.runLevels({ AI: { run: async () => { throw new Error("must not be called"); } } }, g0);
+  assert.equal(r.gateResult.ok, false);
+  // H. reasoning-model replies: the <think> block is stripped and the 2000-token budget is requested
+  let seenTokens = null;
+  const thinker = { AI: { run: async (m, a) => { seenTokens = a.max_tokens; return { response: '<think>{"score": 1} hmm</think>{"would_read_to_end": true, "score": 5, "slop_tells": [], "fix": ""}' }; } } };
+  const tv = await q.readerTest(thinker, "@cf/qwen/qwen3-30b-a3b-fp8", "# t\n\nbody");
+  assert.equal(tv.score, 5); assert.equal(seenTokens, 2000);
+}
+
+// 14. schema ordering: a q08_reader_tests table created by 0.8.4 (no role, no family) is upgraded, then writes and reads work
+{
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE q08_reader_tests (id INTEGER PRIMARY KEY AUTOINCREMENT, piece_key TEXT, round INTEGER, model TEXT, would_read INTEGER, score INTEGER, tells TEXT, fix TEXT, pass INTEGER, created_at TEXT)");
+  const shim = { prepare: (sql) => { let a = []; const st = { bind: (...x) => { a = x; return st; }, run: async () => db.prepare(sql).run(...a), first: async () => db.prepare(sql).get(...a) || null, all: async () => ({ results: db.prepare(sql).all(...a) }) }; return st; } };
+  const env = { DB: shim };
+  const rows = [];
+  for (let i = 0; i < 8; i++) rows.push({ round: 1, role: "judge", model: "m", family: "google", would_read: true, score: 4, tells: [], fix: "", pass: true });
+  rows.push({ round: 1, role: "panel_unavailable", model: "", family: "", pass: true });
+  await q.saveReaderTests(env, "old-shape", rows);
+  const cols = db.prepare("PRAGMA table_info(q08_reader_tests)").all().map((c) => c.name);
+  assert.ok(cols.includes("role") && cols.includes("family"), "columns added to an old table");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM q08_reader_tests").get().n, 9, "rows written to the upgraded table");
+  const share = await q.panelUnavailableShare(env);
+  assert.equal(share, 0.2, "1 unavailable among 5 panel reads (8 judge rows = 4 panels) is 0.2");
+  assert.equal((await q.ensembleReport(env)).panel_unavailable, 1);
+}
+console.log("quality.test.mjs sections 13-14 ok");

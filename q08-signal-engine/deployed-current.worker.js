@@ -142,6 +142,13 @@ async function writeOwnMetrics(env) {
       if (rr && rr.meta && rr.meta.changes) n++;
     }
   } catch (e) {}
+  try {
+    var us = await panelUnavailableShare(env);
+    if (us != null) {
+      var ru = await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind("q08_panel_unavailable_share_7d", String(us), now).run();
+      if (ru && ru.meta && ru.meta.changes) n++;
+    }
+  } catch (e) {}
   return n;
 }
 var MAX_PER_DAY = 10;
@@ -475,12 +482,15 @@ var MODEL_FAMILY = {
 };
 function familyOf(id) { return MODEL_FAMILY[id] || "unknown:" + String(id || "").split("/")[1]; }
 // Judges, cheapest-per-call first within a rotation. Active parameters are small (a4b, a3b, flash) on purpose.
+// Three of the five judges are reasoning models (qwen3-30b-a3b, glm-5.3-flash, deepseek-v4-flash): they think before they answer, so the
+// output budget covers the thinking too (the same failure ASK-LOOP-1 hit with its judge, PR 566). Non-reasoning models lead the rotation.
+var READER_MAX_TOKENS = 2000;
 var PANEL_POOL = [
   "@cf/google/gemma-4-26b-a4b-it",
-  "@cf/zai-org/glm-5.3-flash",
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
   "@cf/qwen/qwen3-30b-a3b-fp8",
-  "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+  "@cf/zai-org/glm-5.3-flash",
+  "@cf/deepseek-ai/deepseek-v4-flash-0731"
 ];
 // k judges, one per family, none from a family in `exclude` (the writer, the editor, an earlier panel). The start rotates with
 // `seed` so no single family becomes the permanent judge. Returns [] when fewer than one candidate remains.
@@ -498,9 +508,9 @@ function seedOf(str) { var h = 0, t = String(str || ""); for (var i = 0; i < t.l
 async function readerTest(env, modelId, text) {
   try {
     var essay = String(text || "").replace(/\n?worth your time:[^\n]*$/im, "").trim().slice(0, 9000);
-    var resp = await env.AI.run(modelId, { messages: [{ role: "user", content: READER_PROMPT + "\n\n--- ESSAY ---\n" + essay }], max_tokens: 700, temperature: 0.2 }, { signal: AbortSignal.timeout(60000) });
+    var resp = await env.AI.run(modelId, { messages: [{ role: "user", content: READER_PROMPT + "\n\n--- ESSAY ---\n" + essay }], max_tokens: READER_MAX_TOKENS, temperature: 0.2 }, { signal: AbortSignal.timeout(90000) });
     var out = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
-    var v = parseReaderVerdict(out);
+    var v = parseReaderVerdict(String(out).replace(/<think>[\s\S]*?<\/think>/gi, ""));
     if (v) { v.model = modelId; v.family = familyOf(modelId); }
     return v;
   } catch (e) { return null; }
@@ -536,27 +546,45 @@ function effectiveVotes(pairs) {
   phi = Math.max(0, Math.min(1, phi));
   return { reads: n, phi: Math.round(phi * 1000) / 1000, n_eff: Math.round((2 / (1 + phi)) * 100) / 100 };
 }
+// Share of panel reads over 7 days that returned no valid verdict (every judge errored or answered with no JSON). A panel that
+// silently never runs fails open, so this is the only place that shows it.
+async function panelUnavailableShare(env) {
+  var r = await env.DB.prepare("SELECT SUM(CASE WHEN role = 'panel_unavailable' THEN 1 ELSE 0 END) u, SUM(CASE WHEN role = 'judge' THEN 1 ELSE 0 END) j FROM q08_reader_tests WHERE created_at >= datetime('now','-7 days')").first().catch(function () { return null; });
+  if (!r) return null;
+  var panels = (r.j || 0) / 2 + (r.u || 0);
+  if (panels < 5) return null;
+  return Math.round(((r.u || 0) / panels) * 1000) / 1000;
+}
 async function panelPairs(env) {
   var rs = await env.DB.prepare("SELECT piece_key, round, pass FROM q08_reader_tests WHERE created_at >= datetime('now','-30 days') AND role = 'judge' ORDER BY piece_key, round, id").all().catch(function () { return { results: [] }; });
   var by = {};
   (rs.results || []).forEach(function (r) { var k = r.piece_key + "#" + r.round; (by[k] = by[k] || []).push(!!r.pass); });
   return Object.keys(by).filter(function (k) { return by[k].length === 2; }).map(function (k) { return by[k]; });
 }
+// 0.8.4 created q08_reader_tests without role and family. CREATE IF NOT EXISTS cannot add them, so an old table is altered; without
+// this a deploy order of 0.8.4 then 0.8.5 would leave every insert failing inside a swallowed catch (review finding on PR 562).
+async function ensureReaderTable(env) {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS q08_reader_tests (id INTEGER PRIMARY KEY AUTOINCREMENT, piece_key TEXT, round INTEGER, role TEXT, model TEXT, family TEXT, would_read INTEGER, score INTEGER, tells TEXT, fix TEXT, pass INTEGER, created_at TEXT)").run();
+  var info = await env.DB.prepare("PRAGMA table_info(q08_reader_tests)").all();
+  var have = {}; (info.results || []).forEach(function (c) { have[c.name] = 1; });
+  if (!have.role) await env.DB.prepare("ALTER TABLE q08_reader_tests ADD COLUMN role TEXT").run();
+  if (!have.family) await env.DB.prepare("ALTER TABLE q08_reader_tests ADD COLUMN family TEXT").run();
+}
 async function saveReaderTests(env, key, rows) {
   if (!rows || !rows.length) return;
   try {
-    await env.DB.prepare("CREATE TABLE IF NOT EXISTS q08_reader_tests (id INTEGER PRIMARY KEY AUTOINCREMENT, piece_key TEXT, round INTEGER, role TEXT, model TEXT, family TEXT, would_read INTEGER, score INTEGER, tells TEXT, fix TEXT, pass INTEGER, created_at TEXT)").run();
+    await ensureReaderTable(env);
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
       await env.DB.prepare("INSERT INTO q08_reader_tests (piece_key, round, role, model, family, would_read, score, tells, fix, pass, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)").bind(String(key || "").slice(0, 200), r.round || 1, r.role || "judge", r.model || "", r.family || "", r.would_read ? 1 : 0, r.score == null ? null : r.score, JSON.stringify(r.tells || []), r.fix || "", r.pass ? 1 : 0, nowIso()).run();
     }
-  } catch (e) {}
+  } catch (e) { console.error("q08 reader_tests write failed: " + String(e && e.message || e).slice(0, 200)); }
 }
 // One row per judge, plus an editor row, so the chain of models behind a piece is recorded.
 // Q08-ENSEMBLE-1 read-out (public, aggregate only; no IP, cookie or visitor text). It is the evidence the loop needs: does each
 // family read like the others (n_eff), does the editor round actually raise the score, and which phrases do judges keep flagging.
 async function ensembleReport(env) {
-  var out = { window_days: 30, by_family: [], by_round: [], effective_votes: effectiveVotes([]), top_tells: [], recorded: false };
+  var out = { window_days: 30, by_family: [], by_round: [], effective_votes: effectiveVotes([]), top_tells: [], panel_unavailable: 0, recorded: false };
   try {
     var since = "created_at >= datetime('now','-30 days')";
     var f = await env.DB.prepare("SELECT family, role, COUNT(*) n, ROUND(AVG(score),2) mean_score, ROUND(AVG(pass),3) pass_rate FROM q08_reader_tests WHERE " + since + " GROUP BY family, role ORDER BY n DESC").all();
@@ -568,7 +596,9 @@ async function ensembleReport(env) {
     var count = {};
     (t.results || []).forEach(function (x) { var a; try { a = JSON.parse(x.tells || "[]"); } catch (e) { a = []; } a.forEach(function (ph) { var k = String(ph).toLowerCase().replace(/\s+/g, " ").trim().slice(0, 120); if (k) count[k] = (count[k] || 0) + 1; }); });
     out.top_tells = Object.keys(count).filter(function (k) { return count[k] >= 2; }).sort(function (a, b) { return count[b] - count[a]; }).slice(0, 10).map(function (k) { return { phrase: k, n: count[k] }; });
-    out.recorded = out.by_family.length > 0;
+    var un = await env.DB.prepare("SELECT COUNT(*) n FROM q08_reader_tests WHERE role = 'panel_unavailable' AND " + since).first();
+    out.panel_unavailable = un ? un.n : 0;
+    out.recorded = out.by_family.length > 0 || out.panel_unavailable > 0;
   } catch (e) {}
   return out;
 }
@@ -954,6 +984,35 @@ async function emitContentSignal(env, piece, saved) {
   }
 }
 
+// Q08-ENSEMBLE-1. Levels: 1 writer (family W) -> 0 deterministic gate (uncorrelated with every model) -> 2 reader panel of two small
+// models from families other than W -> 3 editor from the other writer family, editing the draft against the panel's notes ->
+// 4 fresh panel from families other than W, the editor and the first panel where the pool allows. Publish only on a passing last
+// read. A panel with no valid verdict fails open (the gate already passed), so a model outage never stalls q08; every such case is
+// written as a 'panel_unavailable' row, so a panel that silently never runs shows in /api/ensemble and in the unavailable-share metric.
+async function runLevels(env, a) {
+  var piece = a.piece, gateResult = a.gateResult, banned = a.banned, rows = [];
+  if (!gateResult.ok) return { piece: piece, gateResult: gateResult, rows: rows };
+  var writerFam = familyOf(piece.model);
+  var seed = seedOf(a.seedText);
+  var p1 = await panelRead(env, piece.text, [writerFam], seed, 2);
+  if (!p1) { rows.push({ round: 1, role: "panel_unavailable", model: "", family: "", pass: 1 }); return { piece: piece, gateResult: gateResult, rows: rows }; }
+  rows = rows.concat(panelRows(p1, 1));
+  if (p1.pass) return { piece: piece, gateResult: gateResult, rows: rows };
+  var editOrder = COMPOSE_MODELS.filter(function (m) { return familyOf(m) !== writerFam; }).concat(COMPOSE_MODELS.filter(function (m) { return familyOf(m) === writerFam; }));
+  var edPrompt = a.prompt + "\n\n--- EDITOR PASS: below is a draft by another writer. Two independent readers from different model families would not read it to the end (mean score " + p1.mean + " of 5). What they said to fix: " + p1.fix + (p1.tells.length ? " Phrases they flagged as generic machine prose: " + p1.tells.join(" | ") + "." : "") + " Edit it, do not start over: keep every fact and the same case, keep the title line first and the verdict line last, replace abstractions with people doing things, vary sentence length, cut anything that only restates. Return the full edited essay. ---\n\n--- DRAFT ---\n" + piece.text;
+  var ed = null;
+  try { ed = await compose(env, edPrompt, banned, editOrder); } catch (e) { ed = null; }
+  var edOk = !!(ed && ed.text && gate(ed.text, banned).ok);
+  if (!edOk) return { piece: piece, gateResult: { ok: false, problems: ["ensemble: the editor's draft failed the gate - " + (p1.fix || "no fix given")] }, rows: rows };
+  var edFam = familyOf(ed.model);
+  var usedFam = [writerFam, edFam].concat(p1.judges.map(function (j) { return j.family; }));
+  var p2 = await panelRead(env, ed.text, usedFam, seed + 1, 2);
+  if (!p2) p2 = await panelRead(env, ed.text, [writerFam, edFam], seed + 1, 2);
+  if (p2) rows = rows.concat(panelRows(p2, 2)); else rows.push({ round: 2, role: "panel_unavailable", model: "", family: "", pass: 1 });
+  rows.push({ round: 2, role: "editor", model: ed.model, family: edFam, pass: p2 ? p2.pass : true });
+  if (!p2 || p2.pass) return { piece: ed, gateResult: gateResult, rows: rows };
+  return { piece: piece, gateResult: { ok: false, problems: ["ensemble: the edited draft was still not worth reading (panel mean " + p2.mean + " of 5) - " + (p2.fix || "no fix given")] }, rows: rows };
+}
 async function generate(env) {
   var t0 = Date.now();
   // Daily cap check
@@ -1043,35 +1102,9 @@ async function generate(env) {
       }
     }
   }
-  // Q08-ENSEMBLE-1. Levels: 1 writer (family W) -> 0 deterministic gate (uncorrelated with every model) -> 2 reader panel of two small
-  // models from families other than W -> 3 editor from the other writer family, editing the draft against the panel's notes ->
-  // 4 fresh panel from families other than W, the editor and the first panel where the pool allows. Publish only on a passing last
-  // read. A panel with no valid verdict fails open (the gate already passed), so a model outage never stalls q08.
-  var readerRows = [];
-  var writerFam = familyOf(piece.model);
-  if (gateResult.ok) {
-    var seed = seedOf(story.title || "");
-    var p1 = await panelRead(env, piece.text, [writerFam], seed, 2);
-    if (p1) readerRows = readerRows.concat(panelRows(p1, 1));
-    if (p1 && !p1.pass) {
-      var editOrder = COMPOSE_MODELS.filter(function (m) { return familyOf(m) !== writerFam; }).concat(COMPOSE_MODELS.filter(function (m) { return familyOf(m) === writerFam; }));
-      var edPrompt = prompt + "\n\n--- EDITOR PASS: below is a draft by another writer. Two independent readers from different model families would not read it to the end (mean score " + p1.mean + " of 5). What they said to fix: " + p1.fix + (p1.tells.length ? " Phrases they flagged as generic machine prose: " + p1.tells.join(" | ") + "." : "") + " Edit it, do not start over: keep every fact and the same case, keep the title line first and the verdict line last, replace abstractions with people doing things, vary sentence length, cut anything that only restates. Return the full edited essay. ---\n\n--- DRAFT ---\n" + piece.text;
-      var ed = null;
-      try { ed = await compose(env, edPrompt, banned, editOrder); } catch (e) { ed = null; }
-      var edOk = ed && ed.text && gate(ed.text, banned).ok;
-      var p2 = null;
-      if (edOk) {
-        var edFam = familyOf(ed.model);
-        var usedFam = [writerFam, edFam].concat(p1.judges.map(function (j) { return j.family; }));
-        p2 = await panelRead(env, ed.text, usedFam, seed + 1, 2);
-        if (!p2) p2 = await panelRead(env, ed.text, [writerFam, edFam], seed + 1, 2);
-        if (p2) readerRows = readerRows.concat(panelRows(p2, 2));
-        readerRows.push({ round: 2, role: "editor", model: ed.model, family: edFam, pass: !!(p2 ? p2.pass : true) });
-      }
-      if (edOk && (!p2 || p2.pass)) { piece = ed; }
-      else { gateResult = { ok: false, problems: ["ensemble: " + (edOk ? "the edited draft was still not worth reading (panel mean " + (p2 && p2.mean) + " of 5)" : "the editor's draft failed the gate") + " - " + (((p2 || p1).fix) || "no fix given")] }; }
-    }
-  }
+  var lv = await runLevels(env, { piece: piece, prompt: prompt, banned: banned, seedText: story.title || "", gateResult: gateResult });
+  piece = lv.piece; gateResult = lv.gateResult;
+  var readerRows = lv.rows;
   if (!gateResult.ok) {
     await saveReaderTests(env, (story.source || "hn") + ":" + String(story.id || ""), readerRows);
     // Mark the signal processed so the same story is not retried by the next runs.
@@ -1432,7 +1465,7 @@ function cleanNote(v) {
   return t || null;
 }
 // Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
-export const __quality = { gate: gate, overusedPrecedents: overusedPrecedents, parseReaderVerdict: parseReaderVerdict, buildPrompt: buildPrompt, ownerDirectives: ownerDirectives, readerTest: readerTest, pickPanel: pickPanel, familyOf: familyOf, aggregatePanel: aggregatePanel, panelRead: panelRead, effectiveVotes: effectiveVotes, PANEL_POOL: PANEL_POOL, ensembleReport: ensembleReport, saveReaderTests: saveReaderTests, OWNER_VERDICT_WEIGHT: OWNER_VERDICT_WEIGHT, REGISTER_EXEMPLAR: REGISTER_EXEMPLAR };
+export const __quality = { gate: gate, overusedPrecedents: overusedPrecedents, parseReaderVerdict: parseReaderVerdict, buildPrompt: buildPrompt, ownerDirectives: ownerDirectives, readerTest: readerTest, pickPanel: pickPanel, familyOf: familyOf, aggregatePanel: aggregatePanel, panelRead: panelRead, effectiveVotes: effectiveVotes, PANEL_POOL: PANEL_POOL, ensembleReport: ensembleReport, saveReaderTests: saveReaderTests, runLevels: runLevels, panelUnavailableShare: panelUnavailableShare, ensureReaderTable: ensureReaderTable, OWNER_VERDICT_WEIGHT: OWNER_VERDICT_WEIGHT, REGISTER_EXEMPLAR: REGISTER_EXEMPLAR };
 
 export default {
   async fetch(req, env, ctx) {

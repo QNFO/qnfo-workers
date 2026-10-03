@@ -22,3 +22,21 @@ INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator
 SELECT v.metric_key, v.title, 'registry', v.operator, v.threshold, v.priority, v.action, 'q08-signal-engine', 'agent_issues', v.cooldown, 1, 'Q08-ENSEMBLE-1 2026-10-03'
 FROM v
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = v.metric_key AND x.enabled = 1);
+
+-- Added after independent review of PR 562: the panel fails open when no judge returns a verdict, so a panel that silently never
+-- runs would look healthy. q08 0.8.5 writes a 'panel_unavailable' row for every such read; this metric is their 7-day share.
+-- Unmeasured (NULL) until 5 panel reads exist. Threshold gt 0.25 is a judgement.
+INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES
+ ('q08_panel_unavailable_share_7d', 'surface', 'guard', 'Over 7d of q08_reader_tests: panel_unavailable rows / (judge rows / 2 + panel_unavailable rows); needs 5 panel reads, else unmeasured (q08 0.8.5 writeOwnMetrics)', 'https://q08.org/api/ensemble', 'unmeasured before 2026-10-03', '<= 0.25 (judgement set 2026-10-03)', 'q08-signal-engine', 'analytics_metric_triggers q08_panel_unavailable_share_7d', '2h', '> 0.25', '> 0.5', 'UNMEASURED', NULL);
+
+WITH v(metric_key, title, operator, threshold, priority, action, cooldown) AS (VALUES
+  ('q08_panel_unavailable_share_7d', 'q08 reader panel returned no verdict on over a quarter of reads, so the ensemble is not gating', 'gt', 0.25, 6,
+   'Pillar reach. The panel fails open on purpose, so this metric is the only alarm for a panel that is not running. Read GET https://q08.org/api/ensemble (panel_unavailable, by_family) and the Workers AI errors for the ids in PANEL_POOL (all five exist in the Cloudflare catalog as of 2026-10-03; three are reasoning models and need the 2000-token READER_MAX_TOKENS budget). Replace a judge that errors or returns no JSON with another family; do not raise READER_MAX_TOKENS past 4000 or add judges. Definition of done: the share is at or below 0.25 over a fresh 7 days.
+
+code-task: repo=qnfo-workers path=q08-signal-engine/worker.js
+code-anchor: var READER_MAX_TOKENS = 2000;', 168)
+)
+INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
+SELECT v.metric_key, v.title, 'registry', v.operator, v.threshold, v.priority, v.action, 'q08-signal-engine', 'agent_issues', v.cooldown, 1, 'Q08-ENSEMBLE-1 review 2026-10-03'
+FROM v
+WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = v.metric_key AND x.enabled = 1);
