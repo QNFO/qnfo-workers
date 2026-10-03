@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.109-cost-and-advisor"; /* 0.4.109 COST-PER-TASK-WINDOW-1: cost_per_successful_task_by_class reads qnfo-ops' daily ladder ledger over the same 30 days as its task count, not whole calendar months of model_ladder_budget (which also held a one-off tier-0 seed of the account's September gateway spend, $188.10, that no ladder call made); ADVISOR-SPEND-1: the 20-minute advisor reuses its last advice while its finding set is unchanged (it paid a 70B proposal and a 120B review 72 times a day for the same OPEN-ISSUES-BACKLOG advice), and counts an issue as filed only when the insert wrote a row (the 24h refile guard ignores it silently); 0.4.108 CODE-LOOP-STALE-VERSION-1 (#1835): a code-loop PR that fails a required check or conflicts, on a file main changed after its merge base, is closed and its goal re-queued as a fresh task (max 2 per goal) instead of parked needs_human; 0.4.107 REACH-IDEATION-6H: reach ideation re-probes every 6 hours, not once per UTC day; 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.110-branch-hygiene"; /* 0.4.110 BRANCH-HYGIENE-1: the hourly tick deletes branches that are merged (contained in main, or the head of a merged pull request), saves the tip of an unmerged branch as refs/archive/<branch> before deleting it once it has no open pull request and no code task in flight, turns on delete-head-branch-on-merge, logs every action in branch_hygiene_log and writes repo_branches_open (GET /branch-hygiene); 0.4.109 COST-PER-TASK-WINDOW-1: cost_per_successful_task_by_class reads qnfo-ops' daily ladder ledger over the same 30 days as its task count, not whole calendar months of model_ladder_budget (which also held a one-off tier-0 seed of the account's September gateway spend, $188.10, that no ladder call made); ADVISOR-SPEND-1: the 20-minute advisor reuses its last advice while its finding set is unchanged (it paid a 70B proposal and a 120B review 72 times a day for the same OPEN-ISSUES-BACKLOG advice), and counts an issue as filed only when the insert wrote a row (the 24h refile guard ignores it silently); 0.4.108 CODE-LOOP-STALE-VERSION-1 (#1835): a code-loop PR that fails a required check or conflicts, on a file main changed after its merge base, is closed and its goal re-queued as a fresh task (max 2 per goal) instead of parked needs_human; 0.4.107 REACH-IDEATION-6H: reach ideation re-probes every 6 hours, not once per UTC day; 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -3755,6 +3755,160 @@ async function codeMergeTick(env, opts) {
 }
 __name(codeMergeTick, "codeMergeTick");
 // ---- CODE-TASK-MERGE-RUNNER-1:END ----
+// ---- BRANCH-HYGIENE-1:BEGIN (2026-10-03, pillar: autonomy) ----
+// The repository had 215 branches besides main (2026-10-03): 166 already merged (an ancestor of main, or the exact head of
+// a merged pull request), 16 open pull requests, 25 closed unmerged pull requests, 7 pushed branches that never got a pull
+// request, 1 whose tip moved after its merge. Nothing deleted a head branch after a merge except the code-loop runner's
+// own merges, and nothing ever looked at the rest, so merged work and abandoned work piled up in the same list and the
+// list could no longer say which branch still mattered. This block is the server-side owner of that list:
+//   merged  = a branch with no open pull request that is contained in main, or whose tip is the head of a merged pull
+//             request: deleted (its commits stay reachable from main and from refs/pull/<n>/head).
+//   unmerged = a branch with commits main does not have, no open pull request, no code task in flight, and older than the
+//             grace period: its tip is first saved as refs/archive/<branch> (hidden from the branch list, fetchable) and
+//             logged, and only then is the branch deleted. Nothing is lost; a missing archive ref stops the delete.
+//   open pull request, code task in flight, a tip equal to main's, a branch younger than the grace period: kept.
+// It also turns on GitHub's own "delete head branch on merge" setting (best effort; needs a token that may administer the
+// repository) so a merge made by anyone, not only by this worker, removes its branch at once.
+// Every action is a branch_hygiene_log row. Metric repo_branches_open (trigger above 40) is written by the tick.
+// Kill switch: ops_config branch_hygiene_enabled ('0' / 'off'); dry run: ops_config branch_hygiene_dry_run ('1').
+var BH_PRESERVE = ["main", "master", "gh-pages"];
+var BH_GRACE_MERGED_H = 6;
+var BH_GRACE_CLOSED_H = 24;
+var BH_GRACE_ORPHAN_H = 48;
+var BH_MAX_ACTIONS = 40;
+var BH_MAX_COMPARES = 60;
+var BH_ARCHIVE_PREFIX = "refs/archive/";
+function bhPath(name) {
+  return String(name).split("/").map(encodeURIComponent).join("/");
+}
+__name(bhPath, "bhPath");
+// Pure. f = { name, protected, open_pr, live_task, merged_pr, closed_pr, status, ahead_by, age_h }.
+// status is the compare(main...tip) status; ahead_by and age_h are null until the branch has been compared.
+function bhDecide(f) {
+  var keep = function(why) { return { action: "keep", why: why }; };
+  if (BH_PRESERVE.indexOf(f.name) >= 0 || f.protected) return keep("protected branch");
+  if (f.open_pr) return keep("open pull request #" + f.open_pr);
+  if (f.live_task) return keep("code task in flight");
+  if (f.merged_pr) return { action: "delete", why: "tip is the head of merged pull request #" + f.merged_pr, pr: f.merged_pr };
+  if (f.status == null) return keep("not compared yet");
+  if (f.status === "identical") return keep("tip equals main's tip; waits for main to move");
+  if (f.status === "behind" || f.ahead_by === 0) {
+    // A branch cut from an older main tip and not yet pushed to looks contained in main too; its tip commit must be old.
+    if (f.age_h == null || f.age_h < BH_GRACE_MERGED_H) return keep("contained in main but tip younger than " + BH_GRACE_MERGED_H + "h");
+    return { action: "delete", why: "contained in main" };
+  }
+  var grace = f.closed_pr ? BH_GRACE_CLOSED_H : BH_GRACE_ORPHAN_H;
+  if (f.age_h == null || f.age_h < grace) return keep("unmerged but younger than " + grace + "h");
+  return { action: "archive-delete", why: f.closed_pr ? "pull request #" + f.closed_pr + " was closed without merging" : "no pull request was ever opened", pr: f.closed_pr || null };
+}
+__name(bhDecide, "bhDecide");
+async function bhConfig(env) {
+  var cfg = { enabled: true, dry: false, raw: "(unset)" };
+  try {
+    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run')").all()).results || [];
+    rows.forEach(function(r) {
+      var v = String(r.value == null ? "" : r.value).trim().toLowerCase();
+      if (r.key === "branch_hygiene_enabled" && v) { cfg.raw = v; cfg.enabled = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0; }
+      if (r.key === "branch_hygiene_dry_run") cfg.dry = ["1", "on", "true", "yes"].indexOf(v) >= 0;
+    });
+  } catch (e) {}
+  return cfg;
+}
+__name(bhConfig, "bhConfig");
+async function bhSchema(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS branch_hygiene_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, branch TEXT NOT NULL, sha TEXT, action TEXT NOT NULL, why TEXT, pr INTEGER, archive_ref TEXT, ok INTEGER DEFAULT 1, dry INTEGER DEFAULT 0)").run();
+}
+__name(bhSchema, "bhSchema");
+async function bhPages(env, path, maxPages) {
+  var all = [];
+  for (var p = 1; p <= maxPages; p++) {
+    var r = await evApi(env, "GET", path + (path.indexOf("?") < 0 ? "?" : "&") + "per_page=100&page=" + p);
+    if (!r.ok || !Array.isArray(r.j)) return { ok: false, status: r.status, items: all };
+    all = all.concat(r.j);
+    if (r.j.length < 100) return { ok: true, items: all };
+  }
+  return { ok: true, items: all, truncated: true };
+}
+__name(bhPages, "bhPages");
+async function branchHygieneTick(env, opts) {
+  opts = opts || {};
+  var nowMs = opts.now || Date.now(), iso = new Date(nowMs).toISOString();
+  if (!env.GITHUB_TOKEN) return { ok: false, why: "no GITHUB_TOKEN" };
+  var cfg = await bhConfig(env);
+  var dry = opts.dry != null ? !!opts.dry : cfg.dry;
+  var beat = async function(status, summary) {
+    try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'branch-hygiene-tick', ?3, 'BRANCH-HYGIENE-1', ?4) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, status = excluded.status").bind("branch-hygiene-tick-" + iso.slice(0, 10), iso, JSON.stringify(summary || {}).slice(0, 300), status).run(); } catch (e) {}
+  };
+  if (!cfg.enabled) { await beat("disabled", { disabled: cfg.raw }); return { ok: true, disabled: true, why: "ops_config branch_hygiene_enabled = " + cfg.raw }; }
+  await bhSchema(env);
+  var out = { ok: true, ts: iso, dry: dry, branches: 0, kept: 0, deleted: [], archived: [], compared: 0, errors: [], setting: null };
+  var br = await bhPages(env, "/branches", 8);
+  if (!br.ok) { await beat("error", { branches_http: br.status }); return { ok: false, why: "branches HTTP " + br.status }; }
+  var prs = await bhPages(env, "/pulls?state=all&sort=updated&direction=desc", 10);
+  if (!prs.ok) { await beat("error", { pulls_http: prs.status }); return { ok: false, why: "pulls HTTP " + prs.status }; }
+  var byRef = {};
+  prs.items.forEach(function(p) {
+    if (!p || !p.head || !p.head.ref || !p.head.repo || p.head.repo.full_name !== EVOLVE_REPO) return;
+    var e = byRef[p.head.ref] || (byRef[p.head.ref] = { open: 0, merged: {}, closed: 0 });
+    if (p.state === "open") e.open = p.number;
+    else if (p.merged_at) e.merged[p.head.sha] = p.number;
+    else e.closed = Math.max(e.closed, p.number);
+  });
+  var live = {};
+  try { ((await env.AUDIT.prepare("SELECT branch FROM code_tasks WHERE status IN ('branch_pushed', 'published', 'pr_open') AND branch IS NOT NULL").all()).results || []).forEach(function(r) { live[r.branch] = 1; }); } catch (e) {}
+  var names = br.items.map(function(b) { return b.name; });
+  out.branches = names.length;
+  var actions = 0, compares = 0, remaining = names.length;
+  for (var i = 0; i < br.items.length; i++) {
+    var b = br.items[i], e2 = byRef[b.name] || { open: 0, merged: {}, closed: 0 };
+    var f = { name: b.name, protected: !!b.protected, open_pr: e2.open, live_task: !!live[b.name], merged_pr: e2.merged[b.commit && b.commit.sha] || 0, closed_pr: e2.closed, status: null, ahead_by: null, age_h: null };
+    var d = bhDecide(f);
+    if (d.action === "keep" && d.why === "not compared yet") {
+      if (compares >= BH_MAX_COMPARES) { out.kept++; continue; }
+      compares++; out.compared++;
+      var cmp = await evApi(env, "GET", "/compare/main..." + encodeURIComponent(b.commit.sha));
+      if (!cmp.ok || !cmp.j) { out.errors.push(b.name + ": compare HTTP " + cmp.status); out.kept++; continue; }
+      f.status = cmp.j.status; f.ahead_by = cmp.j.ahead_by;
+      var cs = Array.isArray(cmp.j.commits) ? cmp.j.commits : [], last = cs.length ? cs[cs.length - 1] : cmp.j.merge_base_commit;
+      var when = last && last.commit && last.commit.committer ? Date.parse(last.commit.committer.date) : NaN;
+      f.age_h = isNaN(when) ? null : (nowMs - when) / 36e5;
+      d = bhDecide(f);
+    }
+    if (d.action === "keep") { out.kept++; continue; }
+    if (actions >= BH_MAX_ACTIONS) { out.kept++; continue; }
+    actions++;
+    var ref = null, ok = true;
+    if (!dry && d.action === "archive-delete") {
+      ref = BH_ARCHIVE_PREFIX + b.name;
+      var ar = await evApi(env, "POST", "/git/refs", { ref: ref, sha: b.commit.sha });
+      var exists = ar.status === 422 && /already exists/i.test(String(ar.j && ar.j.message || ""));
+      if (!ar.ok && !exists) { ok = false; out.errors.push(b.name + ": archive ref HTTP " + ar.status); }
+    }
+    if (!dry && ok) {
+      var dl = await evApi(env, "DELETE", "/git/refs/heads/" + bhPath(b.name));
+      if (!dl.ok && dl.status !== 404 && dl.status !== 422) { ok = false; out.errors.push(b.name + ": delete HTTP " + dl.status); }
+    }
+    try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)").bind(iso, b.name, b.commit.sha, d.action, d.why, d.pr || null, ref, ok ? 1 : 0, dry ? 1 : 0).run(); } catch (e) {}
+    if (ok) { (d.action === "archive-delete" ? out.archived : out.deleted).push(b.name); if (!dry) remaining--; } else out.kept++;
+  }
+  out.remaining = remaining - 1;
+  if (out.remaining < 0) out.remaining = 0;
+  // GitHub's own switch, so a merge made by anyone removes its branch at once. Best effort: needs a token that may administer the repo.
+  try {
+    var rp = await evApi(env, "GET", "");
+    if (rp.ok && rp.j && rp.j.delete_branch_on_merge === false) {
+      if (dry) out.setting = "would enable delete_branch_on_merge";
+      else { var pt = await evApi(env, "PATCH", "", { delete_branch_on_merge: true }); out.setting = pt.ok ? "delete_branch_on_merge enabled" : "delete_branch_on_merge not enabled: HTTP " + pt.status; }
+    } else if (rp.ok && rp.j) out.setting = "delete_branch_on_merge already " + rp.j.delete_branch_on_merge;
+  } catch (e) { out.setting = "setting check failed"; }
+  if (!dry) {
+    try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'repo_branches_open'").bind(String(out.remaining), iso).run(); } catch (e) {}
+  }
+  await beat(out.errors.length && !out.deleted.length && !out.archived.length ? "error" : "ok", { branches: out.branches, remaining: out.remaining, deleted: out.deleted.length, archived: out.archived.length, errors: out.errors.length, dry: dry });
+  return out;
+}
+__name(branchHygieneTick, "branchHygieneTick");
+// ---- BRANCH-HYGIENE-1:END ----
 // Folded autopilot activity snapshot: one row per scheduled worker per day (dashboard req24).
 async function activitySnapshotDaily(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_activity_daily (id INTEGER PRIMARY KEY AUTOINCREMENT, worker_name TEXT NOT NULL, day TEXT NOT NULL, req24 INTEGER, source TEXT, ts TEXT)").run();
@@ -6402,6 +6556,18 @@ var worker_default2 = {
       if (!(cat2 && ((env.DEPLOY_ADMIN_TOKEN && cat2 === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && cat2 === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
       return json(await codeMergeTick(env));
     }
+    if (p === "/branch-hygiene" && request.method === "GET") {
+      var bhc = await bhConfig(env);
+      var bhl = await env.AUDIT.prepare("SELECT ts, branch, sha, action, why, pr, archive_ref, ok, dry FROM branch_hygiene_log ORDER BY id DESC LIMIT 40").all().catch(function() { return { results: [] }; });
+      var bhh = await env.AUDIT.prepare("SELECT ts, status, text FROM cloud_ops_events WHERE id >= 'branch-hygiene-tick-' AND id < 'branch-hygiene-tick.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
+      return json({ ok: true, version: VERSION, loop: "BRANCH-HYGIENE-1", enabled: bhc.enabled, dry_run: bhc.dry, switch: "ops_config branch_hygiene_enabled = " + bhc.raw, grace_hours: { merged: BH_GRACE_MERGED_H, closed_pr: BH_GRACE_CLOSED_H, no_pr: BH_GRACE_ORPHAN_H }, max_actions_per_tick: BH_MAX_ACTIONS, archive_refs: BH_ARCHIVE_PREFIX + "<branch>", last_tick: bhh, recent: bhl.results || [] });
+    }
+    if (p === "/branch-hygiene/tick" && request.method === "POST") {
+      var bha = request.headers.get("Authorization") || "";
+      var bht = bha.indexOf("Bearer ") === 0 ? bha.slice(7) : bha;
+      if (!(bht && ((env.DEPLOY_ADMIN_TOKEN && bht === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && bht === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
+      return json(await branchHygieneTick(env, { dry: new URL(request.url).searchParams.get("dry") === "1" ? true : void 0 }));
+    }
     if (p === "/advisor" || p.startsWith("/advisor/")) {
       const u2 = new URL(request.url);
       u2.pathname = p.slice("/advisor".length) || "/";
@@ -6430,6 +6596,7 @@ var worker_default2 = {
     ctx.waitUntil(refreshOwnedMetrics(env).catch((e) => console.error("refreshOwnedMetrics error:", e && e.message || e)));
     ctx.waitUntil(evolveTickHeartbeat(env).catch((e) => console.error("evolveTick error:", e && e.message || e)));
     ctx.waitUntil(codeMergeTick(env).catch((e) => console.error("codeMergeTick error:", e && e.message || e)));
+    ctx.waitUntil(branchHygieneTick(env).catch((e) => console.error("branchHygieneTick error:", e && e.message || e)));
     ctx.waitUntil(slaEscalate(env).catch((e) => console.error("slaEscalate error:", e && e.message || e)));
     ctx.waitUntil(evaluateMetricTriggers(env).catch((e) => console.error("evaluateMetricTriggers error:", e && e.message || e)));
     ctx.waitUntil(publicationPreflight(env).catch((e) => console.error("publicationPreflight error:", e && e.message || e)));
