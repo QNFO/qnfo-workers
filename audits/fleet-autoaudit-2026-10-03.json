@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-03 07:03:15",
+  "audited_at": "2026-10-03 07:53:53",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "radar-hub"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -392,7 +399,7 @@
     "sync_workers": [
       {
         "dir": "calendar-api",
-        "version": "0.4.3-feed-rotation",
+        "version": "0.5.0-feedback",
         "worker": "calendar-api"
       },
       {
@@ -592,7 +599,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.2.0",
+        "version": "1.2.1",
         "worker": "radar-hub"
       }
     ]
@@ -624,9 +631,9 @@
       "worker": "audits"
     },
     "calendar-api": {
-      "before": "0.4.3-feed-rotation",
+      "before": "0.5.0-feedback",
       "http": 200,
-      "live": "0.4.3-feed-rotation",
+      "live": "0.5.0-feedback",
       "match": 1,
       "note": "SYNC",
       "worker": "calendar-api"
@@ -1472,9 +1479,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.2.0",
+      "before": "1.2.1",
       "http": 200,
-      "live": "1.2.0",
+      "live": "1.2.1",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
