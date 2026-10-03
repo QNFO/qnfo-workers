@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.8.3-note"; // v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.8.4-quality"; // v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -360,6 +360,8 @@ var Q08_DIRECTIVE = [
     "BANNED FRAMING (automatic rejection \u2014 the tells of a banal essay): 'illustrates a broader structural dynamic', 'exposes a structural dynamic', 'reveals a structural dynamic', 'a recurring institutional dynamic', 'a systemic failure in which', 'a structural gap between', 'what this reveals about', 'the deeper pattern', 'the broader lesson'. Never tell the reader what the essay 'reveals'; demonstrate it and stop. A sentence that announces the significance of the essay instead of adding a fact is a sentence to delete.",
     "SIGNIFICANCE ANNOUNCEMENT (banned): never write \"the incident illustrates / exposes / reveals / foregrounds / underscores a <noun phrase>\". Those verbs, applied to the incident, are the banality signature \u2014 they announce that the essay has a point instead of making it. State the causal chain directly: who does what to whom, and what breaks as a result. If a draft contains any of these verbs, rewrite the sentence as a mechanism.",
     "TITLE: name the mechanism, not the category. A good title names a specific causal process or its actors \u2014 e.g. 'The clearinghouse that paid itself first' or 'Why the map outlives the territory it describes'. Banned title shapes: the bare '[Adjective]-[Noun] [Preposition] [Abstract Noun]' stack ('Scale-Induced Professional Displacement'); 'The X of Y' ('The Incentive-Driven Misalignment of Threat Models'); 'X as Y' ('Formal Guarantees as Market Signal'); and any title opening with Structural, Systemic, Implicit, Opaque, Formal, Abstract, Externalized, Statistical or a similar nominalisation. If the title would work as a category label in a management deck, it is the wrong title.",
+  "PLAIN WORDING (this is what a reader judges first): write the way a sharp person explains something to a smart friend, not the way a paper abstracts it. Mix short sentences with long ones. Name who did what by what they are (the maintainers, the buyers, the vendor, the shipping line), never by role words: no 'the observer', 'the actor', 'the producer', 'the consumer', 'the proxy', 'the cue', 'the arrangement', 'the mechanism', 'the signal', 'the process'. A sentence that exists only to announce structure ('This same arrangement appears...', 'The mechanism works like this', 'The process therefore hinges on', 'not a quirk of a single product') is deleted. If you cannot picture a person doing the thing in a sentence, rewrite it. Say it once; do not restate a point in new abstract words.",
+  "INTERNAL FIELDS: the SIGNAL block's field names and its signal_strength value are pipeline metadata, not facts about the world. Never mention them, never write 'signal strength', 'friction point' or 'core concept'. Open with what actually happened or was said, as one concrete event, in plain words.",
   "CONSTRAINTS (hard):",
   "- The structural claim must outlive the incident: dates may appear in the material, but the argument must not depend on them.",
   "- No @handles, no marketing register, no promotional language. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
@@ -370,9 +372,9 @@ var Q08_DIRECTIVE = [
 ].join("\n");
 
 var REGISTER_EXEMPLAR = [
-  "# The badge that outlived the inspection behind it",
+  "# The rating agency that switched who paid",
   "",
-  "A guild issued a stamped mark to certify that a piece of metal had been assayed by a sworn inspector. Buyers learned to read the mark as a promise about the metal. The mark was cheaper to copy than the inspection was to perform, and within a generation the workshops turning out stamped-but-unaudited goods outnumbered the ones still submitting to the assay. The arrangement had three parts. The buyer could not verify the metal directly, so the stamp carried the entire burden of trust. The guild drew its authority from the stamp, so it had no reason to publish how many stamps circulated outside its control. The copying workshop paid nothing for the trust it spent. The inspection was the expensive step and the stamp was the cheap one, and the market rewarded the cheap one.",
+  "Until the early 1970s the big credit rating agencies sold their ratings to investors. Then they switched: the company issuing the bond paid for its own rating. The letter grades looked the same on the day of the switch. What had changed was who could take their business elsewhere. An agency that rated a bond too harshly lost the issuer to a competitor, and the fee with it. Investors kept reading the grade as a judgement made on their behalf, and nothing on the page told them the customer had changed. Years later the top grade sat on thousands of mortgage securities that lost most of their value. The agencies had not faked a number. They had learned which answer kept the client.",
   "",
   "# The freight office that priced its own risk",
   "",
@@ -397,7 +399,80 @@ function exemplarOk(md) {
   return true;
 }
 
-function buildPrompt(friction, fewShot, recentStructures) {
+// Q08-QUALITY-1: precedents the site leans on too often are named to the writer and rejected by the gate. 19 of 36 pieces in
+// the 7 days to 2026-10-03 reached for the same guild hallmark, because the register exemplar was one.
+var PRECEDENT_VOCAB = [
+  { label: "the medieval guild hallmark or goldsmith stamp", re: /hall-?mark|goldsmith|guild/i },
+  { label: "the South Sea Bubble", re: /south sea/i },
+  { label: "tulip mania", re: /tulip/i },
+  { label: "patent medicines", re: /patent[- ]medicine/i },
+  { label: "railway mania", re: /railway mania/i },
+  { label: "the printing press", re: /gutenberg|printing press/i },
+  { label: "the Hanseatic League", re: /hanseatic/i },
+  { label: "the Medici bank", re: /medici/i },
+  { label: "the Dutch East India Company", re: /east india company/i },
+  { label: "the dot-com bubble", re: /dot-?com/i }
+];
+function overusedPrecedents(bodies, minUses) {
+  var need = minUses || 2, out = [];
+  for (var v of PRECEDENT_VOCAB) {
+    var n = 0;
+    for (var b of (bodies || [])) { if (v.re.test(String(b || ""))) n++; }
+    if (n >= need) out.push(v);
+  }
+  return out;
+}
+// Q08-QUALITY-1: the owner's editorial directives, written only through the signed-in command line at fleet.qnfo.org
+// (qnfo-audit q08_editor_notes). They are authenticated text, unlike visitor notes, which no prompt ever reads.
+async function ownerDirectives(env) {
+  if (!env || !env.AUDIT) return [];
+  try {
+    var r = await env.AUDIT.prepare("SELECT text FROM q08_editor_notes WHERE active = 1 ORDER BY id DESC LIMIT 8").all();
+    return (r.results || []).map(function (x) { return String(x.text || "").replace(/\s+/g, " ").trim().slice(0, 400); }).filter(Boolean);
+  } catch (e) { return []; }
+}
+// Q08-READER-TEST-1: a cold read by the model that did not write the draft. It judges as a reader, not as an editor.
+var READER_PROMPT = [
+  "You are a busy, intelligent reader who has never heard of this site and owes it nothing. Read the essay below the way you read anything you found by chance: you stop at the first sentence that wastes your time.",
+  "Answer with exactly one JSON object and nothing else:",
+  "{\"would_read_to_end\": true or false, \"score\": 1 to 5 (5 = I would send it to a friend, 4 = worth the time, 3 = I would skim it, 1 = I stopped at the first paragraph), \"slop_tells\": [up to 3 short phrases copied from the essay that sound like generic machine prose], \"fix\": \"one sentence telling the writer what to change\"}",
+  "Judge: does it open with something concrete that happened? Can you state its claim in one sentence? Does every paragraph add a new fact or step, or only restate in abstract words? Are the words plain, or do role words ('the observer', 'the actor', 'the arrangement') and announcements of structure stand in for people doing things? Is the historical parallel specific and real, or a stock example? Be strict: a 4 must be earned."
+].join("\n");
+function parseReaderVerdict(text) {
+  var m = String(text || "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  var o;
+  try { o = JSON.parse(m[0]); } catch (e) { return null; }
+  var score = Number(o && o.score);
+  if (!isFinite(score)) return null;
+  score = Math.max(1, Math.min(5, Math.round(score)));
+  var wr = o.would_read_to_end === true || o.would_read_to_end === "true";
+  var tells = Array.isArray(o.slop_tells) ? o.slop_tells.slice(0, 3).map(function (t) { return String(t).slice(0, 120); }) : [];
+  return { would_read: wr, score: score, tells: tells, fix: String(o.fix || "").slice(0, 300), pass: wr && score >= 4 };
+}
+async function readerTest(env, piece) {
+  try {
+    var other = piece.model === COMPOSE_MODELS[0] ? COMPOSE_MODELS[1] : COMPOSE_MODELS[0];
+    var essay = String(piece.text || "").replace(/\n?worth your time:[^\n]*$/im, "").trim().slice(0, 9000);
+    var resp = await env.AI.run(other, { messages: [{ role: "user", content: READER_PROMPT + "\n\n--- ESSAY ---\n" + essay }], max_tokens: 700, temperature: 0.2 }, { signal: AbortSignal.timeout(60000) });
+    var text = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
+    var v = parseReaderVerdict(text);
+    if (v) v.model = other;
+    return v;
+  } catch (e) { return null; }
+}
+async function saveReaderTests(env, key, rounds) {
+  if (!rounds || !rounds.length) return;
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS q08_reader_tests (id INTEGER PRIMARY KEY AUTOINCREMENT, piece_key TEXT, round INTEGER, model TEXT, would_read INTEGER, score INTEGER, tells TEXT, fix TEXT, pass INTEGER, created_at TEXT)").run();
+    for (var i = 0; i < rounds.length; i++) {
+      var r = rounds[i];
+      await env.DB.prepare("INSERT INTO q08_reader_tests (piece_key, round, model, would_read, score, tells, fix, pass, created_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(String(key || "").slice(0, 200), i + 1, r.model || "", r.would_read ? 1 : 0, r.score, JSON.stringify(r.tells || []), r.fix || "", r.pass ? 1 : 0, nowIso()).run();
+    }
+  } catch (e) {}
+}
+
+function buildPrompt(friction, fewShot, recentStructures, opts) {
   var parts = [Q08_DIRECTIVE];
   parts.push("Remember: your final output line must be the verdict: 'worth your time: yes|flat|no \u2014 justification'.");
   if (fewShot && fewShot.length > 0) {
@@ -416,7 +491,17 @@ function buildPrompt(friction, fewShot, recentStructures) {
       parts.push(s.slice(0, 200));
     }
   }
-  parts.push("\n--- SIGNAL ---");
+  var banned = opts && opts.banned || [];
+  if (banned.length) {
+    parts.push("\n--- OVERUSED PRECEDENTS ON THIS SITE (BANNED: pick a different real case, or use none) ---");
+    parts.push(banned.map(function (b) { return b.label; }).join("; "));
+  }
+  var notes = opts && opts.ownerNotes || [];
+  if (notes.length) {
+    parts.push("\n--- OWNER EDITORIAL DIRECTIVES (from the publication's editor, authenticated; they outrank the style defaults above, never the FACTS rule or the hard constraints) ---");
+    for (var n of notes) parts.push("- " + n);
+  }
+  parts.push("\n--- SIGNAL (the field names and the signal_strength value are internal pipeline metadata: never mention them in the essay) ---");
   parts.push("core_concept: " + friction.core_concept);
   parts.push("friction_point: " + friction.friction_point);
   parts.push("signal_strength: " + friction.signal_strength);
@@ -450,7 +535,7 @@ async function composeTemperature(env) {
   try { var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(TEMP_KEY).first(); return parseTemperature(r && r.value); }
   catch (e) { return TEMP_DEFAULT; }
 }
-async function compose(env, prompt) {
+async function compose(env, prompt, banned) {
   var temperature = await composeTemperature(env);
   var lastErr;
   // TITLE-PROMOTE-1: compliance-driven fallback -- keep the best draft across
@@ -467,7 +552,7 @@ async function compose(env, prompt) {
       var text = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
       if (!text || text.length <= 200) continue;
       var norm = normalizeDraft(text);
-      var g = gate(norm);
+      var g = gate(norm, banned);
       if (g.ok) return { text: norm, model: modelId };
       if (!best || norm.length > best.text.length) best = { text: norm, model: modelId, problems: g.problems };
     } catch (e) {
@@ -558,7 +643,7 @@ function normalizeDraft(text) {
   return t;
 }
 
-function gate(text) {
+function gate(text, banned) {
   // Enforce LONG-FORM PROSE with a hook, not lists:
   // 1. length 2. concrete title 3. no handles 4. no babble 5. prose-dominant.
   var problems = [];
@@ -598,6 +683,14 @@ function gate(text) {
   if (absN >= 3) problems.push("abstraction-summary phrases x" + absN + " (e.g. 'structural dynamic') \u2014 state the mechanism instead of labelling it");
   for (var lt of LABEL_TITLE_RES) {
     if (lt.test(title)) { problems.push("label title \u2014 names a category, not a mechanism: '" + title.slice(0, 60) + "'"); break; }
+  }
+  // Q08-QUALITY-1: a Title Case title reads as a label; the pipeline's own field names must not reach the reader; a precedent the
+  // site already overuses is rejected so the next essay finds a different case.
+  var tw = title.split(/\s+/).filter(Boolean);
+  if (tw.length >= 4 && tw.filter(function (w) { return /^[A-Z]/.test(w); }).length / tw.length >= 0.75) problems.push("Title Case title reads as a label, not a sentence: '" + title.slice(0, 60) + "'");
+  if (/\b(?:signal[ _]strength|friction_point|core_concept)\b/i.test(text)) problems.push("pipeline metadata in the essay ('signal strength', 'friction_point' or 'core_concept') - open with what happened instead");
+  if (banned && banned.length) {
+    for (var bp of banned) { if (bp.re.test(text)) { problems.push("overused precedent on this site: " + bp.label + " - use a different real case, or none"); break; } }
   }
   if (/\b(?:score|rating|ratio|reputation) of \d+\.\d+\b/i.test(body)) problems.push("invented decimal metric \u2014 no fabricated scores");
   if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier \u2014 no fabricated IDs");
@@ -676,6 +769,7 @@ async function persistPiece(env, piece, signal, story, model) {
 // ---------------------------------------------------------------------------
 // 7. Feedback loop \u2014 promote top 15%, purge bottom 15%
 // ---------------------------------------------------------------------------
+var OWNER_VERDICT_WEIGHT = 3;
 async function feedbackScan(env) {
   // Rank prompt_pool by READER VERDICTS (worth your time?) \u2014 votes, not views.
   var rows = await env.DB.prepare(
@@ -685,6 +779,16 @@ async function feedbackScan(env) {
     "FROM prompt_pool pp JOIN published_pieces p ON p.id = pp.piece_id WHERE pp.active = 1"
   ).all();
   var all = rows.results || [];
+  // Q08-QUALITY-1: the owner's verdict (signed in at fleet.qnfo.org, qnfo-audit q08_owner_verdicts) counts 3 votes, so one
+  // calibrating verdict can clear the 3-vote minimum while reader volume is low.
+  try {
+    if (env.AUDIT) {
+      var ov = await env.AUDIT.prepare("SELECT slug, signal FROM q08_owner_verdicts").all();
+      var ow = {};
+      for (var o of (ov.results || [])) { var k = String(o.slug); ow[k] = ow[k] || { g: 0, b: 0 }; if (o.signal === "good") ow[k].g++; else if (o.signal === "flat" || o.signal === "no") ow[k].b++; }
+      for (var ar of all) { var w = ow[String(ar.slug)]; if (w) { ar.g = (Number(ar.g) || 0) + w.g * OWNER_VERDICT_WEIGHT; ar.b = (Number(ar.b) || 0) + w.b * OWNER_VERDICT_WEIGHT; } }
+    }
+  } catch (e) {}
   var promoted = 0, purged = 0;
   for (var r of all) {
     var g = Number(r.g) || 0, b = Number(r.b) || 0;
@@ -757,6 +861,12 @@ async function generate(env) {
   if (todayN >= cap) {
     return { ok: false, reason: "daily cap reached (" + todayN + "/" + cap + (cap < MAX_PER_DAY ? ", ops_config " + CAP_KEY : "") + ")" };
   }
+  // Q08-QUALITY-1: attempts are bounded at twice the publish cap, so reader-test rounds cannot add model calls beyond what the
+  // lower cap saves (fleet_budget caps are breached; CORE PROMPT rule 8 forbids adding paid calls).
+  var attempts = await env.DB.prepare("SELECT COUNT(*) n FROM engine_runs WHERE ran_at >= datetime('now','start of day') AND status IN ('ok','gate_failed')").first().catch(function () { return { n: 0 }; });
+  if ((attempts && attempts.n || 0) >= cap * 2) {
+    return { ok: false, reason: "daily attempt cap reached (" + attempts.n + "/" + (cap * 2) + ")" };
+  }
   // Scrape + rank \u2014 three sources (break the filter bubble)
   var stories = [];
   try { stories = stories.concat(await scrapeHN()); } catch (e) {}
@@ -801,16 +911,19 @@ async function generate(env) {
   ).all();
   var recentStructures = (recentRows.results || []).map(function(r){ return r.structure_md; });
   // Compose
-  var prompt = buildPrompt(friction, fewShot, recentStructures);
-  var piece  = await compose(env, prompt);
+  var recentBodies = await env.DB.prepare("SELECT body_md FROM published_pieces ORDER BY published_at DESC LIMIT 8").all().catch(function () { return { results: [] }; });
+  var banned = overusedPrecedents((recentBodies.results || []).map(function (r) { return r.body_md; }), 2);
+  var ownerNotes = await ownerDirectives(env);
+  var prompt = buildPrompt(friction, fewShot, recentStructures, { banned: banned, ownerNotes: ownerNotes });
+  var piece  = await compose(env, prompt, banned);
   // Gate \u2014 one corrective retry on failure
-  var gateResult = gate(piece.text);
+  var gateResult = gate(piece.text, banned);
   if (!gateResult.ok) {
     var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure \u2014 continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay \u2014 fixing only these issues ---\n" + gateResult.problems.join("; ");
     var retryPiece = null;
-    try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
+    try { retryPiece = await compose(env, retryPrompt, banned); } catch (e) { retryPiece = null; }
     if (retryPiece && retryPiece.text) {
-      var retryGate = gate(retryPiece.text);
+      var retryGate = gate(retryPiece.text, banned);
       if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
       else if (retryGate.problems.length === 1 && /verdict/i.test(retryGate.problems[0]) && retryGate.problems[0].indexOf("self-verdict") < 0) {
         // Verdict-only micro-call: one cheap compose asking for exactly the verdict line.
@@ -819,14 +932,32 @@ async function generate(env) {
           var vm2 = (vp && vp.text || "").match(/worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-]\s*\S[^\n]*$/im);
           if (vm2) {
             retryPiece.text = retryPiece.text.replace(/\s*$/, "") + "\n\n" + vm2[0];
-            retryGate = gate(retryPiece.text);
+            retryGate = gate(retryPiece.text, banned);
             if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
           }
         } catch (e) {}
       }
     }
   }
+  // Q08-READER-TEST-1: a draft that passed the deterministic gate is read cold by the other model. One rewrite on feedback; the
+  // piece is published only if a read passes. A critic error fails open (the gate already passed), so an outage never stalls q08.
+  var readerRounds = [];
+  if (gateResult.ok) {
+    var r1 = await readerTest(env, piece);
+    if (r1) readerRounds.push(r1);
+    if (r1 && !r1.pass) {
+      var rwPrompt = prompt + "\n\n--- READER TEST FEEDBACK: a cold reader would not read this draft to the end (score " + r1.score + " of 5). Fix: " + r1.fix + (r1.tells.length ? " Phrases that read as generic machine prose: " + r1.tells.join(" | ") + "." : "") + " Rewrite the ENTIRE essay in plain words with a different opening, keep exactly one '# ' title line first and the verdict line last ---";
+      var rw = null;
+      try { rw = await compose(env, rwPrompt, banned); } catch (e) { rw = null; }
+      var rwOk = rw && rw.text && gate(rw.text, banned).ok;
+      var r2 = rwOk ? await readerTest(env, rw) : null;
+      if (r2) readerRounds.push(r2);
+      if (rwOk && (!r2 || r2.pass)) { piece = rw; }
+      else { gateResult = { ok: false, problems: ["reader-test: a cold read scored " + (r2 ? r2.score : r1.score) + " of 5 after one rewrite - " + ((r2 || r1).fix || "no fix given")] }; }
+    }
+  }
   if (!gateResult.ok) {
+    await saveReaderTests(env, (story.source || "hn") + ":" + String(story.id || ""), readerRounds);
     // Mark the signal processed so the same story is not retried by the next runs.
     try {
       await env.DB.prepare(
@@ -842,6 +973,7 @@ async function generate(env) {
   piece.text = piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
   // Persist
   var saved = await persistPiece(env, piece, friction, story, piece.model);
+  await saveReaderTests(env, saved.slug, readerRounds);
   // Feedback loop. MUST be awaited: as a floating promise with no ctx.waitUntil it
   // was truncated by the Worker runtime once the response returned, so the promotion
   // loop never completed and the reader-proven pool stayed empty (feedback_score
@@ -1183,6 +1315,9 @@ function cleanNote(v) {
   var t = String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/https?:\/\/\S+/gi, "[link]").replace(/\s+/g, " ").trim().slice(0, 280);
   return t || null;
 }
+// Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
+export const __quality = { gate: gate, overusedPrecedents: overusedPrecedents, parseReaderVerdict: parseReaderVerdict, buildPrompt: buildPrompt, ownerDirectives: ownerDirectives, readerTest: readerTest, OWNER_VERDICT_WEIGHT: OWNER_VERDICT_WEIGHT, REGISTER_EXEMPLAR: REGISTER_EXEMPLAR };
+
 export default {
   async fetch(req, env, ctx) {
     env = __aiAttrEnv(env, "q08-signal-engine", "AI", "AUDIT");
@@ -1197,7 +1332,7 @@ export default {
       var cnt = await env.DB.prepare("SELECT COUNT(*) n FROM published_pieces").first().catch(() => ({n:0}));
       var last = await env.DB.prepare("SELECT slug, title, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 1").first().catch(() => null);
       var runs = await env.DB.prepare("SELECT status, COUNT(*) n FROM engine_runs GROUP BY status").all().catch(() => ({results:[]}));
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "/run is unauthenticated but rate-limited to 5 per IP per hour", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], metrics_7d: m7, pieces: cnt.n, daily_cap: await dailyCap(env), daily_cap_key: "ops_config " + CAP_KEY, last, runs: runs.results });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit", "reader-test", "owner-editorial-directives", "owner-verdict-weight"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "/run is unauthenticated but rate-limited to 5 per IP per hour", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], metrics_7d: m7, pieces: cnt.n, daily_cap: await dailyCap(env), daily_cap_key: "ops_config " + CAP_KEY, last, runs: runs.results });
     }
 
     if (path === "/run" && req.method === "POST") {
