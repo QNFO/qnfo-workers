@@ -6,14 +6,14 @@
   "pre_rc": "ok",
   "restore_exit": "",
   "gate_need_restore": "false",
-  "gate_reason": "newest container event is container.exec at 2026-10-02T11:18:20.073Z: container healthy, nothing to restore",
+  "gate_reason": "newest container event is container.exec at 2026-10-03T07:33:24.080Z: container healthy, nothing to restore",
   "settings_readback_rc": "containers-null-at-settings-advisory",
-  "probe_rc": "health-ok-no-pilot-token",
-  "verdict": "AMBER",
-  "head": "fc82dd50a4e04b3e1689b6348e5087ebd9dca203",
-  "ts": "2026-10-02T11:23:16Z",
+  "probe_rc": "",
+  "verdict": "",
+  "head": "d6c342243f7c37d5b01b8c41eb7eea3a25ba4b3f",
+  "ts": "2026-10-03T08:14:36Z",
   "pre_settings": "{\n  \"success\": true,\n  \"containers\": null,\n  \"bindings\": [\n    \"AUDIT\",\n    \"PILOT_TOKEN\",\n    \"SHELL_CONTAINER\"\n  ],\n  \"compatibility_date\": \"2026-08-01\",\n  \"compatibility_flags\": [\n    \"nodejs_compat\"\n  ]\n}\n",
   "restore_log": "UNREADABLE: [Errno 2] No such file or directory: '/tmp/restore.log'",
   "post_settings": "{\n  \"containers\": null,\n  \"bindings\": [\n    \"AUDIT\",\n    \"PILOT_TOKEN\",\n    \"SHELL_CONTAINER\"\n  ]\n}\n",
-  "health": "{\n  \"ok\": true,\n  \"worker\": \"qnfo-containers-pilot\",\n  \"version\": \"1.0.11-command-exit-honest\",\n  \"capabilities\": [\n    \"bash\",\n    \"python3.12\",\n    \"node22\",\n    \"npm\",\n    \"pip\",\n    \"git\",\n    \"ripgrep\",\n    \"workspace-fs\",\n    \"git-clone\",\n    \"full-shell\"\n  ],\n  \"limitations\": [\n    \"command paths only via an internal service binding (qnfo-ops bearer, or a qnfo-* caller authenticated by binding props)\",\n    \"PILOT-RATE-LIMIT-1: 429 above the limits below\",\n    \"one shared container instance\",\n    \"stdout/stderr capped at 131072 bytes\"\n  ],\n  \"limits\": {\n    \"per_minute\": 60,\n    \"per_hour\": 600,\n    \"inflight\": 8\n  },\n  \"public_exec\": false\n}"
+  "health": "UNREADABLE: [Errno 2] No such file or directory: '/tmp/health.json'"
 }
