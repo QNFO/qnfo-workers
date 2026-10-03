@@ -28,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.2.1-ctl-ellipsis"; // 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
+var VERSION = "2.2.2-judge-visible"; // 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -62,6 +62,7 @@ var FALLBACK_MODEL_2 = "@cf/zai-org/glm-5.3-flash";
 // Reasoning models think before they answer; their output budget must cover both.
 var REASONING_TOKENS = { "@cf/zai-org/glm-5.3-flash": 8000, "@cf/qwen/qwen3-30b-a3b-fp8": 8000 };
 var JUDGE_MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+var JUDGE_MAX_TOKENS = 3000;
 var QGEN_MODEL = "@cf/zai-org/glm-5.3-flash";
 // Cloudflare neurons per 1M tokens [in, out] (same table as qnfo-ai __AI_ATTR_RATES).
 var RATES = {
@@ -879,7 +880,7 @@ async function judge(env, max) {
   var d = db(env);
   if (!env.AI) return { skipped: "no AI binding" };
   var rows = (await d.prepare("SELECT id, query, answer, context FROM ask_events WHERE judge=1 AND judged_total IS NULL AND answer IS NOT NULL ORDER BY ts DESC LIMIT ?1").bind(max).all()).results || [];
-  var done = 0, sup = 0, tot = 0;
+  var done = 0, sup = 0, tot = 0, errors = 0, noJson = 0, badCounts = 0, lastError = null, head = null;
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
     var msg = [
@@ -887,19 +888,21 @@ async function judge(env, max) {
       { role: "user", content: "QUESTION: " + r.query + "\n\nEXCERPTS:\n" + r.context + "\n\nANSWER:\n" + r.answer },
     ];
     try {
-      var out = await env.AI.run(JUDGE_MODEL, { messages: msg, max_tokens: 1200, temperature: 0 });
+      var out = await env.AI.run(JUDGE_MODEL, { messages: msg, max_tokens: JUDGE_MAX_TOKENS, temperature: 0 });
       var t = stripThink(String((out && (out.response || (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content))) || ""));
       recordSpend(env, null, JUDGE_MODEL, Math.ceil((r.context.length + r.answer.length) / 3.5), 150, "judge");
       var m = t.match(/\{[\s\S]*\}/);
-      if (!m) continue;
+      if (!m) { noJson++; if (head === null) head = t.slice(0, 160); continue; }
       var j = JSON.parse(m[0]);
       var s = Math.max(0, Math.floor(Number(j.supported) || 0)), n = Math.max(0, Math.floor(Number(j.total) || 0));
-      if (!n || s > n) continue;
+      if (!n || s > n) { badCounts++; continue; }
       await d.prepare("UPDATE ask_events SET judged_supported=?2, judged_total=?3 WHERE id=?1").bind(r.id, s, n).run();
       done++; sup += s; tot += n;
-    } catch (e) {}
+    } catch (e) { errors++; lastError = String((e && e.message) || e).slice(0, 160); }
   }
-  return { judged: done, supported: sup, total: tot };
+  var res = { judged: done, supported: sup, total: tot };
+  if (rows.length && done < rows.length) res.failed = { attempted: rows.length, errors: errors, no_json: noJson, bad_counts: badCounts, last_error: lastError, head: head };
+  return res;
 }
 // ---- IMPROVE: ASK-FIX-1 (code changes go through the fleet's code loop; this loop verifies the outcome and closes)
 var FIX_PREFIX = "ASK-FIX-1: ";
