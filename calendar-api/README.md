@@ -17,6 +17,10 @@ Endpoints:
 - PUT  /events/:id                -> update fields
 - DELETE /events/:id
 - GET  /events.ics?plane=..       -> RFC5545 export (Outlook/Google subscribe URL)
+- GET/POST /e/:id?s=<sig>         -> (0.5.0) feedback page for a suggested personal event: keep / I went / not for me.
+                                    Signed link (HMAC of the id with CAL_TOKEN), no login; GET only shows, POST changes.
+                                    Personal feed events from personal-radar and personal-twin carry this link.
+- GET  /feedback?since=&limit=    -> (0.5.0, bearer) stored answers from calendar_feedback, newest first
 
 Deploy: cd qnfo-workers/calendar && npx wrangler deploy
 Canonical source: github.com/QNFO/qnfo-workers -> qnfo-workers/calendar/worker.js
