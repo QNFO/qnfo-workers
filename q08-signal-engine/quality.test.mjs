@@ -26,9 +26,13 @@ assert.equal(q.parseReaderVerdict('{"score": "abc"}'), null);
 assert.equal(q.parseReaderVerdict('{"would_read_to_end": true, "score": 99}').score, 5);
 
 // 4. gate: metadata leak and Title Case title are problems; banned precedent is a problem
-const leakText = "# Why the vendor stopped answering\n\nThe signal strength of this case was high. " + "word ".repeat(10);
+const leakText = "# Why the vendor stopped answering\n\nThe signal_strength of this case was high. " + "word ".repeat(10);
 const g1 = q.gate(leakText, []);
 assert.ok(g1.problems.some((p) => /pipeline metadata/.test(p)), "metadata leak flagged");
+const radio = q.gate("# Why the repeater stopped answering\n\nThe signal strength at the hilltop fell as the leaves came in. " + "word ".repeat(10), []);
+assert.ok(!radio.problems.some((p) => /pipeline metadata/.test(p)), "an essay that is genuinely about radio signal strength is not rejected");
+const leak2 = q.gate("# Why the vendor stopped answering\n\nThe signal strength of 0.8 pointed at it. " + "word ".repeat(10), []);
+assert.ok(leak2.problems.some((p) => /pipeline metadata/.test(p)), "a signal strength value is still a leak");
 const g2 = q.gate("# The Badge That Outlived The Inspection\n\nbody " + "word ".repeat(10), []);
 assert.ok(g2.problems.some((p) => /Title Case/.test(p)), "Title Case flagged");
 const g3 = q.gate("# The badge that outlived the inspection\n\nA guild hallmark story. " + "word ".repeat(10), q.overusedPrecedents(bodies, 2));
