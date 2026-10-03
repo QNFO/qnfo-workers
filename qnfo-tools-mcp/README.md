@@ -10,6 +10,12 @@ Two transports: HTTP (SSE) at `/mcp/sse?token=...` and streamable HTTP at `/mcp?
 - `papers_search` — semantic search over the QNFO research corpus (qwav-research-v2).
 - `history_recall` — semantic recall of past research notes/queries (qnfo-ai-log).
 - `personal_search` — personal-life index (notes, files, chat threads) - strictly personal side.
+- `owner_queue` — what the fleet is waiting on the owner to do (the open cards on fleet.qnfo.org; read-only, public data).
+- `owner_code` — emails the owner a 6-digit code (write scope). The dashboard fixes the destination; this worker cannot choose it.
+- `owner_act` — done / dismiss / snooze / note on owner cards (write scope). Takes the code the owner reads from their inbox;
+  one code covers a batch of up to 10 actions. This worker holds no dashboard secret: it calls the dashboard's public
+  `/api/cmd/verify` and `/api/cmd/run`, so the dashboard's rules (12 h session, 15 min step-up for done/dismiss, `ha:` keys
+  only for done/dismiss) stay the only gate. The code is redacted from `mcp_log`. Offline suite: `owner-queue.test.mjs`.
 
 ## Deploy
 

@@ -6,7 +6,8 @@ var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var PL_SEARCH = "https://personal-life-search.q08.workers.dev";
 var EMAIL_BASE = "https://qnfo-email.internal";
 var NL = String.fromCharCode(10);
-var VERSION = "1.1.6-capability-contract"; // MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
+var FLEET = "https://fleet.qnfo.org";
+var VERSION = "1.2.0-owner-queue"; // OWNER-QUEUE-MCP-1: owner_queue / owner_code / owner_act reach the fleet.qnfo.org queue from any MCP client; 1.1.6-capability-contract: MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN=read+write, MCP_READ_TOKEN=read-only
 var TOOLS = [
   { name: "web_search", description: "Search the web via DuckDuckGo (QNFO router). Returns title/url/snippet.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, k: { type: "number", description: "result count (1-10)" } }, required: ["q"] } },
   { name: "web_fetch", description: "Fetch a URL and extract readable text (SSRF-guarded).", inputSchema: { type: "object", properties: { url: { type: "string" }, max: { type: "number", description: "max chars (500-20000)" } }, required: ["url"] } },
@@ -22,7 +23,10 @@ var TOOLS = [
   { name: "email_stats", description: "Email account stats: total messages, last 24h, by classification, by status.", inputSchema: { type: "object", properties: {} } },
   { name: "email_search", description: "Search email subject/sender/body text across the QNFO domain email accounts.", inputSchema: { type: "object", properties: { q: { type: "string", description: "search query" }, limit: { type: "number", description: "max rows (1-100, default 20)" } }, required: ["q"] } },
   { name: "email_respond", description: "Send an email reply (or new email) FROM a QNFO domain account via the qnfo-email Worker. Pass reply_to_id to reply to an existing inbound email (worker marks it replied). `from` defaults to qnfo@qnfo.org; pass rowan.quni@qnfo.org for academic outreach. Body field is `body` (plain text) with optional `html`.", inputSchema: { type: "object", properties: { to: { type: "string", description: "recipient email" }, subject: { type: "string", description: 'subject (use "Re: <original>" for replies)' }, body: { type: "string", description: "plain-text body" }, html: { type: "string", description: "optional HTML body" }, reply_to_id: { type: "number", description: "id of the inbound email being replied to (marks it replied)" }, affirm: { type: "boolean", description: "must be TRUE to send a NEW outbound email when reply_to_id is absent (MCP-COLD-SEND-UNGATED-1); replies do not need it" }, from: { type: "string", description: "QNFO domain sender (default qnfo@qnfo.org; rowan.quni@qnfo.org for outreach)" } }, required: ["to", "subject", "body"] } },
-  { name: "email_mark", description: "Update the status of an email row (received/processed/sent/replied/archived/spam/read/rejected).", inputSchema: { type: "object", properties: { id: { type: "number", description: "email id" }, status: { type: "string", description: "new status" } }, required: ["id", "status"] } }
+  { name: "email_mark", description: "Update the status of an email row (received/processed/sent/replied/archived/spam/read/rejected).", inputSchema: { type: "object", properties: { id: { type: "number", description: "email id" }, status: { type: "string", description: "new status" } }, required: ["id", "status"] } },
+  { name: "owner_queue", description: "List what the fleet is waiting on the OWNER (a human) to do: the open cards on fleet.qnfo.org (key, title, why, the exact action, link, urgency, due). Read-only; the same public data as https://fleet.qnfo.org/api/human. Use the returned key with owner_act.", inputSchema: { type: "object", properties: { limit: { type: "number", description: "max cards (1-100, default 50)" } } } },
+  { name: "owner_code", description: "Email a 6-digit code to the owner's fixed address (the dashboard decides where it goes; nobody can choose). The owner reads it in their inbox and passes it to owner_act. Valid 10 minutes; at most 6 an hour.", inputSchema: { type: "object", properties: {} } },
+  { name: "owner_act", description: "Act on owner cards through the dashboard's own gate. Needs `code`, the 6-digit code the owner received from owner_code (single use; ask the owner for it, never guess). One code covers every action in the batch. kind: done (mark finished), dismiss (not doing), snooze (days 1-90), note (text kept with the card and filed as fleet work). key is a key from owner_queue; done and dismiss only work on keys starting ha:.", inputSchema: { type: "object", properties: { code: { type: "string", description: "6-digit code from the owner's email" }, actions: { type: "array", maxItems: 10, items: { type: "object", properties: { key: { type: "string" }, kind: { type: "string", description: "done | dismiss | snooze | note" }, days: { type: "number", description: "snooze days 1-90" }, note: { type: "string", description: "note text (max 500)" } }, required: ["key", "kind"] } } }, required: ["code", "actions"] } }
 ];
 function tokenEq(token, expected) {
   if (!expected || !token) return false;
@@ -41,7 +45,7 @@ __name(authToken, "authToken");
 // MCP-TOKEN-NO-SCOPE-SEPARATION (954): MCP_TOKEN is the FULL read+write credential.
 // MCP_READ_TOKEN (optional) grants READ tools only and cannot invoke the write tools
 // email_respond / email_mark / express_desire. With no MCP_READ_TOKEN set, behaviour is unchanged.
-var WRITE_TOOLS = ["email_respond", "email_mark", "express_desire"];
+var WRITE_TOOLS = ["email_respond", "email_mark", "express_desire", "owner_code", "owner_act"];
 function scopeFor(token, env) {
   if (tokenEq(token, env.MCP_TOKEN)) return { ok: true, write: true };
   if (env.MCP_READ_TOKEN && tokenEq(token, env.MCP_READ_TOKEN)) return { ok: true, write: false };
@@ -76,6 +80,42 @@ async function callEmail(env, path, opts = {}) {
   return j;
 }
 __name(callEmail, "callEmail");
+// OWNER-QUEUE-MCP-1: the dashboard stays the only writer. These helpers call its public routes (the same ones the
+// browser uses); no dashboard secret is held here, so the owner's emailed code is the whole gate, exactly as in the browser.
+async function fleetJson(path, o) {
+  const headers = { "x-fleet-ui": "1" };
+  if (o.body !== void 0) headers["Content-Type"] = "application/json";
+  if (o.cookie) headers["Cookie"] = "fleet_cmd=" + o.cookie;
+  let resp;
+  try {
+    resp = await fetch(FLEET + path, { method: o.method, headers, body: o.body !== void 0 ? JSON.stringify(o.body) : void 0 });
+  } catch (e) {
+    return { error: "fleet.qnfo.org unreachable: " + String(e && e.message || e).slice(0, 120) };
+  }
+  let j = null;
+  try {
+    j = await resp.json();
+  } catch (e) {
+    j = null;
+  }
+  if (!j) return { error: "fleet.qnfo.org " + path + " HTTP " + resp.status + " (no JSON)" };
+  if (!resp.ok && !j.error) j.error = "HTTP " + resp.status;
+  if (o.wantCookie && resp.ok) {
+    const sc = typeof resp.headers.getSetCookie === "function" ? resp.headers.getSetCookie().join(", ") : resp.headers.get("set-cookie") || "";
+    const m = /fleet_cmd=([0-9a-f]{64})/.exec(sc);
+    if (!m) return { error: "the dashboard accepted the code but set no session" };
+    j.cookie = m[1];
+  }
+  return j;
+}
+__name(fleetJson, "fleetJson");
+// A code or session value must never reach the audit log (mcp_log keeps tool arguments).
+function redactArgs(a) {
+  const o = Object.assign({}, a || {});
+  if (o.code !== void 0) o.code = "[redacted]";
+  return o;
+}
+__name(redactArgs, "redactArgs");
 async function callTool(env, name, args) {
   const H = { Authorization: "Bearer " + env.RT };
   const k = Math.min(parseInt(args.k || 5, 10) || 5, 20);
@@ -184,6 +224,41 @@ async function callTool(env, name, args) {
     if (j.error) return { error: j.error };
     return j;
   }
+  if (name === "owner_queue") {
+    const lim = Math.min(parseInt(args.limit || 50, 10) || 50, 100);
+    const j = await fleetJson("/api/human", { method: "GET" });
+    if (j.error) return { error: j.error };
+    const slim = (i) => ({ key: i.key, title: i.title, why: i.why, action: i.action, url: i.url || "", sev: i.sev, due: i.due || "", age_days: i.age == null ? null : i.age, fallback: i.fallback || "" });
+    const items = (j.items || []).slice(0, lim).map(slim);
+    return { verdict: j.verdict, open: j.count, snoozed: j.snoozed, shown: items.length, items, upcoming: (j.upcoming || []).slice(0, lim).map(slim), next: "owner_code emails the owner a code; owner_act uses it." };
+  }
+  if (name === "owner_code") {
+    const j = await fleetJson("/api/cmd/code", { method: "POST", body: {} });
+    if (j.error) return { error: j.error };
+    return { sent: !!j.sent, note: j.note || "" };
+  }
+  if (name === "owner_act") {
+    const code = String(args.code || "").replace(/\D/g, "");
+    if (code.length !== 6) return { error: "code must be the 6 digits the owner received from owner_code" };
+    const acts = Array.isArray(args.actions) ? args.actions.slice(0, 10) : [];
+    if (!acts.length) return { error: "actions is empty" };
+    for (const a of acts) {
+      const kind = String(a && a.kind || "");
+      if (["done", "dismiss", "snooze", "note"].indexOf(kind) < 0) return { error: "kind must be done|dismiss|snooze|note" };
+      if (!/^[A-Za-z0-9:._-]{3,160}$/.test(String(a && a.key || ""))) return { error: "bad key: " + String(a && a.key || "").slice(0, 60) };
+      if (kind === "snooze" && !(Number(a.days) >= 1)) return { error: "snooze needs days 1-90" };
+      if (kind === "note" && !String(a.note || "").trim()) return { error: "note needs text" };
+    }
+    const v = await fleetJson("/api/cmd/verify", { method: "POST", body: { code }, wantCookie: true });
+    if (v.error) return { error: "code not accepted: " + v.error, results: [] };
+    const results = [];
+    for (const a of acts) {
+      const kind = String(a.kind);
+      const r = await fleetJson("/api/cmd/run", { method: "POST", cookie: v.cookie, body: { op: kind, args: { key: String(a.key), days: kind === "snooze" ? Math.min(90, Math.max(1, Math.round(Number(a.days)))) : void 0, note: kind === "note" ? String(a.note).slice(0, 500) : void 0 } } });
+      results.push({ key: a.key, kind, ok: !r.error && r.ok !== false, text: r.text || void 0, error: r.error || void 0 });
+    }
+    return { ok: results.every((x) => x.ok), done: results.filter((x) => x.ok).length, failed: results.filter((x) => !x.ok).length, results };
+  }
   throw new Error("unknown tool: " + name);
 }
 __name(callTool, "callTool");
@@ -206,7 +281,7 @@ async function handleJsonRpc(msg, env, allowWrite) {
       try {
         if (env.AUDIT) {
           await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS mcp_log (id TEXT PRIMARY KEY, ts TEXT, tool TEXT, args TEXT, result TEXT, session TEXT)").run();
-          await env.AUDIT.prepare("INSERT INTO mcp_log (id, ts, tool, args, result, session) VALUES (?1,?2,?3,?4,?5,?6)").bind("mcp-" + Date.now().toString(36), (/* @__PURE__ */ new Date()).toISOString(), String(msg.params && msg.params.name || ""), JSON.stringify(msg.params && msg.params.arguments || {}).slice(0, 2e3), JSON.stringify(out).slice(0, 4e3), "").run();
+          await env.AUDIT.prepare("INSERT INTO mcp_log (id, ts, tool, args, result, session) VALUES (?1,?2,?3,?4,?5,?6)").bind("mcp-" + Date.now().toString(36), (/* @__PURE__ */ new Date()).toISOString(), String(msg.params && msg.params.name || ""), JSON.stringify(redactArgs(msg.params && msg.params.arguments || {})).slice(0, 2e3), JSON.stringify(out).slice(0, 4e3), "").run();
         }
       } catch (e2) {
       }
