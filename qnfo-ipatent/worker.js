@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.2-fleet-link"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.3-codeagent"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -1076,6 +1076,31 @@ var GUIDE_HTML = `<!DOCTYPE html>
 <footer>
 iPatent is a free, open experiment from <a href="https://qnfo.org">QNFO</a> by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID</a>). <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-guide">Work with me</a> · <a href="/example">See a real run</a>. Source code is public at <a href="https://github.com/QNFO/qnfo-workers/tree/main/qnfo-ipatent">github.com/QNFO/qnfo-workers</a>. This guide is general information, not legal advice, and reflects US law and USPTO fees as of 2 October 2026.
 </footer>
+</div>
+<div class="box">
+<h2>Get new guides by email</h2>
+<form id="subscribe-form">
+  <input type="email" name="email" required placeholder="Your email address">
+  <button type="submit">Subscribe</button>
+  <span id="status-message"></span>
+</form>
+<script>
+document.getElementById('subscribe-form').addEventListener('submit', function(event) {
+  event.preventDefault();
+  const email = this.email.value;
+  fetch('/api/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email, source: 'ipatent-guide' })
+  }).then(response => response.json())
+    .then(data => {
+      document.getElementById('status-message').textContent = 'Check your inbox to confirm your subscription.';
+    })
+    .catch(error => {
+      document.getElementById('status-message').textContent = 'Error: ' + error.message;
+    });
+});
+</script>
 </div>
 ${fleetCtlLink(CANONICAL_ORIGIN + "/guide")}
 </body>
