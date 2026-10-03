@@ -1,91 +1,19 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@15da9d340ef6",
- "due": 10,
- "pass": 2,
- "fail": 7,
- "skipped": 1,
+ "verifier": "remediation-consumer@cf0ee2e4d57a",
+ "due": 1,
+ "pass": 0,
+ "fail": 1,
+ "skipped": 0,
  "contracts": [
   {
-   "class": "EVID-1683-SPEND",
-   "issue_id": 1683,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
-  },
-  {
-   "class": "EVID-GATE-A2-PUBLISHV2",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "assert-ok",
-   "observed": "no-publish-yet",
-   "written": true
-  },
-  {
-   "class": "issue-1826",
-   "issue_id": 1826,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1796",
-   "issue_id": 1796,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "4",
-   "written": true
-  },
-  {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
-   "verdict": "fail",
-   "expected": "all-sources-ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
-   "verdict": "fail",
-   "expected": "seven-days",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1730",
-   "issue_id": 1730,
+   "class": "issue-1800",
+   "issue_id": 1800,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
-  },
-  {
-   "class": "EVID-1649-BRIEF",
-   "issue_id": 1649,
-   "verdict": "pass",
-   "expected": "recorded",
-   "observed": "recorded",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "vacuous-probe-result",
-   "expected": "fixed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
   }
  ],
  "trusted_transports": [
@@ -104,8 +32,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 23124,
- "head": "15da9d340ef6f2c8fd7c29c0ca190090aca9d370",
+ "spent_ms": 5034,
+ "head": "cf0ee2e4d57a7e25eed8f6492ddf1ac7d5fa5378",
  "job_status": "success",
- "ts": "2026-10-03T13:16:24Z"
+ "ts": "2026-10-03T14:00:44Z"
 }
