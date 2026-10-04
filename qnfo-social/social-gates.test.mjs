@@ -116,7 +116,10 @@ function baseState(over) {
   const recs = calls.filter(c => c.u.includes('createRecord')).map(c => JSON.parse(c.body).record);
   assert.equal(recs.length, 2);
   assert.ok(recs[0].text.includes(EM) && !recs[0].text.includes('\u00e2'), 'mojibake repaired before posting');
-  assert.ok(recs[0].text.includes('utm_source=bluesky&utm_medium=social&utm_campaign=jpcub'), 'bluesky utm');
+  // SOCIAL-POST-TRUNCATION-1 (0.7.35): the visible text carries no tracking; the UTM is on the link facet uri and the card.
+  assert.ok(!recs[0].text.includes('utm_'), 'bluesky visible text has no utm');
+  assert.ok(recs[0].facets[0].features[0].uri.includes('utm_source=bluesky&utm_medium=social&utm_campaign=jpcub'), 'bluesky utm on the facet uri');
+  assert.ok(recs[0].embed.external.uri.includes('utm_campaign=jpcub'), 'link card carries the tagged uri');
   assert.equal(recs[0].embed.external.title, 'JPCUB caf\u00e9');
   const cps = calls.filter(c => c.body.includes('createPost'));
   const lin = cps.find(c => c.body.includes('chL')); const mas = cps.find(c => c.body.includes('chM'));
@@ -177,7 +180,7 @@ function baseState(over) {
   const ins = m2.log.find(l => l.sql.includes('INSERT INTO social_threads') && l.sql.includes('post_uri'));
   assert.ok(ins && ins.args[3] === 'at://did:plc:me/app.bsky.feed.post/r1');
   const rec = JSON.parse(calls.find(c => c.u.includes('createRecord')).body).record;
-  assert.ok(rec.text.includes('utm_campaign=abc'));
+  assert.ok(!rec.text.includes('utm_') && rec.facets[0].features[0].uri.includes('utm_campaign=abc'));
   const res3 = await W.fetch(new Request('https://x/post', { method: 'POST', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ text: 'x https://q08.org/p/y' }) }), mkEnv(baseState()).env);
   assert.equal(res3.status, 422);
   ok('routes: cap -> 429, q08 -> 422, allowed /post records social_threads row with post_uri and UTM');
@@ -260,13 +263,14 @@ function baseState(over) {
   const r = await mod.drainQueue(env);
   assert.equal(r.posted, 1);
   const rec = JSON.parse(calls.find(c => c.u.includes('createRecord')).body).record;
-  assert.ok(rec.text.includes('https://ipatent.qnfo.org/example?utm_source=bluesky&utm_medium=social&utm_campaign=ipatent-example'), 'ipatent link tagged on Bluesky');
+  assert.deepEqual(mod.extractUrls(rec.text), ['https://ipatent.qnfo.org/example']); assert.ok(!rec.text.includes('utm_'), 'ipatent link shown short on Bluesky');
+  assert.equal(rec.facets[0].features[0].uri, 'https://ipatent.qnfo.org/example?utm_source=bluesky&utm_medium=social&utm_campaign=ipatent-example', 'ipatent link tagged in the facet uri');
   const upd = log.find(l => l.sql.includes("SET status='posted'") && l.sql.includes('posts=COALESCE(?3, posts)'));
   assert.ok(upd, 'posted write stores the sent text');
   assert.equal(upd.args[1], 153);
   const stored = JSON.parse(upd.args[2]);
   assert.equal(stored.length, 1);
-  assert.equal(stored[0], rec.text, 'stored text is exactly the posted text');
+  assert.equal(stored[0], rec.text.split('https://ipatent.qnfo.org/example').join(rec.facets[0].features[0].uri), 'stored text is the posted text with the link as the facet resolves it');
   assert.ok(/utm_source=/.test(upd.args[2]), 'a probe on social_threads.posts LIKE %utm_source=% now sees the tag');
   const cps = calls.filter(c => c.body.includes('createPost'));
   assert.ok(cps.length === 2 && cps.every(c => c.body.includes('ipatent.qnfo.org/example?utm_source=')), 'Buffer channels get the tagged ipatent link too');

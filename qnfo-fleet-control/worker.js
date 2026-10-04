@@ -1060,7 +1060,11 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.109-cost-and-advisor"; /* 0.4.109 COST-PER-TASK-WINDOW-1: cost_per_successful_task_by_class reads qnfo-ops' daily ladder ledger over the same 30 days as its task count, not whole calendar months of model_ladder_budget (which also held a one-off tier-0 seed of the account's September gateway spend, $188.10, that no ladder call made); ADVISOR-SPEND-1: the 20-minute advisor reuses its last advice while its finding set is unchanged (it paid a 70B proposal and a 120B review 72 times a day for the same OPEN-ISSUES-BACKLOG advice), and counts an issue as filed only when the insert wrote a row (the 24h refile guard ignores it silently); 0.4.108 CODE-LOOP-STALE-VERSION-1 (#1835): a code-loop PR that fails a required check or conflicts, on a file main changed after its merge base, is closed and its goal re-queued as a fresh task (max 2 per goal) instead of parked needs_human; 0.4.107 REACH-IDEATION-6H: reach ideation re-probes every 6 hours, not once per UTC day; 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
+var VERSION = "0.4.114-merge-runner-unstick"; /* 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+// 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
+// 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
+// issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
+// summary lists open issues in the same order. Before, critical was excluded from self-repair and ranked with low. /* 0.4.110 BRANCH-HYGIENE-1: the hourly tick deletes branches that are merged (contained in main, or the head of a merged pull request), saves the tip of an unmerged branch as refs/archive/<branch> before deleting it once it has no open pull request and no code task in flight, turns on delete-head-branch-on-merge, logs every action in branch_hygiene_log and writes repo_branches_open (GET /branch-hygiene); 0.4.109 COST-PER-TASK-WINDOW-1: cost_per_successful_task_by_class reads qnfo-ops' daily ladder ledger over the same 30 days as its task count, not whole calendar months of model_ladder_budget (which also held a one-off tier-0 seed of the account's September gateway spend, $188.10, that no ladder call made); ADVISOR-SPEND-1: the 20-minute advisor reuses its last advice while its finding set is unchanged (it paid a 70B proposal and a 120B review 72 times a day for the same OPEN-ISSUES-BACKLOG advice), and counts an issue as filed only when the insert wrote a row (the 24h refile guard ignores it silently); 0.4.108 CODE-LOOP-STALE-VERSION-1 (#1835): a code-loop PR that fails a required check or conflicts, on a file main changed after its merge base, is closed and its goal re-queued as a fresh task (max 2 per goal) instead of parked needs_human; 0.4.107 REACH-IDEATION-6H: reach ideation re-probes every 6 hours, not once per UTC day; 0.4.105 EVOLVE-JSON-1: the self-repair loop reads a model reply whose JSON strings hold real line breaks, and a model-skip row records what came back; 0.4.102 REACH-INTAKE-1: catalog reach ideas carry an intake code-task line and anchor; 0.4.101 REACH-IDEATION-2: reach ideas also come from the busiest owned pages by RUM traffic, are filed value-first under a work-in-progress cap (4 buildable, 1 not-buildable gap), and every idea has an outcome row (metric at filing, close, +7d) that re-weights its check kind; reach_ideas_shipped_30d; 0.4.100 TRIGGER-PARSE-1: a trigger value is a number only when the whole string is one ("12 of 20" was read as 1220); 0.4.98 EVOLVE-NO-DOUBLE-1: EVOLVE-PR-1 skips an issue that carries a code-task line (the code loop owns it; AUTOTRIAGE-OWNER-ROUTE-1 made such issues eligible by naming their worker as owner); 0.4.97 BUDGET-LIVE-1: fleet_budget.current for crons, D1, KV, R2, queues and Vectorize is counted from the account on every budget audit (cron_schedules read 69 with 84 registered; d1_databases read 10 with 11 live); 0.4.96 UTF8-DEPLOY-1: the wrangler.toml cron read decodes GitHub base64 as UTF-8 (evDecode), like every other GitHub read here; 0.4.95 MERGE-THROUGHPUT-1: merges per tick read from ops_config (default 1); 0.4.94 TRIGGER-DISPATCH-1: metric-trigger issues are filed with a canonical priority, and a failed dispatch no longer starts the cooldown; 0.4.92 charterNum: an n/a or unmeasured marker is never a number (its reason digits were written to metric_history); 0.4.91 PERFORMANCE-LOOP-1 */
 
 /* FLEET-SELFSTATE-1 (2026-09-30): the fleet must always know its own state, its own issues and
    its own health. Measured deficit before this fix: fleet_heartbeat held 3 workers of 38, and the
@@ -1155,7 +1159,7 @@ async function selfState(env) {
     var ir = await env.DB_AUDIT.prepare("SELECT priority, COUNT(*) AS n FROM agent_issues WHERE status='open' GROUP BY priority").all();
     var by = {}, tot = 0;
     (ir.results || []).forEach(function (x) { by[x.priority] = x.n; tot += x.n; });
-    var tr = await env.DB_AUDIT.prepare("SELECT id, priority, substr(title,1,140) AS title FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, id LIMIT 12").all();
+    var tr = await env.DB_AUDIT.prepare("SELECT id, priority, substr(title,1,140) AS title FROM agent_issues WHERE status='open' ORDER BY CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, id LIMIT 12").all();
     var sr = await env.DB_AUDIT.prepare("SELECT COALESCE(source,'(none)') AS source, COUNT(*) AS n FROM agent_issues WHERE status='open' GROUP BY 1 ORDER BY n DESC LIMIT 10").all();
     out.issues = { open_total: tot, by_priority: by, by_source: sr.results || [], top: tr.results || [] };
   } catch (e) {
@@ -2889,7 +2893,7 @@ __name(evLand, "evLand");
 async function evPropose(env) {
   var model = env.EVOLVE_MODEL || "@cf/moonshotai/kimi-k2.7-code";
   var reviewer = env.REVIEW_MODEL || "@cf/openai/gpt-oss-120b";
-  var cands = (await env.AUDIT.prepare("SELECT a.id, a.title, substr(a.description,1,1500) d, t.owner FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND a.priority IN ('high','medium','low') AND a.title NOT LIKE 'SEC-%' AND COALESCE(a.description,'') NOT LIKE '%code-task:%' AND a.category IN (" + EVOLVE_CATEGORIES.map(function(c) { return "'" + c + "'"; }).join(",") + ") AND a.id NOT IN (SELECT issue_id FROM evolve_candidates WHERE issue_id IS NOT NULL AND ts > datetime('now','-14 day')) ORDER BY CASE a.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, a.id LIMIT 40").all()).results || [];
+  var cands = (await env.AUDIT.prepare("SELECT a.id, a.title, substr(a.description,1,1500) d, t.owner FROM agent_issues a JOIN issue_triage t ON t.issue_id=a.id WHERE a.status='open' AND a.priority IN ('critical','high','medium','low') AND a.title NOT LIKE 'SEC-%' AND COALESCE(a.description,'') NOT LIKE '%code-task:%' AND a.category IN (" + EVOLVE_CATEGORIES.map(function(c) { return "'" + c + "'"; }).join(",") + ") AND a.id NOT IN (SELECT issue_id FROM evolve_candidates WHERE issue_id IS NOT NULL AND ts > datetime('now','-14 day')) ORDER BY CASE a.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, a.id LIMIT 40").all()).results || [];
   for (var i = 0; i < cands.length; i++) {
     var iss = cands[i], worker = String(iss.owner || "");
     if (!/^[a-z0-9-]+$/.test(worker) || EVOLVE_DENY.indexOf(worker) >= 0) continue;
@@ -3097,6 +3101,8 @@ var CM_CHECKS_WAIT_H = 3;
 var CM_DEPLOY_WAIT_H = 3;
 var CM_MAX_CANDIDATES = 5;
 var CM_MAX_MERGES = 1;
+var CM_MERGEABLE_READS = 3;
+var CM_MERGEABLE_WAIT_MS = 2000;
 var CM_OK = ["success", "neutral", "skipped"];
 var CM_INFLIGHT = ["deploying", "deployed", "reverting"];
 var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"];
@@ -3580,6 +3586,13 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
   if (d.action !== "refuse") {
     var pr = await evApi(env, "GET", "/pulls/" + num);
     if (!pr.ok || !pr.j) { out.errors++; return { id: t.id, action: "error", why: "pull HTTP " + pr.status }; }
+    // MERGE-RUNNER-UNSTICK-1: a single /pulls read right after main moved returns mergeable=null (GitHub computes it
+    // lazily); re-read within the tick rather than waiting a whole hour for the next tick to read null again.
+    for (var mr = 1; mr < CM_MERGEABLE_READS && pr.j.state === "open" && !pr.j.merged && pr.j.mergeable == null; mr++) {
+      if (CM_MERGEABLE_WAIT_MS > 0) await new Promise(function(res) { setTimeout(res, CM_MERGEABLE_WAIT_MS); });
+      var again = await evApi(env, "GET", "/pulls/" + num);
+      if (again.ok && again.j) pr = again;
+    }
     g.pr = pr.j;
     if (!pr.j.merged && pr.j.state === "open" && pr.j.head && pr.j.head.sha) {
       var head = pr.j.head.sha;
@@ -3725,9 +3738,9 @@ async function codeMergeTick(env, opts) {
   (await all("SELECT path FROM code_tasks WHERE merged_by = ?1 AND merge_state IN ('deploying', 'deployed', 'reverting')", [CM_RUNNER])).forEach(function(r) { var s = cmScope(r.path); if (s.worker) busy[s.worker] = 1; });
   try { (await all("SELECT worker FROM evolve_candidates WHERE status IN ('pr-open', 'merged', 'deployed')")).forEach(function(r) { busy[r.worker] = 1; }); } catch (e) {}
   // Pushed branches first: open their PRs (CI then starts by itself; they are merge candidates from the next tick).
-  var pushed = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status = 'branch_pushed' AND branch LIKE 'codeagent-%' ORDER BY updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
+  var pushed = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status = 'branch_pushed' AND branch LIKE 'codeagent-%' ORDER BY COALESCE(merge_checked_at, '') ASC, updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
   for (var o = 0; o < pushed.length; o++) out.opened.push(await cmOpenHandle(env, cx, pushed[o], cfg, out));
-  var cands = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status IN ('published', 'pr_open') AND branch LIKE 'codeagent-%' AND pr_url LIKE 'https://github.com/QNFO/qnfo-workers/pull/%' ORDER BY updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
+  var cands = await all("SELECT * FROM code_tasks WHERE repo = 'qnfo-workers' AND status IN ('published', 'pr_open') AND branch LIKE 'codeagent-%' AND pr_url LIKE 'https://github.com/QNFO/qnfo-workers/pull/%' ORDER BY COALESCE(merge_checked_at, '') ASC, updated_at ASC LIMIT ?1", [CM_MAX_CANDIDATES]);
   for (var j = 0; j < cands.length; j++) out.decided.push(await cmHandle(env, cx, cands[j], cfg, busy, out));
   // A refused PR (or a refused branch whose PR a person opened) that a person later merged or closed: record the outcome
   // (code-task-publish reconciles only waiting rows).
@@ -3755,6 +3768,164 @@ async function codeMergeTick(env, opts) {
 }
 __name(codeMergeTick, "codeMergeTick");
 // ---- CODE-TASK-MERGE-RUNNER-1:END ----
+// ---- BRANCH-HYGIENE-1:BEGIN (2026-10-03, pillar: autonomy) ----
+// The repository had 215 branches besides main (2026-10-03): 166 already merged (an ancestor of main, or the exact head of
+// a merged pull request), 16 open pull requests, 25 closed unmerged pull requests, 7 pushed branches that never got a pull
+// request, 1 whose tip moved after its merge. Nothing deleted a head branch after a merge except the code-loop runner's
+// own merges, and nothing ever looked at the rest, so merged work and abandoned work piled up in the same list and the
+// list could no longer say which branch still mattered. This block is the server-side owner of that list:
+//   merged  = a branch with no open pull request that is contained in main, or whose tip is the head of a merged pull
+//             request: deleted (its commits stay reachable from main and from refs/pull/<n>/head).
+//   unmerged = a branch with commits main does not have, no open pull request, no code task in flight, and older than the
+//             grace period: its tip is first saved as refs/archive/<branch> (hidden from the branch list, fetchable) and
+//             logged, and only then is the branch deleted. Nothing is lost; a missing archive ref stops the delete.
+//   open pull request, code task in flight, a tip equal to main's, a branch younger than the grace period: kept.
+// It also turns on GitHub's own "delete head branch on merge" setting (best effort; needs a token that may administer the
+// repository) so a merge made by anyone, not only by this worker, removes its branch at once.
+// Every action is a branch_hygiene_log row. Metric repo_branches_open (trigger above 40) is written by the tick.
+// Kill switch: ops_config branch_hygiene_enabled ('0' / 'off'); dry run: ops_config branch_hygiene_dry_run ('1').
+var BH_PRESERVE = ["main", "master", "gh-pages"];
+var BH_GRACE_MERGED_H = 6;
+var BH_GRACE_CLOSED_H = 24;
+var BH_GRACE_ORPHAN_H = 48;
+var BH_NEEDS_HUMAN_DAYS = 7;
+var BH_MAX_ACTIONS = 40;
+var BH_MAX_COMPARES = 60;
+var BH_ARCHIVE_PREFIX = "refs/archive/";
+function bhPath(name) {
+  return String(name).split("/").map(encodeURIComponent).join("/");
+}
+__name(bhPath, "bhPath");
+// Pure. f = { name, protected, open_pr, live_task, merged_pr, closed_pr, status, ahead_by, age_h }.
+// status is the compare(main...tip) status; ahead_by and age_h are null until the branch has been compared.
+function bhDecide(f) {
+  var keep = function(why) { return { action: "keep", why: why }; };
+  if (BH_PRESERVE.indexOf(f.name) >= 0 || f.protected) return keep("protected branch");
+  if (f.open_pr) return keep("open pull request #" + f.open_pr);
+  if (f.live_task) return keep("code task in flight");
+  if (f.merged_pr) return { action: "delete", why: "tip is the head of merged pull request #" + f.merged_pr, pr: f.merged_pr };
+  if (f.status == null) return keep("not compared yet");
+  if (f.status === "identical") return keep("tip equals main's tip; waits for main to move");
+  if (f.status === "behind" || f.ahead_by === 0) {
+    // A branch cut from an older main tip and not yet pushed to looks contained in main too; its tip commit must be old.
+    if (f.age_h == null || f.age_h < BH_GRACE_MERGED_H) return keep("contained in main but tip younger than " + BH_GRACE_MERGED_H + "h");
+    return { action: "delete", why: "contained in main" };
+  }
+  var grace = f.closed_pr ? BH_GRACE_CLOSED_H : BH_GRACE_ORPHAN_H;
+  if (f.age_h == null || f.age_h < grace) return keep("unmerged but younger than " + grace + "h");
+  return { action: "archive-delete", why: f.closed_pr ? "pull request #" + f.closed_pr + " was closed without merging" : "no pull request was ever opened", pr: f.closed_pr || null };
+}
+__name(bhDecide, "bhDecide");
+async function bhConfig(env) {
+  var cfg = { enabled: true, dry: false, raw: "(unset)" };
+  try {
+    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run')").all()).results || [];
+    rows.forEach(function(r) {
+      var v = String(r.value == null ? "" : r.value).trim().toLowerCase();
+      if (r.key === "branch_hygiene_enabled" && v) { cfg.raw = v; cfg.enabled = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0; }
+      if (r.key === "branch_hygiene_dry_run") cfg.dry = ["1", "on", "true", "yes"].indexOf(v) >= 0;
+    });
+  } catch (e) {}
+  return cfg;
+}
+__name(bhConfig, "bhConfig");
+async function bhSchema(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS branch_hygiene_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, branch TEXT NOT NULL, sha TEXT, action TEXT NOT NULL, why TEXT, pr INTEGER, archive_ref TEXT, ok INTEGER DEFAULT 1, dry INTEGER DEFAULT 0)").run();
+}
+__name(bhSchema, "bhSchema");
+async function bhPages(env, path, maxPages) {
+  var all = [];
+  for (var p = 1; p <= maxPages; p++) {
+    var r = await evApi(env, "GET", path + (path.indexOf("?") < 0 ? "?" : "&") + "per_page=100&page=" + p);
+    if (!r.ok || !Array.isArray(r.j)) return { ok: false, status: r.status, items: all };
+    all = all.concat(r.j);
+    if (r.j.length < 100) return { ok: true, items: all };
+  }
+  return { ok: true, items: all, truncated: true };
+}
+__name(bhPages, "bhPages");
+async function branchHygieneTick(env, opts) {
+  opts = opts || {};
+  var nowMs = opts.now || Date.now(), iso = new Date(nowMs).toISOString();
+  if (!env.GITHUB_TOKEN) return { ok: false, why: "no GITHUB_TOKEN" };
+  var cfg = await bhConfig(env);
+  var dry = opts.dry != null ? !!opts.dry : cfg.dry;
+  var beat = async function(status, summary) {
+    try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'branch-hygiene-tick', ?3, 'BRANCH-HYGIENE-1', ?4) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, text = excluded.text, status = excluded.status").bind("branch-hygiene-tick-" + iso.slice(0, 10), iso, JSON.stringify(summary || {}).slice(0, 300), status).run(); } catch (e) {}
+  };
+  if (!cfg.enabled) { await beat("disabled", { disabled: cfg.raw }); return { ok: true, disabled: true, why: "ops_config branch_hygiene_enabled = " + cfg.raw }; }
+  await bhSchema(env);
+  var out = { ok: true, ts: iso, dry: dry, branches: 0, kept: 0, deleted: [], archived: [], compared: 0, errors: [], setting: null };
+  var br = await bhPages(env, "/branches", 8);
+  if (!br.ok) { await beat("error", { branches_http: br.status }); return { ok: false, why: "branches HTTP " + br.status }; }
+  var prs = await bhPages(env, "/pulls?state=all&sort=updated&direction=desc", 10);
+  if (!prs.ok) { await beat("error", { pulls_http: prs.status }); return { ok: false, why: "pulls HTTP " + prs.status }; }
+  var byRef = {};
+  prs.items.forEach(function(p) {
+    if (!p || !p.head || !p.head.ref || !p.head.repo || p.head.repo.full_name !== EVOLVE_REPO) return;
+    var e = byRef[p.head.ref] || (byRef[p.head.ref] = { open: 0, merged: {}, closed: 0 });
+    if (p.state === "open") e.open = p.number;
+    else if (p.merged_at) e.merged[p.head.sha] = p.number;
+    else e.closed = Math.max(e.closed, p.number);
+  });
+  var live = {};
+  // BRANCH-HYGIENE-2: a task the merge runner refused (needs_human) keeps its branch for BH_NEEDS_HUMAN_DAYS days, because the
+  // branch is the only artifact a person has to act on; after that the archive ref is enough.
+  var nhSince = new Date(nowMs - BH_NEEDS_HUMAN_DAYS * 864e5).toISOString();
+  try { ((await env.AUDIT.prepare("SELECT branch FROM code_tasks WHERE branch IS NOT NULL AND (status IN ('branch_pushed', 'published', 'pr_open') OR (status = 'needs_human' AND updated_at >= ?1))").bind(nhSince).all()).results || []).forEach(function(r) { live[r.branch] = 1; }); } catch (e) {}
+  var names = br.items.map(function(b) { return b.name; });
+  out.branches = names.length;
+  var actions = 0, compares = 0, remaining = names.length;
+  for (var i = 0; i < br.items.length; i++) {
+    var b = br.items[i], e2 = byRef[b.name] || { open: 0, merged: {}, closed: 0 };
+    var f = { name: b.name, protected: !!b.protected, open_pr: e2.open, live_task: !!live[b.name], merged_pr: e2.merged[b.commit && b.commit.sha] || 0, closed_pr: e2.closed, status: null, ahead_by: null, age_h: null };
+    var d = bhDecide(f);
+    if (d.action === "keep" && d.why === "not compared yet") {
+      if (compares >= BH_MAX_COMPARES) { out.kept++; continue; }
+      compares++; out.compared++;
+      var cmp = await evApi(env, "GET", "/compare/main..." + encodeURIComponent(b.commit.sha));
+      if (!cmp.ok || !cmp.j) { out.errors.push(b.name + ": compare HTTP " + cmp.status); out.kept++; continue; }
+      f.status = cmp.j.status; f.ahead_by = cmp.j.ahead_by;
+      var cs = Array.isArray(cmp.j.commits) ? cmp.j.commits : [], last = cs.length ? cs[cs.length - 1] : cmp.j.merge_base_commit;
+      var when = last && last.commit && last.commit.committer ? Date.parse(last.commit.committer.date) : NaN;
+      f.age_h = isNaN(when) ? null : (nowMs - when) / 36e5;
+      d = bhDecide(f);
+    }
+    if (d.action === "keep") { out.kept++; continue; }
+    if (actions >= BH_MAX_ACTIONS) { out.kept++; continue; }
+    actions++;
+    var ref = null, ok = true;
+    if (!dry && d.action === "archive-delete") {
+      ref = BH_ARCHIVE_PREFIX + b.name;
+      var ar = await evApi(env, "POST", "/git/refs", { ref: ref, sha: b.commit.sha });
+      var exists = ar.status === 422 && /already exists/i.test(String(ar.j && ar.j.message || ""));
+      if (!ar.ok && !exists) { ok = false; out.errors.push(b.name + ": archive ref HTTP " + ar.status); }
+    }
+    if (!dry && ok) {
+      var dl = await evApi(env, "DELETE", "/git/refs/heads/" + bhPath(b.name));
+      if (!dl.ok && dl.status !== 404 && dl.status !== 422) { ok = false; out.errors.push(b.name + ": delete HTTP " + dl.status); }
+    }
+    try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)").bind(iso, b.name, b.commit.sha, d.action, d.why, d.pr || null, ref, ok ? 1 : 0, dry ? 1 : 0).run(); } catch (e) {}
+    if (ok) { (d.action === "archive-delete" ? out.archived : out.deleted).push(b.name); if (!dry) remaining--; } else out.kept++;
+  }
+  out.remaining = remaining - 1;
+  if (out.remaining < 0) out.remaining = 0;
+  // GitHub's own switch, so a merge made by anyone removes its branch at once. Best effort: needs a token that may administer the repo.
+  try {
+    var rp = await evApi(env, "GET", "");
+    if (rp.ok && rp.j && rp.j.delete_branch_on_merge === false) {
+      if (dry) out.setting = "would enable delete_branch_on_merge";
+      else { var pt = await evApi(env, "PATCH", "", { delete_branch_on_merge: true }); out.setting = pt.ok ? "delete_branch_on_merge enabled" : "delete_branch_on_merge not enabled: HTTP " + pt.status; }
+    } else if (rp.ok && rp.j) out.setting = "delete_branch_on_merge already " + rp.j.delete_branch_on_merge;
+  } catch (e) { out.setting = "setting check failed"; }
+  if (!dry) {
+    try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'repo_branches_open'").bind(String(out.remaining), iso).run(); } catch (e) {}
+  }
+  await beat(out.errors.length && !out.deleted.length && !out.archived.length ? "error" : "ok", { branches: out.branches, remaining: out.remaining, deleted: out.deleted.length, archived: out.archived.length, errors: out.errors.length, dry: dry });
+  return out;
+}
+__name(branchHygieneTick, "branchHygieneTick");
+// ---- BRANCH-HYGIENE-1:END ----
 // Folded autopilot activity snapshot: one row per scheduled worker per day (dashboard req24).
 async function activitySnapshotDaily(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS worker_activity_daily (id INTEGER PRIMARY KEY AUTOINCREMENT, worker_name TEXT NOT NULL, day TEXT NOT NULL, req24 INTEGER, source TEXT, ts TEXT)").run();
@@ -4890,6 +5061,229 @@ async function loopWatch(env) {
   return { ok: true, ts: nowIso, healthy: findings.length === 0, findings: findings, filed: filed, closed: closed, charter_last: f.charter_last, portfolio_last: f.portfolio_last ? { ts: f.portfolio_last.ts, status: f.portfolio_last.status, note: f.portfolio_last.note } : null, first_seen: f.first_seen };
 }
 // ---- LOOP-WATCH-1:END ----
+// ---- CF-CHANGELOG-LOOP-1:BEGIN (2026-10-03, pillar autonomy; RM-CAPABILITY-PRODUCT-LOOP-1, #1675) ----
+// Owner directive (2026-10-03): the fleet must find out for itself what Cloudflare ships and fold it into its own
+// improvement cycle; nobody should have to say "look for new features". docs/CLOUDFLARE-CAPABILITY-INTEGRATION.md (2026-09-07)
+// designed this as Loop 1 (the "sync watcher") but no worker ever fetched the changelog: the catalog only knew what a
+// session typed into it. This block is that watcher. Once a day, inside the existing hourly tick (no new worker, no new
+// cron, no model call: the budget table is over its caps), it reads Cloudflare's changelog feed, classifies each recent
+// item against cloudflare_capability_catalog and the fleet's own service registry, and acts on four classes only:
+//   deadline      a billing start, deprecation or breaking change for a product the fleet uses -> one deduped agent_issue
+//   reopen        a GA/beta launch for a product the catalog marked rejected -> status back to proposed (previous status logged)
+//   new_product   a launch for a product the catalog has no row for -> a not_considered row (the decision queue)
+//   in_use_change a change to an in-use product -> recorded only (GET /cf-changelog is the digest)
+// Everything else is recorded and ignored. Issues are capped per day because open_agent_issues is itself in breach.
+var CFC_FEED = "https://developers.cloudflare.com/changelog/rss/index.xml";
+var CFC_MAX_BYTES = 1500000;
+var CFC_MAX_ITEMS = 60;
+var CFC_STALE_H = 20;
+var CFC_RECENT_DAYS = 45;
+var CFC_CAP_ISSUES = 2;
+var CFC_CAP_REOPEN = 2;
+var CFC_CAP_ROWS = 5;
+var CFC_NOISE = { "cloudflare one client": 1, "cloudflare one appliance": 1, "radar": 1, "magic transit": 1, "cloudflare wan": 1, "network flow": 1, "network interconnect": 1, "digital experience monitoring": 1, "data loss prevention": 1, "casb": 1, "email security": 1, "browser isolation": 1, "risk score": 1, "security center": 1, "cloudflare mesh": 1, "multi-cloud networking": 1, "registrar": 1, "support": 1, "cloudflare network firewall": 1, "cloudflare tunnel for sase": 1, "1.1.1.1 (dns resolver)": 1 };
+var CFC_DEADLINE_RE = /(billing (begins|will begin|starts)|will begin billing|begin charging|start charging|usage-based billing|pricing (change|update)|price (increase|change)|deprecat|sunset|end[- ]of[- ]life|will be removed|no longer (be )?(supported|available)|breaking change|must (migrate|update|upgrade)|will stop working|retir(e|ed|ing))/i;
+var CFC_LAUNCH_RE = /(generally available|open beta|public beta|is now in beta|now in beta|now available|introducing|launch|announc|goes v1|sdk 1\.0)/i;
+// Cloudflare renames products (Cloudflare Data Platform became Basin on 2026-10-01); an alias maps the new changelog name
+// to the name the catalog row already carries, so a launch reopens the rejected row instead of adding a duplicate.
+var CFC_ALIAS = { "basin": "pipelines", "basin pipelines": "pipelines", "basin catalog": "r2 data catalog", "basin sql": "r2 sql", "sandboxes": "sandbox sdk" };
+var CFC_RANK = { in_use: 5, approved: 4, reviewing: 3, proposed: 2, not_considered: 1, rejected: 0, reverted: 0 };
+function cfcDecode(s) { return String(s || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&amp;/g, "&"); }
+function cfcText(html) { return cfcDecode(html).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(); }
+// Pure: the feed text -> items, newest first. Only complete <item> elements count, so a feed cut at the byte cap is safe.
+function cfcParseItems(xml, max) {
+  var out = [], re = /<item>([\s\S]*?)<\/item>/g, m;
+  while ((m = re.exec(String(xml || ""))) && out.length < (max || CFC_MAX_ITEMS)) {
+    var b = m[1];
+    var one = function(tag) { var x = new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)</" + tag + ">").exec(b); return x ? x[1] : ""; };
+    var title = cfcDecode(one("title")).trim();
+    var link = cfcDecode(one("link")).trim();
+    var guid = cfcDecode(one("guid")).trim() || link;
+    if (!title || !guid) continue;
+    var cats = [], cre = /<category[^>]*>([\s\S]*?)<\/category>/g, c;
+    while ((c = cre.exec(b))) { var v = cfcDecode(c[1]).trim(); if (v) cats.push(v); }
+    var dash = title.indexOf(" - ");
+    if (!cats.length && dash > 0) cats = title.slice(0, dash).split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+    var pub = Date.parse(cfcDecode(one("pubDate")));
+    // The feed's <product> tag is the item's primary product; the other <category> values are tags (Artifacts is also
+    // tagged Workers). Matching on every tag let an in-use tag hide an unknown product and file billing changes to the
+    // wrong product, so the match uses the primary product only.
+    var primary = cfcDecode(one("product")).trim() || cats[0] || "";
+    out.push({ guid: guid, link: link, pub_ms: isNaN(pub) ? null : pub, title: title, headline: dash > 0 ? title.slice(dash + 3) : title, products: cats, primary: primary, text: cfcText(one("description")).slice(0, 700) });
+  }
+  return out;
+}
+function cfcSlug(name) { return "cfc-" + String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); }
+function cfcNorm(s) { return String(s || "").toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim(); }
+// Pure: the first date written in the text as "Nov 1, 2026" or "November 1, 2026", as epoch ms (UTC), or null.
+function cfcDeadlineMs(text) {
+  var mo = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  var m = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.? (\d{1,2}),? (20\d\d)\b/.exec(String(text || ""));
+  if (!m) return null;
+  return Date.UTC(Number(m[3]), mo[m[1].toLowerCase()], Number(m[2]));
+}
+// Pure: best catalog row for a changelog item's product names. A catalog product matches by whole name or by one of its
+// "A + B" / "A, B" / "A / B" parts, so "Workers" does not match every "Workers ..." row.
+function cfcMatch(products, catalog) {
+  var best = null;
+  (products || []).forEach(function(p) {
+    var pn = cfcNorm(p), names = [pn];
+    if (CFC_ALIAS[pn]) names.push(CFC_ALIAS[pn]);
+    (catalog || []).forEach(function(r) {
+      var whole = cfcNorm(r.product);
+      var parts = String(r.product || "").split(/\s*(?:\+|,|\/|\(|\))\s*/).map(cfcNorm);
+      // exact name or one part of an "A + B" name beats a looser match; the looser match is the feed's short name
+      // ("Agents", "Access") sitting as whole words inside a longer catalog name ("Agents SDK", "Cloudflare Access (...)")
+      var exact = names.some(function(n) { return whole === n || parts.indexOf(n) >= 0; });
+      var loose = !exact && names.some(function(n) { return n.length >= 4 && (" " + whole + " ").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").indexOf(" " + n + " ") >= 0; });
+      if (exact || loose) {
+        var score = (CFC_RANK[r.status] || 0) * 10 + (exact ? 5 : 0);
+        // a tie goes to the shorter (closer) catalog name: "Agents" fits "Agents SDK" better than "Workers + Agents SDK"
+        if (!best || score > best.score || (score === best.score && best.via === p && whole.length < best.len)) best = { slug: r.slug, product: r.product, status: r.status, via: p, score: score, len: whole.length };
+      }
+    });
+  });
+  return best;
+}
+// Pure: one item -> its class and the facts the action needs. ctx = { catalog, fleetText, nowMs }.
+function cfcClassify(it, ctx) {
+  var cats = (it.products || []).map(function(p) { return String(p).toLowerCase(); });
+  var out = { klass: "noted", match: null, in_fleet: false, deadline_ms: null };
+  if (/waf release/i.test(it.title) || (cats.length && cats.every(function(c) { return CFC_NOISE[c]; }))) { out.klass = "noise"; return out; }
+  if (it.pub_ms == null || ctx.nowMs - it.pub_ms > CFC_RECENT_DAYS * 86400000) { out.klass = "old"; return out; }
+  var prim = it.primary ? [it.primary] : (it.products || []).slice(0, 1);
+  out.match = cfcMatch(prim, ctx.catalog);
+  var ft = cfcNorm(ctx.fleetText);
+  out.in_fleet = prim.some(function(p) { var n = cfcNorm(p); return n.length >= 4 && ft.indexOf(n) >= 0; });
+  var body = it.headline + " " + it.text;
+  var used = out.match && (out.match.status === "in_use" || out.match.status === "approved" || out.match.status === "reviewing");
+  if (CFC_DEADLINE_RE.test(body) && (used || out.in_fleet)) { out.klass = "deadline"; out.deadline_ms = cfcDeadlineMs(body); return out; }
+  var launch = CFC_LAUNCH_RE.test(it.headline + " " + it.text.slice(0, 300));
+  if (out.match && out.match.status === "rejected" && launch) { out.klass = "reopen"; return out; }
+  if (!out.match && !out.in_fleet && launch && prim.length && prim[0]) { out.klass = "new_product"; return out; }
+  if (out.match && out.match.status === "in_use") { out.klass = "in_use_change"; return out; }
+  return out;
+}
+// Pure: when must the loop run again? null = fresh.
+function cfcNeedsRun(lastOk, nowMs) {
+  if (!lastOk || !lastOk.ts) return "never ran";
+  var t = Date.parse(lastOk.ts);
+  if (isNaN(t)) return "unreadable last run";
+  var h = (nowMs - t) / 3600000;
+  return h >= CFC_STALE_H ? "last ok run " + Math.round(h) + "h ago" : null;
+}
+async function cfcSchema(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS cf_changelog_items (guid TEXT PRIMARY KEY, seen_at TEXT, pub TEXT, title TEXT, link TEXT, products TEXT, klass TEXT, slug TEXT, action TEXT, issue_id INTEGER, prev_status TEXT)").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS cf_changelog_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT, items INTEGER, fresh INTEGER, deadlines INTEGER, new_rows INTEGER, reopened INTEGER, filed INTEGER, bytes INTEGER, note TEXT)").run();
+}
+// Streams the feed and stops at the byte cap: the full file is ~8 MB (1,300 items, full HTML), newest first.
+async function cfcFetchFeed() {
+  var r = await timedFetch(CFC_FEED, { headers: { "User-Agent": "qnfo-fleet-control/" + VERSION, "Accept": "application/xml" } }, 25e3);
+  if (!r.ok) return { ok: false, note: "feed HTTP " + r.status };
+  var rd = r.body.getReader(), dec = new TextDecoder("utf-8"), buf = "", n = 0;
+  for (;;) {
+    var c = await rd.read();
+    if (c.done) break;
+    n += c.value.length;
+    buf += dec.decode(c.value, { stream: true });
+    if (n >= CFC_MAX_BYTES) { try { await rd.cancel(); } catch (e) {} break; }
+  }
+  return { ok: true, xml: buf, bytes: n };
+}
+async function cfcRun(env, force) {
+  await cfcSchema(env);
+  var nowMs = Date.now(), nowIso = new Date(nowMs).toISOString();
+  var run = { ok: true, ts: nowIso, status: "ok", items: 0, fresh: 0, deadlines: 0, new_rows: 0, reopened: 0, filed: 0, bytes: 0, note: "" };
+  var fin = async function() {
+    try { await env.AUDIT.prepare("INSERT INTO cf_changelog_runs (ts, status, items, fresh, deadlines, new_rows, reopened, filed, bytes, note) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)").bind(run.ts, run.status, run.items, run.fresh, run.deadlines, run.new_rows, run.reopened, run.filed, run.bytes, run.note.slice(0, 300)).run(); } catch (e) {}
+    await cfcMetrics(env);
+    return run;
+  };
+  var feed;
+  try { feed = await cfcFetchFeed(); } catch (e) { feed = { ok: false, note: "feed fetch " + String(e && e.message || e).slice(0, 120) }; }
+  if (!feed.ok) { run.ok = false; run.status = "fetch-failed"; run.note = feed.note; return fin(); }
+  run.bytes = feed.bytes;
+  var items = cfcParseItems(feed.xml, CFC_MAX_ITEMS);
+  run.items = items.length;
+  if (!items.length) { run.ok = false; run.status = "parse-empty"; run.note = "no <item> in " + feed.bytes + " bytes"; return fin(); }
+  var known = {};
+  (await charterRows(env, "SELECT guid FROM cf_changelog_items ORDER BY seen_at DESC LIMIT 600")).forEach(function(r) { known[r.guid] = 1; });
+  var catalog = await charterRows(env, "SELECT slug, product, status FROM cloudflare_capability_catalog");
+  var svc = await charterRows(env, "SELECT service, capabilities FROM capability_catalog");
+  var fleetText = svc.map(function(r) { return String(r.service || "") + " " + String(r.capabilities || ""); }).join(" ");
+  var ctx = { catalog: catalog, fleetText: fleetText, nowMs: nowMs };
+  var fresh = items.filter(function(it) { return !known[it.guid]; });
+  run.fresh = fresh.length;
+  var classified = fresh.map(function(it) { return { it: it, c: cfcClassify(it, ctx) }; });
+  var issueLeft = Math.max(0, CFC_CAP_ISSUES - Number((await charterOne(env, "SELECT COUNT(*) n FROM cf_changelog_items WHERE action='filed' AND substr(seen_at,1,10)='" + nowIso.slice(0, 10) + "'") || {}).n || 0));
+  var reopenLeft = CFC_CAP_REOPEN, rowsLeft = CFC_CAP_ROWS;
+  // soonest deadline first, so the cap keeps the most urgent ones
+  classified.sort(function(a, b) { return (a.c.deadline_ms == null ? 9e15 : a.c.deadline_ms) - (b.c.deadline_ms == null ? 9e15 : b.c.deadline_ms); });
+  for (var i = 0; i < classified.length; i++) {
+    var it = classified[i].it, c = classified[i].c, action = "noted", slug = c.match ? c.match.slug : null, issueId = null, prev = null;
+    try {
+      if (c.klass === "deadline") {
+        run.deadlines++;
+        var when = c.deadline_ms != null ? new Date(c.deadline_ms).toISOString().slice(0, 10) : "date not stated";
+        var title = "CF-CHANGELOG-1: " + (it.primary || it.products[0] || "Cloudflare") + ": " + it.headline.slice(0, 90);
+        // charterOne takes no bind values, so the dedupe reads through the binding directly (a null here would refile daily).
+        var dup = null;
+        try { dup = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE title=?1 AND status='open'").bind(title).first(); } catch (e) { dup = { id: -1 }; }
+        if (issueLeft > 0 && !dup) {
+          var soon = c.deadline_ms != null && c.deadline_ms - nowMs < 21 * 86400000;
+          var r = await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'cf-changelog', 'optimization', ?3, 'open', ?4, ?4)")
+            .bind(title, "AUTO-FILED by qnfo-fleet-control CF-CHANGELOG-LOOP-1 from Cloudflare's changelog. Change: " + it.headline + ". Date: " + when + ". Affects: " + (it.products.join(", ")) + (c.match ? " (catalog " + c.match.slug + ", status " + c.match.status + ")" : "") + (c.in_fleet ? "; the service registry shows the fleet uses it" : "") + ". Detail: " + it.text.slice(0, 420) + " Source: " + it.link + " DoD: find which workers use the product (service_registry / capability_catalog), then adopt, migrate or record why not in the catalog row (status + metric_ref), and close with that evidence in issue_triage.close_evidence. Do not close as wontfix without a written reason.", soon ? "high" : "medium", nowMs).run();
+          issueId = r && r.meta ? r.meta.last_row_id : null;
+          issueLeft--; run.filed++; action = "filed";
+        } else action = dup ? "already-open" : "capped";
+      } else if (c.klass === "reopen" && reopenLeft > 0 && c.match) {
+        prev = c.match.status;
+        await env.AUDIT.prepare("UPDATE cloudflare_capability_catalog SET status='proposed', when_to_choose=COALESCE(when_to_choose,'') || ?2, last_synced=datetime('now') WHERE slug=?1 AND status='rejected'")
+          .bind(c.match.slug, " | cf-changelog " + new Date(it.pub_ms).toISOString().slice(0, 10) + ": " + it.headline.slice(0, 120) + " (was rejected; re-evaluate)").run();
+        reopenLeft--; run.reopened++; action = "reopened";
+      } else if (c.klass === "new_product" && rowsLeft > 0) {
+        slug = cfcSlug(it.primary || it.products[0]);
+        var ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO cloudflare_capability_catalog (slug, need, product, when_to_choose, source, source_sha, status) VALUES (?1, ?2, ?3, ?4, 'cf-changelog', ?5, 'not_considered')")
+          .bind(slug, it.headline.slice(0, 180), it.primary || it.products[0], it.text.slice(0, 300), it.guid).run();
+        if (ins && ins.meta && ins.meta.changes) { rowsLeft--; run.new_rows++; action = "new-row"; } else action = "row-exists";
+      } else if (c.klass === "reopen" || c.klass === "new_product") action = "capped";
+    } catch (e) { action = "error"; run.note += " " + String(e && e.message || e).slice(0, 80); }
+    try { await env.AUDIT.prepare("INSERT OR IGNORE INTO cf_changelog_items (guid, seen_at, pub, title, link, products, klass, slug, action, issue_id, prev_status) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
+      .bind(it.guid, nowIso, it.pub_ms == null ? null : new Date(it.pub_ms).toISOString(), it.title.slice(0, 300), it.link, it.products.join(", "), c.klass, slug, action, issueId, prev).run(); } catch (e) {}
+  }
+  if (run.note.indexOf("error") >= 0 || /\berror\b/.test(run.note)) run.status = "partial";
+  run.note = ((force ? "forced; " : "") + feed.bytes + " bytes, " + items.length + " items, " + fresh.length + " fresh. " + run.note).trim();
+  return fin();
+}
+// The two measures this loop is graded by (registered with triggers in migrations/2026-10-03-cf-changelog-loop.sql).
+async function cfcMetrics(env) {
+  var nowIso = new Date().toISOString();
+  var ok = await charterOne(env, "SELECT ts FROM cf_changelog_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1");
+  var age = ok && ok.ts ? Math.round(((Date.now() - Date.parse(ok.ts)) / 3600000) * 10) / 10 : "n/a";
+  var pend = await charterOne(env, "SELECT COUNT(DISTINCT i.slug) n FROM cf_changelog_items i JOIN cloudflare_capability_catalog c ON c.slug = i.slug WHERE i.action IN ('reopened','new-row') AND c.status IN ('not_considered','proposed') AND replace(substr(i.seen_at,1,19),'T',' ') < datetime('now','-14 days')");
+  try {
+    await env.AUDIT.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='cf_changelog_audit_age_h'").bind(String(age), nowIso).run();
+    await env.AUDIT.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='cf_changelog_open_proposals_14d'").bind(String(pend ? Number(pend.n || 0) : 0), nowIso).run();
+  } catch (e) {}
+  return { age_h: age, open_proposals_14d: pend ? Number(pend.n || 0) : 0 };
+}
+async function cfChangelogIfStale(env) {
+  await cfcSchema(env);
+  var last = await charterOne(env, "SELECT ts FROM cf_changelog_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1");
+  var why = cfcNeedsRun(last, Date.now());
+  if (!why) { var m = await cfcMetrics(env); return { ok: true, status: "fresh", last: last.ts, metrics: m }; }
+  var r = await cfcRun(env, false);
+  r.reason = why;
+  return r;
+}
+async function cfChangelogLatest(env) {
+  await cfcSchema(env);
+  var runs = await charterRows(env, "SELECT ts, status, items, fresh, deadlines, new_rows, reopened, filed, bytes, note FROM cf_changelog_runs ORDER BY id DESC LIMIT 5");
+  var items = await charterRows(env, "SELECT pub, title, link, products, klass, slug, action, issue_id FROM cf_changelog_items WHERE klass NOT IN ('noise','old') ORDER BY pub DESC LIMIT 40");
+  var byClass = await charterRows(env, "SELECT klass, COUNT(*) n FROM cf_changelog_items GROUP BY klass");
+  return { runs: runs, recent: items, by_class: byClass, metrics: await cfcMetrics(env) };
+}
+// ---- CF-CHANGELOG-LOOP-1:END ----
 // ---- OBJECTIVE-CONSTRAINTS-1:BEGIN (2026-10-02, goals 41, 43, 57, ratified under the owner's queue delegation; agent_issues 1744, 1745, 1746) ----
 // Three objective revisions were ratified on fleet.qnfo.org (2026-10-01) by a session under the owner's queue delegation, not by the owner in person (audit 2026-10-02, issues 1765, 1766). None is a weight change, so
 // OBJECTIVE-REVISION-APPLY-1 (qnfo-fleet-dashboard) filed each as work. This block makes each one a constraint the kernel
@@ -6265,6 +6659,16 @@ var worker_default2 = {
       var lwx = loopWatchEvaluate(lwf, Date.now());
       return json({ ok: true, worker_version: VERSION, healthy: lwx.length === 0, findings: lwx, charter_last: lwf.charter_last, portfolio_last: lwf.portfolio_last ? { ts: lwf.portfolio_last.ts, status: lwf.portfolio_last.status, note: lwf.portfolio_last.note } : null, first_seen: lwf.first_seen });
     }
+    // CF-CHANGELOG-LOOP-1: what Cloudflare shipped and what the fleet did about it; public read (OPEN-ACCESS-1).
+    if (p === "/cf-changelog" && request.method === "GET") {
+      return json({ ok: true, worker_version: VERSION, changelog: await cfChangelogLatest(env) });
+    }
+    if (p === "/cf-changelog/run" && request.method === "POST") {
+      var cfh = request.headers.get("Authorization") || "";
+      var cft = cfh.indexOf("Bearer ") === 0 ? cfh.slice(7) : cfh;
+      if (!(cft && ((env.DEPLOY_ADMIN_TOKEN && cft === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && cft === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
+      return json(await cfcRun(env, true));
+    }
     // OBJECTIVE-CONSTRAINTS-1 (goals 41, 43, 57): the delegated constraints, measured live; public read (OPEN-ACCESS-1).
     if (p === "/constraints" && request.method === "GET") {
       var ocf = await ocFacts(env);
@@ -6402,6 +6806,18 @@ var worker_default2 = {
       if (!(cat2 && ((env.DEPLOY_ADMIN_TOKEN && cat2 === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && cat2 === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
       return json(await codeMergeTick(env));
     }
+    if (p === "/branch-hygiene" && request.method === "GET") {
+      var bhc = await bhConfig(env);
+      var bhl = await env.AUDIT.prepare("SELECT ts, branch, sha, action, why, pr, archive_ref, ok, dry FROM branch_hygiene_log ORDER BY id DESC LIMIT 40").all().catch(function() { return { results: [] }; });
+      var bhh = await env.AUDIT.prepare("SELECT ts, status, text FROM cloud_ops_events WHERE id >= 'branch-hygiene-tick-' AND id < 'branch-hygiene-tick.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
+      return json({ ok: true, version: VERSION, loop: "BRANCH-HYGIENE-1", enabled: bhc.enabled, dry_run: bhc.dry, switch: "ops_config branch_hygiene_enabled = " + bhc.raw, grace_hours: { merged: BH_GRACE_MERGED_H, closed_pr: BH_GRACE_CLOSED_H, no_pr: BH_GRACE_ORPHAN_H }, needs_human_days: BH_NEEDS_HUMAN_DAYS, max_actions_per_tick: BH_MAX_ACTIONS, archive_refs: BH_ARCHIVE_PREFIX + "<branch>", last_tick: bhh, recent: bhl.results || [] });
+    }
+    if (p === "/branch-hygiene/tick" && request.method === "POST") {
+      var bha = request.headers.get("Authorization") || "";
+      var bht = bha.indexOf("Bearer ") === 0 ? bha.slice(7) : bha;
+      if (!(bht && ((env.DEPLOY_ADMIN_TOKEN && bht === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && bht === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
+      return json(await branchHygieneTick(env, { dry: new URL(request.url).searchParams.get("dry") === "1" ? true : void 0 }));
+    }
     if (p === "/advisor" || p.startsWith("/advisor/")) {
       const u2 = new URL(request.url);
       u2.pathname = p.slice("/advisor".length) || "/";
@@ -6430,6 +6846,7 @@ var worker_default2 = {
     ctx.waitUntil(refreshOwnedMetrics(env).catch((e) => console.error("refreshOwnedMetrics error:", e && e.message || e)));
     ctx.waitUntil(evolveTickHeartbeat(env).catch((e) => console.error("evolveTick error:", e && e.message || e)));
     ctx.waitUntil(codeMergeTick(env).catch((e) => console.error("codeMergeTick error:", e && e.message || e)));
+    ctx.waitUntil(branchHygieneTick(env).catch((e) => console.error("branchHygieneTick error:", e && e.message || e)));
     ctx.waitUntil(slaEscalate(env).catch((e) => console.error("slaEscalate error:", e && e.message || e)));
     ctx.waitUntil(evaluateMetricTriggers(env).catch((e) => console.error("evaluateMetricTriggers error:", e && e.message || e)));
     ctx.waitUntil(publicationPreflight(env).catch((e) => console.error("publicationPreflight error:", e && e.message || e)));
@@ -6439,6 +6856,7 @@ var worker_default2 = {
     ctx.waitUntil(aiAttributionCoverage(env).catch((e) => console.error("aiAttributionCoverage error:", e && e.message || e)));
     ctx.waitUntil(portfolioSyncIfStale(env).catch((e) => console.error("portfolioSync error:", e && e.message || e)));
     ctx.waitUntil(loopWatch(env).catch((e) => console.error("loopWatch error:", e && e.message || e)));
+    ctx.waitUntil(cfChangelogIfStale(env).catch((e) => console.error("cfChangelogIfStale error:", e && e.message || e)));
     ctx.waitUntil(objectiveConstraintsTick(env).catch((e) => console.error("objectiveConstraintsTick error:", e && e.message || e)));
     ctx.waitUntil(remediationContractsTick(env).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
     ctx.waitUntil(improvementLoopTick(env).catch((e) => console.error("improvementLoopTick error:", e && e.message || e)));

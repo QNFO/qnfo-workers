@@ -163,5 +163,27 @@ const lp = (await call("/api/loop")).json();
 ok(lp.metrics.length === 8 && lp.runs.length > 0 && lp.config.champion, "GET /api/loop reports metrics, runs and config");
 ok(models.includes("@cf/deepseek-ai/deepseek-v4-flash-0731"), "the judge is a different model from the writer");
 
+// 7. ASK-JUDGE-1: a judge that cannot judge says why in ask_loop_runs instead of reporting a bare judged:0
+{
+  const real = AI.run;
+  sq.exec("UPDATE ask_events SET judged_total=NULL, judged_supported=NULL, judge=1, answer='x [1]', context='[1] y' WHERE id IN (SELECT id FROM ask_events LIMIT 2)");
+  AI.run = async (m, o) => { if (/deepseek/.test(m)) return { response: "<think>reasoning that never reaches an answer</think>" + "so ".repeat(80) }; return real(m, o); };
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 4, 3, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  let jr = JSON.parse(sq.prepare("SELECT note FROM ask_loop_runs WHERE kind='judge' ORDER BY id DESC LIMIT 1").get().note);
+  ok(jr.judged === 0 && jr.failed && jr.failed.no_json === 2 && /so so/.test(jr.failed.head || ""), "an unparseable judge reply is counted and its head is kept: " + JSON.stringify(jr));
+  AI.run = async (m, o) => { if (/deepseek/.test(m)) throw new Error("model unavailable: 5007"); return real(m, o); };
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 5, 3, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  jr = JSON.parse(sq.prepare("SELECT note FROM ask_loop_runs WHERE kind='judge' ORDER BY id DESC LIMIT 1").get().note);
+  ok(jr.failed && jr.failed.errors === 2 && /5007/.test(jr.failed.last_error), "a judge error is counted and named: " + JSON.stringify(jr));
+  AI.run = real;
+  let sawTokens = null;
+  AI.run = async (m, o) => { if (/deepseek/.test(m)) sawTokens = o.max_tokens; return real(m, o); };
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 6, 3, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  ok(sawTokens === 3000, "the judge gets a 3000-token budget for a reasoning model (" + sawTokens + ")");
+  AI.run = real;
+}
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.11-text-writers-probed"; // 2.3.11 PROBER-MODELS-1 (pillar: reach): probes the 4 text models the writing loops depend on and nobody watched (nemotron-3-120b = q08 primary writer; gemma-4-26b-a4b, qwen3-30b-a3b, llama-3.3-70b = q08 panel judges / ask writers); healthy models are probed every 9h instead of 6h so the unique-id calls per day do not rise (9 ids x 4 = 36 before, 13 ids x 2.67 = 34.7 after; fleet_budget ai_spend caps are breached, so no net model calls). Shared ids were already probed once per tick (byId), so the repeated deepseek-v4-pro-0813 row costs no extra call;
+var VERSION = "2.3.13-text-writers-probed"; // 2.3.13 PROBER-MODELS-1 (pillar: reach): probes the 4 text models the writing loops depend on and nobody watched (nemotron-3-120b = q08 primary writer; gemma-4-26b-a4b, qwen3-30b-a3b, llama-3.3-70b = q08 panel judges / ask writers); healthy models are probed every 9h instead of 6h so the unique-id calls per day do not rise (9 ids x 4 = 36 before, 13 ids x 2.67 = 34.7 after; fleet_budget ai_spend caps are breached, so no net model calls). Shared ids were already probed once per tick (byId), so the repeated deepseek-v4-pro-0813 row costs no extra call;
 var CAPS = ["model-health-probe", "freshness-check", "health-coverage"];
 var LIMS = ["cron-only: no public route; runs every 20 minutes", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron"];
 // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.

@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.2.1"; // 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.2.3"; // 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -854,7 +854,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.5";
+var VERSION = "1.2.7";
 var WORKER = "personal-events-radar";
 var TAB = String.fromCharCode(9);
 var LF = String.fromCharCode(10);
@@ -872,7 +872,7 @@ var INTERESTS = [
   { code: "FES", name: "Festivals and city life", kw: ["festival", "open day", "night of", "museumnacht", "free entry", "gratis", "market", "parade", "city walk"] }
 ];
 var SOURCES = [
-  { name: "Concertgebouw", url: "https://www.concertgebouw.nl/en", kind: "concert", delivery: "onsite", cost: 2 },
+  { name: "Concertgebouw", url: "https://www.concertgebouw.nl/en", kind: "concert", delivery: "onsite", cost: 2, titleDir: "after" },
   { name: "Rijksmuseum", url: "https://www.rijksmuseum.nl/en/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
   { name: "VanGoghMuseum", url: "https://www.vangoghmuseum.nl/en/visit/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
   { name: "Stedelijk", url: "https://www.stedelijk.nl/en/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
@@ -924,10 +924,90 @@ function toISO(y, m, d) {
   return y + "-" + pad2(m) + "-" + pad2(d);
 }
 __name(toISO, "toISO");
+// RADAR-TITLE-NOISE-1 (charter pillar: personal). The calendar title used to be the venue plus the first 90 characters of the
+// stripped page text around the date, which carried menu chrome, dates and the previous card's tail. extractEvents now also
+// builds `title`: the nearest heading or link text before the date, else the text between the previous date and this one,
+// with chrome, dates and repeated venue prefixes removed and a length cap. The snippet (scoring, classify, report) and the
+// dedupe key venue|date are untouched, so existing rows are never re-posted.
+var TITLE_CAP = 80;
+var TITLE_CHROME = new RegExp("indeling" + WS + "prijs" + WS + "taal" + WS + "valuta|dit" + WS + "evenement" + WS + "opslaan|\\bopslaan\\b|\\bnext" + WS + "page\\b|\\bprevious" + WS + "page\\b|\\bpage" + WS + "[0-9]+\\b|upcoming" + WS + "exhibitions|skip" + WS + "to" + WS + "[a-z]+(?:" + WS + "[a-z]+)?|read" + WS + "more|lees" + WS + "meer|accept(?:" + WS + "all)?" + WS + "cookies|\\bcookies?(?:" + WS + "(?:settings|policy|preferences))?\\b|tickets" + WS + "available|accessibility" + WS + "facilities|now" + WS + "on" + WS + "view|\\bexpected\\b|\\bsave" + WS + "this" + WS + "event\\b|\\bsubscribe\\b|\\bnewsletter\\b|at" + WS + "various" + WS + "times|diverse" + WS + "locaties" + WSC + "*/" + WSC + "*various" + WS + "locations|[0-9]{1,2}:[0-9]{2}" + WSC + "*-" + WSC + "*[0-9]{1,2}:[0-9]{2}|our" + WS + "top" + WS + "picks" + WS + "this" + WS + "season|all" + WS + "events" + WS + "and" + WS + "happenings|festivals" + WS + "and" + WS + "events|shopping" + WS + "and" + WS + "markets|theatre" + WS + "and" + WS + "stage", "gi");
+var TITLE_WDAY = "(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag";
+var TITLE_DATE_SRC = "(?:(?:" + TITLE_WDAY + ")[.]?,?" + WSC + "*)?(?:" + MONTH_RE + "[a-z]*[.]?" + WS + "[0-9]{1,2}(?:" + WSC + "*[-–—]" + WSC + "*[0-9]{1,2})?|[0-9]{1,2}(?:" + WSC + "*[-–—]" + WSC + "*[0-9]{1,2})?" + WS + MONTH_RE + "[a-z]*[.]?)(?:" + WSC + "*,?" + WSC + "*'?20?[0-9]{2}(?![0-9:]))?(?:" + WSC + "*,?" + WSC + "*[0-9]{1,2}:[0-9]{2}(?:" + WSC + "*[AaPp][Mm])?)?";
+function cleanTitleText(raw, venue, isHeading) {
+  let t = String(raw || "").replace(new RegExp(TITLE_DATE_SRC, "gi"), " ").replace(TITLE_CHROME, " ");
+  t = t.replace(new RegExp("^[^A-Za-z0-9]*" + String(venue || "").replace(/[^A-Za-z0-9]/g, "") + "[:|]?", "i"), " ");
+  t = t.replace(new RegExp("^[^A-Za-z0-9]*Amsterdam" + WSC + "*[|:]", "i"), " ");
+  t = t.replace(new RegExp(WSC + "+", "g"), " ").replace(new RegExp("^['\u2019]?[0-9]{1,2}" + WS + "(?=[A-Z])"), "").trim();
+  const close = t.indexOf(")");
+  if (close !== -1 && t.indexOf("(") === -1 || close !== -1 && close < t.indexOf("(")) t = t.slice(close + 1).trim();
+  const sentence = t.lastIndexOf(". ");
+  if (sentence !== -1 && t.length - sentence - 2 >= 8) t = t.slice(sentence + 2).trim();
+  t = t.replace(new RegExp("(?:^|" + WS + ")(?:from|until|till|t/m|every|op|vanaf" + (isHeading ? "" : "|" + TITLE_WDAY) + ")[.,]?" + WSC + "*$", "i"), "").trim();
+  let words = t.split(" ");
+  while (words.length > 2 && /^[a-z]/.test(words[0]) && words.slice(1, 6).some((w) => /^[A-Z0-9]/.test(w))) words = words.slice(1);
+  t = words.join(" ").replace(/^[^A-Za-z0-9]+/, "").replace(/[\s,;:|\-–—]+$/, "").trim();
+  if (t.length > TITLE_CAP) {
+    t = t.slice(0, TITLE_CAP);
+    const cut = t.lastIndexOf(" ");
+    if (cut > 30) t = t.slice(0, cut);
+    t = t.replace(/[\s,;:|\-–—]+$/, "");
+  }
+  return /[A-Za-z]{3}/.test(t) && t.length >= 8 ? t : "";
+}
+__name(cleanTitleText, "cleanTitleText");
+function headingCandidates(html, clean) {
+  const out = [];
+  for (const re of [/<(h[1-4])\b[^>]*>([^]*?)<\/\1>/gi, /<(a)\b[^>]*>([^]*?)<\/\1>/gi]) {
+    for (const m of String(html || "").matchAll(re)) {
+      const txt = cleanHtml(m[2]);
+      if (txt.length < 8 || txt.length > 140) continue;
+      let i = clean.indexOf(txt);
+      while (i !== -1 && out.length < 600) {
+        out.push({ txt, start: i, end: i + txt.length });
+        i = clean.indexOf(txt, i + txt.length);
+      }
+    }
+  }
+  return out;
+}
+__name(headingCandidates, "headingCandidates");
+function buildTitle(clean, idx, cands, venue, dir) {
+  const dateRe = new RegExp(TITLE_DATE_SRC, "gi");
+  const hasDate = (x) => new RegExp(TITLE_DATE_SRC, "i").test(x);
+  const m0 = new RegExp("^" + TITLE_DATE_SRC, "i").exec(clean.slice(idx));
+  const dateEnd = idx + (m0 ? m0[0].length : 0);
+  let best = null;
+  for (const c of cands) {
+    if (dir === "after") {
+      if (c.start < dateEnd || c.start - dateEnd > 200 || hasDate(clean.slice(dateEnd, c.start))) continue;
+      if (best && c.start >= best.pos) continue;
+      const t = cleanTitleText(c.txt, venue, true);
+      if (t) best = { pos: c.start, t };
+    } else {
+      if (c.end > idx || idx - c.end > 160 || hasDate(clean.slice(c.end, idx))) continue;
+      if (best && c.end <= best.pos) continue;
+      const t = cleanTitleText(c.txt, venue, true);
+      if (t) best = { pos: c.end, t };
+    }
+  }
+  if (best) return best.t;
+  const pre = clean.slice(Math.max(0, idx - 140), idx);
+  const ms = Array.from(pre.matchAll(dateRe));
+  for (let k = ms.length; k >= 0; k--) {
+    const seg = pre.slice(k === 0 ? 0 : ms[k - 1].index + ms[k - 1][0].length, k === ms.length ? pre.length : ms[k].index);
+    const before = cleanTitleText(seg, venue);
+    if (before) return before;
+  }
+  const after = clean.slice(dateEnd, dateEnd + 140);
+  const next = after.search(new RegExp(TITLE_DATE_SRC, "i"));
+  return cleanTitleText(next === -1 ? after : after.slice(0, next), venue);
+}
+__name(buildTitle, "buildTitle");
 function extractEvents(text, src) {
   const events = [];
   let discarded = 0;
   const clean = cleanHtml(text);
+  const cands = headingCandidates(text, clean);
   const cutYear = (/* @__PURE__ */ new Date()).getFullYear();
   const dropGarbage = /* @__PURE__ */ __name((s) => {
     if (new RegExp("[.]st[0-9]+" + WSC + "*[{]").test(s)) return true;
@@ -980,7 +1060,7 @@ function extractEvents(text, src) {
     const runningUntil = new RegExp("until|till|t/m|tot(?=" + WSC + "*[0-9])", "i").test(pre);
     const wideSnippet = clean.slice(Math.max(0, idx - 120), Math.min(clean.length, idx + 40)).slice(0, 240);
     const dateText = d2 ? mo + " " + d1 + "-" + d2 + ", " + year : mo + " " + d1 + ", " + year;
-    events.push({ venue: src.name, dateText, startIso, endIso, year, month, day: d1 || null, url: src.url, snippet, wideSnippet, runningUntil, srcKind: src.kind, srcDelivery: src.delivery, srcCost: src.cost });
+    events.push({ venue: src.name, title: buildTitle(clean, idx, cands, src.name, src.titleDir), dateText, startIso, endIso, year, month, day: d1 || null, url: src.url, snippet, wideSnippet, runningUntil, srcKind: src.kind, srcDelivery: src.delivery, srcCost: src.cost });
   }, "push");
   for (const m of clean.matchAll(rangeRe)) push(m[1], parseInt(m[2], 10), parseInt(m[3], 10), m[4], m.index);
   for (const m of clean.matchAll(rangeRe2)) push(m[3], parseInt(m[1], 10), parseInt(m[2], 10), m[4], m.index);
@@ -1090,6 +1170,113 @@ function scoreEvent(ev) {
   };
 }
 __name(scoreEvent, "scoreEvent");
+// RADAR-TASTE-LEARN-1 (charter pillar: personal). The owner answers each suggestion keep|went|nope (+ reason) and the answers
+// land in qnfo-audit.calendar_feedback. Taste score per venue and per domain = (went*2 + keep) - 2*(nope with reason
+// not-my-thing or not-my-crowd), shrunk linearly to zero below 3 samples. relevance is multiplied by
+// clamp(1 + 0.15*score, 0.3, 1.5). bad-timing and too-much-effort never touch taste: they add +1 friction per occurrence per
+// venue (cap 3). The stated-taste prior (art openings and exhibitions up, repair cafes and hobby-tech meetups down) joins in
+// only once feedback exists, so an empty or missing table leaves every score exactly as before (fail safe).
+var TASTE_PRIOR_DOMAIN = { MUS: 2, CLA: 1, JAZ: 1, QUR: 1 };
+var TASTE_PRIOR_TOPICS = [
+  { name: "art-opening", re: /\bopening\b|vernissage|exhibition|expositie|tentoonstelling/i, score: 1 },
+  { name: "repair-cafe-hobby-tech", re: /repair caf|repaircaf|hackerspace|hobby|arduino|raspberry pi|maker ?space|tech meetup|tech meet-up/i, score: -4 }
+];
+var TASTE_MIN_SAMPLES = 3;
+var TASTE_FRICTION_CAP = 3;
+function tasteClamp(x, lo, hi) {
+  return Math.min(hi, Math.max(lo, x));
+}
+__name(tasteClamp, "tasteClamp");
+function buildTaste(rows) {
+  const bump = (map, key, f) => {
+    if (!key) return;
+    const k = String(key).trim();
+    if (!k) return;
+    const o = map[k] || (map[k] = { went: 0, keep: 0, nopeTaste: 0, friction: 0 });
+    f(o);
+  };
+  const venue = {}, domain = {};
+  let used = 0;
+  for (const r of rows || []) {
+    const action = String(r.action || "").toLowerCase();
+    const reason = String(r.reason || "").toLowerCase();
+    let f = null;
+    if (action === "went") f = (o) => { o.went += 1; };
+    else if (action === "keep") f = (o) => { o.keep += 1; };
+    else if (action === "nope" && (reason === "not-my-thing" || reason === "not-my-crowd")) f = (o) => { o.nopeTaste += 1; };
+    else if (action === "nope" && (reason === "bad-timing" || reason === "too-much-effort")) {
+      bump(venue, r.location, (o) => { o.friction += 1; });
+      used += 1;
+      continue;
+    }
+    if (!f) continue;
+    used += 1;
+    bump(venue, r.location, f);
+    bump(domain, r.domain, f);
+  }
+  const fin = (map) => {
+    const out = {};
+    for (const k of Object.keys(map)) {
+      const o = map[k];
+      const n = o.went + o.keep + o.nopeTaste;
+      const raw = o.went * 2 + o.keep - o.nopeTaste * 2;
+      const score = n === 0 ? 0 : raw * Math.min(1, n / TASTE_MIN_SAMPLES);
+      out[k] = { went: o.went, keep: o.keep, nope: o.nopeTaste, samples: n, raw, score: Math.round(score * 100) / 100, frictionAdd: Math.min(TASTE_FRICTION_CAP, o.friction) };
+    }
+    return out;
+  };
+  return { active: used > 0, rows: used, venue: fin(venue), domain: fin(domain) };
+}
+__name(buildTaste, "buildTaste");
+async function loadTaste(env) {
+  try {
+    if (!env.RADAR_DB) return { active: false, rows: 0, venue: {}, domain: {} };
+    const r = await env.RADAR_DB.prepare("SELECT action, reason, location, domain FROM calendar_feedback ORDER BY id DESC LIMIT 2000").all();
+    return buildTaste(r.results || []);
+  } catch (e) {
+    return { active: false, rows: 0, venue: {}, domain: {} };
+  }
+}
+__name(loadTaste, "loadTaste");
+function tasteScoreFor(e, taste) {
+  const v = taste.venue[e.venue];
+  const dom = (e.interests || [])[0];
+  const d = dom ? taste.domain[dom] : null;
+  let prior = 0;
+  const pd = dom ? TASTE_PRIOR_DOMAIN[dom] : 0;
+  if (pd) prior += pd;
+  const text = ((e.snippet || "") + " " + (e.venue || "")).toLowerCase();
+  for (const t of TASTE_PRIOR_TOPICS) if (t.re.test(text)) prior += t.score;
+  const learned = (v ? v.score : 0) + (d ? d.score : 0);
+  return { learned, prior, score: learned + prior, frictionAdd: v ? v.frictionAdd : 0 };
+}
+__name(tasteScoreFor, "tasteScoreFor");
+function applyTaste(e, taste) {
+  if (!taste || !taste.active) return e;
+  const t = tasteScoreFor(e, taste);
+  const mult = tasteClamp(1 + 0.15 * t.score, 0.3, 1.5);
+  const relevance = e.relevance === 0 ? 0 : Math.min(10, Math.round(e.relevance * mult * 10) / 10);
+  const friction = Math.min(10, e.friction + t.frictionAdd);
+  const priority = Math.round(relevance * 10 / (1 + friction) * 10) / 10;
+  return { ...e, relevance, friction, priority, frictionClass: friction <= 2 ? "LOW" : friction <= 5 ? "MED" : "HIGH", taste: { score: t.score, prior: t.prior, mult: Math.round(mult * 1000) / 1000, frictionAdd: t.frictionAdd } };
+}
+__name(applyTaste, "applyTaste");
+function tasteReportLines(taste) {
+  const L = [];
+  L.push("## Taste weights (RADAR-TASTE-LEARN-1)");
+  if (!taste || !taste.active) {
+    L.push("- inactive: no usable calendar_feedback rows yet, so relevance and friction are the plain INTERESTS scores.");
+    return L;
+  }
+  L.push("- feedback rows used: " + taste.rows + ". relevance x clamp(1 + 0.15 x (venue + domain + prior), 0.3, 1.5); shrunk to zero below " + TASTE_MIN_SAMPLES + " samples; bad-timing and too-much-effort add friction only (cap " + TASTE_FRICTION_CAP + ").");
+  const fmt = (m) => Object.keys(m).sort().map((k) => k + " score " + m[k].score + " (went " + m[k].went + ", keep " + m[k].keep + ", nope " + m[k].nope + (m[k].frictionAdd ? ", +" + m[k].frictionAdd + " friction" : "") + ", x" + (Math.round(tasteClamp(1 + 0.15 * m[k].score, 0.3, 1.5) * 100) / 100) + ")");
+  const v = fmt(taste.venue), d = fmt(taste.domain);
+  L.push("- venues: " + (v.length ? v.join("; ") : "none yet"));
+  L.push("- domains: " + (d.length ? d.join("; ") : "none yet"));
+  L.push("- stated-taste prior: " + Object.keys(TASTE_PRIOR_DOMAIN).map((k) => k + " +" + TASTE_PRIOR_DOMAIN[k]).join(", ") + "; " + TASTE_PRIOR_TOPICS.map((t) => t.name + " " + (t.score > 0 ? "+" : "") + t.score).join(", ") + ".");
+  return L;
+}
+__name(tasteReportLines, "tasteReportLines");
 async function computeBudget(env) {
   const r = await env.PERSONAL_DB.prepare(
     "SELECT venue, start_date FROM events WHERE start_date>=? AND start_date<? AND category IN ('conference','workshop','school','program')"
@@ -1182,7 +1369,7 @@ async function fetchExistingCalendar(env) {
   }
 }
 __name(fetchExistingCalendar, "fetchExistingCalendar");
-function renderReport(scannedAt, horizon, gated, budget, stats, posted) {
+function renderReport(scannedAt, horizon, gated, budget, stats, posted, taste) {
   const L = [];
   L.push("PERSONAL-EVENTS-RADAR SCAN \u2014 generated " + scannedAt.slice(0, 10) + " (window: " + scannedAt.slice(0, 10) + " .. " + horizon + ")");
   L.push("[PERSONAL-RADAR: " + gated.length + " in-window events | " + stats.okVenues + "/" + stats.totalVenues + " venues ok | " + gated.filter((g) => g.cleared && g.e.relevance >= 2).length + " cleared | " + posted.posted + " posted this run]");
@@ -1223,6 +1410,8 @@ function renderReport(scannedAt, horizon, gated, budget, stats, posted) {
   L.push("- Schengen exit deadline: 2026-10-17. Onsite Amsterdam events on/after that date are blocked.");
   L.push("- standing filter: QPL / CWI topics excluded from personal recommendations.");
   L.push("- posted to calendar-api plane=personal: " + posted.posted + " new (dedupe skipped " + posted.skipped + ").");
+  L.push("");
+  for (const x of tasteReportLines(taste)) L.push(x);
   L.push("");
   L.push("## All in-window events (gate tags)");
   const chrono = gated.slice().sort((a, b) => a.e.startIso.localeCompare(b.e.startIso) || a.e.venue.localeCompare(b.e.venue));
@@ -1267,7 +1456,8 @@ async function run(env) {
     } else venueErrors.push({ venue: SOURCES[i].name, error: String((res.reason || "?").slice(0, 100)) });
   });
   const inWindow = rawEvents.filter((e) => e.startIso >= nowIso && e.startIso <= horizon);
-  const scored = inWindow.map(scoreEvent);
+  const taste = await loadTaste(env);
+  const scored = inWindow.map(scoreEvent).map((e) => applyTaste(e, taste));
   const seen = /* @__PURE__ */ new Set();
   const uniq = scored.filter((e) => {
     const k = e.venue + "|" + e.startIso;
@@ -1298,6 +1488,7 @@ async function run(env) {
     let title = g.e.venue + ": " + g.e.snippet.slice(0, 90);
     const cut = title.lastIndexOf(" ");
     if (cut > 30) title = title.slice(0, cut);
+    if (g.e.title) title = g.e.venue + ": " + g.e.title;
     const key = g.e.venue.toLowerCase() + "|" + g.e.startIso;
     const kSlug = slug(g.e.venue);
     const ledgerDup = ledgerSlugs.some((r) => r.d === g.e.startIso && (r.v.indexOf(kSlug) !== -1 || kSlug.indexOf(r.v) !== -1));
@@ -1344,7 +1535,7 @@ async function run(env) {
     } catch (e) {}
   }
   const stats = { inWindow: uniq.length, discarded, okVenues: SOURCES.length - venueErrors.length, totalVenues: SOURCES.length, venueErrors, horizonISO: horizon };
-  const report = renderReport(scannedAt, horizon, gated, budget, stats, { posted, skipped });
+  const report = renderReport(scannedAt, horizon, gated, budget, stats, { posted, skipped }, taste);
   const slugN = "personal-events-radar-" + scannedAt.slice(0, 10);
   let delivery = null;
   try {
@@ -1369,6 +1560,7 @@ async function run(env) {
     discarded,
     venueErrors: venueErrors.length,
     budget,
+    taste: { active: taste.active, rows: taste.rows },
     posted: postedList,
     delivery,
     topPicks: gated.filter((g) => g.cleared && !g.e.runningUntil && !g.e.runningUntilMonth && g.e.relevance >= 3).sort((a, b) => b.e.priority - a.e.priority).slice(0, 5).map((g) => "P" + g.e.priority + " " + g.e.startIso + " " + g.e.venue + " " + g.e.interests.join("/") + " [" + g.e.delivery + "]")

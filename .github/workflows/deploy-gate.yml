@@ -126,6 +126,21 @@ jobs:
       # dashboard's own emailed-code gate (qnfo-tools-mcp owner_queue / owner_code / owner_act); the code never reaches mcp_log.
       - name: OWNER-QUEUE-MCP-1 offline suite (qnfo-tools-mcp)
         run: node qnfo-tools-mcp/owner-queue.test.mjs
+
+      # MSGRAPH-MAIL-1 + MSGRAPH-NO-CODES-1 (pillar personal): Outlook.com mail through Microsoft Graph into email_index.
+      # Mocked Microsoft login and Graph over a node:sqlite D1; one-time codes must never be indexed.
+      - name: MSGRAPH-MAIL-1 offline suite (personal-api)
+        run: node --test personal-api/msgraph/msgraph.test.mjs
+      # AWAY-GATE-2 (pillar personal, #1884): the brief hides Amsterdam on-site events inside a lodging away window.
+      - name: AWAY-GATE-2 offline suite (personal-api)
+        run: node personal-api/away-gate.test.mjs
+      # CONNECTION-LEDGER-1 step 1 (pillar personal, #1951): went answers become Ledger people and in_person interactions, idempotently.
+      - name: CONNECTION-LEDGER-1 offline suite (personal-api)
+        run: node personal-api/ledger-sync.test.mjs
+      # ITINERARY-INGEST-1 + SOURCE-FRESHNESS-1 (pillar personal, #1881): flight/hotel confirmation parser, idempotent upsert,
+      # DMARC gate and freshness guard in qnfo-email, against fakes.
+      - name: ITINERARY-INGEST-1 offline suite (qnfo-email)
+        run: node qnfo-email/itinerary-ingest.test.mjs
       # WORK-WITH-ME-1 + WORK-WITH-ME-METRIC-1 (pillar reach): qnfo.org/work-with-me makes no claim STRATEGY s2.2 rules out,
       # every offer mails rowan.quni@qnfo.org with a [work-with-me:<offer>] subject tag and valid JSON-LD; the reach ingest
       # counts those tagged contacts and the page's RUM views over 30 days, idempotently, into reach_signals and metric_registry.
@@ -177,6 +192,15 @@ jobs:
           echo "$out"
           echo "$out" | grep -q " 0 failed" \
             || { echo "::error::code-merge runner suite reported failures"; exit 1; }
+      # BRANCH-HYGIENE-1: merged branches are deleted, an unmerged branch is archived (refs/archive/<branch>) before it is deleted,
+      # open pull requests and in-flight code tasks are never touched. Scripted GitHub + in-memory D1.
+      - name: BRANCH-HYGIENE-1 offline suite (qnfo-fleet-control)
+        run: |
+          set -euo pipefail
+          out=$(node qnfo-fleet-control/branch-hygiene.test.mjs)
+          echo "$out"
+          echo "$out" | grep -q " 0 failed" \
+            || { echo "::error::branch-hygiene suite reported failures"; exit 1; }
       # SELF-REPAIR-1 (#1768): a code task whose model attempts fail retries in backoff rounds and is then handed to the fleet as one
       # agent_issues row, never parked as a needs_human owner card. The suite replays ct_qldqse7ngltdth (a 93 KB q08-shaped worker,
       # a duplicate SEARCH, two no-block replies) through to a patch that git-applies, and runs the dashboard's own owner-card query.

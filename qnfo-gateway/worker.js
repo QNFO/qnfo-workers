@@ -1,4 +1,4 @@
-var VERSION="3.9.2-reading";
+var VERSION="3.9.3-allowlist";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -1434,7 +1434,7 @@ async function handlePapers(request, env) {
     const search = (u.searchParams.get("search") || "").trim();
     const limit = Math.min(Math.max(parseInt(u.searchParams.get("limit") || "50", 10), 1), 200);
     const offset = Math.max(parseInt(u.searchParams.get("offset") || "0", 10), 0);
-    let sql = "SELECT slug,title,doi,abstract,created_at,status,version,authors FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')";
+    let sql = "SELECT slug,title,doi,abstract,created_at,status,version,authors FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')";
     const params = [];
     if (search) {
       sql += " AND (title LIKE ? OR abstract LIKE ? OR authors LIKE ?)";
@@ -1452,7 +1452,7 @@ async function handlePapers(request, env) {
     for (const p of all) { p._cat = detectCategory(p.title, p.abstract); facets[p._cat] = (facets[p._cat] || 0) + 1; }
     const latest = all.length ? all[0].created_at : null;
     let allTotal = all.length;
-    if (search) { try { const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')").first(); allTotal = c ? c.n : allTotal; } catch (e) {} }
+    if (search) { try { const c = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS n FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')").first(); allTotal = c ? c.n : allTotal; } catch (e) {} }
     const months = [];
     { const now = new Date(); for (let k = 11; k >= 0; k--) { const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - k, 1)); const key = d.toISOString().slice(0, 7); months.push({ key, label: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()] + " '" + String(d.getUTCFullYear()).slice(2), n: 0 }); }
       const idx = {}; months.forEach((m, i) => { idx[m.key] = i; }); for (const p of all) { const k = String(p.created_at || "").slice(0, 7); if (idx[k] != null) months[idx[k]].n++; } }
@@ -1496,7 +1496,7 @@ __name2222222222(handlePapers, "handlePapers");
 // are absent the detail page would render blank. Must report blank_count = 0.
 async function handleBlankPapers(env) {
   try {
-    const r = await env.LIVING_PAPER.prepare("SELECT slug,title,status,paper_type,length(COALESCE(body_md,'')) AS body_len,length(COALESCE(abstract,'')) AS abstract_len FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND length(trim(COALESCE(body_md,''))) < 40 AND length(trim(COALESCE(abstract,''))) < 1 ORDER BY status, slug").all();
+    const r = await env.LIVING_PAPER.prepare("SELECT slug,title,status,paper_type,length(COALESCE(body_md,'')) AS body_len,length(COALESCE(abstract,'')) AS abstract_len FROM papers WHERE status IN ('published','distributed','external_preprint') AND length(trim(COALESCE(body_md,''))) < 40 AND length(trim(COALESCE(abstract,''))) < 1 ORDER BY status, slug").all();
     const rows = (r && r.results) || [];
     const published = rows.filter(function (x) { return x.status === "published"; });
     return json({ ok: published.length === 0, invariant: "NO-BLANK-PAPER-1", published_no_content: published.length, other_no_content: rows.length - published.length, note: "Renderer emits an abstract/placeholder fallback so no page renders blank; this flags papers with no content at all.", items: rows });
@@ -1559,7 +1559,7 @@ __name(servedRenderedPdf, "servedRenderedPdf");
 async function handlePaperPdf(env, slug) {
   const nf = new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   const paper = await env.LIVING_PAPER.prepare(
-    "SELECT slug,doi,pdf_path FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
+    "SELECT slug,doi,pdf_path FROM papers WHERE slug = ? AND status IN ('published','distributed','external_preprint') LIMIT 1"
   ).bind(slug).first();
   if (!paper) return nf;
   const rec = zenodoRecId(paper.doi);
@@ -1586,7 +1586,7 @@ async function handlePaperDetail(request, env, path) {
   }
   try {
     const paper = await env.LIVING_PAPER.prepare(
-      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version,pdf_path,license FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1"
+      "SELECT slug,title,body_md,abstract,authors,doi,created_at,status,version,pdf_path,license FROM papers WHERE slug = ? AND status IN ('published','distributed','external_preprint') LIMIT 1"
     ).bind(slug).first();
     if (!paper) return notFoundPage(request, env, "papers.qnfo.org", "/papers/" + slug, slug);
     paper.doi = lpDoi(paper.doi);
@@ -1629,8 +1629,8 @@ __name2222222222(handlePaperDetail, "handlePaperDetail");
 async function handleHub(env) {
   try {
     const [papersRes, countRes, nodesRes] = await Promise.all([
-      env.LIVING_PAPER.prepare("SELECT slug,title,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 8").all(),
-      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')").first(),
+      env.LIVING_PAPER.prepare("SELECT slug,title,created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 8").all(),
+      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM nodes").first()
     ]);
     const paperCount = countRes ? countRes.cnt : 0;
@@ -1658,7 +1658,7 @@ __name2222222222(handleHub, "handleHub");
 async function handleAbout(env) {
   try {
     const [pc, nc, ec] = await Promise.all([
-      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')").first(),
+      env.LIVING_PAPER.prepare("SELECT COUNT(*) as cnt FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM nodes").first(),
       env.DB.prepare("SELECT COUNT(*) as count FROM edges").first()
     ]);
@@ -1889,7 +1889,7 @@ async function collectPaperUrls(env, recentDays) {
   // submit (ok on the first, operator-side run) exceeds the IndexNow per-key rate budget when
   // repeated daily and returns 429 from the Cloudflare egress IP (FM2). The full set remains
   // available via /api/indexnow?full=1; the cron stays inside the budget.
-  var sql = "SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined')";
+  var sql = "SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint')";
   if (recentDays) sql += " AND created_at >= datetime('now','-" + Number(recentDays) + " days')";
   sql += " ORDER BY created_at DESC";
   const res = await env.LIVING_PAPER.prepare(sql).all();
@@ -1960,7 +1960,7 @@ async function renderHealthSweep(env) {
   let last = 0, checked = 0, withDefects = 0;
   const started = Date.now();
   for (let page = 0; page < 60; page++) {
-    const r = await env.LIVING_PAPER.prepare("SELECT rowid AS rid, slug, title, body_md, render_defects FROM papers WHERE rowid > ?1 AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY rowid LIMIT 15").bind(last).all();
+    const r = await env.LIVING_PAPER.prepare("SELECT rowid AS rid, slug, title, body_md, render_defects FROM papers WHERE rowid > ?1 AND status IN ('published','distributed','external_preprint') ORDER BY rowid LIMIT 15").bind(last).all();
     const rows = r.results || [];
     if (!rows.length) break;
     const upd = [];
@@ -1980,8 +1980,8 @@ async function renderHealthSweep(env) {
 }
 async function handleRenderHealth(env) {
   try {
-    const r = await env.LIVING_PAPER.prepare("SELECT slug, render_defects, render_checked_at FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND render_defects IS NOT NULL AND render_defects <> 0 ORDER BY render_defects DESC, slug").all();
-    const n = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS checked, MAX(render_checked_at) AS last FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') AND render_checked_at IS NOT NULL").first();
+    const r = await env.LIVING_PAPER.prepare("SELECT slug, render_defects, render_checked_at FROM papers WHERE status IN ('published','distributed','external_preprint') AND render_defects IS NOT NULL AND render_defects <> 0 ORDER BY render_defects DESC, slug").all();
+    const n = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS checked, MAX(render_checked_at) AS last FROM papers WHERE status IN ('published','distributed','external_preprint') AND render_checked_at IS NOT NULL").first();
     return json({ metric: "paper_render_defect_pages", value: (r.results || []).length, checked: n ? n.checked : 0, last_checked: n ? n.last : null, tests: ["raw ** opening a word", "raw heading marker", "raw table rule", "odd number of unescaped $"], pages: r.results || [] });
   } catch (e) {
     console.log("RENDER-HEALTH-1 read failed: " + String(e && e.message || e).slice(0, 200));
@@ -1990,7 +1990,7 @@ async function handleRenderHealth(env) {
 }
 async function handleSitemap(env, sitemapHost) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug, created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC").all();
     const isSite = sitemapHost === "qnfo.org" || sitemapHost === "www.qnfo.org";
     const base = isSite ? "https://qnfo.org" : "https://papers.qnfo.org";
     const ALL = isSite
@@ -2058,7 +2058,7 @@ __name222222222(handlePapersRobots, "handlePapersRobots");
 __name2222222222(handlePapersRobots, "handlePapersRobots");
 async function handleLlmsTxt(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 200").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 200").all();
     const base = "https://papers.qnfo.org";
     let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n- [Work with me: assessments, reviews, talks, collaboration and roles](https://qnfo.org/work-with-me)\n\n## Papers\n\n";
     body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (lpDoi(p.doi) ? " (DOI: " + lpDoi(p.doi) + ")" : "")).join("\n");
@@ -2083,7 +2083,7 @@ __name222222222(handleLlmsTxt, "handleLlmsTxt");
 __name2222222222(handleLlmsTxt, "handleLlmsTxt");
 async function handleRss(env) {
   try {
-    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC LIMIT 50").all();
+    const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 50").all();
     const base = "https://papers.qnfo.org";
     const now = (/* @__PURE__ */ new Date()).toUTCString();
     const items = res.results.map((p) => {
@@ -2200,7 +2200,7 @@ async function handleAskAI(request, env) {
   try {
     let paperTitle = "", paperBody = "";
     if (slug) {
-      const paper = await env.LIVING_PAPER.prepare("SELECT title,body_md,abstract FROM papers WHERE slug = ? AND status NOT IN ('duplicate','kg-backfill','quarantined') LIMIT 1").bind(slug).first();
+      const paper = await env.LIVING_PAPER.prepare("SELECT title,body_md,abstract FROM papers WHERE slug = ? AND status IN ('published','distributed','external_preprint') LIMIT 1").bind(slug).first();
       if (paper) {
         paperTitle = paper.title || "";
         paperBody = (stripFrontmatter(paper.body_md) || paper.abstract || "").slice(0, 6e3);
@@ -2624,7 +2624,7 @@ __name2(handleUnsubscribeProxy, "handleUnsubscribeProxy");
 async function handleArchive(env) {
   let rows = [], latest = [];
   try {
-    const r = await env.LIVING_PAPER.prepare("SELECT slug, title, abstract, created_at, doi FROM papers WHERE status NOT IN ('duplicate','kg-backfill','quarantined') ORDER BY created_at DESC").all();
+    const r = await env.LIVING_PAPER.prepare("SELECT slug, title, abstract, created_at, doi FROM papers WHERE status IN ('published','distributed','external_preprint') ORDER BY created_at DESC").all();
     rows = r.results || [];
     latest = rows.slice(0, 5);
   } catch (e) {}
@@ -2710,7 +2710,7 @@ async function notFoundPage(request, env, host, path, slug) {
   if (words.length && env.LIVING_PAPER) {
     try {
       const cond = words.map(function(_, i) { return "(slug LIKE ?" + (i + 1) + " OR lower(title) LIKE ?" + (i + 1) + ")"; }).join(" + ");
-      const sql = "SELECT slug, title, (" + words.map(function(_, i) { return "(slug LIKE ?" + (i + 1) + ")"; }).join(" + ") + ") AS hits FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') AND (" + cond.replace(/ \+ /g, " OR ") + ") ORDER BY hits DESC, created_at DESC LIMIT 5";
+      const sql = "SELECT slug, title, (" + words.map(function(_, i) { return "(slug LIKE ?" + (i + 1) + ")"; }).join(" + ") + ") AS hits FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') AND (" + cond.replace(/ \+ /g, " OR ") + ") ORDER BY hits DESC, created_at DESC LIMIT 5";
       const st = env.LIVING_PAPER.prepare(sql);
       near = ((await st.bind.apply(st, words.map(function(w) { return "%" + w + "%"; })).all()).results) || [];
     } catch (e) { near = []; }
@@ -2789,7 +2789,7 @@ function withFleetCtl(res) {
 // <em> runs; the title is no longer printed twice; paper text is left-aligned (justified prose made rivers).
 // Everything stays server-rendered and readable without JavaScript; SEO metas, JSON-LD, citation_* and GA4 unchanged.
 var LP_ASK = "https://ask.qwav.tech";
-var LP_EXCLUDE = "('duplicate','kg-backfill','quarantined')";
+var LP_PUBLIC = "('published','distributed','external_preprint')";
 var LP_FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">';
 var LP_THEME_BOOT = "<script>(function(){try{var t=localStorage.getItem('qnfo-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()<\/script>";
 var LP_GA = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-LV7RHRVW6R"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-LV7RHRVW6R");<\/script>';
@@ -2981,15 +2981,15 @@ async function handlePaperContext(env, slug) {
   const H = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*" };
   const out = function(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: H }); };
   if (!/^[a-z0-9][a-z0-9-]{1,180}$/.test(slug)) return out({ error: "bad slug" }, 400);
-  const paper = await env.LIVING_PAPER.prepare("SELECT slug,title,abstract,doi,version,created_at FROM papers WHERE slug = ? AND status NOT IN " + LP_EXCLUDE + " LIMIT 1").bind(slug).first();
+  const paper = await env.LIVING_PAPER.prepare("SELECT slug,title,abstract,doi,version,created_at FROM papers WHERE slug = ? AND status IN " + LP_PUBLIC + " LIMIT 1").bind(slug).first();
   if (!paper) return out({ error: "Paper not found" }, 404);
   const norm = lpNorm(paper.title);
   const terms = lpTerms(paper.title).slice(0, 5).concat(lpTerms(String(paper.abstract || "").slice(0, 500)).slice(0, 3)).filter(function(w, i, a) { return a.indexOf(w) === i; }).slice(0, 6);
   const none = { results: [] };
   const q = function(p) { return p.then(function(r) { return r || none; }, function() { return none; }); };
   const res = await Promise.all([
-    q(env.LIVING_PAPER.prepare("SELECT slug,title,version,created_at,doi FROM papers WHERE slug IS NOT NULL AND status NOT IN " + LP_EXCLUDE + " AND lower(substr(title,1,22)) = ? ORDER BY created_at DESC LIMIT 24").bind(String(paper.title || "").toLowerCase().slice(0, 22)).all()),
-    terms.length ? q(env.LIVING_PAPER.prepare("SELECT p.slug,p.title,p.created_at,p.doi,p.abstract FROM papers_fts JOIN papers p ON p.rowid = papers_fts.rowid WHERE papers_fts MATCH ? AND p.slug IS NOT NULL AND p.slug != ? AND p.status NOT IN " + LP_EXCLUDE + " ORDER BY papers_fts.rank LIMIT 24").bind(terms.map(function(w) { return w + "*"; }).join(" OR "), slug).all()) : Promise.resolve(none)
+    q(env.LIVING_PAPER.prepare("SELECT slug,title,version,created_at,doi FROM papers WHERE slug IS NOT NULL AND status IN " + LP_PUBLIC + " AND lower(substr(title,1,22)) = ? ORDER BY created_at DESC LIMIT 24").bind(String(paper.title || "").toLowerCase().slice(0, 22)).all()),
+    terms.length ? q(env.LIVING_PAPER.prepare("SELECT p.slug,p.title,p.created_at,p.doi,p.abstract FROM papers_fts JOIN papers p ON p.rowid = papers_fts.rowid WHERE papers_fts MATCH ? AND p.slug IS NOT NULL AND p.slug != ? AND p.status IN " + LP_PUBLIC + " ORDER BY papers_fts.rank LIMIT 24").bind(terms.map(function(w) { return w + "*"; }).join(" OR "), slug).all()) : Promise.resolve(none)
   ]);
   // Graph matches use the most specific title terms; a node needs two of them, or one term of 6+ letters.
   const gTerms = lpTerms(paper.title).filter(function(w) { return w.length >= 5; }).sort(function(x, y) { return y.length - x.length; }).slice(0, 8);

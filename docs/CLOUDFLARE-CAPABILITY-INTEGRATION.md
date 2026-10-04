@@ -103,3 +103,21 @@ When a request or agent_issue arrives:
 - P2: skills mirror into skills-discovery; kaizen outcome re-evaluation; weekly capability digest.
 - P3: policy-gated auto-adoption for low-risk config changes (cache rules, routes, bindings) with
   before/after metrics; quarterly catalog prune (rejected/reverted rows).
+
+## Status 2026-10-03: Loop 1 is built (CF-CHANGELOG-LOOP-1, qnfo-fleet-control 0.4.112)
+The sync watcher in section 2 was designed on 2026-09-07 and never built; the catalog (54 rows) was edited by hand. It now runs
+inside qnfo-fleet-control's existing hourly tick, once a day, instead of the Monday cron in the original sketch: the fleet is over its
+worker, D1 and AI-spend caps (fleet_budget), so it adds no worker, no cron and no model call.
+- Source: `https://developers.cloudflare.com/changelog/rss/index.xml` (about 8 MB, 1,300 items, newest first; read as a stream and
+  cut at 1.5 MB). Each item carries `<product>` (primary), `<category>` tags (secondary; Artifacts is also tagged Workers),
+  `<pubDate>` and an HTML `<description>`. Per-product feeds exist (developers.cloudflare.com/fundamentals/new-features/available-rss-feeds/).
+- Classes: `deadline` (billing / deprecation / breaking change to a product the fleet uses; max 2 deduped issues a day),
+  `reopen` (a rejected catalog row's product launched or went GA; row goes back to `proposed`, max 2 a day), `new_product`
+  (no catalog row; a `not_considered` row, max 5 a day), `in_use_change` (recorded), `noise`, `old` (more than 45 days).
+  Matching uses the primary product, the catalog's part names ("A + B"), whole-word containment ("Agents" in "Agents SDK") and
+  an alias map for renames (`CFC_ALIAS`: Basin -> Pipelines / R2 Data Catalog / R2 SQL, Sandboxes -> Sandbox SDK).
+- Measures: `cf_changelog_audit_age_h` (loop alive) and `cf_changelog_open_proposals_14d` (found features get decided), each with a
+  trigger (migrations/2026-10-03-cf-changelog-loop.sql). `GET /cf-changelog` is the digest; `POST /cf-changelog/run` (admin token) forces a run.
+- Not done here: the advisor decision gate (section 4), the registry-to-catalog adoption join (section 3) and the skills mirror
+  (section 6). The catalog's `in_use` statuses are still hand-set (#1695): the loop uses the service registry text as a second
+  signal that the fleet uses a product, but it does not repair the status column.

@@ -59,8 +59,21 @@ ok(!row.sent_at && row.attempts === 1 && /email 401 nope/.test(row.last_error) &
 for (let i = 0; i < 6; i++) await deliverOwnerPrompts(T.env, noon);
 ok(T.db.prepare("SELECT attempts FROM owner_questions WHERE ref='f1'").get().attempts === 5 && T.calls.length === 5, "gives up after five attempts");
 
-T = setup(); r = await deliverOwnerPrompts({ AUDIT: T.env.AUDIT }, noon); ok(r.skipped === "no EMAIL binding", "missing EMAIL binding is a skip");
+T = setup(); r = await deliverOwnerPrompts({ AUDIT: T.env.AUDIT }, noon); ok(r.skipped === "no mail binding", "missing mail binding is a skip");
 r = await deliverOwnerPrompts({ EMAIL: T.env.EMAIL }, noon); ok(r.skipped === "no AUDIT binding", "missing AUDIT binding is a skip");
 await deliverOwnerPrompts(T.env, noon); add(T.db, "k", "z", "Z", 5); await deliverOwnerPrompts(T.env, noon);
 ok(!T.sqls.some((q) => /email_suppression/i.test(q)), "the opt-out table is never touched by prompt delivery");
-console.log(pass + " passed, " + fail + " failed"); process.exit(fail ? 1 : 0);
+
+// direct send path
+{
+  const T2 = setup(); const sent = [];
+  T2.env.SEND_EMAIL = { send: async (m) => { sent.push(m); } };
+  await deliverOwnerPrompts(T2.env, noon); add(T2.db, "k", "d1", "D subject", 5);
+  const r2 = await deliverOwnerPrompts(T2.env, noon);
+  ok(r2.sent === 1 && sent.length === 1 && sent[0].to === "rwnquni@outlook.com" && sent[0].subject === "D subject" && sent[0].text === "body of D subject" && T2.calls.length === 0, "SEND_EMAIL is preferred and the email service is not called");
+  const T3 = setup(); T3.env.SEND_EMAIL = { send: async () => { throw new Error("E_SEND rejected"); } };
+  await deliverOwnerPrompts(T3.env, noon); add(T3.db, "k", "d2", "D2", 5); await deliverOwnerPrompts(T3.env, noon);
+  const w = T3.db.prepare("SELECT sent_at, attempts, last_error FROM owner_questions WHERE ref='d2'").get();
+  ok(!w.sent_at && w.attempts === 1 && w.last_error === "E_SEND rejected", "a SEND_EMAIL failure is recorded verbatim");
+  console.log(pass + " passed, " + fail + " failed (incl. direct path)"); process.exit(fail ? 1 : 0);
+}
