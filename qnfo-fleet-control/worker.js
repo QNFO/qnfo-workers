@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.115-cycle-time-1"; /* 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.116-merge-nochecks-requeue-1"; /* 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -3342,7 +3342,7 @@ function cmDecide(t, g, nowMs) {
     // Actions GITHUB_TOKEN never does. The clock starts the first time the runner sees this head without checks.
     if (t.nochecks_sha === head.sha) {
       var nAge = (nowMs - Date.parse(t.nochecks_since || "")) / 36e5;
-      if (nAge > CM_CHECKS_WAIT_H) return refuse("no required check (" + req.join(", ") + ") started on " + sha7 + " within " + CM_CHECKS_WAIT_H + "h (a pull request opened with the Actions GITHUB_TOKEN starts none; push to the branch or reopen the PR, then set the task back to 'published')");
+      if (nAge > CM_CHECKS_WAIT_H) return Object.assign(refuse("no required check (" + req.join(", ") + ") started on " + sha7 + " within " + CM_CHECKS_WAIT_H + "h (a pull request opened with the Actions GITHUB_TOKEN starts none; requeued)"), { nochecks: true });
       return wait("no required check has started on " + sha7 + " yet");
     }
     var w = wait("no required check has started on " + sha7 + " yet");
@@ -3557,14 +3557,14 @@ function cmTaskId() {
   return s;
 }
 __name(cmTaskId, "cmTaskId");
-async function cmRequeueStale(env, cx, t, pr, num, why) {
+async function cmRequeueStale(env, cx, t, pr, num, why, force) {
   var path = String(t.path || ""), head = pr.head && pr.head.sha;
   if (!path || !head) return null;
   var cmp = await evApi(env, "GET", "/compare/main..." + head);
   var mb = cmp.ok && cmp.j && cmp.j.merge_base_commit && cmp.j.merge_base_commit.sha;
   if (!mb) return null;
   var atBase = await evReadFile(env, path, mb), atMain = await evReadFile(env, path, "main");
-  if (atBase == null || atMain == null || atBase === atMain) return null;
+  if (atBase == null || atMain == null || (atBase === atMain && !force)) return null;
   var n = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM code_tasks WHERE goal = ?1").bind(t.goal).first();
   if (n && Number(n.n) > CM_REQUEUE_MAX) return null;
   var anchor = null;
@@ -3614,6 +3614,10 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
   if (d.action === "refuse" && d.stale_check && num && g.pr && g.pr.state === "open") {
     var rq = await cmRequeueStale(env, cx, t, g.pr, num, d.why);
     if (rq) return { id: t.id, pr: num, action: "requeued", why: rq.why, task: rq.id };
+  }
+  if (d.action === "refuse" && d.nochecks && num && g.pr && g.pr.state === "open") {
+    var rq2 = await cmRequeueStale(env, cx, t, g.pr, num, d.why, true);
+    if (rq2) return { id: t.id, pr: num, action: "requeued", why: rq2.why, task: rq2.id };
   }
   var res = { id: t.id, pr: num, action: d.action, why: d.why };
   var cmLimit = out.maxMerges || CM_MAX_MERGES;
