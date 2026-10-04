@@ -1,11 +1,11 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@824378c05337",
- "due": 10,
+ "verifier": "remediation-consumer@ecaaf2a548ff",
+ "due": 16,
  "pass": 1,
- "fail": 6,
- "skipped": 3,
+ "fail": 14,
+ "skipped": 1,
  "contracts": [
   {
    "class": "EVID-1649-BRIEF",
@@ -20,30 +20,6 @@
    "issue_id": 1805,
    "verdict": "vacuous-probe-result",
    "expected": "fixed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-1905",
-   "issue_id": 1905,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "GCAL-CONNECTED-1",
-   "issue_id": 1816,
-   "verdict": "vacuous-probe-result",
-   "expected": "connected",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
-   "verdict": "vacuous-probe-result",
-   "expected": "connected",
    "observed": null,
    "reason": "probe returned no expected/observed pair"
   },
@@ -72,8 +48,80 @@
    "written": true
   },
   {
+   "class": "issue-1623",
+   "issue_id": 1623,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "19",
+   "written": true
+  },
+  {
    "class": "issue-1730",
    "issue_id": 1730,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1624",
+   "issue_id": 1624,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1637",
+   "issue_id": 1637,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1643",
+   "issue_id": 1643,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1644",
+   "issue_id": 1644,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1648",
+   "issue_id": 1648,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1651",
+   "issue_id": 1651,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1712",
+   "issue_id": 1712,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1724",
+   "issue_id": 1724,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
@@ -104,8 +152,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 25500,
- "head": "824378c05337c6850a99bc9cacedc680d206d7b8",
+ "spent_ms": 39676,
+ "head": "ecaaf2a548ffef0fb96d97f746f5feccb2629e07",
  "job_status": "success",
- "ts": "2026-10-04T15:24:17Z"
+ "ts": "2026-10-04T18:25:38Z"
 }
