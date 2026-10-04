@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.6-client-ip"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
+var VERSION = "1.1.7-codeagent"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
 var SITE = "https://qnfo.org";
 // FLEET-CTL-STATIC-1 (issue 1778; owner request 1757): the owner's fleet command-line link on the subscribe, confirm and
 // unsubscribe pages, as static HTML scoped to the subscribe surface. Not fleet.qnfo.org/ctl.js: it scopes the link with
@@ -55,13 +55,36 @@ function confirmUrl(token) {
   return SITE + "/api/confirm?token=" + encodeURIComponent(token);
 }
 __name(confirmUrl, "confirmUrl");
-async function sendEmail(env, to, subject, text) {
-  if (!env.SEND_EMAIL) return { error: "SEND_EMAIL binding missing" };
+async function logSend(env, kind, status, messageId, error) {
   try {
-    const r = await env.SEND_EMAIL.send({ to, from: FROM, subject, text });
-    return { ok: true, messageId: r && r.messageId || null };
+    const meta = { kind: kind || "unknown" };
+    if (messageId) meta.messageId = messageId;
+    else if (error) meta.error = error;
+    await env.AUDIT.prepare(
+      "INSERT INTO cloud_ops_events (kind, status, meta, created_at) VALUES (?1, ?2, ?3, datetime('now'))"
+    ).bind("subscribers-send", status, JSON.stringify(meta)).run();
   } catch (e) {
-    return { error: String(e && e.message || e) };
+  }
+}
+__name(logSend, "logSend");
+async function sendEmail(env, to, subject, text, kind, headers) {
+  if (!env.SEND_EMAIL) {
+    await logSend(env, kind, "error", null, "SEND_EMAIL binding missing");
+    return { error: "SEND_EMAIL binding missing" };
+  }
+  const payload = { to, from: FROM, subject, text };
+  if (headers && Object.keys(headers).length) {
+    payload.headers = headers;
+  }
+  try {
+    const r = await env.SEND_EMAIL.send(payload);
+    const messageId = r && r.messageId || null;
+    await logSend(env, kind, "ok", messageId, null);
+    return { ok: true, messageId };
+  } catch (e) {
+    const err = String(e && e.message || e);
+    await logSend(env, kind, "error", null, err);
+    return { error: err };
   }
 }
 __name(sendEmail, "sendEmail");
@@ -149,7 +172,7 @@ async function handleSubscribe(request, env) {
     const alreadyConfirmed = !!(existing && existing.status === "subscribed");
     let sent = false;
     if (!alreadyConfirmed) {
-      const res = await sendEmail(env, email, "Confirm your QNFO subscription", confirmText(token));
+      const res = await sendEmail(env, email, "Confirm your QNFO subscription", confirmText(token), "confirm");
       if (res && res.ok) {
         sent = true;
         await env.AUDIT.prepare("UPDATE subscribers SET welcomed_at = datetime('now') WHERE email = ?1").bind(email).run();
@@ -242,7 +265,11 @@ async function runDigest(env, opts) {
   for (let i = 0; i < subs.length; i += BATCH) {
     const slice = subs.slice(i, i + BATCH);
     const results = await Promise.all(slice.map(function(s) {
-      return sendEmail(env, s.email, subject, digestText(papers, s.unsub_token));
+      const unsub = unsubUrl(s.unsub_token);
+      return sendEmail(env, s.email, subject, digestText(papers, s.unsub_token), "digest", {
+        "List-Unsubscribe": `<${unsub}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+      });
     }));
     for (let j = 0; j < results.length; j++) {
       if (results[j] && results[j].ok) sent++;
