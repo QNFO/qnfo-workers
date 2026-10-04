@@ -1,3 +1,5 @@
+// idea-hub v1.5.3-questions-feed-leakfix-20261004: ROLEPROMPT-SHAPE-GATE-1 (a public question is never
+//   an instruction addressed to a model; catches pipeline prompts not enumerated in INTERNAL).
 // idea-hub v1.5.2-questions-feed-20261004: IDEAS-PUBLIC-FILTER-1 (strip client-injected <ATTACHMENT_FILE>
 //   and <context-data> blocks before the public gate; withhold a thread only when its FIRST public question
 //   is internal, not when any turn is) + IDEAS-QUESTIONS-SOURCE-1 (publish self_questions open + triaged
@@ -76,7 +78,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.5.2-questions-feed";
+var VERSION = "1.5.3-questions-feed-leakfix";
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -201,7 +203,12 @@ const TOOLINV=/(?:use|invoke|call|run)\s+(?:your\s+|the\s+|a\s+|an\s+)?[a-z][a-z
 // pubQuestion: denylist safety gate only (no RESEARCH allowlist) -- the fleet's own self-questions
 // and triaged idea proposals are research questions by construction, so requiring one of 39 exact
 // RESEARCH tokens would silently drop them. publicTitle keeps the allowlist for arbitrary chat threads.
-function pubQuestion(s){const t=clean(s,1000);if(STAMP.test(t))return false;if(TOOLINV.test(t))return false;return t.length>=12&&!has(t,INTERNAL)&&!has(t,OPS)&&!has(t,JUNK)}
+// ROLEPROMPT-SHAPE-GATE-1 (2026-10-04): a public question is never an instruction addressed to a
+// model. Blocking the SHAPE (role assignment / imperative writer prompt) catches the paper-pipeline
+// prompts that were not enumerated in INTERNAL -- e.g. "You are the reconciling editor...", which
+// leaked because "input block" matched the RESEARCH token 'block' and the role phrase was not listed.
+const ROLEPROMPT=/^\s*(you are (the|an|a)\b|write (one|a|the|two)\b|extract (every|all|the)\b|produce (the|a|one|two)\b|output (the|a|only|strict)\b|audit (this|the)\b|reconcil(e|ing)\b|based on the chat history|give this conversation a name)/i;
+function pubQuestion(s){const t=clean(s,1000);if(STAMP.test(t))return false;if(TOOLINV.test(t))return false;if(ROLEPROMPT.test(t))return false;return t.length>=12&&!has(t,INTERNAL)&&!has(t,OPS)&&!has(t,JUNK)}
 function publicTitle(s){const t=clean(s,1000);return pubQuestion(t)&&has(t,RESEARCH)}
 function ts(v){if(!v)return null;if(typeof v==='number')return new Date(v).toISOString();let s=String(v).replace(' ','T');if(!/Z$|[+-]\d\d:\d\d$/.test(s))s+='Z';const d=new Date(s);return Number.isNaN(d.getTime())?String(v):d.toISOString()}
 let _qSet=null,_qAt=0;
