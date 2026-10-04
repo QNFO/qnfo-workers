@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.8.3-codeagent"; // v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.8.5-ensemble"; // v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -134,6 +134,21 @@ async function writeOwnMetrics(env) {
     var r = await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind(Q08_METRIC_KEYS[i][0], String(v), now).run().catch(function () { return null; });
     if (r && r.meta && r.meta.changes) n++;
   }
+  // Q08-ENSEMBLE-1: how many independent votes the two-judge panel really gives (2 = independent, 1 = one voice twice).
+  try {
+    var ev = effectiveVotes(await panelPairs(env));
+    if (ev.n_eff != null) {
+      var rr = await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind("q08_panel_effective_votes_30d", String(ev.n_eff), now).run();
+      if (rr && rr.meta && rr.meta.changes) n++;
+    }
+  } catch (e) {}
+  try {
+    var us = await panelUnavailableShare(env);
+    if (us != null) {
+      var ru = await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind("q08_panel_unavailable_share_7d", String(us), now).run();
+      if (ru && ru.meta && ru.meta.changes) n++;
+    }
+  } catch (e) {}
   return n;
 }
 var MAX_PER_DAY = 10;
@@ -360,6 +375,8 @@ var Q08_DIRECTIVE = [
     "BANNED FRAMING (automatic rejection \u2014 the tells of a banal essay): 'illustrates a broader structural dynamic', 'exposes a structural dynamic', 'reveals a structural dynamic', 'a recurring institutional dynamic', 'a systemic failure in which', 'a structural gap between', 'what this reveals about', 'the deeper pattern', 'the broader lesson'. Never tell the reader what the essay 'reveals'; demonstrate it and stop. A sentence that announces the significance of the essay instead of adding a fact is a sentence to delete.",
     "SIGNIFICANCE ANNOUNCEMENT (banned): never write \"the incident illustrates / exposes / reveals / foregrounds / underscores a <noun phrase>\". Those verbs, applied to the incident, are the banality signature \u2014 they announce that the essay has a point instead of making it. State the causal chain directly: who does what to whom, and what breaks as a result. If a draft contains any of these verbs, rewrite the sentence as a mechanism.",
     "TITLE: name the mechanism, not the category. A good title names a specific causal process or its actors \u2014 e.g. 'The clearinghouse that paid itself first' or 'Why the map outlives the territory it describes'. Banned title shapes: the bare '[Adjective]-[Noun] [Preposition] [Abstract Noun]' stack ('Scale-Induced Professional Displacement'); 'The X of Y' ('The Incentive-Driven Misalignment of Threat Models'); 'X as Y' ('Formal Guarantees as Market Signal'); and any title opening with Structural, Systemic, Implicit, Opaque, Formal, Abstract, Externalized, Statistical or a similar nominalisation. If the title would work as a category label in a management deck, it is the wrong title.",
+  "PLAIN WORDING (this is what a reader judges first): write the way a sharp person explains something to a smart friend, not the way a paper abstracts it. Mix short sentences with long ones. Name who did what by what they are (the maintainers, the buyers, the vendor, the shipping line), never by role words: no 'the observer', 'the actor', 'the producer', 'the consumer', 'the proxy', 'the cue', 'the arrangement', 'the mechanism', 'the signal', 'the process'. A sentence that exists only to announce structure ('This same arrangement appears...', 'The mechanism works like this', 'The process therefore hinges on', 'not a quirk of a single product') is deleted. If you cannot picture a person doing the thing in a sentence, rewrite it. Say it once; do not restate a point in new abstract words.",
+  "INTERNAL FIELDS: the SIGNAL block's field names and its signal_strength value are pipeline metadata, not facts about the world. Never mention them, never write 'signal strength', 'friction point' or 'core concept'. Open with what actually happened or was said, as one concrete event, in plain words.",
   "CONSTRAINTS (hard):",
   "- The structural claim must outlive the incident: dates may appear in the material, but the argument must not depend on them.",
   "- No @handles, no marketing register, no promotional language. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
@@ -370,9 +387,9 @@ var Q08_DIRECTIVE = [
 ].join("\n");
 
 var REGISTER_EXEMPLAR = [
-  "# The badge that outlived the inspection behind it",
+  "# The rating agency that switched who paid",
   "",
-  "A guild issued a stamped mark to certify that a piece of metal had been assayed by a sworn inspector. Buyers learned to read the mark as a promise about the metal. The mark was cheaper to copy than the inspection was to perform, and within a generation the workshops turning out stamped-but-unaudited goods outnumbered the ones still submitting to the assay. The arrangement had three parts. The buyer could not verify the metal directly, so the stamp carried the entire burden of trust. The guild drew its authority from the stamp, so it had no reason to publish how many stamps circulated outside its control. The copying workshop paid nothing for the trust it spent. The inspection was the expensive step and the stamp was the cheap one, and the market rewarded the cheap one.",
+  "Until the early 1970s the big credit rating agencies sold their ratings to investors. Then they switched: the company issuing the bond paid for its own rating. The letter grades looked the same on the day of the switch. What had changed was who could take their business elsewhere. An agency that rated a bond too harshly lost the issuer to a competitor, and the fee with it. Investors kept reading the grade as a judgement made on their behalf, and nothing on the page told them the customer had changed. Years later the top grade sat on thousands of mortgage securities that lost most of their value. The agencies had not faked a number. They had learned which answer kept the client.",
   "",
   "# The freight office that priced its own risk",
   "",
@@ -397,7 +414,199 @@ function exemplarOk(md) {
   return true;
 }
 
-function buildPrompt(friction, fewShot, recentStructures) {
+// Q08-QUALITY-1: precedents the site leans on too often are named to the writer and rejected by the gate. 19 of 36 pieces in
+// the 7 days to 2026-10-03 reached for the same guild hallmark, because the register exemplar was one.
+var PRECEDENT_VOCAB = [
+  { label: "the medieval guild hallmark or goldsmith stamp", re: /hall-?mark|goldsmith|guild/i },
+  { label: "the South Sea Bubble", re: /south sea/i },
+  { label: "tulip mania", re: /tulip/i },
+  { label: "patent medicines", re: /patent[- ]medicine/i },
+  { label: "railway mania", re: /railway mania/i },
+  { label: "the printing press", re: /gutenberg|printing press/i },
+  { label: "the Hanseatic League", re: /hanseatic/i },
+  { label: "the Medici bank", re: /medici/i },
+  { label: "the Dutch East India Company", re: /east india company/i },
+  { label: "the dot-com bubble", re: /dot-?com/i }
+];
+function overusedPrecedents(bodies, minUses) {
+  var need = minUses || 2, out = [];
+  for (var v of PRECEDENT_VOCAB) {
+    var n = 0;
+    for (var b of (bodies || [])) { if (v.re.test(String(b || ""))) n++; }
+    if (n >= need) out.push(v);
+  }
+  return out;
+}
+// Q08-QUALITY-1: the owner's editorial directives, written only through the signed-in command line at fleet.qnfo.org
+// (qnfo-audit q08_editor_notes). They are authenticated text, unlike visitor notes, which no prompt ever reads.
+async function ownerDirectives(env) {
+  if (!env || !env.AUDIT) return [];
+  try {
+    var r = await env.AUDIT.prepare("SELECT text FROM q08_editor_notes WHERE active = 1 ORDER BY id DESC LIMIT 8").all();
+    return (r.results || []).map(function (x) { return String(x.text || "").replace(/\s+/g, " ").trim().slice(0, 400); }).filter(Boolean);
+  } catch (e) { return []; }
+}
+// Q08-READER-TEST-1: a cold read by the model that did not write the draft. It judges as a reader, not as an editor.
+var READER_PROMPT = [
+  "You are a busy, intelligent reader who has never heard of this site and owes it nothing. Read the essay below the way you read anything you found by chance: you stop at the first sentence that wastes your time.",
+  "Answer with exactly one JSON object and nothing else:",
+  "{\"would_read_to_end\": true or false, \"score\": 1 to 5 (5 = I would send it to a friend, 4 = worth the time, 3 = I would skim it, 1 = I stopped at the first paragraph), \"slop_tells\": [up to 3 short phrases copied from the essay that sound like generic machine prose], \"fix\": \"one sentence telling the writer what to change\"}",
+  "Judge: does it open with something concrete that happened? Can you state its claim in one sentence? Does every paragraph add a new fact or step, or only restate in abstract words? Are the words plain, or do role words ('the observer', 'the actor', 'the arrangement') and announcements of structure stand in for people doing things? Is the historical parallel specific and real, or a stock example? Be strict: a 4 must be earned."
+].join("\n");
+function parseReaderVerdict(text) {
+  var m = String(text || "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  var o;
+  try { o = JSON.parse(m[0]); } catch (e) { return null; }
+  var score = Number(o && o.score);
+  if (!isFinite(score)) return null;
+  score = Math.max(1, Math.min(5, Math.round(score)));
+  var wr = o.would_read_to_end === true || o.would_read_to_end === "true";
+  var tells = Array.isArray(o.slop_tells) ? o.slop_tells.slice(0, 3).map(function (t) { return String(t).slice(0, 120); }) : [];
+  return { would_read: wr, score: score, tells: tells, fix: String(o.fix || "").slice(0, 300), pass: wr && score >= 4 };
+}
+// Q08-ENSEMBLE-1. Research behind the design (2026-10-03): LLM errors are strongly correlated. Kim et al. (ICML 2025) found models
+// agree 60% of the time they are both wrong, and that larger, more accurate models correlate MORE; a 9-judge, 7-family panel gave
+// only 2.18 effective independent votes (mean pairwise phi 0.39), and past 5 judges added 0.22 votes. Verga et al. (PoLL, 2024)
+// found a panel of small models from disjoint families beat one large judge at about 1/7 the cost, with less self-preference.
+// So: judges come from families other than the writer's, are small, are few (2 per round), and the layers that really are
+// uncorrelated with a model are not models: the deterministic gate, real reader votes and the owner's verdict.
+var MODEL_FAMILY = {
+  "@cf/nvidia/nemotron-3-120b-a12b": "nvidia",
+  "@cf/openai/gpt-oss-120b": "openai",
+  "@cf/google/gemma-4-26b-a4b-it": "google",
+  "@cf/zai-org/glm-5.3-flash": "zai",
+  "@cf/qwen/qwen3-30b-a3b-fp8": "alibaba",
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast": "meta",
+  "@cf/deepseek-ai/deepseek-v4-flash-0731": "deepseek"
+};
+function familyOf(id) { return MODEL_FAMILY[id] || "unknown:" + String(id || "").split("/")[1]; }
+// Judges, cheapest-per-call first within a rotation. Active parameters are small (a4b, a3b, flash) on purpose.
+// Three of the five judges are reasoning models (qwen3-30b-a3b, glm-5.3-flash, deepseek-v4-flash): they think before they answer, so the
+// output budget covers the thinking too (the same failure ASK-LOOP-1 hit with its judge, PR 566). Non-reasoning models lead the rotation.
+var READER_MAX_TOKENS = 2000;
+var PANEL_POOL = [
+  "@cf/google/gemma-4-26b-a4b-it",
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "@cf/qwen/qwen3-30b-a3b-fp8",
+  "@cf/zai-org/glm-5.3-flash",
+  "@cf/deepseek-ai/deepseek-v4-flash-0731"
+];
+// k judges, one per family, none from a family in `exclude` (the writer, the editor, an earlier panel). The start rotates with
+// `seed` so no single family becomes the permanent judge. Returns [] when fewer than one candidate remains.
+function pickPanel(exclude, k, seed) {
+  var ex = {}; (exclude || []).forEach(function (f) { ex[f] = 1; });
+  var n = PANEL_POOL.length, start = Math.abs(seed | 0) % n, out = [], seen = {};
+  for (var i = 0; i < n && out.length < k; i++) {
+    var id = PANEL_POOL[(start + i) % n], f = familyOf(id);
+    if (ex[f] || seen[f]) continue;
+    seen[f] = 1; out.push(id);
+  }
+  return out;
+}
+function seedOf(str) { var h = 0, t = String(str || ""); for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return Math.abs(h); }
+async function readerTest(env, modelId, text) {
+  try {
+    var essay = String(text || "").replace(/\n?worth your time:[^\n]*$/im, "").trim().slice(0, 9000);
+    var resp = await env.AI.run(modelId, { messages: [{ role: "user", content: READER_PROMPT + "\n\n--- ESSAY ---\n" + essay }], max_tokens: READER_MAX_TOKENS, temperature: 0.2 }, { signal: AbortSignal.timeout(90000) });
+    var out = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
+    var v = parseReaderVerdict(String(out).replace(/<think>[\s\S]*?<\/think>/gi, ""));
+    if (v) { v.model = modelId; v.family = familyOf(modelId); }
+    return v;
+  } catch (e) { return null; }
+}
+// Panel verdict: passes when the mean score is at least 4 and a strict majority would read to the end. With 2 judges that means
+// both. Judges that error are replaced by the next candidate family once; no valid verdict at all returns null (fail open).
+function aggregatePanel(judges) {
+  var j = (judges || []).filter(Boolean);
+  if (!j.length) return null;
+  var mean = j.reduce(function (a, x) { return a + x.score; }, 0) / j.length;
+  var wr = j.filter(function (x) { return x.would_read; }).length;
+  var tells = [], fixes = [];
+  j.forEach(function (x) { (x.tells || []).forEach(function (t) { if (tells.indexOf(t) < 0 && tells.length < 5) tells.push(t); }); if (x.fix && fixes.indexOf(x.fix) < 0) fixes.push(x.fix); });
+  return { judges: j, n: j.length, mean: Math.round(mean * 100) / 100, pass: mean >= 4 && wr * 2 > j.length, fix: fixes.join(" | ").slice(0, 500), tells: tells };
+}
+async function panelRead(env, text, exclude, seed, k) {
+  var want = k || 2;
+  var ids = pickPanel(exclude, want + 2, seed);
+  var first = ids.slice(0, want), spare = ids.slice(want);
+  var got = await Promise.all(first.map(function (id) { return readerTest(env, id, text); }));
+  for (var i = 0; i < got.length; i++) { if (!got[i] && spare.length) got[i] = await readerTest(env, spare.shift(), text); }
+  return aggregatePanel(got);
+}
+// Mean pairwise agreement of the two judges in each panel read, as a phi coefficient over pass/fail, and the implied number of
+// independent votes n_eff = n / (1 + (n - 1) * phi) for n = 2. Reported only from 20 paired reads, else null (unmeasured).
+function effectiveVotes(pairs) {
+  var a = 0, b = 0, c = 0, d = 0;
+  (pairs || []).forEach(function (p) { if (p[0] && p[1]) a++; else if (p[0] && !p[1]) b++; else if (!p[0] && p[1]) c++; else d++; });
+  var n = a + b + c + d;
+  if (n < 20) return { reads: n, phi: null, n_eff: null };
+  var den = Math.sqrt((a + b) * (c + d) * (a + c) * (b + d));
+  var phi = den === 0 ? 1 : (a * d - b * c) / den;
+  phi = Math.max(0, Math.min(1, phi));
+  return { reads: n, phi: Math.round(phi * 1000) / 1000, n_eff: Math.round((2 / (1 + phi)) * 100) / 100 };
+}
+// Share of panel reads over 7 days that returned no valid verdict (every judge errored or answered with no JSON). A panel that
+// silently never runs fails open, so this is the only place that shows it.
+async function panelUnavailableShare(env) {
+  var r = await env.DB.prepare("SELECT SUM(CASE WHEN role = 'panel_unavailable' THEN 1 ELSE 0 END) u, SUM(CASE WHEN role = 'judge' THEN 1 ELSE 0 END) j FROM q08_reader_tests WHERE created_at >= datetime('now','-7 days')").first().catch(function () { return null; });
+  if (!r) return null;
+  var panels = (r.j || 0) / 2 + (r.u || 0);
+  if (panels < 5) return null;
+  return Math.round(((r.u || 0) / panels) * 1000) / 1000;
+}
+async function panelPairs(env) {
+  var rs = await env.DB.prepare("SELECT piece_key, round, pass FROM q08_reader_tests WHERE created_at >= datetime('now','-30 days') AND role = 'judge' ORDER BY piece_key, round, id").all().catch(function () { return { results: [] }; });
+  var by = {};
+  (rs.results || []).forEach(function (r) { var k = r.piece_key + "#" + r.round; (by[k] = by[k] || []).push(!!r.pass); });
+  return Object.keys(by).filter(function (k) { return by[k].length === 2; }).map(function (k) { return by[k]; });
+}
+// 0.8.4 created q08_reader_tests without role and family. CREATE IF NOT EXISTS cannot add them, so an old table is altered; without
+// this a deploy order of 0.8.4 then 0.8.5 would leave every insert failing inside a swallowed catch (review finding on PR 562).
+async function ensureReaderTable(env) {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS q08_reader_tests (id INTEGER PRIMARY KEY AUTOINCREMENT, piece_key TEXT, round INTEGER, role TEXT, model TEXT, family TEXT, would_read INTEGER, score INTEGER, tells TEXT, fix TEXT, pass INTEGER, created_at TEXT)").run();
+  var info = await env.DB.prepare("PRAGMA table_info(q08_reader_tests)").all();
+  var have = {}; (info.results || []).forEach(function (c) { have[c.name] = 1; });
+  if (!have.role) await env.DB.prepare("ALTER TABLE q08_reader_tests ADD COLUMN role TEXT").run();
+  if (!have.family) await env.DB.prepare("ALTER TABLE q08_reader_tests ADD COLUMN family TEXT").run();
+}
+async function saveReaderTests(env, key, rows) {
+  if (!rows || !rows.length) return;
+  try {
+    await ensureReaderTable(env);
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      await env.DB.prepare("INSERT INTO q08_reader_tests (piece_key, round, role, model, family, would_read, score, tells, fix, pass, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)").bind(String(key || "").slice(0, 200), r.round || 1, r.role || "judge", r.model || "", r.family || "", r.would_read ? 1 : 0, r.score == null ? null : r.score, JSON.stringify(r.tells || []), r.fix || "", r.pass ? 1 : 0, nowIso()).run();
+    }
+  } catch (e) { console.error("q08 reader_tests write failed: " + String(e && e.message || e).slice(0, 200)); }
+}
+// One row per judge, plus an editor row, so the chain of models behind a piece is recorded.
+// Q08-ENSEMBLE-1 read-out (public, aggregate only; no IP, cookie or visitor text). It is the evidence the loop needs: does each
+// family read like the others (n_eff), does the editor round actually raise the score, and which phrases do judges keep flagging.
+async function ensembleReport(env) {
+  var out = { window_days: 30, by_family: [], by_round: [], effective_votes: effectiveVotes([]), top_tells: [], panel_unavailable: 0, recorded: false };
+  try {
+    var since = "created_at >= datetime('now','-30 days')";
+    var f = await env.DB.prepare("SELECT family, role, COUNT(*) n, ROUND(AVG(score),2) mean_score, ROUND(AVG(pass),3) pass_rate FROM q08_reader_tests WHERE " + since + " GROUP BY family, role ORDER BY n DESC").all();
+    out.by_family = f.results || [];
+    var r = await env.DB.prepare("SELECT round, COUNT(*) n, ROUND(AVG(score),2) mean_score, ROUND(AVG(pass),3) pass_rate FROM q08_reader_tests WHERE role = 'judge' AND " + since + " GROUP BY round ORDER BY round").all();
+    out.by_round = r.results || [];
+    out.effective_votes = effectiveVotes(await panelPairs(env));
+    var t = await env.DB.prepare("SELECT tells FROM q08_reader_tests WHERE role = 'judge' AND " + since + " ORDER BY id DESC LIMIT 400").all();
+    var count = {};
+    (t.results || []).forEach(function (x) { var a; try { a = JSON.parse(x.tells || "[]"); } catch (e) { a = []; } a.forEach(function (ph) { var k = String(ph).toLowerCase().replace(/\s+/g, " ").trim().slice(0, 120); if (k) count[k] = (count[k] || 0) + 1; }); });
+    out.top_tells = Object.keys(count).filter(function (k) { return count[k] >= 2; }).sort(function (a, b) { return count[b] - count[a]; }).slice(0, 10).map(function (k) { return { phrase: k, n: count[k] }; });
+    var un = await env.DB.prepare("SELECT COUNT(*) n FROM q08_reader_tests WHERE role = 'panel_unavailable' AND " + since).first();
+    out.panel_unavailable = un ? un.n : 0;
+    out.recorded = out.by_family.length > 0 || out.panel_unavailable > 0;
+  } catch (e) {}
+  return out;
+}
+function panelRows(panel, round) {
+  return panel.judges.map(function (j) { return { round: round, role: "judge", model: j.model, family: j.family, would_read: j.would_read, score: j.score, tells: j.tells, fix: j.fix, pass: j.pass }; });
+}
+
+function buildPrompt(friction, fewShot, recentStructures, opts) {
   var parts = [Q08_DIRECTIVE];
   parts.push("Remember: your final output line must be the verdict: 'worth your time: yes|flat|no \u2014 justification'.");
   if (fewShot && fewShot.length > 0) {
@@ -416,7 +625,17 @@ function buildPrompt(friction, fewShot, recentStructures) {
       parts.push(s.slice(0, 200));
     }
   }
-  parts.push("\n--- SIGNAL ---");
+  var banned = opts && opts.banned || [];
+  if (banned.length) {
+    parts.push("\n--- OVERUSED PRECEDENTS ON THIS SITE (BANNED: pick a different real case, or use none) ---");
+    parts.push(banned.map(function (b) { return b.label; }).join("; "));
+  }
+  var notes = opts && opts.ownerNotes || [];
+  if (notes.length) {
+    parts.push("\n--- OWNER EDITORIAL DIRECTIVES (from the publication's editor, authenticated; they outrank the style defaults above, never the FACTS rule or the hard constraints) ---");
+    for (var n of notes) parts.push("- " + n);
+  }
+  parts.push("\n--- SIGNAL (the field names and the signal_strength value are internal pipeline metadata: never mention them in the essay) ---");
   parts.push("core_concept: " + friction.core_concept);
   parts.push("friction_point: " + friction.friction_point);
   parts.push("signal_strength: " + friction.signal_strength);
@@ -450,13 +669,13 @@ async function composeTemperature(env) {
   try { var r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = ?1").bind(TEMP_KEY).first(); return parseTemperature(r && r.value); }
   catch (e) { return TEMP_DEFAULT; }
 }
-async function compose(env, prompt) {
+async function compose(env, prompt, banned, order) {
   var temperature = await composeTemperature(env);
   var lastErr;
   // TITLE-PROMOTE-1: compliance-driven fallback -- keep the best draft across
   // models rather than returning the first long-enough one gate-unchecked.
   var best = null;
-  for (var modelId of COMPOSE_MODELS) {
+  for (var modelId of (order || COMPOSE_MODELS)) {
     try {
       var resp = await env.AI.run(modelId, {
         messages: [{ role: "user", content: prompt }],
@@ -467,7 +686,7 @@ async function compose(env, prompt) {
       var text = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
       if (!text || text.length <= 200) continue;
       var norm = normalizeDraft(text);
-      var g = gate(norm);
+      var g = gate(norm, banned);
       if (g.ok) return { text: norm, model: modelId };
       if (!best || norm.length > best.text.length) best = { text: norm, model: modelId, problems: g.problems };
     } catch (e) {
@@ -558,7 +777,7 @@ function normalizeDraft(text) {
   return t;
 }
 
-function gate(text) {
+function gate(text, banned) {
   // Enforce LONG-FORM PROSE with a hook, not lists:
   // 1. length 2. concrete title 3. no handles 4. no babble 5. prose-dominant.
   var problems = [];
@@ -598,6 +817,14 @@ function gate(text) {
   if (absN >= 3) problems.push("abstraction-summary phrases x" + absN + " (e.g. 'structural dynamic') \u2014 state the mechanism instead of labelling it");
   for (var lt of LABEL_TITLE_RES) {
     if (lt.test(title)) { problems.push("label title \u2014 names a category, not a mechanism: '" + title.slice(0, 60) + "'"); break; }
+  }
+  // Q08-QUALITY-1: a Title Case title reads as a label; the pipeline's own field names must not reach the reader; a precedent the
+  // site already overuses is rejected so the next essay finds a different case.
+  var tw = title.split(/\s+/).filter(Boolean);
+  if (tw.length >= 4 && tw.filter(function (w) { return /^[A-Z]/.test(w); }).length / tw.length >= 0.75) problems.push("Title Case title reads as a label, not a sentence: '" + title.slice(0, 60) + "'");
+  if (/\b(?:signal_strength|friction_point|core_concept)\b|\bsignal strength (?:of|was|is|value)\s+[0-9.]+/i.test(text)) problems.push("pipeline metadata in the essay ('signal_strength', 'friction_point', 'core_concept' or a signal strength value) - open with what happened instead");
+  if (banned && banned.length) {
+    for (var bp of banned) { if (bp.re.test(text)) { problems.push("overused precedent on this site: " + bp.label + " - use a different real case, or none"); break; } }
   }
   if (/\b(?:score|rating|ratio|reputation) of \d+\.\d+\b/i.test(body)) problems.push("invented decimal metric \u2014 no fabricated scores");
   if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier \u2014 no fabricated IDs");
@@ -676,6 +903,7 @@ async function persistPiece(env, piece, signal, story, model) {
 // ---------------------------------------------------------------------------
 // 7. Feedback loop \u2014 promote top 15%, purge bottom 15%
 // ---------------------------------------------------------------------------
+var OWNER_VERDICT_WEIGHT = 3;
 async function feedbackScan(env) {
   // Rank prompt_pool by READER VERDICTS (worth your time?) \u2014 votes, not views.
   var rows = await env.DB.prepare(
@@ -685,6 +913,16 @@ async function feedbackScan(env) {
     "FROM prompt_pool pp JOIN published_pieces p ON p.id = pp.piece_id WHERE pp.active = 1"
   ).all();
   var all = rows.results || [];
+  // Q08-QUALITY-1: the owner's verdict (signed in at fleet.qnfo.org, qnfo-audit q08_owner_verdicts) counts 3 votes, so one
+  // calibrating verdict can clear the 3-vote minimum while reader volume is low.
+  try {
+    if (env.AUDIT) {
+      var ov = await env.AUDIT.prepare("SELECT slug, signal FROM q08_owner_verdicts").all();
+      var ow = {};
+      for (var o of (ov.results || [])) { var k = String(o.slug); ow[k] = ow[k] || { g: 0, b: 0 }; if (o.signal === "good") ow[k].g++; else if (o.signal === "flat" || o.signal === "no") ow[k].b++; }
+      for (var ar of all) { var w = ow[String(ar.slug)]; if (w) { ar.g = (Number(ar.g) || 0) + w.g * OWNER_VERDICT_WEIGHT; ar.b = (Number(ar.b) || 0) + w.b * OWNER_VERDICT_WEIGHT; } }
+    }
+  } catch (e) {}
   var promoted = 0, purged = 0;
   for (var r of all) {
     var g = Number(r.g) || 0, b = Number(r.b) || 0;
@@ -746,6 +984,35 @@ async function emitContentSignal(env, piece, saved) {
   }
 }
 
+// Q08-ENSEMBLE-1. Levels: 1 writer (family W) -> 0 deterministic gate (uncorrelated with every model) -> 2 reader panel of two small
+// models from families other than W -> 3 editor from the other writer family, editing the draft against the panel's notes ->
+// 4 fresh panel from families other than W, the editor and the first panel where the pool allows. Publish only on a passing last
+// read. A panel with no valid verdict fails open (the gate already passed), so a model outage never stalls q08; every such case is
+// written as a 'panel_unavailable' row, so a panel that silently never runs shows in /api/ensemble and in the unavailable-share metric.
+async function runLevels(env, a) {
+  var piece = a.piece, gateResult = a.gateResult, banned = a.banned, rows = [];
+  if (!gateResult.ok) return { piece: piece, gateResult: gateResult, rows: rows };
+  var writerFam = familyOf(piece.model);
+  var seed = seedOf(a.seedText);
+  var p1 = await panelRead(env, piece.text, [writerFam], seed, 2);
+  if (!p1) { rows.push({ round: 1, role: "panel_unavailable", model: "", family: "", pass: 1 }); return { piece: piece, gateResult: gateResult, rows: rows }; }
+  rows = rows.concat(panelRows(p1, 1));
+  if (p1.pass) return { piece: piece, gateResult: gateResult, rows: rows };
+  var editOrder = COMPOSE_MODELS.filter(function (m) { return familyOf(m) !== writerFam; }).concat(COMPOSE_MODELS.filter(function (m) { return familyOf(m) === writerFam; }));
+  var edPrompt = a.prompt + "\n\n--- EDITOR PASS: below is a draft by another writer. Two independent readers from different model families would not read it to the end (mean score " + p1.mean + " of 5). What they said to fix: " + p1.fix + (p1.tells.length ? " Phrases they flagged as generic machine prose: " + p1.tells.join(" | ") + "." : "") + " Edit it, do not start over: keep every fact and the same case, keep the title line first and the verdict line last, replace abstractions with people doing things, vary sentence length, cut anything that only restates. Return the full edited essay. ---\n\n--- DRAFT ---\n" + piece.text;
+  var ed = null;
+  try { ed = await compose(env, edPrompt, banned, editOrder); } catch (e) { ed = null; }
+  var edOk = !!(ed && ed.text && gate(ed.text, banned).ok);
+  if (!edOk) return { piece: piece, gateResult: { ok: false, problems: ["ensemble: the editor's draft failed the gate - " + (p1.fix || "no fix given")] }, rows: rows };
+  var edFam = familyOf(ed.model);
+  var usedFam = [writerFam, edFam].concat(p1.judges.map(function (j) { return j.family; }));
+  var p2 = await panelRead(env, ed.text, usedFam, seed + 1, 2);
+  if (!p2) p2 = await panelRead(env, ed.text, [writerFam, edFam], seed + 1, 2);
+  if (p2) rows = rows.concat(panelRows(p2, 2)); else rows.push({ round: 2, role: "panel_unavailable", model: "", family: "", pass: 1 });
+  rows.push({ round: 2, role: "editor", model: ed.model, family: edFam, pass: p2 ? p2.pass : true });
+  if (!p2 || p2.pass) return { piece: ed, gateResult: gateResult, rows: rows };
+  return { piece: piece, gateResult: { ok: false, problems: ["ensemble: the edited draft was still not worth reading (panel mean " + p2.mean + " of 5) - " + (p2.fix || "no fix given")] }, rows: rows };
+}
 async function generate(env) {
   var t0 = Date.now();
   // Daily cap check
@@ -756,6 +1023,12 @@ async function generate(env) {
   var cap = await dailyCap(env);
   if (todayN >= cap) {
     return { ok: false, reason: "daily cap reached (" + todayN + "/" + cap + (cap < MAX_PER_DAY ? ", ops_config " + CAP_KEY : "") + ")" };
+  }
+  // Q08-QUALITY-1: attempts are bounded at twice the publish cap, so reader-test rounds cannot add model calls beyond what the
+  // lower cap saves (fleet_budget caps are breached; CORE PROMPT rule 8 forbids adding paid calls).
+  var attempts = await env.DB.prepare("SELECT COUNT(*) n FROM engine_runs WHERE ran_at >= datetime('now','start of day') AND status IN ('ok','gate_failed')").first().catch(function () { return { n: 0 }; });
+  if ((attempts && attempts.n || 0) >= cap * 2) {
+    return { ok: false, reason: "daily attempt cap reached (" + attempts.n + "/" + (cap * 2) + ")" };
   }
   // Scrape + rank \u2014 three sources (break the filter bubble)
   var stories = [];
@@ -801,16 +1074,19 @@ async function generate(env) {
   ).all();
   var recentStructures = (recentRows.results || []).map(function(r){ return r.structure_md; });
   // Compose
-  var prompt = buildPrompt(friction, fewShot, recentStructures);
-  var piece  = await compose(env, prompt);
+  var recentBodies = await env.DB.prepare("SELECT body_md FROM published_pieces ORDER BY published_at DESC LIMIT 8").all().catch(function () { return { results: [] }; });
+  var banned = overusedPrecedents((recentBodies.results || []).map(function (r) { return r.body_md; }), 2);
+  var ownerNotes = await ownerDirectives(env);
+  var prompt = buildPrompt(friction, fewShot, recentStructures, { banned: banned, ownerNotes: ownerNotes });
+  var piece  = await compose(env, prompt, banned);
   // Gate \u2014 one corrective retry on failure
-  var gateResult = gate(piece.text);
+  var gateResult = gate(piece.text, banned);
   if (!gateResult.ok) {
     var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure \u2014 continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay \u2014 fixing only these issues ---\n" + gateResult.problems.join("; ");
     var retryPiece = null;
-    try { retryPiece = await compose(env, retryPrompt); } catch (e) { retryPiece = null; }
+    try { retryPiece = await compose(env, retryPrompt, banned); } catch (e) { retryPiece = null; }
     if (retryPiece && retryPiece.text) {
-      var retryGate = gate(retryPiece.text);
+      var retryGate = gate(retryPiece.text, banned);
       if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
       else if (retryGate.problems.length === 1 && /verdict/i.test(retryGate.problems[0]) && retryGate.problems[0].indexOf("self-verdict") < 0) {
         // Verdict-only micro-call: one cheap compose asking for exactly the verdict line.
@@ -819,14 +1095,18 @@ async function generate(env) {
           var vm2 = (vp && vp.text || "").match(/worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-]\s*\S[^\n]*$/im);
           if (vm2) {
             retryPiece.text = retryPiece.text.replace(/\s*$/, "") + "\n\n" + vm2[0];
-            retryGate = gate(retryPiece.text);
+            retryGate = gate(retryPiece.text, banned);
             if (retryGate.ok) { piece = retryPiece; gateResult = retryGate; }
           }
         } catch (e) {}
       }
     }
   }
+  var lv = await runLevels(env, { piece: piece, prompt: prompt, banned: banned, seedText: story.title || "", gateResult: gateResult });
+  piece = lv.piece; gateResult = lv.gateResult;
+  var readerRows = lv.rows;
   if (!gateResult.ok) {
+    await saveReaderTests(env, (story.source || "hn") + ":" + String(story.id || ""), readerRows);
     // Mark the signal processed so the same story is not retried by the next runs.
     try {
       await env.DB.prepare(
@@ -842,6 +1122,7 @@ async function generate(env) {
   piece.text = piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
   // Persist
   var saved = await persistPiece(env, piece, friction, story, piece.model);
+  await saveReaderTests(env, saved.slug, readerRows);
   // Feedback loop. MUST be awaited: as a floating promise with no ctx.waitUntil it
   // was truncated by the Worker runtime once the response returned, so the promotion
   // loop never completed and the reader-proven pool stayed empty (feedback_score
@@ -994,7 +1275,7 @@ function renderIndex(pieces) {
 function renderPiece(p) {
   var body = mdToHtml(p.body_md || "").replace(/^\s*<h1>[\s\S]*?<\/h1>\s*/, "");
   var refs = renderSources(p.sources_json);
-  var fb = '<form class="q08-fb" method="post"><span>Was this worth your time?</span><button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=good">Yes</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=flat">Flat</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=no">No</button></form>';
+  var fb = '<form class="q08-fb" method="post"><span>Was this worth your time?</span><textarea class="q-input" name="note" maxlength="280" rows="2" style="flex-basis:100%;order:2" placeholder="Optional: what was missing?" aria-label="Optional note: what was missing?"></textarea><button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=good">Yes</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=flat">Flat</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=no">No</button></form>';
   var date = (p.published_at || "").slice(0, 10);
   var desc = q08Lede(p.body_md).slice(0, 160);
   var html = '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">\u2190 Index</a></p><h1 class="q08-t">' + escHtml(p.title) + '</h1><p class="q-meta" style="margin:0 0 28px"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.core_concept ? ' \u00b7 <span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "") + "</p>" +
@@ -1177,12 +1458,24 @@ async function stallDetector(env) {
     await env.AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES ('q08-signal-engine', 'warn', ?1)").bind(title).run().catch(function () {});
   } catch (e) {}
 }
+// Q08-NOTE-1: a visitor note is stored for the owner to read and is never part of any prompt. Plain text only: control
+// characters and angle brackets are dropped, links become [link], whitespace collapses, 280 characters at most.
+function cleanNote(v) {
+  var t = String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/https?:\/\/\S+/gi, "[link]").replace(/\s+/g, " ").trim().slice(0, 280);
+  return t || null;
+}
+// Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
+export const __quality = { gate: gate, overusedPrecedents: overusedPrecedents, parseReaderVerdict: parseReaderVerdict, buildPrompt: buildPrompt, ownerDirectives: ownerDirectives, readerTest: readerTest, pickPanel: pickPanel, familyOf: familyOf, aggregatePanel: aggregatePanel, panelRead: panelRead, effectiveVotes: effectiveVotes, PANEL_POOL: PANEL_POOL, ensembleReport: ensembleReport, saveReaderTests: saveReaderTests, runLevels: runLevels, panelUnavailableShare: panelUnavailableShare, ensureReaderTable: ensureReaderTable, OWNER_VERDICT_WEIGHT: OWNER_VERDICT_WEIGHT, REGISTER_EXEMPLAR: REGISTER_EXEMPLAR };
+
 export default {
   async fetch(req, env, ctx) {
     env = __aiAttrEnv(env, "q08-signal-engine", "AI", "AUDIT");
     var url  = new URL(req.url);
     var path = url.pathname.replace(/\/+$/, "") || "/";
 
+    if (path === "/api/ensemble") {
+      return json(Object.assign({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso() }, await ensembleReport(env)));
+    }
     if (path === "/api/metrics") {
       return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), windows: { "7d": await metrics7d(env) } });
     }
@@ -1191,7 +1484,7 @@ export default {
       var cnt = await env.DB.prepare("SELECT COUNT(*) n FROM published_pieces").first().catch(() => ({n:0}));
       var last = await env.DB.prepare("SELECT slug, title, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 1").first().catch(() => null);
       var runs = await env.DB.prepare("SELECT status, COUNT(*) n FROM engine_runs GROUP BY status").all().catch(() => ({results:[]}));
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "/run is unauthenticated but rate-limited to 5 per IP per hour", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], metrics_7d: m7, pieces: cnt.n, daily_cap: await dailyCap(env), daily_cap_key: "ops_config " + CAP_KEY, last, runs: runs.results });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit", "reader-test", "owner-editorial-directives", "owner-verdict-weight"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "/run is unauthenticated but rate-limited to 5 per IP per hour", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], metrics_7d: m7, pieces: cnt.n, daily_cap: await dailyCap(env), daily_cap_key: "ops_config " + CAP_KEY, last, runs: runs.results });
     }
 
     if (path === "/run" && req.method === "POST") {
@@ -1288,8 +1581,12 @@ export default {
       if (prev) return json({ ok: true, updated: false, note: "vote already recorded" });
       var rate = await env.DB.prepare("SELECT COUNT(*) n FROM q08_feedback WHERE ip_key = ? AND created_at > datetime('now','-1 hour')").bind(ipKey).first().catch(function(){ return { n: 0 }; });
       if ((rate && rate.n || 0) >= 5) return json({ ok: false, error: "rate limited" }, 429);
-      await env.DB.prepare("INSERT OR IGNORE INTO q08_feedback (slug, signal, ip_key, created_at) VALUES (?,?,?,?)").bind(fslug, s, ipKey, nowIso()).run();
-      return json({ ok: true, recorded: s });
+      var fnote = null;
+      try {
+        if (String(req.headers.get("Content-Type") || "").indexOf("form") >= 0) fnote = cleanNote((await req.formData()).get("note"));
+      } catch (e) { fnote = null; }
+      await env.DB.prepare("INSERT OR IGNORE INTO q08_feedback (slug, signal, ip_key, note, created_at) VALUES (?,?,?,?,?)").bind(fslug, s, ipKey, fnote, nowIso()).run();
+      return json({ ok: true, recorded: s, note_stored: !!fnote });
     }
     if (path === "/feed.xml") {
       var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 20").all();
