@@ -144,6 +144,21 @@ because each one was broken at least once; the linked issue holds the evidence.
   (zenodo_versions_per_flagship read 1 while the true minimum was 3: two flagships were unmeasured, #1754). An action the
   session is refused is handed to the owner with the reason, not retried.
 
+## Writing that outsiders read (ENSEMBLE-POLICY-1)
+- Read `docs/ENSEMBLE-POLICY.md` before adding or changing a worker that writes prose for readers outside the fleet. LLM errors are
+  correlated (a 9-judge, 7-family panel is worth about 2.2 votes), so layers must come from disjoint model families, stay few and
+  small, keep the non-model layers (deterministic gate, reader votes, owner verdict), record their verdicts, and add no net model
+  calls while a `fleet_budget` cap is breached.
+
+## One priority queue, no due dates (PRIORITY-QUEUE-1)
+- Owner directive 2026-10-03: dates are not important, the order of priority is. D1 `qnfo-audit.v_issue_queue` is the
+  master queue: every open issue with `pos`, ordered critical, high, medium, low, then oldest first. A loop that picks issues
+  orders by `CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END`
+  (then its own tie-break), never by id or date alone, and never filters critical out.
+- Do not set or rely on `issue_triage.sla_due_at`: new issues are due on arrival (trigger `agent_issues_autotriage2_ins`) and
+  the SLA views report only untriaged issues. Never write "+7 days" or another future date into it.
+  See migrations/2026-10-03-priority-queue.sql (backups and rollback in its header).
+
 ## Issues and evidence
 - Open work lives in D1 `qnfo-audit.agent_issues`. Close an issue only with evidence in `issue_triage.close_evidence`
   (a live measurement, not "deployed").

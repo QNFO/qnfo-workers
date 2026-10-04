@@ -9,11 +9,13 @@
 //   agent_issue escalation. FIX 2026-09-15: checker max_tokens 1000->3000 for the reasoning model.
 // v0.7.19 POST-ID-UTM-1 (#1712, 2026-10-01): UTM tags on qnfo links, post ids persisted, weekly cadence cap
 //   (SOCIAL_WEEKLY_CAP, default 2) and the pipeline_flags.social_paused kill switch on both drains.
+// v0.7.35 SOCIAL-POST-TRUNCATION-1 (#1902, pillar: reach): postText fits the UNTAGGED text and puts the UTM only in each link
+//   facet uri (tagFacets), so tracking costs no visible characters and the prose is never cut for it; stored_text keeps the tagged form.
 // Secrets: BSKY_HANDLE, BSKY_APP_PASS, SOCIAL_TOKEN, GATEWAY_SOCIAL_TOKEN, BUFFER_TOKEN, OPS_KEY.
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.7.34-reach-select";
+var VERSION = "0.7.35-link-facet-utm";
 // 0.7.34 (2026-10-03, owner directive "wire an ideation loop so the fleet generates and queues the next reach work itself,
 // without asking", pillar: reach): REACH-SELECT-1 + REACH-REFILL-1. Measured before: the Zenodo scan composed a thread for
 // every new paper (10 on 2026-10-03 06:0xZ, nearly all ultrametric programme, which STRATEGY 2.3 keeps out of outreach),
@@ -218,6 +220,17 @@ function tagAndFit(text, max, source, campaign) {
   const fit = fitKeepUrls(plain, max);
   return fit !== null ? fit : truncateSafe(plain, max);
 }
+// SOCIAL-POST-TRUNCATION-1 (0.7.35, agent_issues #1902): the visible post text is fitted WITHOUT the UTM parameters (about 55
+// characters per qnfo link), and the tracking rides only in each link facet's uri. Before this, tagAndFit lengthened every
+// qnfo link and then fitKeepUrls cut the prose to make room, so the 2026-10-02 launch post went out ending "Status: open…".
+// A facet whose host is not a qnfo host keeps its uri (utmTag leaves other hosts and already-tagged links alone).
+function tagFacets(facets, source, campaign) {
+  return (facets || []).map(function(f) {
+    return Object.assign({}, f, { features: (f.features || []).map(function(ft) {
+      return ft && ft.$type === 'app.bsky.richtext.facet#link' ? Object.assign({}, ft, { uri: utmTag(ft.uri, source, campaign) }) : ft;
+    }) });
+  });
+}
 // post_uri value: the Bluesky URI alone, a lone 'buffer:<id>', or (both) a small JSON object keyed by utm_source.
 function postUriValue(bskyUri, bufferResult) {
   const ids = {};
@@ -366,9 +379,13 @@ async function postText(s, text, reply, opts) {
   opts = opts || {};
   // POST-ID-UTM-1 (#1712, 2026-10-01): tag qnfo links, then fit to 290 code points (inside Bluesky's 300 graphemes) by
   // shortening the prose, never a URL. Facets and the link card below are built from this final text.
-  const record = { text: tagAndFit(text, 290, opts.utmSource || 'bluesky', opts.campaign), createdAt: (opts.createdAt || new Date().toISOString()) };
+  // SOCIAL-POST-TRUNCATION-1 (0.7.35): fit the untagged text, then put the UTM on the facet uri only (see tagFacets).
+  const plainText = String(text || '');
+  let shown = fitKeepUrls(plainText, 290);
+  if (shown === null) shown = truncateSafe(plainText, 290);
+  const record = { text: shown, createdAt: (opts.createdAt || new Date().toISOString()) };
   if (reply) record.reply = reply;
-  const facets = buildFacets(record.text);
+  const facets = tagFacets(buildFacets(record.text), opts.utmSource || 'bluesky', opts.campaign);
   if (facets.length) record.facets = facets;
   if (opts.embed && facets.length) {
     record.embed = {
@@ -396,7 +413,13 @@ async function postText(s, text, reply, opts) {
     // POST-SENT-TEXT-1 (0.7.31, #1712): hand back the text exactly as posted (tagged and fitted), so the caller can store
     // it. Before this the tagged text lived only on Bluesky and D1 kept the untagged draft, so no probe could see a UTM.
     const out = await r.json();
-    if (out && typeof out === 'object') out.text = record.text;
+    if (out && typeof out === 'object') {
+      out.text = record.text;
+      // The copy kept in D1 (POST-SENT-TEXT-1) shows the link as the facet resolves it, so a probe on social_threads.posts
+      // LIKE '%utm_source=%' still sees the tag; the public post itself shows the short link.
+      out.stored_text = utmTagText(record.text, opts.utmSource || 'bluesky', opts.campaign);
+      out.link_uris = facets.map(function(f) { return f.features[0] && f.features[0].uri; }).filter(Boolean); // tagged targets of the visible links
+    }
     return out;
   }
   throw lastErr || new Error('post retries exhausted');
@@ -428,7 +451,7 @@ async function postThread(s, posts, threadOpts) {
     const res = await postText(s, text, reply, opts);
     uris.push(res.uri);
     // POST-SENT-TEXT-1: a caller that passes threadOpts.sent = [] gets the posted texts, in order.
-    if (Array.isArray(threadOpts.sent)) threadOpts.sent.push(typeof res.text === 'string' ? res.text : text);
+    if (Array.isArray(threadOpts.sent)) threadOpts.sent.push(typeof res.stored_text === 'string' ? res.stored_text : (typeof res.text === 'string' ? res.text : text));
     if (i === 0) root = { uri: res.uri, cid: res.cid };
     parent = { uri: res.uri, cid: res.cid };
   }
@@ -1138,7 +1161,7 @@ async function drainDissemination(env, opts) {
       const handle = String((s && s.handle) || env.BSKY_HANDLE || '');
       const postUrl = handle && rkey ? 'https://bsky.app/profile/' + handle + '/post/' + rkey : r.uri;
       // POST-SENT-TEXT-1 (0.7.31, #1712): post_text_snippet holds the text as posted (UTM tag included) on success.
-      await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, post_text_snippet=COALESCE(?, post_text_snippet), updated_at=datetime('now') WHERE id=?").bind(postUrl, r.uri, typeof r.text === 'string' && r.text ? r.text : null, row.id).run();
+      await env.DB.prepare("UPDATE dissemination_tracker SET action='posted', posted_at=datetime('now'), post_url=?, post_id=?, post_text_snippet=COALESCE(?, post_text_snippet), updated_at=datetime('now') WHERE id=?").bind(postUrl, r.uri, typeof r.stored_text === 'string' && r.stored_text ? r.stored_text : (typeof r.text === 'string' && r.text ? r.text : null), row.id).run();
       posted++;
       if (decision) learner = await learnerRecordPost(env, decision, r.uri, opts.nowMs);
     } catch (e) {
@@ -1985,7 +2008,7 @@ export default {
         if (g.status) return json(g.body, g.status);
         const s = await session(env);
         const r = await postText(s, g.texts[0], null, { campaign: b.slug ? String(b.slug) : undefined });
-        const slug = await recordAdhoc(env, 'post', b.title || g.texts[0].slice(0, 120), typeof r.text === 'string' && r.text ? [r.text] : g.texts, r.uri);
+        const slug = await recordAdhoc(env, 'post', b.title || g.texts[0].slice(0, 120), typeof r.stored_text === 'string' && r.stored_text ? [r.stored_text] : (typeof r.text === 'string' && r.text ? [r.text] : g.texts), r.uri);
         return json({ ok: true, uri: r.uri, slug: slug });
       }
       if (p === '/cross' && m === 'POST') {
@@ -2163,7 +2186,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
+export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick,
   learnerEngagementRate, learnerReport, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF };

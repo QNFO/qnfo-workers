@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.2.15-escalate-on-cron"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.2.16-codeagent"; // FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -636,7 +636,7 @@ export default {
       await assessIntegration(env);
       ctx.waitUntil(evReview(env).catch(function (e) { console.error('evReview failed', String(e && e.message || e)); })); // OBSERVABILITY-ESCALATION-1 (#1809): escalate undigested alerts hourly
     } catch (e) { console.error('scheduled failed', String(e && e.message || e)); }
-    ctx.waitUntil(Promise.resolve());
+    // No-op placeholder
   },
 
   async fetch(req, env, ctx) {

@@ -6,7 +6,9 @@
     "applier-rot-triage.json",
     "apply-pending-report.json",
     "apply-pending.json",
+    "attach-ask-qwav-route.json",
     "attach-lifecycle-custom-domain.json",
+    "attach-surface-routes.json",
     "backlog-health-cheap.json",
     "backlog-repo-sync.json",
     "binding-install-gate-1.json",
@@ -53,6 +55,6 @@
     "version-precedence-2.json",
     "version-quote-1.json"
   ],
-  "count": 50,
+  "count": 52,
   "note": "Only these filenames exist in ci-status/ for this run. Any other ci-status/<name>.json is absent by construction - do not poll it."
 }

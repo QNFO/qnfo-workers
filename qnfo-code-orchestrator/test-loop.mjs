@@ -362,7 +362,7 @@ function fakeLoader(spinMs) {
 // ---- ISSUE-INTAKE-1: an opted-in open issue becomes exactly one queued task ----
 {
   const { env } = envWith([]);
-  await env.AUDIT_DB.prepare("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT)").run();
+  await env.AUDIT_DB.prepare("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT)").run();
   const ins = (id, title, desc, st) => env.AUDIT_DB.prepare("INSERT INTO agent_issues (id,title,description,status) VALUES (?,?,?,?)").bind(id, title, desc, st).run();
   await ins(1, "Fix typo", "Fix the typo in the intro.\ncode-task: repo=qnfo-workers path=docs/x.md", "open");
   await ins(2, "No marker", "Please look at docs/y.md", "open");
@@ -372,6 +372,18 @@ function fakeLoader(spinMs) {
   await call(env, "POST", "/v1/tick", { maxSteps: 0 });
   const rows = (await env.AUDIT_DB.prepare("SELECT repo, path, goal FROM code_tasks").all()).results;
   check("intake: only the opted-in open issue became a task, once (deduped over two ticks)", rows.length === 1 && rows[0].path === "docs/x.md" && /^\[issue #1\] Fix typo/.test(rows[0].goal) && !/code-task:/.test(rows[0].goal), rows);
+}
+// ---- PRIORITY-QUEUE-1: intake follows the master queue (critical before an older medium) ----
+{
+  const { env } = envWith([]);
+  await env.AUDIT_DB.prepare("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT)").run();
+  const ins = (id, title, desc, pr) => env.AUDIT_DB.prepare("INSERT INTO agent_issues (id,title,description,status,priority) VALUES (?,?,?,'open',?)").bind(id, title, desc, pr).run();
+  await ins(10, "Older medium", "code-task: repo=qnfo-workers path=docs/m.md", "medium");
+  await ins(11, "Newer critical", "code-task: repo=qnfo-workers path=docs/c.md", "critical");
+  await ins(12, "Newer low", "code-task: repo=qnfo-workers path=docs/l.md", "low");
+  await call(env, "POST", "/v1/tick", { maxSteps: 0 });
+  const rows = (await env.AUDIT_DB.prepare("SELECT path FROM code_tasks ORDER BY rowid").all()).results.map((r) => r.path);
+  check("intake: critical is taken before an older medium, low waits (master queue order)", rows[0] === "docs/c.md" && rows.indexOf("docs/l.md") < 0, rows);
 }
 // ---- KEYLESS-READ-1: with no CODE_AGENT_KEY the read step uses the public raw endpoint ----
 {
