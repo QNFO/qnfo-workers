@@ -14,7 +14,12 @@ lost), then PUT the worker secret under the secrets:<worker> lease, then verify 
 Values are never printed (this is a public repository and its Actions logs are public); only HTTP statuses are.
 
   python3 scripts/issue_owner_client_keys.py issue [host ...]   # hosts: ai ops personal (default all)
-  python3 scripts/issue_owner_client_keys.py check              # probe each host with the stored key (no write)
+  python3 scripts/issue_owner_client_keys.py check              # probe each host with the stored key (no secret write)
+
+Both modes also refresh the owner-client probe ledger qnfo-audit.owner_client_probes (one row per
+host: http status + public-read flag, never the key). ai-health-prober monitors that ledger each cron
+and the remediation contract for issue 1886 verifies it, so a broken owner-client key is caught
+server-side and no rotation issue can close without a passing client probe (OWNER-CLIENT-PROBE-1).
 
 Requires CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. Exit 1 if any host fails verification.
 """
@@ -31,6 +36,7 @@ from secret_lock import secret_lock  # noqa: E402
 
 API = "https://api.cloudflare.com/client/v4"
 IDENTITY_DB = "6c26125a-908a-4774-9812-f1f0e60afc5f"  # qnfo-identity (private; bound only to qnfo-fleet-dashboard)
+AUDIT_DB = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"  # qnfo-audit (owner_client_probes ledger, OWNER-CLIENT-PROBE-1 #1886)
 UA = "QNFO-fleet-ci/1.0 (+https://qnfo.org; issue_owner_client_keys.py)"
 
 HOSTS = {
@@ -54,12 +60,38 @@ def cf(method, path, body=None):
             return e.code, {}
 
 
-def d1(sql, params=None):
+def d1(sql, params=None, db=None):
     acct = os.environ["CLOUDFLARE_ACCOUNT_ID"]
-    st, j = cf("POST", "/accounts/%s/d1/database/%s/query" % (acct, IDENTITY_DB), {"sql": sql, "params": params or []})
+    st, j = cf("POST", "/accounts/%s/d1/database/%s/query" % (acct, db or IDENTITY_DB), {"sql": sql, "params": params or []})
     if st != 200 or not j.get("success"):
         raise RuntimeError("D1 query failed HTTP %s" % st)
     return (j.get("result") or [{}])[0].get("results") or []
+
+
+PROBED = []  # per-host (host, http_status, public_read, ok) accumulated this run
+
+
+def record_probes(rows):
+    """OWNER-CLIENT-PROBE-1 (#1886): publish the owner-client probe ledger to qnfo-audit.
+
+    Why: the owner-client key has no other machine monitor. ai-health-prober reads this
+    ledger each cron and raises a self_heal_actions breach when it is stale or any host is
+    not ok, and the remediation contract for issue 1886 verifies the same ledger. One row per
+    host; the current run REPLACES the previous set, so a passing probe stays fresh and a
+    stopped producer ages out (observed -> 0) instead of passing forever on a stale green row.
+    No key material is ever written here, only the HTTP status and the public-read flag."""
+    if not rows:
+        return
+    try:
+        d1("CREATE TABLE IF NOT EXISTS owner_client_probes (id INTEGER PRIMARY KEY AUTOINCREMENT, host TEXT NOT NULL, http_status INTEGER, public_read INTEGER, ok INTEGER NOT NULL, checked_at TEXT NOT NULL, source TEXT)", db=AUDIT_DB)
+        d1("DELETE FROM owner_client_probes", db=AUDIT_DB)
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        for host, code, public, ok in rows:
+            d1("INSERT INTO owner_client_probes (host,http_status,public_read,ok,checked_at,source) VALUES (?,?,?,?,?,?)",
+               [host, int(code), 1 if public else 0, 1 if ok else 0, now, "owner-client-keys workflow"], db=AUDIT_DB)
+        print("RESULT probe-ledger: wrote %d rows to qnfo-audit.owner_client_probes" % len(rows))
+    except Exception as e:  # noqa: BLE001
+        print("RESULT probe-ledger: write failed %s" % str(e)[:160])
 
 
 def ensure_table():
@@ -112,6 +144,7 @@ def issue(host):
             ok = True
             break
     print("RESULT %s: NEW key -> HTTP %s public_read=%s verified=%s" % (host, code, public, ok))
+    PROBED.append((host, code, public, ok))
     if ok:
         d1("UPDATE owner_client_keys SET status='superseded' WHERE host=? AND status='active'", [host])
         d1("UPDATE owner_client_keys SET status='active', verified_at=? WHERE host=? AND key_value=?",
@@ -130,10 +163,12 @@ def check():
         if not rows:
             print("RESULT %s: no active key stored" % host)
             all_ok = False
+            PROBED.append((host, 0, False, False))
             continue
         code, public = probe(host, rows[0]["key_value"])
         good = code == 200 and not public
         print("RESULT %s: stored key -> HTTP %s public_read=%s ok=%s" % (host, code, public, good))
+        PROBED.append((host, code, public, good))
         all_ok = all_ok and good
     return all_ok
 
@@ -146,7 +181,9 @@ def main():
         print("CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required")
         return 2
     if sys.argv[1] == "check":
-        return 0 if check() else 1
+        ok = check()
+        record_probes(PROBED)
+        return 0 if ok else 1
     ensure_table()
     wanted = sys.argv[2:] or list(HOSTS)
     unknown = [w for w in wanted if w not in HOSTS]
@@ -154,6 +191,7 @@ def main():
         print("unknown host: %s" % ",".join(unknown))
         return 2
     results = [issue(w) for w in wanted]
+    record_probes(PROBED)
     return 0 if all(results) else 1
 
 

@@ -25,6 +25,31 @@ silently break the research/social/intent pipelines (CHANGE-AUDIT-FIRST-1).
 | API_KEY (personal) | personal-api | personal clients; personal-api's own /mcp + /v1 routes |
 | CLOUDFLARE_API_TOKEN | qnfo-ops (as CF_API_TOKEN) | 35 workflows/scripts; ~/.env; local deploy tooling |
 
+### Client consumers of the endpoint keys (OWNER-CLIENT-KEY-DRIFT-1, #1886, added 2026-10-04)
+A rotation is NOT complete until every CLIENT consumer holds the new value. The 2026-10-01 rotation
+updated the workers and the local stores but missed these owner-facing clients, which then got 401.
+They are updated by hand (the owner pastes the key) and each has a dedicated per-host "owner client"
+key issued by `scripts/issue_owner_client_keys.py` (ai -> `ROUTER_AUTH_KEY_2`, ops ->
+`OPS_ROUTER_AUTH_KEY_2`, personal -> `API_KEY`), so a client rotation never has to touch a worker's
+primary key or another consumer:
+
+| client | endpoint | model | key store |
+|---|---|---|---|
+| ChatBox (phone) | https://ai.qnfo.org | qnfo | %APPDATA%/xyz.chatboxapp.app/config.json |
+| ChatBox (phone) | https://ops.qnfo.org | ops | %APPDATA%/xyz.chatboxapp.app/config.json |
+| ChatBox (phone) | https://personal.qnfo.org | personal | %APPDATA%/xyz.chatboxapp.app/config.json |
+| DeepChat | https://ops.qnfo.org | ops | agent.db provider/apiKey + Roaming app-settings.json |
+| DeepChat (personal twin) | https://personal.qnfo.org | personal | agent.db provider/apiKey |
+
+**Rule (#1886):** a rotation or credential issue MUST NOT be closed without a PASSING owner-client
+probe. The probe is `scripts/issue_owner_client_keys.py check` (the `owner-client-keys` workflow): a
+1-token chat per host with the STORED client key, failing on 401 or unexpected public-read. It writes
+`qnfo-audit.owner_client_probes`, which `ai-health-prober` monitors every cron and which the
+remediation contract for issue 1886 verifies. Closing on a store -> client re-sync ALONE is forbidden:
+a re-sync from a store that itself holds a dead value (as happened 2026-10-04, when `~/.env` held dead
+router/personal values) cannot prove the client works. Never re-accept a value from the 2026-10-01
+exposure (`rk-f0e1…`, `sk-pl-v1-…`).
+
 ## Atomic procedure (per credential — do NOT interleave)
 1. **Generate** new value (32–48 bytes, hex/base64) in the credential store, not in shell history.
 2. **PUT** the worker secret(s) that hold it:
