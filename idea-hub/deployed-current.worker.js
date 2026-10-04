@@ -69,7 +69,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.4.0-qds";
+var VERSION = "1.5.0-private-ideas";
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -581,4 +581,41 @@ async function ideasCached(req, ctx, make) {
 }
 // ---- IDEAS-QDS-1:END ----
 
-export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "rss", "session-pages", "ideation", "qds-pages"],limitations:["read-only public surface: /api/ask, /api/proposals and /run answer 503", "only research-domain titles pass the public filter; personal, ops and quarantined threads are never shown", "ideation runs on the hourly :23 cron"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
+
+// IDEAS-PRIVATE-1 / CANONICAL-CF-1 (2026-10-04): QNFO Ideas is the OWNER's private feed. The read surfaces
+// (/, /index.html, /s/*, /api/sessions, /api/feed, /api/session/*, /rss.xml) require an owner bearer token.
+// Unauthenticated -> 401 (fail closed: no secret means private). Public questions go through Ask QWAV, not here.
+// POST /api/intake files an owner item (idea|paper|issue) into the intake with provenance, held for the gate.
+var GATED = new Set(['/','/index.html','/rss.xml','/api/sessions','/api/feed']);
+function ownerToken(env){return env.OWNER_TOKEN || env.SYNC_TOKEN || ''}
+function ownerOk(req,env){
+  var want=ownerToken(env);
+  if(!want||want.length<16)return false;
+  var h=req.headers.get('Authorization')||'';
+  var m=/^Bearer\s+(.+)$/i.exec(h.trim());
+  var sup=m?m[1].trim():'';
+  if(!sup){try{sup=new URL(req.url).searchParams.get('token')||''}catch(e){}}
+  if(!sup||sup.length!==want.length)return false;
+  var d=0;for(var i=0;i<want.length;i++)d|=want.charCodeAt(i)^sup.charCodeAt(i);
+  return d===0;
+}
+async function intake(req,env){
+  var b;try{b=await req.json()}catch(e){return json({error:'invalid JSON body'},400)}
+  var kind=String(b.kind||'idea').toLowerCase();
+  var title=clean(b.title||'',300);
+  var body=String(b.body||b.text||'').slice(0,200000);
+  if(!title&&!body)return json({error:'title or body required'},400);
+  var src='owner-chat', now=Date.now();
+  if(kind==='paper'){
+    var slug=String(b.slug||title).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,80)||('owner-'+now);
+    try{await env.LIVING_PAPER.prepare("INSERT OR IGNORE INTO papers (identifier,slug,title,authors,abstract,body_md,status,created_at,updated_at,version) VALUES (?,?,?,?,?,?,'draft',datetime('now'),datetime('now'),'0.0.1')").bind('owner-'+slug,slug,title||'Untitled','["Rowan Brad Quni-Gudzinas"]',clean(body,2000),body).run()}catch(e){return json({error:'paper insert failed: '+(e&&e.message||e)},500)}
+    return json({ok:true,kind:'paper',slug:slug,status:'draft',provenance:src,held:true});
+  }
+  if(kind==='issue'){
+    try{await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at) VALUES (?,?,?,?,?,'open',?,?)").bind(title||'Owner-filed item',body||title,src,(b.category||'owner-intake'),(b.priority||'medium'),now,now).run()}catch(e){return json({error:'issue insert failed: '+(e&&e.message||e)},500)}
+    return json({ok:true,kind:'issue',provenance:src,held:true});
+  }
+  try{await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name,idea,contact,status,created_at) VALUES (?,?,?,?,datetime('now'))").bind(src,(title?title+'\n\n':'')+body,'owner','new').run()}catch(e){return json({error:'idea insert failed: '+(e&&e.message||e)},500)}
+  return json({ok:true,kind:'idea',provenance:src,status:'new',held:true});
+}
+export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});if(GATED.has(u.pathname)||u.pathname.startsWith('/api/session/')||(u.pathname.startsWith('/s/')&&u.pathname.length>3)){if(!ownerOk(req,env))return json({error:'Authentication required',hint:'Authorization: Bearer <OWNER_TOKEN>'},401)}try{if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,private:true,public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["owner-private-ideas-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake"],limitations:["owner-private: /, /s/*, /rss.xml, /api/sessions, /api/session/* need Authorization: Bearer <OWNER_TOKEN>; /api/ask, /api/proposals and /run answer 503", "only research-domain titles pass the public filter; personal, ops and quarantined threads are never shown", "ideation runs on the hourly :23 cron"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
