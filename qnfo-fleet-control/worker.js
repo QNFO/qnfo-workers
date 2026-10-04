@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.113-branch-hygiene-2"; /* 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.114-codeagent"; /* 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -5151,6 +5151,22 @@ function cfcClassify(it, ctx) {
   if (CFC_DEADLINE_RE.test(body) && (used || out.in_fleet)) { out.klass = "deadline"; out.deadline_ms = cfcDeadlineMs(body); return out; }
   var launch = CFC_LAUNCH_RE.test(it.headline + " " + it.text.slice(0, 300));
   if (out.match && out.match.status === "rejected" && launch) { out.klass = "reopen"; return out; }
+  if (!out.match && !out.in_fleet && launch && prim.length && prim[0]) { out.klass = "launch"; return out; }
+  if (out.match && out.match.status === "in_use") { out.klass = "in_use_change"; return out; }
+  return out;
+  var cats = (it.products || []).map(function(p) { return String(p).toLowerCase(); });
+  var out = { klass: "noted", match: null, in_fleet: false, deadline_ms: null };
+  if (/waf release/i.test(it.title) || (cats.length && cats.every(function(c) { return CFC_NOISE[c]; }))) { out.klass = "noise"; return out; }
+  if (it.pub_ms == null || ctx.nowMs - it.pub_ms > CFC_RECENT_DAYS * 86400000) { out.klass = "old"; return out; }
+  var prim = it.primary ? [it.primary] : (it.products || []).slice(0, 1);
+  out.match = cfcMatch(prim, ctx.catalog);
+  var ft = cfcNorm(ctx.fleetText);
+  out.in_fleet = prim.some(function(p) { var n = cfcNorm(p); return n.length >= 4 && ft.indexOf(n) >= 0; });
+  var body = it.headline + " " + it.text;
+  var used = out.match && (out.match.status === "in_use" || out.match.status === "approved" || out.match.status === "reviewing");
+  if (CFC_DEADLINE_RE.test(body) && (used || out.in_fleet)) { out.klass = "deadline"; out.deadline_ms = cfcDeadlineMs(body); return out; }
+  var launch = CFC_LAUNCH_RE.test(it.headline + " " + it.text.slice(0, 300));
+  if (out.match && out.match.status === "rejected" && launch) { out.klass = "reopen"; return out; }
   if (!out.match && !out.in_fleet && launch && prim.length && prim[0]) { out.klass = "new_product"; return out; }
   if (out.match && out.match.status === "in_use") { out.klass = "in_use_change"; return out; }
   return out;
@@ -5228,6 +5244,25 @@ async function cfcRun(env, force) {
           issueLeft--; run.filed++; action = "filed";
         } else action = dup ? "already-open" : "capped";
       } else if (c.klass === "reopen" && reopenLeft > 0 && c.match) {
+  prev = c.match.status;
+  await env.AUDIT.prepare("UPDATE cloudflare_capability_catalog SET status='proposed', when_to_choose=COALESCE(when_to_choose,'') || ?2, last_synced=datetime('now') WHERE slug=?1 AND status='rejected'")
+    .bind(c.match.slug, " | cf-changelog " + new Date(it.pub_ms).toISOString().slice(0, 10) + ": " + it.headline.slice(0, 120) + " (was rejected; re-evaluate)").run();
+  reopenLeft--; run.reopened++; action = "reopened";
+} else if (c.klass === "new_product" && rowsLeft > 0) {
+  slug = cfcSlug(it.primary || it.products[0]);
+  var ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO cloudflare_capability_catalog (slug, need, product, when_to_choose, source, source_sha, status) VALUES (?1, ?2, ?3, ?4, 'cf-changelog', ?5, 'not_considered')")
+    .bind(slug, it.headline.slice(0, 180), it.primary || it.products[0], it.text.slice(0, 300), it.guid).run();
+  if (ins && ins.meta && ins.meta.changes) { rowsLeft--; run.new_rows++; action = "new-row"; } else action = "row-exists";
+} else if (c.klass === "launch" && reopenLeft > 0 && c.match) {
+  prev = c.match.status;
+  await env.AUDIT.prepare("UPDATE cloudflare_capability_catalog SET status='proposed', when_to_choose=COALESCE(when_to_choose,'') || ?2, last_synced=datetime('now') WHERE slug=?1 AND status IN ('proposed', 'not_considered')")
+    .bind(c.match.slug, " | cf-changelog " + new Date(it.pub_ms).toISOString().slice(0, 10) + ": " + it.headline.slice(0, 120) + " (was proposed/not_considered; re-evaluate)").run();
+  reopenLeft--; run.reopened++; action = "reopened";
+} else if (c.klass === "launch" && rowsLeft > 0) {
+  slug = cfcSlug(it.primary || it.products[0]);
+  var ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO cloudflare_capability_catalog (slug, need, product, when_to_choose, source, source_sha, status) VALUES (?1, ?2, ?3, ?4, 'cf-changelog', ?5, 'not_considered')")
+    .bind(slug, it.headline.slice(0, 180), it.primary || it.products[0], it.text.slice(0, 300), it.guid).run();
+  if (ins && ins.meta && ins.meta.changes) { rowsLeft--; run.new_rows++; action = "new-row"; } else action = "row-exists";
         prev = c.match.status;
         await env.AUDIT.prepare("UPDATE cloudflare_capability_catalog SET status='proposed', when_to_choose=COALESCE(when_to_choose,'') || ?2, last_synced=datetime('now') WHERE slug=?1 AND status='rejected'")
           .bind(c.match.slug, " | cf-changelog " + new Date(it.pub_ms).toISOString().slice(0, 10) + ": " + it.headline.slice(0, 120) + " (was rejected; re-evaluate)").run();
@@ -5268,6 +5303,12 @@ async function cfChangelogIfStale(env) {
   return r;
 }
 async function cfChangelogLatest(env) {
+  await cfcSchema(env);
+  var runs = await charterRows(env, "SELECT ts, status, items, fresh, deadlines, new_rows, reopened, filed, bytes, note FROM cf_changelog_runs ORDER BY id DESC LIMIT 5");
+  var items = await charterRows(env, "SELECT pub, title, link, products, klass, slug, action, issue_id FROM cf_changelog_items WHERE klass NOT IN ('noise','old') ORDER BY pub DESC LIMIT 40");
+  var byClass = await charterRows(env, "SELECT klass, COUNT(*) n FROM cf_changelog_items GROUP BY klass");
+  var leads = await charterRows(env, "SELECT pub, title, link, products, klass, slug, action, issue_id FROM cf_changelog_items WHERE klass IN ('in_use_change', 'launch') ORDER BY pub DESC LIMIT 40");
+  return { runs: runs, recent: items, by_class: byClass, leads: leads, metrics: await cfcMetrics(env) };
   await cfcSchema(env);
   var runs = await charterRows(env, "SELECT ts, status, items, fresh, deadlines, new_rows, reopened, filed, bytes, note FROM cf_changelog_runs ORDER BY id DESC LIMIT 5");
   var items = await charterRows(env, "SELECT pub, title, link, products, klass, slug, action, issue_id FROM cf_changelog_items WHERE klass NOT IN ('noise','old') ORDER BY pub DESC LIMIT 40");
