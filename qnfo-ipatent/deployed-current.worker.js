@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.2-fleet-link"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.3-codeagent"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -1157,6 +1157,11 @@ function renderExamplePage() {
 <h3>Abstract</h3><p class="para">${esc(EXAMPLE_SECTIONS.abstract || "")}</p>
 <h3>Reviewer notes from the model (support gaps)</h3><p class="para">${esc(EXAMPLE_SECTIONS.support_gaps || "")}</p>
 <a class="cta" href="/#draft">Draft your own, free</a><a class="cta alt" href="/guide">Read the provisional guide</a>
+<form action="/api/subscribe" method="post" style="margin-bottom: 20px;">
+  <input type="email" name="email" required placeholder="Enter your email" style="padding: 8px; margin-right: 10px; border: 1px solid var(--line);">
+  <input type="hidden" name="source" value="example">
+  <button type="submit" class="cta">Subscribe</button>
+</form>
 <footer><p>Share this example: ${shareLinks("https://ipatent.qnfo.org/example?utm_source=share&utm_medium=social&utm_campaign=ipatent-example", "A real AI-drafted provisional patent, and the five things it invented")}</p>
 <p class="mono">Built by Rowan Brad Quni-Gudzinas (<a href="https://orcid.org/0009-0002-4317-5604">ORCID</a>) at <a href="https://qnfo.org">QNFO</a>. Want a human review, iPatent for your team or institution, or to collaborate? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&utm_medium=referral&utm_campaign=ipatent">Work with me</a>. Not legal advice.</p></footer>
 </div>${fleetCtlLink(CANONICAL_ORIGIN + "/example")}</body></html>`;
