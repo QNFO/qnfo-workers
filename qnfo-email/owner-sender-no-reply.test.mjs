@@ -23,7 +23,7 @@ const fake = () => {
 const fail = [];
 const eq = (label, got, want) => { if (JSON.stringify(got) !== JSON.stringify(want)) fail.push(label + ": got " + JSON.stringify(got) + " want " + JSON.stringify(want)); };
 
-eq("version", VERSION, "2.2.5-owner-sender-no-reply");
+eq("version", VERSION, "2.3.1-itinerary-ingest");
 for (const [v, want] of [["rwnquni@outlook.com", true], ["Rowan <rowan.quni@outlook.com>", true], ["rowan.quni@qnfo.org", true],
                          ["ameliahughes@advancedresearchpub.com", false], ["", false], ["arne@green-coding.io", false]]) eq("isOwnerSender(" + v + ")", isOwnerSender(v), want);
 for (const [v, want] of [["Re: [handoff] A journal for interdisciplinary research", true],
