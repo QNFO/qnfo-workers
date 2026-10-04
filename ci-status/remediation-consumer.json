@@ -1,20 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3d87ed50aaa4",
- "due": 7,
+ "verifier": "remediation-consumer@057ebf6eb0f4",
+ "due": 20,
  "pass": 2,
- "fail": 4,
- "skipped": 1,
+ "fail": 15,
+ "skipped": 3,
  "contracts": [
-  {
-   "class": "PREDICT-WEEK-1",
-   "issue_id": 1908,
-   "verdict": "pass",
-   "expected": "predicting",
-   "observed": "predicting",
-   "written": true
-  },
   {
    "class": "EVID-1649-BRIEF",
    "issue_id": 1649,
@@ -32,32 +24,144 @@
    "reason": "probe returned no expected/observed pair"
   },
   {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
+   "class": "issue-1683",
+   "issue_id": 1683,
    "verdict": "fail",
-   "expected": "all-sources-ok",
-   "observed": "pending",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
+   "class": "issue-1836",
+   "issue_id": 1836,
    "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "pending",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "EVID-1711-REACH",
+   "class": "issue-1711",
    "issue_id": 1711,
    "verdict": "fail",
-   "expected": "seven-days",
-   "observed": "pending",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1730",
-   "issue_id": 1730,
+   "class": "issue-1726",
+   "issue_id": 1726,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "3",
+   "written": true
+  },
+  {
+   "class": "issue-1780",
+   "issue_id": 1780,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1713",
+   "issue_id": 1713,
+   "verdict": "fail",
+   "expected": "linkedin-connected+buffer-id+digest-3d",
+   "observed": "linkedin-rows=1,linkedin-buffer-posts=2,digest-days-since-2026-10-03=2,last-delivered=2026-10-04",
+   "written": true
+  },
+  {
+   "class": "EVID-1683-SPEND",
+   "issue_id": 1683,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-1802",
+   "issue_id": 1802,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "EVID-GATE-A2-PUBLISHV2",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "assert-ok",
+   "observed": "no-publish-yet",
+   "written": true
+  },
+  {
+   "class": "issue-1796",
+   "issue_id": 1796,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "3",
+   "written": true
+  },
+  {
+   "class": "issue-1902",
+   "issue_id": 1902,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1916",
+   "issue_id": 1916,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1955",
+   "issue_id": 1955,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1886",
+   "issue_id": 1886,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1905",
+   "issue_id": 1905,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "GCAL-CONNECTED-1",
+   "issue_id": 1816,
+   "verdict": "vacuous-probe-result",
+   "expected": "connected",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "vacuous-probe-result",
+   "expected": "connected",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-1800",
+   "issue_id": 1800,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
@@ -80,8 +184,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 21253,
- "head": "3d87ed50aaa42b84f64a62565e7ea7244b8e98df",
+ "spent_ms": 43955,
+ "head": "057ebf6eb0f484bba39f76743f104af57094c1f6",
  "job_status": "success",
- "ts": "2026-10-04T19:40:42Z"
+ "ts": "2026-10-04T21:58:39Z"
 }
