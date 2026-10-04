@@ -22,5 +22,12 @@ Endpoints:
                                     Personal feed events from personal-radar and personal-twin carry this link.
 - GET  /feedback?since=&limit=    -> (0.5.0, bearer) stored answers from calendar_feedback, newest first
 
+Owner questions (0.6.0, CONNECTION-PRODUCER-1): after publishICS the hourly :17 tick calls queueOwnerQuestions, which
+INSERT OR IGNOREs rows into qnfo-audit.owner_questions (UNIQUE(kind, ref)); personal-companion mails them.
+- after-event ref=<calendar id>: confirmed timed personal-radar/personal-twin events (not trip-, not all-day or date-only,
+  not outside Amsterdam) whose end passed 1-6h ago; no dtend = 2h long; priority 3, not_before = end + 1h; signed link.
+- triage ref=<ISO week>: Sundays (Amsterdam), up to 5 tentative personal-radar events within 14 days, one signed link each; priority 5.
+Tests: node --no-warnings calendar-api/queue.test.mjs
+
 Deploy: cd qnfo-workers/calendar && npx wrangler deploy
 Canonical source: github.com/QNFO/qnfo-workers -> qnfo-workers/calendar/worker.js

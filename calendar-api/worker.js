@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.5.0-feedback";
+var VERSION = "0.6.0-queue";
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
 // recreated as a separate worker. Its EXECUTE leg already wrote this worker's `calendar` table, and both share the
@@ -432,6 +432,119 @@ async function fbHandle(request, env, id, sig) {
   return fbPage(row.title, fbEventHtml(Object.assign({}, row, { status: newStatus }), want, say[action]));
 }
 __name(fbHandle, "fbHandle");
+// ---- CONNECTION-PRODUCER-1 (2026-10-04, issue 1950, charter pillar: personal) ----
+// The hourly tick queues the owner's questions in qnfo-audit.owner_questions; personal-companion mails them (max 2/day,
+// quiet hours 22-08 Amsterdam). Two kinds only, both INSERT OR IGNORE on UNIQUE(kind, ref) so a rerun adds nothing:
+//   after-event  ref=<calendar id>  a confirmed timed suggestion whose end passed 1-6h ago: "Did you go to X?" + signed link
+//   triage       ref=<ISO week>     on Sundays (Amsterdam), up to 5 tentative personal-radar suggestions within 14 days
+// Only FB_SOURCES rows qualify (their signed page refuses every other source); manual rows, trip- uids, all-day or
+// date-only rows and places outside Amsterdam are skipped. No model call.
+var OQ_DDL = "CREATE TABLE IF NOT EXISTS owner_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))";
+var OQ_DEFAULT_LEN_MS = 2 * 36e5;
+var OQ_OUTSIDE_RE = /\b(poland|polska|krak[oó]w|wroc[łl]aw|warsaw|warszawa|gda[nń]sk|germany|berlin|london|paris|brussels|belgium|rotterdam|utrecht|den haag|the hague|haarlem|leiden|eindhoven|groningen|italy|tuscany|castiglioncello|spain|france|uk)\b/i;
+var AMS_FMT = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Amsterdam", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", weekday: "short" });
+function amsParts(ms) {
+  var o = {};
+  AMS_FMT.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });
+  return o;
+}
+__name(amsParts, "amsParts");
+function amsOffsetMin(ms) {
+  var p = amsParts(ms);
+  var wall = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return Math.round((wall - Math.floor(ms / 1e3) * 1e3) / 6e4);
+}
+__name(amsOffsetMin, "amsOffsetMin");
+function amsDateStr(ms) {
+  var p = amsParts(ms);
+  return p.year + "-" + p.month + "-" + p.day;
+}
+__name(amsDateStr, "amsDateStr");
+// ISO week label of the Amsterdam calendar date at ms, e.g. 2026-W40
+function amsIsoWeek(ms) {
+  var p = amsParts(ms);
+  var d = new Date(Date.UTC(+p.year, +p.month - 1, +p.day));
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) + 3);
+  var y = d.getUTCFullYear();
+  var jan4 = new Date(Date.UTC(y, 0, 4));
+  var wk = 1 + Math.round(((d.getTime() - jan4.getTime()) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+  return y + "-W" + String(wk).padStart(2, "0");
+}
+__name(amsIsoWeek, "amsIsoWeek");
+// A timed value: with an explicit offset it must be Amsterdam's offset at that instant (else the event is elsewhere);
+// without one it is Amsterdam wall-clock time. Returns epoch ms, or null for date-only, unparsable or foreign-offset values.
+function oqParseWhen(s) {
+  s = String(s || "");
+  var m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d))?(?:\.\d+)?(Z|[+-]\d\d:?\d\d)?$/.exec(s);
+  if (!m) return null;
+  if (m[7] === "Z") return Date.parse(s);
+  if (m[7]) {
+    var ms = Date.parse(s);
+    if (!Number.isFinite(ms)) return null;
+    var sign = m[7].charAt(0) === "-" ? -1 : 1;
+    var hh = +m[7].slice(1, 3), mm = +m[7].slice(-2);
+    return sign * (hh * 60 + mm) === amsOffsetMin(ms) ? ms : null;
+  }
+  var wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+  var guess = wall - amsOffsetMin(wall) * 6e4;
+  return wall - amsOffsetMin(guess) * 6e4;
+}
+__name(oqParseWhen, "oqParseWhen");
+function oqCleanTitle(t) {
+  t = String(t || "").replace(/\s+/g, " ").trim();
+  var i = t.toLowerCase().lastIndexOf("opslaan:");
+  if (i >= 0) t = t.slice(i + 8).trim();
+  t = t.replace(/^[^:]{1,40}:\s+/, "");
+  return t.length > 80 ? t.slice(0, 79).trim() + "…" : t;
+}
+__name(oqCleanTitle, "oqCleanTitle");
+function oqSqlTime(ms) {
+  return new Date(ms).toISOString().replace("T", " ").slice(0, 19);
+}
+__name(oqSqlTime, "oqSqlTime");
+async function queueOwnerQuestions(env) {
+  var out = { after_event: 0, triage: 0, skipped: null };
+  await env.CAL_DB.prepare(OQ_DDL).run();
+  var probe = await fbLink(env, 0);
+  if (!probe) { out.skipped = "no CAL_TOKEN"; return out; }
+  var now = Date.now();
+  var srcIn = FB_SOURCES.map(function () { return "?"; }).join(",");
+  // (a) after-event
+  var rows = await runQuery(env, "SELECT id, uid, title, dtstart, dtend, all_day, location, source FROM calendar WHERE plane='personal' AND status='confirmed' AND all_day=0 AND source IN (" + srcIn + ") AND dtstart>=? AND dtstart<=?", FB_SOURCES.concat([new Date(now - 3 * 864e5).toISOString().slice(0, 10), new Date(now + 864e5).toISOString().slice(0, 10)]));
+  for (var r of rows) {
+    if (r.source === "manual" || String(r.uid || "").indexOf("trip-") === 0 || (r.uid || "").indexOf("-trip-") >= 0) continue;
+    if (r.location && OQ_OUTSIDE_RE.test(r.location) && !/amsterdam/i.test(r.location)) continue;
+    var st = oqParseWhen(r.dtstart);
+    if (st == null) continue;
+    var en = oqParseWhen(r.dtend);
+    if (en == null || en <= st) en = st + OQ_DEFAULT_LEN_MS;
+    if (en > now - 36e5 || en < now - 6 * 36e5) continue;
+    var done = await env.CAL_DB.prepare("SELECT 1 x FROM calendar_feedback WHERE cal_id=? AND action IN ('went','nope') LIMIT 1").bind(r.id).first();
+    if (done) continue;
+    var link = await fbLink(env, r.id);
+    var title = r.source === "personal-radar" ? oqCleanTitle(r.title) : String(r.title || "").replace(/\s+/g, " ").trim().slice(0, 100);
+    var res = await env.CAL_DB.prepare("INSERT OR IGNORE INTO owner_questions (kind, ref, subject, body, priority, not_before) VALUES ('after-event', ?, ?, ?, 3, ?)")
+      .bind(String(r.id), "Did you go to " + title + "?", title + "\n" + link + '\n\nTap "I went" and say who you talked to.', oqSqlTime(en + 36e5)).run();
+    out.after_event += res && res.meta ? Number(res.meta.changes) || 0 : 0;
+  }
+  // (b) Sunday triage
+  if (amsParts(now).weekday === "Sun") {
+    var today = amsDateStr(now), horizon = amsDateStr(now + 14 * 864e5);
+    var cand = await runQuery(env, "SELECT id, title, dtstart, location, relevance FROM calendar WHERE plane='personal' AND status='tentative' AND source='personal-radar' AND substr(dtstart,1,10)>=? AND substr(dtstart,1,10)<=?", [today, horizon]);
+    cand.sort(function (a, b) { return (b.relevance == null ? -1 : b.relevance) - (a.relevance == null ? -1 : a.relevance) || String(a.dtstart).localeCompare(String(b.dtstart)); });
+    cand = cand.slice(0, 5);
+    if (cand.length) {
+      var lines = ["These suggestions start in the next two weeks. Tap one to keep it, or remove it with a reason.", ""];
+      for (var c of cand) lines.push("- " + oqCleanTitle(c.title) + " (" + String(c.dtstart).slice(0, 10) + (c.location ? ", " + c.location : "") + ")", "  " + await fbLink(env, c.id));
+      var wk = amsIsoWeek(now);
+      var t2 = await env.CAL_DB.prepare("INSERT OR IGNORE INTO owner_questions (kind, ref, subject, body, priority) VALUES ('triage', ?, ?, ?, 5)")
+        .bind(wk, "This week: " + cand.length + " suggestion" + (cand.length === 1 ? "" : "s") + " to sort", lines.join("\n")).run();
+      out.triage = t2 && t2.meta ? Number(t2.meta.changes) || 0 : 0;
+    }
+  }
+  return out;
+}
+__name(queueOwnerQuestions, "queueOwnerQuestions");
 var worker_default = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -439,6 +552,7 @@ var worker_default = {
         try { await notesIntakeRun(env); } catch (e) { console.log("calendar-api notes intake error:", e && e.message || e); }
       } else console.log("calendar-api notes intake skipped: VAULT binding missing");
       await publishICS(env).catch((e) => console.log("calendar-api publish error:", e && e.message || e));
+      try { await ensureSchema(env); console.log("calendar-api owner questions:", JSON.stringify(await queueOwnerQuestions(env))); } catch (e) { console.log("calendar-api queueOwnerQuestions error:", e && e.message || e); }
     })());
   },
   async fetch(request, env) {
@@ -456,7 +570,7 @@ var worker_default = {
         const tok = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + p).first();
         urls.push({ plane: p, url: tok && tok.v ? R2_PUBLIC + "/calendar/" + p + "-" + tok.v + ".ics" : null });
       }
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake", "event-feedback"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN), and /health lists feed URLs only to a CAL_TOKEN caller", "ICS feeds are republished to R2 by the hourly :17 cron", "two planes only: qnfo and personal"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake", "event-feedback", "owner-questions"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN), and /health lists feed URLs only to a CAL_TOKEN caller", "ICS feeds are republished to R2 by the hourly :17 cron", "two planes only: qnfo and personal"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
     }
     if (path === "/publish") {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
