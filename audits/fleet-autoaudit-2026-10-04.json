@@ -1,0 +1,1508 @@
+{
+  "audited_at": "2026-10-04 09:06:41",
+  "d1_write_failures": [],
+  "d1_writes_ok": 113,
+  "guard": {
+    "_guard_rc": 0,
+    "ahead": [],
+    "cf_script_list": true,
+    "content_checked": true,
+    "content_drift": [],
+    "cron_only": [
+      {
+        "crons": [
+          "*/20 * * * *"
+        ],
+        "dir": "ai-health-prober",
+        "worker": "ai-health-prober"
+      },
+      {
+        "crons": [
+          "0 */3 * * *",
+          "*/15 * * * *"
+        ],
+        "dir": "qnfo-email-orchestrator",
+        "worker": "qnfo-email-orchestrator"
+      },
+      {
+        "crons": [
+          "0 * * * *"
+        ],
+        "dir": "qnfo-signal-loop",
+        "worker": "qnfo-signal-loop"
+      }
+    ],
+    "cron_only_count": 3,
+    "drift": [],
+    "live_err": [],
+    "multi_version": [],
+    "multi_version_count": 0,
+    "name_resolution": true,
+    "no_health_route": [],
+    "no_live_version": [],
+    "no_repo_version": [],
+    "not_a_worker": [
+      {
+        "dir": "audits",
+        "worker": "audits"
+      },
+      {
+        "dir": "ci-status",
+        "worker": "ci-status"
+      },
+      {
+        "dir": "docs",
+        "worker": "docs"
+      },
+      {
+        "dir": "funding",
+        "worker": "funding"
+      },
+      {
+        "dir": "machine-readability",
+        "worker": "machine-readability"
+      },
+      {
+        "dir": "migrations",
+        "worker": "migrations"
+      },
+      {
+        "dir": "papers",
+        "worker": "papers"
+      },
+      {
+        "dir": "qnfo-web-unified",
+        "worker": "qnfo-web-unified"
+      },
+      {
+        "dir": "scripts",
+        "worker": "scripts"
+      }
+    ],
+    "not_a_worker_count": 9,
+    "not_deployed_dirs": [
+      "agent-orchestrator",
+      "audit-hub",
+      "companion-hub",
+      "errata-orchestrator",
+      "events-radar",
+      "jnl-pipeline",
+      "jnl-referee",
+      "jnl-reviser",
+      "jnl-watch",
+      "jnl-zenodo",
+      "memory-mcp",
+      "notes-intake",
+      "obsidian-writer",
+      "ops-gateway",
+      "osf-integrity-check",
+      "paper-hub",
+      "personal-events-radar",
+      "personal-life-indexer",
+      "personal-life-maintain",
+      "personal-life-search",
+      "qnfo-agent-ws",
+      "qnfo-analytics",
+      "qnfo-artifact-agent",
+      "qnfo-artifacts",
+      "qnfo-arxiv-radar",
+      "qnfo-auditor",
+      "qnfo-autopilot",
+      "qnfo-blank-audit",
+      "qnfo-calendar-intake",
+      "qnfo-chameleon",
+      "qnfo-chat-canary",
+      "qnfo-citation-watch",
+      "qnfo-code-agent",
+      "qnfo-ddocs-indexer",
+      "qnfo-errata-publish",
+      "qnfo-errata-respond",
+      "qnfo-errata-watch",
+      "qnfo-error-selfheal",
+      "qnfo-events",
+      "qnfo-fleet-advisor",
+      "qnfo-fleet-calibrator",
+      "qnfo-fleet-deploy",
+      "qnfo-fleet-feed",
+      "qnfo-idea-factory",
+      "qnfo-idea-miner",
+      "qnfo-idea-triage",
+      "qnfo-impact",
+      "qnfo-paper-explainer",
+      "qnfo-pipeline-ops",
+      "qnfo-proof",
+      "qnfo-qwav",
+      "qnfo-register-guard",
+      "qnfo-research-radar",
+      "qnfo-research-supervisor",
+      "qnfo-scorecard",
+      "qnfo-thread-ingest",
+      "qnfo-twin-maintain",
+      "research-daily-brief",
+      "skills-discovery",
+      "vault-indexer"
+    ],
+    "not_deployed_notdrift": 60,
+    "not_deployed_workers": [
+      {
+        "dir": "agent-orchestrator",
+        "worker": "qnfo-agent-orchestrator-legacy-dup"
+      },
+      {
+        "dir": "audit-hub",
+        "worker": "audit-hub"
+      },
+      {
+        "dir": "companion-hub",
+        "worker": "companion-hub"
+      },
+      {
+        "dir": "errata-orchestrator",
+        "worker": "qnfo-errata-orchestrator"
+      },
+      {
+        "dir": "events-radar",
+        "worker": "events-radar"
+      },
+      {
+        "dir": "jnl-pipeline",
+        "worker": "jnl-pipeline"
+      },
+      {
+        "dir": "jnl-referee",
+        "worker": "jnl-referee"
+      },
+      {
+        "dir": "jnl-reviser",
+        "worker": "jnl-reviser"
+      },
+      {
+        "dir": "jnl-watch",
+        "worker": "jnl-watch"
+      },
+      {
+        "dir": "jnl-zenodo",
+        "worker": "jnl-zenodo"
+      },
+      {
+        "dir": "memory-mcp",
+        "worker": "qnfo-memory-mcp-legacy-dup"
+      },
+      {
+        "dir": "notes-intake",
+        "worker": "notes-intake"
+      },
+      {
+        "dir": "obsidian-writer",
+        "worker": "obsidian-writer"
+      },
+      {
+        "dir": "ops-gateway",
+        "worker": "ops-gateway"
+      },
+      {
+        "dir": "osf-integrity-check",
+        "worker": "osf-integrity-check"
+      },
+      {
+        "dir": "paper-hub",
+        "worker": "paper-hub"
+      },
+      {
+        "dir": "personal-events-radar",
+        "worker": "personal-events-radar"
+      },
+      {
+        "dir": "personal-life-indexer",
+        "worker": "personal-life-indexer"
+      },
+      {
+        "dir": "personal-life-maintain",
+        "worker": "personal-life-maintain"
+      },
+      {
+        "dir": "personal-life-search",
+        "worker": "personal-life-search"
+      },
+      {
+        "dir": "qnfo-agent-ws",
+        "worker": "qnfo-agent-ws"
+      },
+      {
+        "dir": "qnfo-analytics",
+        "worker": "qnfo-analytics"
+      },
+      {
+        "dir": "qnfo-artifact-agent",
+        "worker": "qnfo-artifact-agent"
+      },
+      {
+        "dir": "qnfo-artifacts",
+        "worker": "qnfo-artifacts"
+      },
+      {
+        "dir": "qnfo-arxiv-radar",
+        "worker": "qnfo-arxiv-radar"
+      },
+      {
+        "dir": "qnfo-auditor",
+        "worker": "qnfo-auditor"
+      },
+      {
+        "dir": "qnfo-autopilot",
+        "worker": "qnfo-autopilot"
+      },
+      {
+        "dir": "qnfo-blank-audit",
+        "worker": "qnfo-blank-audit"
+      },
+      {
+        "dir": "qnfo-calendar-intake",
+        "worker": "qnfo-calendar-intake"
+      },
+      {
+        "dir": "qnfo-chameleon",
+        "worker": "qnfo-chameleon"
+      },
+      {
+        "dir": "qnfo-chat-canary",
+        "worker": "qnfo-chat-canary"
+      },
+      {
+        "dir": "qnfo-citation-watch",
+        "worker": "qnfo-citation-watch"
+      },
+      {
+        "dir": "qnfo-code-agent",
+        "worker": "qnfo-code-agent"
+      },
+      {
+        "dir": "qnfo-ddocs-indexer",
+        "worker": "qnfo-ddocs-indexer"
+      },
+      {
+        "dir": "qnfo-errata-publish",
+        "worker": "qnfo-errata-publish"
+      },
+      {
+        "dir": "qnfo-errata-respond",
+        "worker": "qnfo-errata-respond"
+      },
+      {
+        "dir": "qnfo-errata-watch",
+        "worker": "qnfo-errata-watch"
+      },
+      {
+        "dir": "qnfo-error-selfheal",
+        "worker": "qnfo-error-selfheal"
+      },
+      {
+        "dir": "qnfo-events",
+        "worker": "qnfo-events"
+      },
+      {
+        "dir": "qnfo-fleet-advisor",
+        "worker": "qnfo-fleet-advisor"
+      },
+      {
+        "dir": "qnfo-fleet-calibrator",
+        "worker": "qnfo-fleet-calibrator"
+      },
+      {
+        "dir": "qnfo-fleet-deploy",
+        "worker": "qnfo-fleet-deploy"
+      },
+      {
+        "dir": "qnfo-fleet-feed",
+        "worker": "qnfo-fleet-feed"
+      },
+      {
+        "dir": "qnfo-idea-factory",
+        "worker": "qnfo-idea-factory"
+      },
+      {
+        "dir": "qnfo-idea-miner",
+        "worker": "qnfo-idea-miner"
+      },
+      {
+        "dir": "qnfo-idea-triage",
+        "worker": "qnfo-idea-triage"
+      },
+      {
+        "dir": "qnfo-impact",
+        "worker": "qnfo-impact"
+      },
+      {
+        "dir": "qnfo-paper-explainer",
+        "worker": "qnfo-paper-explainer"
+      },
+      {
+        "dir": "qnfo-pipeline-ops",
+        "worker": "qnfo-pipeline-ops"
+      },
+      {
+        "dir": "qnfo-proof",
+        "worker": "qnfo-proof"
+      },
+      {
+        "dir": "qnfo-qwav",
+        "worker": "qnfo-qwav"
+      },
+      {
+        "dir": "qnfo-register-guard",
+        "worker": "qnfo-register-guard"
+      },
+      {
+        "dir": "qnfo-research-radar",
+        "worker": "qnfo-research-radar"
+      },
+      {
+        "dir": "qnfo-research-supervisor",
+        "worker": "qnfo-research-supervisor"
+      },
+      {
+        "dir": "qnfo-scorecard",
+        "worker": "qnfo-scorecard"
+      },
+      {
+        "dir": "qnfo-thread-ingest",
+        "worker": "qnfo-thread-ingest"
+      },
+      {
+        "dir": "qnfo-twin-maintain",
+        "worker": "qnfo-twin-maintain"
+      },
+      {
+        "dir": "research-daily-brief",
+        "worker": "research-daily-brief"
+      },
+      {
+        "dir": "skills-discovery",
+        "worker": "qnfo-skills-discovery"
+      },
+      {
+        "dir": "vault-indexer",
+        "worker": "vault-indexer"
+      }
+    ],
+    "retired_present": [],
+    "retired_present_count": 0,
+    "scope": "all",
+    "sync": 41,
+    "sync_workers": [
+      {
+        "dir": "calendar-api",
+        "version": "0.7.0-host",
+        "worker": "calendar-api"
+      },
+      {
+        "dir": "errata-hub",
+        "version": "1.3.0-single-trigger",
+        "worker": "errata-hub"
+      },
+      {
+        "dir": "fleet-exec",
+        "version": "1.0.3-capability-contract",
+        "worker": "fleet-exec"
+      },
+      {
+        "dir": "idea-hub",
+        "version": "1.4.0-qds",
+        "worker": "idea-hub"
+      },
+      {
+        "dir": "personal-api",
+        "version": "4.6.0-ledger-sync",
+        "worker": "personal-api"
+      },
+      {
+        "dir": "personal-companion",
+        "version": "1.10.0-ledger",
+        "worker": "personal-companion"
+      },
+      {
+        "dir": "q08-signal-engine",
+        "version": "0.8.3-codeagent",
+        "worker": "q08-signal-engine"
+      },
+      {
+        "dir": "qnfo-agent-orchestrator",
+        "version": "1.1.1-capability-contract",
+        "worker": "qnfo-agent-orchestrator"
+      },
+      {
+        "dir": "qnfo-ai",
+        "version": "5.31.1-aig-metadata",
+        "worker": "qnfo-ai"
+      },
+      {
+        "dir": "qnfo-ai-calibration",
+        "version": "1.2.8-capability-contract",
+        "worker": "qnfo-ai-calibration"
+      },
+      {
+        "dir": "qnfo-ai-search",
+        "version": "2.2.1-ctl-ellipsis",
+        "worker": "qnfo-ai-search"
+      },
+      {
+        "dir": "qnfo-archive",
+        "version": "1.2.2-internal-search",
+        "worker": "qnfo-archive"
+      },
+      {
+        "dir": "qnfo-autonomy-scorer",
+        "version": "1.2.1-priority-queue",
+        "worker": "qnfo-autonomy-scorer"
+      },
+      {
+        "dir": "qnfo-backlog-exec",
+        "version": "2.0.5-priority-queue",
+        "worker": "qnfo-backlog-exec"
+      },
+      {
+        "dir": "qnfo-cloud-ops",
+        "version": "1.19.0-single-trigger",
+        "worker": "qnfo-cloud-ops"
+      },
+      {
+        "dir": "qnfo-code-orchestrator",
+        "version": "0.3.15-priority-queue",
+        "worker": "qnfo-code-orchestrator"
+      },
+      {
+        "dir": "qnfo-containers-pilot",
+        "version": "1.0.11-command-exit-honest",
+        "worker": "qnfo-containers-pilot"
+      },
+      {
+        "dir": "qnfo-deploy-guard",
+        "version": "1.3.22-work-claim-unify",
+        "worker": "qnfo-deploy-guard"
+      },
+      {
+        "dir": "qnfo-email",
+        "version": "2.3.1-itinerary-ingest",
+        "worker": "qnfo-email"
+      },
+      {
+        "dir": "qnfo-fleet-control",
+        "version": "0.4.113-branch-hygiene-2",
+        "worker": "qnfo-fleet-control"
+      },
+      {
+        "dir": "qnfo-fleet-dashboard",
+        "version": "1.21.2-loop-sync-deadline",
+        "worker": "qnfo-fleet-dashboard"
+      },
+      {
+        "dir": "qnfo-gateway",
+        "version": "3.9.2-reading",
+        "worker": "qnfo-gateway"
+      },
+      {
+        "dir": "qnfo-infra",
+        "version": "1.2.10-capability-contract",
+        "worker": "qnfo-infra"
+      },
+      {
+        "dir": "qnfo-intent-orchestrator",
+        "version": "1.3.8-capability-contract",
+        "worker": "qnfo-intent-orchestrator"
+      },
+      {
+        "dir": "qnfo-ipatent",
+        "version": "3.9.2-fleet-link",
+        "worker": "qnfo-ipatent"
+      },
+      {
+        "dir": "qnfo-kaizen",
+        "version": "0.3.3-scan-internal",
+        "worker": "qnfo-kaizen"
+      },
+      {
+        "dir": "qnfo-lifecycle",
+        "version": "1.7.1-ping-hourly",
+        "worker": "qnfo-lifecycle"
+      },
+      {
+        "dir": "qnfo-memory-mcp",
+        "version": "2.0.5-capability-contract",
+        "worker": "qnfo-memory-mcp"
+      },
+      {
+        "dir": "qnfo-observability",
+        "version": "1.2.15-escalate-on-cron",
+        "worker": "qnfo-observability"
+      },
+      {
+        "dir": "qnfo-ops",
+        "version": "2.38.40-error-detail-capture",
+        "worker": "qnfo-ops"
+      },
+      {
+        "dir": "qnfo-outreach",
+        "version": "0.3.8-cf-dow",
+        "worker": "qnfo-outreach"
+      },
+      {
+        "dir": "qnfo-paper-indexer",
+        "version": "3.0.11-render-health",
+        "worker": "qnfo-paper-indexer"
+      },
+      {
+        "dir": "qnfo-paper-reviser",
+        "version": "1.2.7-flagged-errata",
+        "worker": "qnfo-paper-reviser"
+      },
+      {
+        "dir": "qnfo-pdf",
+        "version": "1.0.2-utf8-redeploy",
+        "worker": "qnfo-pdf"
+      },
+      {
+        "dir": "qnfo-research-exec",
+        "version": "0.9.57-codeagent",
+        "worker": "qnfo-research-exec"
+      },
+      {
+        "dir": "qnfo-skill-sync",
+        "version": "1.1.3",
+        "worker": "qnfo-skill-sync"
+      },
+      {
+        "dir": "qnfo-social",
+        "version": "0.7.34-reach-select",
+        "worker": "qnfo-social"
+      },
+      {
+        "dir": "qnfo-subscribers",
+        "version": "1.1.6-client-ip",
+        "worker": "qnfo-subscribers"
+      },
+      {
+        "dir": "qnfo-tools-mcp",
+        "version": "1.2.0-owner-queue",
+        "worker": "qnfo-tools-mcp"
+      },
+      {
+        "dir": "qnfo-venue-radar",
+        "version": "1.0.5",
+        "worker": "qnfo-venue-radar"
+      },
+      {
+        "dir": "radar-hub",
+        "version": "1.2.3",
+        "worker": "radar-hub"
+      }
+    ]
+  },
+  "purge_error": null,
+  "rows": {
+    "ai-health-prober": {
+      "before": null,
+      "http": null,
+      "live": null,
+      "match": 0,
+      "note": "CRON_ONLY",
+      "worker": "ai-health-prober"
+    },
+    "audit-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "audit-hub"
+    },
+    "audits": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "audits"
+    },
+    "calendar-api": {
+      "before": "0.7.0-host",
+      "http": 200,
+      "live": "0.7.0-host",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "calendar-api"
+    },
+    "ci-status": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "ci-status"
+    },
+    "companion-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "companion-hub"
+    },
+    "docs": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "docs"
+    },
+    "errata-hub": {
+      "before": "1.3.0-single-trigger",
+      "http": 200,
+      "live": "1.3.0-single-trigger",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "errata-hub"
+    },
+    "events-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "events-radar"
+    },
+    "fleet-exec": {
+      "before": "1.0.3-capability-contract",
+      "http": 200,
+      "live": "1.0.3-capability-contract",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "fleet-exec"
+    },
+    "funding": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "funding"
+    },
+    "idea-hub": {
+      "before": "1.4.0-qds",
+      "http": 200,
+      "live": "1.4.0-qds",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "idea-hub"
+    },
+    "jnl-pipeline": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-pipeline"
+    },
+    "jnl-referee": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-referee"
+    },
+    "jnl-reviser": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-reviser"
+    },
+    "jnl-watch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-watch"
+    },
+    "jnl-zenodo": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "jnl-zenodo"
+    },
+    "machine-readability": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "machine-readability"
+    },
+    "migrations": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "migrations"
+    },
+    "notes-intake": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "notes-intake"
+    },
+    "obsidian-writer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "obsidian-writer"
+    },
+    "ops-gateway": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "ops-gateway"
+    },
+    "osf-integrity-check": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "osf-integrity-check"
+    },
+    "paper-hub": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "paper-hub"
+    },
+    "papers": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "papers"
+    },
+    "personal-api": {
+      "before": "4.6.0-ledger-sync",
+      "http": 200,
+      "live": "4.6.0-ledger-sync",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "personal-api"
+    },
+    "personal-companion": {
+      "before": "1.10.0-ledger",
+      "http": 200,
+      "live": "1.10.0-ledger",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "personal-companion"
+    },
+    "personal-events-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "personal-events-radar"
+    },
+    "personal-life-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "personal-life-indexer"
+    },
+    "personal-life-maintain": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "personal-life-maintain"
+    },
+    "personal-life-search": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "personal-life-search"
+    },
+    "q08-signal-engine": {
+      "before": "0.8.3-codeagent",
+      "http": 200,
+      "live": "0.8.3-codeagent",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "q08-signal-engine"
+    },
+    "qnfo-agent-orchestrator": {
+      "before": "1.1.1-capability-contract",
+      "http": 200,
+      "live": "1.1.1-capability-contract",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-agent-orchestrator"
+    },
+    "qnfo-agent-orchestrator-legacy-dup": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-agent-orchestrator-legacy-dup"
+    },
+    "qnfo-agent-ws": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-agent-ws"
+    },
+    "qnfo-ai": {
+      "before": "5.31.1-aig-metadata",
+      "http": 200,
+      "live": "5.31.1-aig-metadata",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ai"
+    },
+    "qnfo-ai-calibration": {
+      "before": "1.2.8-capability-contract",
+      "http": 200,
+      "live": "1.2.8-capability-contract",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ai-calibration"
+    },
+    "qnfo-ai-search": {
+      "before": "2.2.1-ctl-ellipsis",
+      "http": 200,
+      "live": "2.2.1-ctl-ellipsis",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ai-search"
+    },
+    "qnfo-analytics": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-analytics"
+    },
+    "qnfo-archive": {
+      "before": "1.2.2-internal-search",
+      "http": 200,
+      "live": "1.2.2-internal-search",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-archive"
+    },
+    "qnfo-artifact-agent": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-artifact-agent"
+    },
+    "qnfo-artifacts": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-artifacts"
+    },
+    "qnfo-arxiv-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-arxiv-radar"
+    },
+    "qnfo-auditor": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-auditor"
+    },
+    "qnfo-autonomy-scorer": {
+      "before": "1.2.1-priority-queue",
+      "http": 200,
+      "live": "1.2.1-priority-queue",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-autonomy-scorer"
+    },
+    "qnfo-autopilot": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-autopilot"
+    },
+    "qnfo-backlog-exec": {
+      "before": "2.0.5-priority-queue",
+      "http": 200,
+      "live": "2.0.5-priority-queue",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-backlog-exec"
+    },
+    "qnfo-blank-audit": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-blank-audit"
+    },
+    "qnfo-calendar-intake": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-calendar-intake"
+    },
+    "qnfo-chameleon": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-chameleon"
+    },
+    "qnfo-chat-canary": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-chat-canary"
+    },
+    "qnfo-citation-watch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-citation-watch"
+    },
+    "qnfo-cloud-ops": {
+      "before": "1.19.0-single-trigger",
+      "http": 200,
+      "live": "1.19.0-single-trigger",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-cloud-ops"
+    },
+    "qnfo-code-agent": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-code-agent"
+    },
+    "qnfo-code-orchestrator": {
+      "before": "0.3.15-priority-queue",
+      "http": 200,
+      "live": "0.3.15-priority-queue",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-code-orchestrator"
+    },
+    "qnfo-containers-pilot": {
+      "before": "1.0.11-command-exit-honest",
+      "http": 200,
+      "live": "1.0.11-command-exit-honest",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-containers-pilot"
+    },
+    "qnfo-ddocs-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-ddocs-indexer"
+    },
+    "qnfo-deploy-guard": {
+      "before": "1.3.22-work-claim-unify",
+      "http": 200,
+      "live": "1.3.22-work-claim-unify",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-deploy-guard"
+    },
+    "qnfo-email": {
+      "before": "2.3.1-itinerary-ingest",
+      "http": 200,
+      "live": "2.3.1-itinerary-ingest",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-email"
+    },
+    "qnfo-email-orchestrator": {
+      "before": null,
+      "http": null,
+      "live": null,
+      "match": 0,
+      "note": "CRON_ONLY",
+      "worker": "qnfo-email-orchestrator"
+    },
+    "qnfo-errata-orchestrator": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-errata-orchestrator"
+    },
+    "qnfo-errata-publish": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-errata-publish"
+    },
+    "qnfo-errata-respond": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-errata-respond"
+    },
+    "qnfo-errata-watch": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-errata-watch"
+    },
+    "qnfo-error-selfheal": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-error-selfheal"
+    },
+    "qnfo-events": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-events"
+    },
+    "qnfo-fleet-advisor": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-fleet-advisor"
+    },
+    "qnfo-fleet-calibrator": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-fleet-calibrator"
+    },
+    "qnfo-fleet-control": {
+      "before": "0.4.113-branch-hygiene-2",
+      "http": 200,
+      "live": "0.4.113-branch-hygiene-2",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-fleet-control"
+    },
+    "qnfo-fleet-dashboard": {
+      "before": "1.21.2-loop-sync-deadline",
+      "http": 200,
+      "live": "1.21.2-loop-sync-deadline",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-fleet-dashboard"
+    },
+    "qnfo-fleet-deploy": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-fleet-deploy"
+    },
+    "qnfo-fleet-feed": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-fleet-feed"
+    },
+    "qnfo-gateway": {
+      "before": "3.9.2-reading",
+      "http": 200,
+      "live": "3.9.2-reading",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-gateway"
+    },
+    "qnfo-idea-factory": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-idea-factory"
+    },
+    "qnfo-idea-miner": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-idea-miner"
+    },
+    "qnfo-idea-triage": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-idea-triage"
+    },
+    "qnfo-impact": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-impact"
+    },
+    "qnfo-infra": {
+      "before": "1.2.10-capability-contract",
+      "http": 200,
+      "live": "1.2.10-capability-contract",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-infra"
+    },
+    "qnfo-intent-orchestrator": {
+      "before": "1.3.8-capability-contract",
+      "http": 200,
+      "live": "1.3.8-capability-contract",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-intent-orchestrator"
+    },
+    "qnfo-ipatent": {
+      "before": "3.9.2-fleet-link",
+      "http": 200,
+      "live": "3.9.2-fleet-link",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ipatent"
+    },
+    "qnfo-kaizen": {
+      "before": "0.3.3-scan-internal",
+      "http": 200,
+      "live": "0.3.3-scan-internal",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-kaizen"
+    },
+    "qnfo-lifecycle": {
+      "before": "1.7.1-ping-hourly",
+      "http": 200,
+      "live": "1.7.1-ping-hourly",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-lifecycle"
+    },
+    "qnfo-memory-mcp": {
+      "before": "2.0.5-capability-contract",
+      "http": 200,
+      "live": "2.0.5-capability-contract",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-memory-mcp"
+    },
+    "qnfo-memory-mcp-legacy-dup": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-memory-mcp-legacy-dup"
+    },
+    "qnfo-observability": {
+      "before": "1.2.15-escalate-on-cron",
+      "http": 200,
+      "live": "1.2.15-escalate-on-cron",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-observability"
+    },
+    "qnfo-ops": {
+      "before": "2.38.40-error-detail-capture",
+      "http": 200,
+      "live": "2.38.40-error-detail-capture",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-ops"
+    },
+    "qnfo-outreach": {
+      "before": "0.3.8-cf-dow",
+      "http": 200,
+      "live": "0.3.8-cf-dow",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-outreach"
+    },
+    "qnfo-paper-explainer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-paper-explainer"
+    },
+    "qnfo-paper-indexer": {
+      "before": "3.0.11-render-health",
+      "http": 200,
+      "live": "3.0.11-render-health",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-paper-indexer"
+    },
+    "qnfo-paper-reviser": {
+      "before": "1.2.7-flagged-errata",
+      "http": 200,
+      "live": "1.2.7-flagged-errata",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-paper-reviser"
+    },
+    "qnfo-pdf": {
+      "before": "1.0.2-utf8-redeploy",
+      "http": 200,
+      "live": "1.0.2-utf8-redeploy",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-pdf"
+    },
+    "qnfo-pipeline-ops": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-pipeline-ops"
+    },
+    "qnfo-proof": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-proof"
+    },
+    "qnfo-qwav": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-qwav"
+    },
+    "qnfo-register-guard": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-register-guard"
+    },
+    "qnfo-research-exec": {
+      "before": "0.9.57-codeagent",
+      "http": 200,
+      "live": "0.9.57-codeagent",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-research-exec"
+    },
+    "qnfo-research-radar": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-research-radar"
+    },
+    "qnfo-research-supervisor": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-research-supervisor"
+    },
+    "qnfo-scorecard": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-scorecard"
+    },
+    "qnfo-signal-loop": {
+      "before": null,
+      "http": null,
+      "live": null,
+      "match": 0,
+      "note": "CRON_ONLY",
+      "worker": "qnfo-signal-loop"
+    },
+    "qnfo-skill-sync": {
+      "before": "1.1.3",
+      "http": 200,
+      "live": "1.1.3",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-skill-sync"
+    },
+    "qnfo-skills-discovery": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-skills-discovery"
+    },
+    "qnfo-social": {
+      "before": "0.7.34-reach-select",
+      "http": 200,
+      "live": "0.7.34-reach-select",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-social"
+    },
+    "qnfo-subscribers": {
+      "before": "1.1.6-client-ip",
+      "http": 200,
+      "live": "1.1.6-client-ip",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-subscribers"
+    },
+    "qnfo-thread-ingest": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-thread-ingest"
+    },
+    "qnfo-tools-mcp": {
+      "before": "1.2.0-owner-queue",
+      "http": 200,
+      "live": "1.2.0-owner-queue",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-tools-mcp"
+    },
+    "qnfo-twin-maintain": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "qnfo-twin-maintain"
+    },
+    "qnfo-venue-radar": {
+      "before": "1.0.5",
+      "http": 200,
+      "live": "1.0.5",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "qnfo-venue-radar"
+    },
+    "qnfo-web-unified": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "qnfo-web-unified"
+    },
+    "radar-hub": {
+      "before": "1.2.3",
+      "http": 200,
+      "live": "1.2.3",
+      "match": 1,
+      "note": "SYNC",
+      "worker": "radar-hub"
+    },
+    "research-daily-brief": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "research-daily-brief"
+    },
+    "scripts": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "scripts"
+    },
+    "vault-indexer": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "worker": "vault-indexer"
+    }
+  },
+  "stale_rows_purged": 0
+}

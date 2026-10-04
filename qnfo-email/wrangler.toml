@@ -27,6 +27,13 @@ binding = "AUDIT_DB"
 database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
+# ITINERARY-INGEST-1 (#1881, charter pillar personal): the itinerary parser writes personal-life.events (lodging/travel rows
+# the away gate and the brief read). Writes happen only for DMARC-verified booking-company or owner mail; see worker.js.
+[[d1_databases]]
+binding = "PERSONAL"
+database_name = "personal-life"
+database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
+
 # Daily inbound-digest cron. NOTE: qnfo-email is also invoked via the qnfo.org
 # email-routing worker (fetch handler); this cron drives scheduled() ->
 # sendInboundDigest(). Reminder dispatch lives in qnfo-calendar-intake.

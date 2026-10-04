@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.10-capability-self-report";
+var VERSION = "2.3.12-revert-c119";
 var CAPS = ["model-health-probe", "freshness-check", "health-coverage"];
 var LIMS = ["cron-only: no public route; runs every 20 minutes", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron"];
 // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.

@@ -127,7 +127,7 @@ ok(fr.status === 200 && fj.ok && fj.count === 2 && fj.feedback[0].id > fj.feedba
 
 // ---- existing behaviour ----
 const h = await (await call(T.env, "GET", "/health")).json();
-ok(h.version === "0.5.0-feedback" && h.capabilities.includes("event-feedback") && h.capabilities.includes("ics-publish"), "health reports the new version and keeps the old capabilities");
+ok(/^\d+\.\d+\.\d+/.test(h.version) && h.capabilities.includes("event-feedback") && h.capabilities.includes("ics-publish"), "health reports the new version and keeps the old capabilities");
 ok((await call(T.env, "GET", "/events?plane=personal")).status === 401, "event reads still need the bearer");
 
 console.log(pass + " passed, " + fail + " failed");

@@ -1568,7 +1568,7 @@ export default {
       return json({ ok: true, slug: prow.slug, title: title, model: piece.model, words: body.split(/\s+/).length });
     }
 
-    if (path === "/api/f") {
+    if (path === "/api/f" && req.method === "POST") {
       if (req.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
       if (/bot|crawl|spider|slurp|preview|headless/i.test(String(req.headers.get("user-agent") || ""))) return json({ ok: false, error: "automated clients cannot vote" }, 403);
       var s = (url.searchParams.get("s") || "").toLowerCase();

@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-03 07:53:53",
+  "audited_at": "2026-10-03 16:03:15",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "radar-hub"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -419,17 +412,17 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.4.0-mcp-oauth",
+        "version": "4.5.1-predict-timeout",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.8.1-codeagent",
+        "version": "1.9.2-direct",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.8.2-metrics",
+        "version": "0.8.3-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -459,12 +452,12 @@
       },
       {
         "dir": "qnfo-autonomy-scorer",
-        "version": "1.2.0-sai-weighted",
+        "version": "1.2.1-priority-queue",
         "worker": "qnfo-autonomy-scorer"
       },
       {
         "dir": "qnfo-backlog-exec",
-        "version": "2.0.4-exception-evidence",
+        "version": "2.0.5-priority-queue",
         "worker": "qnfo-backlog-exec"
       },
       {
@@ -474,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.14-plan-deny-negation",
+        "version": "0.3.15-priority-queue",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -489,17 +482,17 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.2.4-handoff-claim-sheet",
+        "version": "2.2.5-owner-sender-no-reply",
         "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.109-cost-and-advisor",
+        "version": "0.4.111-priority-queue",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.20.3-render-health-watch",
+        "version": "1.21.1-branch-hygiene-watch",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -579,7 +572,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.33-scan-pagesize",
+        "version": "0.7.34-reach-select",
         "worker": "qnfo-social"
       },
       {
@@ -589,7 +582,7 @@
       },
       {
         "dir": "qnfo-tools-mcp",
-        "version": "1.1.6-capability-contract",
+        "version": "1.2.0-owner-queue",
         "worker": "qnfo-tools-mcp"
       },
       {
@@ -807,17 +800,17 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.4.0-mcp-oauth",
+      "before": "4.5.1-predict-timeout",
       "http": 200,
-      "live": "4.4.0-mcp-oauth",
+      "live": "4.5.1-predict-timeout",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.8.1-codeagent",
+      "before": "1.9.2-direct",
       "http": 200,
-      "live": "1.8.1-codeagent",
+      "live": "1.9.2-direct",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -855,9 +848,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.8.2-metrics",
+      "before": "0.8.3-codeagent",
       "http": 200,
-      "live": "0.8.2-metrics",
+      "live": "0.8.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -959,9 +952,9 @@
       "worker": "qnfo-auditor"
     },
     "qnfo-autonomy-scorer": {
-      "before": "1.2.0-sai-weighted",
+      "before": "1.2.1-priority-queue",
       "http": 200,
-      "live": "1.2.0-sai-weighted",
+      "live": "1.2.1-priority-queue",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-autonomy-scorer"
@@ -975,9 +968,9 @@
       "worker": "qnfo-autopilot"
     },
     "qnfo-backlog-exec": {
-      "before": "2.0.4-exception-evidence",
+      "before": "2.0.5-priority-queue",
       "http": 200,
-      "live": "2.0.4-exception-evidence",
+      "live": "2.0.5-priority-queue",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-backlog-exec"
@@ -1039,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.14-plan-deny-negation",
+      "before": "0.3.15-priority-queue",
       "http": 200,
-      "live": "0.3.14-plan-deny-negation",
+      "live": "0.3.15-priority-queue",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1071,9 +1064,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.2.4-handoff-claim-sheet",
+      "before": "2.2.5-owner-sender-no-reply",
       "http": 200,
-      "live": "2.2.4-handoff-claim-sheet",
+      "live": "2.2.5-owner-sender-no-reply",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1151,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.109-cost-and-advisor",
+      "before": "0.4.111-priority-queue",
       "http": 200,
-      "live": "0.4.109-cost-and-advisor",
+      "live": "0.4.111-priority-queue",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.20.3-render-health-watch",
+      "before": "1.21.1-branch-hygiene-watch",
       "http": 200,
-      "live": "1.20.3-render-health-watch",
+      "live": "1.21.1-branch-hygiene-watch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1423,9 +1416,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.33-scan-pagesize",
+      "before": "0.7.34-reach-select",
       "http": 200,
-      "live": "0.7.33-scan-pagesize",
+      "live": "0.7.34-reach-select",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
@@ -1447,9 +1440,9 @@
       "worker": "qnfo-thread-ingest"
     },
     "qnfo-tools-mcp": {
-      "before": "1.1.6-capability-contract",
+      "before": "1.2.0-owner-queue",
       "http": 200,
-      "live": "1.1.6-capability-contract",
+      "live": "1.2.0-owner-queue",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-tools-mcp"

@@ -88,11 +88,16 @@ async function connect(env, code) {
   return call(env, "/microsoft/callback?code=" + code + "&state=" + state);
 }
 
-test("bundle identifies as 4.5.0 and /health reports the Microsoft state", async () => {
+// VERSION-UNPIN-1 (2026-10-03, ci-watchdog #577): the suite pinned "4.5.0-msgraph-mail" exactly, so every later
+// personal-api release (4.5.1) failed deploy-gate. It now requires a release that carries Microsoft mail: 4.5.0 or later.
+test("bundle is 4.5.0 or later and /health reports the Microsoft state", async () => {
   mockWorld();
   const env = mkEnv();
   const h = await (await call(env, "/health")).json();
-  assert.equal(h.version, "4.5.0-msgraph-mail");
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(h.version || ""));
+  assert.ok(m, "health.version must start with major.minor.patch, got " + h.version);
+  const v = [Number(m[1]), Number(m[2]), Number(m[3])];
+  assert.ok(v[0] > 4 || (v[0] === 4 && (v[1] > 5 || (v[1] === 5 && v[2] >= 0))), "expected >= 4.5.0, got " + h.version);
   assert.equal(h.microsoft_mail, "not-connected");
 });
 

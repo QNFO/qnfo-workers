@@ -57,6 +57,7 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('reach-ingest-
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jo-qnfo-backlog-exec-abc', ?, 'ok')").run(ago(7));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-grant-followup-ok1', ?, 'ok')").run(ago(4));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('branch-hygiene-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
 // SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39): the */30 heartbeat.
 db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('evt-secret-watch-1', ?, 'secret-watch-tick', 'qnfo-ops', 'ok')").run(ago(0.3));
 // ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40): the */30 heartbeat.
@@ -140,6 +141,7 @@ ok(op(m, "portfolio-daily").state.startsWith("ok") && op(m, "portfolio-daily").a
 ok(op(m, "identity-weekly").state.startsWith("ok") && op(m, "time-gated-verification").state.startsWith("ok"), "space-format timestamps are read as UTC");
 ok(!op(m, "linkedin-draft-approval").counted && /by policy/.test(op(m, "linkedin-draft-approval").state), "by-policy owner approvals are listed, not counted");
 ok(!op(m, "code-task-merge").counted && op(m, "code-task-merge").runner === "cron:qnfo-fleet-control" && /^ok, last run 0.5h ago$/.test(op(m, "code-task-merge").state), "a fresh merge-runner heartbeat with nothing for a person: not counted");
+ok(!op(m, "branch-hygiene").counted && op(m, "branch-hygiene").runner === "cron:qnfo-fleet-control", "a fresh branch-sweeper heartbeat: not counted (BRANCH-HYGIENE-1)");
 // CODE-TASK-MERGE-RUNNER-1: the runner merges; what a person still did or must do counts. The runner's first ok tick
 // (code-merge-first-ok, written once) was 5 days ago: a person merge before it is history, not a dependency.
 const cm = async () => op(await api.watchmakerMeasure(env, NOW), "code-task-merge");
