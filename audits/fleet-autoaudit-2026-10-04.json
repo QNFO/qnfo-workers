@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-04 08:25:43",
+  "audited_at": "2026-10-04 09:06:41",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -392,7 +392,7 @@
     "sync_workers": [
       {
         "dir": "calendar-api",
-        "version": "0.5.0-feedback",
+        "version": "0.7.0-host",
         "worker": "calendar-api"
       },
       {
@@ -412,12 +412,12 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.5.1-predict-timeout",
+        "version": "4.6.0-ledger-sync",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.9.2-direct",
+        "version": "1.10.0-ledger",
         "worker": "personal-companion"
       },
       {
@@ -482,7 +482,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.2.5-owner-sender-no-reply",
+        "version": "2.3.1-itinerary-ingest",
         "worker": "qnfo-email"
       },
       {
@@ -592,7 +592,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.2.1",
+        "version": "1.2.3",
         "worker": "radar-hub"
       }
     ]
@@ -624,9 +624,9 @@
       "worker": "audits"
     },
     "calendar-api": {
-      "before": "0.5.0-feedback",
+      "before": "0.7.0-host",
       "http": 200,
-      "live": "0.5.0-feedback",
+      "live": "0.7.0-host",
       "match": 1,
       "note": "SYNC",
       "worker": "calendar-api"
@@ -800,17 +800,17 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.5.1-predict-timeout",
+      "before": "4.6.0-ledger-sync",
       "http": 200,
-      "live": "4.5.1-predict-timeout",
+      "live": "4.6.0-ledger-sync",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.9.2-direct",
+      "before": "1.10.0-ledger",
       "http": 200,
-      "live": "1.9.2-direct",
+      "live": "1.10.0-ledger",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1064,9 +1064,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.2.5-owner-sender-no-reply",
+      "before": "2.3.1-itinerary-ingest",
       "http": 200,
-      "live": "2.2.5-owner-sender-no-reply",
+      "live": "2.3.1-itinerary-ingest",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1472,9 +1472,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.2.1",
+      "before": "1.2.3",
       "http": 200,
-      "live": "1.2.1",
+      "live": "1.2.3",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
