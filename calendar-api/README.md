@@ -29,5 +29,13 @@ INSERT OR IGNOREs rows into qnfo-audit.owner_questions (UNIQUE(kind, ref)); pers
 - triage ref=<ISO week>: Sundays (Amsterdam), up to 5 tentative personal-radar events within 14 days, one signed link each; priority 5.
 Tests: node --no-warnings calendar-api/queue.test.mjs
 
+Host plane (0.7.0, CAL-HOST-PLANE-1): a third plane `host` = open-house availability (owner decision 2026-10-04: dates only).
+- Writes need the CAL_TOKEN bearer like every plane. POST /events?plane=host takes dtstart (YYYY-MM-DD) and optional dtend;
+  everything else is dropped and stored as title "Open for guests", all_day, source host.
+- The feed (R2 calendar/host-<token>.ics, republished hourly and on every write; /events.ics?plane=host needs the bearer)
+  carries only all-day "Open for guests" events: no address, names, contact details, description or url, even if a row holds
+  them (scrubbed at read time). Guest records never go in qnfo-audit.
+Tests: node --no-warnings calendar-api/host.test.mjs
+
 Deploy: cd qnfo-workers/calendar && npx wrangler deploy
 Canonical source: github.com/QNFO/qnfo-workers -> qnfo-workers/calendar/worker.js
