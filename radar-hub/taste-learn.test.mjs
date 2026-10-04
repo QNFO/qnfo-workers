@@ -121,6 +121,6 @@ const bo = await (await W.fetch(new Request("https://radar-hub.example/personal/
 ok(bo.ok === true && bo.taste.active === false, "a malformed feedback table fails safe");
 
 const h = await (await W.fetch(new Request("https://radar-hub.example/health"), {}, {})).json();
-ok(h.version === "1.2.2", "hub /health reports 1.2.2");
+ok(h.version === "1.2.3", "hub /health reports 1.2.3");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
