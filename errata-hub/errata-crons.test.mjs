@@ -56,6 +56,8 @@ audit.prepare("INSERT INTO errata_actions (queue_id, paper_doi, slug, version_fr
 papers.prepare("INSERT INTO papers (slug, version, doi, zenodo_doi, body_md) VALUES ('old-paper', '0.5', '10.5281/zenodo.901', '10.5281/zenodo.901', 'x')").run();
 
 const aiCalls = [];
+const judgeCalls = [];
+let judgeMode = "pass";
 const AI = {
   async run(model, input) {
     const p = input.messages[0].content;
@@ -63,6 +65,13 @@ const AI = {
     if (p.includes("errata-detection")) {
       const yes = (p.split("\nBody: ")[1] || "").includes("nowhere mentioned");
       return { response: JSON.stringify({ errata: yes, paper_doi: yes ? DOI : null, claim: yes ? "Equation (3) is not in Doe et al." : null, confidence: yes ? 0.9 : 0.1 }) };
+    }
+    if (p.includes("CORRECTION REVIEW")) {
+      judgeCalls.push(p);
+      if (judgeMode === "throw") throw new Error("model down");
+      if (judgeMode === "garbage") return { response: "I think it is fine." };
+      if (judgeMode === "fail") return { response: "<think>hm</think>{\"changes_result\": true, \"supported_by_email\": true, \"reason\": \"alters a claim\"}" };
+      return { response: "{\"changes_result\": false, \"supported_by_email\": true, \"reason\": \"attribution only\"}" };
     }
     return { response: JSON.stringify({ risk: "low", clarification: "Equation (3) is QNFO's own reformulation, not a result of Doe et al.", anchor: ANCHOR, position: "after", acknowledgement: "We thank the correspondent for the correction.", changelog: "Attribution of Equation (3) corrected.", version: "1.1" }) };
   }
@@ -162,6 +171,19 @@ audit.exec("DELETE FROM errata_watch WHERE key LIKE 'tick:%'");
 await quiet(() => worker.scheduled({ cron: "0 * * * *", scheduledTime: Date.UTC(2026, 9, 2, 12, 0) }, env, ctx));
 const tr = ["errata-watch", "errata-respond", "errata-publish"].map(tickRow);
 ok(tr.every((r) => r && r.ts) && tr[0].ts <= tr[1].ts && tr[1].ts <= tr[2].ts, "one hourly tick runs watch, respond and publish in that order (" + tr.map((r) => r && r.ts).join(" <= ") + ")");
+
+// ERRATA-JUDGE-1: a low-risk draft stays low only if the cross-family judge passes it; no verdict or a failing verdict makes it high (fail closed).
+ok(judgeCalls.length === 1 && audit.prepare("SELECT pass FROM errata_judge_log").all().every((r) => r.pass === 1), "the respond tick judged the low-risk draft once and logged a pass");
+ok(/Cross-family read: pass/.test(sends[0].text), "the receipt states the cross-family read");
+for (const mode of ["fail", "garbage", "throw"]) {
+  judgeMode = mode;
+  const qid = audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, claim, confidence, status, paper_doi) VALUES (NULL, 'email', ?, ?, 'Equation (3) is not in Doe et al.', 0.9, 'detected', ?)").run(SENDER, "judge-" + mode, DOI).lastInsertRowid;
+  await tick("15 * * * *");
+  const a = audit.prepare("SELECT risk, status FROM errata_actions WHERE queue_id = ?").get(qid);
+  ok(a && a.risk === "high", "judge " + mode + ": the draft becomes high risk, so errata-publish never sends it (" + JSON.stringify(a) + ")");
+}
+ok(audit.prepare("SELECT COUNT(*) n FROM errata_judge_log WHERE pass = 0").get().n === 3, "the three failed reads are logged");
+ok(deposits().length === 1, "no extra Zenodo call from the judge scenarios");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
