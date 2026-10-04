@@ -3,8 +3,8 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 var WORKER = "ai-health-prober";
-var VERSION = "2.3.12-revert-c119";
-var CAPS = ["model-health-probe", "freshness-check", "health-coverage"];
+var VERSION = "2.3.13-owner-client-probe";
+var CAPS = ["model-health-probe", "freshness-check", "health-coverage", "owner-client-probe"];
 var LIMS = ["cron-only: no public route; runs every 20 minutes", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron"];
 // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
 // MODELS[0] still carried a QUALIFIED internal key ("@cf/qwen/qwen3.8-27b"), i.e. this
@@ -218,6 +218,45 @@ async function checkHealthCoverage(env, now) {
   return { signal: "amh_coverage", total, stale, neverProbed, threshold_hours: THRESHOLD_H, status };
 }
 __name(checkHealthCoverage, "checkHealthCoverage");
+// OWNER-CLIENT-PROBE-1 (#1886, 2026-10-04). WHY: the owner's ChatBox/DeepChat endpoints lost
+// access when the 2026-10-01 credential rotation (#1676/#1701) skipped client consumers, and nothing
+// monitored the client path. The credential-holding 1-token probe is scripts/issue_owner_client_keys.py
+// (the owner-client-keys workflow): it keeps the owner client key private and writes one row per host
+// into owner_client_probes (HTTP status + public-read flag, never the key). This cron reads that ledger
+// and fails CLOSED: a STALE ledger (the producer stopped) or any host with ok=0 (401 / unexpected
+// public-read) raises a self_heal_actions breach within one cron. No new worker, cron or binding: it
+// reuses the existing QNFO_AUDIT binding and the freshness_guard pattern.
+async function checkOwnerClientKeys(env, now) {
+  const THRESHOLD_H = 26;
+  const out = { signal: "owner_client_keys", status: "error" };
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS ok, MAX(checked_at) AS mx FROM owner_client_probes").first();
+    const n = r ? Number(r.n || 0) : 0;
+    const ok = r ? Number(r.ok || 0) : 0;
+    const mx = r && r.mx ? String(r.mx) : null;
+    const ageH = mx ? Math.round(((now - Date.parse(mx)) / 36e5) * 10) / 10 : 999;
+    const fresh = n >= 3 && ageH <= THRESHOLD_H;
+    const allOk = n >= 3 && ok === n;
+    out.hosts = n; out.ok = ok; out.age_hours = ageH; out.threshold_hours = THRESHOLD_H;
+    out.status = fresh && allOk ? "fresh" : "stale";
+    try {
+      await env.QNFO_AUDIT.prepare("INSERT INTO freshness_guard (signal, table_name, ts_column, max_ts, age_hours, threshold_hours, status, mode, checked_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?9,?8) ON CONFLICT(signal) DO UPDATE SET table_name=?2, ts_column=?3, max_ts=?4, age_hours=?5, threshold_hours=?6, status=?7, mode=?9, checked_at=?8").bind("owner_client_keys", "owner_client_probes", "checked_at", n + " rows, " + ok + " ok", ageH, THRESHOLD_H, out.status, new Date(now).toISOString(), "heartbeat").run();
+    } catch (e) {
+    }
+    if (out.status !== "fresh") {
+      try {
+        const open = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM self_heal_actions WHERE kind='owner-client-key' AND status='open'").first();
+        if (!open || Number(open.n || 0) === 0) {
+          await env.QNFO_AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, claim, confidence) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind("owner-client-key", "issue-1886", "owner-client key probe stale or failing", new Date(now).toISOString(), "open", JSON.stringify(out), 0.9).run();
+        }
+      } catch (e) {
+      }
+    }
+  } catch (e) {
+  }
+  return out;
+}
+__name(checkOwnerClientKeys, "checkOwnerClientKeys");
 // CAPABILITY-SELF-REPORT-1 (2026-10-01, #1735): this worker has no public route (CRON_ONLY, #1402), so the deploy-guard
 // capability snapshot cannot probe its /health. Each cron run upserts its own capability_audit_snapshot row instead.
 async function capSelfReport(db, name) {
@@ -235,12 +274,13 @@ var worker_default = {
       const p = await runProbe(env, u.searchParams.get("force") === "1");
       const f = await checkFreshness(env);
       const coverage = await checkHealthCoverage(env, Date.now());
+      const ownerClients = await checkOwnerClientKeys(env, Date.now());
       let st = 0, idle = 0;
       for (let i = 0; i < f.length; i++) {
         if (f[i].status === "stale") st++;
         if (f[i].status === "idle") idle++;
       }
-      return json({ ok: true, version: VERSION, probe: p, coverage, freshness: f, stale_count: st, idle_count: idle });
+      return json({ ok: true, version: VERSION, probe: p, coverage, owner_clients: ownerClients, freshness: f, stale_count: st, idle_count: idle });
     }
     if (u.pathname === "/freshness") return json(await checkFreshness(env));
     return json({ ok: false, error: "not found" }, 404);
@@ -252,6 +292,7 @@ var worker_default = {
         await runProbe(env);
         await checkFreshness(env);
         await checkHealthCoverage(env, Date.now());
+        await checkOwnerClientKeys(env, Date.now());
       } catch (e) {
         ok = 0;
       }
