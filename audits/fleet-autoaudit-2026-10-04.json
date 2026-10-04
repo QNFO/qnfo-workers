@@ -1,8 +1,17 @@
 {
-  "audited_at": "2026-10-04 11:24:08",
+  "audited_at": "2026-10-04 12:46:23",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-fleet-dashboard"
+      ],
+      "refreshed": true,
+      "second_pass": [
+        "qnfo-fleet-dashboard"
+      ]
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -33,7 +42,14 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [],
+    "drift": [
+      {
+        "dir": "qnfo-fleet-dashboard",
+        "live": "1.21.4-owner-keys-view",
+        "repo": "1.21.3-q08-editor",
+        "worker": "qnfo-fleet-dashboard"
+      }
+    ],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -388,7 +404,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 41,
+    "sync": 40,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -489,11 +505,6 @@
         "dir": "qnfo-fleet-control",
         "version": "0.4.115-cycle-time-1",
         "worker": "qnfo-fleet-control"
-      },
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "version": "1.21.3-q08-editor",
-        "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
@@ -1154,9 +1165,9 @@
     "qnfo-fleet-dashboard": {
       "before": "1.21.3-q08-editor",
       "http": 200,
-      "live": "1.21.3-q08-editor",
-      "match": 1,
-      "note": "SYNC",
+      "live": "1.21.4-owner-keys-view",
+      "match": 0,
+      "note": "DRIFT",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
