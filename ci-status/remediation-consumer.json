@@ -1,12 +1,124 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@36fcd7d41869",
- "due": 5,
- "pass": 2,
- "fail": 2,
- "skipped": 1,
+ "verifier": "remediation-consumer@f9aa903093b9",
+ "due": 28,
+ "pass": 1,
+ "fail": 15,
+ "skipped": 12,
  "contracts": [
+  {
+   "class": "issue-1793",
+   "issue_id": 1793,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1794",
+   "issue_id": 1794,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1795",
+   "issue_id": 1795,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1798",
+   "issue_id": 1798,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1834",
+   "issue_id": 1834,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1838",
+   "issue_id": 1838,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1810",
+   "issue_id": 1810,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "EVID-1641-MENTIONS",
+   "issue_id": 1641,
+   "verdict": "fail",
+   "expected": "all-sources-ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1809",
+   "issue_id": 1809,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "EVID-1711-REACH",
+   "issue_id": 1711,
+   "verdict": "fail",
+   "expected": "seven-days",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1730",
+   "issue_id": 1730,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1753",
+   "issue_id": 1753,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1756",
+   "issue_id": 1756,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
   {
    "class": "EVID-1649-BRIEF",
    "issue_id": 1649,
@@ -24,27 +136,77 @@
    "reason": "probe returned no expected/observed pair"
   },
   {
-   "class": "PREDICT-WEEK-1",
-   "issue_id": 1908,
-   "verdict": "pass",
-   "expected": "predicting",
-   "observed": "predicting",
-   "written": true
+   "class": "detect-threshold-blindspot",
+   "issue_id": 1165,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
   },
   {
-   "class": "issue-1712",
-   "issue_id": 1712,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
+   "class": "act-half-unverified",
+   "issue_id": 1207,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
   },
   {
-   "class": "issue-1724",
-   "issue_id": 1724,
+   "class": "closure-evidence-unbacked",
+   "issue_id": 1263,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "remediation-class-death",
+   "issue_id": 1200,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "capability-precondition-missing",
+   "issue_id": 1118,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "mixed-type-timestamp",
+   "issue_id": 1283,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "timestamp-seconds-bypass",
+   "issue_id": 1298,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "router-calib-agent-class",
+   "issue_id": 1293,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "outreach-selector-drift",
+   "issue_id": 1294,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "outreach-drain-scheduled",
+   "issue_id": 1295,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "close-predicate-monotone",
+   "issue_id": 1297,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
+  {
+   "class": "cron-registry-truth",
+   "issue_id": 1494,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": 17,
+   "observed": 0,
    "written": true
   }
  ],
@@ -64,8 +226,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 10338,
- "head": "36fcd7d4186985b595d265df5916035d51d95525",
+ "spent_ms": 43714,
+ "head": "f9aa903093b9a43a6eb006f89ee8c4c82ff301a9",
  "job_status": "success",
- "ts": "2026-10-04T06:21:10Z"
+ "ts": "2026-10-04T07:54:02Z"
 }
