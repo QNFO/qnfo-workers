@@ -1,77 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@df0934f33713",
- "due": 8,
- "pass": 3,
- "fail": 4,
- "skipped": 1,
- "contracts": [
-  {
-   "class": "PREDICT-WEEK-1",
-   "issue_id": 1908,
-   "verdict": "pass",
-   "expected": "predicting",
-   "observed": "predicting",
-   "written": true
-  },
-  {
-   "class": "dashboard-cron-wall-stall-fixed",
-   "issue_id": 1938,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
-   "verdict": "fail",
-   "expected": "all-sources-ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
-   "verdict": "fail",
-   "expected": "seven-days",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1730",
-   "issue_id": 1730,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "EVID-1649-BRIEF",
-   "issue_id": 1649,
-   "verdict": "pass",
-   "expected": "recorded",
-   "observed": "recorded",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "vacuous-probe-result",
-   "expected": "fixed",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  }
- ],
+ "verifier": "remediation-consumer@a5ffda2efcd3",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
+ "skipped": 0,
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -88,8 +23,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 16217,
- "head": "df0934f3371322327977a2efae35d638719aceae",
+ "spent_ms": 3307,
+ "head": "a5ffda2efcd305bd695c7a2f177e433c5c8f9408",
  "job_status": "success",
- "ts": "2026-10-04T12:44:01Z"
+ "ts": "2026-10-04T13:16:03Z"
 }
