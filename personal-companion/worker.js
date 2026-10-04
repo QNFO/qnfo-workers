@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.9.2-direct"; // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.9.3-brief"; // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -2157,6 +2157,25 @@ function promptQuietHour(ms) {
   var h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Amsterdam", hour: "2-digit", hour12: false }).format(new Date(ms)));
   return h >= 22 || h < 8;
 }
+// MORNING-BRIEF-OWNER-NOTICE-1: one shared owner-notice sender. Goes to the owner's own address only (the recipient is a
+// constant, never a parameter), never reads or writes email_suppression, so the 2026-09-22 digest opt-out keeps silencing
+// essay mail while the owner's own transactional mail (morning brief, owner questions) arrives.
+async function sendOwnerNotice(env, subject, text) {
+  if (!env.SEND_EMAIL && !env.EMAIL) return { ok: false, error: "no mail binding" };
+  try {
+    if (env.SEND_EMAIL) {
+      await env.SEND_EMAIL.send({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: subject, text: text });
+      return { ok: true, via: "send_email" };
+    }
+    var resp = await env.EMAIL.fetch("https://email.internal/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
+      body: JSON.stringify({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: subject, body: text, handoff: true })
+    });
+    if (!resp.ok) return { ok: false, error: "email " + resp.status + " " + String(await resp.text().catch(function () { return ""; })).slice(0, 200) };
+    return { ok: true, via: "email" };
+  } catch (e) { return { ok: false, error: String(e && e.message || e).slice(0, 240) }; }
+}
 async function deliverOwnerPrompts(env, nowMs) {
   var out = { sent: 0, skipped: "", error: null };
   if (!env.AUDIT) { out.skipped = "no AUDIT binding"; return out; }
@@ -2172,19 +2191,8 @@ async function deliverOwnerPrompts(env, nowMs) {
     if (cnt && cnt.n >= PROMPT_DAILY_CAP) { out.skipped = "daily cap"; return out; }
     var row = await env.AUDIT.prepare("SELECT id, subject, body FROM owner_questions WHERE sent_at IS NULL AND attempts < ?1 AND (not_before IS NULL OR not_before <= ?2) ORDER BY priority, id LIMIT 1").bind(PROMPT_MAX_ATTEMPTS, nowStr).first();
     if (!row) { out.skipped = "queue empty"; return out; }
-    var err = null;
-    try {
-      if (env.SEND_EMAIL) {
-        await env.SEND_EMAIL.send({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: row.subject, text: row.body });
-      } else {
-        var resp = await env.EMAIL.fetch("https://email.internal/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") },
-          body: JSON.stringify({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: row.subject, body: row.body, handoff: true })
-        });
-        if (!resp.ok) err = "email " + resp.status + " " + String(await resp.text().catch(function () { return ""; })).slice(0, 200);
-      }
-    } catch (e) { err = String(e && e.message || e).slice(0, 240); }
+    var nr = await sendOwnerNotice(env, row.subject, row.body);
+    var err = nr.ok ? null : nr.error;
     if (err) {
       await env.AUDIT.prepare("UPDATE owner_questions SET attempts = attempts + 1, last_error = ?2 WHERE id = ?1").bind(row.id, err).run();
       out.error = err;
@@ -2248,8 +2256,20 @@ async function sendMorningBrief(env) {
       if (_ft && _ft.v) L.push("Calendar feed: https://pub-7e5e6cd48f4b43ebb55a5ee25093cb71.r2.dev/calendar/personal-" + _ft.v + ".ics");
     } catch (eFeed) {
     }
+    try {
+      if (env.AUDIT) {
+        var qs = await env.AUDIT.prepare("SELECT subject, sent_at FROM owner_questions WHERE sent_at IS NULL OR sent_at >= datetime('now','-2 days') ORDER BY sent_at IS NOT NULL, priority, id LIMIT 5").all();
+        var qr = (qs && qs.results) || [];
+        if (qr.length) {
+          L.push("");
+          L.push("Questions waiting:");
+          for (var qi = 0; qi < qr.length; qi++) L.push("- " + qr[qi].subject + (qr[qi].sent_at ? " (sent)" : " (queued)"));
+        }
+      }
+    } catch (eQ) {
+    }
     var body = L.join(NL);
-    var r = await sendOne(env, "rwnquni@outlook.com", "Morning - " + day, body);
+    var r = await sendOwnerNotice(env, "Morning - " + day, body);
     if (r && r.ok) {
       await env.PERSONAL.prepare("INSERT INTO companion_morning_brief (date, sent_at) VALUES (?, ?)").bind(day, (/* @__PURE__ */ new Date()).toISOString()).run();
     }
@@ -2345,6 +2365,8 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
 export {
   GenerationFlow,
   deliverOwnerPrompts,
+  sendOwnerNotice,
+  sendMorningBrief,
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
