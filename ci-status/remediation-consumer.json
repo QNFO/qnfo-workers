@@ -1,11 +1,11 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@2d3c3e5ad944",
- "due": 8,
- "pass": 1,
- "fail": 4,
- "skipped": 3,
+ "verifier": "remediation-consumer@36fcd7d41869",
+ "due": 5,
+ "pass": 2,
+ "fail": 2,
+ "skipped": 1,
  "contracts": [
   {
    "class": "EVID-1649-BRIEF",
@@ -24,48 +24,24 @@
    "reason": "probe returned no expected/observed pair"
   },
   {
-   "class": "GCAL-CONNECTED-1",
-   "issue_id": 1816,
-   "verdict": "vacuous-probe-result",
-   "expected": "connected",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
-   "verdict": "vacuous-probe-result",
-   "expected": "connected",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
-   "verdict": "fail",
-   "expected": "all-sources-ok",
-   "observed": "pending",
+   "class": "PREDICT-WEEK-1",
+   "issue_id": 1908,
+   "verdict": "pass",
+   "expected": "predicting",
+   "observed": "predicting",
    "written": true
   },
   {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
+   "class": "issue-1712",
+   "issue_id": 1712,
    "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "pending",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
-   "verdict": "fail",
-   "expected": "seven-days",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1730",
-   "issue_id": 1730,
+   "class": "issue-1724",
+   "issue_id": 1724,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
@@ -88,8 +64,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 21522,
- "head": "2d3c3e5ad94481a9d106472811cc26557100d9c8",
+ "spent_ms": 10338,
+ "head": "36fcd7d4186985b595d265df5916035d51d95525",
  "job_status": "success",
- "ts": "2026-10-04T02:42:28Z"
+ "ts": "2026-10-04T06:21:10Z"
 }
