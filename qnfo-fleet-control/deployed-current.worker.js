@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.112-cf-changelog";
+var VERSION = "0.4.113-branch-hygiene-2"; /* 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -3779,6 +3779,7 @@ var BH_PRESERVE = ["main", "master", "gh-pages"];
 var BH_GRACE_MERGED_H = 6;
 var BH_GRACE_CLOSED_H = 24;
 var BH_GRACE_ORPHAN_H = 48;
+var BH_NEEDS_HUMAN_DAYS = 7;
 var BH_MAX_ACTIONS = 40;
 var BH_MAX_COMPARES = 60;
 var BH_ARCHIVE_PREFIX = "refs/archive/";
@@ -3859,7 +3860,10 @@ async function branchHygieneTick(env, opts) {
     else e.closed = Math.max(e.closed, p.number);
   });
   var live = {};
-  try { ((await env.AUDIT.prepare("SELECT branch FROM code_tasks WHERE status IN ('branch_pushed', 'published', 'pr_open') AND branch IS NOT NULL").all()).results || []).forEach(function(r) { live[r.branch] = 1; }); } catch (e) {}
+  // BRANCH-HYGIENE-2: a task the merge runner refused (needs_human) keeps its branch for BH_NEEDS_HUMAN_DAYS days, because the
+  // branch is the only artifact a person has to act on; after that the archive ref is enough.
+  var nhSince = new Date(nowMs - BH_NEEDS_HUMAN_DAYS * 864e5).toISOString();
+  try { ((await env.AUDIT.prepare("SELECT branch FROM code_tasks WHERE branch IS NOT NULL AND (status IN ('branch_pushed', 'published', 'pr_open') OR (status = 'needs_human' AND updated_at >= ?1))").bind(nhSince).all()).results || []).forEach(function(r) { live[r.branch] = 1; }); } catch (e) {}
   var names = br.items.map(function(b) { return b.name; });
   out.branches = names.length;
   var actions = 0, compares = 0, remaining = names.length;
@@ -6797,7 +6801,7 @@ var worker_default2 = {
       var bhc = await bhConfig(env);
       var bhl = await env.AUDIT.prepare("SELECT ts, branch, sha, action, why, pr, archive_ref, ok, dry FROM branch_hygiene_log ORDER BY id DESC LIMIT 40").all().catch(function() { return { results: [] }; });
       var bhh = await env.AUDIT.prepare("SELECT ts, status, text FROM cloud_ops_events WHERE id >= 'branch-hygiene-tick-' AND id < 'branch-hygiene-tick.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
-      return json({ ok: true, version: VERSION, loop: "BRANCH-HYGIENE-1", enabled: bhc.enabled, dry_run: bhc.dry, switch: "ops_config branch_hygiene_enabled = " + bhc.raw, grace_hours: { merged: BH_GRACE_MERGED_H, closed_pr: BH_GRACE_CLOSED_H, no_pr: BH_GRACE_ORPHAN_H }, max_actions_per_tick: BH_MAX_ACTIONS, archive_refs: BH_ARCHIVE_PREFIX + "<branch>", last_tick: bhh, recent: bhl.results || [] });
+      return json({ ok: true, version: VERSION, loop: "BRANCH-HYGIENE-1", enabled: bhc.enabled, dry_run: bhc.dry, switch: "ops_config branch_hygiene_enabled = " + bhc.raw, grace_hours: { merged: BH_GRACE_MERGED_H, closed_pr: BH_GRACE_CLOSED_H, no_pr: BH_GRACE_ORPHAN_H }, needs_human_days: BH_NEEDS_HUMAN_DAYS, max_actions_per_tick: BH_MAX_ACTIONS, archive_refs: BH_ARCHIVE_PREFIX + "<branch>", last_tick: bhh, recent: bhl.results || [] });
     }
     if (p === "/branch-hygiene/tick" && request.method === "POST") {
       var bha = request.headers.get("Authorization") || "";

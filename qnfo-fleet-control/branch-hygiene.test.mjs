@@ -1,5 +1,5 @@
 /**
- * branch-hygiene.test.mjs -- offline regression lock for BRANCH-HYGIENE-1 (qnfo-fleet-control 0.4.110).
+ * branch-hygiene.test.mjs -- offline regression lock for BRANCH-HYGIENE-1/2 (qnfo-fleet-control 0.4.110, 0.4.113).
  *
  * Slices the block out of worker.js and drives bhDecide (pure) and branchHygieneTick against an in-memory SQLite D1
  * (node:sqlite, Node 22) and a scripted GitHub API. Proves: merged branches are deleted; an unmerged branch is deleted
@@ -30,7 +30,7 @@ const hAgo = (n) => new Date(NOW - n * 3600000).toISOString();
 
 function makeD1() {
   const db = new DatabaseSync(":memory:");
-  db.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE code_tasks (id TEXT, branch TEXT, status TEXT); CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, job TEXT, status TEXT); CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT); INSERT INTO metric_registry (metric) VALUES ('repo_branches_open');");
+  db.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE code_tasks (id TEXT, branch TEXT, status TEXT, updated_at TEXT); CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, job TEXT, status TEXT); CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT); INSERT INTO metric_registry (metric) VALUES ('repo_branches_open');");
   const stmt = (sql, args) => ({
     bind: (...a2) => stmt(sql, a2),
     run: async () => { db.prepare(sql).run(...args); return {}; },
@@ -60,7 +60,9 @@ function makeGh(sc) {
 
 async function run(sc, opts) {
   const d1 = makeD1();
-  (sc.liveTasks || []).forEach((br) => d1.db.prepare("INSERT INTO code_tasks (id, branch, status) VALUES (?1, ?2, 'branch_pushed')").run("t-" + br, br));
+  (sc.liveTasks || []).forEach((br) => d1.db.prepare("INSERT INTO code_tasks (id, branch, status, updated_at) VALUES (?1, ?2, 'branch_pushed', ?3)").run("t-" + br, br, hAgo(1)));
+  (sc.needsHuman || []).forEach(([br, ageH]) => d1.db.prepare("INSERT INTO code_tasks (id, branch, status, updated_at) VALUES (?1, ?2, 'needs_human', ?3)").run("nh-" + br, br, hAgo(ageH)));
+  (sc.closedTasks || []).forEach((br) => d1.db.prepare("INSERT INTO code_tasks (id, branch, status, updated_at) VALUES (?1, ?2, 'closed', ?3)").run("c-" + br, br, hAgo(1)));
   (sc.config || []).forEach(([k, v]) => d1.db.prepare("INSERT INTO ops_config (key, value) VALUES (?1, ?2)").run(k, v));
   const gh = makeGh(sc);
   const sandbox = { evApi: gh.evApi, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, __export: null };
@@ -128,6 +130,17 @@ const scenario = () => ({
   eq(out.setting, "delete_branch_on_merge enabled", "the repo setting is turned on");
   eq(calls.includes("PATCH "), true, "PATCH on the repo");
   eq(d1.db.prepare("SELECT status FROM cloud_ops_events WHERE kind='branch-hygiene-tick'").get().status, "ok", "heartbeat ok");
+}
+{ // BRANCH-HYGIENE-2: a needs_human task keeps its branch for 7 days; after that, or when closed, the branch is archived and deleted
+  const sc = {
+    branches: [br("main", 0, true), br("codeagent-nh-fresh", 20), br("codeagent-nh-old", 21), br("codeagent-closed", 22)],
+    compare: { [sha(20)]: cmpRes("diverged", 1, 100), [sha(21)]: cmpRes("diverged", 1, 300), [sha(22)]: cmpRes("diverged", 1, 100) },
+    needsHuman: [["codeagent-nh-fresh", 30], ["codeagent-nh-old", 24 * 8]], closedTasks: ["codeagent-closed"]
+  };
+  const { out, calls } = await run(sc);
+  eq(out.archived.sort(), ["codeagent-closed", "codeagent-nh-old"], "a closed task and a needs_human task idle for 8 days are archived then deleted");
+  eq(calls.some((c) => c.startsWith("DELETE") && c.includes("nh-fresh")), false, "a needs_human task updated 30h ago keeps its branch");
+  eq(calls.some((c) => c.startsWith("GET /compare/main...") && c.includes(sha(20))), false, "a protected branch is not even compared");
 }
 { // a failed archive stops the delete
   const sc = scenario(); sc.archiveFails = true;
