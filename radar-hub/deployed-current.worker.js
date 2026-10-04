@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.2.2"; // 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.2.3"; // 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -854,7 +854,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.6";
+var VERSION = "1.2.7";
 var WORKER = "personal-events-radar";
 var TAB = String.fromCharCode(9);
 var LF = String.fromCharCode(10);
@@ -872,7 +872,7 @@ var INTERESTS = [
   { code: "FES", name: "Festivals and city life", kw: ["festival", "open day", "night of", "museumnacht", "free entry", "gratis", "market", "parade", "city walk"] }
 ];
 var SOURCES = [
-  { name: "Concertgebouw", url: "https://www.concertgebouw.nl/en", kind: "concert", delivery: "onsite", cost: 2 },
+  { name: "Concertgebouw", url: "https://www.concertgebouw.nl/en", kind: "concert", delivery: "onsite", cost: 2, titleDir: "after" },
   { name: "Rijksmuseum", url: "https://www.rijksmuseum.nl/en/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
   { name: "VanGoghMuseum", url: "https://www.vangoghmuseum.nl/en/visit/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
   { name: "Stedelijk", url: "https://www.stedelijk.nl/en/whats-on", kind: "exhibition", delivery: "onsite", cost: 1 },
@@ -924,10 +924,90 @@ function toISO(y, m, d) {
   return y + "-" + pad2(m) + "-" + pad2(d);
 }
 __name(toISO, "toISO");
+// RADAR-TITLE-NOISE-1 (charter pillar: personal). The calendar title used to be the venue plus the first 90 characters of the
+// stripped page text around the date, which carried menu chrome, dates and the previous card's tail. extractEvents now also
+// builds `title`: the nearest heading or link text before the date, else the text between the previous date and this one,
+// with chrome, dates and repeated venue prefixes removed and a length cap. The snippet (scoring, classify, report) and the
+// dedupe key venue|date are untouched, so existing rows are never re-posted.
+var TITLE_CAP = 80;
+var TITLE_CHROME = new RegExp("indeling" + WS + "prijs" + WS + "taal" + WS + "valuta|dit" + WS + "evenement" + WS + "opslaan|\\bopslaan\\b|\\bnext" + WS + "page\\b|\\bprevious" + WS + "page\\b|\\bpage" + WS + "[0-9]+\\b|upcoming" + WS + "exhibitions|skip" + WS + "to" + WS + "[a-z]+(?:" + WS + "[a-z]+)?|read" + WS + "more|lees" + WS + "meer|accept(?:" + WS + "all)?" + WS + "cookies|\\bcookies?(?:" + WS + "(?:settings|policy|preferences))?\\b|tickets" + WS + "available|accessibility" + WS + "facilities|now" + WS + "on" + WS + "view|\\bexpected\\b|\\bsave" + WS + "this" + WS + "event\\b|\\bsubscribe\\b|\\bnewsletter\\b|at" + WS + "various" + WS + "times|diverse" + WS + "locaties" + WSC + "*/" + WSC + "*various" + WS + "locations|[0-9]{1,2}:[0-9]{2}" + WSC + "*-" + WSC + "*[0-9]{1,2}:[0-9]{2}|our" + WS + "top" + WS + "picks" + WS + "this" + WS + "season|all" + WS + "events" + WS + "and" + WS + "happenings|festivals" + WS + "and" + WS + "events|shopping" + WS + "and" + WS + "markets|theatre" + WS + "and" + WS + "stage", "gi");
+var TITLE_WDAY = "(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag";
+var TITLE_DATE_SRC = "(?:(?:" + TITLE_WDAY + ")[.]?,?" + WSC + "*)?(?:" + MONTH_RE + "[a-z]*[.]?" + WS + "[0-9]{1,2}(?:" + WSC + "*[-–—]" + WSC + "*[0-9]{1,2})?|[0-9]{1,2}(?:" + WSC + "*[-–—]" + WSC + "*[0-9]{1,2})?" + WS + MONTH_RE + "[a-z]*[.]?)(?:" + WSC + "*,?" + WSC + "*'?20?[0-9]{2}(?![0-9:]))?(?:" + WSC + "*,?" + WSC + "*[0-9]{1,2}:[0-9]{2}(?:" + WSC + "*[AaPp][Mm])?)?";
+function cleanTitleText(raw, venue, isHeading) {
+  let t = String(raw || "").replace(new RegExp(TITLE_DATE_SRC, "gi"), " ").replace(TITLE_CHROME, " ");
+  t = t.replace(new RegExp("^[^A-Za-z0-9]*" + String(venue || "").replace(/[^A-Za-z0-9]/g, "") + "[:|]?", "i"), " ");
+  t = t.replace(new RegExp("^[^A-Za-z0-9]*Amsterdam" + WSC + "*[|:]", "i"), " ");
+  t = t.replace(new RegExp(WSC + "+", "g"), " ").replace(new RegExp("^['\u2019]?[0-9]{1,2}" + WS + "(?=[A-Z])"), "").trim();
+  const close = t.indexOf(")");
+  if (close !== -1 && t.indexOf("(") === -1 || close !== -1 && close < t.indexOf("(")) t = t.slice(close + 1).trim();
+  const sentence = t.lastIndexOf(". ");
+  if (sentence !== -1 && t.length - sentence - 2 >= 8) t = t.slice(sentence + 2).trim();
+  t = t.replace(new RegExp("(?:^|" + WS + ")(?:from|until|till|t/m|every|op|vanaf" + (isHeading ? "" : "|" + TITLE_WDAY) + ")[.,]?" + WSC + "*$", "i"), "").trim();
+  let words = t.split(" ");
+  while (words.length > 2 && /^[a-z]/.test(words[0]) && words.slice(1, 6).some((w) => /^[A-Z0-9]/.test(w))) words = words.slice(1);
+  t = words.join(" ").replace(/^[^A-Za-z0-9]+/, "").replace(/[\s,;:|\-–—]+$/, "").trim();
+  if (t.length > TITLE_CAP) {
+    t = t.slice(0, TITLE_CAP);
+    const cut = t.lastIndexOf(" ");
+    if (cut > 30) t = t.slice(0, cut);
+    t = t.replace(/[\s,;:|\-–—]+$/, "");
+  }
+  return /[A-Za-z]{3}/.test(t) && t.length >= 8 ? t : "";
+}
+__name(cleanTitleText, "cleanTitleText");
+function headingCandidates(html, clean) {
+  const out = [];
+  for (const re of [/<(h[1-4])\b[^>]*>([^]*?)<\/\1>/gi, /<(a)\b[^>]*>([^]*?)<\/\1>/gi]) {
+    for (const m of String(html || "").matchAll(re)) {
+      const txt = cleanHtml(m[2]);
+      if (txt.length < 8 || txt.length > 140) continue;
+      let i = clean.indexOf(txt);
+      while (i !== -1 && out.length < 600) {
+        out.push({ txt, start: i, end: i + txt.length });
+        i = clean.indexOf(txt, i + txt.length);
+      }
+    }
+  }
+  return out;
+}
+__name(headingCandidates, "headingCandidates");
+function buildTitle(clean, idx, cands, venue, dir) {
+  const dateRe = new RegExp(TITLE_DATE_SRC, "gi");
+  const hasDate = (x) => new RegExp(TITLE_DATE_SRC, "i").test(x);
+  const m0 = new RegExp("^" + TITLE_DATE_SRC, "i").exec(clean.slice(idx));
+  const dateEnd = idx + (m0 ? m0[0].length : 0);
+  let best = null;
+  for (const c of cands) {
+    if (dir === "after") {
+      if (c.start < dateEnd || c.start - dateEnd > 200 || hasDate(clean.slice(dateEnd, c.start))) continue;
+      if (best && c.start >= best.pos) continue;
+      const t = cleanTitleText(c.txt, venue, true);
+      if (t) best = { pos: c.start, t };
+    } else {
+      if (c.end > idx || idx - c.end > 160 || hasDate(clean.slice(c.end, idx))) continue;
+      if (best && c.end <= best.pos) continue;
+      const t = cleanTitleText(c.txt, venue, true);
+      if (t) best = { pos: c.end, t };
+    }
+  }
+  if (best) return best.t;
+  const pre = clean.slice(Math.max(0, idx - 140), idx);
+  const ms = Array.from(pre.matchAll(dateRe));
+  for (let k = ms.length; k >= 0; k--) {
+    const seg = pre.slice(k === 0 ? 0 : ms[k - 1].index + ms[k - 1][0].length, k === ms.length ? pre.length : ms[k].index);
+    const before = cleanTitleText(seg, venue);
+    if (before) return before;
+  }
+  const after = clean.slice(dateEnd, dateEnd + 140);
+  const next = after.search(new RegExp(TITLE_DATE_SRC, "i"));
+  return cleanTitleText(next === -1 ? after : after.slice(0, next), venue);
+}
+__name(buildTitle, "buildTitle");
 function extractEvents(text, src) {
   const events = [];
   let discarded = 0;
   const clean = cleanHtml(text);
+  const cands = headingCandidates(text, clean);
   const cutYear = (/* @__PURE__ */ new Date()).getFullYear();
   const dropGarbage = /* @__PURE__ */ __name((s) => {
     if (new RegExp("[.]st[0-9]+" + WSC + "*[{]").test(s)) return true;
@@ -980,7 +1060,7 @@ function extractEvents(text, src) {
     const runningUntil = new RegExp("until|till|t/m|tot(?=" + WSC + "*[0-9])", "i").test(pre);
     const wideSnippet = clean.slice(Math.max(0, idx - 120), Math.min(clean.length, idx + 40)).slice(0, 240);
     const dateText = d2 ? mo + " " + d1 + "-" + d2 + ", " + year : mo + " " + d1 + ", " + year;
-    events.push({ venue: src.name, dateText, startIso, endIso, year, month, day: d1 || null, url: src.url, snippet, wideSnippet, runningUntil, srcKind: src.kind, srcDelivery: src.delivery, srcCost: src.cost });
+    events.push({ venue: src.name, title: buildTitle(clean, idx, cands, src.name, src.titleDir), dateText, startIso, endIso, year, month, day: d1 || null, url: src.url, snippet, wideSnippet, runningUntil, srcKind: src.kind, srcDelivery: src.delivery, srcCost: src.cost });
   }, "push");
   for (const m of clean.matchAll(rangeRe)) push(m[1], parseInt(m[2], 10), parseInt(m[3], 10), m[4], m.index);
   for (const m of clean.matchAll(rangeRe2)) push(m[3], parseInt(m[1], 10), parseInt(m[2], 10), m[4], m.index);
@@ -1408,6 +1488,7 @@ async function run(env) {
     let title = g.e.venue + ": " + g.e.snippet.slice(0, 90);
     const cut = title.lastIndexOf(" ");
     if (cut > 30) title = title.slice(0, cut);
+    if (g.e.title) title = g.e.venue + ": " + g.e.title;
     const key = g.e.venue.toLowerCase() + "|" + g.e.startIso;
     const kSlug = slug(g.e.venue);
     const ledgerDup = ledgerSlugs.some((r) => r.d === g.e.startIso && (r.v.indexOf(kSlug) !== -1 || kSlug.indexOf(r.v) !== -1));

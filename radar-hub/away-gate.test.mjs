@@ -71,7 +71,7 @@ const dates = (posted) => posted.map((b) => b.dtstart).sort();
 // control: no lodging rows -> everything posted
 let T = makeEnv({});
 let out = await runRadar(T.env);
-ok(out.ok === true && out.version === "1.2.6", "the personal radar run answers with its new version (" + out.version + ")");
+ok(out.ok === true && out.version === "1.2.7", "the personal radar run answers with its new version (" + out.version + ")");
 ok(JSON.stringify(dates(T.posted)) === JSON.stringify([iso(3), iso(4), iso(13), iso(14), iso(20)]), "control: with no lodging row all five Amsterdam events are posted (got " + dates(T.posted) + ")");
 
 // away window Oct 4 to Oct 14 (check-out day exclusive) in Krakow
@@ -102,7 +102,7 @@ ok(T.posted.length === 5, "a past trip gates nothing");
 
 // hub health still tracks the hub version
 const h1 = await (await W.fetch(new Request("https://radar-hub.example/health"), {}, {})).json();
-ok(h1.version === (/var VERSION = "([^"]+)"/.exec(src) || [])[1] && h1.version === "1.2.2", "hub /health reports 1.2.2");
+ok(h1.version === (/var VERSION = "([^"]+)"/.exec(src) || [])[1] && h1.version === "1.2.3", "hub /health reports 1.2.3");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
