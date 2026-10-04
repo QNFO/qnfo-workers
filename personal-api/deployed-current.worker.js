@@ -45,7 +45,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.5.1-predict-timeout";
+var VERSION = "4.5.2-away-gate";
 // FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
 // <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
 // any script loaded here can read it; a remote script from a shared, open worker would put calendar write access and
@@ -176,15 +176,16 @@ async function loadPrimeContext(env, q, currentThread) {
     const tom = tmw.toISOString().slice(0, 10);
     const _seenCal = new Set();
     const _calEvents = [];
+    const _awayW = await loadAwayWindows(env, today);
     let _evsApi = null;
     try { _evsApi = await calList(env, today, tom, 10); } catch (e) {}
-    if (_evsApi && _evsApi.ok && _evsApi.events) for (const e of _evsApi.events) {
+    if (_evsApi && _evsApi.ok && _evsApi.events) for (const e of awayFilter(_evsApi.events, _awayW, (x) => x.dtstart)) {
       const k = String(e.title || "").slice(0, 60) + "|" + String(e.dtstart || "").slice(0, 10);
       if (!_seenCal.has(k)) { _seenCal.add(k); _calEvents.push({ date: String(e.dtstart || "").slice(0, 10), title: e.title, loc: e.location, tag: e.domain || e.source || "" }); }
     }
     let _evsStore = null;
-    try { _evsStore = await env.PERSONAL.prepare("SELECT title, venue, start_date FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all(); } catch (e) {}
-    if (_evsStore && _evsStore.results) for (const e of _evsStore.results) {
+    try { _evsStore = await env.PERSONAL.prepare("SELECT title, venue, city, category, start_date FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all(); } catch (e) {}
+    if (_evsStore && _evsStore.results) for (const e of awayFilter(_evsStore.results, _awayW, (x) => x.start_date)) {
       const k = String(e.title || "").slice(0, 60) + "|" + String(e.start_date || "").slice(0, 10);
       if (!_seenCal.has(k)) { _seenCal.add(k); _calEvents.push({ date: String(e.start_date || "").slice(0, 10), title: e.title, loc: e.venue, tag: "personal" }); }
     }
@@ -882,6 +883,46 @@ async function handleGoogle(request, env, url) {
   return json({ error: { message: "not found" } }, 404);
 }
 __name(handleGoogle, "handleGoogle");
+// AWAY-GATE-2 (2026-10-04, charter pillar: personal, agent_issues #1884). Same rule as radar-hub loadAwayWindows/awayReason:
+// personal-life.events rows with category 'lodging' and a city other than Amsterdam, ISO dates, end date exclusive, malformed
+// rows ignored. The brief and the twin's calendar context drop Amsterdam on-site events that fall inside a window. Nothing is
+// deleted; any query error means no filtering (fail safe).
+async function loadAwayWindows(env, fromDate) {
+  try {
+    const r = await env.PERSONAL.prepare("SELECT city, country, start_date, end_date FROM events WHERE category = 'lodging' AND end_date >= ?1 ORDER BY start_date").bind(fromDate).all();
+    const out = [];
+    for (const w of r.results || []) {
+      const st = String(w.start_date || "").slice(0, 10);
+      const en = String(w.end_date || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(st) || !/^\d{4}-\d{2}-\d{2}$/.test(en) || en <= st) continue;
+      const city = String(w.city || "").trim();
+      if (/^amsterdam$/i.test(city)) continue;
+      out.push({ city: city || "elsewhere", start: st, end: en });
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+function awayReason(dateIso, windows) {
+  const d = String(dateIso || "").slice(0, 10);
+  for (const w of windows || []) if (d >= w.start && d < w.end) return "away:" + w.city;
+  return null;
+}
+var AMS_LOCAL_RE = /amsterdam|bimhuis|concertgebouw|zaal 100|rijksmuseum|van gogh museum|stedelijk|openluchttheater|muziekgebouw|paradiso|melkweg|\bOBA\b/i;
+// An on-site Amsterdam event: lodging and travel rows never count; a row with a city counts only when that city is Amsterdam;
+// a row without a city counts when its venue or location names Amsterdam or a known local venue.
+function isAmsterdamOnsite(e) {
+  const cat = String(e && e.category || "").toLowerCase();
+  if (cat === "lodging" || cat === "travel") return false;
+  const city = String(e && e.city || "").trim();
+  if (city) return /^amsterdam$/i.test(city);
+  return AMS_LOCAL_RE.test(String((e && (e.venue || e.location)) || ""));
+}
+function awayFilter(items, windows, dateOf) {
+  if (!windows || !windows.length) return items;
+  return (items || []).filter((e) => !(isAmsterdamOnsite(e) && awayReason(dateOf(e), windows)));
+}
 function calHeaders(env, extra) {
   const h = Object.assign({}, extra || {});
   if (env.CAL_TOKEN) h.Authorization = "Bearer " + env.CAL_TOKEN;
@@ -1425,12 +1466,15 @@ async function buildBrief(env, withSummary) {
     env.PERSONAL.prepare("SELECT ts, kind, content FROM notes ORDER BY ts DESC LIMIT 5").all().catch(() => ({ results: [] })),
     habitCheck(env, { days: 1 }).catch(() => ({ habits: [] }))
   ]);
+  const _awayB = await loadAwayWindows(env, date);
+  const _af = (r) => awayFilter(r.events || [], _awayB, (x) => x.dtstart);
   const brief = {
     ok: true,
     generated: (/* @__PURE__ */ new Date()).toISOString(),
     date,
     weather: wx,
-    calendar: { today: calToday.events || [], tomorrow: calTomorrow.events || [], upcoming7: calWeek.events || [] },
+    calendar: { today: _af(calToday), tomorrow: _af(calTomorrow), upcoming7: _af(calWeek) },
+    away_windows: _awayB.length ? _awayB : void 0,
     open: { tasks: tasksOpen.tasks || [] },
     emails: { recent: emails.results || [] },
     memory: { recentFacts: facts.results || [] },
@@ -1438,11 +1482,11 @@ async function buildBrief(env, withSummary) {
     habits: habits.habits || []
   };
   try {
-    const _exRows = await env.PERSONAL.prepare("SELECT title, venue, start_date FROM events WHERE start_date >= ?1 AND start_date <= ?2 ORDER BY start_date LIMIT 30").bind(date, next7).all();
+    const _exRows = await env.PERSONAL.prepare("SELECT title, venue, city, category, start_date FROM events WHERE start_date >= ?1 AND start_date <= ?2 ORDER BY start_date LIMIT 30").bind(date, next7).all();
     const _havCal = new Set();
     for (const s2 of brief.calendar.today || []) _havCal.add(String(s2.title || "").slice(0, 60).toLowerCase());
     for (const s2 of brief.calendar.tomorrow || []) _havCal.add(String(s2.title || "").slice(0, 60).toLowerCase());
-    for (const e of (_exRows.results || [])) {
+    for (const e of awayFilter(_exRows.results || [], _awayB, (x) => x.start_date)) {
       const _k = String(e.title || "").slice(0, 60).toLowerCase();
       if (_havCal.has(_k)) continue;
       _havCal.add(_k);
@@ -2419,7 +2463,8 @@ var api_default = {
         const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
         const later = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
         const earlier = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
-        const planned = await env.PERSONAL.prepare("SELECT title, category, venue, city, start_date, energy, energy_label FROM events WHERE COALESCE(start_date,'9999') >= ?1 AND COALESCE(start_date,'') <= ?2 ORDER BY start_date LIMIT 8").bind(today, later).all();
+        const planned = await env.PERSONAL.prepare("SELECT title, category, venue, city, start_date, energy, energy_label FROM events WHERE COALESCE(start_date,'9999') >= ?1 AND COALESCE(start_date,'') <= ?2 ORDER BY start_date LIMIT 30").bind(today, later).all();
+        planned.results = awayFilter(planned.results || [], await loadAwayWindows(env, today), (x) => x.start_date).slice(0, 8);
         const attended = await env.PERSONAL.prepare("SELECT date, title, category, venue, notes FROM activity WHERE date >= ?1 AND date <= ?2 ORDER BY date DESC LIMIT 8").bind(earlier, today).all();
         const lines = [];
         if (planned.results.length) {
@@ -3571,14 +3616,16 @@ var PersonalTwinAgent = class {
     try {
       const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
       const tom = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+      const _awayM = await loadAwayWindows(this.env, today);
       const [evs, tasks, facts] = await Promise.all([
-        calList(this.env, today, tom, 10).then(function(cl) { return { results: (cl && cl.events || []).map(function(e) { return { title: e.title, venue: e.location, start_date: String(e.dtstart || "").slice(0, 10) }; }) }; }).catch(function() { return { results: [] }; }),
+        calList(this.env, today, tom, 10).then(function(cl) { return { results: awayFilter((cl && cl.events || []).map(function(e) { return { title: e.title, venue: e.location, start_date: String(e.dtstart || "").slice(0, 10) }; }), _awayM, function(x) { return x.start_date; }) }; }).catch(function() { return { results: [] }; }),
         this.env.PERSONAL.prepare("SELECT title,due,kind FROM tasks WHERE status='open' ORDER BY due ASC LIMIT 8").all().catch(() => ({ results: [] })),
         this.env.PERSONAL.prepare("SELECT statement FROM facts ORDER BY ts DESC LIMIT 5").all().catch(() => ({ results: [] }))
       ]);
       const brief = { date: today, events: (evs.results || []).map((e) => e.title + (e.venue ? " @ " + e.venue : "") + " on " + e.start_date), tasks: (tasks.results || []).map((t) => t.title + (t.due ? " (due " + t.due + ")" : "")), facts: (facts.results || []).map((f) => f.statement) };
       try {
-        const _ex = await this.env.PERSONAL.prepare("SELECT title, venue, start_date FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all();
+        const _ex = await this.env.PERSONAL.prepare("SELECT title, venue, city, category, start_date FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all();
+        _ex.results = awayFilter(_ex.results || [], _awayM, (x) => x.start_date);
         const _have = new Set();
         for (const s2 of brief.events) { const _p = String(s2).split(" @ "); _have.add(String(_p[0] || "").slice(0, 60).toLowerCase()); }
         for (const e of (_ex.results || [])) {
