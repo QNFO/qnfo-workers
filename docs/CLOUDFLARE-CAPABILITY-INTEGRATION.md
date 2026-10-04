@@ -121,3 +121,9 @@ worker, D1 and AI-spend caps (fleet_budget), so it adds no worker, no cron and n
 - Not done here: the advisor decision gate (section 4), the registry-to-catalog adoption join (section 3) and the skills mirror
   (section 6). The catalog's `in_use` statuses are still hand-set (#1695): the loop uses the service registry text as a second
   signal that the fleet uses a product, but it does not repair the status column.
+
+## Status 2026-10-04: Clef / Clef-flash assessed (CLEF-CANDIDATE-1, qnfo-fleet-control 0.4.114)
+Clef (Workers AI decision models: option probabilities, no free text) was measured against the fleet's real usage (cf-ops ai-neurons,
+7d: 1,745,338 neurons; glm-5.3 + glm-5.3-flash = 81%, all generative). No high-volume decision-shaped caller exists outside
+qnfo-ai-calibration (a model prober, not swappable), so no swap was made. `clef_candidate_calls_7d` (target <= 2000) now counts such
+callers hourly; its trigger files the shadow-test work. Catalog row `cfc-clef` holds the evidence.

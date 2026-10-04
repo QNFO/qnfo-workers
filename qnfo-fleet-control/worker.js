@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.113-branch-hygiene-2"; /* 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.114-clef-candidate"; /* 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -5275,6 +5275,17 @@ async function cfChangelogLatest(env) {
   return { runs: runs, recent: items, by_class: byClass, metrics: await cfcMetrics(env) };
 }
 // ---- CF-CHANGELOG-LOOP-1:END ----
+// ---- CLEF-CANDIDATE-1:BEGIN (2026-10-04, pillar: cost; catalog row cfc-clef) ----
+// Clef / Clef-flash (Workers AI decision models) only pay off where the fleet makes a high-volume, short-output LLM call that
+// is really a classify/score/choose. 2026-10-04 measurement: none outside qnfo-ai-calibration (which probes each model on
+// purpose, so it cannot be swapped). This hourly measure counts such calls so the fleet notices the day one appears.
+async function clefCandidateMetric(env) {
+  var row = await charterOne(env, "SELECT COALESCE(SUM(calls),0) n FROM (SELECT SUM(calls) calls FROM ai_spend_ledger WHERE day >= date('now','-7 days') AND caller NOT LIKE 'qnfo-ai-calibration%' AND model NOT LIKE '%bge-%' GROUP BY caller, model HAVING SUM(calls) >= 50 AND 1.0 * SUM(out_tok) / SUM(calls) < 100)");
+  var n = row ? Number(row.n || 0) : 0;
+  try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='clef_candidate_calls_7d'").bind(String(n), new Date().toISOString()).run(); } catch (e) {}
+  return n;
+}
+// ---- CLEF-CANDIDATE-1:END ----
 // ---- OBJECTIVE-CONSTRAINTS-1:BEGIN (2026-10-02, goals 41, 43, 57, ratified under the owner's queue delegation; agent_issues 1744, 1745, 1746) ----
 // Three objective revisions were ratified on fleet.qnfo.org (2026-10-01) by a session under the owner's queue delegation, not by the owner in person (audit 2026-10-02, issues 1765, 1766). None is a weight change, so
 // OBJECTIVE-REVISION-APPLY-1 (qnfo-fleet-dashboard) filed each as work. This block makes each one a constraint the kernel
@@ -6848,6 +6859,7 @@ var worker_default2 = {
     ctx.waitUntil(portfolioSyncIfStale(env).catch((e) => console.error("portfolioSync error:", e && e.message || e)));
     ctx.waitUntil(loopWatch(env).catch((e) => console.error("loopWatch error:", e && e.message || e)));
     ctx.waitUntil(cfChangelogIfStale(env).catch((e) => console.error("cfChangelogIfStale error:", e && e.message || e)));
+    ctx.waitUntil(clefCandidateMetric(env).catch((e) => console.error("clefCandidateMetric error:", e && e.message || e)));
     ctx.waitUntil(objectiveConstraintsTick(env).catch((e) => console.error("objectiveConstraintsTick error:", e && e.message || e)));
     ctx.waitUntil(remediationContractsTick(env).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
     ctx.waitUntil(improvementLoopTick(env).catch((e) => console.error("improvementLoopTick error:", e && e.message || e)));

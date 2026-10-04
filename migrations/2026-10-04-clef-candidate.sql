@@ -1,0 +1,12 @@
+-- CLEF-CANDIDATE-1 (2026-10-04, pillar: cost). Idempotent. Catalog row cfc-clef (proposed).
+-- Measured 2026-10-04: no high-volume decision-shaped LLM caller exists outside qnfo-ai-calibration (a model prober; not swappable).
+-- qnfo-fleet-control 0.4.114 counts them hourly. Rule 8: a Clef call is a new paid call while fleet_budget is breached, so the lever
+-- is a shadow comparison (Clef-flash vs the existing path) that replaces the old call, net-zero cost.
+-- Rollback: DELETE the metric_registry and analytics_metric_triggers rows (notes = 'CLEF-CANDIDATE-1 2026-10-04').
+INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES
+ ('clef_candidate_calls_7d', 'system', 'leading', 'ai_spend_ledger calls in the last 7 days from caller+model groups with >= 50 calls and mean output < 100 tokens, excluding qnfo-ai-calibration and embeddings; i.e. decision-shaped calls Clef could take', 'qnfo-audit.ai_spend_ledger via qnfo-fleet-control clefCandidateMetric', '0 (2026-10-04)', '<= 2000', 'qnfo-fleet-control', 'its own trigger', 'hourly', '> 1500', '> 2000', 'MEASURED', NULL);
+INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
+SELECT 'clef_candidate_calls_7d', 'Cost lever: a decision-shaped LLM caller is large enough to move to Clef-flash', 'registry', 'gt', 2000, 5,
+ 'Pillar cost. Run: SELECT caller, model, SUM(calls) c, 1.0*SUM(out_tok)/SUM(calls) avg_out, SUM(usd) usd FROM ai_spend_ledger WHERE day >= date(''now'',''-7 days'') AND caller NOT LIKE ''qnfo-ai-calibration%'' GROUP BY caller, model HAVING c >= 50 AND avg_out < 100 ORDER BY c DESC. For the top caller, add a shadow call to @cf/cloudflare/clef-flash (env.AI.run with state + typed questions; see cloudflare_capability_catalog cfc-clef), log agreement with the existing answer, and replace the old call only if agreement >= 95 percent and out-of-scope inputs are handled (Clef-flash is weak there). Net-zero rule 8: the shadow runs on a sample of at most 5 percent. Definition of done: caller moved or catalog row cfc-clef rejected with the measured agreement; record in issue_triage.close_evidence.',
+ 'qnfo-fleet-control', 'agent_issues', 168, 1, 'CLEF-CANDIDATE-1 2026-10-04'
+WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'clef_candidate_calls_7d' AND x.enabled = 1);
