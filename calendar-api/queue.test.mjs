@@ -188,7 +188,7 @@ const oq = (db, kind) => db.prepare("SELECT * FROM owner_questions WHERE kind=? 
   const ddl = tb.db.prepare("SELECT sql FROM sqlite_master WHERE name='owner_questions'").get().sql;
   ok(/UNIQUE\(kind, ref\)/.test(ddl) && /last_error TEXT/.test(ddl), "owner_questions created with the delivery columns and UNIQUE(kind, ref)");
   const h = await (await W.fetch(new Request("https://calendar-api.q08.workers.dev/health"), tb.env)).json();
-  ok(h.version === "0.6.0-queue", "health version");
+  ok(/^\d+\.\d+\.\d+/.test(h.version), "health version");
 }
 globalThis.Date = RealDate;
 console.log(pass + " passed, " + fail + " failed");

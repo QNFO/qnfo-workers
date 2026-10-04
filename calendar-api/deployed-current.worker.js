@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.6.0-queue";
+var VERSION = "0.7.0-host";
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
 // recreated as a separate worker. Its EXECUTE leg already wrote this worker's `calendar` table, and both share the
@@ -236,8 +236,26 @@ async function notesRegenIndex(env) {
 }
 
 
-var PLANES = ["qnfo", "personal"];
-var ALLOWED_SOURCES = ["radar", "catalog", "manual", "personal-radar", "personal-profile", "personal-twin", "email"];
+var PLANES = ["qnfo", "personal", "host"];
+var ALLOWED_SOURCES = ["radar", "catalog", "manual", "personal-radar", "personal-profile", "personal-twin", "email", "host"];
+// CAL-HOST-PLANE-1 (2026-10-04, issue 1954, charter pillar: personal; owner decision 2026-10-04: dates only). The host plane is
+// open-house availability. Its feed carries all-day "Open for guests" events and nothing else: no address, no names, no
+// contact details, no description or url, whatever a row holds. The feed is built from the dates alone (the scrub is at read
+// time, so an edited or older row cannot leak), and POST also stores nothing but the dates. Guest records never live here.
+var HOST_TITLE = "Open for guests";
+function hostDay(v) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ""));
+  if (!m) return null;
+  var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] ? m[0] : null;
+}
+__name(hostDay, "hostDay");
+function hostNextDay(day) {
+  var d = new Date(day + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+__name(hostNextDay, "hostNextDay");
 var R2_PUBLIC = "https://pub-7e5e6cd48f4b43ebb55a5ee25093cb71.r2.dev";
 var CR = String.fromCharCode(13);
 var LF = String.fromCharCode(10);
@@ -311,8 +329,16 @@ __name(getIcsToken, "getIcsToken");
 async function buildICS(env, plane, fromIso) {
   const rows = await runQuery(env, "SELECT * FROM calendar WHERE plane=? AND status!='cancelled' AND dtstart>=? ORDER BY dtstart LIMIT 500", [plane, fromIso]);
   const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//QNFO//calendar-api//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
-  L.push("X-WR-CALNAME:" + (plane === "qnfo" ? "QNFO Research Calendar" : "Personal Calendar"));
+  L.push("X-WR-CALNAME:" + (plane === "qnfo" ? "QNFO Research Calendar" : plane === "host" ? "Open House Availability" : "Personal Calendar"));
   for (const e of rows) {
+    if (plane === "host") {
+      const d0 = hostDay(e.dtstart);
+      if (!d0) continue;
+      let d1 = hostDay(e.dtend);
+      if (!d1 || d1 <= d0) d1 = hostNextDay(d0);
+      L.push("BEGIN:VEVENT", "UID:" + uidFor("host", e.id), "DTSTAMP:" + fmtDate(e.created || (/* @__PURE__ */ new Date()).toISOString(), 0), "DTSTART;VALUE=DATE:" + d0.replace(/-/g, ""), "DTEND;VALUE=DATE:" + d1.replace(/-/g, ""), "SUMMARY:" + HOST_TITLE, "TRANSP:TRANSPARENT", "END:VEVENT");
+      continue;
+    }
     L.push("BEGIN:VEVENT");
     L.push("UID:" + (e.uid || uidFor(e.plane, e.id)));
     L.push("DTSTAMP:" + fmtDate(e.created || (/* @__PURE__ */ new Date()).toISOString(), 0));
@@ -561,7 +587,7 @@ var worker_default = {
     const method = request.method;
     const path = url.pathname;
     const plane = url.searchParams.get("plane") || "qnfo";
-    if (!PLANES.includes(plane)) return json({ error: "plane must be qnfo|personal" }, 400);
+    if (!PLANES.includes(plane)) return json({ error: "plane must be qnfo|personal|host" }, 400);
     if (path === "/health") {
       // PERSONAL-ICS-AUTH-1 (2026-10-01): the tokenised feed URLs are capability links, so /health
       // only returns them to a caller holding CAL_TOKEN.
@@ -570,7 +596,7 @@ var worker_default = {
         const tok = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + p).first();
         urls.push({ plane: p, url: tok && tok.v ? R2_PUBLIC + "/calendar/" + p + "-" + tok.v + ".ics" : null });
       }
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake", "event-feedback", "owner-questions"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN), and /health lists feed URLs only to a CAL_TOKEN caller", "ICS feeds are republished to R2 by the hourly :17 cron", "two planes only: qnfo and personal"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake", "event-feedback", "owner-questions", "host-plane"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN), and /health lists feed URLs only to a CAL_TOKEN caller", "ICS feeds are republished to R2 by the hourly :17 cron", "three planes: qnfo, personal and host; host (open-house availability) publishes dates only as all-day Open for guests, no address, names or contact details"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
     }
     if (path === "/publish") {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
@@ -593,7 +619,7 @@ var worker_default = {
     }
     if (path === "/events.ics") {
       // PERSONAL-ICS-AUTH-1: the personal plane needs CAL_TOKEN; subscribe to it via the tokenised R2 URL.
-      if (plane === "personal" && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      if (plane !== "qnfo" && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
       const fromIso = toIso(url.searchParams.get("from")) || new Date(Date.now() - 864e5).toISOString();
       const ics = await buildICS(env, plane, fromIso);
       return new Response(ics, { headers: { "content-type": "text/calendar; charset=utf-8" } });
@@ -625,7 +651,14 @@ var worker_default = {
       return json({ ok: true, plane, count: rows.length, events: rows });
     }
     if (path === "/events" && method === "POST") {
-      const b = await request.json().catch(() => null);
+      let b = await request.json().catch(() => null);
+      if (plane === "host") {
+        const d0 = hostDay(b && b.dtstart);
+        if (!d0) return json({ error: "host plane needs dtstart as YYYY-MM-DD" }, 400);
+        let d1 = hostDay(b.dtend);
+        if (!d1 || d1 <= d0) d1 = hostNextDay(d0);
+        b = { title: HOST_TITLE, dtstart: d0, dtend: d1, all_day: 1, source: "host", status: b.status === "cancelled" ? "cancelled" : "confirmed" };
+      }
       if (!b || !b.title || !b.dtstart) return json({ error: "title and dtstart required" }, 400);
       const uid = uidFor(plane, "t" + Date.now().toString(36));
       const r = await env.CAL_DB.prepare(
