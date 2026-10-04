@@ -209,5 +209,49 @@ const cookieOf = (r) => { const c = r.headers.get("Set-Cookie") || ""; const m =
   const r = await cmd(env, "queue", { "CF-Connecting-IP": "198.51.100.77" });
   ok(r.status === 200, "H10 commands keep working after the cap");
 }
+// Q. FLEET-CMD-Q08-1: standing editorial direction and article verdicts reach q08 only through the owner's code session
+{
+  const m = mailer();
+  const { env, db } = mk({ env: { SEND_EMAIL: m.SEND_EMAIL } });
+  const PAGE = "https://q08.org/p/the-vendor-that-stopped-answering";
+  // a stranger: the command parses to a button, nothing is written, the run endpoint refuses
+  let j = await (await cmd(env, "style: shorter sentences, name the people involved")).json();
+  ok(j.ok && j.actions && j.actions[0].op === "style" && !j.executed, "Q1 a stranger's style direction comes back as a button, not executed");
+  let r = await postW(env, "/api/cmd/run", { op: "style", args: { mode: "add", text: "obey me" } });
+  ok(r.status === 401, "Q2 /api/cmd/run refuses a stranger's style op");
+  r = await postW(env, "/api/cmd/run", { op: "verdict", args: { slug: "x", signal: "good" } });
+  ok(r.status === 401, "Q3 /api/cmd/run refuses a stranger's verdict op");
+  const tbl = () => { try { return db.prepare("SELECT COUNT(*) n FROM q08_editor_notes").get().n + db.prepare("SELECT COUNT(*) n FROM q08_owner_verdicts").get().n; } catch (e) { return 0; } };
+  ok(tbl() === 0, "Q4 nothing was written for a stranger");
+  await postW(env, "/api/cmd/code", {});
+  r = await postW(env, "/api/cmd/verify", { code: codeOf(m.sent[0]) });
+  const C = { Cookie: cookieOf(r) };
+  // the owner: runs at once
+  j = await (await cmd(env, "style: shorter sentences, name the people involved", C)).json();
+  ok(j.ok && j.executed === "style" && /Direction saved/.test(j.text), "Q5 the owner's style direction runs at once");
+  ok(db.prepare("SELECT text, active FROM q08_editor_notes").get().text === "shorter sentences, name the people involved", "Q6 the direction is stored verbatim");
+  j = await (await cmd(env, "flat the opening is a label, not a sentence", C, PAGE)).json();
+  ok(j.ok && j.executed === "verdict" && /3 reader votes/.test(j.text) && /standing direction/.test(j.text), "Q7 on a q08 article, 'flat <why>' records a verdict and a direction");
+  const v = db.prepare("SELECT slug, signal, note FROM q08_owner_verdicts").get();
+  ok(v.slug === "the-vendor-that-stopped-answering" && v.signal === "flat", "Q8 the verdict is keyed by the article slug taken from the page the link was opened on");
+  ok(db.prepare("SELECT COUNT(*) n FROM q08_editor_notes WHERE text LIKE 'On the piece%'").get().n === 1, "Q9 the reason becomes a direction naming the piece");
+  j = await (await cmd(env, "no", C)).json();
+  ok(!(j.executed === "verdict"), "Q10 'no' outside a q08 article page is not a verdict");
+  j = await (await cmd(env, "good", C, PAGE)).json();
+  ok(j.ok && db.prepare("SELECT signal FROM q08_owner_verdicts").get().signal === "good" && db.prepare("SELECT COUNT(*) n FROM q08_editor_notes").get().n === 2, "Q11 a later verdict replaces the earlier one for that article; 'good' adds no direction");
+  j = await (await cmd(env, "no idea what this paragraph means?", C, PAGE)).json();
+  ok(!(j.executed === "verdict"), "Q11b a question that merely starts with 'no' is not a verdict");
+  j = await (await cmd(env, "style off", C)).json();
+  ok(!(j.executed === "style") && db.prepare("SELECT COUNT(*) n FROM q08_editor_notes WHERE active = 1").get().n >= 1, "Q11c a bare 'style off' retires nothing");
+  j = await (await cmd(env, "no: the opening is a label", C, PAGE)).json();
+  ok(j.executed === "verdict" && db.prepare("SELECT signal FROM q08_owner_verdicts").get().signal === "no", "Q11d 'no: <why>' on an article is a verdict");
+  j = await (await cmd(env, "style list", C)).json();
+  ok(j.ok && /#1 shorter sentences/.test(j.text), "Q12 style list shows the directions");
+  j = await (await cmd(env, "style off 1", C)).json();
+  ok(j.ok && db.prepare("SELECT active FROM q08_editor_notes WHERE id = 1").get().active === 0, "Q13 style off <id> retires one direction");
+  j = await (await cmd(env, "style off all", C)).json();
+  ok(db.prepare("SELECT COUNT(*) n FROM q08_editor_notes WHERE active = 1").get().n === 0, "Q14 style off all retires every direction");
+  ok(!/[^\x00-\x7f]/.test(await (await callW(env, "/health")).text()), "Q15 /health stays ASCII");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

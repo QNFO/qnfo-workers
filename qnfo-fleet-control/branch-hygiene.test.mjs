@@ -52,6 +52,8 @@ function makeGh(sc) {
     if (method === "POST" && path === "/git/refs") return sc.archiveFails ? ok({ message: "Validation Failed" }, 422) : ok({}, 201);
     if (method === "DELETE") return ok(null, 204);
     if (method === "GET" && path === "") return ok({ delete_branch_on_merge: sc.setting == null ? false : sc.setting });
+    if (method === "POST" && /^\/issues\/\d+\/comments$/.test(path)) return ok({}, 201);
+    if (method === "PATCH" && path.startsWith("/pulls/")) return ok({});
     if (method === "PATCH" && path === "") return ok({});
     return ok(null, 404);
   };
@@ -88,11 +90,11 @@ async function run(sc, opts) {
   eq(d({ status: "behind", ahead_by: 0, age_h: 100 }).action, "delete", "old branch contained in main is deleted");
   eq(d({ status: "behind", ahead_by: 0, age_h: 2 }).action, "keep", "a fresh branch cut from an older main is not taken for merged");
   eq(d({ status: "behind", ahead_by: 0, age_h: null }).action, "keep", "unknown age is never deleted as merged");
-  eq(d({ status: "diverged", ahead_by: 3, age_h: 10 }).action, "keep", "unmerged and young (no PR, 48h) is kept");
-  eq(d({ status: "diverged", ahead_by: 3, age_h: 50 }).action, "archive-delete", "unmerged orphan past 48h is archived then deleted");
-  eq(d({ status: "diverged", ahead_by: 3, age_h: 30, closed_pr: 12 }).action, "archive-delete", "closed-unmerged PR past 24h is archived then deleted");
+  eq(d({ status: "diverged", ahead_by: 3, age_h: 10 }).action, "keep", "unmerged and young (no PR, <24h) is kept");
+  eq(d({ status: "diverged", ahead_by: 3, age_h: 50 }).action, "archive-delete", "unmerged orphan past 24h is archived then deleted");
+  eq(d({ status: "diverged", ahead_by: 3, age_h: 30, closed_pr: 12 }).action, "archive-delete", "closed-unmerged PR past 12h is archived then deleted");
   eq(d({ status: "diverged", ahead_by: 3, age_h: 30, closed_pr: 12 }).pr, 12, "the closed PR number is logged");
-  eq(d({ status: "diverged", ahead_by: 3, age_h: 20, closed_pr: 12 }).action, "keep", "closed-unmerged PR younger than 24h is kept");
+  eq(d({ status: "diverged", ahead_by: 3, age_h: 6, closed_pr: 12 }).action, "keep", "closed-unmerged PR younger than 12h is kept");
 }
 
 // ---- full tick ----
@@ -131,15 +133,15 @@ const scenario = () => ({
   eq(calls.includes("PATCH "), true, "PATCH on the repo");
   eq(d1.db.prepare("SELECT status FROM cloud_ops_events WHERE kind='branch-hygiene-tick'").get().status, "ok", "heartbeat ok");
 }
-{ // BRANCH-HYGIENE-2: a needs_human task keeps its branch for 7 days; after that, or when closed, the branch is archived and deleted
+{ // BRANCH-HYGIENE-2 / CYCLE-TIME-1: a needs_human task keeps its branch for 1 day; after that, or when closed, it is archived and deleted
   const sc = {
     branches: [br("main", 0, true), br("codeagent-nh-fresh", 20), br("codeagent-nh-old", 21), br("codeagent-closed", 22)],
     compare: { [sha(20)]: cmpRes("diverged", 1, 100), [sha(21)]: cmpRes("diverged", 1, 300), [sha(22)]: cmpRes("diverged", 1, 100) },
-    needsHuman: [["codeagent-nh-fresh", 30], ["codeagent-nh-old", 24 * 8]], closedTasks: ["codeagent-closed"]
+    needsHuman: [["codeagent-nh-fresh", 12], ["codeagent-nh-old", 48]], closedTasks: ["codeagent-closed"]
   };
   const { out, calls } = await run(sc);
-  eq(out.archived.sort(), ["codeagent-closed", "codeagent-nh-old"], "a closed task and a needs_human task idle for 8 days are archived then deleted");
-  eq(calls.some((c) => c.startsWith("DELETE") && c.includes("nh-fresh")), false, "a needs_human task updated 30h ago keeps its branch");
+  eq(out.archived.sort(), ["codeagent-closed", "codeagent-nh-old"], "a closed task and a needs_human task idle over 24h are archived then deleted");
+  eq(calls.some((c) => c.startsWith("DELETE") && c.includes("nh-fresh")), false, "a needs_human task updated 12h ago keeps its branch");
   eq(calls.some((c) => c.startsWith("GET /compare/main...") && c.includes(sha(20))), false, "a protected branch is not even compared");
 }
 { // a failed archive stops the delete
@@ -173,6 +175,29 @@ const scenario = () => ({
 { // GitHub unreachable
   const { out } = await run({ branches: [], compare: {}, pulls: [] });
   eq(out.ok, true, "an empty repository is fine");
+}
+
+{ // CYCLE-TIME-1: an open PR idle over 24h with no live code task is archived, commented and closed; a fresh one is left alone
+  const sc = {
+    branches: [br("main", 0, true)],
+    pulls: [
+      { number: 21, state: "open", updated_at: hAgo(30), head: { ref: "claude/idle-pr", sha: sha(30), repo: { full_name: "QNFO/qnfo-workers" } } },
+      { number: 22, state: "open", updated_at: hAgo(2), head: { ref: "claude/fresh-pr", sha: sha(31), repo: { full_name: "QNFO/qnfo-workers" } } }
+    ],
+    compare: {}
+  };
+  const { out, calls, d1 } = await run(sc);
+  eq(out.closed_prs, [21], "only the PR idle over 24h is closed");
+  eq(calls.some((c) => c === "POST /git/refs"), true, "the idle PR head is archived before close");
+  eq(calls.some((c) => c === "POST /issues/21/comments"), true, "a comment is posted on the idle PR");
+  eq(calls.some((c) => c === "PATCH /pulls/21"), true, "the idle PR is closed via REST PATCH");
+  eq(calls.some((c) => c.startsWith("PATCH /pulls/22") || c.startsWith("POST /issues/22/")), false, "a fresh PR is left alone");
+  eq(d1.db.prepare("SELECT pr, ok FROM branch_hygiene_log WHERE action='close-stale-pr'").get().pr, 21, "the close is logged with ok=1");
+}
+{ // a live code task's idle PR is never closed
+  const sc = { branches: [br("main", 0, true)], pulls: [ { number: 23, state: "open", updated_at: hAgo(50), head: { ref: "codeagent-livepr", sha: sha(32), repo: { full_name: "QNFO/qnfo-workers" } } } ], liveTasks: ["codeagent-livepr"], compare: {} };
+  const { out } = await run(sc);
+  eq(out.closed_prs, [], "a live code task's PR is kept even when idle");
 }
 
 console.log(`${passed} passed, ${failed} failed`);
