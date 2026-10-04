@@ -1,55 +1,10 @@
 {
-  "audited_at": "2026-10-04 09:38:39",
+  "audited_at": "2026-10-04 10:25:32",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [],
-      "waited_for": [
-        "q08-signal-engine",
-        "qnfo-ai-search",
-        "qnfo-ipatent",
-        "qnfo-observability"
-      ]
-    },
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/errata-hub/deployed-current.worker.js",
-        "dir": "errata-hub",
-        "live": "1.3.0-single-trigger",
-        "repo": "1.3.1-errata-judge",
-        "worker": "errata-hub"
-      },
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/q08-signal-engine/deployed-current.worker.js",
-        "dir": "q08-signal-engine",
-        "live": "0.8.3-codeagent",
-        "repo": "0.8.5-ensemble",
-        "worker": "q08-signal-engine"
-      },
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-ai-search/deployed-current.worker.js",
-        "dir": "qnfo-ai-search",
-        "live": "2.2.1-ctl-ellipsis",
-        "repo": "2.2.2-judge-visible",
-        "worker": "qnfo-ai-search"
-      },
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-ipatent/deployed-current.worker.js",
-        "dir": "qnfo-ipatent",
-        "live": "3.9.2-fleet-link",
-        "repo": "3.9.3-codeagent",
-        "worker": "qnfo-ipatent"
-      },
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-observability/deployed-current.worker.js",
-        "dir": "qnfo-observability",
-        "live": "1.2.15-escalate-on-cron",
-        "repo": "1.2.16-codeagent",
-        "worker": "qnfo-observability"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
@@ -78,38 +33,7 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [
-      {
-        "dir": "errata-hub",
-        "live": "1.3.0-single-trigger",
-        "repo": "1.3.1-errata-judge",
-        "worker": "errata-hub"
-      },
-      {
-        "dir": "q08-signal-engine",
-        "live": "0.8.3-codeagent",
-        "repo": "0.8.5-ensemble",
-        "worker": "q08-signal-engine"
-      },
-      {
-        "dir": "qnfo-ai-search",
-        "live": "2.2.1-ctl-ellipsis",
-        "repo": "2.2.2-judge-visible",
-        "worker": "qnfo-ai-search"
-      },
-      {
-        "dir": "qnfo-ipatent",
-        "live": "3.9.2-fleet-link",
-        "repo": "3.9.3-codeagent",
-        "worker": "qnfo-ipatent"
-      },
-      {
-        "dir": "qnfo-observability",
-        "live": "1.2.15-escalate-on-cron",
-        "repo": "1.2.16-codeagent",
-        "worker": "qnfo-observability"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -464,12 +388,17 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 36,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
         "version": "0.7.0-host",
         "worker": "calendar-api"
+      },
+      {
+        "dir": "errata-hub",
+        "version": "1.3.1-errata-judge",
+        "worker": "errata-hub"
       },
       {
         "dir": "fleet-exec",
@@ -488,8 +417,13 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.10.0-ledger",
+        "version": "1.10.1-answer-rate",
         "worker": "personal-companion"
+      },
+      {
+        "dir": "q08-signal-engine",
+        "version": "0.8.5-ensemble",
+        "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-agent-orchestrator",
@@ -505,6 +439,11 @@
         "dir": "qnfo-ai-calibration",
         "version": "1.2.8-capability-contract",
         "worker": "qnfo-ai-calibration"
+      },
+      {
+        "dir": "qnfo-ai-search",
+        "version": "2.2.2-judge-visible",
+        "worker": "qnfo-ai-search"
       },
       {
         "dir": "qnfo-archive",
@@ -572,6 +511,11 @@
         "worker": "qnfo-intent-orchestrator"
       },
       {
+        "dir": "qnfo-ipatent",
+        "version": "3.9.3-codeagent",
+        "worker": "qnfo-ipatent"
+      },
+      {
         "dir": "qnfo-kaizen",
         "version": "0.3.3-scan-internal",
         "worker": "qnfo-kaizen"
@@ -585,6 +529,11 @@
         "dir": "qnfo-memory-mcp",
         "version": "2.0.5-capability-contract",
         "worker": "qnfo-memory-mcp"
+      },
+      {
+        "dir": "qnfo-observability",
+        "version": "1.2.16-codeagent",
+        "worker": "qnfo-observability"
       },
       {
         "dir": "qnfo-ops",
@@ -709,9 +658,9 @@
     "errata-hub": {
       "before": "1.3.1-errata-judge",
       "http": 200,
-      "live": "1.3.0-single-trigger",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "1.3.1-errata-judge",
+      "match": 1,
+      "note": "SYNC",
       "worker": "errata-hub"
     },
     "events-radar": {
@@ -859,9 +808,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.10.0-ledger",
+      "before": "1.10.1-answer-rate",
       "http": 200,
-      "live": "1.10.0-ledger",
+      "live": "1.10.1-answer-rate",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -901,9 +850,9 @@
     "q08-signal-engine": {
       "before": "0.8.5-ensemble",
       "http": 200,
-      "live": "0.8.3-codeagent",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "0.8.5-ensemble",
+      "match": 1,
+      "note": "SYNC",
       "worker": "q08-signal-engine"
     },
     "qnfo-agent-orchestrator": {
@@ -949,9 +898,9 @@
     "qnfo-ai-search": {
       "before": "2.2.2-judge-visible",
       "http": 200,
-      "live": "2.2.1-ctl-ellipsis",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "2.2.2-judge-visible",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ai-search"
     },
     "qnfo-analytics": {
@@ -1285,9 +1234,9 @@
     "qnfo-ipatent": {
       "before": "3.9.3-codeagent",
       "http": 200,
-      "live": "3.9.2-fleet-link",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "3.9.3-codeagent",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ipatent"
     },
     "qnfo-kaizen": {
@@ -1325,9 +1274,9 @@
     "qnfo-observability": {
       "before": "1.2.16-codeagent",
       "http": 200,
-      "live": "1.2.15-escalate-on-cron",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "1.2.16-codeagent",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
