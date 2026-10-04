@@ -1,7 +1,7 @@
-var VERSION="2.2.5-owner-sender-no-reply"/* HANDOFF-CLAIM-SHEET-1: every handoffs insert carries a claim_sheet (FRAMEWORK-DOGFOOD-1 trigger rejected them since 2026-09-27); SCHEDULES-LIVE-1 */;
+var VERSION="2.3.1-itinerary-ingest"/* HANDOFF-CLAIM-SHEET-1: every handoffs insert carries a claim_sheet (FRAMEWORK-DOGFOOD-1 trigger rejected them since 2026-09-27); SCHEDULES-LIVE-1 */;
 const BODY_MAX_TEXT=1e4,BODY_MAX_HTML=2e4;
-export default{async email(m,e,c){const st=Date.now(),h=m.headers,from=m.from,to=m.to,subject=h.get("subject")||"(no subject)",messageId=h.get("message-id")||(Date.now()+"-"+crypto.randomUUID()),receivedAt=new Date().toISOString();const parsed=await parseBody(m.raw),bodyText=(parsed.bodyText||"").slice(0,BODY_MAX_TEXT),bodyHtml=(parsed.bodyHtml||"").slice(0,BODY_MAX_HTML),rawText=parsed.rawText||"",headersJson=JSON.stringify(Object.fromEntries(h.entries())),classification=await classifyInbound(e.AUDIT_DB,from,to);const filter=await applyFilters(e.AUDIT_DB,from,to,subject,bodyText);if(filter.action==="reject"){m.setReject(filter.reason||"rejected");return}const emailId=await storeEmail(e.AUDIT_DB,{messageId,from,to,subject,bodyText,bodyHtml,headersJson,classification,receivedAt,inReplyTo:h.get("in-reply-to")||null,refsHdr:h.get("references")||null});c.waitUntil(archiveRaw(e,{emailId,messageId,rawText,rawSize:m.rawSize,receivedAt}));const spam=(filter.action==="spam")||heuristicSpam(from,subject);if(spam){await logAction(e.AUDIT_DB,emailId,"spam",classification,st);return}c.waitUntil(enqueueHumanReply(e,{emailId:emailId,from:from,to:to,subject:subject,bodyText:bodyText,bodyHtml:bodyHtml,receivedAt:receivedAt}));if(String(bodyText||"").trim()||String(bodyHtml||"").trim())c.waitUntil(resolveParseFailures(e.AUDIT_DB,from,subject));c.waitUntil(recordParseFailure(e,{emailId,messageId,from,to,subject,bodyText,bodyHtml,headersJson,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(enqueueHandoff(e,{emailId,from,subject,receivedAt,classification}));try{await processCommand(e,{emailId:emailId,messageId:messageId,inReplyTo:h.get("in-reply-to")||null,from:from,to:to,subject:subject,bodyText:bodyText,authResults:h.get("authentication-results")||""})}catch(err){console.error("processCommand",err&&err.message||err)}
-await logAction(e.AUDIT_DB,emailId,"processed",classification,st)},async scheduled(controller,env,ctx){try{const r=await drainReplyQueue(env);console.log("qnfo-email v2.1.5 drain",JSON.stringify(r))}catch(e){console.error("drain",e&&e.message||e)}try{await replyStallGuard(env)}catch(e){}console.log("qnfo-email v2.1.5 scheduled done")},async fetch(req,e){const u=new URL(req.url),p=u.pathname==="/email"?"/":u.pathname.replace(/^\/email(?=\/)/,"");const J=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json","access-control-allow-origin":"*"}});if(p==="/health")return J({status:"ok",worker:"qnfo-email",version:VERSION,capabilities:["inbound-email", "command-control", "raw-archive", "send", "reply-queue"],limitations:["every route except /health needs API_KEY or GATEWAY_EMAIL_KEY", "commands are accepted only from allowlisted senders (the list is not published)", "queued replies drain on the daily 07:00 cron"],command_control:true,raw_archive:true,mime_guard:true,bindings:{d1:!!e.AUDIT_DB,send_email:!!e.SEND_EMAIL,ops_key:!!e.OPS_KEY},timestamp:new Date().toISOString()});/* OPTIONS-AUTH-1 (2026-10-01): OPTIONS used to skip the key check and fall through to the data routes. */if(req.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET,POST,PATCH,OPTIONS","access-control-allow-headers":"authorization,x-api-key,content-type"}});if(p!=="/health"){const a=req.headers.get("authorization")||"",x=req.headers.get("x-api-key")||"";const ok=(e.API_KEY&&(a==="Bearer "+e.API_KEY||x===e.API_KEY))||(e.GATEWAY_EMAIL_KEY&&(a==="Bearer "+e.GATEWAY_EMAIL_KEY||x===e.GATEWAY_EMAIL_KEY));if(!ok)return J({error:"unauthorized"},401)}try{if(p==="/stats")return J(await stats(e));if(p==="/emails/recent"){const limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),status=u.searchParams.get("status");let sql="SELECT id,message_id,sender,recipient,subject,classification,status,received_at,processing_ms FROM emails",vals=[];if(status){sql+=" WHERE status=?1";vals.push(status)}sql+=" ORDER BY id DESC LIMIT ?"+(vals.length+1);vals.push(limit);const r=await e.AUDIT_DB.prepare(sql).bind(...vals).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/body"){const id=parseInt(u.searchParams.get("id")||"0"),r=await e.AUDIT_DB.prepare("SELECT * FROM emails WHERE id=?1").bind(id).first();return r?J(r):J({error:"not found"},404)}if(p==="/emails/search"){const q="%"+(u.searchParams.get("q")||"")+"%",limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),r=await e.AUDIT_DB.prepare("SELECT id,message_id,sender,recipient,subject,classification,status,received_at FROM emails WHERE subject LIKE ?1 OR sender LIKE ?1 OR body_text LIKE ?1 ORDER BY id DESC LIMIT ?2").bind(q,limit).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/status"&&(req.method==="PATCH"||req.method==="POST")){const b=await req.json().catch(()=>({}));const sid=parseInt(b.id||0),sstat=String(b.status||""),ALLOWED=["received","processed","sent","replied","archived","spam","read","rejected"];if(!sid||!ALLOWED.includes(sstat))return J({ok:false,error:"id and a valid status are required",allowed:ALLOWED},400);await e.AUDIT_DB.prepare("UPDATE emails SET status=?1 WHERE id=?2").bind(sstat,sid).run();return J({ok:true,id:sid,status:sstat})}if(p==="/command"&&req.method==="POST"){try{const b=await req.json().catch(()=>({}));const sender=b.sender||b.from||"",dry=u.searchParams.get("dry")==="1"||b.dry===true,bodyText=b.body||b.command||"",subj=b.subject||"(http command)",row=await lookupSender(e.AUDIT_DB,normalizeAddress(sender));if(!row)return J({ok:false,error:"sender not in command allowlist"},403);const kind=row.kind,pc=parseCommand(bodyText,subj);let result;try{result=await routeCommand(e,pc.verb,pc.commandText,kind)}catch(err){result={ok:false,error:String(err&&err.message||err)}}const replyText=formatResult(pc.verb,pc.commandText,result,kind);let sent=false;if(!dry&&e.SEND_EMAIL&&sender){try{await e.SEND_EMAIL.send({to:sender,from:"qnfo@qnfo.org",subject:"Re: "+subj,text:replyText});sent=true}catch(err){result.reply_error=String(err&&err.message||err)}}return J({ok:result.ok!==false,verb:pc.verb,kind:kind,dry:dry,reply_sent:sent,result:result,reply:replyText})}catch(err){return J({error:err.message||String(err)},500)}}if(p==="/commands"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_commands ORDER BY id DESC LIMIT 50").all();return J({count:(r.results||[]).length,commands:r.results||[]})}catch(err){return J({error:err.message||String(err)},500)}}if(p==="/command-senders"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_command_senders ORDER BY id").all();return J({senders:r.results||[]})}catch(err){return J({error:err.message||String(err)},500)}}if(p==="/send"&&req.method==="POST")return await sendApi(req,e,J);if(p==="/queue"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT decision,COUNT(*) c FROM email_reply_queue GROUP BY decision").all();return J({counts:r.results||[]})}catch(err){return J({error:err.message},500)}}if(req.method==="GET")return J({ok:true,worker:"qnfo-email",version:VERSION,routes:["/health","/stats","/emails/recent","/emails/body","/emails/search","/emails/status","/commands","/command-senders","/send","/command"]});return J({ok:false,error:"not found",path:p,method:req.method,version:VERSION},404)}catch(err){return J({error:err.message||String(err)},500)}}};
+export default{async email(m,e,c){const st=Date.now(),h=m.headers,from=m.from,to=m.to,subject=h.get("subject")||"(no subject)",messageId=h.get("message-id")||(Date.now()+"-"+crypto.randomUUID()),receivedAt=new Date().toISOString();const parsed=await parseBody(m.raw),bodyText=(parsed.bodyText||"").slice(0,BODY_MAX_TEXT),bodyHtml=(parsed.bodyHtml||"").slice(0,BODY_MAX_HTML),rawText=parsed.rawText||"",headersJson=JSON.stringify(Object.fromEntries(h.entries())),classification=await classifyInbound(e.AUDIT_DB,from,to);const filter=await applyFilters(e.AUDIT_DB,from,to,subject,bodyText);if(filter.action==="reject"){m.setReject(filter.reason||"rejected");return}const emailId=await storeEmail(e.AUDIT_DB,{messageId,from,to,subject,bodyText,bodyHtml,headersJson,classification,receivedAt,inReplyTo:h.get("in-reply-to")||null,refsHdr:h.get("references")||null});c.waitUntil(archiveRaw(e,{emailId,messageId,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(itineraryIngest(e,{emailId,from,subject,bodyText,bodyHtml,authResults:h.get("authentication-results")||""}));const spam=(filter.action==="spam")||heuristicSpam(from,subject);if(spam){await logAction(e.AUDIT_DB,emailId,"spam",classification,st);return}c.waitUntil(enqueueHumanReply(e,{emailId:emailId,from:from,to:to,subject:subject,bodyText:bodyText,bodyHtml:bodyHtml,receivedAt:receivedAt}));if(String(bodyText||"").trim()||String(bodyHtml||"").trim())c.waitUntil(resolveParseFailures(e.AUDIT_DB,from,subject));c.waitUntil(recordParseFailure(e,{emailId,messageId,from,to,subject,bodyText,bodyHtml,headersJson,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(enqueueHandoff(e,{emailId,from,subject,receivedAt,classification}));try{await processCommand(e,{emailId:emailId,messageId:messageId,inReplyTo:h.get("in-reply-to")||null,from:from,to:to,subject:subject,bodyText:bodyText,authResults:h.get("authentication-results")||""})}catch(err){console.error("processCommand",err&&err.message||err)}
+await logAction(e.AUDIT_DB,emailId,"processed",classification,st)},async scheduled(controller,env,ctx){try{const r=await drainReplyQueue(env);console.log("qnfo-email v2.1.5 drain",JSON.stringify(r))}catch(e){console.error("drain",e&&e.message||e)}try{await replyStallGuard(env)}catch(e){}try{console.log("qnfo-email freshness",JSON.stringify(await freshnessGuard(env)))}catch(e){console.error("freshness",e&&e.message||e)}console.log("qnfo-email v2.1.5 scheduled done")},async fetch(req,e){const u=new URL(req.url),p=u.pathname==="/email"?"/":u.pathname.replace(/^\/email(?=\/)/,"");const J=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json","access-control-allow-origin":"*"}});if(p==="/health")return J({status:"ok",worker:"qnfo-email",version:VERSION,capabilities:["inbound-email", "command-control", "raw-archive", "send", "reply-queue"],limitations:["every route except /health needs API_KEY or GATEWAY_EMAIL_KEY", "commands are accepted only from allowlisted senders (the list is not published)", "queued replies drain on the daily 07:00 cron"],command_control:true,raw_archive:true,mime_guard:true,bindings:{d1:!!e.AUDIT_DB,send_email:!!e.SEND_EMAIL,ops_key:!!e.OPS_KEY},timestamp:new Date().toISOString()});/* OPTIONS-AUTH-1 (2026-10-01): OPTIONS used to skip the key check and fall through to the data routes. */if(req.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET,POST,PATCH,OPTIONS","access-control-allow-headers":"authorization,x-api-key,content-type"}});if(p!=="/health"){const a=req.headers.get("authorization")||"",x=req.headers.get("x-api-key")||"";const ok=(e.API_KEY&&(a==="Bearer "+e.API_KEY||x===e.API_KEY))||(e.GATEWAY_EMAIL_KEY&&(a==="Bearer "+e.GATEWAY_EMAIL_KEY||x===e.GATEWAY_EMAIL_KEY));if(!ok)return J({error:"unauthorized"},401)}try{if(p==="/stats")return J(await stats(e));if(p==="/emails/recent"){const limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),status=u.searchParams.get("status");let sql="SELECT id,message_id,sender,recipient,subject,classification,status,received_at,processing_ms FROM emails",vals=[];if(status){sql+=" WHERE status=?1";vals.push(status)}sql+=" ORDER BY id DESC LIMIT ?"+(vals.length+1);vals.push(limit);const r=await e.AUDIT_DB.prepare(sql).bind(...vals).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/body"){const id=parseInt(u.searchParams.get("id")||"0"),r=await e.AUDIT_DB.prepare("SELECT * FROM emails WHERE id=?1").bind(id).first();return r?J(r):J({error:"not found"},404)}if(p==="/emails/search"){const q="%"+(u.searchParams.get("q")||"")+"%",limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),r=await e.AUDIT_DB.prepare("SELECT id,message_id,sender,recipient,subject,classification,status,received_at FROM emails WHERE subject LIKE ?1 OR sender LIKE ?1 OR body_text LIKE ?1 ORDER BY id DESC LIMIT ?2").bind(q,limit).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/status"&&(req.method==="PATCH"||req.method==="POST")){const b=await req.json().catch(()=>({}));const sid=parseInt(b.id||0),sstat=String(b.status||""),ALLOWED=["received","processed","sent","replied","archived","spam","read","rejected"];if(!sid||!ALLOWED.includes(sstat))return J({ok:false,error:"id and a valid status are required",allowed:ALLOWED},400);await e.AUDIT_DB.prepare("UPDATE emails SET status=?1 WHERE id=?2").bind(sstat,sid).run();return J({ok:true,id:sid,status:sstat})}if(p==="/command"&&req.method==="POST"){try{const b=await req.json().catch(()=>({}));const sender=b.sender||b.from||"",dry=u.searchParams.get("dry")==="1"||b.dry===true,bodyText=b.body||b.command||"",subj=b.subject||"(http command)",row=await lookupSender(e.AUDIT_DB,normalizeAddress(sender));if(!row)return J({ok:false,error:"sender not in command allowlist"},403);const kind=row.kind,pc=parseCommand(bodyText,subj);let result;try{result=await routeCommand(e,pc.verb,pc.commandText,kind)}catch(err){result={ok:false,error:pubErr(err)}}const replyText=formatResult(pc.verb,pc.commandText,result,kind);let sent=false;if(!dry&&e.SEND_EMAIL&&sender){try{await e.SEND_EMAIL.send({to:sender,from:"qnfo@qnfo.org",subject:"Re: "+subj,text:replyText});sent=true}catch(err){result.reply_error=pubErr(err)}}return J({ok:result.ok!==false,verb:pc.verb,kind:kind,dry:dry,reply_sent:sent,result:result,reply:replyText})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/commands"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_commands ORDER BY id DESC LIMIT 50").all();return J({count:(r.results||[]).length,commands:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/command-senders"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_command_senders ORDER BY id").all();return J({senders:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/send"&&req.method==="POST")return await sendApi(req,e,J);if(p==="/queue"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT decision,COUNT(*) c FROM email_reply_queue GROUP BY decision").all();return J({counts:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(req.method==="GET")return J({ok:true,worker:"qnfo-email",version:VERSION,routes:["/health","/stats","/emails/recent","/emails/body","/emails/search","/emails/status","/commands","/command-senders","/send","/command"]});return J({ok:false,error:"not found",path:p,method:req.method,version:VERSION},404)}catch(err){return J({error:pubErr(err)},500)}}};
 function trunc(s,n){return String(s||"").slice(0,n)}function classifyAddress(to){to=String(to||"").toLowerCase();return to.includes("rowan")||to.includes("rwn")?"personal":"general"}
 // EMAIL-CLASSIFICATION-PERSONAL-CATCHALL-1 (#1474, 2026-10-01): the owner alias alone used to make every
 // message "personal", so the class was dominated by conference spam and vendor promos and could not route
@@ -401,3 +401,255 @@ async function enqueueHumanReply(env,d){try{if(isMachineSender(d.from))return nu
 /* EMAIL-APPROVAL-GATE-1: owner-approval + sender-reputation gate restored */
 async function drainReplyQueue(env){const out={sent:0,skipped:0,errors:0,held:0};try{const r=await env.AUDIT_DB.prepare("SELECT q.id,q.email_id,q.sender,q.subject,q.draft_text FROM email_reply_queue q WHERE q.decision='escalate' AND q.sent_at IS NULL AND q.draft_text IS NOT NULL AND q.skip_reason LIKE '%cleared for auto-send%' AND NOT EXISTS (SELECT 1 FROM emails e WHERE e.id=q.email_id AND e.status='spam') AND NOT EXISTS (SELECT 1 FROM emails e2 WHERE e2.sender=q.sender AND e2.status='spam') ORDER BY q.id LIMIT 20").all();for(const row of r.results||[]){try{await env.SEND_EMAIL.send({to:row.sender,from:"rowan.quni@qnfo.org",subject:"Re: "+row.subject,text:row.draft_text});await env.AUDIT_DB.prepare("UPDATE email_reply_queue SET decision='sent',sent_at=datetime('now'),attempt_count=attempt_count+1,updated_at=datetime('now') WHERE id=?1").bind(row.id).run();await env.AUDIT_DB.prepare("UPDATE emails SET status='replied' WHERE id=?1").bind(row.email_id).run();try{await env.AUDIT_DB.prepare("INSERT INTO emails (message_id,sender,recipient,subject,body_text,headers_json,classification,received_at,status) VALUES (?1,'rowan.quni@qnfo.org',?2,?3,?4,'{}','general',?5,'sent')").bind(crypto.randomUUID(),row.sender,"Re: "+row.subject,String(row.draft_text||"").slice(0,10000),new Date().toISOString()).run()}catch(e){}out.sent++}catch(e){out.errors++}}const s=await env.AUDIT_DB.prepare("SELECT q.id FROM email_reply_queue q JOIN emails e ON e.id=q.email_id WHERE q.decision='escalate' AND q.sent_at IS NULL AND e.status='spam'").all();for(const row of s.results||[]){try{await env.AUDIT_DB.prepare("UPDATE email_reply_queue SET decision='skip',skip_reason=COALESCE(skip_reason,'')||' | executor: parent email is spam (terminal).',updated_at=datetime('now') WHERE id=?1").bind(row.id).run();out.skipped++}catch(e){}}const _held=await env.AUDIT_DB.prepare("SELECT q.id FROM email_reply_queue q WHERE q.decision='escalate' AND q.sent_at IS NULL AND q.draft_text IS NOT NULL AND (q.skip_reason IS NULL OR q.skip_reason NOT LIKE '%cleared for auto-send%')").all();for(const row of _held.results||[]){try{await env.AUDIT_DB.prepare("UPDATE email_reply_queue SET skip_reason=COALESCE(skip_reason,'')||' | executor: owner-approval marker absent, held (REPLY-QUEUE-AUTOSEND-ON-DRAFT-1).',updated_at=datetime('now') WHERE id=?1").bind(row.id).run();out.held++}catch(e){}}}catch(e){}return out}
 async function replyStallGuard(env){try{const r=await env.AUDIT_DB.prepare("SELECT q.id,q.sender,q.subject FROM email_reply_queue q WHERE q.decision='escalate' AND q.sent_at IS NULL AND q.draft_text IS NULL AND q.created_at < datetime('now','-24 hours')").all();for(const row of r.results||[]){const ex=await env.AUDIT_DB.prepare("SELECT id FROM handoffs WHERE session_id=?1").bind("email-stall-"+row.id).first();if(!ex){try{await env.AUDIT_DB.prepare("INSERT INTO handoffs (session_id,project_id,summary,pending_work,next_action,timestamp,claim_sheet) VALUES (?1,'qnfo-email',?2,?3,?4,datetime('now'),json_object('claim',?2,'evidence','qnfo-email handoff '||?1,'confidence','asserted','status','unverified'))").bind("email-stall-"+row.id,"STALLED >24h: human email awaiting authored reply: "+row.sender+" / "+row.subject,"Queue row "+row.id+" has no draft_text; the executor cannot send it.","Author a reply (set draft_text) so the executor sends it.").run()}catch(e){}}}}catch(e){}}
+
+/* ITINERARY-INGEST-1 (agent_issues #1881, 2026-10-04): booking confirmations that reach this inbound handler become
+   personal-life.events rows (category lodging/travel, with city, country, start_date, end_date) and a mirror
+   qnfo-audit.calendar row, so the radar away gate and the daily brief see a trip without hand entry.
+   Deterministic parser, no model call. Only two kinds of mail are read: (a) from a booking-company domain whose
+   Cloudflare-stamped DMARC verdict passes for that same domain (Gmail/Outlook auto-forward keeps the original From and
+   DKIM), (b) from an owner address with the same DMARC check (a manual forward). Anything else is ignored, because a
+   fake "confirmation" must not be able to hide the owner's Amsterdam events behind an away window.
+   Booking references and phone numbers stay in personal-life.events.booking_ref; the calendar mirror never carries
+   them, and its uid is an HMAC of the code (not the code). Re-delivery is idempotent (same id, upsert). */
+var ITIN_OWNER = OWNER_SENDERS.concat(["rwnquni@gmail.com"]);
+var ITIN_BOOKING_DOMAINS = ["booking.com", "klm.com", "klm.nl", "airfrance.com", "airfrance.fr", "wizzair.com", "esky.com", "esky.pl", "esky.nl", "ryanair.com", "transavia.com", "easyjet.com", "lufthansa.com", "airbnb.com", "expedia.com", "hotels.com", "agoda.com", "vueling.com", "eurowings.com", "lot.com", "norwegian.com", "tui.com", "trip.com", "omio.com", "flixbus.com"];
+var ITIN_AIRPORTS = {
+  AMS: ["Amsterdam", "NL", 1], EIN: ["Eindhoven", "NL", 1], RTM: ["Rotterdam", "NL", 1], BRU: ["Brussels", "BE", 1], CRL: ["Charleroi", "BE", 1],
+  CDG: ["Paris", "FR", 1], ORY: ["Paris", "FR", 1], FRA: ["Frankfurt", "DE", 1], MUC: ["Munich", "DE", 1], BER: ["Berlin", "DE", 1], DUS: ["Dusseldorf", "DE", 1], HAM: ["Hamburg", "DE", 1],
+  LHR: ["London", "GB", 0], LGW: ["London", "GB", 0], STN: ["London", "GB", 0], LTN: ["London", "GB", 0], DUB: ["Dublin", "IE", 0], LIS: ["Lisbon", "PT", 0], OPO: ["Porto", "PT", 0],
+  MAD: ["Madrid", "ES", 1], BCN: ["Barcelona", "ES", 1], FCO: ["Rome", "IT", 1], MXP: ["Milan", "IT", 1], VCE: ["Venice", "IT", 1], VIE: ["Vienna", "AT", 1], ZRH: ["Zurich", "CH", 1], PRG: ["Prague", "CZ", 1], BUD: ["Budapest", "HU", 1],
+  CPH: ["Copenhagen", "DK", 1], ARN: ["Stockholm", "SE", 1], OSL: ["Oslo", "NO", 1], HEL: ["Helsinki", "FI", 2], ATH: ["Athens", "GR", 2], OTP: ["Bucharest", "RO", 2], SOF: ["Sofia", "BG", 2],
+  WAW: ["Warsaw", "PL", 1], WMI: ["Warsaw", "PL", 1], KRK: ["Kraków", "PL", 1], WRO: ["Wrocław", "PL", 1], GDN: ["Gdańsk", "PL", 1], POZ: ["Poznań", "PL", 1], KTW: ["Katowice", "PL", 1]
+};
+var ITIN_COUNTRIES = { poland: "PL", netherlands: "NL", germany: "DE", france: "FR", belgium: "BE", spain: "ES", italy: "IT", portugal: "PT", austria: "AT", switzerland: "CH", czechia: "CZ", "czech republic": "CZ", hungary: "HU", denmark: "DK", sweden: "SE", norway: "NO", finland: "FI", greece: "GR", ireland: "IE", "united kingdom": "GB", romania: "RO", bulgaria: "BG", croatia: "HR", slovakia: "SK", lithuania: "LT", latvia: "LV", estonia: "EE" };
+var ITIN_MONTHS = { jan: 1, january: 1, januari: 1, feb: 2, february: 2, februari: 2, mar: 3, march: 3, maart: 3, mrt: 3, apr: 4, april: 4, may: 5, mei: 5, jun: 6, june: 6, juni: 6, jul: 7, july: 7, juli: 7, aug: 8, august: 8, augustus: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, okt: 10, oktober: 10, nov: 11, november: 11, dec: 12, december: 12 };
+var ITIN_DATE_RE = "(?:\\d{4}-\\d{2}-\\d{2}|\\d{1,2}[./]\\d{1,2}[./]\\d{4}|\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?[A-Za-z]{3,9}\\.?,?\\s+\\d{4}|[A-Za-z]{3,9}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+\\d{4})";
+function itinPad(n) { return (n < 10 ? "0" : "") + n }
+function itinIso(y, m, d) {
+  if (!(y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return "";
+  var t = new Date(Date.UTC(y, m - 1, d));
+  if (t.getUTCMonth() !== m - 1 || t.getUTCDate() !== d) return "";
+  return y + "-" + itinPad(m) + "-" + itinPad(d);
+}
+function itinParseDate(s) {
+  s = String(s || "").trim().replace(/ /g, " ");
+  var m;
+  if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s))) return itinIso(+m[1], +m[2], +m[3]);
+  if ((m = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(s))) return itinIso(+m[3], +m[2], +m[1]);
+  if ((m = /^(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?([A-Za-z]{3,9})\.?,?\s+(\d{4})$/.exec(s))) { var a = ITIN_MONTHS[m[2].toLowerCase()]; return a ? itinIso(+m[3], a, +m[1]) : "" }
+  if ((m = /^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/.exec(s))) { var b = ITIN_MONTHS[m[1].toLowerCase()]; return b ? itinIso(+m[3], b, +m[2]) : "" }
+  return "";
+}
+function itinFindDate(text, labelRe) {
+  var re = new RegExp("(?:" + labelRe + ")[^\\n\\d]{0,40}?(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\\.?,?\\s+)?(" + ITIN_DATE_RE + ")", "i");
+  var m = re.exec(text);
+  return m ? itinParseDate(m[1]) : "";
+}
+function itinFindTime(text, labelRe) {
+  var re = new RegExp("(?:" + labelRe + ")[^\\n]{0,60}?\\b([01]?\\d|2[0-3]):([0-5]\\d)\\b", "i");
+  var m = re.exec(text);
+  return m ? itinPad(+m[1]) + ":" + m[2] : "";
+}
+function itinCode(text) {
+  var re = /(?:booking|confirmation|reservation|reference|locator|PNR)(?:[ \t]+(?:code|number|no\.?|ref(?:erence)?|id))?(?:[ \t]*\([A-Z]+\))?[ \t]*[:#][ \t]*([A-Z0-9]{5,10})\b/gi, m;
+  while ((m = re.exec(text))) {
+    var tok = m[1];
+    if (tok !== tok.toUpperCase()) continue; // codes are printed upper case; "details", "number" are not codes
+    if (!/\d/.test(tok) && !/^[A-Z]{6}$/.test(tok)) continue;
+    return tok;
+  }
+  return "";
+}
+function itinStrip(raw) {
+  return String(raw || "").replace(/<(?:style|script)[\s\S]*?<\/(?:style|script)>/gi, " ").replace(/<br\s*\/?>|<\/(?:p|div|tr|li|h\d)>/gi, "\n").replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&amp;/g, "&")
+    .replace(/[ \t ]+/g, " ").replace(/ ?\n ?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+// +01:00 or +02:00 for a European local time: EU summer time runs 01:00 UTC last Sunday of March to 01:00 UTC last Sunday of October.
+function itinOffset(iso, stdHours) {
+  var y = +iso.slice(0, 4);
+  function lastSun(mon) { var d = new Date(Date.UTC(y, mon + 1, 0)); return Date.UTC(y, mon, d.getUTCDate() - d.getUTCDay(), 1) }
+  var p = iso.split("-"), t = Date.UTC(+p[0], +p[1] - 1, +p[2], 12);
+  var dst = t >= lastSun(2) && t < lastSun(9);
+  var h = stdHours + (dst ? 1 : 0);
+  return "+" + itinPad(h) + ":00";
+}
+function itinAddDays(iso, n) { var p = iso.split("-"), d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n)); return d.getUTCFullYear() + "-" + itinPad(d.getUTCMonth() + 1) + "-" + itinPad(d.getUTCDate()) }
+function itinAirline(fn, text, from) {
+  var map = { KL: "KLM", HV: "Transavia", W6: "Wizz Air", W4: "Wizz Air", FR: "Ryanair", U2: "easyJet", LH: "Lufthansa", AF: "Air France", LO: "LOT", VY: "Vueling", EW: "Eurowings", DY: "Norwegian", BA: "British Airways", SK: "SAS" };
+  var c = fn.slice(0, 2);
+  if (map[c]) return map[c];
+  var f = String(from || "").toLowerCase();
+  for (var k in { klm: 1, wizzair: 1, ryanair: 1, transavia: 1, easyjet: 1, lufthansa: 1 }) if (f.indexOf(k) >= 0 || new RegExp("\\b" + k + "\\b", "i").test(text)) return k === "wizzair" ? "Wizz Air" : k === "klm" ? "KLM" : k.charAt(0).toUpperCase() + k.slice(1);
+  return "Flight";
+}
+function itinParseFlights(text, from, code) {
+  var out = [], seen = {};
+  var re = /\b([A-Z][A-Z0-9]|[0-9][A-Z])\s?(\d{2,4})\b[^\n]{0,80}?\b([A-Z]{3})\s*(?:-|–|→|>|to)\s*([A-Z]{3})\b|\b([A-Z]{3})\s*(?:-|–|→|>|to)\s*([A-Z]{3})\b[^\n]{0,60}?\b([A-Z][A-Z0-9]|[0-9][A-Z])\s?(\d{2,4})\b/g, m;
+  var lines = text.split("\n"); var reOne = new RegExp(re.source);
+  for (var i = 0; i < lines.length; i++) {
+    re.lastIndex = 0;
+    while ((m = re.exec(lines[i]))) {
+      var fn = m[1] ? m[1] + m[2] : m[7] + m[8], o = m[1] ? m[3] : m[5], d = m[1] ? m[4] : m[6];
+      if (!ITIN_AIRPORTS[o] || !ITIN_AIRPORTS[d] || o === d) continue;
+      // date and times sit on this line or the next three
+      var fwd = [lines[i]];
+      for (var j = i + 1; j < Math.min(lines.length, i + 4); j++) { if (reOne.test(lines[j])) break; fwd.push(lines[j]) }
+      var ctx = fwd.join("\n"), dre = new RegExp("(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\\.?,?\\s+)?(" + ITIN_DATE_RE + ")", "i");
+      var dm = dre.exec(ctx);
+      if (!dm && i > 0) { ctx = lines[i - 1] + "\n" + lines[i]; dm = dre.exec(ctx) }
+      var date = dm ? itinParseDate(dm[1]) : "";
+      if (!date) continue;
+      var tms = ctx.match(/\b(?:[01]?\d|2[0-3]):[0-5]\d\b/g) || [];
+      var key = fn + "|" + date + "|" + o + "|" + d;
+      if (seen[key]) continue;
+      seen[key] = 1;
+      out.push({ fn: fn, o: o, d: d, date: date, dep: tms[0] || "", arr: tms[1] || "" });
+    }
+  }
+  return out.map(function (f) {
+    var oa = ITIN_AIRPORTS[f.o], da = ITIN_AIRPORTS[f.d], air = itinAirline(f.fn, text, from);
+    var timed = /^\d{1,2}:\d{2}$/.test(f.dep);
+    var dep = timed ? itinPad(+f.dep.split(":")[0]) + ":" + f.dep.split(":")[1] : "";
+    var arr = /^\d{1,2}:\d{2}$/.test(f.arr) ? itinPad(+f.arr.split(":")[0]) + ":" + f.arr.split(":")[1] : "";
+    var title;
+    title = "Flight " + f.o + " to " + f.d + " (" + (air === "Flight" ? "" : air + " ") + f.fn + ")";
+    return { kind: "flight", disc: f.fn.toLowerCase(), code: code, category: "travel", title: title, venue: oa[0] + " Airport", city: oa[0], country: oa[1], start_date: f.date, end_date: f.date,
+      notes: (dep ? "Departs " + dep : "Departure time not stated") + (arr ? ", arrives " + arr + " local" : "") + ". " + oa[0] + " to " + da[0] + ".",
+      cal: { title: title, description: oa[0] + " to " + da[0] + (dep ? ", departs " + dep + " local" : "") + ".", location: oa[0] + " Airport (" + f.o + ") to " + da[0] + " Airport (" + f.d + ")",
+        all_day: timed ? 0 : 1, dtstart: timed ? f.date + "T" + dep + ":00" + itinOffset(f.date, oa[2]) : f.date, dtend: timed ? (arr ? f.date + "T" + arr + ":00" + itinOffset(f.date, da[2]) : null) : itinAddDays(f.date, 1) } };
+  });
+}
+function itinCountry(s) { var k = String(s || "").toLowerCase().replace(/[^a-z ]/g, "").trim(); return ITIN_COUNTRIES[k] || (/^[A-Z]{2}$/.test(String(s || "").trim()) ? String(s).trim() : "") }
+function itinParseHotel(subject, text, code) {
+  var cin = itinFindDate(text, "check[- ]?in|arrival|aankomst|incheck(?:en)?"), cout = itinFindDate(text, "check[- ]?out|departure|vertrek|uitcheck(?:en)?");
+  if (!cin || !cout || cout <= cin) return null;
+  var name = "", m;
+  var pats = [/^(?:property|hotel|accommodation|accommodatie|name)\s*[:\-]\s*(.{3,80})$/im, /your (?:booking|reservation|stay) (?:at|with) (.{3,80}?) (?:is|has been|was) confirmed/i, /(?:booking|reservation) confirmed\s*[:\-–]\s*(.{3,80})$/im, /confirmed\s*[:\-–]\s*(.{3,80}?)(?:\s+in\s+[^\n]+)?$/im];
+  var src = String(subject || "") + "\n" + text;
+  for (var i = 0; i < pats.length && !name; i++) if ((m = pats[i].exec(src))) name = m[1].replace(/\s+/g, " ").replace(/[.\s]+$/, "").trim();
+  var city = "", country = "";
+  if ((m = /^(?:address|adres)\s*[:\-]\s*(.{5,200})$/im.exec(text))) {
+    var parts = m[1].split(",").map(function (x) { return x.trim() }).filter(Boolean);
+    country = itinCountry(parts[parts.length - 1]);
+    var cp = parts[country ? parts.length - 2 : parts.length - 1] || "";
+    city = cp.replace(/^\d{2}-?\d{3}\s*|^\d{4}\s?[A-Z]{2}\s*|^\d{5}\s*/, "").trim();
+  }
+  if (!city && (m = /^(?:city|location|stad|plaats)\s*[:\-]\s*([^\n,]{2,60})(?:,\s*([^\n]{2,40}))?$/im.exec(text))) { city = m[1].trim(); country = country || itinCountry(m[2]) }
+  if (!city && (m = /your (?:booking|stay|reservation) in ([A-Z][^\n,.]{1,40}?) (?:is|has)/.exec(subject || ""))) city = m[1].trim();
+  if (!city) return null;
+  var tin = itinFindTime(text, "check[- ]?in|from"), tout = itinFindTime(text, "check[- ]?out|until|by");
+  if (!name) name = "Stay in " + city;
+  var nights = Math.round((Date.parse(cout) - Date.parse(cin)) / 864e5);
+  return { kind: "lodging", disc: "", code: code, category: "lodging", title: name, venue: name, city: city, country: country, start_date: cin, end_date: cout,
+    notes: (tin ? "Check-in from " + tin : "Check-in time not stated") + (tout ? ", check-out by " + tout : "") + ". " + nights + " night" + (nights === 1 ? "" : "s") + ".",
+    cal: { title: name, description: "Check-in " + cin + (tin ? " from " + tin : "") + ", check-out " + cout + (tout ? " by " + tout : "") + ".", location: city + (country ? ", " + country : ""), all_day: 1, dtstart: cin, dtend: cout } };
+}
+// Pure: returns [] for anything that is not a recognisable flight or hotel confirmation.
+function itinParse(subject, bodyText, bodyHtml, from) {
+  var text = String(bodyText || "").trim() ? String(bodyText) : itinStrip(bodyHtml);
+  text = text.replace(/\r/g, "").replace(/[ \t ]+/g, " ").slice(0, 60000);
+  if (!text.trim()) return [];
+  var code = itinCode(text) || itinCode(String(subject || ""));
+  if (!code) return [];
+  var items = itinParseFlights(text, from, code);
+  var h = items.length ? null : itinParseHotel(subject, text, code);
+  if (h) items.push(h);
+  return items;
+}
+function itinPrivacyScrub(s, code) {
+  var t = String(s || "");
+  if (code) t = t.split(code).join("").split(code.toLowerCase()).join("");
+  return t.replace(/\+?\d[\d ()\-]{7,}\d/g, "").replace(/\s{2,}/g, " ").trim();
+}
+async function itinHmac(key, msg) {
+  var k = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  var sig = new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg)));
+  var hex = ""; for (var i = 0; i < 6; i++) hex += (sig[i] < 16 ? "0" : "") + sig[i].toString(16);
+  return hex;
+}
+function itinSenderAddr(from) { var s = String(from || "").toLowerCase(); var m = s.match(/<([^>]+)>/); if (m) s = m[1]; return s.trim() }
+// Which door is this mail allowed through? Returns "" when none. Reuses the Cloudflare-stamped DMARC reading of ownerAuthenticated().
+function itinGate(env, from, authResults) {
+  var addr = itinSenderAddr(from), dom = addr.split("@")[1] || "";
+  if (!dom) return "";
+  var raw = String(authResults || ""), first = raw.split(/,\s*(?=[a-z0-9.-]+\s*;)/i)[0];
+  if (!/^\s*mx\.cloudflare\.net\s*;/i.test(first)) return "";
+  var m = /\bdmarc=(\w+)\s+header\.from=([^\s;]+)/i.exec(first);
+  if (!m || m[1].toLowerCase() !== "pass") return "";
+  var hf = m[2].toLowerCase();
+  if (hf !== dom) return "";
+  if (ITIN_OWNER.indexOf(addr) >= 0) return "owner-forward";
+  for (var i = 0; i < ITIN_BOOKING_DOMAINS.length; i++) { var b = ITIN_BOOKING_DOMAINS[i]; if (dom === b || (dom.length > b.length && dom.slice(dom.length - b.length - 1) === "." + b)) return "booking-domain" }
+  return "";
+}
+function itinLooksLikeBooking(subject) {
+  var s = String(subject || "");
+  return /confirm|itinerar|e-?ticket|your (?:booking|reservation|flight|trip)|boarding/i.test(s) && !/review|rate your|offer|deal|survey|reminder to|newsletter/i.test(s);
+}
+// Idempotent upsert of parsed items. db handles are injected so the fixtures can run offline.
+async function itinWrite(env, items, meta) {
+  var key = env.OPS_KEY || env.API_KEY || "";
+  var out = { written: 0, duplicate: 0, skipped: 0, ids: [] };
+  if (!key) { out.error = "no HMAC key (OPS_KEY/API_KEY)"; return out }
+  if (!env.PERSONAL) { out.error = "PERSONAL binding missing"; return out }
+  var now = new Date().toISOString();
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var id = "evt-itin-" + await itinHmac(key, [it.code, it.kind, it.start_date, it.disc].join("|"));
+    // A hand-entered row for the same booking and date already feeds the gate and the brief: do not double it.
+    var hand = await env.PERSONAL.prepare("SELECT id FROM events WHERE booking_ref = ?1 AND start_date = ?2 AND category = ?3 AND id NOT LIKE 'evt-itin-%' LIMIT 1").bind(it.code, it.start_date, it.category).first();
+    if (hand) { out.duplicate++; continue }
+    await env.PERSONAL.prepare("INSERT INTO events (id, category, title, venue, city, country, start_date, end_date, amount, currency, booking_ref, source, source_subject, energy, energy_label, notes, ingested_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,NULL,NULL,?9,?10,?11,NULL,NULL,?12,?13) ON CONFLICT(id) DO UPDATE SET title=?3, venue=?4, city=?5, country=?6, start_date=?7, end_date=?8, booking_ref=?9, source=?10, source_subject=?11, notes=?12, ingested_at=?13")
+      .bind(id, it.category, trunc(it.title, 200), trunc(it.venue, 200), it.city, it.country || "", it.start_date, it.end_date, it.code, "email-itinerary:" + meta.gate, trunc(meta.subject, 200), trunc(itinPrivacyScrub(it.notes, it.code), 400), now).run();
+    var c = it.cal, uid = "trip-" + id + "@qnfo.cloud";
+    await env.AUDIT_DB.prepare("INSERT INTO calendar (plane, uid, title, description, location, dtstart, dtend, all_day, url, source, domain, status, created, updated) VALUES ('personal',?1,?2,?3,?4,?5,?6,?7,NULL,'manual','travel','confirmed',datetime('now'),datetime('now')) ON CONFLICT(uid) DO UPDATE SET title=?2, description=?3, location=?4, dtstart=?5, dtend=?6, all_day=?7, status='confirmed', updated=datetime('now')")
+      .bind(uid, itinPrivacyScrub(c.title, it.code), itinPrivacyScrub(c.description, it.code), itinPrivacyScrub(c.location, it.code), c.dtstart, c.dtend || null, c.all_day).run();
+    out.written++; out.ids.push(id);
+  }
+  return out;
+}
+async function itineraryIngest(env, x) {
+  try {
+    var gate = itinGate(env, x.from, x.authResults);
+    if (!gate) return { skipped: "not-gated" };
+    var items = itinParse(x.subject, x.bodyText, x.bodyHtml, x.from);
+    if (!items.length) {
+      if (itinLooksLikeBooking(x.subject)) {
+        try { await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status) VALUES (?1,?2,'qnfo-email','personal','low','open')").bind("ITINERARY-PARSE-MISS-1: email " + x.emailId + " looked like a booking confirmation but nothing was parsed", "A gated sender (" + gate + ") sent a mail whose subject looks like a booking confirmation, but itinParse returned no flight or hotel. Read audit emails.id=" + x.emailId + " (subject: " + trunc(String(x.subject || "").replace(/[\r\n]+/g, " "), 120) + ") and extend itinParse in qnfo-email/worker.js with a fixture. No row was written to events or calendar.").run() } catch (_) {}
+      }
+      return { parsed: 0 };
+    }
+    var r = await itinWrite(env, items, { gate: gate, subject: x.subject });
+    console.log("itinerary", JSON.stringify({ email: x.emailId, gate: gate, parsed: items.length, written: r.written, duplicate: r.duplicate, error: r.error || null }));
+    return { parsed: items.length, written: r.written, duplicate: r.duplicate, error: r.error || null };
+  } catch (err) { console.error("itineraryIngest", err && err.message || err); return { error: String(err && err.message || err) } }
+}
+/* SOURCE-FRESHNESS-1 (#1881): rides the existing 07:00 cron. One agent_issues row per ingest source with no new row for
+   more than 3 days. The open-title unique index dedupes; the description is refreshed with the current age. */
+var FRESH_LIMIT_DAYS = 3;
+async function freshnessGuard(env) {
+  var rows = [];
+  try { var a = await env.AUDIT_DB.prepare("SELECT max(datetime(received_at)) AS last_seen FROM emails").first(); rows.push({ source: "qnfo-email inbound (audit.emails)", last: a && a.last_seen }) } catch (_) {}
+  if (env.PERSONAL) {
+    try { var s = await env.PERSONAL.prepare("SELECT store, max(datetime(received_at)) AS last_seen FROM email_index GROUP BY store").all(); (s.results || []).forEach(function (r) { rows.push({ source: "email_index store " + r.store, last: r.last_seen }) }) } catch (_) {}
+    try { var ev = await env.PERSONAL.prepare("SELECT max(datetime(ingested_at)) AS last_seen FROM events").first(); rows.push({ source: "personal-life.events ingest", last: ev && ev.last_seen }) } catch (_) {}
+  }
+  var filed = 0, stale = [];
+  for (var i = 0; i < rows.length && filed < 6; i++) {
+    var r = rows[i], t = r.last ? Date.parse(String(r.last).replace(" ", "T") + "Z") : NaN;
+    var days = isNaN(t) ? 999 : Math.floor((Date.now() - t) / 864e5);
+    if (days <= FRESH_LIMIT_DAYS) continue;
+    stale.push(r.source + ":" + days + "d");
+    var title = "SOURCE-FRESHNESS-1: " + r.source + " has no new rows for over " + FRESH_LIMIT_DAYS + " days";
+    var desc = "Newest row: " + (r.last || "none") + " UTC, " + days + " days ago, measured " + new Date().toISOString() + " by qnfo-email freshnessGuard. Find the writer for this source, repair or formally retire it; if retired, delete its dependents instead of monitoring. See #1881.";
+    try {
+      var ins = await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status) VALUES (?1,?2,'qnfo-email','personal','medium','open')").bind(title, desc).run();
+      if (ins && ins.meta && ins.meta.changes) filed++;
+      else await env.AUDIT_DB.prepare("UPDATE agent_issues SET description = ?2 WHERE title = ?1 AND status = 'open'").bind(title, desc).run();
+    } catch (_) {}
+  }
+  return { checked: rows.length, stale: stale, filed: filed };
+}
+/* PUBLIC-ERROR-1: authenticated routes returned raw err.message (CodeQL js/stack-trace-exposure); the detail goes to the log only. */
+function pubErr(err) { try { console.error("qnfo-email route error", err && err.message || err) } catch (_) {} return "internal error" }

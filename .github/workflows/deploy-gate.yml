@@ -137,6 +137,10 @@ jobs:
       # CONNECTION-LEDGER-1 step 1 (pillar personal, #1951): went answers become Ledger people and in_person interactions, idempotently.
       - name: CONNECTION-LEDGER-1 offline suite (personal-api)
         run: node personal-api/ledger-sync.test.mjs
+      # ITINERARY-INGEST-1 + SOURCE-FRESHNESS-1 (pillar personal, #1881): flight/hotel confirmation parser, idempotent upsert,
+      # DMARC gate and freshness guard in qnfo-email, against fakes.
+      - name: ITINERARY-INGEST-1 offline suite (qnfo-email)
+        run: node qnfo-email/itinerary-ingest.test.mjs
       # WORK-WITH-ME-1 + WORK-WITH-ME-METRIC-1 (pillar reach): qnfo.org/work-with-me makes no claim STRATEGY s2.2 rules out,
       # every offer mails rowan.quni@qnfo.org with a [work-with-me:<offer>] subject tag and valid JSON-LD; the reach ingest
       # counts those tagged contacts and the page's RUM views over 30 days, idempotently, into reach_signals and metric_registry.
