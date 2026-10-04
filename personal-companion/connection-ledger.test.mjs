@@ -55,7 +55,7 @@ r = await refreshConnectionMetrics(T.env);
 ok(r.seen_twice === 1 && T.a.prepare("SELECT last_value FROM metric_registry WHERE metric='ledger_people_seen_twice'").get().last_value === "1", "ledger_people_seen_twice written (1)");
 ok(r.answer_rate === null && T.a.prepare("SELECT last_value FROM metric_registry WHERE metric='owner_question_answer_rate_14d'").get().last_value === "n/a", "answer rate is n/a under 6 sent");
 const send = (kind, ref, ago) => T.a.prepare("INSERT INTO owner_questions (kind, ref, subject, body, sent_at) VALUES (?,?,?,?, datetime('now', ?))").run(kind, ref, "s", "b", ago);
-for (let i = 1; i <= 6; i++) send(i % 2 ? "after-event" : "triage", String(i), "-3 days");
+for (let i = 1; i <= 6; i++) send("after-event", String(i), "-3 days");
 send("follow-up", "99", "-3 days"); send("after-event", "50", "-20 days");
 T.a.exec("INSERT INTO calendar_feedback (cal_id, ts) VALUES (1, datetime('now','-3 days','+1 hour')), (2, datetime('now','-3 days','+47 hours')), (3, datetime('now','-3 days','+49 hours')), (4, datetime('now','-3 days','-1 hour')), (99, datetime('now','-3 days','+1 hour')), (50, datetime('now','-20 days','+1 hour'))");
 r = await refreshConnectionMetrics(T.env);
