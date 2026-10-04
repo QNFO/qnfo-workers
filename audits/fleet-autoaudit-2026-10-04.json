@@ -1,17 +1,8 @@
 {
-  "audited_at": "2026-10-04 12:46:23",
+  "audited_at": "2026-10-04 13:18:04",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-dashboard"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "qnfo-fleet-dashboard"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -42,14 +33,7 @@
       }
     ],
     "cron_only_count": 3,
-    "drift": [
-      {
-        "dir": "qnfo-fleet-dashboard",
-        "live": "1.21.4-owner-keys-view",
-        "repo": "1.21.3-q08-editor",
-        "worker": "qnfo-fleet-dashboard"
-      }
-    ],
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -404,7 +388,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 40,
+    "sync": 41,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -423,12 +407,12 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.5.0-private-ideas",
+        "version": "1.5.3-questions-feed-leakfix",
         "worker": "idea-hub"
       },
       {
         "dir": "personal-api",
-        "version": "4.6.0-ledger-sync",
+        "version": "4.7.0-gcal-ics",
         "worker": "personal-api"
       },
       {
@@ -505,6 +489,11 @@
         "dir": "qnfo-fleet-control",
         "version": "0.4.115-cycle-time-1",
         "worker": "qnfo-fleet-control"
+      },
+      {
+        "dir": "qnfo-fleet-dashboard",
+        "version": "1.21.4-owner-keys-view",
+        "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
@@ -699,9 +688,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.5.0-private-ideas",
+      "before": "1.5.3-questions-feed-leakfix",
       "http": 200,
-      "live": "1.5.0-private-ideas",
+      "live": "1.5.3-questions-feed-leakfix",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -811,9 +800,9 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.6.0-ledger-sync",
+      "before": "4.7.0-gcal-ics",
       "http": 200,
-      "live": "4.6.0-ledger-sync",
+      "live": "4.7.0-gcal-ics",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -1163,11 +1152,11 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.21.3-q08-editor",
+      "before": "1.21.4-owner-keys-view",
       "http": 200,
       "live": "1.21.4-owner-keys-view",
-      "match": 0,
-      "note": "DRIFT",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
     },
     "qnfo-fleet-deploy": {
