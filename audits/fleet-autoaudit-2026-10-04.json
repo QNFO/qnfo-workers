@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-04 06:19:34",
+  "audited_at": "2026-10-04 07:55:12",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -487,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.111-priority-queue",
+        "version": "0.4.112-cf-changelog",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1144,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.111-priority-queue",
+      "before": "0.4.112-cf-changelog",
       "http": 200,
-      "live": "0.4.111-priority-queue",
+      "live": "0.4.112-cf-changelog",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
