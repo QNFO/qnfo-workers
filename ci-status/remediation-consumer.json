@@ -1,31 +1,63 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@cbed22a2da8d",
- "due": 3,
- "pass": 1,
- "fail": 2,
+ "verifier": "remediation-consumer@133b6442d82a",
+ "due": 7,
+ "pass": 0,
+ "fail": 7,
  "skipped": 0,
  "contracts": [
   {
-   "class": "dashboard-cron-wall-stall-fixed",
-   "issue_id": 1938,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
+   "class": "issue-1623",
+   "issue_id": 1623,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "19",
    "written": true
   },
   {
-   "class": "issue-1822",
-   "issue_id": 1822,
+   "class": "issue-1624",
+   "issue_id": 1624,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1783",
-   "issue_id": 1783,
+   "class": "issue-1637",
+   "issue_id": 1637,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1643",
+   "issue_id": 1643,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1644",
+   "issue_id": 1644,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1648",
+   "issue_id": 1648,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1651",
+   "issue_id": 1651,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
@@ -48,8 +80,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 7943,
- "head": "cbed22a2da8ddd7ceef6659265e47900c1ece903",
+ "spent_ms": 16673,
+ "head": "133b6442d82a299a60e7af5227288d5e16f7a178",
  "job_status": "success",
- "ts": "2026-10-04T11:22:15Z"
+ "ts": "2026-10-04T12:00:57Z"
 }
