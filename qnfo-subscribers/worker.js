@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.6-client-ip"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
+var VERSION = "1.1.7-codeagent"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
 var SITE = "https://qnfo.org";
 // FLEET-CTL-STATIC-1 (issue 1778; owner request 1757): the owner's fleet command-line link on the subscribe, confirm and
 // unsubscribe pages, as static HTML scoped to the subscribe surface. Not fleet.qnfo.org/ctl.js: it scopes the link with
@@ -170,6 +170,19 @@ async function handleConfirm(request, env) {
     if (!row) return html("<h1>Link not recognised</h1><p>This confirmation link is invalid.</p>", 404);
     if (row.status === "subscribed") {
       return html("<h1>Already confirmed</h1><p>Your subscription is active. The next digest will reach you by email.</p>");
+    }
+    if (request.method.toUpperCase() !== "POST") {
+      const confirmPage =
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Confirm your subscription</title></head>' +
+        '<body style="font-family:system-ui,sans-serif;max-width:34em;margin:2em auto;line-height:1.5;padding:0 1em;">' +
+        "<h1>Confirm your QNFO subscription</h1>" +
+        "<p>Click the button below to finish subscribing. This extra step prevents automated scanners from confirming your address.</p>" +
+        '<form action="' + SITE + "/api/confirm?token=" + encodeURIComponent(token) + '" method="POST">' +
+        '<button type="submit" style="font-size:1rem;padding:0.6em 1.2em;background:#0066cc;color:#fff;border:none;border-radius:0.25em;cursor:pointer;">Confirm subscription</button>' +
+        "</form>" +
+        '<p style="color:#666;font-size:0.9em;">Did not request this? You can close this page - no further email will be sent.</p>' +
+        "</body></html>";
+      return html(confirmPage);
     }
     await env.AUDIT.prepare(
       "UPDATE subscribers SET status='subscribed', confirmed_at=datetime('now'), updated_at=datetime('now') WHERE unsub_token = ?1"
