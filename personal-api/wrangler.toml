@@ -46,6 +46,9 @@ service = "calendar-api"
 environment = "production"
 
 # Secrets (wrangler secret put): API_KEY, CAL_TOKEN, CF_TOKEN, INFRA_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (v4.3.0), optional OWNER_GOOGLE_EMAIL
+# GOOGLE_ICS_URL (v4.7.0, GOOGLE-ICS-BRIDGE-1): the owner's Google Calendar "Secret address in iCal format".
+# Set it alone (no OAuth client) and the twin reads that calendar keylessly, one paste, read-only; writes stay in the
+# twin store. GET /v1/calendar/feed returns the twin's published iCal URL for the other direction (Google subscribes to it).
 
 # PersonalTwinAgent Durable Object (deployed; class pre-exists with live instances).
 # Binding-only on purpose: the class was created by a prior migration. Do NOT re-declare it
