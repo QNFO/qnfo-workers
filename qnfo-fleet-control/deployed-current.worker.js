@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.114-merge-runner-unstick"; /* 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.115-cycle-time-1"; /* 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -3786,9 +3786,10 @@ __name(codeMergeTick, "codeMergeTick");
 // Kill switch: ops_config branch_hygiene_enabled ('0' / 'off'); dry run: ops_config branch_hygiene_dry_run ('1').
 var BH_PRESERVE = ["main", "master", "gh-pages"];
 var BH_GRACE_MERGED_H = 6;
-var BH_GRACE_CLOSED_H = 24;
-var BH_GRACE_ORPHAN_H = 48;
-var BH_NEEDS_HUMAN_DAYS = 7;
+var BH_GRACE_CLOSED_H = 12;
+var BH_GRACE_ORPHAN_H = 24;
+var BH_NEEDS_HUMAN_DAYS = 1;
+var BH_STALE_PR_H = 24; // CYCLE-TIME-1: an open PR idle this long with no live code task is archived, commented and closed
 var BH_MAX_ACTIONS = 40;
 var BH_MAX_COMPARES = 60;
 var BH_ARCHIVE_PREFIX = "refs/archive/";
@@ -3855,7 +3856,7 @@ async function branchHygieneTick(env, opts) {
   };
   if (!cfg.enabled) { await beat("disabled", { disabled: cfg.raw }); return { ok: true, disabled: true, why: "ops_config branch_hygiene_enabled = " + cfg.raw }; }
   await bhSchema(env);
-  var out = { ok: true, ts: iso, dry: dry, branches: 0, kept: 0, deleted: [], archived: [], compared: 0, errors: [], setting: null };
+  var out = { ok: true, ts: iso, dry: dry, branches: 0, kept: 0, deleted: [], archived: [], closed_prs: [], compared: 0, errors: [], setting: null };
   var br = await bhPages(env, "/branches", 8);
   if (!br.ok) { await beat("error", { branches_http: br.status }); return { ok: false, why: "branches HTTP " + br.status }; }
   var prs = await bhPages(env, "/pulls?state=all&sort=updated&direction=desc", 10);
@@ -3910,6 +3911,32 @@ async function branchHygieneTick(env, opts) {
   }
   out.remaining = remaining - 1;
   if (out.remaining < 0) out.remaining = 0;
+  // CYCLE-TIME-1 (2026-10-04, issue 1961): an open pull request whose head is not a live code task and that nobody has touched
+  // for BH_STALE_PR_H hours is not waiting on anything the fleet will do. Save the head tip as refs/archive/<ref>, comment, then
+  // close it through the REST API (the branch sweeper archives and deletes the branch on a later tick). This is what turns the
+  // open-PR backlog over inside a day; a live code task (branch_pushed / published / pr_open / recent needs_human) is always kept.
+  var prClosed = 0;
+  for (var pi = 0; pi < prs.items.length && prClosed < BH_MAX_ACTIONS; pi++) {
+    var p = prs.items[pi];
+    if (!p || p.state !== "open" || p.draft) continue;
+    if (!p.head || !p.head.ref || !p.head.repo || p.head.repo.full_name !== EVOLVE_REPO) continue;
+    if (BH_PRESERVE.indexOf(p.head.ref) >= 0 || live[p.head.ref]) continue;
+    var updMs = p.updated_at ? Date.parse(p.updated_at) : NaN;
+    if (isNaN(updMs) || (nowMs - updMs) < BH_STALE_PR_H * 36e5) continue;
+    var href = BH_ARCHIVE_PREFIX + p.head.ref, hok = true;
+    if (!dry) {
+      var har = await evApi(env, "POST", "/git/refs", { ref: href, sha: p.head.sha || p.head.ref });
+      var hexists = har.status === 422 && /already exists/i.test(String(har.j && har.j.message || ""));
+      if (!har.ok && !hexists) { hok = false; out.errors.push("PR " + p.number + ": archive ref HTTP " + har.status); }
+    }
+    if (!dry && hok) {
+      await evApi(env, "POST", "/issues/" + p.number + "/comments", { body: "CYCLE-TIME-1 (qnfo-fleet-control): this pull request has had no activity for over " + BH_STALE_PR_H + "h and its head is not a live code task. Its tip is saved as `" + href + "`; the branch sweeper archives and deletes the branch. Reopen or re-push if it is still wanted." });
+      var hcl = await evApi(env, "PATCH", "/pulls/" + p.number, { state: "closed" });
+      if (!hcl.ok) { hok = false; out.errors.push("PR " + p.number + ": close HTTP " + hcl.status); }
+    }
+    try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'close-stale-pr', ?4, ?5, ?6, ?7, ?8)").bind(iso, p.head.ref, p.head.sha || null, "open PR idle over " + BH_STALE_PR_H + "h with no live code task", p.number, href, hok ? 1 : 0, dry ? 1 : 0).run(); } catch (e) {}
+    if (hok) { out.closed_prs.push(p.number); prClosed++; }
+  }
   // GitHub's own switch, so a merge made by anyone removes its branch at once. Best effort: needs a token that may administer the repo.
   try {
     var rp = await evApi(env, "GET", "");
@@ -3921,7 +3948,7 @@ async function branchHygieneTick(env, opts) {
   if (!dry) {
     try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'repo_branches_open'").bind(String(out.remaining), iso).run(); } catch (e) {}
   }
-  await beat(out.errors.length && !out.deleted.length && !out.archived.length ? "error" : "ok", { branches: out.branches, remaining: out.remaining, deleted: out.deleted.length, archived: out.archived.length, errors: out.errors.length, dry: dry });
+  await beat(out.errors.length && !out.deleted.length && !out.archived.length ? "error" : "ok", { branches: out.branches, remaining: out.remaining, deleted: out.deleted.length, archived: out.archived.length, closed_prs: out.closed_prs.length, errors: out.errors.length, dry: dry });
   return out;
 }
 __name(branchHygieneTick, "branchHygieneTick");
@@ -6810,7 +6837,7 @@ var worker_default2 = {
       var bhc = await bhConfig(env);
       var bhl = await env.AUDIT.prepare("SELECT ts, branch, sha, action, why, pr, archive_ref, ok, dry FROM branch_hygiene_log ORDER BY id DESC LIMIT 40").all().catch(function() { return { results: [] }; });
       var bhh = await env.AUDIT.prepare("SELECT ts, status, text FROM cloud_ops_events WHERE id >= 'branch-hygiene-tick-' AND id < 'branch-hygiene-tick.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
-      return json({ ok: true, version: VERSION, loop: "BRANCH-HYGIENE-1", enabled: bhc.enabled, dry_run: bhc.dry, switch: "ops_config branch_hygiene_enabled = " + bhc.raw, grace_hours: { merged: BH_GRACE_MERGED_H, closed_pr: BH_GRACE_CLOSED_H, no_pr: BH_GRACE_ORPHAN_H }, needs_human_days: BH_NEEDS_HUMAN_DAYS, max_actions_per_tick: BH_MAX_ACTIONS, archive_refs: BH_ARCHIVE_PREFIX + "<branch>", last_tick: bhh, recent: bhl.results || [] });
+      return json({ ok: true, version: VERSION, loop: "BRANCH-HYGIENE-1", enabled: bhc.enabled, dry_run: bhc.dry, switch: "ops_config branch_hygiene_enabled = " + bhc.raw, grace_hours: { merged: BH_GRACE_MERGED_H, closed_pr: BH_GRACE_CLOSED_H, no_pr: BH_GRACE_ORPHAN_H }, needs_human_days: BH_NEEDS_HUMAN_DAYS, stale_pr_hours: BH_STALE_PR_H, max_actions_per_tick: BH_MAX_ACTIONS, archive_refs: BH_ARCHIVE_PREFIX + "<branch>", last_tick: bhh, recent: bhl.results || [] });
     }
     if (p === "/branch-hygiene/tick" && request.method === "POST") {
       var bha = request.headers.get("Authorization") || "";
