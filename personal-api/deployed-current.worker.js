@@ -45,7 +45,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.6.0-ledger-sync";
+var VERSION = "4.7.0-gcal-ics";
 // FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
 // <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
 // any script loaded here can read it; a remote script from a shared, open worker would put calendar write access and
@@ -683,11 +683,17 @@ async function gRow(env) {
 __name(gRow, "gRow");
 function gConfigured(env) { return !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET); }
 __name(gConfigured, "gConfigured");
+function gIcsConfigured(env) { return !!(env.GOOGLE_ICS_URL && String(env.GOOGLE_ICS_URL).trim()); }
+__name(gIcsConfigured, "gIcsConfigured");
 async function gStatus(env) {
-  if (!gConfigured(env)) return { state: "no-client", connected: false };
-  const r = await gRow(env);
-  if (!r || !r.refresh_token) return { state: "not-connected", connected: false };
-  return { state: r.last_error ? "error" : "connected", connected: !r.last_error, connected_at: r.connected_at, scope: r.scope, last_error: r.last_error || null };
+  if (gConfigured(env)) {
+    const r = await gRow(env);
+    if (r && r.refresh_token) return { state: r.last_error ? "error" : "connected", connected: !r.last_error, connected_at: r.connected_at, scope: r.scope, last_error: r.last_error || null };
+    if (gIcsConfigured(env)) return { state: "ics", connected: false, ics: true };
+    return { state: "not-connected", connected: false };
+  }
+  if (gIcsConfigured(env)) return { state: "ics", connected: false, ics: true };
+  return { state: "no-client", connected: false };
 }
 __name(gStatus, "gStatus");
 function b64urlJson(seg) {
@@ -761,6 +767,62 @@ async function gcalList(env, from, to, limit) {
   return { ok: true, events: (r.j.items || []).filter((e) => e.status !== "cancelled").map(gMap) };
 }
 __name(gcalList, "gcalList");
+// GOOGLE-ICS-BRIDGE-1 (2026-10-04): keyless read of the owner's Google Calendar.
+// Google exposes a per-calendar "Secret address in iCal format" (Settings -> Integrate calendar).
+// Setting it as the secret GOOGLE_ICS_URL makes "what is on today" read the real Google Calendar with
+// ONE paste and NO Google Cloud project, consent screen or OAuth client. It is read-only (writes stay
+// in the twin store); for the other direction the owner points Google at GET /v1/calendar/feed.
+function icsUnesc(s) { return String(s == null ? "" : s).replace(/\\n/gi, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\"); }
+__name(icsUnesc, "icsUnesc");
+function icsDateStr(val) {
+  const v = String(val || "").trim();
+  if (/^\d{8}$/.test(v)) return v.slice(0, 4) + "-" + v.slice(4, 6) + "-" + v.slice(6, 8);
+  const m = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
+  if (!m) return v;
+  const iso = m[1] + "-" + m[2] + "-" + m[3] + "T" + m[4] + ":" + m[5] + ":" + m[6];
+  return m[7] ? iso + "Z" : withOffset(iso.slice(0, 16));
+}
+__name(icsDateStr, "icsDateStr");
+function parseICS(text) {
+  const unfolded = String(text || "").replace(/\r\n[ \t]/g, "").replace(/\n[ \t]/g, "");
+  const out = [];
+  let cur = null;
+  for (const line of unfolded.split(/\r?\n/)) {
+    if (line === "BEGIN:VEVENT") { cur = {}; continue; }
+    if (line === "END:VEVENT") { if (cur) out.push(cur); cur = null; continue; }
+    if (!cur) continue;
+    const i = line.indexOf(":");
+    if (i < 0) continue;
+    const name = line.slice(0, i).split(";")[0].toUpperCase();
+    const val = line.slice(i + 1);
+    if (name === "DTSTART") cur.start = icsDateStr(val);
+    else if (name === "DTEND") cur.end = icsDateStr(val);
+    else if (name === "SUMMARY") cur.summary = icsUnesc(val);
+    else if (name === "LOCATION") cur.location = icsUnesc(val);
+    else if (name === "DESCRIPTION") cur.description = icsUnesc(val);
+    else if (name === "UID") cur.uid = val;
+    else if (name === "STATUS") cur.status = String(val).toUpperCase();
+  }
+  return out;
+}
+__name(parseICS, "parseICS");
+function icsMap(e) {
+  const allDay = !/T\d{2}:\d{2}/.test(String(e.start || ""));
+  return { id: "gics:" + (e.uid || Math.random().toString(36).slice(2)), title: e.summary || "(no title)", dtstart: e.start || "", dtend: e.end || null, all_day: allDay, location: e.location || null, description: e.description ? String(e.description).slice(0, 400) : null, url: null, status: "confirmed", source: "google", calendar: "google" };
+}
+__name(icsMap, "icsMap");
+async function gicsList(env, from, to, limit) {
+  const url = String(env.GOOGLE_ICS_URL || "").trim();
+  if (!url) return { ok: false, error: "google-ics-not-configured" };
+  const r = await fetch(url, { headers: { "User-Agent": "qnfo-personal-twin/1" }, signal: AbortSignal.timeout(8e3) });
+  if (!r.ok) return { ok: false, error: "google-ics HTTP " + r.status };
+  const text = await r.text();
+  const f = String(from).slice(0, 10), t = String(to).slice(0, 10);
+  const events = parseICS(text).filter((e) => e.status !== "CANCELLED").map(icsMap).filter((e) => { const d = String(e.dtstart).slice(0, 10); return d >= f && d <= t; });
+  events.sort((a, b) => String(a.dtstart).localeCompare(String(b.dtstart)));
+  return { ok: true, events: events.slice(0, Math.min(Math.max(Number(limit) || 50, 1), 250)) };
+}
+__name(gicsList, "gicsList");
 async function gcalAdd(env, args) {
   const title = String(args && args.title || "").trim().slice(0, 300);
   const dtstart = String(args && args.dtstart || "").trim();
@@ -791,6 +853,7 @@ async function calList(env, from, to, limit) {
   const g = await gStatus(env);
   let google = null;
   if (g.connected) google = await gcalList(env, from, to, limit || 50).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
+  else if (gIcsConfigured(env)) google = await gicsList(env, from, to, limit || 50).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
   let store = null;
   try { store = await storeList(env, from, to, 100); } catch (e) { store = { ok: false, error: String(e && e.message || e) }; }
   const events = [];
@@ -798,7 +861,7 @@ async function calList(env, from, to, limit) {
   if (store && store.ok) for (const e of store.events || []) events.push(Object.assign({}, e, { calendar: e.source === "personal-radar" ? "suggestion" : "twin-store" }));
   events.sort((a, b) => String(a.dtstart).localeCompare(String(b.dtstart)));
   const ok = !!((google && google.ok) || (store && store.ok));
-  return { ok, google: g.state, google_error: google && !google.ok ? google.error : null, store_error: store && !store.ok ? store.error : null, count: events.length, events: events.slice(0, limit || 25), note: g.connected ? "calendar=google is Rowan's Google Calendar; twin-store and suggestion rows are the twin's own store and radar ideas, not booked" : "Google Calendar is not connected (state " + g.state + "); these are the twin's own store and radar ideas only" };
+  return { ok, google: g.state, google_error: google && !google.ok ? google.error : null, store_error: store && !store.ok ? store.error : null, count: events.length, events: events.slice(0, limit || 25), note: g.connected ? "calendar=google is Rowan's Google Calendar; twin-store and suggestion rows are the twin's own store and radar ideas, not booked" : (gIcsConfigured(env) ? "calendar=google is read live from Rowan's Google Calendar private iCal feed (read-only); twin-store and suggestion rows are the twin's own store and radar ideas" : "Google Calendar is not connected (state " + g.state + "); these are the twin's own store and radar ideas only") };
 }
 __name(calList, "calList");
 async function calAdd(env, args) {
@@ -810,7 +873,7 @@ async function calAdd(env, args) {
     return Object.assign({}, fb, { calendar: "twin-store", warning: "Google Calendar write failed (" + r.error + "); saved to the twin store instead" });
   }
   const r = await storeAdd(env, args);
-  return Object.assign({}, r, { calendar: "twin-store", note: "Google Calendar is not connected (" + g.state + "); saved to the twin store, which Google does not show" });
+  return Object.assign({}, r, { calendar: "twin-store", note: gIcsConfigured(env) ? "Google Calendar is linked read-only (iCal feed); saved to the twin store. To make twin adds appear in Google, subscribe Google to the twin's calendar feed from GET /v1/calendar/feed" : "Google Calendar is not connected (" + g.state + "); saved to the twin store, which Google does not show" });
 }
 __name(calAdd, "calAdd");
 async function calDelete(env, args) {
@@ -3024,10 +3087,21 @@ var api_default = {
         return json({ error: { message: String(e && e.message || e), type: "server_error" } }, 500);
       }
     }
+    if (path === "/v1/calendar/feed" && request.method === "GET") {
+      if (!await auth(request, env)) return json({ error: { message: "unauthorized", type: "invalid_request_error" } }, 401);
+      try {
+        const r = await env.CAL_API.fetch("https://calendar-api/health", { headers: calHeaders(env), signal: AbortSignal.timeout(8e3) });
+        const j = await r.json().catch(() => ({}));
+        const u = j && j.ics_publish && j.ics_publish.urls ? j.ics_publish.urls.find((x) => x.plane === "personal") : null;
+        return json({ ok: !!(u && u.url), plane: "personal", url: u && u.url || null, note: "Add this URL in Google Calendar (Other calendars -> From URL) or any iCal client to receive the twin's own events. Read-only in Google." });
+      } catch (e) {
+        return json({ error: { message: String(e && e.message || e), type: "server_error" } }, 500);
+      }
+    }
     if (path === "/health") {
       const _g = await gStatus(env).catch(() => ({ state: "unknown" }));
       const _ms = await msState(env).catch(() => ({ state: "unknown" }));
-      return json({ ok: true, worker: "personal-api", version: VERSION, google_calendar: _g.state, microsoft_mail: _ms.state, ledger: await ledgerCounts(env), mcp: "/mcp (bearer key or OAuth 2.1)", capabilities: ["personal-twin-chat", "vision", "google-calendar", "mcp", "journal", "habits", "plan", "daily-brief", "location", "media", "web-search", "embeddings"], limitations: ["every /v1 route needs the personal API key (bearer)", "the daily brief is built on the 05:05 cron and cached in D1; /v1/plan is uncached (one or two model calls)", "calendar reads and writes use the owner's Google Calendar once /google/connect has run (state in google_calendar); until then they use the calendar-api store", "/mcp exposes the twin's tools to MCP clients by bearer key or OAuth 2.1 (PKCE, dynamic registration); each OAuth client is approved once on the consent page with the personal API key"] });
+      return json({ ok: true, worker: "personal-api", version: VERSION, google_calendar: _g.state, microsoft_mail: _ms.state, ledger: await ledgerCounts(env), mcp: "/mcp (bearer key or OAuth 2.1)", capabilities: ["personal-twin-chat", "vision", "google-calendar", "google-calendar-ics", "mcp", "journal", "habits", "plan", "daily-brief", "location", "media", "web-search", "embeddings"], limitations: ["every /v1 route needs the personal API key (bearer)", "the daily brief is built on the 05:05 cron and cached in D1; /v1/plan is uncached (one or two model calls)", "calendar reads use the owner's Google Calendar when /google/connect has run (OAuth) OR the read-only GOOGLE_ICS_URL iCal feed (state in google_calendar); writes go to Google only when OAuth-connected, otherwise to the calendar-api store", "GET /v1/calendar/feed (bearer) returns the twin's published iCal URL so Google can subscribe to the twin's own events", "/mcp exposes the twin's tools to MCP clients by bearer key or OAuth 2.1 (PKCE, dynamic registration); each OAuth client is approved once on the consent page with the personal API key"] });
     }
     if (path === "/" && request.method === "GET") {
       return new Response(PLAYGROUND_HTML.replaceAll("__TITLE__", "Personal Twin - notes (personal-api)").replace("__KEY_HINT__", "your personal API key (Bearer)").replace("__DEFAULT_MODEL__", "personal-twin-chat").replace("__STREAM__", "true"), { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
