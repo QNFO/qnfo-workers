@@ -26,7 +26,9 @@ bucket_name = "qnfo-skills"
 binding = "AI"
 
 [triggers]
-crons = ["0 2 * * *", "0 10 * * 1"]
+# KAIZEN-CF-MONDAY-1 (0.3.4): Cloudflare numbers weekdays 1=Sunday..7=Saturday, so the Monday 10:00 drift scan is
+# "0 10 * * 2" ("0 10 * * 1" fired on Sundays). worker.js scheduled() matches the same string.
+crons = ["0 2 * * *", "0 10 * * 2"]
 
 # Secrets (already set on the deployed script; persist across wrangler deploys):
 #   KAIZEN_TOKEN, GITHUB_TOKEN

@@ -1,8 +1,8 @@
-// qnfo-deploy-guard v1.3.22 - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
+// qnfo-deploy-guard v1.3.23 (SECRET-ONLY-LEDGER-1: a ledgered secret rotation is not a code deploy for NON-CANONICAL-DEPLOY-1) - deploy lock + secret lock + work claims (one procedure: the D1 work_claims ledger and the code loop's tasks are read and written by /work-lock) + concurrent-mutation detector + cost watchdog + heartbeat (expected_version enforcement + per-session attribution + registry version refresh on redeploy + NON-CANONICAL-DEPLOY-1 detection excluding synthetic/test rows AND failed canonical attempts + SETTINGS-ONLY ledger rows + DEPLOY-TICKET-AUTORESOLVE-1 + CAPABILITY-SNAPSHOT-1 + WORK-CLAIM-1 + WORK-CLAIM-UNIFY-1)
 // Worker Contract v1: VERSION constant + GET /health
 // Data: https://ops.qnfo.org/fleet (modified_on per worker) + https://ops.qnfo.org/cost (spend)
 // NOTE: source of truth is this file; GET /workers/scripts/<name> TRUNCATES large bodies - never patch from a GET.
-var VERSION = "1.3.22-work-claim-unify";
+var VERSION = "1.3.23-secret-only-ledger";
 var WORKER = "qnfo-deploy-guard";
 var LOCK_PREFIX = "deploylock:";
 var DENY_PREFIX = "deploydeny:";
@@ -132,6 +132,17 @@ function coalesceBursts(list) {
 // LIMITATION, STATED: the SYNC rule proves the live CODE is canonical; it cannot attribute a settings-only change.
 // That is why settings mutators now ledger themselves (SETTINGS-ONLY-LEDGER-1, fleet-control obs reassert).
 function isSettingsOnly(note) { return String(note || "").indexOf("SETTINGS-ONLY") === 0; }
+// SECRET-ONLY-LEDGER-1 (v1.3.23, 2026-10-05, agent_issues 1976): a secret PUT also bumps the worker's CF version, so its
+// writer ledgers it (it satisfies the unlogged-mutation rule), but it changes no code. On 2026-10-04 12:36Z the k1 rotation on
+// qnfo-ops (fleet_deploys 3419, actor "deepchat/ops secret-rotate", to_sha "k1-rotated") became qnfo-ops's "last code deploy"
+// and raised DEPLOY-NON-CANONICAL-DEPLOY: fleet although the fleet self-audit read qnfo-ops SYNC (version and sha256) with
+// main. A row whose note starts SECRET-ONLY, or whose actor or note names a secret rotate/put/set and which carries no code
+// version, is not a code deploy for NON-CANONICAL-DEPLOY-1. Secret changes stay watched by qnfo-ops SECRET-CHANGE-WATCH-1.
+function isSecretOnly(row) {
+  var n = String(row && row.note || ""), a = String(row && row.actor || ""), v = String(row && row.to_sha || "");
+  if (n.indexOf("SECRET-ONLY") === 0) return true;
+  return /secret[- ]?(rotat|put|set\b|change)/i.test(a + " " + n) && !/^v?\d+\.\d+/.test(v);
+}
 var MUT_SLACK_MS = 180000;
 // WRANGLER-CONTAINER-LEDGER-1 (#1708/#1709): qnfo-code-orchestrator is also a container worker deployed by wrangler
 // (deploy-code-orchestrator.yml) because canonical-deploy skips any directory with [[containers]]. It is NOT in qnfo-ops
@@ -218,7 +229,7 @@ async function scan(env) {
     var month = (ca.j.last_30d && ca.j.last_30d.cost) || 0;
     cost = { day_usd: day, month_usd: month, cap_per_utc_day: ca.j.cap_per_utc_day, thresholds: thr };
   }
-  var ledger = await auditAll(env, "SELECT id, worker, to_sha, ts, note, ok FROM fleet_deploys ORDER BY id", []);
+  var ledger = await auditAll(env, "SELECT id, worker, actor, to_sha, ts, note, ok FROM fleet_deploys ORDER BY id", []);
   var lastLedger = {}; var ledgerBy = {};
   for (var i = 0; i < ledger.length; i++) { lastLedger[ledger[i].worker] = ledger[i]; (ledgerBy[ledger[i].worker] = ledgerBy[ledger[i].worker] || []).push(ledger[i]); }
   var prev = {}; try { var pv = await env.FLEET_CONFIG.get(SNAP_KEY); if (pv) prev = JSON.parse(pv) || {}; } catch (e) {}
@@ -260,7 +271,7 @@ async function scan(env) {
   // modified_on without touching code, so its mutator now ledgers it with a "SETTINGS-ONLY" note. That row must
   // satisfy the unlogged-mutation rule above (it IS logged) but must NOT stand in for the worker's last CODE
   // deploy here, or every reassert would make a canonically deployed worker look non-canonical.
-  var lastCode = {}; for (var lc = 0; lc < ledger.length; lc++) { if (!isSettingsOnly(ledger[lc].note)) lastCode[ledger[lc].worker] = ledger[lc]; }
+  var lastCode = {}; for (var lc = 0; lc < ledger.length; lc++) { if (!isSettingsOnly(ledger[lc].note) && !isSecretOnly(ledger[lc])) lastCode[ledger[lc].worker] = ledger[lc]; }
   var nonCanon = [];
   for (var ncw in lastCode) {
     if (ncw.indexOf("__") === 0) continue; // test namespace (e.g. __e2e__) - not a real deploy target

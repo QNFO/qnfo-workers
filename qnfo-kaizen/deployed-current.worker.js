@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.3.3-scan-internal"; // 2026-09-08 model audit: sub-frontier -> glm-5.3-flash (MODEL-FLOOR-OK) (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
+var VERSION = "0.3.4-cf-monday"; // 0.3.4 KAIZEN-CF-MONDAY-1: the drift scan cron is "0 10 * * 2" (Cloudflare weekday 2 = Monday; "1" fired on Sundays); // 2026-09-08 model audit: sub-frontier -> glm-5.3-flash (MODEL-FLOOR-OK) (fc+reasoning 1.3M ctx, ~-89% cost) + disposition pass
 var MAX_CLAIM_PER_RUN = 20;
 var MAX_APPLY_PER_RUN = 5;
 function json(data, status = 200) {
@@ -383,7 +383,7 @@ var worker_default = {
           limitations: ["scheduled daily at 02:00 and Mondays at 10:00", "/run/scan on a public hostname and /run/meta?commit=1 require KAIZEN_TOKEN; service-binding callers are internal"],
           bindings: { r2: !!env.SKILLS_BUCKET, d1: !!env.QNFO_AUDIT, ai: !!env.AI },
           secrets: { kaizen_token: !!env.KAIZEN_TOKEN, github_token: !!env.GITHUB_TOKEN },
-          crons: ["0 2 * * * (meta loop)", "0 10 * * 1 (drift scan)"],
+          crons: ["0 2 * * * (meta loop)", "0 10 * * 2 (drift scan, Mondays: Cloudflare weekday 2)"],
           policy: { maxApplyPerRun: MAX_APPLY_PER_RUN, maxClaimPerRun: MAX_CLAIM_PER_RUN, versionBump: false, additiveOnly: true, githubPush: !!env.GITHUB_TOKEN }
         });
       }
@@ -433,7 +433,7 @@ var worker_default = {
         const m = await runMeta(env, true, MAX_CLAIM_PER_RUN);
         const a = await applyMeta(env, true);
         console.log("[qnfo-kaizen] meta loop:", JSON.stringify({ claimed: m.claimed.length, errors: m.errors.length, applied: a.applied.length }));
-      } else if (event.cron === "0 10 * * 1") {
+      } else if (event.cron === "0 10 * * 2") {
         const r = await runScan(env);
         console.log("[qnfo-kaizen] scan done:", JSON.stringify({ scanned: r.scanned, flagged: r.flagged }));
       }

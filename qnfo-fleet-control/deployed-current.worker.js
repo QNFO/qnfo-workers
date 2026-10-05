@@ -1003,7 +1003,7 @@ var calibratorMod = (function() {
     async scheduled(controller, env, ctx) {
       const cron = controller.cron || "";
       let type = "daily";
-      if (cron === "30 3 * * 1") type = "stress"; // CAL-STRESS-CRON-1: wrangler declares Monday (1); the Sunday key never matched
+      if (cron === "30 3 * * 1") type = "stress"; // CAL-STRESS-CRON-1: the old key '30 3 * * 0' never matched the declared cron. CF-DOW (2026-10-05): Cloudflare weekday 1 is SUNDAY (1=Sun..7=Sat), so this is the Sunday 03:30Z stress run the original calibrator intended ('0' = Sunday in Unix cron); fleet_cal_runs shows it firing on Sundays (2026-09-06..10-04)
       else if (cron === "0 4 1 * *") type = "monthly";
       const out = await runCalibration(env, type, "cron:" + cron, null);
       await stateSet2(env, "last_cron", sjs({ cron, type, out, at: nowIso() }));
@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.117-merge-lane"; /* 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.118-metric-truth"; /* 0.4.118 (2026-10-05, remediation B2): LAND-BUNDLE-GUARD-1 (issues 1976, 1979): landFix refuses to commit a deployed script that adds esbuild __name helper layers or keeps under half of main's comment lines (the 2026-10-04 qnfo-fleet-dashboard 1.21.4 landing replaced the hand-written source with a wrangler bundle) and files one LAND-BUNDLE-REFUSED-1 issue instead; REPO-LIVE-DRIFT-1 (issue 1879): drift_total adds the fleet self-audit's DRIFT and CONTENT_DRIFT rows (live version or script sha256 differs from main) and counts a missing or 26h-old audit as 1; CF-CHANGELOG-LEADS-1 (issue 1959): a launch of a proposed or not_considered catalog row writes a dated when_to_choose line (max 5 a day) and GET /cf-changelog lists cost, speed and consolidation leads; CLEF-CANDIDATE-1 re-landed (PR 586 closed unmerged): clef_candidate_calls_7d is written hourly; IMPROVEMENT-UNMEASURED-STAMP-1 (issue 1865): the improvement loop stamps last_refreshed with state UNMEASURED while its trend metrics have too little history. 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -1822,6 +1822,31 @@ function extractModuleCode(content) {
 __name(extractModuleCode, "extractModuleCode");
 __name2(extractModuleCode, "extractModuleCode");
 __name22(extractModuleCode, "extractModuleCode");
+// ---- LAND-BUNDLE-GUARD-1:BEGIN ----
+// LAND-BUNDLE-GUARD-1 (2026-10-05, issues 1976 and 1979): on 2026-10-04 a session deployed qnfo-fleet-dashboard
+// 1.21.4 with wrangler outside the canonical path; scan() saw it ahead of main and landFix committed the deployed
+// artifact (1e97baba): an esbuild bundle that wrapped the source in a sixth __name helper layer and kept 55 of the
+// source's 671 comment lines. The VERSION marker was present, so the SOURCE-ONLY guard let it through and main lost
+// the hand-written source. A deployed script that adds helper layers or drops most comments is a bundle of the
+// source, not the source: refuse it and file one issue so the out-of-band change lands by PR.
+function landHelperLayers(s) { var m = String(s || "").match(/^var __name\d* = /gm); return m ? m.length : 0; }
+function landCommentLines(s) { var m = String(s || "").match(/^\s*(\/\/|\/\*)/gm); return m ? m.length : 0; }
+function landBundleRefusal(raw, repoSrc) {
+  if (repoSrc == null) return null;
+  var hd = landHelperLayers(raw), hr = landHelperLayers(repoSrc);
+  if (hd > hr) return "deployed script adds esbuild __name helper layers (" + hd + " vs " + hr + " in main): a wrangler bundle, not source";
+  var cd = landCommentLines(raw), cr = landCommentLines(repoSrc);
+  if (cr >= 20 && cd * 2 < cr) return "deployed script keeps " + cd + " of the " + cr + " comment lines in main: a bundle, not source";
+  return null;
+}
+__name(landBundleRefusal, "landBundleRefusal");
+async function landBundleIssue(env, worker, depV, canV, why) {
+  var title = "LAND-BUNDLE-REFUSED-1: " + worker + " deployed " + depV + " is ahead of main " + canV + " as a bundle";
+  var desc = "Pillar core. qnfo-fleet-control scan() found " + worker + " live at " + depV + " while main carries " + canV + ", and LAND-BUNDLE-GUARD-1 refused to commit the deployed script to main: " + why + ". The live version came from outside the canonical path (merge to main). Land the change as source by PR (bump VERSION above " + depV + "), or redeploy main to restore " + canV + ". Definition of done: GET https://" + worker + ".q08.workers.dev/health version equals the VERSION in " + worker + "/worker.js on main and the latest fleet_deploys row for " + worker + " is a canonical deploy.";
+  try { await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-fleet-control', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind(title, desc, Date.now()).run(); } catch (e) {}
+}
+__name(landBundleIssue, "landBundleIssue");
+// ---- LAND-BUNDLE-GUARD-1:END ----
 async function landFix(env, worker, depCode, depV, canV, srcPath) {
   if (!env.GITHUB_TOKEN) return { ok: false, status: 403, note: "GITHUB_TOKEN missing - cannot land fix" };
   if (!/^[a-zA-Z0-9-]+$/.test(worker)) return { ok: false, status: 400, note: "invalid worker name" };
@@ -1872,6 +1897,7 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
       var cmJ = cmR.status === 200 ? await cmR.json().catch(function() { return null; }) : null;
       var baseTree = cmJ && cmJ.tree && cmJ.tree.sha;
       var toWrite = [];
+      var repoSrc = null;
       for (var pi = 0; pi < paths.length; pi++) {
         var encI = paths[pi].split("/").map(encodeURIComponent).join("/");
         var gI = await timedFetch("https://api.github.com/repos/QNFO/" + repo + "/contents/" + encI + "?ref=main", { headers: ghHeaders }, 8e3);
@@ -1879,10 +1905,16 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
         if (gI.status === 200) {
           var gjI = await gI.json().catch(function() { return null; });
           if (gjI && gjI.content) {
-            try { var dec = new TextDecoder().decode(Uint8Array.from(atob(gjI.content.replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); })); if (dec === raw) same = true; } catch (e) {}
+            try { var dec = new TextDecoder().decode(Uint8Array.from(atob(gjI.content.replace(/\s+/g, "")), function(c) { return c.charCodeAt(0); })); if (dec === raw) same = true; if (pi === 0) repoSrc = dec; } catch (e) {}
           }
         }
         if (same) landed.push(paths[pi] + ":no-op"); else toWrite.push(paths[pi]);
+      }
+      var bundleWhy = toWrite.length ? landBundleRefusal(raw, repoSrc) : null;
+      if (bundleWhy) {
+        errors.push("bundle-refused: " + bundleWhy);
+        await landBundleIssue(env, worker, depV, canV, bundleWhy);
+        toWrite = [];
       }
       if (toWrite.length && baseTree) {
         var entries = [];
@@ -1910,8 +1942,9 @@ async function landFix(env, worker, depCode, depV, canV, srcPath) {
   } catch (e) { errors.push("atomic:" + String(e && e.message || e).slice(0, 80)); }
   var ok = landed.length > 0 && errors.length === 0;
   var note = ok ? "landed " + landed.join(", ") : "land-failed " + errors.join(";");
-  // close evidence: verified self-heal row (detect -> act -> verify).
-  try {
+  // close evidence: verified self-heal row (detect -> act -> verify). A bundle refusal is recorded by its deduped
+  // LAND-BUNDLE-REFUSED-1 issue instead of one failed row per hourly scan.
+  if (!bundleWhy) try {
     await env.AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, verified_at, claim, confidence) VALUES ('code-fix-land','" + worker + "',?1,datetime('now'),?2,?3,?4,?5)").bind(String(note).slice(0, 400), ok ? "verified" : "failed", ok ? new Date().toISOString() : null, "LAND-CODE-FIX-1: deployed-ahead " + depV + " > repo " + canV + " committed to main", ok ? "high" : "low").run();
   } catch (e) {}
   return { ok, status: ok ? 200 : 502, note, landed: landed.length, errors: errors.length };
@@ -5279,6 +5312,24 @@ var CFC_LAUNCH_RE = /(generally available|open beta|public beta|is now in beta|n
 // to the name the catalog row already carries, so a launch reopens the rejected row instead of adding a duplicate.
 var CFC_ALIAS = { "basin": "pipelines", "basin pipelines": "pipelines", "basin catalog": "r2 data catalog", "basin sql": "r2 sql", "sandboxes": "sandbox sdk" };
 var CFC_RANK = { in_use: 5, approved: 4, reviewing: 3, proposed: 2, not_considered: 1, rejected: 0, reverted: 0 };
+// CF-CHANGELOG-LEADS-1 (2026-10-05, #1959): an in-use product's change and a later launch of a proposed or not_considered
+// row were recorded and read by nobody. A launch now writes a dated line into that row's when_to_choose (row_update, at
+// most CFC_CAP_NOTES a day), and GET /cf-changelog lists the recent in-use changes and row updates that read like a cost,
+// speed or consolidation lever as `leads`. Deterministic only: rule 8 forbids a new paid model call while a cap is breached.
+var CFC_CAP_NOTES = 5;
+var CFC_LEAD_DAYS = 14;
+var CFC_LEAD_MAX = 10;
+var CFC_LEAD_RE = /(cost|price|pricing|cheaper|latency|faster|embedding|rerank|consolidat|fewer|included|decision model|classif)/i;
+function cfcLead(title, text) { return CFC_LEAD_RE.test(String(title || "") + " " + String(text || "")); }
+// Pure: stored cf_changelog_items rows -> the leads list, newest first.
+function cfcLeads(rows, nowMs) {
+  return (rows || []).filter(function(r) {
+    var t = Date.parse(r.pub || "");
+    return !isNaN(t) && nowMs - t <= CFC_LEAD_DAYS * 86400000 && (r.klass === "in_use_change" || r.klass === "row_update") && cfcLead(r.title, r.excerpt);
+  }).sort(function(a, b) { return Date.parse(b.pub) - Date.parse(a.pub); }).slice(0, CFC_LEAD_MAX).map(function(r) {
+    return { pub: r.pub, title: r.title, link: r.link, klass: r.klass, slug: r.slug, action: r.action };
+  });
+}
 function cfcDecode(s) { return String(s || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&amp;/g, "&"); }
 function cfcText(html) { return cfcDecode(html).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(); }
 // Pure: the feed text -> items, newest first. Only complete <item> elements count, so a feed cut at the byte cap is safe.
@@ -5351,6 +5402,7 @@ function cfcClassify(it, ctx) {
   if (CFC_DEADLINE_RE.test(body) && (used || out.in_fleet)) { out.klass = "deadline"; out.deadline_ms = cfcDeadlineMs(body); return out; }
   var launch = CFC_LAUNCH_RE.test(it.headline + " " + it.text.slice(0, 300));
   if (out.match && out.match.status === "rejected" && launch) { out.klass = "reopen"; return out; }
+  if (out.match && (out.match.status === "proposed" || out.match.status === "not_considered") && launch) { out.klass = "row_update"; return out; }
   if (!out.match && !out.in_fleet && launch && prim.length && prim[0]) { out.klass = "new_product"; return out; }
   if (out.match && out.match.status === "in_use") { out.klass = "in_use_change"; return out; }
   return out;
@@ -5366,6 +5418,7 @@ function cfcNeedsRun(lastOk, nowMs) {
 async function cfcSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS cf_changelog_items (guid TEXT PRIMARY KEY, seen_at TEXT, pub TEXT, title TEXT, link TEXT, products TEXT, klass TEXT, slug TEXT, action TEXT, issue_id INTEGER, prev_status TEXT)").run();
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS cf_changelog_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT, items INTEGER, fresh INTEGER, deadlines INTEGER, new_rows INTEGER, reopened INTEGER, filed INTEGER, bytes INTEGER, note TEXT)").run();
+  try { await env.AUDIT.prepare("ALTER TABLE cf_changelog_items ADD COLUMN excerpt TEXT").run(); } catch (e) {} // CF-CHANGELOG-LEADS-1; fails once it exists
 }
 // Streams the feed and stops at the byte cap: the full file is ~8 MB (1,300 items, full HTML), newest first.
 async function cfcFetchFeed() {
@@ -5408,6 +5461,12 @@ async function cfcRun(env, force) {
   var classified = fresh.map(function(it) { return { it: it, c: cfcClassify(it, ctx) }; });
   var issueLeft = Math.max(0, CFC_CAP_ISSUES - Number((await charterOne(env, "SELECT COUNT(*) n FROM cf_changelog_items WHERE action='filed' AND substr(seen_at,1,10)='" + nowIso.slice(0, 10) + "'") || {}).n || 0));
   var reopenLeft = CFC_CAP_REOPEN, rowsLeft = CFC_CAP_ROWS;
+  var notesLeft = Math.max(0, CFC_CAP_NOTES - Number((await charterOne(env, "SELECT COUNT(*) n FROM cf_changelog_items WHERE action='row-noted' AND substr(seen_at,1,10)='" + nowIso.slice(0, 10) + "'") || {}).n || 0));
+  // items seen before the excerpt column existed get their text once, while they are still in the feed and recent
+  for (var k2 = 0; k2 < items.length; k2++) {
+    if (!known[items[k2].guid] || items[k2].pub_ms == null || nowMs - items[k2].pub_ms > CFC_LEAD_DAYS * 86400000) continue;
+    try { await env.AUDIT.prepare("UPDATE cf_changelog_items SET excerpt=?2 WHERE guid=?1 AND excerpt IS NULL").bind(items[k2].guid, items[k2].text.slice(0, 400)).run(); } catch (e) {}
+  }
   // soonest deadline first, so the cap keeps the most urgent ones
   classified.sort(function(a, b) { return (a.c.deadline_ms == null ? 9e15 : a.c.deadline_ms) - (b.c.deadline_ms == null ? 9e15 : b.c.deadline_ms); });
   for (var i = 0; i < classified.length; i++) {
@@ -5437,10 +5496,15 @@ async function cfcRun(env, force) {
         var ins = await env.AUDIT.prepare("INSERT OR IGNORE INTO cloudflare_capability_catalog (slug, need, product, when_to_choose, source, source_sha, status) VALUES (?1, ?2, ?3, ?4, 'cf-changelog', ?5, 'not_considered')")
           .bind(slug, it.headline.slice(0, 180), it.primary || it.products[0], it.text.slice(0, 300), it.guid).run();
         if (ins && ins.meta && ins.meta.changes) { rowsLeft--; run.new_rows++; action = "new-row"; } else action = "row-exists";
-      } else if (c.klass === "reopen" || c.klass === "new_product") action = "capped";
+      } else if (c.klass === "row_update" && notesLeft > 0 && c.match) {
+        prev = c.match.status;
+        await env.AUDIT.prepare("UPDATE cloudflare_capability_catalog SET when_to_choose=COALESCE(when_to_choose,'') || ?2, last_synced=datetime('now') WHERE slug=?1 AND status IN ('proposed','not_considered')")
+          .bind(c.match.slug, " | cf-changelog " + new Date(it.pub_ms).toISOString().slice(0, 10) + ": " + it.headline.slice(0, 120)).run();
+        notesLeft--; action = "row-noted";
+      } else if (c.klass === "reopen" || c.klass === "new_product" || c.klass === "row_update") action = "capped";
     } catch (e) { action = "error"; run.note += " " + String(e && e.message || e).slice(0, 80); }
-    try { await env.AUDIT.prepare("INSERT OR IGNORE INTO cf_changelog_items (guid, seen_at, pub, title, link, products, klass, slug, action, issue_id, prev_status) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
-      .bind(it.guid, nowIso, it.pub_ms == null ? null : new Date(it.pub_ms).toISOString(), it.title.slice(0, 300), it.link, it.products.join(", "), c.klass, slug, action, issueId, prev).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT OR IGNORE INTO cf_changelog_items (guid, seen_at, pub, title, link, products, klass, slug, action, issue_id, prev_status, excerpt) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
+      .bind(it.guid, nowIso, it.pub_ms == null ? null : new Date(it.pub_ms).toISOString(), it.title.slice(0, 300), it.link, it.products.join(", "), c.klass, slug, action, issueId, prev, it.text.slice(0, 400)).run(); } catch (e) {}
   }
   if (run.note.indexOf("error") >= 0 || /\berror\b/.test(run.note)) run.status = "partial";
   run.note = ((force ? "forced; " : "") + feed.bytes + " bytes, " + items.length + " items, " + fresh.length + " fresh. " + run.note).trim();
@@ -5472,9 +5536,24 @@ async function cfChangelogLatest(env) {
   var runs = await charterRows(env, "SELECT ts, status, items, fresh, deadlines, new_rows, reopened, filed, bytes, note FROM cf_changelog_runs ORDER BY id DESC LIMIT 5");
   var items = await charterRows(env, "SELECT pub, title, link, products, klass, slug, action, issue_id FROM cf_changelog_items WHERE klass NOT IN ('noise','old') ORDER BY pub DESC LIMIT 40");
   var byClass = await charterRows(env, "SELECT klass, COUNT(*) n FROM cf_changelog_items GROUP BY klass");
-  return { runs: runs, recent: items, by_class: byClass, metrics: await cfcMetrics(env) };
+  var leadRows = await charterRows(env, "SELECT pub, title, link, klass, slug, action, excerpt FROM cf_changelog_items WHERE klass IN ('in_use_change','row_update') AND pub >= '" + new Date(Date.now() - CFC_LEAD_DAYS * 86400000).toISOString() + "' ORDER BY pub DESC LIMIT 200");
+  return { runs: runs, recent: items, leads: cfcLeads(leadRows, Date.now()), by_class: byClass, metrics: await cfcMetrics(env) };
 }
 // ---- CF-CHANGELOG-LOOP-1:END ----
+// ---- CLEF-CANDIDATE-1:BEGIN (2026-10-04, pillar: cost; catalog row cfc-clef; re-landed 2026-10-05 for #1865) ----
+// Clef / Clef-flash (Workers AI decision models) only pay off where the fleet makes a high-volume, short-output LLM call that
+// is really a classify/score/choose. migrations/2026-10-04-clef-candidate.sql registered clef_candidate_calls_7d and its
+// trigger, but PR 586, which carried this writer, was closed unmerged, so the metric read "never refreshed" in the
+// freshness audit (METRIC-REGISTRY-STALENESS-1). One D1 read per hour; no model call.
+var CLEF_CANDIDATE_SQL = "SELECT COALESCE(SUM(calls),0) n FROM (SELECT SUM(calls) calls FROM ai_spend_ledger WHERE day >= date('now','-7 days') AND caller NOT LIKE 'qnfo-ai-calibration%' AND model NOT LIKE '%bge-%' GROUP BY caller, model HAVING SUM(calls) >= 50 AND 1.0 * SUM(out_tok) / SUM(calls) < 100)";
+async function clefCandidateMetric(env) {
+  var row = await env.AUDIT.prepare(CLEF_CANDIDATE_SQL).first();
+  if (!row || row.n == null) return null; // an unreadable ledger is not a zero
+  var n = Number(row.n || 0);
+  await env.AUDIT.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='clef_candidate_calls_7d'").bind(String(n), new Date().toISOString()).run();
+  return n;
+}
+// ---- CLEF-CANDIDATE-1:END ----
 // ---- OBJECTIVE-CONSTRAINTS-1:BEGIN (2026-10-02, goals 41, 43, 57, ratified under the owner's queue delegation; agent_issues 1744, 1745, 1746) ----
 // Three objective revisions were ratified on fleet.qnfo.org (2026-10-01) by a session under the owner's queue delegation, not by the owner in person (audit 2026-10-02, issues 1765, 1766). None is a weight change, so
 // OBJECTIVE-REVISION-APPLY-1 (qnfo-fleet-dashboard) filed each as work. This block makes each one a constraint the kernel
@@ -6041,7 +6120,11 @@ async function improvementLoopTick(env) {
     try {
       await env.AUDIT.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state) VALUES (?1, 'system', ?2, ?3, 'qnfo-audit.metric_history + agent_issues (qnfo-fleet-control IMPROVEMENT-LOOP-1)', ?4, 'qnfo-fleet-control', 'qnfo-fleet-control IMPROVEMENT-LOOP-1 files and closes the issues', 'hourly', ?5, ?6, 'MEASURED')")
         .bind(sm.metric, sm.kind, sm.formula, sm.target, sm.warning, sm.kill).run();
-      if (val !== null && val !== void 0) await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3 WHERE metric = ?1").bind(sm.metric, String(val), nowIso).run();
+      // IMPROVEMENT-UNMEASURED-STAMP-1 (2026-10-05, #1865): until metric_history holds 4 daily points in both 7-day windows
+      // (about 2026-10-13) the trend metrics have no value. The loop still ran, so it stamps last_refreshed and says
+      // UNMEASURED with a NULL value: the freshness audit sees a live writer and the trigger sees no reading.
+      if (val !== null && val !== void 0) await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1").bind(sm.metric, String(val), nowIso).run();
+      else await env.AUDIT.prepare("UPDATE metric_registry SET last_value = NULL, last_refreshed = ?2, state = 'UNMEASURED' WHERE metric = ?1").bind(sm.metric, nowIso).run();
       if (sm.trigger) await env.AUDIT.prepare("INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes) VALUES (?1, ?2, 'registry', ?3, ?4, ?5, ?6, 'qnfo-fleet-control', 'agent_issues', 168, 1, 'seeded by IMPROVEMENT-LOOP-1')")
         .bind(sm.metric, sm.trigger.title, sm.trigger.operator, sm.trigger.threshold, sm.trigger.priority, sm.trigger.action).run();
     } catch (e) {}
@@ -7054,6 +7137,7 @@ var worker_default2 = {
     ctx.waitUntil(portfolioSyncIfStale(env).catch((e) => console.error("portfolioSync error:", e && e.message || e)));
     ctx.waitUntil(loopWatch(env).catch((e) => console.error("loopWatch error:", e && e.message || e)));
     ctx.waitUntil(cfChangelogIfStale(env).catch((e) => console.error("cfChangelogIfStale error:", e && e.message || e)));
+    ctx.waitUntil(clefCandidateMetric(env).catch((e) => console.error("clefCandidateMetric error:", e && e.message || e)));
     ctx.waitUntil(objectiveConstraintsTick(env).catch((e) => console.error("objectiveConstraintsTick error:", e && e.message || e)));
     ctx.waitUntil(remediationContractsTick(env).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
     ctx.waitUntil(improvementLoopTick(env).catch((e) => console.error("improvementLoopTick error:", e && e.message || e)));
@@ -7419,6 +7503,28 @@ function costPerSuccessfulTask(spent, okN) {
   return { value: (Number(spent) / n).toFixed(4), why: null };
 }
 // ---- COST-PER-TASK-WINDOW-1:END ----
+// ---- REPO-LIVE-DRIFT-1:BEGIN (2026-10-05, agent_issues 1879, pillar core) ----
+// drift_total compared the service registry with the CF script list (names, a version string present), so a live script
+// whose bytes or version differ from repo main read 0 drift. The fleet self-audit (scripts/fleet-autoaudit.py, run by
+// fleet-autodeploy.yml on every push to main) already compares each worker's live /health version and the sha256 of its
+// live script with main and writes worker_live_audit (DRIFT, CONTENT_DRIFT). drift_total now adds those rows. An audit
+// snapshot older than REPO_LIVE_AUDIT_MAX_H, or none at all, adds 1: an unread comparison is not a match.
+var REPO_LIVE_AUDIT_MAX_H = 26;
+function repoLiveDrift(rows, nowMs) {
+  var newest = null, drifted = [];
+  (rows || []).forEach(function (r) {
+    var p = String(r.probed_at || "");
+    var t = Date.parse(p.indexOf("T") >= 0 ? p : p.replace(" ", "T") + "Z");
+    if (!isNaN(t) && (newest === null || t > newest)) newest = t;
+    if (/(^|\+)(DRIFT|CONTENT_DRIFT)(\+|$)/.test(String(r.note || ""))) drifted.push(r.worker + ":" + r.note);
+  });
+  if (newest === null) return { count: drifted.length + 1, stale: true, age_h: null, drifted: drifted, why: "no fleet self-audit rows" };
+  var age = Math.round((nowMs - newest) / 36e4) / 10;
+  if (age > REPO_LIVE_AUDIT_MAX_H) return { count: drifted.length + 1, stale: true, age_h: age, drifted: drifted, why: "fleet self-audit " + age + "h old" };
+  return { count: drifted.length, stale: false, age_h: age, drifted: drifted };
+}
+var DRIFT_TOTAL_FORMULA = "ghost + unregistered + unversioned (service_registry vs the CF workers/scripts list) + repo_live (worker_live_audit rows DRIFT or CONTENT_DRIFT: live /health version or live script sha256 differs from repo main, fleet self-audit on every push to main; +1 when that audit is missing or older than 26h). REPO-LIVE-DRIFT-1, qnfo-fleet-control hourly";
+// ---- REPO-LIVE-DRIFT-1:END ----
 /* OWNED-METRICS-WRITER-1 (2026-09-30, agent_issues #1411 METRIC-REGISTRY-STALENESS-1): metric_registry names
    qnfo-fleet-control as the OWNER of drift_total, cost_usd_30d, cost_per_successful_task_by_class and
    gateway_cap_30d_usd, but nothing in the fleet wrote them: they froze at 2026-09-27/29 while declaring hourly/daily
@@ -7480,8 +7586,12 @@ async function refreshOwnedMetrics(env) {
         if (isLive && live[r.service] && (r.version == null || String(r.version).trim() === "")) unversioned++;
       });
       Object.keys(live).forEach(function (n) { if (!inReg[n]) unregistered++; });
-      await put("drift_total", ghost + unregistered + unversioned);
-      out.drift = { ghost: ghost, unregistered: unregistered, unversioned: unversioned };
+      var rl;
+      try { rl = repoLiveDrift((await db.prepare("SELECT worker, note, probed_at FROM worker_live_audit").all()).results || [], Date.now()); }
+      catch (eRl) { rl = { count: 1, stale: true, age_h: null, drifted: [], why: "worker_live_audit unreadable: " + String(eRl && eRl.message || eRl).slice(0, 80) }; }
+      await put("drift_total", ghost + unregistered + unversioned + rl.count);
+      try { await db.prepare("UPDATE metric_registry SET formula=?1 WHERE metric='drift_total'").bind(DRIFT_TOTAL_FORMULA).run(); } catch (eF) {}
+      out.drift = { ghost: ghost, unregistered: unregistered, unversioned: unversioned, repo_live: rl };
     } else {
       out.skipped.drift_total = "CF workers/scripts list unreadable";
     }

@@ -1,4 +1,4 @@
-var VERSION = "1.7.1-ping-hourly"; // 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.7.2-cadence-units"; // 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -287,13 +287,17 @@ __name222222(runUlaCheck, "runUlaCheck");
 // auditor never invents a value -- it stamps last_value/last_refreshed only for metrics
 // whose source table is bound here, classifies every other metric against its OWN declared
 // refresh_cadence, and files one deduplicated agent_issue so staleness cannot stay silent.
+// METRIC-CADENCE-UNITS-1 (2026-10-05, #1865): "*/3h" was read as 3 minutes (inbound_unactioned_72h "180m stale vs 3m
+// cadence") and "2h" did not parse (seven q08 metrics "cadence unparsed"). "*/N" and "N" take an optional m, h or d unit;
+// a bare "*/N" stays minutes (the cron-minute form the */15 metrics use).
 function metricCadenceMinutes(cadence) {
   if (!cadence) return null;
   var c = String(cadence).trim();
-  var m = c.match(/^\*\/(\d+)/);
-  if (m) return parseInt(m[1], 10);
-  var m2 = c.match(/^(\d+)\s*m$/i);
-  if (m2) return parseInt(m2[1], 10);
+  var unit = { m: 1, h: 60, d: 1440 };
+  var m = c.match(/^\*\/(\d+)\s*([mhd])?$/i);
+  if (m) return parseInt(m[1], 10) * unit[(m[2] || "m").toLowerCase()];
+  var m2 = c.match(/^(\d+)\s*([mhd])$/i);
+  if (m2) return parseInt(m2[1], 10) * unit[m2[2].toLowerCase()];
   if (c === "hourly") return 60;
   if (c === "daily") return 1440;
   if (c === "weekly") return 10080;
@@ -303,7 +307,7 @@ function metricCadenceMinutes(cadence) {
 async function runMetricFreshness(env) {
   var nowMs = Date.now();
   var nowIso = new Date(nowMs).toISOString();
-  var out = { status: "metric-freshness", timestamp: nowIso, total: 0, fresh: 0, stale: 0, never: 0, unparsed_cadence: 0, undefined: 0, undefined_metrics: [], worst: null, refreshed: [], filed_issue: false, updated_issue: false };
+  var out = { status: "metric-freshness", timestamp: nowIso, total: 0, fresh: 0, stale: 0, never: 0, unparsed_cadence: 0, undefined: 0, undefined_metrics: [], unmeasured: 0, unmeasured_metrics: [], worst: null, refreshed: [], filed_issue: false, updated_issue: false };
   var rows = [];
   try {
     var res = await env.QNFO_AUDIT.prepare("SELECT metric, refresh_cadence, last_refreshed, state FROM metric_registry").all();
@@ -323,6 +327,15 @@ async function runMetricFreshness(env) {
     if (String(r.state || "").toUpperCase() === "UNDEFINED") {
       out.undefined++;
       out.undefined_metrics.push(r.metric);
+      continue;
+    }
+    // METRIC-UNMEASURED-CLASS-1 (2026-10-05, #1865): a metric whose owner declares it UNMEASURED (or n/a) and that has never
+    // had a reading (ask_helpful_rate_30d below 10 ratings, the q08 panel metrics, paper_math_browser_fail_pages) is a
+    // measurement gap, not a stale writer; it is reported in its own class, like UNDEFINED. Once a writer stamps it, the
+    // row is judged on its cadence like any other.
+    if (!r.last_refreshed && /^(unmeasured|n\/a)$/i.test(String(r.state || "").trim())) {
+      out.unmeasured++;
+      out.unmeasured_metrics.push(r.metric);
       continue;
     }
     var cad = metricCadenceMinutes(r.refresh_cadence);
@@ -399,7 +412,7 @@ async function runMetricFreshness(env) {
     try {
       var ox = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND title = ? LIMIT 1").bind(stTitle).first();
       if (ox && ox.id) {
-        var evd = "qnfo-lifecycle/" + QNFO_VERSION + " at " + nowIso + ": 0 stale / 0 never / 0 unparsed of " + out.total + " metrics (" + out.fresh + " fresh" + (out.undefined ? ", " + out.undefined + " UNDEFINED excluded: " + out.undefined_metrics.join(",") : "") + ")";
+        var evd = "qnfo-lifecycle/" + QNFO_VERSION + " at " + nowIso + ": 0 stale / 0 never / 0 unparsed of " + out.total + " metrics (" + out.fresh + " fresh" + (out.undefined ? ", " + out.undefined + " UNDEFINED excluded: " + out.undefined_metrics.join(",") : "") + (out.unmeasured ? ", " + out.unmeasured + " never-measured UNMEASURED excluded: " + out.unmeasured_metrics.join(",") : "") + ")";
         await env.QNFO_AUDIT.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, remediation, close_evidence) VALUES (?1, 'METRIC-STALENESS-SELF-CLOSE-1', 'resolved', 'qnfo-lifecycle', datetime('now'), 'auditor verdict: registry fresh', ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='resolved'").bind(ox.id, evd).run();
         await env.QNFO_AUDIT.prepare("UPDATE agent_issues SET status='resolved', close_channel='lifecycle-metric-freshness', updated_at=? WHERE id=? AND status='open'").bind(nowMs, ox.id).run();
         out.closed_issue = ox.id;
@@ -408,7 +421,7 @@ async function runMetricFreshness(env) {
   }
   if (remaining > 0) {
     var title = "METRIC-REGISTRY-STALENESS-1: metric_registry rows exceed their declared refresh cadence";
-    var desc = remaining + "/" + out.total + " metrics not fresh at " + nowIso + " :: " + offenders.slice(0, 40).join("; ") + (out.undefined ? " || excluded as UNDEFINED (definition gap, not staleness): " + out.undefined_metrics.join(", ") : "");
+    var desc = remaining + "/" + out.total + " metrics not fresh at " + nowIso + " :: " + offenders.slice(0, 40).join("; ") + (out.undefined ? " || excluded as UNDEFINED (definition gap, not staleness): " + out.undefined_metrics.join(", ") : "") + (out.unmeasured ? " || awaiting a first reading (state UNMEASURED or n/a, never refreshed; a measurement gap, not staleness): " + out.unmeasured_metrics.join(", ") : "");
     try {
       var ex = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE status = 'open' AND title = ? LIMIT 1").bind(title).first();
       if (ex && ex.id) {
