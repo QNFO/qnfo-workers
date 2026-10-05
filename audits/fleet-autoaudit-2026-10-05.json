@@ -1,7 +1,12 @@
 {
-  "audited_at": "2026-10-05 15:58:57",
-  "d1_write_failures": [],
-  "d1_writes_ok": 113,
+  "audited_at": "2026-10-05 16:01:34",
+  "d1_write_failures": [
+    [
+      "qnfo-errata-watch",
+      "HTTP 401: b'{\"result\":null,\"success\":false,\"errors\":[{\"code\":10000,\"message\":\"Authentication error\"}],\"messages\":[]}'"
+    ]
+  ],
+  "d1_writes_ok": 112,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -497,7 +502,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.9.3-allowlist",
+        "version": "3.9.4-hub-swr",
         "worker": "qnfo-gateway"
       },
       {
@@ -572,7 +577,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.7.35-link-facet-utm",
+        "version": "0.7.36-reach-repair",
         "worker": "qnfo-social"
       },
       {
@@ -1176,9 +1181,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.9.3-allowlist",
+      "before": "3.9.4-hub-swr",
       "http": 200,
-      "live": "3.9.3-allowlist",
+      "live": "3.9.4-hub-swr",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1416,9 +1421,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.7.35-link-facet-utm",
+      "before": "0.7.36-reach-repair",
       "http": 200,
-      "live": "0.7.35-link-facet-utm",
+      "live": "0.7.36-reach-repair",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
@@ -1504,5 +1509,5 @@
       "worker": "vault-indexer"
     }
   },
-  "stale_rows_purged": 0
+  "stale_rows_purged": 1
 }
