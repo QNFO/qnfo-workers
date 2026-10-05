@@ -1,82 +1,74 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@e31403fd36e1",
- "due": 9,
- "pass": 5,
+ "verifier": "remediation-consumer@c596cc7cc098",
+ "due": 8,
+ "pass": 3,
  "fail": 4,
- "skipped": 0,
+ "skipped": 1,
  "contracts": [
   {
-   "class": "issue-1629",
-   "issue_id": 1629,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1993",
-   "issue_id": 1993,
-   "verdict": "pass",
-   "expected": "clean",
-   "observed": "clean",
-   "written": true
-  },
-  {
-   "class": "issue-1825",
-   "issue_id": 1825,
+   "class": "EVID-1641-MENTIONS",
+   "issue_id": 1641,
    "verdict": "fail",
+   "expected": "all-sources-ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "vacuous-probe-result",
    "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
   },
   {
-   "class": "issue-1891",
-   "issue_id": 1891,
+   "class": "EVID-1711-REACH",
+   "issue_id": 1711,
    "verdict": "fail",
-   "expected": "clean",
+   "expected": "seven-days",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1925",
-   "issue_id": 1925,
+   "class": "issue-1730",
+   "issue_id": 1730,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "tracked",
+   "observed": "tracked",
    "written": true
   },
   {
-   "class": "issue-1939",
-   "issue_id": 1939,
+   "class": "issue-LIFECYCLE-PING-1042-1",
+   "issue_id": 1994,
    "verdict": "fail",
    "expected": "ok",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1986",
-   "issue_id": 1986,
+   "class": "issue-1907",
+   "issue_id": 1907,
    "verdict": "fail",
-   "expected": "ok",
+   "expected": "linked",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1979",
-   "issue_id": 1979,
+   "class": "issue-1865",
+   "issue_id": 1865,
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-Q08-WRITE-ROUTES-TOKEN-1",
-   "issue_id": 1995,
+   "class": "issue-1879",
+   "issue_id": 1879,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "1",
+   "observed": "1",
    "written": true
   }
  ],
@@ -96,8 +88,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 26239,
- "head": "e31403fd36e192478031acfb8ceba5de7fd6288a",
+ "spent_ms": 21521,
+ "head": "c596cc7cc098d440c959486cf00bd11a9b684b81",
  "job_status": "success",
- "ts": "2026-10-05T19:47:47Z"
+ "ts": "2026-10-05T20:33:43Z"
 }
