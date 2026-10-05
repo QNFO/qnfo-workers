@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-05 16:43:31",
+  "audited_at": "2026-10-05 17:17:47",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -392,7 +392,7 @@
     "sync_workers": [
       {
         "dir": "calendar-api",
-        "version": "0.7.0-host",
+        "version": "0.7.1-caller-props",
         "worker": "calendar-api"
       },
       {
@@ -407,17 +407,17 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.5.4-reach-swr",
+        "version": "1.5.5-triage-budget",
         "worker": "idea-hub"
       },
       {
         "dir": "personal-api",
-        "version": "4.7.0-gcal-ics",
+        "version": "4.7.2-ai-attr",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.10.1-answer-rate",
+        "version": "1.10.2-email-props",
         "worker": "personal-companion"
       },
       {
@@ -432,12 +432,12 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.31.1-aig-metadata",
+        "version": "5.31.2-ds-402-breaker",
         "worker": "qnfo-ai"
       },
       {
         "dir": "qnfo-ai-calibration",
-        "version": "1.2.8-capability-contract",
+        "version": "1.2.9-gw-402-unfunded",
         "worker": "qnfo-ai-calibration"
       },
       {
@@ -467,7 +467,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.15-priority-queue",
+        "version": "0.3.16-dispatch-dedupe",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -482,22 +482,22 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.5.0-rebook-cancel",
+        "version": "2.5.3-parse-error-private",
         "worker": "qnfo-email"
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.116-idea-buildable-truth",
+        "version": "0.4.117-merge-lane",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.21.7-weekday-backfill",
+        "version": "1.22.1-fleet-console",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.9.4-hub-swr",
+        "version": "3.9.7-math-typeset",
         "worker": "qnfo-gateway"
       },
       {
@@ -512,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.9.5-patent-probe",
+        "version": "3.9.7-probe-errors",
         "worker": "qnfo-ipatent"
       },
       {
@@ -537,7 +537,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.40-error-detail-capture",
+        "version": "2.38.41-ds-402-breaker",
         "worker": "qnfo-ops"
       },
       {
@@ -547,7 +547,7 @@
       },
       {
         "dir": "qnfo-paper-indexer",
-        "version": "3.0.11-render-health",
+        "version": "3.0.12-math-browser-metric",
         "worker": "qnfo-paper-indexer"
       },
       {
@@ -557,12 +557,12 @@
       },
       {
         "dir": "qnfo-pdf",
-        "version": "1.0.2-utf8-redeploy",
+        "version": "1.1.0-math-browser-check",
         "worker": "qnfo-pdf"
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.57-codeagent",
+        "version": "0.9.61-zenodo-related",
         "worker": "qnfo-research-exec"
       },
       {
@@ -624,9 +624,9 @@
       "worker": "audits"
     },
     "calendar-api": {
-      "before": "0.7.0-host",
+      "before": "0.7.1-caller-props",
       "http": 200,
-      "live": "0.7.0-host",
+      "live": "0.7.1-caller-props",
       "match": 1,
       "note": "SYNC",
       "worker": "calendar-api"
@@ -688,9 +688,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.5.4-reach-swr",
+      "before": "1.5.5-triage-budget",
       "http": 200,
-      "live": "1.5.4-reach-swr",
+      "live": "1.5.5-triage-budget",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -800,17 +800,17 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.7.0-gcal-ics",
+      "before": "4.7.2-ai-attr",
       "http": 200,
-      "live": "4.7.0-gcal-ics",
+      "live": "4.7.2-ai-attr",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.10.1-answer-rate",
+      "before": "1.10.2-email-props",
       "http": 200,
-      "live": "1.10.1-answer-rate",
+      "live": "1.10.2-email-props",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -880,17 +880,17 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.31.1-aig-metadata",
+      "before": "5.31.2-ds-402-breaker",
       "http": 200,
-      "live": "5.31.1-aig-metadata",
+      "live": "5.31.2-ds-402-breaker",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
     },
     "qnfo-ai-calibration": {
-      "before": "1.2.8-capability-contract",
+      "before": "1.2.9-gw-402-unfunded",
       "http": 200,
-      "live": "1.2.8-capability-contract",
+      "live": "1.2.9-gw-402-unfunded",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-calibration"
@@ -1032,9 +1032,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.15-priority-queue",
+      "before": "0.3.16-dispatch-dedupe",
       "http": 200,
-      "live": "0.3.15-priority-queue",
+      "live": "0.3.16-dispatch-dedupe",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1064,9 +1064,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.5.0-rebook-cancel",
+      "before": "2.5.3-parse-error-private",
       "http": 200,
-      "live": "2.5.0-rebook-cancel",
+      "live": "2.5.3-parse-error-private",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.116-idea-buildable-truth",
+      "before": "0.4.117-merge-lane",
       "http": 200,
-      "live": "0.4.116-idea-buildable-truth",
+      "live": "0.4.117-merge-lane",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.21.7-weekday-backfill",
+      "before": "1.22.1-fleet-console",
       "http": 200,
-      "live": "1.21.7-weekday-backfill",
+      "live": "1.22.1-fleet-console",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1176,9 +1176,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.9.4-hub-swr",
+      "before": "3.9.7-math-typeset",
       "http": 200,
-      "live": "3.9.4-hub-swr",
+      "live": "3.9.7-math-typeset",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1232,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.9.5-patent-probe",
+      "before": "3.9.7-probe-errors",
       "http": 200,
-      "live": "3.9.5-patent-probe",
+      "live": "3.9.7-probe-errors",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1280,9 +1280,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.40-error-detail-capture",
+      "before": "2.38.41-ds-402-breaker",
       "http": 200,
-      "live": "2.38.40-error-detail-capture",
+      "live": "2.38.41-ds-402-breaker",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1304,9 +1304,9 @@
       "worker": "qnfo-paper-explainer"
     },
     "qnfo-paper-indexer": {
-      "before": "3.0.11-render-health",
+      "before": "3.0.12-math-browser-metric",
       "http": 200,
-      "live": "3.0.11-render-health",
+      "live": "3.0.12-math-browser-metric",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-paper-indexer"
@@ -1320,9 +1320,9 @@
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
-      "before": "1.0.2-utf8-redeploy",
+      "before": "1.1.0-math-browser-check",
       "http": 200,
-      "live": "1.0.2-utf8-redeploy",
+      "live": "1.1.0-math-browser-check",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-pdf"
@@ -1360,9 +1360,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.57-codeagent",
+      "before": "0.9.61-zenodo-related",
       "http": 200,
-      "live": "0.9.57-codeagent",
+      "live": "0.9.61-zenodo-related",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"

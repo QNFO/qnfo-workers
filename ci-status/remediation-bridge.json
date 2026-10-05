@@ -2,108 +2,23 @@
  "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
  "probe_map_entries": 45,
- "open_issues": 97,
- "with_contract_before": 97,
+ "open_issues": 99,
+ "with_contract_before": 99,
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
- "active_contracts": 143,
- "active_with_executable_probe": 125,
- "active_with_prose_probe": 18,
+ "active_contracts": 132,
+ "active_with_executable_probe": 131,
+ "active_with_prose_probe": 1,
  "prose_probe_contracts": [
-  {
-   "class": "detect-threshold-blindspot",
-   "issue_id": 1165,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "act-half-unverified",
-   "issue_id": 1207,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "probe-non-falsifiable",
-   "issue_id": 1190,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "closure-evidence-unbacked",
-   "issue_id": 1263,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "remediation-class-death",
-   "issue_id": 1200,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "capability-precondition-missing",
-   "issue_id": 1118,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "trust-authority-split",
-   "issue_id": 1282,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "mixed-type-timestamp",
-   "issue_id": 1283,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "timestamp-seconds-bypass",
-   "issue_id": 1298,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "kg-paper-node-duplication",
-   "issue_id": 1292,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "router-calib-agent-class",
-   "issue_id": 1293,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "outreach-selector-drift",
-   "issue_id": 1294,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "outreach-drain-scheduled",
-   "issue_id": 1295,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "outreach-enricher-recovery",
-   "issue_id": 1296,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "close-predicate-monotone",
-   "issue_id": 1297,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "CI-WATCHDOG-REAPER-SUBJECT-SHAPE-1",
-   "issue_id": null,
-   "reason": "not-a-select"
-  },
-  {
-   "class": "issue-1922",
-   "issue_id": 1922,
-   "reason": "multi-statement"
-  },
   {
    "class": "issue-1951",
    "issue_id": 1951,
    "reason": "multi-statement"
   }
  ],
- "contracts_needs_machine_probe": 93,
- "open_issues_without_active_contract": 17,
+ "contracts_needs_machine_probe": 92,
+ "open_issues_without_active_contract": 16,
  "residual_gap_ids": [
   1985,
   1750,
@@ -120,10 +35,9 @@
   1903,
   1907,
   1966,
-  1967,
-  1992
+  1967
  ],
- "head": "a471735baa919dea90e3901e54f09f5dafd675be",
+ "head": "c1398de87c2d4fbe5c23779778ea220a099524b0",
  "job_status": "success",
- "ts": "2026-10-05T16:45:25Z"
+ "ts": "2026-10-05T17:15:27Z"
 }

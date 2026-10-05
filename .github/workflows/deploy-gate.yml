@@ -268,6 +268,7 @@ jobs:
           node qnfo-subscribers/fleet-link.test.mjs
           node qnfo-ipatent/routes.test.mjs
           node qnfo-ipatent/error-json.test.mjs
+          node --no-warnings qnfo-ipatent/bench-dataset.test.mjs
           node qnfo-fleet-dashboard/ipatent-usage.test.mjs
       # Q08-REVIEW-2026-10-31 (#1716): the one-shot q08 decision on bot-filtered RUM page views and the cadence cap
       # q08-signal-engine reads (Q08-CADENCE-CAP-1); a deferral never satisfies the remediation probe.
@@ -417,6 +418,10 @@ jobs:
       # math check (blocking only with ops_config research_math_gate=enforce).
       - name: MATH-LATEX-2 offline suite (qnfo-research-exec)
         run: node --no-warnings qnfo-research-exec/math-latex.test.mjs
+      # ZENODO-READ-ONLINE-1 (qnfo-research-exec 0.9.61, #1907): kind='related' rows add the papers.qnfo.org page as an
+      # isVariantFormOf related identifier to the latest version of a record, idempotently; the probe closes the issue.
+      - name: ZENODO-READ-ONLINE-1 offline suite (qnfo-research-exec)
+        run: node --no-warnings qnfo-research-exec/zenodo-related.test.mjs
       # 2026-10-05 remediation (session bold-thompson): suites added by clusters C2, D and E.
       - name: CALLER-PROPS-1 offline suite (calendar-api 0.7.1, #1987)
         run: node --no-warnings calendar-api/caller-props.test.mjs
