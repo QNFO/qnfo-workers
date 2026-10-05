@@ -168,7 +168,8 @@ jobs:
       - name: DS-402-BREAKER-1 offline suite (qnfo-ai)
         run: node --no-warnings qnfo-ai/ds-402-breaker.test.mjs
       # ENSEMBLE-RUN-LOG-1 (qnfo-ai 5.31.3, #1889): every ensemble call leaves one cloud_ops_events row with the primary
-      # and validator families and the verdict, so same-family agreement is measurable before the pool is thinned.
+      # and validator families and the verdict, so same-family agreement is measurable. ENSEMBLE-FAMILY-DISJOINT-1
+      # (5.31.4): the same suite holds the pool to one model per family and the validator to another family than the primary.
       - name: ENSEMBLE-RUN-LOG-1 offline suite (qnfo-ai)
         run: node --no-warnings qnfo-ai/ensemble-run-log.test.mjs
       # UTF8-DEPLOY-1: worker source fetched from GitHub reaches the upload as the same UTF-8 text (no double encoding).
