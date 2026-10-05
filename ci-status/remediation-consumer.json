@@ -1,32 +1,66 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@eb67a0f2ebbe",
- "due": 3,
+ "verifier": "remediation-consumer@0f88add83f7a",
+ "due": 7,
  "pass": 2,
- "fail": 0,
- "skipped": 1,
+ "fail": 1,
+ "skipped": 4,
  "contracts": [
   {
-   "class": "CI-WATCHDOG-REAPER-SUBJECT-SHAPE-1",
-   "issue_id": null,
-   "verdict": "probe-not-machine-executable",
-   "reason": "not-a-select"
+   "class": "EVID-1649-BRIEF",
+   "issue_id": 1649,
+   "verdict": "pass",
+   "expected": "recorded",
+   "observed": "recorded",
+   "written": true
   },
   {
-   "class": "predicate-set-incomplete",
-   "issue_id": 1282,
-   "verdict": "pass",
-   "expected": "0",
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "vacuous-probe-result",
+   "expected": "fixed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-1730",
+   "issue_id": 1730,
+   "verdict": "fail",
+   "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "cron-registry-drift",
-   "issue_id": 1494,
+   "class": "issue-1854",
+   "issue_id": 1854,
+   "verdict": "vacuous-probe-result",
+   "expected": "1",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "GCAL-CONNECTED-1",
+   "issue_id": 1816,
+   "verdict": "vacuous-probe-result",
+   "expected": "connected",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "vacuous-probe-result",
+   "expected": "connected",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "PREDICT-WEEK-1",
+   "issue_id": 1908,
    "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
+   "expected": "predicting",
+   "observed": "predicting",
    "written": true
   }
  ],
@@ -46,8 +80,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 6187,
- "head": "eb67a0f2ebbe9180d11381dafe2d524db90a8d39",
+ "spent_ms": 17357,
+ "head": "0f88add83f7aade313890274b1346ba3d3ddc888",
  "job_status": "success",
- "ts": "2026-10-05T09:38:50Z"
+ "ts": "2026-10-05T15:56:39Z"
 }
