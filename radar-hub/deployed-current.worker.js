@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.2.3"; // 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.2.4"; // 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -854,7 +854,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.7";
+var VERSION = "1.2.8";
 var WORKER = "personal-events-radar";
 var TAB = String.fromCharCode(9);
 var LF = String.fromCharCode(10);
@@ -930,29 +930,52 @@ __name(toISO, "toISO");
 // with chrome, dates and repeated venue prefixes removed and a length cap. The snippet (scoring, classify, report) and the
 // dedupe key venue|date are untouched, so existing rows are never re-posted.
 var TITLE_CAP = 80;
-var TITLE_CHROME = new RegExp("indeling" + WS + "prijs" + WS + "taal" + WS + "valuta|dit" + WS + "evenement" + WS + "opslaan|\\bopslaan\\b|\\bnext" + WS + "page\\b|\\bprevious" + WS + "page\\b|\\bpage" + WS + "[0-9]+\\b|upcoming" + WS + "exhibitions|skip" + WS + "to" + WS + "[a-z]+(?:" + WS + "[a-z]+)?|read" + WS + "more|lees" + WS + "meer|accept(?:" + WS + "all)?" + WS + "cookies|\\bcookies?(?:" + WS + "(?:settings|policy|preferences))?\\b|tickets" + WS + "available|accessibility" + WS + "facilities|now" + WS + "on" + WS + "view|\\bexpected\\b|\\bsave" + WS + "this" + WS + "event\\b|\\bsubscribe\\b|\\bnewsletter\\b|at" + WS + "various" + WS + "times|diverse" + WS + "locaties" + WSC + "*/" + WSC + "*various" + WS + "locations|[0-9]{1,2}:[0-9]{2}" + WSC + "*-" + WSC + "*[0-9]{1,2}:[0-9]{2}|our" + WS + "top" + WS + "picks" + WS + "this" + WS + "season|all" + WS + "events" + WS + "and" + WS + "happenings|festivals" + WS + "and" + WS + "events|shopping" + WS + "and" + WS + "markets|theatre" + WS + "and" + WS + "stage", "gi");
+var TITLE_CHROME = new RegExp("indeling" + WS + "prijs" + WS + "taal" + WS + "valuta|dit" + WS + "evenement" + WS + "opslaan|\\bopslaan\\b|\\bnext" + WS + "page\\b|\\bprevious" + WS + "page\\b|\\bpage" + WS + "[0-9]+\\b|upcoming" + WS + "exhibitions|skip" + WS + "to" + WS + "[a-z]+(?:" + WS + "[a-z]+)?|read" + WS + "more|lees" + WS + "meer|accept(?:" + WS + "all)?" + WS + "cookies|\\bcookies?(?:" + WS + "(?:settings|policy|preferences))?\\b|tickets" + WS + "available|accessibility" + WS + "facilities|now" + WS + "on" + WS + "view|\\bexpected\\b|\\bsave" + WS + "this" + WS + "event\\b|\\bsubscribe\\b|\\bnewsletter\\b|at" + WS + "various" + WS + "times|diverse" + WS + "locaties" + WSC + "*/" + WSC + "*various" + WS + "locations|[0-9]{1,2}:[0-9]{2}" + WSC + "*-" + WSC + "*[0-9]{1,2}:[0-9]{2}|our" + WS + "top" + WS + "picks" + WS + "this" + WS + "season|all" + WS + "events" + WS + "and" + WS + "happenings|festivals" + WS + "and" + WS + "events|shopping" + WS + "and" + WS + "markets|theatre" + WS + "and" + WS + "stage|art" + WS + "and" + WS + "design", "gi");
+// RADAR-TITLE-NOISE-2 (#1885): everything in front of the last navigation marker is the previous card or the menu, and titles
+// at the venues whose pages are mostly navigation lists (Stedelijk, Iamsterdam, Eventbrite) must start like a title: a
+// leading lowercase word, "&" or punctuation is a cut fragment, so the candidate falls back to the next clean segment or is skipped.
+var TITLE_LEAD_CHROME = new RegExp("^[^]*(?:indeling" + WS + "prijs" + WS + "taal" + WS + "valuta|dit" + WS + "evenement" + WS + "opslaan|\\bopslaan" + WSC + "*:|\\bnext" + WS + "page|upcoming" + WS + "exhibitions)" + WSC + "*:?", "i");
+var TITLE_STRICT_VENUES = ["Stedelijk", "Iamsterdam", "EventbriteLGBTQ"];
 var TITLE_WDAY = "(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag";
-var TITLE_DATE_SRC = "(?:(?:" + TITLE_WDAY + ")[.]?,?" + WSC + "*)?(?:" + MONTH_RE + "[a-z]*[.]?" + WS + "[0-9]{1,2}(?:" + WSC + "*[-–—]" + WSC + "*[0-9]{1,2})?|[0-9]{1,2}(?:" + WSC + "*[-–—]" + WSC + "*[0-9]{1,2})?" + WS + MONTH_RE + "[a-z]*[.]?)(?:" + WSC + "*,?" + WSC + "*'?20?[0-9]{2}(?![0-9:]))?(?:" + WSC + "*,?" + WSC + "*[0-9]{1,2}:[0-9]{2}(?:" + WSC + "*[AaPp][Mm])?)?";
-function cleanTitleText(raw, venue, isHeading) {
-  let t = String(raw || "").replace(new RegExp(TITLE_DATE_SRC, "gi"), " ").replace(TITLE_CHROME, " ");
-  t = t.replace(new RegExp("^[^A-Za-z0-9]*" + String(venue || "").replace(/[^A-Za-z0-9]/g, "") + "[:|]?", "i"), " ");
+var TITLE_DATE_SRC = "(?:(?:" + TITLE_WDAY + ")[.]?,?" + WSC + "*)?(?:" + MONTH_RE + "[a-z]*[.]?" + WS + "[0-9]{1,2}(?:" + WSC + "*[-–—]" + WSC + "*[0-9]{1,2})?|[0-9]{1,2}(?:" + WSC + "*[-–—]" + WSC + "*[0-9]{1,2})?" + WS + MONTH_RE + "[a-z]*[.]?)(?:" + WSC + "*,?" + WSC + "*(?:20[0-9]{2}|'[0-9]{2})(?![0-9:]))?(?:" + WSC + "*,?" + WSC + "*[0-9]{1,2}:[0-9]{2}(?:" + WSC + "*[AaPp][Mm])?)?";
+function cleanTitleSegment(raw, venue, isHeading) {
+  const strict = TITLE_STRICT_VENUES.indexOf(venue) !== -1;
+  let t = String(raw || "").replace(TITLE_LEAD_CHROME, " ").replace(TITLE_CHROME, " ");
+  const venueRe = new RegExp("^[^A-Za-z0-9]*" + String(venue || "").replace(/[^A-Za-z0-9]/g, "") + "[:|]?", "i");
+  while (venueRe.test(t) && String(venue || "")) t = t.replace(venueRe, " ");
   t = t.replace(new RegExp("^[^A-Za-z0-9]*Amsterdam" + WSC + "*[|:]", "i"), " ");
-  t = t.replace(new RegExp(WSC + "+", "g"), " ").replace(new RegExp("^['\u2019]?[0-9]{1,2}" + WS + "(?=[A-Z])"), "").trim();
+  t = t.replace(new RegExp(WSC + "+", "g"), " ").trim();
+  if (strict && /^[a-z&,;:)|\-\u2013\u2014.]/.test(t)) return "";
+  t = t.replace(new RegExp("^['\u2019]?[0-9]{1,2}" + WS + "(?=[A-Z])"), "").trim();
   const close = t.indexOf(")");
   if (close !== -1 && t.indexOf("(") === -1 || close !== -1 && close < t.indexOf("(")) t = t.slice(close + 1).trim();
   const sentence = t.lastIndexOf(". ");
   if (sentence !== -1 && t.length - sentence - 2 >= 8) t = t.slice(sentence + 2).trim();
-  t = t.replace(new RegExp("(?:^|" + WS + ")(?:from|until|till|t/m|every|op|vanaf" + (isHeading ? "" : "|" + TITLE_WDAY) + ")[.,]?" + WSC + "*$", "i"), "").trim();
+  const tail = new RegExp("(?:^|" + WS + ")(?:from|until|till|t/m|every|op|vanaf" + (isHeading ? "" : "|" + TITLE_WDAY + "|and|en|or|of|the") + ")[.,]?" + WSC + "*$", "i");
+  for (let i = 0; i < 4 && tail.test(t); i++) t = t.replace(tail, "").trim();
   let words = t.split(" ");
   while (words.length > 2 && /^[a-z]/.test(words[0]) && words.slice(1, 6).some((w) => /^[A-Z0-9]/.test(w))) words = words.slice(1);
-  t = words.join(" ").replace(/^[^A-Za-z0-9]+/, "").replace(/[\s,;:|\-–—]+$/, "").trim();
+  t = words.join(" ").replace(/^[^A-Za-z0-9]+/, "").replace(/[\s,;:|\-\u2013\u2014]+$/, "").trim();
   if (t.length > TITLE_CAP) {
     t = t.slice(0, TITLE_CAP);
     const cut = t.lastIndexOf(" ");
     if (cut > 30) t = t.slice(0, cut);
-    t = t.replace(/[\s,;:|\-–—]+$/, "");
+    t = t.replace(/[\s,;:|\-\u2013\u2014]+$/, "");
   }
   return /[A-Za-z]{3}/.test(t) && t.length >= 8 ? t : "";
+}
+__name(cleanTitleSegment, "cleanTitleSegment");
+function cleanTitleText(raw, venue, isHeading) {
+  const text = String(raw || "");
+  if ((text.match(new RegExp("\\b[0-9]{1,2}" + WSC + "+[.]" + WSC + "+", "g")) || []).length >= 2) return "";
+  const one = new RegExp("(?:(?:from|until|till|t/m|vanaf)" + WS + ")?" + TITLE_DATE_SRC, "gi").source;
+  const rangeRe = new RegExp("(?:" + one + ")(?:" + WSC + "*(?:till|until|to|t/m|tot|[-\u2013\u2014])" + WSC + "*(?:" + one + "))*", "gi");
+  const parts = text.replace(rangeRe, " \u0001 ").split("\u0001");
+  for (const part of parts) {
+    const c = cleanTitleSegment(part, venue, isHeading);
+    if (c) return c;
+  }
+  return "";
 }
 __name(cleanTitleText, "cleanTitleText");
 function headingCandidates(html, clean) {
@@ -1183,6 +1206,17 @@ var TASTE_PRIOR_TOPICS = [
 ];
 var TASTE_MIN_SAMPLES = 3;
 var TASTE_FRICTION_CAP = 3;
+// RADAR-TASTE-SHRINK-1 (#1952): the stated-taste prior is scaled by n/(n+TASTE_PRIOR_K), n = usable feedback rows, so one early
+// nope cannot swing the whole prior; below TASTE_FLOOR_ROWS rows the multiplier never goes under TASTE_EARLY_FLOOR (0.6); and the
+// personal radar never lets taste drop more than half of a day's viable candidates (tasteValve keeps the top half by pre-taste priority).
+var TASTE_PRIOR_K = 3;
+var TASTE_FLOOR_ROWS = 5;
+var TASTE_EARLY_FLOOR = 0.6;
+var TASTE_LATE_FLOOR = 0.3;
+function tasteFloor(taste) {
+  return taste && taste.rows < TASTE_FLOOR_ROWS ? TASTE_EARLY_FLOOR : TASTE_LATE_FLOOR;
+}
+__name(tasteFloor, "tasteFloor");
 function tasteClamp(x, lo, hi) {
   return Math.min(hi, Math.max(lo, x));
 }
@@ -1247,6 +1281,8 @@ function tasteScoreFor(e, taste) {
   if (pd) prior += pd;
   const text = ((e.snippet || "") + " " + (e.venue || "")).toLowerCase();
   for (const t of TASTE_PRIOR_TOPICS) if (t.re.test(text)) prior += t.score;
+  const n = taste.rows || 0;
+  prior = Math.round(prior * (n / (n + TASTE_PRIOR_K)) * 100) / 100;
   const learned = (v ? v.score : 0) + (d ? d.score : 0);
   return { learned, prior, score: learned + prior, frictionAdd: v ? v.frictionAdd : 0 };
 }
@@ -1254,13 +1290,43 @@ __name(tasteScoreFor, "tasteScoreFor");
 function applyTaste(e, taste) {
   if (!taste || !taste.active) return e;
   const t = tasteScoreFor(e, taste);
-  const mult = tasteClamp(1 + 0.15 * t.score, 0.3, 1.5);
+  const mult = tasteClamp(1 + 0.15 * t.score, tasteFloor(taste), 1.5);
   const relevance = e.relevance === 0 ? 0 : Math.min(10, Math.round(e.relevance * mult * 10) / 10);
   const friction = Math.min(10, e.friction + t.frictionAdd);
   const priority = Math.round(relevance * 10 / (1 + friction) * 10) / 10;
-  return { ...e, relevance, friction, priority, frictionClass: friction <= 2 ? "LOW" : friction <= 5 ? "MED" : "HIGH", taste: { score: t.score, prior: t.prior, mult: Math.round(mult * 1000) / 1000, frictionAdd: t.frictionAdd } };
+  return { ...e, relevance, friction, priority, frictionClass: friction <= 2 ? "LOW" : friction <= 5 ? "MED" : "HIGH", tastePre: { relevance: e.relevance, friction: e.friction, priority: e.priority, frictionClass: e.frictionClass }, taste: { score: t.score, prior: t.prior, mult: Math.round(mult * 1000) / 1000, frictionAdd: t.frictionAdd } };
 }
 __name(applyTaste, "applyTaste");
+function tasteValve(list, taste) {
+  let dropped = 0, restored = 0;
+  const days = {};
+  for (const e of list) {
+    if (!e.tastePre || e.tastePre.relevance < 2) continue;
+    (days[e.startIso] || (days[e.startIso] = [])).push(e);
+  }
+  const out = list.slice();
+  for (const day of Object.keys(days)) {
+    const viable = days[day];
+    const lost = viable.filter((e) => e.relevance < 2);
+    const keepMin = Math.ceil(viable.length / 2);
+    let need = keepMin - (viable.length - lost.length);
+    dropped += lost.length;
+    if (need <= 0) continue;
+    lost.sort((a, b) => b.tastePre.priority - a.tastePre.priority);
+    for (const e of lost.slice(0, need)) {
+      const i = out.indexOf(e);
+      out[i] = { ...e, relevance: e.tastePre.relevance, friction: e.tastePre.friction, priority: e.tastePre.priority, frictionClass: e.tastePre.frictionClass, tasteRestored: true };
+      restored += 1;
+      dropped -= 1;
+    }
+  }
+  if (taste) {
+    taste.droppedByFloor = dropped;
+    taste.restoredByValve = restored;
+  }
+  return out;
+}
+__name(tasteValve, "tasteValve");
 function tasteReportLines(taste) {
   const L = [];
   L.push("## Taste weights (RADAR-TASTE-LEARN-1)");
@@ -1273,6 +1339,7 @@ function tasteReportLines(taste) {
   const v = fmt(taste.venue), d = fmt(taste.domain);
   L.push("- venues: " + (v.length ? v.join("; ") : "none yet"));
   L.push("- domains: " + (d.length ? d.join("; ") : "none yet"));
+  L.push("- taste flooring: " + (taste.droppedByFloor || 0) + " candidate(s) dropped below relevance 2 by taste this run; " + (taste.restoredByValve || 0) + " restored by the safety valve (taste may drop at most half of a day's viable candidates, top half by priority kept); multiplier floor " + tasteFloor(taste) + " (" + TASTE_EARLY_FLOOR + " under " + TASTE_FLOOR_ROWS + " feedback rows); prior scaled by n/(n+" + TASTE_PRIOR_K + ").");
   L.push("- stated-taste prior: " + Object.keys(TASTE_PRIOR_DOMAIN).map((k) => k + " +" + TASTE_PRIOR_DOMAIN[k]).join(", ") + "; " + TASTE_PRIOR_TOPICS.map((t) => t.name + " " + (t.score > 0 ? "+" : "") + t.score).join(", ") + ".");
   return L;
 }
@@ -1457,7 +1524,7 @@ async function run(env) {
   });
   const inWindow = rawEvents.filter((e) => e.startIso >= nowIso && e.startIso <= horizon);
   const taste = await loadTaste(env);
-  const scored = inWindow.map(scoreEvent).map((e) => applyTaste(e, taste));
+  const scored = tasteValve(inWindow.map(scoreEvent).map((e) => applyTaste(e, taste)), taste);
   const seen = /* @__PURE__ */ new Set();
   const uniq = scored.filter((e) => {
     const k = e.venue + "|" + e.startIso;
@@ -1485,6 +1552,7 @@ async function run(env) {
     if (!g.cleared || g.e.relevance < 2) continue;
     /* junkgate-marker */
     if (/opslaan|dit evenement|next page|previous page|\bpage\s+\d+\b|skip to|lees meer|read more|\bcookie\b|subscribe|newsletter|privacy policy|all rights reserved/i.test(g.e.snippet) || String(g.e.snippet||"").trim().length < 15) { skipped += 1; continue; }
+    if (!g.e.title && TITLE_STRICT_VENUES.indexOf(g.e.venue) !== -1) { skipped += 1; continue; }
     let title = g.e.venue + ": " + g.e.snippet.slice(0, 90);
     const cut = title.lastIndexOf(" ");
     if (cut > 30) title = title.slice(0, cut);
@@ -1560,7 +1628,7 @@ async function run(env) {
     discarded,
     venueErrors: venueErrors.length,
     budget,
-    taste: { active: taste.active, rows: taste.rows },
+    taste: { active: taste.active, rows: taste.rows, droppedByFloor: taste.droppedByFloor || 0, restoredByValve: taste.restoredByValve || 0 },
     posted: postedList,
     delivery,
     topPicks: gated.filter((g) => g.cleared && !g.e.runningUntil && !g.e.runningUntilMonth && g.e.relevance >= 3).sort((a, b) => b.e.priority - a.e.priority).slice(0, 5).map((g) => "P" + g.e.priority + " " + g.e.startIso + " " + g.e.venue + " " + g.e.interests.join("/") + " [" + g.e.delivery + "]")
