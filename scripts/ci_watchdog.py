@@ -287,6 +287,18 @@ def classify_structural(name: str, run: dict) -> tuple[str, str]:
     return "unknown", "inspect the job log"
 
 
+def runner_not_acquired(jobs: list | None) -> bool:
+    """RUNNER-NOT-ACQUIRED-1 (2026-10-05, #650-#653): every job was cancelled before a single step ran.
+
+    GitHub's annotation on such a job reads "The job was not acquired by Runner of type hosted even after multiple
+    attempts": the run is marked failed after about 15 minutes in the queue, but no code ran, so nothing in the repo
+    failed. Between 19:21Z and 19:53Z on 2026-10-05 this hit remediation-consumer, version-bump-guard, mirror-sync,
+    apply-unmangle-worker-js, code-task-publish, remediation-bridge and a PR's mirror-guard and CodeQL jobs, and the
+    watchdog filed four of them as `unknown`. Read from the jobs list, so it needs no log download.
+    """
+    return bool(jobs) and all(j.get("conclusion") == "cancelled" and not j.get("steps") for j in jobs)
+
+
 def _absent(path: str, run: dict) -> bool:
     ref = run.get("head_branch") or "main"
     st, _ = gh(f"/repos/{REPO}/contents/{path}?ref={ref}")
@@ -619,10 +631,15 @@ def main() -> int:
                 st, _ = gh(f"/repos/{REPO}/contents/{path}?ref={r.get('head_branch') or 'main'}")
             retired = st == 404
             # Structural first: needs no log download, and log downloading
-            # is exactly what silently failed in CI.
-            kl, hint = classify_structural(name, r)
+            # is exactly what silently failed in CI. RUNNER-NOT-ACQUIRED-1 is read before the name-based
+            # classes: a starved mirror-guard is not mirror lag, and a starved run has no log to read.
+            stj, jd = gh(f"/repos/{REPO}/actions/runs/{r['id']}/jobs")
+            if stj == 200 and runner_not_acquired(jd.get("jobs")):
+                kl, hint = "runner-not-acquired", ("GitHub-hosted runner was not acquired; no step ran. "
+                                                   "Re-run the failed jobs once; a second starvation is filed.")
+            else:
+                kl, hint = classify_structural(name, r)
             if kl == "unknown" and not retired and log_fetches < MAX_LOG_FETCHES:
-                stj, jd = gh(f"/repos/{REPO}/actions/runs/{r['id']}/jobs")
                 if stj == 200 and not jd.get("jobs"):
                     kl, hint = "invalid-workflow", "the workflow YAML is invalid; GitHub created the run with zero jobs"
                 elif stj == 200:
@@ -637,6 +654,7 @@ def main() -> int:
                 "class": kl, "subject": name,
                 "evidence": f"{r['created_at'][:19]} {name} [{r.get('event')}/{r.get('head_branch')}] run={r['id']} retired={retired}",
                 "retired": retired, "run_id": r["id"], "hint": hint, "sha": (r.get("head_sha") or "")[:8],
+                "attempt": int(r.get("run_attempt") or 1),
             })
     else:
         print("failures loop skipped (CI_WD_WINDOW_HOURS<=0)")
@@ -666,6 +684,11 @@ def main() -> int:
         elif k == "mirror-lag":
             ok, how = dispatch("mirror-sync.yml")
             (acted if ok else unactionable).append((line, f"dispatched mirror-sync -> {how}"))
+        elif k == "runner-not-acquired" and int(f.get("attempt") or 1) <= 1 and not f.get("retired"):
+            # One re-run only (no step ran, so this is not retrying a test); a run that starves again on its
+            # second attempt falls through to the filed finding below.
+            st, _ = gh(f"/repos/{REPO}/actions/runs/{f['run_id']}/rerun-failed-jobs", method="POST")
+            (acted if st in (201, 204) else unactionable).append((line, f"re-ran failed jobs once (no step had run) -> HTTP {st}"))
         else:
             if f.get("retired"):
                 (tracked).append((line, "workflow file removed; cannot re-run (retired)"))

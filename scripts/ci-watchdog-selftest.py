@@ -325,6 +325,14 @@ def main() -> int:
         else:
             os.environ["GITHUB_REF"] = old_ref
 
+    # RUNNER-NOT-ACQUIRED-1 (#650-#653): a run whose jobs were all cancelled before any step ran is runner
+    # starvation, named from the jobs list; a job that ran steps, or a mix, is not.
+    starved = [{"conclusion": "cancelled", "steps": []}, {"conclusion": "cancelled", "steps": []}]
+    check("all jobs cancelled with no step -> runner-not-acquired", cw.runner_not_acquired(starved) is True)
+    check("a cancelled job that ran steps is not starvation", cw.runner_not_acquired([{"conclusion": "cancelled", "steps": [{"name": "x"}]}]) is False)
+    check("one starved job next to a real failure is not starvation", cw.runner_not_acquired([starved[0], {"conclusion": "failure", "steps": [{"name": "t"}]}]) is False)
+    check("no jobs is not starvation (that is invalid-workflow)", cw.runner_not_acquired([]) is False and cw.runner_not_acquired(None) is False)
+
     print("\n%d failure(s)" % len(fails))
     return 1 if fails else 0
 
