@@ -129,7 +129,9 @@ eq("promo is silent", W4.issues.length, 1);
 // 7 freshness
 const W5 = fakeDbs();
 const fg = await api.freshnessGuard(W5.env);
-eq("freshness stale sources", fg.stale.map((s) => s.split(":")[0]), ["email_index store gmail", "personal-life.events ingest"]);
+// gmail is a RETIRED_STORES member (EMAIL-INDEX-WRITER-1): not flagged; the live store qnfo.org is absent in this fake, so it is.
+eq("freshness stale sources", fg.stale.map((s) => s.split(":")[0]), ["email_index store qnfo.org", "personal-life.events ingest"]);
+eq("freshness retired", fg.retired, ["gmail"]);
 eq("freshness filed", [fg.filed, W5.issues.length], [2, 2]);
 const fg2 = await api.freshnessGuard(W5.env);
 eq("freshness deduped on rerun", [fg2.filed, W5.issues.length], [0, 2]);
