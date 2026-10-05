@@ -17,7 +17,7 @@ const calls = [];
 let failSearch = false, burst429 = 0;
 const doc = (kind) => ({
   abstractHtml: "<p>An abstract.</p>",
-  claimsHtml: kind === "noclaims" ? "<p>1. A thing.</p>" : "<p>1. A method comprising " + "steps of doing things, ".repeat(20) + "</p>",
+  claimsHtml: kind === "noclaims" ? "<p>1. A thing.</p>" : "<p>1. A method comprising " + "steps of doing things, ".repeat(20) + "where x &amp;lt; y &amp; z &lt; w.</p>",
   descriptionHtml: kind === "noprov" ? "<p>No priority here.</p>" : "<p>This application claims the benefit of U.S. Provisional Application Ser. No. 63/123,456, filed Jan. 2, 2023.</p>",
   briefHtml: "", backgroundTextHtml: ""
 });
@@ -86,6 +86,7 @@ const f0 = ds.fields[0];
 ok(ds.fields.length === 3 && ds.fields.map((f) => f.query.split("$")[0]).join() === "G06N,A61B,H01M", "three fields by CPC subclass", ds.fields.map((f) => f.query));
 ok(f0.patents.map((p) => p.guid).join() === "US-1-B2,US-5-B2", "only direct provisional claims are kept", f0.patents.map((p) => p.guid));
 ok(f0.skipped["not a direct claim to the provisional"] === 1 && f0.skipped["no provisional reference"] === 1 && f0.skipped["claims text missing"] === 1, "every skip is counted by reason", f0.skipped);
+ok(/where x &lt; y & z < w\.$/.test(f0.patents[0].claims), "entities decode once: &amp;lt; stays the text &lt; (CodeQL js/double-escaping)", f0.patents[0].claims.slice(-40));
 ok(f0.patents[0].provisional_no === "63/123,456" && f0.patents[0].filing_gap_days === 364 && f0.patents[0].claims.length > 200, "kept rows carry the provisional number, the filing gap and verbatim claims", f0.patents[0]);
 ok(/@pd>="20250101"<="20250630"/.test(f0.query) && ds.window.from === "20250101", "the query and window are stored with the sample");
 ok(ds.patents_total === 6 && ds.complete === false, "a short field is reported, never padded (6 of 30)");

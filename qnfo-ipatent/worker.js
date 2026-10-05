@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.10.0-bench-dataset"; /* 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.10.1-bench-dataset"; /* 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -955,8 +955,10 @@ var BENCH_PER_FIELD = 10;
 var BENCH_MAX_READ = 40;
 var BENCH_MAX_PAGES = 15;
 var BENCH_PROV_RX = /[Pp]rovisional (?:[Pp]atent )?[Aa]pplication(?:s)?,? (?:[Ss]er(?:ial)?\.? )?(?:[Nn]o\.? ?|[Nn]umber )?(6[0-3]\/\d{3},?\d{3})/;
+var BENCH_ENTITIES = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" };
 function benchText(x) {
-  return String(x || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+  // One pass over the entities, so "&amp;lt;" decodes to the literal text "&lt;", never to "<" (CodeQL js/double-escaping, PR 627).
+  return String(x || "").replace(/<[^>]+>/g, " ").replace(/&(nbsp|amp|lt|gt|quot|#39);/g, function(m, e) { return BENCH_ENTITIES[e]; }).replace(/\s+/g, " ").trim();
 }
 function benchDays(a, b) {
   var x = Date.parse(a), y = Date.parse(b);
