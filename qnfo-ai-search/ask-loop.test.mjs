@@ -185,5 +185,72 @@ ok(models.includes("@cf/deepseek-ai/deepseek-v4-flash-0731"), "the judge is a di
   ok(sawTokens === 3000, "the judge gets a 3000-token budget for a reasoning model (" + sawTokens + ")");
   AI.run = real;
 }
+
+// 8. ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a question naming one of the program's terms gets its defining paper first, with
+// the section that answers it (level-1 headings, stem match), and the retrieval eval records the defined papers' ranks.
+{
+  PAPERS.push({ slug: "joules-per-solution-metric", title: "The Joules-per-Solution Metric: Definition, Measurement Protocol, and Anti-Gaming Provisions", doi: "10.5281/zenodo.21637028", abstract: "We define the joules-per-solution (J/S) metric as a universal, cross-domain measure of computational energy efficiency. ".repeat(3), body_md: "# The Joules-per-Solution Metric\n\n**Series:** Joules-per-Compute Universal Benchmark (JPCUB) - Paper P0\n\n## 3. The Joules-per-Solution Metric\n\nJ/S is the total system energy spent per correct solution, measured at the wall.\n\n## References\n\nnone", created_at: "2026-07-27 10:00:00" });
+  PAPERS.push({ slug: "distinction-lattice-framework", title: "Distinction-Lattice Framework: Eigenforms, Bisimulation, and the Realizability Boundary", doi: "10.5281/zenodo.23076161", abstract: "A conservative formal version of DLF: stable entities are bisimulation classes of observational behaviour, certified coinductively. ".repeat(3), body_md: "# 1. Scope and Status\n\nThis document states one conjecture with explicit conditions and is deliberately conservative about everything else it says here.\n\n# 6. The Central Separation\n\nFalsification conditions (any one of these refutes the conjecture): 1. exhibit a realizability filter whose fixed points are not bisimulation classes; 2. a stable entity with no final coalgebra; 3. a notation that names itself without leaving R.\n\n# 9. References\n\nnone", created_at: "2026-10-01 10:00:00" });
+  const real = AI.run;
+  let seen = null;
+  AI.run = async (m, o) => { if (o && o.stream) seen = o.messages[o.messages.length - 1].content; return real(m, o); };
+  const r1 = await call("/api/ask", { query: "So what does JPCUB measure, exactly?" });
+  const m1 = sse(r1.text, "meta")[0];
+  ok(m1 && m1.sources[0].slug === "joules-per-solution-metric" && m1.sources[0].defines === "jpcub" && m1.sources.filter((s) => s.slug === "joules-per-solution-metric").length === 1, "a question naming JPCUB gets the J/S metric paper as source [1], once, marked as defining the term");
+  ok(/\[1\] The Joules-per-Solution Metric[^\n]*\[defines the term 'jpcub'\]/.test(seen || "") && /J\/S is the total system energy spent per correct solution/.test(seen || ""), "the model is told [1] defines the term and gets the defining section");
+  await call("/api/ask", { query: "What would falsify the distinction-lattice framework?" });
+  ok(/^\[1\] Distinction-Lattice Framework/m.test(seen || "") && /Falsification conditions \(any one of these refutes the conjecture\)/.test(seen || ""), "'falsify' finds the falsification conditions under a level-1 heading");
+  ok(!/strongest open problem/i.test(seen || "") && /never add a generic one/.test(readFileSync(join(here, "worker.js"), "utf8")), "the prompt no longer asks every answer for an open problem");
+  AI.run = real;
+  sq.exec("DELETE FROM ask_golden");
+  const gq = sq.prepare("INSERT INTO ask_golden (slug, question, title, added_at) VALUES (?, ?, ?, '2026-10-05T00:00:00Z')");
+  gq.run("joules-per-solution-metric", "What does JPCUB measure?", "J/S");
+  gq.run("distinction-lattice-framework", "What would falsify the distinction-lattice framework?", "DLF");
+  for (let i = 0; i < 8; i++) gq.run("filler-" + i, "Filler question number " + i + " about adelic statistics?", "filler");
+  await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 7, 3, 41) }, env, ctx);
+  await Promise.allSettled(waits.splice(0));
+  const ev2 = sq.prepare("SELECT detail FROM ask_evals WHERE kind = 'retrieval-champion' ORDER BY id DESC LIMIT 1").get();
+  const defs = ev2 ? JSON.parse(ev2.detail).defs : null;
+  ok(defs && defs["joules-per-solution-metric"] === 1 && defs["distinction-lattice-framework"] === 1, "the retrieval eval always includes the defined terms' golden questions and records their ranks: " + JSON.stringify(defs));
+}
+
+// 9. ASK-HUNG-REQUEST-1 (#1839): no await on /api/ask can hang. Timers run 500 times faster in this section (the 150 s
+// answer deadline is 300 ms, the 45 s model-idle deadline 90 ms, the 15 s write deadline 30 ms).
+{
+  const realST = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms, ...a) => realST(fn, Math.max(1, (Number(ms) || 0) / 500), ...a);
+  const n0 = sq.prepare("SELECT COUNT(*) n FROM ask_events").get().n;
+  // a visitor who stops reading: the response body is never read
+  const r = await worker.fetch(new Request("https://ask.qwav.tech/api/ask", { method: "POST", headers: { "content-type": "application/json", "CF-Connecting-IP": "5.5.5.5" }, body: JSON.stringify({ query: "Gone reader question about adelic statistics?" }) }), env, ctx);
+  ok(r.status === 200, "the stream response is returned at once");
+  await Promise.allSettled(waits.splice(0));
+  const g = sq.prepare("SELECT limited, error FROM ask_events ORDER BY rowid DESC LIMIT 1").get();
+  ok(sq.prepare("SELECT COUNT(*) n FROM ask_events").get().n === n0 + 1 && g.limited === "client-gone" && g.error === null, "a visitor who stops reading ends the answer: logged as limited 'client-gone', not an error (" + JSON.stringify(g) + ")");
+  // a model stream that stalls after one chunk
+  const real = AI.run;
+  AI.run = async (m, o) => { if (!o || !o.stream) return real(m, o); const enc = new TextEncoder(); return new ReadableStream({ start(c) { c.enqueue(enc.encode("data: " + JSON.stringify({ response: "Partial " }) + "\n\n")); } }); };
+  const s = await call("/api/ask", { query: "Stalled model question about adelic statistics?" }, "5.5.5.6");
+  const e = sse(s.text, "error")[0];
+  const row = sq.prepare("SELECT error FROM ask_events ORDER BY rowid DESC LIMIT 1").get();
+  ok(e && /model stream timed out/.test(e.error) && /model stream timed out/.test(row.error || ""), "a stalled model stream ends with an error event and the event is logged (" + (row && row.error) + ")");
+  // a model call that never starts
+  AI.run = async (m, o) => (o && o.stream ? new Promise(() => {}) : real(m, o));
+  const s2 = await call("/api/ask", { query: "Model that never starts, about adelic statistics?" }, "5.5.5.7");
+  const e2 = sse(s2.text, "error")[0];
+  ok(e2 && /timed out/.test(e2.error) && sse(s2.text, "meta").length === 1, "a model call that never answers still gives the visitor the sources and an error, never a hung request");
+  AI.run = real;
+  globalThis.setTimeout = realST;
+}
+// 10. ASK-IDEA-HANDOFF-1 (#1936): an uncovered answer points to the ideas pipeline; thread links use /s/<id>.
+{
+  const p = (await call("/")).text;
+  ok(p.includes("if (d.uncovered){") && p.includes('href=\\"https://ideas.qnfo.org/\\">ideas.qnfo.org</a>') && !p.includes("ideas.qnfo.org/#/s/") && p.includes("https://ideas.qnfo.org/s/"), "the page hands an uncovered question to ideas.qnfo.org and links threads at /s/<id>");
+  const real = AI.run;
+  AI.run = async (m, o) => { if (!o || !o.stream) return real(m, o); const enc = new TextEncoder(); return new ReadableStream({ start(c) { c.enqueue(enc.encode("data: " + JSON.stringify({ response: "The excerpts do not cover this question. Nothing in the corpus addresses it." }) + "\n\n")); c.close(); } }); };
+  const u = await call("/api/ask", { query: "What is the boiling point of adelic tea?" }, "5.5.5.8");
+  const d = sse(u.text, "done")[0];
+  ok(d && d.uncovered === 1, "the done event says when the corpus does not cover the question");
+  AI.run = real;
+}
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
