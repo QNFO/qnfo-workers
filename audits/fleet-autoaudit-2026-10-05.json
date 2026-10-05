@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-05 18:01:09",
+  "audited_at": "2026-10-05 18:33:35",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -412,7 +412,7 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.7.2-ai-attr",
+        "version": "4.8.0-twin-flash",
         "worker": "personal-api"
       },
       {
@@ -432,7 +432,7 @@
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.31.2-ds-402-breaker",
+        "version": "5.31.5-ensemble-validator-budget",
         "worker": "qnfo-ai"
       },
       {
@@ -487,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.118-metric-truth",
+        "version": "0.4.123-remediation-hold",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -522,7 +522,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.7.2-cadence-units",
+        "version": "1.7.3-strict-public-fetch",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -562,7 +562,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.61-zenodo-related",
+        "version": "0.9.62-stage-attr",
         "worker": "qnfo-research-exec"
       },
       {
@@ -800,9 +800,9 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.7.2-ai-attr",
+      "before": "4.8.0-twin-flash",
       "http": 200,
-      "live": "4.7.2-ai-attr",
+      "live": "4.8.0-twin-flash",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
@@ -880,9 +880,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.31.2-ds-402-breaker",
+      "before": "5.31.5-ensemble-validator-budget",
       "http": 200,
-      "live": "5.31.2-ds-402-breaker",
+      "live": "5.31.5-ensemble-validator-budget",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1144,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.118-metric-truth",
+      "before": "0.4.123-remediation-hold",
       "http": 200,
-      "live": "0.4.118-metric-truth",
+      "live": "0.4.123-remediation-hold",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1248,9 +1248,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.7.2-cadence-units",
+      "before": "1.7.3-strict-public-fetch",
       "http": 200,
-      "live": "1.7.2-cadence-units",
+      "live": "1.7.3-strict-public-fetch",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1360,9 +1360,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.61-zenodo-related",
+      "before": "0.9.62-stage-attr",
       "http": 200,
-      "live": "0.9.61-zenodo-related",
+      "live": "0.9.62-stage-attr",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
