@@ -7,7 +7,7 @@
 import fs from "node:fs";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const api = new Function(src.replace(/export default\{/, "const __handler={") +
-  "\nreturn {handler:__handler,heuristicSpam,predatoryBody,internalCaller,VERSION};")();
+  "\nreturn {handler:__handler,heuristicSpam,predatoryBody,internalCaller,parseCommand,fwdNoCommand,VERSION};")();
 let pass = 0, fail = 0;
 const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (extra !== undefined ? " :: " + JSON.stringify(extra) : "")); } };
 
@@ -44,6 +44,19 @@ ok(api.heuristicSpam("anna@lab.example.org", "Re: your preprint", colleague) ===
 ok(api.heuristicSpam("editor@journal.example.org", "Decision on your manuscript", "Dear Author, your manuscript has been accepted for publication in the Journal.") === false, "an editorial decision without an indexing or scope claim is not spam");
 ok(api.predatoryBody("<p>Dear Researcher,</p><p>Our journal is indexed in <b>Scopus</b>. Submit your manuscript today.</p>") === true, "HTML bodies are read as text");
 ok(api.heuristicSpam("x@y.example", "Invitation to submit your manuscript", "") === true, "the subject rules still apply");
+
+// ---- 3. FWD-NOT-COMMAND-1: a rule-forwarded booking mail from an owner mailbox is not an ops command ----
+{
+  const outlookFwd = "\n\n________________________________\nFrom: Booking.com <noreply@booking.com>\nSent: Thursday, October 1, 2026 3:29 PM\nTo: owner@example.test\nSubject: Thanks! Your booking is confirmed at Hotel Example\n\nConfirmation number: 7700654321";
+  const pc1 = api.parseCommand(outlookFwd, "FW: Thanks! Your booking is confirmed at Hotel Example");
+  ok(pc1.fromSubject === true && api.fwdNoCommand(pc1, "FW: Thanks! Your booking is confirmed at Hotel Example"), "an Outlook rule forward with nothing typed is not a command");
+  const pc2 = api.parseCommand("\n---------- Forwarded message ---------\nFrom: eSky <noreply@esky.nl>\n", "Fwd: Boekingsnummer 1112223334 is voltooid. Hier is uw ticket");
+  ok(api.fwdNoCommand(pc2, "Fwd: Boekingsnummer 1112223334 is voltooid. Hier is uw ticket"), "a Gmail-style forward with nothing typed is not a command");
+  const pc3 = api.parseCommand("status\n\n---------- Forwarded message ---------\nFrom: x@y.test", "Fwd: something");
+  ok(pc3.verb === "status" && !api.fwdNoCommand(pc3, "Fwd: something"), "a forward with a typed instruction above it is still a command");
+  const pc4 = api.parseCommand("", "status");
+  ok(pc4.verb === "status" && !api.fwdNoCommand(pc4, "status"), "a subject-only command that is not a forward still works");
+}
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
