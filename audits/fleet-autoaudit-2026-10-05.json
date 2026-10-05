@@ -1,12 +1,7 @@
 {
-  "audited_at": "2026-10-05 16:01:34",
-  "d1_write_failures": [
-    [
-      "qnfo-errata-watch",
-      "HTTP 401: b'{\"result\":null,\"success\":false,\"errors\":[{\"code\":10000,\"message\":\"Authentication error\"}],\"messages\":[]}'"
-    ]
-  ],
-  "d1_writes_ok": 112,
+  "audited_at": "2026-10-05 16:06:52",
+  "d1_write_failures": [],
+  "d1_writes_ok": 113,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -487,7 +482,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.4.0-email-index-writer",
+        "version": "2.5.0-rebook-cancel",
         "worker": "qnfo-email"
       },
       {
@@ -517,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.9.3-codeagent",
+        "version": "3.9.4-filing-path",
         "worker": "qnfo-ipatent"
       },
       {
@@ -1069,9 +1064,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.4.0-email-index-writer",
+      "before": "2.5.0-rebook-cancel",
       "http": 200,
-      "live": "2.4.0-email-index-writer",
+      "live": "2.5.0-rebook-cancel",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1237,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.9.3-codeagent",
+      "before": "3.9.4-filing-path",
       "http": 200,
-      "live": "3.9.3-codeagent",
+      "live": "3.9.4-filing-path",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1509,5 +1504,5 @@
       "worker": "vault-indexer"
     }
   },
-  "stale_rows_purged": 1
+  "stale_rows_purged": 0
 }
