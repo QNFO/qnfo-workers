@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.123-remediation-hold"; /* 0.4.123 REMEDIATION-HOLD-1 (agent_issues 1297, pillar autonomy): a remediation contract that passes no longer stops; it holds, read once a day, and closes only after a 7-day pass streak (RT_HOLD_D), so a closure that breaks again inside the window reopens through REMEDIATION-REOPEN-1 (the 2026-09-28 closures 1283, 1284 and 1287 passed once and broke within hours after their contracts had stopped); a relapse returns the contract to active. 0.4.122 is left to session_013sMN4pr2RGmHezM4Gm6fMk (#1838). 0.4.121 REMEDIATION-REOPEN-1 fix (agent_issues 1297): an observation of 'pending' (the deferral convention, written by this tick and by remediation-consumer) neither reopens a closed issue nor counts toward max_attempts; 0.4.119 would have reopened 1919 and 1920 on their third pending row. 0.4.120 Q08-SELF-TUNE-1 (agent_issues 1760, pillar reach): PERF_LEVERS gains q08-temperature (q08_gate_pass_rate_7d, ops_config q08_compose_temperature 0.4..0.8 step 0.1, direction -1, effect higher, eval 14 days, capped by the q08 review lock); a lever step is rounded to 4 decimals so a 0.1 step never writes 0.5500000000000000. 0.4.119 REMEDIATION-REOPEN-1 (agent_issues 1297, pillar autonomy): remediationContractsTick reads the issue status; a contract on a wontfix issue is marked superseded, and a contract whose probe fails max_attempts times after its issue was closed (or since its last pass) reopens that issue once, with the failure and the prior close_evidence in its description (59 contracts had failed hourly on closed issues with nothing acting on it; INTEGRITY-GUARDS-1: a failing probe on a closed issue is a closure that did not hold); verification rows are never deleted. 0.4.118 (2026-10-05, remediation B2): LAND-BUNDLE-GUARD-1 (issues 1976, 1979): landFix refuses to commit a deployed script that adds esbuild __name helper layers or keeps under half of main's comment lines (the 2026-10-04 qnfo-fleet-dashboard 1.21.4 landing replaced the hand-written source with a wrangler bundle) and files one LAND-BUNDLE-REFUSED-1 issue instead; REPO-LIVE-DRIFT-1 (issue 1879): drift_total adds the fleet self-audit's DRIFT and CONTENT_DRIFT rows (live version or script sha256 differs from main) and counts a missing or 26h-old audit as 1; CF-CHANGELOG-LEADS-1 (issue 1959): a launch of a proposed or not_considered catalog row writes a dated when_to_choose line (max 5 a day) and GET /cf-changelog lists cost, speed and consolidation leads; CLEF-CANDIDATE-1 re-landed (PR 586 closed unmerged): clef_candidate_calls_7d is written hourly; IMPROVEMENT-UNMEASURED-STAMP-1 (issue 1865): the improvement loop stamps last_refreshed with state UNMEASURED while its trend metrics have too little history. 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.124-drift-confirm"; /* 0.4.124 DRIFT-CONFIRM-2 (agent_issues 1993, pillar core): drift_total's terms (ghost, unregistered, unversioned, repo_live) are computed by one pure function; a non-zero first read is re-read once after 20s and the smaller value is written (the 18:00:13Z read of 1 sampled the inputs while the deploy batch, the self-audit and the registry sync were writing them; PR 636 DRIFT-AUDIT-AFTER-DEPLOY-1 re-audits after each deploy, this change stops the sample from being written); a non-zero first read leaves a cloud_ops_events row (kind drift-total-detail) naming the workers behind each term. 0.4.123 REMEDIATION-HOLD-1 (agent_issues 1297, pillar autonomy): a remediation contract that passes no longer stops; it holds, read once a day, and closes only after a 7-day pass streak (RT_HOLD_D), so a closure that breaks again inside the window reopens through REMEDIATION-REOPEN-1 (the 2026-09-28 closures 1283, 1284 and 1287 passed once and broke within hours after their contracts had stopped); a relapse returns the contract to active. 0.4.122 is left to session_013sMN4pr2RGmHezM4Gm6fMk (#1838). 0.4.121 REMEDIATION-REOPEN-1 fix (agent_issues 1297): an observation of 'pending' (the deferral convention, written by this tick and by remediation-consumer) neither reopens a closed issue nor counts toward max_attempts; 0.4.119 would have reopened 1919 and 1920 on their third pending row. 0.4.120 Q08-SELF-TUNE-1 (agent_issues 1760, pillar reach): PERF_LEVERS gains q08-temperature (q08_gate_pass_rate_7d, ops_config q08_compose_temperature 0.4..0.8 step 0.1, direction -1, effect higher, eval 14 days, capped by the q08 review lock); a lever step is rounded to 4 decimals so a 0.1 step never writes 0.5500000000000000. 0.4.119 REMEDIATION-REOPEN-1 (agent_issues 1297, pillar autonomy): remediationContractsTick reads the issue status; a contract on a wontfix issue is marked superseded, and a contract whose probe fails max_attempts times after its issue was closed (or since its last pass) reopens that issue once, with the failure and the prior close_evidence in its description (59 contracts had failed hourly on closed issues with nothing acting on it; INTEGRITY-GUARDS-1: a failing probe on a closed issue is a closure that did not hold); verification rows are never deleted. 0.4.118 (2026-10-05, remediation B2): LAND-BUNDLE-GUARD-1 (issues 1976, 1979): landFix refuses to commit a deployed script that adds esbuild __name helper layers or keeps under half of main's comment lines (the 2026-10-04 qnfo-fleet-dashboard 1.21.4 landing replaced the hand-written source with a wrangler bundle) and files one LAND-BUNDLE-REFUSED-1 issue instead; REPO-LIVE-DRIFT-1 (issue 1879): drift_total adds the fleet self-audit's DRIFT and CONTENT_DRIFT rows (live version or script sha256 differs from main) and counts a missing or 26h-old audit as 1; CF-CHANGELOG-LEADS-1 (issue 1959): a launch of a proposed or not_considered catalog row writes a dated when_to_choose line (max 5 a day) and GET /cf-changelog lists cost, speed and consolidation leads; CLEF-CANDIDATE-1 re-landed (PR 586 closed unmerged): clef_candidate_calls_7d is written hourly; IMPROVEMENT-UNMEASURED-STAMP-1 (issue 1865): the improvement loop stamps last_refreshed with state UNMEASURED while its trend metrics have too little history. 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -7588,7 +7588,53 @@ function repoLiveDrift(rows, nowMs) {
   if (age > REPO_LIVE_AUDIT_MAX_H) return { count: drifted.length + 1, stale: true, age_h: age, drifted: drifted, why: "fleet self-audit " + age + "h old" };
   return { count: drifted.length, stale: false, age_h: age, drifted: drifted };
 }
-var DRIFT_TOTAL_FORMULA = "ghost + unregistered + unversioned (service_registry vs the CF workers/scripts list) + repo_live (worker_live_audit rows DRIFT or CONTENT_DRIFT: live /health version or live script sha256 differs from repo main, fleet self-audit on every push to main; +1 when that audit is missing or older than 26h). REPO-LIVE-DRIFT-1, qnfo-fleet-control hourly";
+var DRIFT_TOTAL_FORMULA = "ghost + unregistered + unversioned (service_registry vs the CF workers/scripts list) + repo_live (worker_live_audit rows DRIFT or CONTENT_DRIFT: live /health version or live script sha256 differs from repo main, fleet self-audit on every push to main; +1 when that audit is missing or older than 26h). A non-zero read is re-read once after a 20s pause and the smaller value is written (DRIFT-CONFIRM-2). REPO-LIVE-DRIFT-1, qnfo-fleet-control hourly";
+// DRIFT-CONFIRM-2 (2026-10-05, agent_issues 1993): drift_total read 1 at the 18:00:13Z refresh while the 17:58Z deploy batch,
+// a self-audit upserting 113 worker_live_audit rows and the qnfo-ops registry sync (36 rows at 18:00:17Z) were all writing
+// the inputs; every input re-read minutes later was clean and the breakdown had not been kept, so the term could not be
+// named. The terms are now computed by one pure function, a non-zero first read is confirmed by a second read after
+// DRIFT_CONFIRM_PAUSE_MS (the smaller value is written, like DRIFT-CONFIRM-1 in scripts/fleet-autoaudit.py), and a
+// non-zero first read always leaves a cloud_ops_events row (kind drift-total-detail) naming the workers behind each term.
+var DRIFT_CONFIRM_PAUSE_MS = 20000;
+function driftParts(liveIds, regRows, auditRows, nowMs) {
+  var live = {}, inReg = {}, names = { ghost: [], unregistered: [], unversioned: [] };
+  (liveIds || []).forEach(function (n) { if (n) live[String(n)] = 1; });
+  (regRows || []).forEach(function (r) {
+    if (!r || !r.service) return;
+    inReg[r.service] = 1;
+    var isLive = !r.state || r.state === "live";
+    if (isLive && (!r.kind || r.kind === "worker") && !live[r.service]) names.ghost.push(r.service);
+    if (isLive && live[r.service] && (r.version == null || String(r.version).trim() === "")) names.unversioned.push(r.service);
+  });
+  Object.keys(live).forEach(function (n) { if (!inReg[n]) names.unregistered.push(n); });
+  var rl = repoLiveDrift(auditRows || [], nowMs);
+  var p = { ghost: names.ghost.length, unregistered: names.unregistered.length, unversioned: names.unversioned.length, repo_live: rl, names: names };
+  p.total = p.ghost + p.unregistered + p.unversioned + rl.count;
+  return p;
+}
+function driftConfirm(first, second) {
+  var a = first ? Number(first.total) || 0 : 0;
+  if (!second) return { value: a, confirmed: a > 0, transient: false, first: a, second: null, parts: first, named: first };
+  var b = Number(second.total) || 0;
+  var v = Math.min(a, b);
+  // parts: the read that is written (the smaller); named: the read whose terms the detail row names (the larger, so a
+  // transient first read still says which worker it saw).
+  return { value: v, confirmed: v > 0, transient: a > 0 && b === 0, first: a, second: b, parts: b <= a ? second : first, named: a >= b ? first : second };
+}
+function driftDetailText(conf) {
+  var p = conf && (conf.named || conf.parts) || { names: { ghost: [], unregistered: [], unversioned: [] }, repo_live: { drifted: [] } };
+  var n = p.names || { ghost: [], unregistered: [], unversioned: [] };
+  var rl = p.repo_live || { drifted: [] };
+  var terms = [];
+  if (n.ghost.length) terms.push("ghost " + n.ghost.join(","));
+  if (n.unregistered.length) terms.push("unregistered " + n.unregistered.join(","));
+  if (n.unversioned.length) terms.push("unversioned " + n.unversioned.join(","));
+  if (rl.drifted && rl.drifted.length) terms.push("repo_live " + rl.drifted.join(","));
+  if (rl.stale) terms.push("audit " + (rl.why || "stale"));
+  var head = conf && conf.transient ? "drift_total transient: first read " + conf.first + ", second read 0 after " + Math.round(DRIFT_CONFIRM_PAUSE_MS / 1e3) + "s; wrote 0"
+    : "drift_total " + (conf ? conf.value : 0) + " (first read " + (conf ? conf.first : 0) + ", second " + (conf && conf.second != null ? conf.second : "n/a") + ")";
+  return (head + (terms.length ? ": " + terms.join("; ") : ": no term named")).slice(0, 600);
+}
 // ---- REPO-LIVE-DRIFT-1:END ----
 /* OWNED-METRICS-WRITER-1 (2026-09-30, agent_issues #1411 METRIC-REGISTRY-STALENESS-1): metric_registry names
    qnfo-fleet-control as the OWNER of drift_total, cost_usd_30d, cost_per_successful_task_by_class and
@@ -7637,26 +7683,38 @@ async function refreshOwnedMetrics(env) {
   }
   var H = { Authorization: "Bearer " + token, "User-Agent": "qnfo-fleet-control-metrics/" + VERSION };
   try {
-    var wr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(1e4) });
-    var wj = await wr.json().catch(function () { return null; });
-    if (wj && wj.success && Array.isArray(wj.result) && wj.result.length) {
-      var live = {};
-      wj.result.forEach(function (w) { if (w && w.id) live[w.id] = 1; });
+    // DRIFT-CONFIRM-2: one read of the three inputs -> driftParts; a non-zero total is re-read once before it is written.
+    var readDriftParts = async function () {
+      var wr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + acct + "/workers/scripts?per_page=100", { headers: H, signal: AbortSignal.timeout(1e4) });
+      var wj = await wr.json().catch(function () { return null; });
+      if (!(wj && wj.success && Array.isArray(wj.result) && wj.result.length)) return null;
+      var liveIds = wj.result.map(function (w) { return w && w.id; }).filter(Boolean);
       var rr = await db.prepare("SELECT service, version, state, kind FROM service_registry").all();
-      var reg = rr.results || [], inReg = {}, ghost = 0, unversioned = 0, unregistered = 0;
-      reg.forEach(function (r) {
-        inReg[r.service] = 1;
-        var isLive = !r.state || r.state === "live";
-        if (isLive && (!r.kind || r.kind === "worker") && !live[r.service]) ghost++;
-        if (isLive && live[r.service] && (r.version == null || String(r.version).trim() === "")) unversioned++;
-      });
-      Object.keys(live).forEach(function (n) { if (!inReg[n]) unregistered++; });
-      var rl;
-      try { rl = repoLiveDrift((await db.prepare("SELECT worker, note, probed_at FROM worker_live_audit").all()).results || [], Date.now()); }
-      catch (eRl) { rl = { count: 1, stale: true, age_h: null, drifted: [], why: "worker_live_audit unreadable: " + String(eRl && eRl.message || eRl).slice(0, 80) }; }
-      await put("drift_total", ghost + unregistered + unversioned + rl.count);
+      var auditRows;
+      try { auditRows = (await db.prepare("SELECT worker, note, probed_at FROM worker_live_audit").all()).results || []; }
+      catch (eRl) { auditRows = null; }
+      var p = driftParts(liveIds, rr.results || [], auditRows || [], Date.now());
+      if (auditRows === null) p.repo_live.why = "worker_live_audit unreadable";
+      return p;
+    };
+    var first = await readDriftParts();
+    if (first) {
+      var second = null;
+      if (first.total > 0) {
+        await new Promise(function (r) { setTimeout(r, DRIFT_CONFIRM_PAUSE_MS); });
+        try { second = await readDriftParts(); } catch (e2) { second = null; }
+      }
+      var conf = driftConfirm(first, second);
+      await put("drift_total", conf.value);
       try { await db.prepare("UPDATE metric_registry SET formula=?1 WHERE metric='drift_total'").bind(DRIFT_TOTAL_FORMULA).run(); } catch (eF) {}
-      out.drift = { ghost: ghost, unregistered: unregistered, unversioned: unversioned, repo_live: rl };
+      out.drift = { ghost: conf.parts.ghost, unregistered: conf.parts.unregistered, unversioned: conf.parts.unversioned, repo_live: conf.parts.repo_live, confirm: { first: conf.first, second: conf.second, transient: conf.transient } };
+      if (first.total > 0) {
+        try {
+          await db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'drift-total-detail', ?3, ?4, 'qnfo-fleet-control', ?5)").bind(
+            "drift-" + Date.now().toString(36), nowIso, driftDetailText(conf),
+            JSON.stringify({ first: first, second: second, value: conf.value, v: VERSION }).slice(0, 1800), conf.transient ? "transient" : "ok").run();
+        } catch (eD) {}
+      }
     } else {
       out.skipped.drift_total = "CF workers/scripts list unreadable";
     }
