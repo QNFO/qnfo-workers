@@ -6729,7 +6729,7 @@ async function cmdRoutes(request, env, ctx, path, owner) {
 // canonical-deploy.yml (the canonical path), never a direct upload; every console action is written to cmd_log.
 var CON_REPO = "QNFO/qnfo-workers";
 var CON_DBS = { audit: "AUDIT", outreach: "OUTREACH", living: "LIVING", graph: "GRAPH" };
-var CON_PROTECTED = ["fleet_budget", "remediation_verifications", "work_claims", "owner_sessions", "owner_codes", "cmd_log", "console_backups"];
+var CON_PROTECTED = ["fleet_budget", "remediation_verifications", "work_claims", "owner_sessions", "owner_codes", "cmd_log", "console_backups", "owner_docs", "sla_due_at"];
 var CON_SVC = { "qnfo-ai": "SVC_QNFO_AI", "qnfo-ipatent": "SVC_QNFO_IPATENT", "personal-api": "SVC_PERSONAL_API", "qnfo-ops": "SVC_QNFO_OPS", "qnfo-kaizen": "SVC_QNFO_KAIZEN", "qnfo-paper-reviser": "SVC_QNFO_PAPER_REVISER", "qnfo-research-exec": "SVC_QNFO_RESEARCH_EXEC" };
 var CON_MAX_ROWS = 200;
 var CON_BACKUP_MAX = 2e3;
@@ -6819,7 +6819,8 @@ function conWritePlan(sql) {
   if (k.error) return k;
   if (k.read) return { error: "That statement only reads: use 'sql' (no '!')." };
   const rawLo = k.sql.toLowerCase();
-  for (const t of CON_PROTECTED) if (new RegExp("\\b" + t + "\\b").test(rawLo)) return { error: t + " is read-only from the console (budget caps, verification evidence, claims, sign-in and the audit trail are never written here)." };
+  for (const t of CON_PROTECTED) if (new RegExp("\\b" + t + "\\b").test(rawLo)) return { error: t + " is read-only from the console (budget caps, verification evidence, claims, sign-in, owner documents, the audit trail and SLA dates (PRIORITY-QUEUE-1) are never written here)." };
+  if (/\b(sqlite_\w*|_cf_\w*)/.test(rawLo)) return { error: "SQLite and Cloudflare internal tables are never written from the console." };
   const lo = k.masked.toLowerCase();
   if (/^\s*with\b/.test(lo)) return { error: "Write it without the WITH clause, so the rows it changes can be backed up first." };
   if (/^\s*(drop|alter|attach|detach|vacuum|reindex|analyze|pragma)\b/.test(lo)) return { error: (k.first || "That").toUpperCase() + " is not run from the console: schema changes ship as a migration in qnfo-workers (backed up, reviewed, reverted on a guard breach)." };
@@ -6871,7 +6872,9 @@ async function conSqlRead(env, dbKey, sql) {
   const db = env[CON_DBS[dbKey]];
   if (!db) return { ok: false, error: "No " + dbKey + " database bound." };
   try {
-    const r = await db.prepare(k.sql).all();
+    // A read is wrapped in a LIMIT so a large table can never be pulled whole into the worker.
+    const wrap = /^\s*(select|with|values)\b/i.test(k.masked) ? "SELECT * FROM (" + k.sql + ") LIMIT " + (CON_MAX_ROWS + 1) : k.sql;
+    const r = await db.prepare(wrap).all();
     const rows = r.results || [];
     return { ok: true, text: dbKey + ": " + conFmtRows(rows.slice(0, CON_MAX_ROWS), rows.length) };
   } catch (e) {

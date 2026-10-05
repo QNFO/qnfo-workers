@@ -133,6 +133,10 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   ok(!j.ok && /One statement/.test(j.error), "C3 one statement at a time");
   j = await (await cmd(env, "sql delete from notes where id = 1", C)).json();
   ok(!j.ok && /sql!/.test(j.error) && db.prepare("SELECT COUNT(*) n FROM notes").get().n === 3, "C4 a write typed as 'sql' is refused and pointed to sql!");
+  for (let i = 10; i < 260; i++) db.prepare("INSERT INTO notes (id, body) VALUES (?, 'bulk')").run(i);
+  j = await (await cmd(env, "sql select id from notes where body = 'bulk'", C)).json();
+  ok(j.ok && /\(200 of 201 rows\)/.test(j.text), "C4b a large read is cut at 200 rows (201 fetched to know there is more)", j.text && j.text.slice(-60));
+  db.prepare("DELETE FROM notes WHERE body = 'bulk'").run();
   j = await (await cmd(env, "sql select replace(body, 'a', 'b') as r from notes where id = 1", C)).json();
   ok(j.ok && /b where b/.test(j.text), "C5 replace() as a function is a read", j);
   j = await (await cmd(env, "prio 1001 high", C)).json();
@@ -163,7 +167,9 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
     ["sql! delete from remediation_verifications where id = 1", /read-only/],
     ["sql! insert or replace into notes (id, body) values (1, 'x')", /REPLACE/],
     ["sql! create trigger t after insert on notes begin delete from notes; end", /One statement|Triggers/],
-    ["sql! update notes set flag = (select 1 where 1) where id = 1", /subquery/]
+    ["sql! update notes set flag = (select 1 where 1) where id = 1", /subquery/],
+    ["sql! update issue_triage set sla_due_at = '2027-01-01' where issue_id = 1001", /read-only/],
+    ["sql! delete from sqlite_sequence where name = 'notes'", /internal tables/]
   ];
   for (const [q, rx] of refused) {
     j = await (await cmd(env, q, C)).json();
