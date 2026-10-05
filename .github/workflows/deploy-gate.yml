@@ -321,6 +321,14 @@ jobs:
         run: node qnfo-cloud-ops/single-trigger.test.mjs
       - name: ZENODO-CATCHUP-1 and tick handler offline suite (qnfo-cloud-ops)
         run: node --no-warnings qnfo-cloud-ops/zenodo-catchup.test.mjs
+      # SIGNAL-INTAKE-1 (qnfo-cloud-ops 1.19.1): the research scan admits error-correction papers only with an energy
+      # angle, and the daily job recomputes idea_topic_concentration_30d (#1947).
+      - name: IDEA-TOPIC-1 offline suite (qnfo-cloud-ops)
+        run: node --no-warnings qnfo-cloud-ops/idea-topic.test.mjs
+      # SUBSCRIBE-CONFIRM-POST-1 + SUBSCRIBE-SEND-LOG-1 (qnfo-subscribers 1.1.7): a GET of the confirm link only shows a
+      # button, the POST confirms; every send is logged and carries List-Unsubscribe (#1904, #1905).
+      - name: SUBSCRIBE-CONFIRM-POST-1 offline suite (qnfo-subscribers)
+        run: node --no-warnings qnfo-subscribers/confirm-post.test.mjs
       # COMMAND-EXIT-HONEST-1 (qnfo-containers-pilot 1.0.11): a caller's command that exits non-zero is recorded as warn
       # with its exit code; a container fault is still container.error with status error.
       - name: COMMAND-EXIT-HONEST-1 offline suite (qnfo-containers-pilot)
