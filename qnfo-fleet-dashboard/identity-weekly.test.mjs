@@ -67,6 +67,9 @@ const ctx = vm.createContext({
   ownerStore: async (env) => env.IDENTITY || env.AUDIT, d1all: d1allStub, reachErr: (e) => String(e && e.message || e),
   PORTFOLIO_RUNNING_STALE_MS: 600000, PORTFOLIO_MAX_ATTEMPTS: 3
 });
+// A re-bundled worker.js (wrangler/esbuild, e.g. LAND-CODE-FIX-1 landing the deployed script) wraps functions in
+// __name2, __name22, ... helpers; define every one the block uses so the suite tests the job, not the bundler (#608).
+for (const h of new Set(block.match(/\b__name\d+\b/g) || [])) ctx[h] = (f) => f;
 const m = vm.runInContext(block, ctx, { filename: "qnfo-fleet-dashboard/worker.js#IDENTITY-WEEKLY-1" });
 
 let pass = 0, fail = 0;
