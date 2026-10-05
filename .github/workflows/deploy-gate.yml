@@ -185,6 +185,9 @@ jobs:
       # HUB-SWR-1 (#1910): the qnfo.org home is served from the edge cache and rebuilt in the background.
       - name: HUB-SWR-1 offline suite (qnfo-gateway)
         run: node qnfo-gateway/hub-swr.test.mjs
+      # idea-hub 1.5.4: share card + iPatent link (#1919 #1920) and the stale-while-revalidate home.
+      - name: IDEAS reach + SWR offline suite (idea-hub)
+        run: node idea-hub/reach-swr.test.mjs
       # CODE-TASK-MERGE-RUNNER-1: qnfo-fleet-control merges code-loop PRs itself. The suite replays the merge decision (every
       # refusal), the CI kick, merge, deploy and live verification and the inverse-patch revert against a scripted GitHub and
       # an in-memory D1 (node:sqlite, so it runs here after the Node 22 switch).
