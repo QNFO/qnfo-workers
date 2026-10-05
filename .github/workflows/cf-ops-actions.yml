@@ -28,8 +28,11 @@ on:
           - delete-vectorize-index
           - zaraz-remove-tool
           - paper-body-from-zenodo
+          - d1-backup
+          - unbind-d1
+          - delete-d1
       target:
-        description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) ops-workspace path (r2-get) or zone (zaraz-remove-tool) or slug|record|file.md (paper-body-from-zenodo)"
+        description: "worker name (worker-history, delete-worker), KV namespace id (kv-secret-scan), index name (delete-vectorize-index) ops-workspace path (r2-get) or zone (zaraz-remove-tool) or slug|record|file.md (paper-body-from-zenodo) or database name (d1-backup, delete-d1) or WORKER:BINDING (unbind-d1)"
         required: false
         default: ""
       model:
