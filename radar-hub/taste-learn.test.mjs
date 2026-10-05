@@ -1,4 +1,4 @@
-// radar-hub taste-learning suite (1.2.2, RADAR-TASTE-LEARN-1, charter pillar: personal).
+// radar-hub taste-learning suite (1.2.4, RADAR-TASTE-LEARN-1 + RADAR-TASTE-SHRINK-1, charter pillar: personal).
 // Loads the real worker.js, drives the personal radar run through the hub's /personal route against in-memory SQLite
 // (qnfo-audit as AUDIT_DB and RADAR_DB, with an optional calendar_feedback table), a stubbed venue page and a stubbed calendar-api.
 // Proves: missing or empty feedback table = baseline scores and posts; three nopes lower a venue's priority, three wents raise it;
@@ -87,7 +87,7 @@ const NO = await go(times(3, "nope", "not-my-thing"));
 const WENT = await go(times(3, "went"));
 ok(NO.sym.priority < R.sym.priority && NO.sym.priority < B.sym.priority, "three nopes lower the venue's priority (" + B.sym.priority + " -> " + NO.sym.priority + ")");
 ok(WENT.sym.priority > R.sym.priority && WENT.sym.priority > B.sym.priority, "three wents raise the venue's priority (" + B.sym.priority + " -> " + WENT.sym.priority + ")");
-ok(NO.sym.taste.mult === 0.3, "multiplier floor is 0.3 (got " + NO.sym.taste.mult + ")");
+ok(NO.sym.taste.mult === 0.6, "under 5 feedback rows the multiplier never goes below 0.6 (got " + NO.sym.taste.mult + ")");
 ok(WENT.sym.taste.mult === 1.5, "multiplier ceiling is 1.5 (got " + WENT.sym.taste.mult + ")");
 ok(WENT.sym.relevance <= 10, "relevance never exceeds 10");
 ok(NO.sym.friction === B.sym.friction && WENT.sym.friction === B.sym.friction, "taste answers do not change friction");
@@ -100,8 +100,9 @@ ok(ONE.sym.taste.mult > NO.sym.taste.mult && ONE.sym.taste.mult < R.sym.taste.mu
 
 // bad-timing and too-much-effort: friction only, +1 each, cap 3
 const BT = await go(times(2, "nope", "bad-timing").concat(OTHER));
-ok(BT.sym.friction === R.sym.friction + 2 && BT.sym.relevance === R.sym.relevance, "two bad-timing nopes add 2 friction and leave relevance alone (friction " + R.sym.friction + " -> " + BT.sym.friction + ")");
-ok(BT.sym.taste.score === R.sym.taste.score, "bad-timing does not move the taste score");
+const R3 = await go(times(2, "keep", null, "Stedelijk", "FIL").concat(OTHER)); // same row count (3), so the same prior shrinkage
+ok(BT.sym.friction === R.sym.friction + 2 && BT.sym.relevance === R3.sym.relevance, "two bad-timing nopes add 2 friction and leave relevance alone (friction " + R.sym.friction + " -> " + BT.sym.friction + ")");
+ok(BT.sym.taste.score === R3.sym.taste.score, "bad-timing does not move the taste score");
 const EF = await go(times(5, "nope", "too-much-effort").concat(times(1, "nope", "bad-timing")));
 ok(EF.sym.friction === Math.min(10, R.sym.friction + 3) && EF.sym.taste.frictionAdd === 3, "friction addition is capped at 3 (got +" + EF.sym.taste.frictionAdd + ")");
 ok(EF.sym.priority < R.sym.priority, "added friction lowers priority");
@@ -121,6 +122,47 @@ const bo = await (await W.fetch(new Request("https://radar-hub.example/personal/
 ok(bo.ok === true && bo.taste.active === false, "a malformed feedback table fails safe");
 
 const h = await (await W.fetch(new Request("https://radar-hub.example/health"), {}, {})).json();
-ok(h.version === "1.2.3", "hub /health reports 1.2.3");
+ok(h.version === "1.2.4", "hub /health reports 1.2.4");
+// RADAR-TASTE-SHRINK-1 (#1952): prior shrinkage, early floor, and the half-a-day safety valve
+{
+  const prior = (x) => x.sym.taste.prior;
+  const P1 = await go(OTHER); // n = 1
+  const P6 = await go(times(6, "keep", null, "Stedelijk", "FIL"));
+  ok(prior(P1) < prior(P6) && prior(P6) > 0, "the stated-taste prior grows with n/(n+3): n=1 " + prior(P1) + " < n=6 " + prior(P6));
+  const rawP = prior(P6) * 9 / 6; // n=6 scales by 6/9
+ok(Math.abs(prior(P1) - rawP / 4) <= 0.02, "with a single feedback row the prior is scaled by 1/4 (" + prior(P1) + " vs raw " + rawP + ")");
+  const E4 = await go(times(4, "nope", "not-my-thing", "Concertgebouw", "CLA"));
+  ok(E4.sym.taste.mult >= 0.6, "4 feedback rows (all nopes) can never push a multiplier below 0.6 (got " + E4.sym.taste.mult + ")");
+  const E5 = await go(times(5, "nope", "not-my-thing", "Concertgebouw", "CLA"));
+  ok(E5.sym.taste.mult === 0.3, "from 5 feedback rows the floor is 0.3 again (got " + E5.sym.taste.mult + ")");
+  const one = await go([["nope", "not-my-thing", "Concertgebouw", "CLA"]]);
+  ok(one.sym.relevance >= B.sym.relevance * 0.6 - 0.1 && one.sym.taste.mult >= 0.6, "one early nope cannot floor an event (mult " + one.sym.taste.mult + ", relevance " + B.sym.relevance + " -> " + one.sym.relevance + ")");
+  ok(/taste flooring: \d+ candidate/.test(one.report) && one.out.taste.droppedByFloor !== undefined, "the run report and the answer state how many candidates taste dropped");
+
+  // valve: several venues on the same day, two of them hit hard by nopes
+  const day = `${MONTH} 9 ${Y}`;
+  const venuePage = (t) => `<html><body><p>${t} Symphony Orchestra concert with Mahler and chamber music, ${day}. Doors open at 19:30.</p></body></html>`;
+  const hosts = { "www.concertgebouw.nl": 1, "www.rijksmuseum.nl": 1, "www.vangoghmuseum.nl": 1, "www.stedelijk.nl": 1 };
+  const keepFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => hosts[new URL(String(url)).hostname] ? new Response(venuePage(new URL(String(url)).hostname), { status: 200, headers: { "content-type": "text/html" } }) : new Response("nf", { status: 404 });
+  const rowsFor = (...venues) => venues.flatMap((v) => times(5, "nope", "not-my-thing", v, "CLA"));
+  const sameDay = (x) => x.ev.filter((e) => e.startIso.slice(8) === "09");
+  const base = await go(OTHER);
+  const hard = await go(rowsFor("Concertgebouw", "Rijksmuseum", "VanGoghMuseum", "Stedelijk"));
+  const viable = sameDay(base).filter((e) => e.relevance >= 2).length;
+  const kept = sameDay(hard).filter((e) => e.relevance >= 2).length;
+  ok(viable >= 4, "valve fixture: " + viable + " viable candidates on one day");
+  ok(kept >= Math.ceil(viable / 2), "taste never drops more than half of a day's candidates (" + kept + " of " + viable + " kept)");
+  ok(sameDay(hard).some((e) => e.tasteRestored), "the safety valve restored candidates by pre-taste priority");
+  ok(hard.out.taste.restoredByValve >= 1 && /restored by the safety valve/.test(hard.report), "the report counts valve restorations (" + hard.out.taste.restoredByValve + ")");
+  const restored = sameDay(hard).filter((e) => e.tasteRestored).map((e) => e.tastePre.priority);
+  const lost = sameDay(hard).filter((e) => e.tastePre.relevance >= 2 && e.relevance < 2).map((e) => e.tastePre.priority);
+  ok(restored.every((r) => lost.every((l) => r >= l)), "the kept half is the top half by pre-taste priority");
+  // mild taste (one nope) drops nothing: valve is a no-op
+  const mild = await go([["nope", "not-my-thing", "Concertgebouw", "CLA"]]);
+  ok(mild.out.taste.restoredByValve === 0 && mild.out.taste.droppedByFloor === 0, "a mild taste signal drops and restores nothing");
+  globalThis.fetch = keepFetch;
+}
+
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
