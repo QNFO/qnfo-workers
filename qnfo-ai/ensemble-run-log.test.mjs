@@ -113,5 +113,15 @@ ok(!/runWorkersAI\(env, ENSEMBLE\.validator\.wa/.test(src), "no validator call b
 m = api.ensembleRunMeta({ primary_model: "deepseek-v4-flash", validator_model: ENS.validator_alt.wa, validator_switched: true, validator_verdict: "pass" }, "general", "t");
 eq([m.primary_family, m.validator_family, m.same_family, m.validator_switched], ["deepseek", "zai", false, true], "meta records the switch and a cross-family pair");
 
+// 10 ENSEMBLE-VALIDATOR-BUDGET-1: the validator keeps a budget slice (not a flat 15s) and its outcome is a stage row in the run row.
+ok(/withTimeout\(runWorkersAI\(env, validatorSpec\.wa, truncateMessagesToFit\(vMsg, validatorSpec\.ctx\), 1024, false\), _stageCap\(0\.3, 15e3\), "ensemble-validator"\)/.test(src), "validator timeout is a 30% budget slice with a 15s floor");
+ok(!/Math\.min\(15e3, _remaining\(\)\), "ensemble-validator"/.test(src), "the flat 15s validator cap is gone");
+ok(/_mk\("validator", _sv, true\);/.test(src) && /_mk\("validator", _sv, false, eV\);\s*throw eV;/.test(src), "validator success and timeout are stage rows, the timeout still skips verification");
+ok(/_mk\("reviewer", _sr, !!rText\.trim\(\)\);/.test(src) && /_mk\("reviewer", _sr, false, e\);/.test(src), "reviewer outcome is a stage row");
+m = api.ensembleRunMeta({ primary_model: "@cf/openai/gpt-oss-120b", validator_model: ENS.validator.wa, validator_verdict: "skipped", stages: { primary: { ms: 55010, ok: true, rem: 64990 }, validator: { ms: 15002, ok: false, err: "timeout ensemble-validator", rem: 49988 } } }, "science", "t");
+eq([m.verdict, m.stages.validator.ok, m.stages.validator.ms], ["skipped", false, 15002], "a starved validator is visible in the run row");
+eq(api.ensembleRunMeta({ stages: "bad" }, "x", "").stages, null, "non-object stages are dropped");
+ok(JSON.stringify(m).length < 1200, "a run row with stages stays well under the 1800-char meta cap");
+
 console.log("ensemble-run-log: " + passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);
