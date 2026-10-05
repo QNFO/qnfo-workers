@@ -1,26 +1,18 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@8c7d3ff80fd0",
- "due": 2,
- "pass": 2,
- "fail": 0,
+ "verifier": "remediation-consumer@116159761e50",
+ "due": 1,
+ "pass": 0,
+ "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1865",
-   "issue_id": 1865,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1879",
-   "issue_id": 1879,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "fail",
+   "expected": "fixed",
+   "observed": "pending",
    "written": true
   }
  ],
@@ -40,8 +32,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 8233,
- "head": "8c7d3ff80fd04ad253c2740c415ee1c585fc3395",
+ "spent_ms": 5598,
+ "head": "116159761e506aeff6c0d9e47a2115225db7546e",
  "job_status": "success",
- "ts": "2026-10-05T18:28:55Z"
+ "ts": "2026-10-05T19:00:30Z"
 }
