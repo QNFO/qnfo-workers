@@ -15,7 +15,10 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.7.35-link-facet-utm";
+var VERSION = "0.7.36-reach-repair";
+// 0.7.36 (2026-10-05, REACH-REPAIR-1, pillar: reach): a draft the checker held was a dead end (4 eligible pillar 1-3
+// papers on 2026-10-05, one since 09-29). Now each held draft gets exactly one automatic rewrite with the checker's
+// findings fed back, then a fresh check: clean -> queued; held again -> rejected with both rounds of findings in notes.
 // 0.7.34 (2026-10-03, owner directive "wire an ideation loop so the fleet generates and queues the next reach work itself,
 // without asking", pillar: reach): REACH-SELECT-1 + REACH-REFILL-1. Measured before: the Zenodo scan composed a thread for
 // every new paper (10 on 2026-10-03 06:0xZ, nearly all ultrametric programme, which STRATEGY 2.3 keeps out of outreach),
@@ -716,6 +719,41 @@ async function reachSweepDrafts(env) {
   }
   return n;
 }
+// REACH-REPAIR-1 (0.7.35): one rewrite per held draft, findings fed back; terminal state either way.
+var REPAIR_PER_RUN = 2;
+function repairPrompt(doi, title, abstract, posts, issues) {
+  return composePrompt(doi, title, abstract) + String.fromCharCode(10) +
+    "A fact checker rejected the previous draft for these reasons; write a new thread that avoids every one of them and adds nothing the abstract does not state:" + String.fromCharCode(10) +
+    (issues || []).map(function(x) { return "- post " + x.post + ": " + String(x.issue || "").slice(0, 300); }).join(String.fromCharCode(10)) + String.fromCharCode(10) +
+    "Previous draft (do not reuse its rejected wording): " + JSON.stringify(posts || []).slice(0, 2000);
+}
+async function reachRepairDrafts(env) {
+  var rows = await env.DB.prepare("SELECT id, title, doi, posts, notes FROM social_threads WHERE status='draft' AND doi IS NOT NULL AND doi <> '' AND notes LIKE '[%' ORDER BY id ASC LIMIT ?").bind(REPAIR_PER_RUN).all();
+  var out = { tried: 0, queued: 0, rejected: 0, skipped: 0 };
+  for (var i = 0, list = (rows && rows.results) || []; i < list.length; i++) {
+    var row = list[i], issues = [], posts = [];
+    try { issues = JSON.parse(row.notes); } catch (e) { issues = []; }
+    try { posts = JSON.parse(row.posts); } catch (e) { posts = []; }
+    if (!reachEligible(row.title, "", row.doi).ok) { out.skipped++; continue; } // the sweep suppresses these
+    var rec = await zenodoRecord(row.doi);
+    if (!rec) { out.skipped++; continue; }
+    out.tried++;
+    var ai = await aiRunAttr(env, "qnfo-social", "repair", COMPOSE_MODEL, { messages: [{ role: "user", content: repairPrompt(row.doi, rec.title, rec.abstract, posts, issues) }], max_tokens: 2000 });
+    var np = sanitizePosts(extractText(ai).split(String.fromCharCode(10)));
+    var again = np.length >= 3 ? await checkThread(env, rec.title, rec.abstract, np, row.doi) : [{ post: 0, issue: "rewrite produced too few posts" }];
+    if (again && again.length === 0) {
+      var sel = reachSelected(row.doi);
+      await env.DB.prepare("UPDATE social_threads SET status='queued', posts=?, notes=?, flags=?, updated_at=datetime('now') WHERE id=? AND status='draft'")
+        .bind(JSON.stringify(np.slice(0, 6)), (sel ? "selected: " : "") + "REACH-REPAIR-1: rewritten after checker findings, now clean | first round: " + String(row.notes).slice(0, 600), sel ? "selected" : null, row.id).run();
+      out.queued++;
+    } else {
+      await env.DB.prepare("UPDATE social_threads SET status='rejected', notes=?, updated_at=datetime('now') WHERE id=? AND status='draft'")
+        .bind(("REACH-REPAIR-1: held twice, not posted | first: " + String(row.notes).slice(0, 450) + " | second: " + JSON.stringify(again === null ? [{ issue: "checker unavailable" }] : again)).slice(0, 1000), row.id).run();
+      out.rejected++;
+    }
+  }
+  return out;
+}
 // ---- REACH-SELECT-1:END ----
 async function autoScan(env) {
   try {
@@ -783,6 +821,8 @@ async function autoScan(env) {
     await env.DB.prepare("INSERT INTO scan_state (key, value) VALUES ('last_scanned', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(newest).run();
     let swept = 0, refill = null;
     try { swept = await reachSweepDrafts(env); } catch (e) { await logAlert(env, 'scan', 'error', 'REACH-SELECT-1 sweep: ' + String(e).slice(0, 200)); }
+    let repair = null;
+    try { repair = await reachRepairDrafts(env); } catch (e) { repair = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'repair', 'error', repair.error); }
     try { refill = await reachRefill(env); } catch (e) { refill = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'refill', 'error', refill.error); }
     // Monitor: posts in the last 30 days must keep up with publications in the last 30 days.
     try {
@@ -791,7 +831,7 @@ async function autoScan(env) {
       if (posts30 < pubs30) await logAlert(env, 'scan', 'warning', 'DISTRIBUTION-RECONCILE-1: posts_30d=' + posts30 + ' < publications_30d=' + pubs30 + ' (Zenodo); distribution is not keeping up');
     } catch (e) {}
     console.log('auto-scan: drafted', drafted, '(reconciled', reconciled + ') draft threads; suppressed', suppressed, 'swept', swept, 'refill', JSON.stringify(refill), 'last_scanned', newest, 'eligible_publications_30d', pubs30);
-    return { records: hits.length, drafted: drafted, suppressed: suppressed, swept: swept, refill: refill, reconciled: reconciled, publications_30d: pubs30, last_scanned: newest };
+    return { records: hits.length, drafted: drafted, suppressed: suppressed, swept: swept, repair: repair, refill: refill, reconciled: reconciled, publications_30d: pubs30, last_scanned: newest };
   } catch (e) {
     await logAlert(env, 'scan', 'error', String(e));
     console.error('auto-scan failed', String(e));

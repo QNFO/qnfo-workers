@@ -15,7 +15,7 @@ import { join } from "node:path";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const strategy = readFileSync(new URL("../docs/STRATEGY.md", import.meta.url), "utf8");
 const dir = mkdtempSync(join(tmpdir(), "rs-"));
-writeFileSync(join(dir, "w.mjs"), src + "\nexport { reachEligible, reachDenied, pickRefill, reachRefill, reachSweepDrafts, REACH_SELECTED, REFILL_MIN_QUEUE, checkThread };\n");
+writeFileSync(join(dir, "w.mjs"), src + "\nexport { reachEligible, reachDenied, pickRefill, reachRefill, reachSweepDrafts, reachRepairDrafts, REACH_SELECTED, REFILL_MIN_QUEUE, checkThread };\n");
 const W = await import(join(dir, "w.mjs"));
 let fails = 0, passes = 0;
 const ok = (c, m, x) => { if (c) passes++; else { fails++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
@@ -154,6 +154,30 @@ globalThis.fetch = async (url) => {
   ok(th && th.status === "queued", "eligible paper composed and queued", th);
   ok(calls.filter((c) => /Temperley/i.test(c)).length === 0 && calls.length === 2, "no AI call mentions the suppressed paper", calls.length);
   ok(r.refill && r.refill.refilled === 0, "queue was full, so the scan's refill step did nothing", r.refill);
+}
+// REACH-REPAIR-1: one rewrite with findings fed back; clean -> queued (selected for a 2.4 work); held again -> rejected
+{
+  const { db, D1 } = mkdb();
+  db.exec(`INSERT INTO social_threads (slug, title, doi, posts, status, notes) VALUES
+    ('r1','Thermodynamic Trade-off Frontiers for Neuromorphic Processors','10.5281/zenodo.23105375','["old"]','draft','[{"post":1,"issue":"invented claim X"}]'),
+    ('r2','Operating the fleet','${D(7)}','["old"]','draft','[{"post":4,"issue":"invented number 40%"}]'),
+    ('r3','Some paper','10.5281/zenodo.5','["x"]','draft','checker unavailable - unverified');`);
+  calls.length = 0; checkerReply = "[]";
+  const r = await W.reachRepairDrafts({ DB: D1, AI });
+  const g = (s) => db.prepare("SELECT status, flags, notes, posts FROM social_threads WHERE slug=?").get(s);
+  ok(r.tried === 2 && r.queued === 2, "two held drafts rewritten and queued", r);
+  ok(g("r1").status === "queued" && g("r1").flags === null && /REACH-REPAIR-1: rewritten/.test(g("r1").notes) && JSON.parse(g("r1").posts).length === 5, "pillar-1 draft queued with the new posts", g("r1"));
+  ok(g("r2").flags === "selected" && /^selected: REACH-REPAIR-1/.test(g("r2").notes), "a selected work is queued as selected");
+  ok(g("r3").status === "draft", "a draft without checker findings is left to the recheck path");
+  const rp = calls.find((c) => /fact checker rejected the previous draft/.test(c));
+  ok(rp && /invented claim X/.test(rp) && /Previous draft/.test(rp), "the findings and the old draft are fed back");
+  db.exec(`INSERT INTO social_threads (slug, title, doi, posts, status, notes) VALUES ('r4','Energy of inference in LLMs','10.5281/zenodo.6','["o"]','draft','[{"post":2,"issue":"overclaim"}]')`);
+  checkerReply = '[{"post":2,"issue":"still overclaims"}]';
+  const r2 = await W.reachRepairDrafts({ DB: D1, AI });
+  ok(r2.rejected === 1 && g("r4").status === "rejected" && /held twice.*overclaim.*still overclaims/.test(g("r4").notes), "held again: rejected with both rounds recorded", g("r4"));
+  const r3 = await W.reachRepairDrafts({ DB: D1, AI });
+  ok(r3.tried === 0, "nothing is retried a second time");
+  checkerReply = "[]";
 }
 // recheck and drain carry the gate (source checks: both paths need the Bluesky stack to run)
 ok(/var rel = reachEligible\(String\(row\.title \|\| ""\), abstract, row\.doi\);[\s\S]{0,200}status='suppressed'/.test(src), "recheck suppresses an ineligible held draft instead of approving it");
