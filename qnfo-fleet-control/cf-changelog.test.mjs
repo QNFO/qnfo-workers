@@ -17,7 +17,7 @@ const a = src.indexOf(BEGIN), b = src.indexOf(END);
 if (a < 0 || b < 0 || b < a) { console.error("FAIL cf-changelog block markers missing"); console.log("1 failed"); process.exit(1); }
 const sandbox = { charterRows: null, charterOne: null, timedFetch: null, VERSION: "test", console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, TextDecoder, __export: null };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(a, b + END.length) + "\n__export = { cfcParseItems, cfcMatch, cfcClassify, cfcNeedsRun, cfcDeadlineMs, cfcSlug, CFC_STALE_H, CFC_MAX_ITEMS };", sandbox, { filename: "cf-changelog-block.js" });
+vm.runInContext(src.slice(a, b + END.length) + "\n__export = { cfcParseItems, cfcMatch, cfcClassify, cfcNeedsRun, cfcDeadlineMs, cfcSlug, CFC_STALE_H, CFC_MAX_ITEMS, cfcLead, cfcLeads, CFC_CAP_NOTES };", sandbox, { filename: "cf-changelog-block.js" });
 const C = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -106,6 +106,32 @@ const phantom = { guid: "g", title: "Spectrum - Spectrum billing will begin Nov 
 eq(C.cfcClassify(phantom, ctx).klass === "deadline", false, "a billing change to a product the fleet and catalog do not use is not a deadline");
 const used = { guid: "g2", title: "KV - KV pricing change", headline: "KV pricing change", products: ["KV"], text: "KV pricing changes on Dec 1, 2026.", pub_ms: NOW - 86400000 };
 eq(C.cfcClassify(used, ctx).klass, "deadline", "a pricing change to an in-use product is a deadline");
+
+// --- CF-CHANGELOG-LEADS-1 (#1959): later launches of proposed / not_considered rows, and the leads digest
+const mg = { guid: "g4", title: "Monetization Gateway - Monetization Gateway is now generally available", headline: "Monetization Gateway is now generally available", products: ["Monetization Gateway"], primary: "Monetization Gateway", text: "Charge agents and crawlers for content.", pub_ms: NOW - 86400000 };
+const withRows = { catalog: catalog.concat([{ slug: "cfc-monetization-gateway", product: "Monetization Gateway", status: "not_considered" }]), fleetText: ctx.fleetText, nowMs: NOW };
+eq(C.cfcClassify(mg, withRows).klass, "row_update", "a GA launch of a not_considered row is a row update, not noted");
+eq(C.cfcClassify(mg, withRows).match.slug, "cfc-monetization-gateway", "...and names that row");
+const proposedRow = { catalog: [{ slug: "managed-rag", product: "AI Search", status: "proposed" }], fleetText: "", nowMs: NOW };
+eq(C.cfcClassify({ guid: "g5", title: "AI Search - AI Search adds hybrid search", headline: "Introducing hybrid search in AI Search", products: ["AI Search"], primary: "AI Search", text: "Hybrid search is on by default.", pub_ms: NOW - 86400000 }, proposedRow).klass, "row_update", "a launch for a proposed row is a row update");
+eq(C.cfcClassify({ guid: "g6", title: "AI Search - fixed a bug", headline: "Fixed a bug in AI Search", products: ["AI Search"], primary: "AI Search", text: "A fix.", pub_ms: NOW - 86400000 }, proposedRow).klass, "noted", "a non-launch change to a proposed row stays noted");
+eq(cls("AI Search is generally available").klass, "deadline", "a billing deadline still wins over a row update");
+eq(C.CFC_CAP_NOTES, 5, "at most five row notes a day");
+eq(C.cfcLead("Workers AI - Introducing Clef: Cloudflare's first open-source decision models, now on Workers AI", ""), true, "the Clef launch is a lead (decision models can replace LLM triage calls)");
+eq(C.cfcLead("KV - Workers KV namespace jurisdictions are now generally available", "Choose where data is stored."), false, "a jurisdiction feature is not a cost lead");
+eq(C.cfcLead("Durable Objects - Pending I/O", "keeps work running with fewer reconnects"), true, "the excerpt text counts too");
+const leadRows = [
+  { pub: "2026-10-01T13:00:00.000Z", title: "Workers AI - Introducing Clef: Cloudflare's first open-source decision models, now on Workers AI", klass: "in_use_change", slug: "managed-inference", action: "noted", excerpt: null },
+  { pub: "2026-10-02T00:00:00.000Z", title: "KV - Workers KV namespace jurisdictions are now generally available", klass: "in_use_change", slug: "kv-config", action: "noted", excerpt: "jurisdictions" },
+  { pub: "2026-10-02T13:00:00.000Z", title: "AI Gateway - Cheaper caching", klass: "in_use_change", slug: "ai-observability", action: "noted", excerpt: "" },
+  { pub: "2026-10-02T00:00:00.000Z", title: "Spectrum - lower price", klass: "noted", slug: null, action: "noted", excerpt: "" },
+  { pub: "2026-09-01T00:00:00.000Z", title: "Workers AI - cheaper embeddings", klass: "in_use_change", slug: "managed-inference", action: "noted", excerpt: "" },
+];
+const leads = C.cfcLeads(leadRows, NOW);
+eq(leads.length, 2, "leads keep recent in-use changes that read like a cost lever, drop noted and old items");
+eq(leads[0].title, "AI Gateway - Cheaper caching", "newest lead first");
+eq(leads.some((l) => /Clef/.test(l.title)), true, "the Clef item is a lead");
+eq(C.cfcLeads(Array.from({ length: 30 }, (_, i) => ({ pub: new Date(NOW - i * 3600000).toISOString(), title: "x - faster", klass: "row_update" })), NOW).length, 10, "at most ten leads");
 
 // --- schedule
 eq(C.cfcNeedsRun(null, NOW), "never ran", "no run yet");
