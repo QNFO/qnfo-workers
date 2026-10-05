@@ -1,3 +1,7 @@
+// idea-hub v1.5.5-triage-budget-20261005: IDEA-TRIAGE-BREACH-DEFER-1 (#1878: no triage model call while a fleet_budget
+//   ai_spend cap is breached; proposals wait as deferred_budget and are released when the caps clear), COST-ATTRIBUTION
+//   (#1833: triage and think-loop calls counted in ai_call_counters via aiRunAttr), OWNER-TOKEN-SHADOW-1 (#1966: intake
+//   accepts OWNER_TOKEN or SYNC_TOKEN, constant-time).
 // idea-hub v1.5.3-questions-feed-leakfix-20261004: ROLEPROMPT-SHAPE-GATE-1 (a public question is never
 //   an instruction addressed to a model; catches pipeline prompts not enumerated in INTERNAL).
 // idea-hub v1.5.2-questions-feed-20261004: IDEAS-PUBLIC-FILTER-1 (strip client-injected <ATTACHMENT_FILE>
@@ -78,7 +82,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.5.4-reach-swr"; // 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.5.5-triage-budget"; // 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -254,12 +258,39 @@ function tExtract(r) {
   if (r.response && typeof r.response === "object") return JSON.stringify(r.response);
   return "";
 }
+// COST-ATTRIBUTION (#1833): every env.AI.run here goes through aiRunAttr (the qnfo-fleet-control helper), which adds one
+// per-worker/purpose call counter to D1 ai_call_counters (fail-soft, never blocks or alters the AI call).
+async function aiRunAttr(env, worker, purpose, model, input, opts) {
+  var t0 = Date.now(), ok = 1;
+  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  finally {
+    try {
+      var db = env.QNFO_AUDIT;
+      if (db) {
+        var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
+        var day = new Date().toISOString().slice(0, 10);
+        await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
+        await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, Date.now() - t0).run();
+      }
+    } catch (e3) {}
+  }
+}
+// IDEA-TRIAGE-BREACH-DEFER-1 (#1878): true while any fleet_budget ai_spend cap is breached (current > cap). An unreadable
+// fleet_budget counts as breached, so a D1 fault can only defer spending, never cause it.
+async function aiBudgetBreach(env) {
+  try {
+    var rows = (await env.QNFO_AUDIT.prepare("SELECT node_class, cap, current FROM fleet_budget WHERE node_class LIKE 'ai_spend:%' AND current > cap ORDER BY node_class").all()).results || [];
+    return { breached: rows.length > 0, caps: rows.map(function (r) { return r.node_class + " " + r.current + "/" + r.cap; }) };
+  } catch (e) {
+    return { breached: true, caps: ["fleet_budget unreadable: " + String(e && e.message || e).slice(0, 80)] };
+  }
+}
 async function tRunModel(env, name, prompt) {
   var lastErr = "";
   var chain = [name].concat(T_CHAIN.filter(function (x) { return x !== name; })).slice(0, 4);
   for (var i = 0; i < chain.length; i++) {
     try {
-      var r = await env.AI.run(chain[i], { messages: [{ role: "user", content: prompt }], max_tokens: 700, temperature: 0.2 });
+      var r = await aiRunAttr(env, "idea-hub", "triage", chain[i], { messages: [{ role: "user", content: prompt }], max_tokens: 700, temperature: 0.2 });
       var mm = tExtract(r).match(/\{[\s\S]*\}/);
       if (!mm) { lastErr = chain[i] + ": no JSON"; continue; }
       var c = JSON.parse(mm[0]); var ok = true;
@@ -288,8 +319,22 @@ async function scoreIdea(env, desire) {
 var NOISE_RE = [/^call (the )?[a-z_]+( tool)?(\s|$)/i, /(email_check|express_intent|intents_list|social_compose|search_research|search_papers tool)/i, /output the (complete )?raw json/i, /^reply with the single word/i, /^give this conversation a name/i, /^max \d+ chars/i, /based on the chat history/i, /rotation verification/i, /redirect probe/i, /auto-express block/i, /wrapped in/i, /^ok$/i];
 function isNoise(t) { t = String(t || ""); return NOISE_RE.some(function (re) { return re.test(t); }); }
 function isQuestion(t) { t = String(t || "").trim(); return t.length < 160 && /\?\s*$/.test(t) && /^(what|who|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have|quick|one line|one sentence|in one sentence|probe)/i.test(t); }
+// IDEA-TRIAGE-BREACH-DEFER-1 (#1878, pillar cost): while a fleet_budget ai_spend cap is breached, triage makes no model
+// call. The zero-cost noise and chat-question rules still run; a proposal that needs scoring is set to status
+// 'deferred_budget' (never dropped or closed, human ideas included). Once no cap is breached, deferred rows go back to
+// 'new' oldest first, TRIAGE_BATCH a run, and are scored through the normal path. Each run writes the deferred count and
+// the breached caps to cloud_ops_events id 'idea-triage-budget'; /health reports the count. Producers count deferred
+// rows in their backpressure, so the backlog cannot grow without bound during a breach.
 async function triageProposals(env) {
-  var out = { triaged: 0, accepted: 0, errors: 0 };
+  var out = { triaged: 0, accepted: 0, errors: 0, deferred: 0, released: 0 };
+  var budget = await aiBudgetBreach(env);
+  out.budget_breached = budget.breached;
+  if (!budget.breached) {
+    try {
+      var rel = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status='new' WHERE id IN (SELECT id FROM idea_proposals WHERE status='deferred_budget' ORDER BY created_at ASC LIMIT ?1)").bind(TRIAGE_BATCH).run();
+      out.released = Number(rel && rel.meta && rel.meta.changes) || 0;
+    } catch (e) { out.errors++; }
+  }
   var rows = (await env.QNFO_AUDIT.prepare("SELECT id, idea, name FROM idea_proposals WHERE status='new' ORDER BY created_at ASC LIMIT ?1").bind(TRIAGE_BATCH).all()).results || [];
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i], now = new Date().toISOString();
@@ -301,6 +346,10 @@ async function triageProposals(env) {
         await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision='HOLD', rationale=?, triaged_at=?, status='triaged_hold' WHERE id=?").bind("noise/question filter", now, row.id).run();
         out.triaged++; continue;
       }
+      if (budget.breached) {
+        await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status='deferred_budget', rationale=? WHERE id=?").bind("deferred " + now.slice(0, 16) + "Z: AI budget caps breached (" + budget.caps.join(", ").slice(0, 200) + "); scored once no cap is breached", row.id).run();
+        out.deferred++; continue;
+      }
       var s = await scoreIdea(env, row.idea);
       if (s.error) { out.errors++; continue; }
       await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision=?, score=?, rationale=?, triaged_at=?, status=? WHERE id=?").bind(s.decision, s.score, s.rationale || "", now, s.decision === "ACCEPT" ? "triaged_accepted" : "triaged_hold", row.id).run();
@@ -311,6 +360,14 @@ async function triageProposals(env) {
       }
     } catch (e) { out.errors++; }
   }
+  try {
+    var dc = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();
+    out.deferred_total = Number(dc && dc.n) || 0;
+    var at = new Date().toISOString();
+    await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('idea-triage-budget', ?1, 'idea-triage-budget', ?2, ?3, 'idea-hub', ?4)")
+      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, no model call; " + out.deferred + " deferred this run, " : "caps clear; " + out.released + " released, ") + out.deferred_total + " waiting as deferred_budget", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged }), budget.breached ? "deferred" : "ok").run();
+  } catch (e) {}
+  console.log("IDEA-TRIAGE-BREACH-DEFER-1 " + JSON.stringify(out));
   try { await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('idea-hub', ?1, ?2, ?3) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind(VERSION, new Date().toISOString(), out.errors ? 0 : 1).run(); } catch (e) {}
   return out;
 }
@@ -372,7 +429,7 @@ async function runReentry(env) {
 }
 async function runConsume(env) {
   var out = { consumed: 0, proposals: 0, paused: false, errors: 0 };
-  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status='new'").first();
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status IN ('new','deferred_budget')").first();
   if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) { out.paused = true; return out; }
   var b = await env.QNFO_AUDIT.prepare("SELECT permitted FROM signal_worker_boundary WHERE worker='idea-hub' AND source='artifact_reentry'").first();
   if (!b || Number(b.permitted) !== 1) { out.paused = true; return out; }
@@ -398,10 +455,10 @@ async function runConsume(env) {
 var THINK_EVERY_H = 6;
 var THINK_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 async function thinkLoop(env) {
-  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status='new'").first();
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status IN ('new','deferred_budget')").first();
   if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) return { ok: true, skipped: "backpressure" };
   await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, question TEXT, hypothesis TEXT, source TEXT, status TEXT)").run();
-  var ai = await env.AI.run(THINK_MODEL, { messages: [
+  var ai = await aiRunAttr(env, "idea-hub", "think", THINK_MODEL, { messages: [
     { role: "system", content: 'You are the research planner for QNFO, an independent research imprint (one researcher with an AI-assisted pipeline). Propose ONE novel, falsifiable research question the fleet should investigate next. Output strict JSON only: {"question": "...", "hypothesis": "...", "why": "..."}. No markdown.' },
     { role: "user", content: "Generate one novel research question. Consider energy-efficient computing, quantum foundations, information thermodynamics, or a gap in the existing corpus." }
   ], max_tokens: 1024 });
@@ -433,7 +490,7 @@ async function thinkLoop(env) {
 var ASK_GAP_BATCH = 5;
 async function runAskGap(env) {
   var out = { ok: true, candidates: 0, inserted: 0, skipped: 0 };
-  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status = 'new'").first().catch(function () { return null; });
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status IN ('new', 'deferred_budget')").first().catch(function () { return null; });
   if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) { out.paused = true; return out; }
   var rows = (await env.QNFO_AUDIT.prepare("SELECT qhash, MIN(query) AS query, COUNT(*) AS n FROM ask_events WHERE uncovered = 1 AND COALESCE(cached, 0) = 0 AND error IS NULL AND query IS NOT NULL AND ts > datetime('now', '-7 days') GROUP BY qhash ORDER BY n DESC, MAX(ts) DESC LIMIT 25").all().catch(function () { return { results: [] }; })).results || [];
   out.candidates = rows.length;
@@ -662,17 +719,22 @@ var IDEAS_FRESH_MS = 15 * 60 * 1000;
 // /, /index.html, /s/*, /api/sessions, /api/feed, /api/session/*, /rss.xml load with NO credential. The
 // public filter below (publicTitle boundary match + quarantine + INTERNAL/OPS/JUNK stripping) is the ONLY
 // gate, unchanged from v1.4.0-qds. POST /api/intake stays owner-authenticated (write path, not a public read).
-function ownerToken(env){return env.OWNER_TOKEN || env.SYNC_TOKEN || ''}
+// OWNER-TOKEN-SHADOW-1 (#1966): the intake accepts either worker secret, OWNER_TOKEN (set 2026-10-04T09:16Z for
+// IDEAS-PRIVATE-1) or SYNC_TOKEN. Before, OWNER_TOKEN || SYNC_TOKEN let the new secret silently shadow the old one, so a
+// client still sending SYNC_TOKEN got 401. Each secret shorter than 16 characters is ignored; every comparison is
+// constant-time and both are always compared. No value is ever logged.
+function ownerTokens(env){return [env.OWNER_TOKEN, env.SYNC_TOKEN].filter(function(t){return typeof t==='string'&&t.length>=16})}
+function ctEq(a,b){if(a.length!==b.length)return false;var d=0;for(var i=0;i<a.length;i++)d|=a.charCodeAt(i)^b.charCodeAt(i);return d===0}
 function ownerOk(req,env){
-  var want=ownerToken(env);
-  if(!want||want.length<16)return false;
+  var wants=ownerTokens(env);
+  if(!wants.length)return false;
   var h=req.headers.get('Authorization')||'';
   var m=/^Bearer\s+(.+)$/i.exec(h.trim());
   var sup=m?m[1].trim():'';
   if(!sup){try{sup=new URL(req.url).searchParams.get('token')||''}catch(e){}}
-  if(!sup||sup.length!==want.length)return false;
-  var d=0;for(var i=0;i<want.length;i++)d|=want.charCodeAt(i)^sup.charCodeAt(i);
-  return d===0;
+  if(!sup)return false;
+  var ok=false;for(var i=0;i<wants.length;i++){if(ctEq(wants[i],sup))ok=true}
+  return ok;
 }
 async function intake(req,env){
   var b;try{b=await req.json()}catch(e){return json({error:'invalid JSON body'},400)}
@@ -693,4 +755,4 @@ async function intake(req,env){
   try{await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name,idea,contact,status,created_at) VALUES (?,?,?,?,datetime('now'))").bind(src,(title?title+'\n\n':'')+body,'owner','new').run()}catch(e){return json({error:'idea insert failed: '+(e&&e.message||e)},500)}
   return json({ok:true,kind:'idea',provenance:src,status:'new',held:true});
 }
-export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated", "ideation runs on the hourly :23 cron"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
+export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}let td=-1;try{const r=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();td=Number(r&&r.n)||0}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,triage_deferred_budget:td,public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated", "ideation runs on the hourly :23 cron", "while a fleet_budget ai_spend cap is breached, triage makes no model call: proposals that need scoring wait as status deferred_budget (count in triage_deferred_budget) and are scored once the caps clear"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
