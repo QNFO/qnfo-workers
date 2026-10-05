@@ -6,14 +6,75 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
+// TWIN-FLASH-1 (2026-10-05, owner directive 4, agent_issues 1818): the twin's primary answer model is glm-5.3-flash ($0.10/M,
+// about 13x cheaper than deepseek-v4-pro), switched with no A/B on the owner's standing decision. deepseek-v4-pro stays the
+// per-request fallback (a flash error or empty reply is answered by it in the same request), and the whole order reverts
+// on its own when flash fails too often today (twinChatModels: >= 20% failed answers over >= 10 calls, from the
+// ai_call_counters row this worker already writes; an empty reply is counted there as a failure). glm-5.3 ($1.40/M) left
+// the list: it was the most expensive leg. Revert by hand: put deepseek-v4-pro first again.
+var TWIN_PRIMARY = "@cf/zai-org/glm-5.3-flash";
+var TWIN_PREVIOUS = "@cf/deepseek-ai/deepseek-v4-pro-0813";
 var CHAT_MODELS = [
-  "@cf/deepseek-ai/deepseek-v4-pro-0813",
-  // $1.32/M, 1M ctx, best quality primary
-  "@cf/zai-org/glm-5.3",
-  // $1.40/M, 1.31M ctx, agentic fallback
+  TWIN_PRIMARY,
+  // $0.10/M, 1.31M ctx, owner-chosen primary (TWIN-FLASH-1)
+  TWIN_PREVIOUS,
+  // $1.32/M, 1M ctx, previous primary: per-request fallback and the automatic revert target
   "@cf/moonshotai/kimi-k2.6"
-  // $0.06/M, 262k ctx, cost-efficient fallback
+  // $0.06/M, 262k ctx, cost-efficient last resort
 ];
+var TWIN_REVERT_MIN_CALLS = 10;
+var TWIN_REVERT_FAIL_SHARE = 0.2;
+var TWIN_REVERT_CACHE_MS = 10 * 6e4;
+var _twinOrder = null;
+// The chat model order for this request: CHAT_MODELS, or the previous primary first when today's flash failure share is
+// at or above TWIN_REVERT_FAIL_SHARE over at least TWIN_REVERT_MIN_CALLS calls. One D1 read per isolate per 10 minutes;
+// any read failure keeps CHAT_MODELS (fail-open to the owner's choice, the per-request fallback still answers).
+async function twinChatModels(env) {
+  const now = Date.now();
+  if (_twinOrder && now - _twinOrder.at < TWIN_REVERT_CACHE_MS) return _twinOrder.models;
+  let models = CHAT_MODELS, reverted = false, calls = 0, errors = 0;
+  try {
+    const db = env && env.AUDIT;
+    if (db) {
+      const r = await db.prepare("SELECT COALESCE(SUM(calls),0) AS calls, COALESCE(SUM(errors),0) AS errors FROM ai_call_counters WHERE day = ?1 AND worker = 'personal-api' AND model = ?2").bind(new Date().toISOString().slice(0, 10), TWIN_PRIMARY).first();
+      calls = Number(r && r.calls) || 0;
+      errors = Number(r && r.errors) || 0;
+      if (calls >= TWIN_REVERT_MIN_CALLS && errors / calls >= TWIN_REVERT_FAIL_SHARE) {
+        models = [TWIN_PREVIOUS].concat(CHAT_MODELS.filter(function(m) { return m !== TWIN_PREVIOUS; }));
+        reverted = true;
+      }
+    }
+  } catch (e) {
+  }
+  _twinOrder = { at: now, models, reverted, calls, errors };
+  return models;
+}
+// An empty answer from a model is a failed answer: count it on that model's counter row so the revert rule sees it.
+async function twinCountEmpty(env, model) {
+  try {
+    if (env && env.AUDIT) await env.AUDIT.prepare("UPDATE ai_call_counters SET errors = errors + 1 WHERE day = ?1 AND worker = 'personal-api' AND purpose = 'binding' AND model = ?2").bind(new Date().toISOString().slice(0, 10), model).run();
+  } catch (e) {
+  }
+}
+// glm models reason at full effort by default and can spend the whole budget before answering (qnfo-research-exec aiText,
+// qnfo-ops 4155): ask for low effort, and retry once without the field if a model rejects it.
+function twinRunOpts(model, base) {
+  const o = Object.assign({}, base);
+  if (/^@cf\/zai-org\/glm-/.test(model)) o.reasoning_effort = "low";
+  return o;
+}
+async function twinRun(env, model, base, runOpts) {
+  const o = twinRunOpts(model, base);
+  try {
+    return await env.AI.run(model, o, runOpts);
+  } catch (e) {
+    // Only a rejected parameter is retried without the field; any other error goes straight to the next model.
+    const _em = String(e && e.message || e);
+    if (!o.reasoning_effort || /timeout|abort|3046/i.test(_em) || !/reasoning|parameter|field|unknown|invalid|unexpected/i.test(_em)) throw e;
+    delete o.reasoning_effort;
+    return await env.AI.run(model, o, runOpts);
+  }
+}
 var BRIEF_MODELS = [
   "@cf/zai-org/glm-5.3-flash",
   // $0.10/M, 1.31M ctx, fast + cheap for summaries
@@ -45,7 +106,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.7.2-ai-attr"; // 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
+var VERSION = "4.8.0-twin-flash"; // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
 // FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
 // <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
 // any script loaded here can read it; a remote script from a shared, open worker would put calendar write access and
@@ -2039,11 +2100,11 @@ async function upstreamChat(env, system, messages, temperature, outTokensParam, 
   const errors = [];
   const outTokens = outTokensParam || DEFAULT_MAX_TOKENS;
   const hasImg = countImages(msgs) > 0;
-  let chatModels = useBriefModels ? BRIEF_MODELS : CHAT_MODELS;
+  let chatModels = useBriefModels ? BRIEF_MODELS : await twinChatModels(env);
   if (hasImg) chatModels = VISION_MODELS;
   for (const model of chatModels) {
     try {
-      const resp = await env.AI.run(model, { messages: msgs, temperature, max_tokens: outTokens }, { gateway: { id: "default" }, signal: AbortSignal.timeout(tmo) });
+      const resp = await twinRun(env, model, { messages: msgs, temperature, max_tokens: outTokens }, { gateway: { id: "default" }, signal: AbortSignal.timeout(tmo) });
       let content = parseResp(resp);
       const usage = usageOf(resp);
       let ct = usage.output_tokens || usage.completion_tokens || 0;
@@ -2068,6 +2129,7 @@ async function upstreamChat(env, system, messages, temperature, outTokensParam, 
         };
       }
       errors.push(model + ":empty");
+      await twinCountEmpty(env, model);
     } catch (e) {
       errors.push(model + ":" + (e && e.message || e));
     }
@@ -3979,18 +4041,26 @@ var PersonalTwinAgent = class {
     try { const _t = new Date().toISOString().slice(0, 10); let _b = this._getState("morning_brief_" + _t); if (!_b) _b = await this._buildBrief(); if (_b) _briefCtx = String.fromCharCode(10) + String.fromCharCode(10) + "TODAY (" + _t + ") DATA ONLY - events: " + ((_b.events || []).join("; ") || "none") + ". open tasks: " + ((_b.tasks || []).join("; ") || "none") + "."; } catch (e) {}
     try { const _pr = await this.env.PERSONAL.prepare("SELECT label, statement FROM profile WHERE facet IN ('identity','likes','filters') AND confidence >= 0.9 ORDER BY facet LIMIT 6").all(); if (_pr.results && _pr.results.length) _briefCtx += String.fromCharCode(10) + "PROFILE (DATA ONLY): " + _pr.results.map(function(r) { return (r.label || "fact") + ": " + String(r.statement || "").slice(0, 140); }).join(" | "); } catch (e) {}
     const messages = [{ role: "system", content: "You are Rowan's durable personal twin agent \u2014 stateful, context-aware, on Cloudflare Durable Objects. Persistent memory across sessions. Answer personal questions directly and concisely. PERSONAL-QNFO-SEPARATION-1: never reference research papers or QNFO research data." + _briefCtx }, ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })), { role: "user", content: uc }];
-    try {
-      const resp = await __aiAttrEnv(this.env, "personal-api", "AI", "AUDIT").AI.run("@cf/deepseek-ai/deepseek-v4-pro-0813", { messages, max_tokens: 4096, temperature: 0.7 });
-      let content = "";
-      if (resp && resp.response) content = resp.response;
-      else if (resp && resp.choices && resp.choices[0]) content = resp.choices[0].message && resp.choices[0].message.content || "";
-      this._appendMsg(sid, "assistant", content);
-      return { content, model: "@cf/deepseek-ai/deepseek-v4-pro-0813" };
-    } catch (e) {
-      const em = "PersonalTwinAgent error: " + (e.message || String(e));
-      this._appendMsg(sid, "assistant", em);
-      return { content: em, model: "error" };
+    // TWIN-FLASH-1: the same model order as the chat route (owner-chosen primary, automatic revert), with fallback.
+    const _env = __aiAttrEnv(this.env, "personal-api", "AI", "AUDIT");
+    const _errs = [];
+    for (const _m of await twinChatModels(_env)) {
+      try {
+        const resp = await twinRun(_env, _m, { messages, max_tokens: 4096, temperature: 0.7 });
+        const content = parseResp(resp);
+        if (content) {
+          this._appendMsg(sid, "assistant", content);
+          return { content, model: _m };
+        }
+        _errs.push(_m + ":empty");
+        await twinCountEmpty(_env, _m);
+      } catch (e) {
+        _errs.push(_m + ":" + (e && e.message || String(e)));
+      }
     }
+    const em = "PersonalTwinAgent error: " + _errs.join("; ").slice(0, 300);
+    this._appendMsg(sid, "assistant", em);
+    return { content: em, model: "error" };
   }
 };
 export {
