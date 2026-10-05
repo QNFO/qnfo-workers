@@ -940,7 +940,8 @@ async function benchSourceProbe(request, ctx) {
 //   - a patent qualifies when its text cites a US provisional application (60/, 61/, 62/ or 63/ series) AND its own
 //     application was filed within 366 days of the earliest related filing date, i.e. it claims the provisional directly
 //     rather than through a continuation chain (what an AI-drafted provisional would be measured against);
-//   - the first 10 qualifying patents per field are kept, at most 40 documents are read per field.
+//   - the first 10 qualifying patents per field are kept; hits are pre-filtered on their own dates, at most 15 search
+//     pages of 20 and 40 documents are read per field.
 // Stored once in R2 at benchmark/dataset.json with the query, the rule and verbatim abstract and claims text. GET answers
 // the stored summary; POST builds it only when it is missing (a build lock stops concurrent builds), so the endpoint cannot
 // be used to hammer the USPTO. No user input reaches a USPTO request. No model is called: the drafting and scoring steps are
@@ -952,6 +953,7 @@ var BENCH_FIELDS = [{ key: "ml", cpc: "G06N", label: "machine learning and AI (C
 var BENCH_WINDOW = { from: "20250101", to: "20250630" };
 var BENCH_PER_FIELD = 10;
 var BENCH_MAX_READ = 40;
+var BENCH_MAX_PAGES = 15;
 var BENCH_PROV_RX = /[Pp]rovisional (?:[Pp]atent )?[Aa]pplication(?:s)?,? (?:[Ss]er(?:ial)?\.? )?(?:[Nn]o\.? ?|[Nn]umber )?(6[0-3]\/\d{3},?\d{3})/;
 function benchText(x) {
   return String(x || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
@@ -1007,13 +1009,21 @@ async function ppubsDoc(ss, hit, queryId) {
 async function benchBuildField(f) {
   var ss = await ppubsSession();
   var q = f.cpc + '$.cpc. AND @pd>="' + BENCH_WINDOW.from + '"<="' + BENCH_WINDOW.to + '"';
-  var kept = [], skipped = {}, start = 0, read = 0;
-  while (kept.length < BENCH_PER_FIELD && read < BENCH_MAX_READ) {
+  var kept = [], skipped = {}, start = 0, read = 0, pages = 0;
+  while (kept.length < BENCH_PER_FIELD && read < BENCH_MAX_READ && pages < BENCH_MAX_PAGES) {
     var page = await ppubsSearch(ss, q, start, 20);
     if (!page.hits.length) break;
+    pages++;
     for (var h of page.hits) {
       if (kept.length >= BENCH_PER_FIELD || read >= BENCH_MAX_READ) break;
       if (h.type && h.type !== "USPAT") continue;
+      // Pre-filter on the search hit's own dates, before any document read: most granted patents in a window descend from
+      // decade-old families (2026-10-05 live run: A61B kept 0 of 40 reads), so only a hit whose earliest related filing is
+      // within 366 days of its own filing is read. The same rule is checked again on the document in benchQualify.
+      var rel0 = (h.relatedApplFilingDate || []).slice().sort()[0];
+      if (!rel0) { skipped["no related application"] = (skipped["no related application"] || 0) + 1; continue; }
+      var g0 = benchDays((h.applicationFilingDate || [])[0], rel0);
+      if (g0 === null || g0 < 0 || g0 > 366) { skipped["not a direct claim to the provisional"] = (skipped["not a direct claim to the provisional"] || 0) + 1; continue; }
       read++;
       var qv = benchQualify(h, await ppubsDoc(ss, h, page.queryId));
       if (qv.ok) kept.push(qv.row);
@@ -1021,11 +1031,11 @@ async function benchBuildField(f) {
     }
     start += page.hits.length;
   }
-  return { key: f.key, label: f.label, query: q, read: read, kept: kept.length, skipped: skipped, patents: kept };
+  return { key: f.key, label: f.label, query: q, pages: pages, read: read, kept: kept.length, skipped: skipped, patents: kept };
 }
 function benchAssemble(fields) {
   var total = fields.reduce(function(a, x) { return a + x.kept; }, 0);
-  return { schema: "ipatent-benchmark-dataset/v1", built_at: new Date().toISOString(), built_by: "qnfo-ipatent " + VERSION + " BENCH-DATASET-1", source: "USPTO Patent Public Search API (ppubs.uspto.gov/api), no key", window: BENCH_WINDOW, rule: "granted USPAT, CPC subclass per field, published in the window, newest first; kept when the text cites a US provisional (60-63 series) and the application was filed within 366 days of the earliest related filing; first " + BENCH_PER_FIELD + " per field, at most " + BENCH_MAX_READ + " documents read per field", documents_read: fields.reduce(function(a, x) { return a + x.read; }, 0), patents_total: total, complete: total === BENCH_PER_FIELD * BENCH_FIELDS.length, fields: fields };
+  return { schema: "ipatent-benchmark-dataset/v1", built_at: new Date().toISOString(), built_by: "qnfo-ipatent " + VERSION + " BENCH-DATASET-1", source: "USPTO Patent Public Search API (ppubs.uspto.gov/api), no key", window: BENCH_WINDOW, rule: "granted USPAT, CPC subclass per field, published in the window, newest first; kept when the text cites a US provisional (60-63 series) and the application was filed within 366 days of the earliest related filing; first " + BENCH_PER_FIELD + " per field; search hits are pre-filtered on their own filing dates, at most " + BENCH_MAX_PAGES + " search pages of 20 and " + BENCH_MAX_READ + " documents read per field", documents_read: fields.reduce(function(a, x) { return a + x.read; }, 0), patents_total: total, complete: total === BENCH_PER_FIELD * BENCH_FIELDS.length, fields: fields };
 }
 function benchSummary(ds) {
   return { schema: ds.schema, built_at: ds.built_at, built_by: ds.built_by, source: ds.source, window: ds.window, rule: ds.rule, documents_read: ds.documents_read, patents_total: ds.patents_total, complete: ds.complete, fields: (ds.fields || []).map(function(f) { return { key: f.key, label: f.label, query: f.query, read: f.read, kept: f.kept, skipped: f.skipped, patents: (f.patents || []).map(function(p) { return { guid: p.guid, title: p.title, published: p.published, provisional_no: p.provisional_no, provisional_filed: p.provisional_filed, filed: p.filed, filing_gap_days: p.filing_gap_days, claims_chars: p.claims_chars }; }) }; }), r2_key: BENCH_DATASET_KEY };

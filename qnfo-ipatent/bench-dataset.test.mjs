@@ -92,6 +92,7 @@ ok(ds.patents_total === 6 && ds.complete === false, "a short field is reported, 
 ok(!JSON.stringify(j).includes("steps of doing things"), "the HTTP answer is a summary; claims text stays in R2");
 ok(calls.every((c) => /^https:\/\/ppubs\.uspto\.gov\/api\//.test(c.url)), "every request goes to the USPTO API");
 ok(aiCalls === 0, "no model is called");
+ok(!calls.some((c) => /highlightSections\/US-2-B2/.test(c.url)), "a continuation chain is skipped on its search dates, before any document read");
 
 calls.length = 0;
 r = await req("POST"); j = await r.json();
