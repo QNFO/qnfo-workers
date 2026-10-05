@@ -237,7 +237,12 @@ let nc = act(task(), noChecks);
 ok(nc.action === "wait" && nc.mark && nc.mark.nochecks_sha === "h1" && nc.mark.nochecks_since === new Date(NOW).toISOString(), "no required check on a new head: wait and start the 3h clock (no empty commit, no integrity fetch)", nc);
 ok(act(task({ nochecks_sha: "h1", nochecks_since: ago(2) }), noChecks).action === "wait" && !act(task({ nochecks_sha: "h1", nochecks_since: ago(2) }), noChecks).mark, "inside 3h: keep waiting, the clock is not reset");
 nc = act(task({ nochecks_sha: "h1", nochecks_since: ago(4) }), noChecks);
-ok(nc.action === "refuse" && /within 3h/.test(nc.why) && /GITHUB_TOKEN/.test(nc.why), "no required check 3h after the runner first saw the head: refuse, naming the likely cause", nc);
+ok(nc.action === "reopen" && /within 3h/.test(nc.why) && nc.mark.nochecks_sha === "h1+reopened" && nc.mark.nochecks_since === new Date(NOW).toISOString(), "MERGE-NOCHECKS-REOPEN-1: no required check 3h after the runner first saw the head: close and reopen once with the fleet token (no model call)", nc);
+ok(act(task({ nochecks_sha: "h1+reopened", nochecks_since: ago(1) }), noChecks).action === "wait", "after the reopen the clock runs again");
+nc = act(task({ nochecks_sha: "h1+reopened", nochecks_since: ago(4) }), noChecks);
+ok(nc.action === "refuse" && /nor within 3h after the runner closed and reopened/.test(nc.why), "still no check 3h after the reopen: refuse, naming both waits", nc);
+nc = act(task({ nochecks_sha: "h1", nochecks_since: ago(1) }), g({ checks: [{ id: 9, name: "CodeQL", status: "completed", conclusion: "success" }], integrity: undefined, pr: prJson({ mergeable: false, mergeable_state: "dirty" }) }));
+ok(nc.action === "refuse" && nc.stale_check === true && /conflicts with main/.test(nc.why), "NOCHECKS-CONFLICT-1: no checks on a dirty PR is a stale base at once (PR 597), not a 3h wait", nc);
 ok(act(task({ nochecks_sha: "h0", nochecks_since: ago(4) }), noChecks).mark.nochecks_sha === "h1", "a new head restarts the clock");
 const merged = act(task(), g({ pr: prJson({ merged: true, state: "closed", merged_by: { login: "rwnq8" } }) }));
 ok(merged.action === "reconcile" && merged.status === "merged" && merged.by === "gh:rwnq8", "a PR a person merged is reconciled with who merged it");
@@ -374,8 +379,9 @@ seedWorkerPr(401, BRANCH, "h1");
 gh.files[401].push({ filename: "scripts/x.py", status: "modified" });
 r = J(await W.codeMergeTick(env, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(r.decided[0].action === "refuse" && row.status === "needs_human" && /^merge-runner: the branch changes/.test(row.last_error) && gh.merges.length === 0 && gh.commits.length === 0, "an extra file: needs_human with the reason, nothing pushed, no merge", row);
-ok(gh.comments.length === 1 && gh.comments[0].pr === 401 && /did not merge this pull request/.test(gh.comments[0].body), "the refusal is explained on the PR");
+ok(r.decided[0].action === "refuse" && row.status === "failed" && /^merge-runner: the branch changes/.test(row.last_error) && gh.merges.length === 0 && gh.commits.length === 0, "an extra file: failed (not an owner card) with the reason, nothing pushed, no merge", row);
+ok(gh.comments.length === 1 && gh.comments[0].pr === 401 && /did not merge this pull request/.test(gh.comments[0].body) && /handed to the fleet/.test(gh.comments[0].body), "the refusal is explained on the PR");
+ok(/CODE-TASK-MERGE-RUNNER-1: code task ct_abcdefghijklmn was refused by the merge runner/.test(one("SELECT description FROM agent_issues WHERE id = 50").description) && one("SELECT status FROM agent_issues WHERE id = 50").status === "open", "MERGE-RUNNER-REFUSAL-TAXONOMY-1: the refusal is noted on the source issue, which stays open for the fleet");
 ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.refused' AND status = 'refused'").n === 1, "the refusal writes one cloud_ops_events row");
 r = J(await W.codeMergeTick(env, { now: NOW + 36e5 }));
 ok(r.decided.length === 0 && gh.comments.length === 1, "a refused task is not re-evaluated or re-commented");
@@ -474,8 +480,14 @@ r = J(await W.codeMergeTick(env, { now: NOW }));
 ok(r.decided[0].action === "wait" && one("SELECT nochecks_sha FROM code_tasks WHERE id = ?", ID).nochecks_sha === "h1", "a PR with no required check: the runner waits and starts the clock");
 r = J(await W.codeMergeTick(env, { now: NOW + 3.5 * 36e5 }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(r.decided[0].action === "refuse" && row.status === "needs_human" && /no required check .* started on h1 within 3h/.test(row.last_error) && gh.commits.length === 0 && gh.merges.length === 0, "3.5h later: refused with the reason, nothing pushed, nothing merged", row);
-ok(gh.comments.length === 1 && /GITHUB_TOKEN/.test(gh.comments[0].body), "the refusal is explained on the PR");
+ok(r.decided[0].action === "reopen" && row.status === "published" && row.nochecks_sha === "h1+reopened" && gh.calls.filter((c) => c === "PATCH /pulls/401").length === 2 && gh.commits.length === 0 && gh.merges.length === 0, "3.5h later: the PR is closed and reopened once with the fleet token, nothing pushed, nothing merged", row);
+ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.reopened'").n === 1, "the reopen writes one cloud_ops_events row");
+r = J(await W.codeMergeTick(env, { now: NOW + 7 * 36e5 }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(r.decided[0].action === "refuse" && row.status === "failed" && /nor within 3h after the runner closed and reopened/.test(row.last_error), "still no check 3.5h after the reopen: refused with the reason and handed to the fleet", row);
+ok(gh.comments.length === 1 && /did not merge/.test(gh.comments[0].body) && one("SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'CODE-MERGE-REFUSED-1: code task ct_abcdefghijklmn%' AND status = 'open'").n === 1, "a direct task's refusal files one CODE-MERGE-REFUSED-1 fleet issue and explains it on the PR");
+await W.codeMergeTick(env, { now: NOW + 8 * 36e5 });
+ok(one("SELECT COUNT(*) n FROM agent_issues WHERE title LIKE 'CODE-MERGE-REFUSED-1:%'").n === 1, "the fleet issue is not filed twice");
 
 // a pushed branch the runner will not open: refused, compare URL kept; a person opens and merges it -> reconciled
 freshDb(); freshGh();
@@ -484,7 +496,7 @@ seedTask({ goal: "[issue #60] kaizen idea", status: "branch_pushed", pr_url: "ht
 gh.branches[BRANCH] = "h1"; seedHead("h1");
 r = J(await W.codeMergeTick(env, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(r.opened[0].action === "refuse" && row.status === "needs_human" && /not a trusted origin/.test(row.last_error) && /\/compare\//.test(row.pr_url) && gh.newPulls.length === 0, "an untrusted branch is not opened as a PR (CI would run it); needs_human, compare URL kept", row);
+ok(r.opened[0].action === "refuse" && row.status === "failed" && /not a trusted origin/.test(row.last_error) && /\/compare\//.test(row.pr_url) && gh.newPulls.length === 0, "an untrusted branch is not opened as a PR (CI would run it); failed and handed to the fleet, compare URL kept", row);
 gh.pulls[470] = prJson({ number: 470, state: "closed", merged: true, merged_by: { login: "rwnq8" }, merged_at: ago(-1), merge_commit_sha: "pm470" });
 r = J(await W.codeMergeTick(env, { now: NOW + 2 * 36e5 }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
@@ -536,9 +548,61 @@ ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.requeue
 sc = await staleCase(MOVED, 0, true);
 ok(sc.rr.decided[0].action === "requeued" && sc.fresh.length === 1, "a conflicting PR on a moved file is re-proposed the same way", sc.rr.decided);
 sc = await staleCase(BASE, 0, false);
-ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "needs_human" && sc.fresh.length === 0, "a failed check while main did NOT change the file stays needs_human (a real failure)", sc.old);
+ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "failed" && sc.fresh.length === 0, "a failed check while main did NOT change the file is a real failure: failed, handed to the fleet", sc.old);
 sc = await staleCase(MOVED, 2, false);
-ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "needs_human" && sc.fresh.length === 0, "after two re-proposals of one goal the runner stops and asks a person", sc.rr.decided);
+ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "failed" && sc.fresh.length === 0, "after two re-proposals of one goal the runner stops and hands it to the fleet", sc.rr.decided);
+
+// ================================================================ 9. CODE-CLOSE-REASON-1: a closure outside the runner records why
+const addCols = () => ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"].forEach((c) => db.exec("ALTER TABLE code_tasks ADD COLUMN " + c));
+freshDb(); freshGh(); addCols();
+db.exec("CREATE TABLE branch_hygiene_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, branch TEXT NOT NULL, sha TEXT, action TEXT NOT NULL, why TEXT, pr INTEGER, archive_ref TEXT, ok INTEGER DEFAULT 1, dry INTEGER DEFAULT 0)");
+seedTask({ goal: "direct task" });
+db.prepare("UPDATE code_tasks SET merge_note = 'GitHub is still computing mergeability' WHERE id = ?").run(ID);
+seedWorkerPr(401, BRANCH, "h1");
+gh.pulls[401].state = "closed"; gh.pulls[401].closed_at = ago(1);
+db.prepare("INSERT INTO branch_hygiene_log (ts, branch, action, why, pr) VALUES (?, ?, 'close-stale-pr', 'open PR idle over 24h with no live code task', 401)").run(ago(1), BRANCH);
+r = J(await W.codeMergeTick(env, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(row.status === "closed" && /closed unmerged by the stale-PR closer \(CYCLE-TIME-1/.test(row.merge_note) && /^closed: /.test(row.last_error) && /last note was: GitHub is still computing/.test(row.merge_note), "a PR closed by CYCLE-TIME-1: the reason names the closer, not the stale wait note", row);
+freshDb(); freshGh();
+seedTask({ goal: "direct task" });
+seedWorkerPr(401, BRANCH, "h1");
+gh.pulls[401].state = "closed"; gh.pulls[401].closed_at = ago(1);
+r = J(await W.codeMergeTick(env, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(row.status === "closed" && /was closed unmerged outside the runner at /.test(row.merge_note), "a PR closed by someone else: the reason says so (no branch_hygiene_log table needed)", row);
+
+// ================================================================ 10. MERGE-RUNNER-VERSION-FORM-1 and CRON-ONLY-VERIFY-1
+const EM = 'var VERSION="2.3.1-itinerary-ingest"/* note */\nvar y = 1;\n';
+const B1 = W.cmBump(EM, "-r");
+ok(B1 && B1.from === "2.3.1-itinerary-ingest" && B1.to === "2.3.2-r" && B1.content.startsWith('var VERSION = "2.3.2-r"/* note */'), "cmBump accepts var VERSION=\"x\" without spaces or semicolon (qnfo-email)", B1);
+const GW = W.cmBump('var VERSION="3.9.3-allowlist";\nz();\n', "-r");
+ok(GW && GW.content.startsWith('var VERSION = "3.9.4-r";'), "cmBump accepts the no-space form with a semicolon (qnfo-gateway)", GW);
+{
+  const B0 = 'var VERSION="2.3.1-x"/* c */\nfunction a() {\n  return 1;\n}\n', N0 = B0.replace('"2.3.1-x"', '"2.3.2-codeagent"').replace("return 1", "return 11");
+  const P0 = W.cmParsePatch(W.hunkPatch("qnfo-e/worker.js", B0, N0))["qnfo-e/worker.js"];
+  const RV = W.cmRevertText(N0.replace('"2.3.2-codeagent"', '"2.3.5-later"'), P0, "-revert-c1");
+  ok(RV && RV.to === "2.3.6-revert-c1" && /return 1;/.test(RV.content), "a no-space VERSION worker is revertible: the inverse applies and main's VERSION is bumped", RV);
+}
+{
+  freshDb(); freshGh(); addCols();
+  db.exec("CREATE TABLE fleet_heartbeat (worker TEXT PRIMARY KEY, version TEXT, ts TEXT, ok INTEGER)");
+  const T3 = "ct_cron00000000x";
+  db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, pr_url, created_at, updated_at, merged_by, merged_at, merge_state, version_to, deployed_at) VALUES (?, 'qnfo-workers', 'qnfo-prober/worker.js', 'direct', 'merged', 'done', 0, ?, 'codeagent-cron00000000', 'https://github.com/QNFO/qnfo-workers/pull/581', ?, ?, 'qnfo-fleet-control', ?, 'deployed', '2.3.11-codeagent', ?)").run(T3, JSON.stringify({ patch: PATCH }), ago(9), ago(5), ago(5), ago(4));
+  db.prepare("INSERT INTO worker_live_audit (worker, http, live_version, note, probed_at) VALUES ('qnfo-prober', NULL, NULL, 'CRON_ONLY', ?)").run(ago(1).replace("T", " ").slice(0, 19));
+  await W.codeMergeTick(env, { now: NOW });
+  const hasEv = !!one("SELECT name FROM sqlite_master WHERE name = 'evolve_candidates'");
+  ok(one("SELECT merge_state FROM code_tasks WHERE id = ?", T3).merge_state === "unverifiable" && (!hasEv || one("SELECT COUNT(*) n FROM evolve_candidates WHERE kind = 'revert'").n === 0) && gh.newPulls.length === 0, "CRON-ONLY-VERIFY-1: a cron-only worker with no heartbeat after the deploy is unverifiable, never reverted on http null", one("SELECT merge_state, merge_note FROM code_tasks WHERE id = ?", T3));
+  db.prepare("UPDATE code_tasks SET merge_state = 'deployed' WHERE id = ?").run(T3);
+  db.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('qnfo-prober', '2.3.11-codeagent', ?, 1)").run(ago(2));
+  await W.codeMergeTick(env, { now: NOW });
+  const v3 = one("SELECT merge_state, merge_note FROM code_tasks WHERE id = ?", T3);
+  ok(v3.merge_state === "verified" && /live 2\.3\.11-codeagent http 200/.test(v3.merge_note), "a cron-only worker whose fleet_heartbeat shows the merged VERSION after the deploy is verified", v3);
+  db.prepare("UPDATE code_tasks SET merge_state = 'deployed' WHERE id = ?").run(T3);
+  db.prepare("UPDATE fleet_heartbeat SET version = '2.3.10-old', ok = 1").run();
+  await W.codeMergeTick(env, { now: NOW });
+  ok(/revert/.test(one("SELECT merge_state FROM code_tasks WHERE id = ?", T3).merge_state), "a heartbeat after the deploy with another VERSION is a real failure and goes the revert way", one("SELECT merge_state, merge_note FROM code_tasks WHERE id = ?", T3));
+}
 
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -15,6 +15,10 @@ binding = "AI"
 binding = "EMAIL"
 service = "qnfo-email"
 environment = "production"
+# EMAIL-CALLER-PROPS-1 (#1923, CLAUDE.md #1703 rule): qnfo-email 2.5.1+ authenticates this binding by ctx.props.caller, so
+# no EMAIL_API_KEY copy is needed (this worker never held one: every EMAIL-path send got 401). Installed by qnfo-ops
+# BINDING-PROPS-APPLY-1 on the canonical deploy.
+props = { caller = "personal-companion" }
 
 [[r2_buckets]]
 binding = "MEDIA"

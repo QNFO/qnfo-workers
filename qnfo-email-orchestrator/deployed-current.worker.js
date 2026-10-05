@@ -2,7 +2,8 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.5.1-inbound-sla"; // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
+var VERSION = "0.5.3-send-retry"; // 0.5.3 CLEARED-SEND-RETRY-1: a cleared reply whose send fails keeps its auto-send marker and is retried up to 3 times (row 56 dead-ended on a 401 on 2026-10-05); the EMAIL binding declares props.caller so qnfo-email 2.5.1+ authenticates this worker without a key copy (#1923 class, CLAUDE.md #1703); 0.5.2 SLA-SES-ENVELOPE-1 (#1957): an Amazon SES message-id envelope (010101a1...-000000@sesmail.<domain>) is a transactional or bulk sender, so INBOUND-SLA-1 closes it as automated instead of holding it as an unknown person (iPostal1 mailbox notices reached the owner queue as "mail:ipostal1.com"; the owner closed the card, note 38). // 0.5.1: a failed send records a unique failure row (same-millisecond failures left a stale claim that read as an acknowledgement) /* 0.5.0 INBOUND-SLA-1 (2026-10-02, pillar: reach): no human inbound message waits more than 72h without a fleet action; category->action map, decision log, kill switch ops_config inbound_sla_enabled, metrics inbound_first_response_h_median_30d + inbound_unactioned_72h. 0.4.3 CAPABILITY-SELF-REPORT-1 */
+var CLEARED_SEND_MAX_TRIES = 3;
 var CAPS = ["reply-drafts", "cadence-log", "email-filters", "inbound-sla"];
 var LIMS = ["cron-only: no public route; the reply-draft pass runs on its */15 and 3-hourly crons, INBOUND-SLA-1 on */15, its metrics on the 3-hourly cron", "never sends outreach or follow-ups; replies only to inbound mail, through qnfo-email /send", "INBOUND-SLA-1 mails nobody outside the research-outreach campaign and never a funder or hiring manager (docs/STRATEGY.md section 5): those messages are held and recorded for the weekly identity review", "publishes this capability row from the cron"];
 var NAMESPACE = "email-orchestrator";
@@ -93,6 +94,9 @@ var SLA_FUNDERS = [
 ];
 var SLA_INTERNAL_RX = /@(qnfo\.org|qnfo\.net|qnfo\.uk|q08\.org|qwav\.(org|tech|net|uk)|q-wave\.tech|qwave\.tech)$/i;
 var SLA_MACHINE_RX = /(^|[^a-z])(no-?reply|do-?not-?reply|mailer-daemon|postmaster|bounces?|notifications?|notify|alerts?|newsletter|news|digest|automated|auto-?confirm|support-noreply|dmarc\w*)([^a-z]|$)|^srs0=/i;
+// SLA-SES-ENVELOPE-1 (#1957): Amazon SES puts its message id in the envelope sender (Return-Path). Every such envelope in
+// qnfo-audit.emails on 2026-10-05 was transactional or bulk mail (iPostal1 notices, conference spam); none was a person.
+var SLA_SES_ENVELOPE_RX = /^[0-9a-f]{16}-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}-[0-9a-f]{6}@/i;
 var SLA_RECEIPT_RX = /thank(s| you) for (your )?(submission|submitting|applying|application|inquiry|enquiry|request|contacting)|application (has been |was )?(received|submitted)|submission (has been |was )?(received|confirmed)|(request|ticket)( #?\s*\S+)? (has been |was )?received|we('ve| have) received your|automatic reply|auto(matic)?[- ]?response|out of (the )?office|delivery status notification|undeliverable/i;
 var SLA_SOLICIT_RX = /(article|manuscript|preprint|papers?)\s+(submission|publication)|(submit|publish|consider)\s+(your\s+)?(article|manuscript|preprint|paper)|invitation to (publish|submit|speak)|call for (papers|submissions?|chapters?|abstracts?)|editorial board|special issue|conference (invitation|registration)|webinar invitation/i;
 var SLA_OPTOUT_RX = /\b(unsubscribe|remove me from|take me off|stop (emailing|contacting|sending)|do not (email|contact|write)|don['\u2019]?t (email|contact|write to) me|opt[- ]?out)\b/i;
@@ -220,6 +224,7 @@ function slaCategorize(f) {
   var auto = String(h["auto-submitted"] || "").toLowerCase();
   if (SLA_INTERNAL_RX.test(addr)) return { category: "automated", detail: "internal sender" };
   if (SLA_MACHINE_RX.test(addr.split("@")[0] || "") || /^srs0=/i.test(addr)) return { category: "automated", detail: "machine sender address" };
+  if (SLA_SES_ENVELOPE_RX.test(addr)) return { category: "automated", detail: "bulk-sender envelope (Amazon SES message id)" };
   if ((auto && auto !== "no") || /bulk|list|junk|auto_reply/i.test(h["precedence"] || "") || h["list-id"] || h["list-unsubscribe"] || h["x-autoreply"] || h["x-autorespond"]) return { category: "automated", detail: "automated or list headers" };
   if (SLA_RECEIPT_RX.test(subj) || SLA_RECEIPT_RX.test(text.slice(0, 300))) return { category: "automated", detail: "receipt or auto-reply" };
   if (SLA_SOLICIT_RX.test(subj) || SLA_SOLICIT_RX.test(text.slice(0, 600))) return { category: "solicitation", detail: "solicitation pattern" };
@@ -649,8 +654,14 @@ var worker_default = {
         if (dry) return { qid: qid, action: "would-send", draft: authored };
         var cr = await env.EMAIL.fetch("https://email/send", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (env.EMAIL_API_KEY || "") }, body: JSON.stringify({ to: row.sender, from: "qnfo@qnfo.org", subject: "Re: " + (row.subject || "(no subject)"), body: authored, reply_to_id: row.email_id }) });
         if (cr && cr.ok) { await this.setDecision(env, qid, "sent", "cleared-draft-sent", authored); return { qid: qid, action: "sent", via: "cleared-draft" }; }
-        await this.setDecision(env, qid, "escalate", "cleared-send-failed:" + (cr ? cr.status : "no-resp"));
-        return { qid: qid, action: "escalate", reason: "cleared-send-failed" };
+        // CLEARED-SEND-RETRY-1 (0.5.3): a failed send keeps the "cleared for auto-send" marker, with a try count, so the
+        // next run retries the row (a 401 here dead-ended row 56 on 2026-10-05); after CLEARED_SEND_MAX_TRIES it is left
+        // escalated with the last status for a person to look at.
+        var tries = (Number((String(row.skip_reason || "").match(/send-failed:\S+ x(\d+)/) || [])[1]) || 0) + 1;
+        var st = cr ? cr.status : "no-resp";
+        if (tries < CLEARED_SEND_MAX_TRIES) await this.setDecision(env, qid, "escalate", "cleared for auto-send; send-failed:" + st + " x" + tries + " " + new Date().toISOString());
+        else await this.setDecision(env, qid, "escalate", "cleared-send-failed:" + st + " x" + tries);
+        return { qid: qid, action: "escalate", reason: "cleared-send-failed", tries: tries };
       }
       var prior = await env.AUDIT_DB.prepare("SELECT id FROM email_reply_queue WHERE lower(sender)=?1 AND id < ?2 AND decision IN ('sent','drafted')").bind(String(row.sender || "").toLowerCase(), qid).first();
       if (prior) { await this.setDecision(env, qid, "skip", "no-repeat"); return { qid: qid, action: "skip", reason: "no-repeat" }; }

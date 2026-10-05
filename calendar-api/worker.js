@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.7.0-host";
+var VERSION = "0.7.1-caller-props"; // 0.7.1 CAL-CALLER-PROPS-1: a service-binding caller named by ctx.props.caller is authorized like a CAL_TOKEN bearer (radar-hub has no CAL_TOKEN secret, so the personal radar posted nothing after 2026-09-23).
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
 // recreated as a separate worker. Its EXECUTE leg already wrote this worker's `calendar` table, and both share the
@@ -298,7 +298,22 @@ function tokenEq(a, b) {
   return d === 0;
 }
 __name(tokenEq, "tokenEq");
-function authorized(request, env) {
+// CAL-CALLER-PROPS-1 (2026-10-05, charter pillar: personal; CLAUDE.md #1703 rule): internal workers authenticate by
+// service-binding props, not by a copy of CAL_TOKEN. radar-hub carries no secrets at all (CAL_TOKEN was lost in a redeploy),
+// so every personal-radar GET/POST here answered 401 and the radar posted 0 events from 2026-09-24 (self_heal_actions
+// calendar-write-path-broken daily). Only someone with deploy rights on the CALLER can set ctx.props, and public requests
+// never carry props, so a binding that declares props = { caller = "<worker>" } is as trusted as the bearer token.
+function internalCaller(ctx) {
+  try {
+    const c = ctx && ctx.props && typeof ctx.props.caller === "string" ? ctx.props.caller : "";
+    return /^[a-z][a-z0-9-]{1,60}$/.test(c) ? c : "";
+  } catch (e) {
+    return "";
+  }
+}
+__name(internalCaller, "internalCaller");
+function authorized(request, env, ctx) {
+  if (internalCaller(ctx)) return true;
   const exp = env.CAL_TOKEN;
   if (!exp) return false;
   return tokenEq(bearerToken(request), exp);
@@ -581,7 +596,7 @@ var worker_default = {
       try { await ensureSchema(env); console.log("calendar-api owner questions:", JSON.stringify(await queueOwnerQuestions(env))); } catch (e) { console.log("calendar-api queueOwnerQuestions error:", e && e.message || e); }
     })());
   },
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     await ensureSchema(env);
     const url = new URL(request.url);
     const method = request.method;
@@ -592,25 +607,25 @@ var worker_default = {
       // PERSONAL-ICS-AUTH-1 (2026-10-01): the tokenised feed URLs are capability links, so /health
       // only returns them to a caller holding CAL_TOKEN.
       const urls = [];
-      for (const p of authorized(request, env) ? PLANES : []) {
+      for (const p of authorized(request, env, ctx) ? PLANES : []) {
         const tok = await env.CAL_DB.prepare("SELECT v FROM calendar_meta WHERE k=?").bind("ics_token_" + p).first();
         urls.push({ plane: p, url: tok && tok.v ? R2_PUBLIC + "/calendar/" + p + "-" + tok.v + ".ics" : null });
       }
       return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["calendar-events", "ics-publish", "notes-intake", "event-feedback", "owner-questions", "host-plane"], limitations: ["reads and writes need the CAL_TOKEN bearer; the public /events.ics serves the qnfo plane only (personal needs CAL_TOKEN), and /health lists feed URLs only to a CAL_TOKEN caller", "ICS feeds are republished to R2 by the hourly :17 cron", "three planes: qnfo, personal and host; host (open-house availability) publishes dates only as all-day Open for guests, no address, names or contact details"], planes: PLANES, notes_intake: { vault: !!env.VAULT, folded_from: "notes-intake 0.1.5" }, ics_publish: { bucket: "qnfo-assets", base: R2_PUBLIC, urls } });
     }
     if (path === "/publish") {
-      if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      if (!authorized(request, env, ctx)) return json({ error: "unauthorized" }, 401);
       const out = await publishICS(env);
       return json({ ok: true, published: out });
     }
     if (path === "/notes/run" && method === "POST") {
-      if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      if (!authorized(request, env, ctx)) return json({ error: "unauthorized" }, 401);
       if (!env.VAULT) return json({ error: "VAULT binding missing" }, 503);
       const r = await notesIntakeRun(env);
       return json({ ok: true, version: VERSION, result: r });
     }
     if (path === "/notes/stats" && method === "GET") {
-      if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      if (!authorized(request, env, ctx)) return json({ error: "unauthorized" }, 401);
       const t = await env.CAL_DB.prepare("SELECT COUNT(*) c FROM notes_intake").first();
       const tt = await env.CAL_DB.prepare("SELECT COUNT(*) c FROM notes_intake WHERE triage_state='needs_triage'").first();
       const q = await env.CAL_DB.prepare("SELECT COUNT(*) c FROM notes_publish_queue WHERE status='pending'").first();
@@ -619,14 +634,14 @@ var worker_default = {
     }
     if (path === "/events.ics") {
       // PERSONAL-ICS-AUTH-1: the personal plane needs CAL_TOKEN; subscribe to it via the tokenised R2 URL.
-      if (plane !== "qnfo" && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      if (plane !== "qnfo" && !authorized(request, env, ctx)) return json({ error: "unauthorized" }, 401);
       const fromIso = toIso(url.searchParams.get("from")) || new Date(Date.now() - 864e5).toISOString();
       const ics = await buildICS(env, plane, fromIso);
       return new Response(ics, { headers: { "content-type": "text/calendar; charset=utf-8" } });
     }
     const mFb = path.match(new RegExp("^/e/([0-9]+)$"));
     if (mFb) return fbHandle(request, env, parseInt(mFb[1], 10), url.searchParams.get("s"));
-    if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+    if (!authorized(request, env, ctx)) return json({ error: "unauthorized" }, 401);
     if (path === "/feedback" && method === "GET") {
       const lim = Math.min(500, Math.max(1, parseInt(url.searchParams.get("limit") || "200", 10) || 200));
       const since = url.searchParams.get("since") || "1970-01-01";

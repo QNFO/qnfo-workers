@@ -23,7 +23,7 @@ function setup(emailResult) {
   const sqls = [];
   const audit = wrap(db); const orig = audit.prepare; audit.prepare = (q) => { sqls.push(q); return orig(q); };
   const EMAIL = { fetch: async (url, init) => { calls.push({ url, body: JSON.parse(init.body), auth: init.headers.Authorization }); return emailResult ? emailResult(calls.length) : new Response("{}", { status: 200 }); } };
-  return { db, env: { AUDIT: audit, EMAIL, EMAIL_API_KEY: "k" }, calls, sqls };
+  return { db, env: { AUDIT: audit, EMAIL }, calls, sqls };
 }
 const noon = new Date("2026-10-06T10:00:00Z").getTime();      // 12:00 Amsterdam
 const lateNight = new Date("2026-10-06T21:30:00Z").getTime(); // 23:30 Amsterdam
@@ -36,7 +36,7 @@ add(T.db, "after-event", "a", "A: did you go?", 5); add(T.db, "after-event", "b"
 let r = await deliverOwnerPrompts(T.env, noon);
 ok(r.sent === 1 && T.calls.length === 1, "exactly one mail per call (" + JSON.stringify(r) + ")");
 ok(T.calls[0].body.subject === "B: did you go?", "lowest priority number goes first");
-ok(T.calls[0].body.handoff === true && T.calls[0].body.to === "rwnquni@outlook.com" && T.calls[0].url === "https://email.internal/send" && T.calls[0].auth === "Bearer k", "owner notice to the owner through the email binding");
+ok(T.calls[0].body.handoff === true && T.calls[0].body.to === "rwnquni@outlook.com" && T.calls[0].url === "https://email.internal/send" && T.calls[0].auth === undefined, "owner notice to the owner through the email binding, authenticated by binding props (no key header)");
 ok(T.db.prepare("SELECT sent_at FROM owner_questions WHERE ref='b'").get().sent_at, "row marked sent");
 await deliverOwnerPrompts(T.env, noon);
 ok(T.calls.length === 2, "second row goes on the next call");
