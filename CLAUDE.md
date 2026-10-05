@@ -99,6 +99,21 @@ because each one was broken at least once; the linked issue holds the evidence.
   and queued tasks no Cloudflare loop read (now `agent_issues` rows, OWNER-NOTES-ROUTE-1); the qnfo-ops `claude-sonnet-4.5` route (2.38.34: no Anthropic upstream anywhere in
   the fleet; a `claude-*` model id routes to the ops model).
 
+## Standing owner grant (OWNER-STANDING-GRANT-1)
+- Owner directive 2026-10-05: "I don't want the 'safest' choice. I want bold autonomous systems that think and act entirely
+  on their own." It extends OWNER-QUEUE-DELEGATION-1 (docs/STRATEGY.md section 5; `pipeline_flags.owner_standing_grant`)
+  and is charter decision rule 9. Without an owner card, a loop or a session may:
+  - retire an idle or low-value worker: PR with a `RETIRED` marker, removal from probes and registries (`service_registry`
+    state `retired`, deploy-targets.txt, registry lists), then cf-ops-actions delete-worker. Idle proof is not required; a
+    dependency check is (binders, URL callers, live readers of the tables only it writes). Stop at the first real dependent
+    and fold it or record it on the issue.
+  - delete an unused D1 database after a verified backup (cf-ops-actions d1-backup, unbind-d1, delete-d1; D1-FOLD-1).
+  - switch a worker to a cheaper model with no A/B test, when it keeps a per-request fallback to the previous model and an
+    automatic revert on errors or empty replies (personal-api TWIN-FLASH-1 is the pattern), recorded on its issue.
+- Unchanged: caps are never raised, no paid model call is added while a `fleet_budget` cap is breached, credentials are not
+  minted or rotated, guards and probes are not weakened, data with no verified backup is never deleted, and governance
+  changes (this file, the charter) land by PR.
+
 ## Open access (OPEN-ACCESS-1)
 - Owner directive 2026-10-01: favor free, open access. The more people see the fleet's data, the more impact the owner makes.
   Do not put reads behind a token, key, login or "owner key", and do not ask the owner to set or enter one. The dashboard

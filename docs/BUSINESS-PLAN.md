@@ -36,8 +36,9 @@ the entire gateway burn.
 
 **Review gate 2026-12-31 (changed 2026-10-01, STRATEGY-1 section 9).** On 2026-12-31 the research layer continues if
 (credibility events at least 2 OR confirmed subscribers at least 50 OR funding secured) AND AI spend is inside the cap.
-Otherwise the fleet shrinks to the selected-works core and the personal layer. **No research data is ever deleted
-automatically**; deletion needs the owner's explicit email confirmation. The +30% pageview test is retired: it measured
+Otherwise the fleet shrinks to the selected-works core and the personal layer. **No research data is ever lost
+automatically**: a store leaves the fleet only after a verified, restorable copy exists (OWNER-STANDING-GRANT-1,
+2026-10-05); deleting data that has no such copy needs the owner's explicit email confirmation. The +30% pageview test is retired: it measured
 traffic volume, which is the wrong objective, and its implementation reported a false pass.
 
 The `shutdown_manifest` rows were updated on 2026-10-01 (verified in D1): row 1 (phase 1) is now this review gate, due

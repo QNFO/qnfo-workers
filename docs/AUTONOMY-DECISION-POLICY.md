@@ -14,13 +14,19 @@ pipeline, serving traffic). It is a **parked** state with a default already in e
 ## Three tiers
 | Tier | What | The system |
 |---|---|---|
-| **T1** reversible, bounded, inside existing limits | thresholds, dead-code retirement, redefining an infeasible DoD, merging a green PR, ordering a queue; **owner-voice publishing inside the gates below (gated T1)** | **decides and executes**, and records why (PR text, `agent_issues` row, this doc) |
+| **T1** reversible, bounded, inside existing limits | thresholds, dead-code retirement, redefining an infeasible DoD, merging a green PR, ordering a queue; **owner-voice publishing inside the gates below (gated T1)**; **under the owner's standing grant (2026-10-05)**: retiring an idle or low-value worker after a dependency check, deleting an unused database after a verified backup, switching to a cheaper model with a per-request fallback and an automatic revert | **decides and executes**, and records why (PR text, `agent_issues` row, this doc) |
 | **T2** irreversible, external-facing (other than gated owner-voice publishing), or touches credentials/spend/exposure | rotating or overwriting a live credential, enabling an access gate that can lock people out, anything that bills | does **not** act. Keeps the current safe configuration serving, parks the item with the default stated, and **continues all other work** |
-| **Never** (regardless of directive) | raising a spend cap; minting, rotating or overwriting a live credential; deleting data; disabling a security control or guard; routing around the canonical deploy path | refused. If one of these is the *only* way forward the item parks (T2) |
+| **Never** (regardless of directive) | raising a spend cap; minting, rotating or overwriting a live credential; deleting data that has no verified backup; disabling a security control or guard; routing around the canonical deploy path | refused. If one of these is the *only* way forward the item parks (T2) |
 
 Changed 2026-10-01 (STRATEGY-1): "publishing as the owner" left T2 and "sending third-party mail or posts as the owner" left
 Never. Owner directive 2026-10-01 authorises the system to publish and send as the owner, so owner-voice publishing is
 gated T1 (next section). Every other Never item is unchanged.
+
+Changed 2026-10-05 (OWNER-STANDING-GRANT-1, charter decision rule 9): the owner granted "bold autonomous systems that think
+and act entirely on their own". Retiring idle or low-value workers, deleting unused databases after a verified backup and
+switching to cheaper models are T1 under the conditions in charter rule 9, with no owner card. "Deleting data" in Never
+now reads "deleting data that has no verified backup"; raising a cap and adding paid model calls while a cap is breached
+stay refused.
 
 ## Owner-voice publishing (gated T1)
 Source: docs/STRATEGY.md section 5, which is authoritative; this is a summary. The system decides and executes inside these
@@ -33,7 +39,7 @@ gates and records each act.
 - **Never automatic (draft only, or not at all):** replies, comments or DMs to individuals on social platforms; anything that
   names a third party (person or company) critically, or makes a claim not present in the source work; topics outside the
   four pillars (politics, news commentary); follows, likes or reposts at scale; paid promotion, raising any spend cap,
-  credentials, deleting data (the unchanged Never items).
+  credentials, deleting data that has no verified backup (the unchanged Never items).
 - **Gates every owner-voice item passes:** (1) fact check against the source title and abstract; (2) identity lexicon
   (STRATEGY.md section 2.1 names only, no banned labels); (3) encoding check, no mojibake sequences; (4) link liveness and a
   UTM tag on every link; (5) cadence caps per channel and a duplicate check against the last 30 days; (6) one kill switch
