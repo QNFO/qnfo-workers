@@ -53,5 +53,22 @@ const FE = { AUDIT_DB: { prepare: (q) => { let a = []; const st = { bind: (...x)
   PERSONAL: { prepare: (q) => { const st = { bind: () => st, first: async () => ({ last_seen: fresh }), all: async () => ({ results: [{ store: "gmail", last_seen: old }, { store: "rowan.quni@outlook.com", last_seen: old }, { store: "rwnquni@outlook.com", last_seen: old }, { store: "qnfo.org", last_seen: fresh }] }) }; return st } } };
 const g = await api.freshnessGuard(FE);
 eq("retired not flagged, live fresh", [g.stale, g.filed, issues.length, g.retired.length], [[], 0, 0, 3]);
+// 6 EMAIL-INDEX-NO-CODES-1: one-time codes stay out of email_index (same rule as personal-api MSGRAPH-NO-CODES-1)
+const S = mkEnv([mk(901, { subject: "Gmail Forwarding Confirmation - Receive Mail from someone@gmail.com" }), mk(902, { subject: "Your verification code" }), mk(903, { subject: "Fleet code for the dashboard" }), mk(904, { subject: "Booking confirmation - Hotel Example" })]);
+const rs = await api.emailIndexSync(S.env);
+eq("codes skipped, booking kept", [rs.inserted, rs.secret, [...S.idx.keys()]], [1, 3, ["m904"]]);
+// 7 FRESHNESS-KEEP-NOTES-1: the daily refresh rewrites only the first line; session notes appended below it survive.
+{
+  const { DatabaseSync } = await import("node:sqlite");
+  const sql = (src.match(/"(UPDATE agent_issues SET description = \?2 \|\|[^"]+)"/) || [])[1];
+  ok("refresh SQL found", !!sql);
+  const d = new DatabaseSync(":memory:");
+  d.exec("CREATE TABLE agent_issues (title TEXT, description TEXT, status TEXT)");
+  d.prepare("INSERT INTO agent_issues VALUES (?,?,?)").run("T", "Newest row: old\nBLOCKED 2026-10-05: owner card 29", "open");
+  d.prepare("INSERT INTO agent_issues VALUES (?,?,?)").run("U", "Newest row: old", "open");
+  d.prepare(sql).run("T", "Newest row: new");
+  d.prepare(sql).run("U", "Newest row: new");
+  eq("notes kept on refresh", d.prepare("SELECT description FROM agent_issues ORDER BY title").all().map((r) => r.description), ["Newest row: new\nBLOCKED 2026-10-05: owner card 29", "Newest row: new"]);
+}
 console.log(JSON.stringify({ version: api.VERSION, failures: fail }));
 if (fail.length) process.exit(1);

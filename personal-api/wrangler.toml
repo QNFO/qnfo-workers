@@ -32,6 +32,13 @@ binding = "PERSONAL"
 database_name = "personal-life"
 database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 
+# WORKERS-AI-ATTRIBUTION-1 (#1833, 4.7.2): counts-only Workers AI attribution rows (ai_call_counters: day, worker, model,
+# calls, tokens, neurons). Nothing personal is written here: chat, mail and notes stay in personal-life (PERSONAL).
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+
 [[vectorize]]
 binding = "VZ"
 index_name = "personal-life"

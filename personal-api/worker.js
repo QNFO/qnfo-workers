@@ -45,7 +45,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.7.0-gcal-ics";
+var VERSION = "4.7.2-ai-attr"; // 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
 // FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
 // <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
 // any script loaded here can read it; a remote script from a shared, open worker would put calendar write access and
@@ -198,7 +198,9 @@ async function loadPrimeContext(env, q, currentThread) {
       lines.push("OPEN REMINDERS / DESIRES (recent):");
       for (const r of op.results) lines.push("- (" + String(r.ts || "").slice(0, 10) + " " + (r.kind || "") + ") " + String(r.content || "").slice(0, 220));
     }
-    const cr = currentThread ? await env.PERSONAL.prepare("SELECT role, content, thread, ts FROM chat WHERE thread != ?1 AND role='assistant' ORDER BY ts DESC LIMIT 3").bind(currentThread).all() : null;
+    // TOOL-TRACE-MEMORY-1 (#1805): rows logged with model tool/mcp-tool are the internal trace ("tool:web_search args={..} => ERROR ..."),
+    // not answers Rowan saw; feeding them back as prior ASSISTANT turns taught the model to answer in tool syntax.
+    const cr = currentThread ? await env.PERSONAL.prepare("SELECT role, content, thread, ts FROM chat WHERE thread != ?1 AND role='assistant' AND COALESCE(model,'') NOT IN ('tool','mcp-tool') ORDER BY ts DESC LIMIT 3").bind(currentThread).all() : null;
     if (cr && cr.results && cr.results.length) {
       lines.push("RECENT CROSS-THREAD ANSWERS (for continuity):");
       for (const r of cr.results) lines.push("- [" + String(r.ts || "").slice(0, 10) + "] " + String(r.content || "").replace(/\s+/g, " ").slice(0, 260));
@@ -2480,7 +2482,8 @@ __name2(logChat, "logChat");
 __name22(logChat, "logChat");
 async function loadThreadMemory(env, thread, clientMessages) {
   try {
-    const rows = await env.PERSONAL.prepare("SELECT role, content FROM chat WHERE thread = ?1 AND role IN ('user','assistant') ORDER BY ts DESC LIMIT 10").bind(thread).all();
+    // TOOL-TRACE-MEMORY-1 (#1805): skip the internal tool-trace rows (model tool/mcp-tool); see loadPrimeContext.
+    const rows = await env.PERSONAL.prepare("SELECT role, content FROM chat WHERE thread = ?1 AND role IN ('user','assistant') AND COALESCE(model,'') NOT IN ('tool','mcp-tool') ORDER BY ts DESC LIMIT 10").bind(thread).all();
     const prior = (rows.results || []).reverse();
     if (!prior.length) return null;
     const clientSet = /* @__PURE__ */ new Set();
@@ -2537,8 +2540,47 @@ async function loadFactsNotes(env) {
 __name(loadFactsNotes, "loadFactsNotes");
 __name2(loadFactsNotes, "loadFactsNotes");
 __name22(loadFactsNotes, "loadFactsNotes");
+// WORKERS-AI-ATTRIBUTION-1 (#1833, ported from qnfo-research-exec #1681): personal-api called env.AI.run directly in five
+// places, so its Workers AI spend reached no fleet counter (ai_call_counters had no personal-api row). The shim returns a
+// shallow env copy whose AI binding records each .run() into qnfo-audit.ai_call_counters (purpose 'binding': calls,
+// errors, ms, tokens, neurons). Only counts and the model id leave the personal plane, never text. Fail-soft; env is never
+// mutated; without the AUDIT binding it is a no-op.
+var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
+function __aiAttrEnv(env, worker, aiKey, dbKey) {
+  try {
+    if (!env || env.__aiAttr) return env;
+    var ai = env[aiKey], db = env[dbKey];
+    if (!ai || typeof ai.run !== "function" || !db) return env;
+    var wrapped = new Proxy(ai, { get: function (t, p) {
+      if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
+      return async function (model, input, opts) {
+        var t0 = Date.now(), ok = 1, res;
+        try { res = await t.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+        finally {
+          try {
+            var u = res && typeof res === "object" && res.usage || {};
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
+            var outTok = Number(u.completion_tokens || u.output_tokens || 0);
+            var r = __AI_ATTR_RATES[String(model)] || [0, 0];
+            var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
+            await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
+              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
+          } catch (e2) {}
+        }
+      };
+    } });
+    var copy = Object.assign({}, env);
+    copy[aiKey] = wrapped;
+    copy.__aiAttr = 1;
+    return copy;
+  } catch (e) {
+    return env;
+  }
+}
 var api_default = {
   async fetch(request, env, ctx) {
+    env = __aiAttrEnv(env, "personal-api", "AI", "AUDIT");
     const url = new URL(request.url);
     const path = url.pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version" } });
@@ -3184,6 +3226,7 @@ var api_default = {
     return json({ error: { message: "not found", type: "invalid_request_error" } }, 404);
   },
   async scheduled(event, env, ctx) {
+    env = __aiAttrEnv(env, "personal-api", "AI", "AUDIT");
     // MSGRAPH-MAIL-1: pull new Outlook.com mail first so the brief built next sees it. A failure here never blocks the brief.
     try { await msSyncAll(env); } catch (e) { console.log("msgraph sync error:", e && e.message || e); }
     // CONNECTION-LEDGER-1: fold new `went` answers (names met) into the Ledger. Never blocks the brief.
@@ -3937,7 +3980,7 @@ var PersonalTwinAgent = class {
     try { const _pr = await this.env.PERSONAL.prepare("SELECT label, statement FROM profile WHERE facet IN ('identity','likes','filters') AND confidence >= 0.9 ORDER BY facet LIMIT 6").all(); if (_pr.results && _pr.results.length) _briefCtx += String.fromCharCode(10) + "PROFILE (DATA ONLY): " + _pr.results.map(function(r) { return (r.label || "fact") + ": " + String(r.statement || "").slice(0, 140); }).join(" | "); } catch (e) {}
     const messages = [{ role: "system", content: "You are Rowan's durable personal twin agent \u2014 stateful, context-aware, on Cloudflare Durable Objects. Persistent memory across sessions. Answer personal questions directly and concisely. PERSONAL-QNFO-SEPARATION-1: never reference research papers or QNFO research data." + _briefCtx }, ...history.slice(-8).map((m) => ({ role: m.role, content: m.content })), { role: "user", content: uc }];
     try {
-      const resp = await this.env.AI.run("@cf/deepseek-ai/deepseek-v4-pro-0813", { messages, max_tokens: 4096, temperature: 0.7 });
+      const resp = await __aiAttrEnv(this.env, "personal-api", "AI", "AUDIT").AI.run("@cf/deepseek-ai/deepseek-v4-pro-0813", { messages, max_tokens: 4096, temperature: 0.7 });
       let content = "";
       if (resp && resp.response) content = resp.response;
       else if (resp && resp.choices && resp.choices[0]) content = resp.choices[0].message && resp.choices[0].message.content || "";
