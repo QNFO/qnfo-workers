@@ -1,7 +1,7 @@
-var VERSION="2.3.1-itinerary-ingest"/* HANDOFF-CLAIM-SHEET-1: every handoffs insert carries a claim_sheet (FRAMEWORK-DOGFOOD-1 trigger rejected them since 2026-09-27); SCHEDULES-LIVE-1 */;
+var VERSION="2.5.0-rebook-cancel"/* REBOOK-CANCEL-1 (#1881 gap D): a confirmation whose booking ref matches an existing row with other dates updates that row and its calendar mirror; a gated cancellation marks them CANCELLED, never deletes;  EMAIL-INDEX-WRITER-1 (#1962): the 07:00 cron copies new qnfo-audit.emails rows into personal-life.email_index (store qnfo.org); RETIRED_STORES;  HANDOFF-CLAIM-SHEET-1: every handoffs insert carries a claim_sheet (FRAMEWORK-DOGFOOD-1 trigger rejected them since 2026-09-27); SCHEDULES-LIVE-1 */;
 const BODY_MAX_TEXT=1e4,BODY_MAX_HTML=2e4;
 export default{async email(m,e,c){const st=Date.now(),h=m.headers,from=m.from,to=m.to,subject=h.get("subject")||"(no subject)",messageId=h.get("message-id")||(Date.now()+"-"+crypto.randomUUID()),receivedAt=new Date().toISOString();const parsed=await parseBody(m.raw),bodyText=(parsed.bodyText||"").slice(0,BODY_MAX_TEXT),bodyHtml=(parsed.bodyHtml||"").slice(0,BODY_MAX_HTML),rawText=parsed.rawText||"",headersJson=JSON.stringify(Object.fromEntries(h.entries())),classification=await classifyInbound(e.AUDIT_DB,from,to);const filter=await applyFilters(e.AUDIT_DB,from,to,subject,bodyText);if(filter.action==="reject"){m.setReject(filter.reason||"rejected");return}const emailId=await storeEmail(e.AUDIT_DB,{messageId,from,to,subject,bodyText,bodyHtml,headersJson,classification,receivedAt,inReplyTo:h.get("in-reply-to")||null,refsHdr:h.get("references")||null});c.waitUntil(archiveRaw(e,{emailId,messageId,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(itineraryIngest(e,{emailId,from,subject,bodyText,bodyHtml,authResults:h.get("authentication-results")||""}));const spam=(filter.action==="spam")||heuristicSpam(from,subject);if(spam){await logAction(e.AUDIT_DB,emailId,"spam",classification,st);return}c.waitUntil(enqueueHumanReply(e,{emailId:emailId,from:from,to:to,subject:subject,bodyText:bodyText,bodyHtml:bodyHtml,receivedAt:receivedAt}));if(String(bodyText||"").trim()||String(bodyHtml||"").trim())c.waitUntil(resolveParseFailures(e.AUDIT_DB,from,subject));c.waitUntil(recordParseFailure(e,{emailId,messageId,from,to,subject,bodyText,bodyHtml,headersJson,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(enqueueHandoff(e,{emailId,from,subject,receivedAt,classification}));try{await processCommand(e,{emailId:emailId,messageId:messageId,inReplyTo:h.get("in-reply-to")||null,from:from,to:to,subject:subject,bodyText:bodyText,authResults:h.get("authentication-results")||""})}catch(err){console.error("processCommand",err&&err.message||err)}
-await logAction(e.AUDIT_DB,emailId,"processed",classification,st)},async scheduled(controller,env,ctx){try{const r=await drainReplyQueue(env);console.log("qnfo-email v2.1.5 drain",JSON.stringify(r))}catch(e){console.error("drain",e&&e.message||e)}try{await replyStallGuard(env)}catch(e){}try{console.log("qnfo-email freshness",JSON.stringify(await freshnessGuard(env)))}catch(e){console.error("freshness",e&&e.message||e)}console.log("qnfo-email v2.1.5 scheduled done")},async fetch(req,e){const u=new URL(req.url),p=u.pathname==="/email"?"/":u.pathname.replace(/^\/email(?=\/)/,"");const J=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json","access-control-allow-origin":"*"}});if(p==="/health")return J({status:"ok",worker:"qnfo-email",version:VERSION,capabilities:["inbound-email", "command-control", "raw-archive", "send", "reply-queue"],limitations:["every route except /health needs API_KEY or GATEWAY_EMAIL_KEY", "commands are accepted only from allowlisted senders (the list is not published)", "queued replies drain on the daily 07:00 cron"],command_control:true,raw_archive:true,mime_guard:true,bindings:{d1:!!e.AUDIT_DB,send_email:!!e.SEND_EMAIL,ops_key:!!e.OPS_KEY},timestamp:new Date().toISOString()});/* OPTIONS-AUTH-1 (2026-10-01): OPTIONS used to skip the key check and fall through to the data routes. */if(req.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET,POST,PATCH,OPTIONS","access-control-allow-headers":"authorization,x-api-key,content-type"}});if(p!=="/health"){const a=req.headers.get("authorization")||"",x=req.headers.get("x-api-key")||"";const ok=(e.API_KEY&&(a==="Bearer "+e.API_KEY||x===e.API_KEY))||(e.GATEWAY_EMAIL_KEY&&(a==="Bearer "+e.GATEWAY_EMAIL_KEY||x===e.GATEWAY_EMAIL_KEY));if(!ok)return J({error:"unauthorized"},401)}try{if(p==="/stats")return J(await stats(e));if(p==="/emails/recent"){const limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),status=u.searchParams.get("status");let sql="SELECT id,message_id,sender,recipient,subject,classification,status,received_at,processing_ms FROM emails",vals=[];if(status){sql+=" WHERE status=?1";vals.push(status)}sql+=" ORDER BY id DESC LIMIT ?"+(vals.length+1);vals.push(limit);const r=await e.AUDIT_DB.prepare(sql).bind(...vals).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/body"){const id=parseInt(u.searchParams.get("id")||"0"),r=await e.AUDIT_DB.prepare("SELECT * FROM emails WHERE id=?1").bind(id).first();return r?J(r):J({error:"not found"},404)}if(p==="/emails/search"){const q="%"+(u.searchParams.get("q")||"")+"%",limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),r=await e.AUDIT_DB.prepare("SELECT id,message_id,sender,recipient,subject,classification,status,received_at FROM emails WHERE subject LIKE ?1 OR sender LIKE ?1 OR body_text LIKE ?1 ORDER BY id DESC LIMIT ?2").bind(q,limit).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/status"&&(req.method==="PATCH"||req.method==="POST")){const b=await req.json().catch(()=>({}));const sid=parseInt(b.id||0),sstat=String(b.status||""),ALLOWED=["received","processed","sent","replied","archived","spam","read","rejected"];if(!sid||!ALLOWED.includes(sstat))return J({ok:false,error:"id and a valid status are required",allowed:ALLOWED},400);await e.AUDIT_DB.prepare("UPDATE emails SET status=?1 WHERE id=?2").bind(sstat,sid).run();return J({ok:true,id:sid,status:sstat})}if(p==="/command"&&req.method==="POST"){try{const b=await req.json().catch(()=>({}));const sender=b.sender||b.from||"",dry=u.searchParams.get("dry")==="1"||b.dry===true,bodyText=b.body||b.command||"",subj=b.subject||"(http command)",row=await lookupSender(e.AUDIT_DB,normalizeAddress(sender));if(!row)return J({ok:false,error:"sender not in command allowlist"},403);const kind=row.kind,pc=parseCommand(bodyText,subj);let result;try{result=await routeCommand(e,pc.verb,pc.commandText,kind)}catch(err){result={ok:false,error:pubErr(err)}}const replyText=formatResult(pc.verb,pc.commandText,result,kind);let sent=false;if(!dry&&e.SEND_EMAIL&&sender){try{await e.SEND_EMAIL.send({to:sender,from:"qnfo@qnfo.org",subject:"Re: "+subj,text:replyText});sent=true}catch(err){result.reply_error=pubErr(err)}}return J({ok:result.ok!==false,verb:pc.verb,kind:kind,dry:dry,reply_sent:sent,result:result,reply:replyText})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/commands"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_commands ORDER BY id DESC LIMIT 50").all();return J({count:(r.results||[]).length,commands:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/command-senders"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_command_senders ORDER BY id").all();return J({senders:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/send"&&req.method==="POST")return await sendApi(req,e,J);if(p==="/queue"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT decision,COUNT(*) c FROM email_reply_queue GROUP BY decision").all();return J({counts:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(req.method==="GET")return J({ok:true,worker:"qnfo-email",version:VERSION,routes:["/health","/stats","/emails/recent","/emails/body","/emails/search","/emails/status","/commands","/command-senders","/send","/command"]});return J({ok:false,error:"not found",path:p,method:req.method,version:VERSION},404)}catch(err){return J({error:pubErr(err)},500)}}};
+await logAction(e.AUDIT_DB,emailId,"processed",classification,st)},async scheduled(controller,env,ctx){try{const r=await drainReplyQueue(env);console.log("qnfo-email v2.1.5 drain",JSON.stringify(r))}catch(e){console.error("drain",e&&e.message||e)}try{await replyStallGuard(env)}catch(e){}try{console.log("qnfo-email email-index",JSON.stringify(await emailIndexSync(env)))}catch(e){console.error("email-index",e&&e.message||e)}try{console.log("qnfo-email freshness",JSON.stringify(await freshnessGuard(env)))}catch(e){console.error("freshness",e&&e.message||e)}console.log("qnfo-email v2.1.5 scheduled done")},async fetch(req,e){const u=new URL(req.url),p=u.pathname==="/email"?"/":u.pathname.replace(/^\/email(?=\/)/,"");const J=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json","access-control-allow-origin":"*"}});if(p==="/health")return J({status:"ok",worker:"qnfo-email",version:VERSION,capabilities:["inbound-email", "command-control", "raw-archive", "send", "reply-queue"],limitations:["every route except /health needs API_KEY or GATEWAY_EMAIL_KEY", "commands are accepted only from allowlisted senders (the list is not published)", "queued replies drain on the daily 07:00 cron"],command_control:true,raw_archive:true,mime_guard:true,bindings:{d1:!!e.AUDIT_DB,send_email:!!e.SEND_EMAIL,ops_key:!!e.OPS_KEY},timestamp:new Date().toISOString()});/* OPTIONS-AUTH-1 (2026-10-01): OPTIONS used to skip the key check and fall through to the data routes. */if(req.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET,POST,PATCH,OPTIONS","access-control-allow-headers":"authorization,x-api-key,content-type"}});if(p!=="/health"){const a=req.headers.get("authorization")||"",x=req.headers.get("x-api-key")||"";const ok=(e.API_KEY&&(a==="Bearer "+e.API_KEY||x===e.API_KEY))||(e.GATEWAY_EMAIL_KEY&&(a==="Bearer "+e.GATEWAY_EMAIL_KEY||x===e.GATEWAY_EMAIL_KEY));if(!ok)return J({error:"unauthorized"},401)}try{if(p==="/stats")return J(await stats(e));if(p==="/emails/recent"){const limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),status=u.searchParams.get("status");let sql="SELECT id,message_id,sender,recipient,subject,classification,status,received_at,processing_ms FROM emails",vals=[];if(status){sql+=" WHERE status=?1";vals.push(status)}sql+=" ORDER BY id DESC LIMIT ?"+(vals.length+1);vals.push(limit);const r=await e.AUDIT_DB.prepare(sql).bind(...vals).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/body"){const id=parseInt(u.searchParams.get("id")||"0"),r=await e.AUDIT_DB.prepare("SELECT * FROM emails WHERE id=?1").bind(id).first();return r?J(r):J({error:"not found"},404)}if(p==="/emails/search"){const q="%"+(u.searchParams.get("q")||"")+"%",limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),r=await e.AUDIT_DB.prepare("SELECT id,message_id,sender,recipient,subject,classification,status,received_at FROM emails WHERE subject LIKE ?1 OR sender LIKE ?1 OR body_text LIKE ?1 ORDER BY id DESC LIMIT ?2").bind(q,limit).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/index-sync"&&req.method==="POST")return J(await emailIndexSync(e));if(p==="/emails/status"&&(req.method==="PATCH"||req.method==="POST")){const b=await req.json().catch(()=>({}));const sid=parseInt(b.id||0),sstat=String(b.status||""),ALLOWED=["received","processed","sent","replied","archived","spam","read","rejected"];if(!sid||!ALLOWED.includes(sstat))return J({ok:false,error:"id and a valid status are required",allowed:ALLOWED},400);await e.AUDIT_DB.prepare("UPDATE emails SET status=?1 WHERE id=?2").bind(sstat,sid).run();return J({ok:true,id:sid,status:sstat})}if(p==="/command"&&req.method==="POST"){try{const b=await req.json().catch(()=>({}));const sender=b.sender||b.from||"",dry=u.searchParams.get("dry")==="1"||b.dry===true,bodyText=b.body||b.command||"",subj=b.subject||"(http command)",row=await lookupSender(e.AUDIT_DB,normalizeAddress(sender));if(!row)return J({ok:false,error:"sender not in command allowlist"},403);const kind=row.kind,pc=parseCommand(bodyText,subj);let result;try{result=await routeCommand(e,pc.verb,pc.commandText,kind)}catch(err){result={ok:false,error:pubErr(err)}}const replyText=formatResult(pc.verb,pc.commandText,result,kind);let sent=false;if(!dry&&e.SEND_EMAIL&&sender){try{await e.SEND_EMAIL.send({to:sender,from:"qnfo@qnfo.org",subject:"Re: "+subj,text:replyText});sent=true}catch(err){result.reply_error=pubErr(err)}}return J({ok:result.ok!==false,verb:pc.verb,kind:kind,dry:dry,reply_sent:sent,result:result,reply:replyText})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/commands"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_commands ORDER BY id DESC LIMIT 50").all();return J({count:(r.results||[]).length,commands:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/command-senders"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_command_senders ORDER BY id").all();return J({senders:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/send"&&req.method==="POST")return await sendApi(req,e,J);if(p==="/queue"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT decision,COUNT(*) c FROM email_reply_queue GROUP BY decision").all();return J({counts:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(req.method==="GET")return J({ok:true,worker:"qnfo-email",version:VERSION,routes:["/health","/stats","/emails/recent","/emails/body","/emails/search","/emails/status","/emails/index-sync","/commands","/command-senders","/send","/command"]});return J({ok:false,error:"not found",path:p,method:req.method,version:VERSION},404)}catch(err){return J({error:pubErr(err)},500)}}};
 function trunc(s,n){return String(s||"").slice(0,n)}function classifyAddress(to){to=String(to||"").toLowerCase();return to.includes("rowan")||to.includes("rwn")?"personal":"general"}
 // EMAIL-CLASSIFICATION-PERSONAL-CATCHALL-1 (#1474, 2026-10-01): the owner alias alone used to make every
 // message "personal", so the class was dominated by conference spam and vendor promos and could not route
@@ -597,9 +597,33 @@ async function itinWrite(env, items, meta) {
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
     var id = "evt-itin-" + await itinHmac(key, [it.code, it.kind, it.start_date, it.disc].join("|"));
-    // A hand-entered row for the same booking and date already feeds the gate and the brief: do not double it.
-    var hand = await env.PERSONAL.prepare("SELECT id FROM events WHERE booking_ref = ?1 AND start_date = ?2 AND category = ?3 AND id NOT LIKE 'evt-itin-%' LIMIT 1").bind(it.code, it.start_date, it.category).first();
-    if (hand) { out.duplicate++; continue }
+    // REBOOK-CANCEL-1: every row of this booking and category, hand-entered or ingested, decides duplicate vs rebooking.
+    var known = [];
+    try { var kr = await env.PERSONAL.prepare("SELECT id, title, start_date FROM events WHERE booking_ref = ?1 AND category = ?2").bind(it.code, it.category).all(); known = kr.results || [] } catch (_) {}
+    var isCancelled = function (r) { return /^CANCELLED /.test(String(r.title || "")) };
+    var exact = known.filter(function (r) { return r.start_date === it.start_date });
+    if (exact.length) {
+      // A row for the same booking and date already feeds the gate and the brief: do not double it, and never resurrect a cancelled one.
+      if (exact.some(function (r) { return r.id === id && !isCancelled(r) })) { /* same id, refresh below */ }
+      else { if (exact.some(isCancelled)) out.cancelled_kept = (out.cancelled_kept || 0) + 1; out.duplicate++; continue }
+    } else {
+      var taken = items.filter(function (o) { return o.code === it.code && o.category === it.category }).map(function (o) { return o.start_date });
+      var cand = known.filter(function (r) { return !isCancelled(r) && taken.indexOf(r.start_date) < 0 });
+      if (it.kind === "flight") {
+        var byNo = cand.filter(function (r) { return String(r.title || "").toLowerCase().replace(/\s+/g, "").indexOf(it.disc) >= 0 });
+        var sameKind = items.filter(function (o) { return o.code === it.code && o.kind === it.kind }).length;
+        cand = byNo.length ? byNo : (sameKind === 1 ? cand : []);
+      }
+      if (cand.length === 1) {
+        var row = cand[0], rc = it.cal, ruid = "trip-" + row.id + "@qnfo.cloud";
+        await env.PERSONAL.prepare("UPDATE events SET title=?2, venue=?3, city=?4, country=?5, start_date=?6, end_date=?7, source=?8, source_subject=?9, notes=?10, ingested_at=?11 WHERE id=?1")
+          .bind(row.id, trunc(it.title, 200), trunc(it.venue, 200), it.city, it.country || "", it.start_date, it.end_date, "email-itinerary:" + meta.gate, trunc(meta.subject, 200), trunc(itinPrivacyScrub(it.notes, it.code), 400), now).run();
+        await env.AUDIT_DB.prepare("INSERT INTO calendar (plane, uid, title, description, location, dtstart, dtend, all_day, url, source, domain, status, created, updated) VALUES ('personal',?1,?2,?3,?4,?5,?6,?7,NULL,'manual','travel','confirmed',datetime('now'),datetime('now')) ON CONFLICT(uid) DO UPDATE SET title=?2, description=?3, location=?4, dtstart=?5, dtend=?6, all_day=?7, status='confirmed', updated=datetime('now')")
+          .bind(ruid, itinPrivacyScrub(rc.title, it.code), itinPrivacyScrub(rc.description, it.code), itinPrivacyScrub(rc.location, it.code), rc.dtstart, rc.dtend || null, rc.all_day).run();
+        out.rebooked = (out.rebooked || 0) + 1; out.ids.push(row.id);
+        continue;
+      }
+    }
     await env.PERSONAL.prepare("INSERT INTO events (id, category, title, venue, city, country, start_date, end_date, amount, currency, booking_ref, source, source_subject, energy, energy_label, notes, ingested_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,NULL,NULL,?9,?10,?11,NULL,NULL,?12,?13) ON CONFLICT(id) DO UPDATE SET title=?3, venue=?4, city=?5, country=?6, start_date=?7, end_date=?8, booking_ref=?9, source=?10, source_subject=?11, notes=?12, ingested_at=?13")
       .bind(id, it.category, trunc(it.title, 200), trunc(it.venue, 200), it.city, it.country || "", it.start_date, it.end_date, it.code, "email-itinerary:" + meta.gate, trunc(meta.subject, 200), trunc(itinPrivacyScrub(it.notes, it.code), 400), now).run();
     var c = it.cal, uid = "trip-" + id + "@qnfo.cloud";
@@ -609,11 +633,49 @@ async function itinWrite(env, items, meta) {
   }
   return out;
 }
+var ITIN_CANCEL_SUBJECT = /cancell?ed|geannuleerd|annul(?:\u00e9e?|e)(?![a-z\u00e0-\u00ff])|storniert/i;
+var ITIN_CANCEL_BODY = /(?:has been|have been|was|is|werd|is|a \u00e9t\u00e9|wurde)\s+(?:cancell?ed|geannuleerd|annul\u00e9e?|storniert)/i;
+function itinCancelIntent(subject, body, parsedCount) {
+  if (ITIN_CANCEL_SUBJECT.test(String(subject || ""))) return true;
+  return parsedCount === 0 && ITIN_CANCEL_BODY.test(String(body || "").slice(0, 4000));
+}
+function itinCodeTokens(subject, body) {
+  var seen = {}, out = [], text = String(subject || "") + "\n" + String(body || "").slice(0, 6000), m;
+  var lab = itinCode(String(body || "")) || itinCode(String(subject || ""));
+  if (lab) { seen[lab] = 1; out.push(lab) }
+  var re = /\b[A-Z0-9]{5,10}\b/g;
+  while ((m = re.exec(text)) && out.length < 30) { var t = m[0]; if (seen[t] || (!/\d/.test(t) && !/^[A-Z]{6}$/.test(t))) continue; seen[t] = 1; out.push(t) }
+  return out;
+}
+// Marks the rows of a known booking CANCELLED (events title prefix, calendar status). Never deletes; unknown refs change nothing.
+async function itinCancel(env, subject, body) {
+  var out = { cancelled: 0, matched: 0 };
+  if (!env.PERSONAL) { out.error = "PERSONAL binding missing"; return out }
+  var codes = itinCodeTokens(subject, body);
+  if (!codes.length) return out;
+  var ph = codes.map(function (_, i) { return "?" + (i + 1) }).join(",");
+  var r = await env.PERSONAL.prepare("SELECT id, title, booking_ref FROM events WHERE booking_ref IN (" + ph + ") AND category IN ('lodging','travel')").bind(...codes).all();
+  var rows = r.results || [];
+  out.matched = rows.length;
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (/^CANCELLED /.test(String(row.title || ""))) continue;
+    await env.PERSONAL.prepare("UPDATE events SET title = 'CANCELLED ' || title, ingested_at = ?2 WHERE id = ?1 AND title NOT LIKE 'CANCELLED %'").bind(row.id, new Date().toISOString()).run();
+    await env.AUDIT_DB.prepare("UPDATE calendar SET status = 'cancelled', title = CASE WHEN title LIKE 'CANCELLED %' THEN title ELSE 'CANCELLED ' || title END, updated = datetime('now') WHERE uid = ?1").bind("trip-" + row.id + "@qnfo.cloud").run();
+    out.cancelled++;
+  }
+  return out;
+}
 async function itineraryIngest(env, x) {
   try {
     var gate = itinGate(env, x.from, x.authResults);
     if (!gate) return { skipped: "not-gated" };
     var items = itinParse(x.subject, x.bodyText, x.bodyHtml, x.from);
+    if (itinCancelIntent(x.subject, x.bodyText || String(x.bodyHtml || "").replace(/<[^>]*>/g, " "), items.length)) {
+      var cr = await itinCancel(env, x.subject, x.bodyText || String(x.bodyHtml || "").replace(/<[^>]*>/g, " "));
+      console.log("itinerary-cancel", JSON.stringify({ email: x.emailId, gate: gate, matched: cr.matched, cancelled: cr.cancelled, error: cr.error || null }));
+      return { cancel: true, matched: cr.matched, cancelled: cr.cancelled, error: cr.error || null };
+    }
     if (!items.length) {
       if (itinLooksLikeBooking(x.subject)) {
         try { await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status) VALUES (?1,?2,'qnfo-email','personal','low','open')").bind("ITINERARY-PARSE-MISS-1: email " + x.emailId + " looked like a booking confirmation but nothing was parsed", "A gated sender (" + gate + ") sent a mail whose subject looks like a booking confirmation, but itinParse returned no flight or hotel. Read audit emails.id=" + x.emailId + " (subject: " + trunc(String(x.subject || "").replace(/[\r\n]+/g, " "), 120) + ") and extend itinParse in qnfo-email/worker.js with a fixture. No row was written to events or calendar.").run() } catch (_) {}
@@ -621,18 +683,58 @@ async function itineraryIngest(env, x) {
       return { parsed: 0 };
     }
     var r = await itinWrite(env, items, { gate: gate, subject: x.subject });
-    console.log("itinerary", JSON.stringify({ email: x.emailId, gate: gate, parsed: items.length, written: r.written, duplicate: r.duplicate, error: r.error || null }));
-    return { parsed: items.length, written: r.written, duplicate: r.duplicate, error: r.error || null };
+    console.log("itinerary", JSON.stringify({ email: x.emailId, gate: gate, parsed: items.length, written: r.written, duplicate: r.duplicate, rebooked: r.rebooked || 0, error: r.error || null }));
+    return { parsed: items.length, written: r.written, duplicate: r.duplicate, rebooked: r.rebooked || 0, error: r.error || null };
   } catch (err) { console.error("itineraryIngest", err && err.message || err); return { error: String(err && err.message || err) } }
 }
 /* SOURCE-FRESHNESS-1 (#1881): rides the existing 07:00 cron. One agent_issues row per ingest source with no new row for
    more than 3 days. The open-title unique index dedupes; the description is refreshed with the current age. */
 var FRESH_LIMIT_DAYS = 3;
+/* EMAIL-INDEX-WRITER-1 (#1962, charter pillar personal): the only credentialed writer for personal-life.email_index is this
+   worker, because it already holds AUDIT_DB (every mail sent to a qnfo.org alias lands in qnfo-audit.emails) and PERSONAL.
+   HONEST LIMIT: the index holds only mail that reaches qnfo.org (aliases, plus owner/booking mail once forwarding rules
+   point at rowan.quni@qnfo.org). It is not a mirror of the owner's Gmail or Outlook mailboxes. No model call, no new cron. */
+var EMAIL_INDEX_STORE = "qnfo.org", EMAIL_INDEX_FOLDER = "qnfo-inbox", EMAIL_INDEX_CAP = 200;
+var RETIRED_STORES = {
+  "gmail": "no credentialed writer; owner-held Microsoft Graph/Google secrets absent; mail reaches the system by forwarding to rowan.quni@qnfo.org",
+  "rowan.quni@outlook.com": "no credentialed writer; owner-held Microsoft Graph/Google secrets absent; mail reaches the system by forwarding to rowan.quni@qnfo.org",
+  "rwnquni@outlook.com": "no credentialed writer; owner-held Microsoft Graph/Google secrets absent; mail reaches the system by forwarding to rowan.quni@qnfo.org"
+};
+function emailIndexTime(t) {
+  var s = String(t || "").trim();
+  if (/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(s)) return s.replace(" ", "T") + ".000000Z";
+  var ms = Date.parse(s);
+  return isNaN(ms) ? s : new Date(ms).toISOString();
+}
+async function emailIndexSync(env) {
+  var out = { store: EMAIL_INDEX_STORE, scanned: 0, already: 0, inserted: 0, capped: false, error: null };
+  if (!env.PERSONAL) { out.error = "PERSONAL binding missing"; return out }
+  try {
+    var have = new Set();
+    var h = await env.PERSONAL.prepare("SELECT message_id FROM email_index WHERE store = ?1 LIMIT 20000").bind(EMAIL_INDEX_STORE).all();
+    (h.results || []).forEach(function (r) { have.add(r.message_id) });
+    // Inbound only: outbound rows are status 'sent', spam is excluded, machine alerts/test rows are noise.
+    var c = await env.AUDIT_DB.prepare("SELECT message_id, sender, subject, received_at, classification, substr(body_text,1,1200) AS body FROM emails WHERE COALESCE(status,'') NOT IN ('spam','sent') AND COALESCE(classification,'') NOT IN ('alerts','test') ORDER BY id DESC LIMIT 3000").all();
+    var now = new Date().toISOString(), rows = c.results || [];
+    out.scanned = rows.length;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r.message_id) continue;
+      if (have.has(r.message_id)) { out.already++; continue }
+      if (out.inserted >= EMAIL_INDEX_CAP) { out.capped = true; break }
+      var summary = String(r.body || "").replace(/\s+/g, " ").trim().slice(0, 300);
+      await env.PERSONAL.prepare("INSERT OR IGNORE INTO email_index (message_id, store, folder, sender, subject, received_at, category, event_id, summary, ingested_at) VALUES (?1,?2,?3,?4,?5,?6,?7,NULL,?8,?9)")
+        .bind(r.message_id, EMAIL_INDEX_STORE, EMAIL_INDEX_FOLDER, trunc(r.sender, 200), trunc(r.subject, 300), emailIndexTime(r.received_at), r.classification || null, summary, now).run();
+      out.inserted++;
+    }
+  } catch (err) { console.error("emailIndexSync", err && err.message || err); out.error = "sync failed (see worker log)" }
+  return out;
+}
 async function freshnessGuard(env) {
-  var rows = [];
+  var rows = [], retired = [];
   try { var a = await env.AUDIT_DB.prepare("SELECT max(datetime(received_at)) AS last_seen FROM emails").first(); rows.push({ source: "qnfo-email inbound (audit.emails)", last: a && a.last_seen }) } catch (_) {}
   if (env.PERSONAL) {
-    try { var s = await env.PERSONAL.prepare("SELECT store, max(datetime(received_at)) AS last_seen FROM email_index GROUP BY store").all(); (s.results || []).forEach(function (r) { rows.push({ source: "email_index store " + r.store, last: r.last_seen }) }) } catch (_) {}
+    try { var s = await env.PERSONAL.prepare("SELECT store, max(datetime(received_at)) AS last_seen FROM email_index GROUP BY store").all(); var seenLive = false; (s.results || []).forEach(function (r) { if (r.store === EMAIL_INDEX_STORE) seenLive = true; if (Object.prototype.hasOwnProperty.call(RETIRED_STORES, r.store)) { retired.push(r.store); return } rows.push({ source: "email_index store " + r.store, last: r.last_seen }) }); if (!seenLive) rows.push({ source: "email_index store " + EMAIL_INDEX_STORE, last: null }) } catch (_) {}
     try { var ev = await env.PERSONAL.prepare("SELECT max(datetime(ingested_at)) AS last_seen FROM events").first(); rows.push({ source: "personal-life.events ingest", last: ev && ev.last_seen }) } catch (_) {}
   }
   var filed = 0, stale = [];
@@ -649,7 +751,7 @@ async function freshnessGuard(env) {
       else await env.AUDIT_DB.prepare("UPDATE agent_issues SET description = ?2 WHERE title = ?1 AND status = 'open'").bind(title, desc).run();
     } catch (_) {}
   }
-  return { checked: rows.length, stale: stale, filed: filed };
+  return { checked: rows.length, stale: stale, filed: filed, retired: retired };
 }
 /* PUBLIC-ERROR-1: authenticated routes returned raw err.message (CodeQL js/stack-trace-exposure); the detail goes to the log only. */
 function pubErr(err) { try { console.error("qnfo-email route error", err && err.message || err) } catch (_) {} return "internal error" }

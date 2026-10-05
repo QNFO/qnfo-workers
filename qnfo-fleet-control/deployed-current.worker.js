@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.115-cycle-time-1"; /* 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.116-idea-buildable-truth"; /* 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -6018,6 +6018,10 @@ function ideaEfficacyMult(eff) {
 // REACH-INTAKE-1: catalog ideas whose edit point is known carry an explicit code-task line and a verbatim anchor, so the code
 // loop takes them through ISSUE-INTAKE-1 (no planner model call; the planner's 8 plans a day are shared fleet-wide). The
 // anchor must occur exactly once in the file (patch mode); a missing anchor makes the task needs_human, never a bad edit.
+// IDEA-BUILDABLE-TRUTH-1 (2026-10-05): "buildable" means the code loop can actually take the idea, i.e. it carries a
+// code-task line. Since REACH-CONTENT-AUTHORED-1 emptied IDEA_BUILD_HINT, every idea marked buildable shipped with no
+// code-task line, so the code loop never built it and it held a WIP slot forever (#1919 #1920 on idea-hub). Ideas with no
+// edit point are filed as NOT AUTO-BUILDABLE and share the single gap slot (IDEA_GAP_MAX), so they cannot crowd out work.
 // REACH-CONTENT-AUTHORED-1 (0.4.103): no build hint for content ideas. On 2026-10-02 the code agent, given a hint to add an
 // iPatent guide page, replaced /guide and credited an invented author with a sample ORCID on legal-adjacent text. It was
 // stopped before merge; the pages were written by hand (qnfo-ipatent 3.9.0 GUIDE_PAGES) and qnfo-ipatent/routes.test.mjs now
@@ -6034,7 +6038,7 @@ function reachIdeasEvaluate(probes, content, extra, efficacy) {
       if (c.skipFlagship && sf.flagship) return;
       if (c.test(p.html, p.ms)) return;
       out.push({ key: IDEA_PREFIX + c.key + " on " + sf.key, check: c.key, surface: sf.key, url: p.url, worker: sf.worker, metric: c.metric,
-        score: Math.round(c.weight * sf.weight * ideaEfficacyMult(eff[c.key]) * 100) / 100, buildable: !IDEA_NOT_BUILDABLE[sf.worker], fix: c.fix,
+        score: Math.round(c.weight * sf.weight * ideaEfficacyMult(eff[c.key]) * 100) / 100, buildable: !IDEA_NOT_BUILDABLE[sf.worker] && false, nobuild: IDEA_NOT_BUILDABLE[sf.worker] ? "deny" : "no-edit-point", fix: c.fix,
         evidence: "GET " + p.url + " -> HTTP " + p.status + " in " + p.ms + " ms; check '" + c.key + "' failed" + (sf.discovered ? " (page found by traffic: " + sf.pv_14d + " RUM views in " + IDEA_DISCOVER_DAYS + " days)" : "") });
     });
   });
@@ -6043,7 +6047,7 @@ function reachIdeasEvaluate(probes, content, extra, efficacy) {
     if (!cat || c.status === 200 || !c.status) return;
     var hint = IDEA_BUILD_HINT[cat.worker] || null;
     out.push({ key: IDEA_PREFIX + "content " + cat.key, check: "content", surface: cat.key, url: cat.url, worker: cat.worker, metric: cat.metric,
-      score: Math.round(cat.weight * 2 * ideaEfficacyMult(eff.content) * 100) / 100, buildable: !IDEA_NOT_BUILDABLE[cat.worker], fix: cat.fix, evidence: "GET " + cat.url + " -> HTTP " + c.status, hint: hint });
+      score: Math.round(cat.weight * 2 * ideaEfficacyMult(eff.content) * 100) / 100, buildable: !IDEA_NOT_BUILDABLE[cat.worker] && !!hint, nobuild: IDEA_NOT_BUILDABLE[cat.worker] ? "deny" : (hint ? "" : "no-edit-point"), fix: cat.fix, evidence: "GET " + cat.url + " -> HTTP " + c.status, hint: hint });
   });
   out.sort(function(a, b) { return b.score - a.score || (b.buildable ? 1 : 0) - (a.buildable ? 1 : 0) || (a.key < b.key ? -1 : 1); });
   return out;
@@ -6084,7 +6088,9 @@ function ideaPriority(f) {
 function ideaDescription(f) {
   return "AUTO-FILED by qnfo-fleet-control REACH-IDEATION-1 (owner directive 2026-10-02: the fleet ideates and builds reach work itself). " +
     "Surface: " + f.url + " (served by " + f.worker + "/worker.js). Evidence: " + f.evidence + ". Idea: " + f.fix + ". Metric it should move: " + f.metric +
-    (f.buildable ? "." : ". NOT AUTO-BUILDABLE: " + f.worker + " is on the code loop's control-plane deny list; a session or the owner builds it.") +
+    (f.buildable ? "." : f.nobuild === "no-edit-point"
+      ? ". NOT AUTO-BUILDABLE: no edit point the code agent may use (REACH-CONTENT-AUTHORED-1 removed the hints); a session builds it."
+      : ". NOT AUTO-BUILDABLE: " + f.worker + " is on the code loop's control-plane deny list; a session or the owner builds it.") +
     " DoD: the live page passes the check; REACH-IDEATION-1 re-probes daily and closes this issue itself with close_evidence. Pillar: reach." +
     (f.buildable && f.hint ? "\nBuild it: " + f.hint.how + ".\ncode-task: repo=qnfo-workers path=" + f.hint.path + "\ncode-anchor: " + f.hint.anchor : "");
 }

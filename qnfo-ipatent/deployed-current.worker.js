@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.3-codeagent"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.5-patent-probe"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -883,6 +883,23 @@ async function handleSuggest(env, url) {
   return json(out);
 }
 __name(handleSuggest, "handleSuggest");
+var BENCH_PROBE_URL = "https://patents.google.com/patent/US11000000B2/en";
+async function benchSourceProbe(request, ctx) {
+  var cache = typeof caches !== "undefined" ? caches.default : null;
+  var key = new Request("https://ipatent.qnfo.org/__bench-source-probe-v1");
+  if (cache) { try { var hit = await cache.match(key); if (hit) return hit; } catch (e) {} }
+  var out = { source: BENCH_PROBE_URL, checked_at: new Date().toISOString() };
+  try {
+    var r = await fetch(BENCH_PROBE_URL, { headers: { "User-Agent": "Mozilla/5.0 (compatible; QNFO-iPatent-benchmark/1.0; +https://ipatent.qnfo.org/)", "Accept": "text/html" } });
+    var h = await r.text();
+    out.status = r.status; out.bytes = h.length;
+    out.claims_found = /class="claim"|itemprop="claims"/.test(h);
+    out.provisional_ref_found = /[Pp]rovisional/.test(h);
+  } catch (e) { out.error = String(e && e.message || e).slice(0, 200); }
+  var res = new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600" } });
+  if (cache && ctx && ctx.waitUntil) { try { ctx.waitUntil(cache.put(key, res.clone())); } catch (e) {} }
+  return res;
+}
 // GUIDE-PAGES-1 (3.9.0): the iPatent guide family as data, rendered by one template. Attribution, dates, licence, share
 // card, canonical and structured data come from renderGuidePage, never from a page entry, so an automated edit cannot
 // invent an author, an ORCID, a date or a copyright line (2026-10-02: a code-agent draft did all four and replaced
@@ -923,6 +940,14 @@ var GUIDE_PAGES = [
       ["Nonprovisional", "<ul><li>is examined and can become a patent;</li><li>needs claims, a full specification, drawings where necessary and an inventor's oath or declaration (35 U.S.C. 111(a), 115);</li><li>costs several times as much in USPTO fees (filing, search and examination), before any attorney's fees: see the <a href=\"https://www.uspto.gov/learning-and-resources/fees-and-payment/uspto-fee-schedule\" rel=\"noopener\">USPTO fee schedule</a>.</li></ul>"],
       ["The link between them", "<p>To keep the provisional's date, file a nonprovisional (or an international PCT application) that claims its benefit within twelve months (35 U.S.C. 119(e)). If that deadline is missed unintentionally, the USPTO can restore the right of priority on a petition filed within fourteen months (37 CFR 1.78(b)). Plan on twelve.</p>"],
       ["Which to file first", "<p>A provisional, when you need a date quickly, are still developing the invention, or need time to judge its commercial value, provided it describes the invention fully. File a nonprovisional directly when the invention is settled and you want examination to start.</p>"]
+    ] },
+  { slug: "file-a-us-provisional", title: "How to file a US provisional patent application yourself", updated: "2026-10-05",
+    description: "The happy path from a finished description to a USPTO filing date: what to upload, what it costs, the 12-month deadline, and what a US filing does and does not secure in Europe.",
+    sections: [
+      ["What you need before you start", "<ul><li>a written description that explains the invention well enough for a skilled person to make and use it (35 U.S.C. 112(a)); it is the only thing the filing date protects;</li><li>drawings wherever they help a reader understand the invention (35 U.S.C. 113);</li><li>the names and residences of every inventor;</li><li>a cover sheet identifying the filing as a provisional application: USPTO form PTO/SB/16, or an application data sheet (37 CFR 1.51(c)(1), 1.76).</li></ul><p>Claims, an oath or declaration and an information disclosure statement are not required for a provisional (35 U.S.C. 111(b)(2); see <a href=\"/guide/claims-in-a-provisional\">claims in a provisional</a>).</p>"],
+      ["The happy path, step by step", "<ol><li><b>Create a USPTO.gov account</b> and open Patent Center, the USPTO's electronic filing system. The USPTO may ask you to verify your identity before you can file; allow a few days for that the first time.</li><li><b>Start a new provisional utility application</b> and upload the cover sheet, the description and the drawings as separate documents.</li><li><b>Choose your entity status.</b> Small entity: generally an individual, a company with fewer than 500 employees, a university or a non-profit that has not licensed the invention to a large entity (37 CFR 1.27). Micro entity: a small entity that also meets an income limit and is named on no more than four earlier applications, not counting provisionals (37 CFR 1.29). Claiming a status you do not qualify for can make a later patent unenforceable, so check before you tick the box.</li><li><b>Pay the filing fee</b>: $325, $130 for a small entity, $65 for a micro entity (USPTO fee schedule since 19 January 2025, 37 CFR 1.16(d)). A description and drawings longer than 100 sheets add an application size fee (37 CFR 1.16(s)).</li><li><b>Keep the electronic acknowledgement receipt.</b> It shows your application number and the date of receipt, which is your filing date; the formal filing receipt follows by post or in Patent Center.</li><li><b>Put the 12-month deadline in your calendar now.</b> The provisional lapses twelve months after filing and that period cannot be extended (35 U.S.C. 111(b)(5), 119(e)); see <a href=\"/guide/provisional-vs-nonprovisional\">provisional vs nonprovisional</a> for what to file before then.</li></ol><p>From the filing date you may describe the invention as \"patent pending\" for what the provisional describes.</p>"],
+      ["What a US provisional secures outside the US", "<p>A US provisional is a regular first filing under the Paris Convention (Art. 4). A European patent application or an international (PCT) application filed within twelve months can claim its date as a priority date (Art. 87 EPC), and the priority date then counts as the filing date when novelty is judged (Art. 89 EPC). So a talk, preprint or sale <i>after</i> the provisional's date does not destroy novelty in Europe for what the provisional describes.</p><p>Four limits matter:</p><ul><li>It covers only what the provisional discloses. The European Patent Office allows priority only for subject matter that a skilled person can derive directly and unambiguously from the earlier filing (Enlarged Board of Appeal, G 2/98). A thin provisional gives a thin priority.</li><li>It does nothing for a disclosure made <i>before</i> its date: Europe has no general grace period (Art. 54, 55 EPC; see <a href=\"/guide/before-you-publish\">before you publish</a>).</li><li>It protects nothing abroad by itself. The European or PCT application must be filed, in your name or your successor's, before the twelve months run out.</li><li>Some countries require their residents to file at home first or to obtain clearance before filing abroad, for example the United Kingdom for inventions in certain sensitive fields (Patents Act 1977, s. 23). Check your own country's rule before filing in the US first.</li></ul>"],
+      ["When to pay for help", "<p>A provisional you file yourself secures a date for what it describes, and nothing more. Before you rely on it for an investment, a public launch or a European filing, have a registered patent attorney or agent check that the description supports everything you will want to claim. In the US, only a registered practitioner or the inventor may prepare and file an application (37 CFR 11.5(b)).</p>"]
     ] },
   // GUIDE-PAGES-APPEND: keep this line unchanged; a new page is one object inserted above it, with sources for every legal statement.
 ];
@@ -1559,6 +1584,7 @@ var LANDING_HTML = `<!DOCTYPE html>
     </div>
     <div id="dlBar" style="display:none;gap:10px;flex-wrap:wrap;margin:0 0 14px">
       <button type="button" id="dlHtml" class="invent" style="width:auto;padding:10px 16px">Download draft (.html)</button>
+      <a href="/guide/file-a-us-provisional" style="display:inline-block;margin-left:10px;font-family:'IBM Plex Mono',monospace;font-size:12px">Next: how to file it as a US provisional</a>
       <button type="button" id="dlPrint" class="invent" style="width:auto;padding:10px 16px">Print / save as PDF</button>
     </div>
     <div class="close-warn" id="closeWarn" style="display:none"></div>
@@ -1587,7 +1613,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       <div class="step">
         <div class="sno">STEP 03 \u2014 OWN</div>
         <h3>Review, then file</h3>
-        <p>Download the draft or print it to PDF and take it to a registered practitioner. Nothing is kept unless you ask for a private copy.</p>
+        <p>Download the draft or print it to PDF, then <a href="/guide/file-a-us-provisional">file it at the USPTO yourself</a> for $65 to $325, or take it to a registered practitioner first. Nothing is kept unless you ask for a private copy.</p>
       </div>
     </div>
   </section>
@@ -1955,6 +1981,10 @@ var qnfo_ipatent_default = {
       }
       if (path === "/api/metrics" && request.method === "GET") return handleMetrics(env);
       if (path === "/api/subscribe" && request.method === "POST") return handleSubscribe(request);
+      // BENCH-SOURCE-PROBE-1 (3.9.5, #1779): can the fleet read issued-patent text server-side without a USPTO key? Fetches ONE
+      // fixed public Google Patents page and reports only status, size and whether claims and a provisional reference were found.
+      // Edge-cached 1 h, so it cannot be used to hammer the source; no user input reaches the URL.
+      if (path === "/api/benchmark/source-probe" && isRead) return benchSourceProbe(request, ctx);
       if (path === "/llms.txt" && isRead) return new Response(LLMS_TXT, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
       if (path === "/" + INDEXNOW_KEY + ".txt" && isRead) return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       if (path === "/robots.txt" && isRead) {
