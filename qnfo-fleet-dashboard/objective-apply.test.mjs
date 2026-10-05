@@ -1,9 +1,11 @@
 // OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 offline suite: drives the real worker's owner routes against an
 // in-memory SQLite D1 (synthetic weights and revisions shaped like the live goals rows) and replays the cron sweep from
-// the worker source. Proves: a balanced weight change applies at once (sai_config, objective-function formula and
-// version, goal adopted, logged); an unbalanced, stale or unknown-term change is refused before anything is written; a
-// non-weight revision is filed as fleet work; a revision ratified elsewhere is applied once by the sweep; reject clears a
-// ratified-but-inapplicable one; a card note and a queued task each become exactly one fleet issue.
+// the worker source. Proves: a balanced weight change applies at once when the owner's emailed-code session ratifies it
+// (sai_config, objective-function formula and version, goal adopted, logged) and is held as proposed for the legacy
+// owner-key cookie (OBJECTIVE-WEIGHT-OWNER-ONLY-1, #1823); an unbalanced, stale or unknown-term change is refused before
+// anything is written; a non-weight revision is filed as fleet work; a weight revision ratified elsewhere with no recorded
+// credential goes back to proposed and is never applied by the sweep; reject clears a ratified-but-inapplicable one; a
+// card note and a queued task each become exactly one fleet issue.
 // Run: node qnfo-fleet-dashboard/objective-apply.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
@@ -25,6 +27,7 @@ CREATE TABLE goals (id INTEGER PRIMARY KEY AUTOINCREMENT, goal_key TEXT UNIQUE N
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT DEFAULT 'optimization',
   priority TEXT DEFAULT 'medium', status TEXT DEFAULT 'open', linked_session TEXT, created_at INTEGER, updated_at INTEGER);
 CREATE TABLE human_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, kind TEXT NOT NULL, note TEXT, until TEXT, ts TEXT DEFAULT (datetime('now')));
+CREATE TABLE owner_sessions (token_hash TEXT PRIMARY KEY, created_ms INTEGER NOT NULL, expires_ms INTEGER NOT NULL, verified_ms INTEGER NOT NULL, revoked INTEGER DEFAULT 0, visitor TEXT);
 CREATE TABLE human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT,
   sev TEXT DEFAULT 'normal', due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT, updated_at TEXT, resolved_at TEXT, resolution TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, desire TEXT, source TEXT, device TEXT, type TEXT, domain TEXT, priority TEXT, summary TEXT, due TEXT, status TEXT,
@@ -76,17 +79,26 @@ ok(r.status === 409 && /sum to 1\.05/.test(j.error) && g(56) === "proposed" && w
 r = await post("/api/owner/objective", { id: 60, decision: "ratify" });
 j = await r.json();
 ok(r.status === 409 && /'charisma' is not a term/.test(j.error) && g(60) === "proposed", "an unknown term is refused");
-// 3. Balanced: applied at once
+// 3. Balanced: OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823) holds it for the legacy OWNER_TOKEN cookie, then the owner's
+// emailed-code session applies it at once
 r = await post("/api/owner/objective", { id: 58, decision: "ratify" });
 j = await r.json();
-ok(r.status === 200 && j.ok && j.outcome === "applied", "a balanced weight change is applied when ratified");
+const logged = (id) => { try { return !!log(id); } catch (e) { return false; } };
+ok(r.status === 403 && j.held === true && j.status === "proposed" && /emailed code/.test(j.error) && g(58) === "proposed" && w("w_autonomy") === 0.2 && !logged(58),"a weight change ratified with the legacy owner-key cookie is held as proposed and nothing is written");
+ok(db.prepare("SELECT credential FROM human_responses WHERE key = 'goals:objective-revision:58' AND kind = 'ratify-held'").get().credential === "owner-key", "the held attempt is recorded with its credential");
+const sessionToken = "cd".repeat(32);
+db.prepare("INSERT INTO owner_sessions (token_hash, created_ms, expires_ms, verified_ms) VALUES (?, ?, ?, ?)").run(createHash("sha256").update(sessionToken).digest("hex"), Date.now(), Date.now() + 36e5, Date.now());
+const postSession = (path, body) => worker.fetch(new Request(ORIGIN + path, { method: "POST", headers: { Cookie: "fleet_cmd=" + sessionToken, "Content-Type": "application/json", "x-fleet-ui": "1", Origin: ORIGIN, "Sec-Fetch-Site": "same-origin" }, body: JSON.stringify(body) }), env, ctx);
+r = await postSession("/api/owner/objective", { id: 58, decision: "ratify" });
+j = await r.json();
+ok(r.status === 200 && j.ok && j.outcome === "applied", "a balanced weight change is applied when the owner's session ratifies it");
 ok(w("w_autonomy") === 0.15 && w("w_self_improv") === 0.2 && w("w_thinking") === 0.15, "sai_config holds the new weights, others untouched");
 const o = obj();
 ok(o.version === 3 && o.statement.includes("SAI = 0.15*autonomy + 0.15*thinking + 0.15*decision + 0.20*self_improv + 0.10*reliability") && o.statement.endsWith("subject to the autonomy-ladder cap. RATIFIED 2026-09-26."), "the objective-function formula is rewritten in place and the version bumped");
-// OBJECTIVE-AUTHORITY-TRUTH-1 (1.17.8): this suite signs in with the legacy OWNER_TOKEN cookie, so the stamp names that
-// credential, not "the owner" (owner-surface.test.mjs covers the emailed-code session, the loop token and no record).
-ok(/goals\.id=58/.test(o.source) && o.ratified_by === "owner-key cookie (fleet.qnfo.org, OWNER_TOKEN holder)", "the objective row names the ratified goal and the credential that ratified it");
-ok(g(58) === "adopted" && log(58).outcome === "applied" && log(58).via === "route:owner-key", "the goal is adopted and the apply logged with its credential");
+// OBJECTIVE-AUTHORITY-TRUTH-1 (1.17.8): the stamp names the credential that acted (owner-surface.test.mjs covers the loop
+// token and no record).
+ok(/goals\.id=58/.test(o.source) && o.ratified_by === "owner (fleet.qnfo.org, emailed code)", "the objective row names the ratified goal and the credential that ratified it");
+ok(g(58) === "adopted" && log(58).outcome === "applied" && log(58).via === "route:owner-session", "the goal is adopted and the apply logged with its credential");
 ok(db.prepare("SELECT COUNT(*) n FROM human_responses WHERE key = 'goals:objective-revision:58' AND kind = 'ratify'").get().n === 1, "the decision is recorded in human_responses");
 const sum = Object.keys(W).reduce((n, k) => n + w(k), 0);
 ok(Math.abs(sum - 1) < 1e-9, "weights still sum to 1.00");
@@ -118,10 +130,11 @@ const api = cx.__api;
 db.prepare("UPDATE goals SET status = 'ratified' WHERE id = 61").run();
 db.prepare("UPDATE goals SET status = 'ratified' WHERE id = 42").run();
 let sw = await api.objectiveRevisionSweep({ AUDIT });
-ok(sw.length === 2 && w("w_governance") === 0.03 && w("w_reliability") === 0.12 && g(61) === "adopted" && log(61).via === "cron:unknown" && obj().version === 4 && obj().ratified_by === "unknown credential", "the sweep applies a revision ratified elsewhere and, with no recorded credential, never names the owner");
+const s61 = sw.find((x) => x.id === 61);
+ok(sw.length === 2 && s61 && s61.outcome === "held" && w("w_governance") === 0.05 && w("w_reliability") === 0.1 && g(61) === "proposed" && !log(61) && obj().version === 3 && obj().ratified_by === "owner (fleet.qnfo.org, emailed code)", "the sweep never applies a weight change ratified elsewhere without the owner's session: it goes back to proposed, unlogged (OBJECTIVE-WEIGHT-OWNER-ONLY-1)");
 ok(log(42).outcome === "not-applicable" && g(42) === "ratified", "the sweep logs a stale ratified revision as not applicable");
 sw = await api.objectiveRevisionSweep({ AUDIT });
-ok(sw.length === 0 && obj().version === 4, "the sweep never applies or retries twice");
+ok(sw.length === 0 && obj().version === 3, "the sweep never applies or retries twice");
 r = await post("/api/owner/objective", { id: 42, decision: "reject" });
 ok(r.status === 200 && g(42) === "rejected", "reject clears a ratified revision that could not be applied");
 // 8. Plan text the card shows

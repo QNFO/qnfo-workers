@@ -270,6 +270,10 @@ jobs:
       # human-only pageviews, a 60 s poll and a public refresh that does not re-measure the whole fleet.
       - name: OWNER-MORNING-1 offline suite (qnfo-fleet-dashboard)
         run: node --no-warnings qnfo-fleet-dashboard/owner-morning.test.mjs
+      # REACH-INGEST-BACKFILL-1 (qnfo-fleet-dashboard 1.21.7, #1711): a day the reach ingest missed in the last 7 is
+      # filled by the next tick (one day per tick).
+      - name: REACH-INGEST-BACKFILL-1 offline suite (qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-fleet-dashboard/reach-backfill.test.mjs
 
       # SAI-COMPOSITE-WEIGHTS-1 (#1739): survival_state.sai and the charter's Autonomy composite are the owner-weighted SAI.
       # The suite locks the scorer's SAI formula to the dashboard's computeSai (parity on a live fixture and 400 random

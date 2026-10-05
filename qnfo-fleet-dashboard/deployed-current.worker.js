@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.21.5-source-restore"; /* 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.21.7-weekday-backfill"; /* 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -1364,6 +1364,22 @@ __name2(loopMaybeSync, "loopMaybeSync");
 __name22(loopMaybeSync, "loopMaybeSync");
 __name222(loopMaybeSync, "loopMaybeSync");
 __name2222(loopMaybeSync, "loopMaybeSync");
+// OUTREACH-WEEKDAY-1 (#1940): whole hours between raw and nowMs that fall on a weekday (UTC); Saturdays and Sundays do
+// not count. Outreach sends Monday to Friday only, so its queue's freshness is judged in these hours.
+function weekdayHoursSince(raw, nowMs) {
+  if (raw == null) return null;
+  let ms = typeof raw === "number" ? raw : Date.parse(String(raw).replace(" ", "T"));
+  if (isNaN(ms) && !isNaN(Number(raw))) ms = Number(raw);
+  if (isNaN(ms)) return null;
+  let sum = 0;
+  for (let cur = ms; cur < nowMs; ) {
+    const d = new Date(cur);
+    const next = Math.min(nowMs, Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
+    if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) sum += next - cur;
+    cur = next;
+  }
+  return Math.round(sum / 36e5);
+}
 async function buildState(env, ctx) {
   const nowMs = Date.now();
   const audits = [];
@@ -1574,6 +1590,9 @@ async function buildState(env, ctx) {
     if (isNaN(ms)) return null;
     return Math.round((nowMs - ms) / 36e5);
   }, "ageOf");
+  const weekdayAgeOf = function(raw) {
+    return weekdayHoursSince(raw, nowMs);
+  };
   const qlook = /* @__PURE__ */ __name222(async function(db, sql) {
     try {
       const g = await d1all(db, sql);
@@ -1632,9 +1651,12 @@ async function buildState(env, ctx) {
     // QUEUE-DRAIN-FRESHNESS-1: the drain sends at a deliberate 8/day cap; judge it by its last send.
     const ls = await qlook(env.AUDIT, "SELECT MAX(sent_at) AS mx FROM outreach_queue WHERE status='sent'");
     const sendAge = ls && !ls.__err ? ageOf(ls.mx) : null;
-    const stale = !gated && open > 0 && age !== null && age > 24 && (sendAge === null || sendAge > 26);
+    // OUTREACH-WEEKDAY-1 (#1940): qnfo-cloud-ops sends outreach once a day, Monday to Friday only (AMS_SCHEDULE
+    // 'outreach', days 1-5), so freshness is judged in weekday hours: a Friday send is not stale on Sunday night.
+    const wAge = weekdayAgeOf(drainable.mx), wSend = ls && !ls.__err ? weekdayAgeOf(ls.mx) : null;
+    const stale = !gated && open > 0 && wAge !== null && wAge > 24 && (wSend === null || wSend > 26);
     queueStats.push({ queue: "outreach_queue", db: "qnfo-audit", open, pending: pend, needs_contact: nc, newest: drainable.mx || null, age_h: age, stale, selector_drift: false, activation: "2026-09-15", drain: "qnfo-cloud-ops/jobOutreach", action: nc > 0 ? nc + " candidates awaiting contact enrichment (no email; not sendable)" : gated ? "external sends gated (kill switch off)" : stale ? "drain due - qnfo-cloud-ops jobOutreach (8/day cap)" : "none" });
-    push({ key: "queue_outreach", label: "Queue outreach_queue", state: gated ? "info" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "drainable=" + open + " (pending=" + pend + ") newest=" + (age === null ? "n/a" : age + "h") + " last-send=" + (sendAge === null ? "n/a" : sendAge + "h") + (gated ? " SEND-GATED (kill switch off)" : stale ? " STALE (>24h, no send in 26h)" : open > 0 ? " draining at 8/day cap, ETA " + Math.ceil(open / 8) + "d" : "") + "; " + nc + " awaiting-contact (undrainable, no email)", ts: drainable.mx || null });
+    push({ key: "queue_outreach", label: "Queue outreach_queue", state: gated ? "info" : stale ? "warn" : open > 0 ? "info" : "ok", detail: "drainable=" + open + " (pending=" + pend + ") newest=" + (age === null ? "n/a" : age + "h") + " last-send=" + (sendAge === null ? "n/a" : sendAge + "h") + (gated ? " SEND-GATED (kill switch off)" : stale ? " STALE (>24 weekday h, no send in 26 weekday h; sends run Mon-Fri)" : open > 0 ? " draining at 8/day cap, ETA " + Math.ceil(open / 8) + "d" : "") + "; " + nc + " awaiting-contact (undrainable, no email)", ts: drainable.mx || null });
   });
   const analytics = await analytics24(env);
   // Errors that all precede the worker's current CODE deploy (last error hour closed before the
@@ -2048,6 +2070,14 @@ __name22(reportCardData, "reportCardData");
 __name222(reportCardData, "reportCardData");
 __name2222(reportCardData, "reportCardData");
 var inflight = null;
+// REFRESH-INFLIGHT-1 (#1942): the shared refresh promise belongs to the invocation that started it. When that invocation
+// is cancelled (a fetch's waitUntil cut off after /api/decision?refresh=1), its 90 s timer never fires and the promise
+// never settles, so every later */15 cron in the isolate awaited it until exceededWallTime (900 s, cpu 0, no subrequest):
+// 4 internalError an hour from 2026-10-04 14:45Z, and nothing after it in scheduled() ran. Reuse is now age-bounded,
+// only the owning promise clears the slot, and the cron starts its own refresh with a bounded await.
+var inflightAt = 0;
+var INFLIGHT_REUSE_MS = 12e4;
+var SCHEDULED_REFRESH_MS = 15e4;
 // WORKER-ERRORS-RECENCY-1: errors inside this window are "active"; older 24h errors are
 // reported as recovered (cleared by a later deploy) or as a warn (no deploy since).
 var ERR_ACTIVE_MS = 3 * 36e5;
@@ -2270,7 +2300,7 @@ async function handleRequest(request, env, ctx) {
       if (!String(b.title || "").trim()) return json({ error: "title required" }, 400);
       if (b.url && !/^https:\/\//.test(String(b.url))) return json({ error: "url must be https" }, 400);
       if (b.url && !safeLink(b.url)) return json({ error: "links to claude.ai / anthropic.com are refused: owner data lives on Cloudflare (NO-CLAUDE-RUNTIME-DEPENDENCY-1)" }, 400);
-      await env.AUDIT.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(slug) DO UPDATE SET title=excluded.title, why=excluded.why, default_in_effect=excluded.default_in_effect, action=excluded.action, url=excluded.url, sev=excluded.sev, due=excluded.due, status='open', resolved_at=NULL, resolution=NULL, updated_at=datetime('now')").bind(b.slug, String(b.title).slice(0, 200), String(b.why || "").slice(0, 400), String(b.default || "").slice(0, 300), String(b.action || "").slice(0, 300), String(b.url || ""), b.sev === "urgent" ? "urgent" : "normal", String(b.due || "").slice(0, 10), String(b.source || "api").slice(0, 60)).run();
+      await env.AUDIT.prepare("INSERT INTO human_actions (slug, title, why, default_in_effect, action, url, sev, due, source) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(slug) DO UPDATE SET title=excluded.title, why=excluded.why, default_in_effect=excluded.default_in_effect, action=excluded.action, url=excluded.url, sev=excluded.sev, due=excluded.due, status='open', resolved_at=NULL, resolution=NULL, updated_at=datetime('now')").bind(b.slug, String(b.title).slice(0, 200), String(b.why || "").slice(0, 400), String(b.default || "").slice(0, 300), String(b.action || "").slice(0, 300), String(b.url || ""), urgentSev(b.sev) ? "urgent" : "normal", String(b.due || "").slice(0, 10), String(b.source || "api").slice(0, 60)).run();
       return json({ ok: true, slug: b.slug });
     }
     return json({ error: "op must be add|resolve" }, 400);
@@ -2282,9 +2312,9 @@ __name2(handleRequest, "handleRequest");
 __name22(handleRequest, "handleRequest");
 __name222(handleRequest, "handleRequest");
 __name2222(handleRequest, "handleRequest");
-async function runRefresh(env, ctx) {
-  if (inflight) return inflight;
-  inflight = (async function() {
+async function runRefresh(env, ctx, opts) {
+  if (inflight && !(opts && opts.fresh) && Date.now() - inflightAt < INFLIGHT_REUSE_MS) return inflight;
+  const p = (async function() {
     const t0 = Date.now();
     // REFRESH-DEADLINE-1 (2026-09-30): buildState fans out to 38 live probes + several
     // CF/GitHub API calls. Under partial degradation a single unresponsive sub-request
@@ -2310,9 +2340,11 @@ async function runRefresh(env, ctx) {
     }));
     return st;
   })().finally(function() {
-    inflight = null;
+    if (inflight === p) inflight = null;
   });
-  return inflight;
+  inflight = p;
+  inflightAt = Date.now();
+  return p;
 }
 __name(runRefresh, "runRefresh");
 __name2(runRefresh, "runRefresh");
@@ -2494,7 +2526,17 @@ var worker_default = {
       // runRefresh already schedules loopMaybeSync (the claimed, single-writer GitHub sync) via
       // waitUntil. The unconditional loopSync that followed here bypassed that claim, so every
       // cron ran the sync twice concurrently (double GitHub traffic, duplicate-comment risk).
-      const st = await runRefresh(env, ctx);
+      // REFRESH-INFLIGHT-1: the cron never joins another invocation's refresh and never waits on its own for more than
+      // SCHEDULED_REFRESH_MS; past that it works from the last saved state, so every step below still runs.
+      let st = await within(runRefresh(env, ctx, { fresh: true }).catch(function() {
+        return null;
+      }), SCHEDULED_BUDGET_MS - SCHEDULED_REFRESH_MS);
+      if (!st) {
+        const prev = await loadState(env).catch(function() {
+          return null;
+        });
+        st = prev && prev.state || { generated_at: (/* @__PURE__ */ new Date()).toISOString(), version: VERSION, issues: [], refresh_error: "REFRESH-INFLIGHT-1: refresh not finished within " + SCHEDULED_REFRESH_MS + "ms" };
+      }
       ctx.waitUntil(within(cmdSweep(env).then(function() {
         return askRetry(env);
       })));
@@ -2509,8 +2551,9 @@ var worker_default = {
       }).catch(function() {
       })));
       // REACH-SIGNALS-INGEST-1 (2026-10-01, #1711): once per UTC day after 02:00Z; throttled inside on the
-      // cloud_ops_events row reach-ingest-<day> (ok = done; partial retried up to 3 attempts).
-      ctx.waitUntil(within(ingestReachSignals(env).catch(function() {
+      // cloud_ops_events row reach-ingest-<day> (ok = done; partial retried up to 3 attempts). REACH-INGEST-BACKFILL-1: then at
+      // most one missed day of the last 7 is ingested.
+      ctx.waitUntil(within(reachIngestTick(env).catch(function() {
       })));
       // Q08-REVIEW-2026-10-31 (#1716): one-shot from the first tick at or after 2026-10-31T00:00Z (a no-op before it, and
       // once ops_config q08_review_2026_10_31 holds a decision); a deferred measurement is retried an hour later.
@@ -3272,6 +3315,37 @@ async function ingestReachSignals(env, opts) {
   await record(out.skipped.length ? "partial" : "ok", "reach ingest " + day + ": " + (summary || "nothing written") + (out.skipped.length ? "; skipped " + out.skipped.length : ""));
   return out;
 }
+// REACH-INGEST-BACKFILL-1 (#1711): a day the cron never ingested (2026-10-04: every tick hung until REFRESH-INFLIGHT-1) is
+// picked up by a later tick: once yesterday's run is settled, the most recent day of the previous REACH_BACKFILL_DAYS with
+// no reach-ingest-<day> row at all is ingested through the same path as the manual POST /api/reach/ingest?day=, one day
+// per tick. A backfilled day writes its own row (ok, partial or error), so no day is attempted twice by this step.
+var REACH_BACKFILL_DAYS = 7;
+async function reachIngestTick(env, opts) {
+  opts = opts || {};
+  const live = await ingestReachSignals(env, opts.nowMs ? { nowMs: opts.nowMs } : {});
+  if (!live || live.not_yet || live.in_progress || live.error) return { live };
+  const yesterday = reachYesterday(opts.nowMs || Date.now());
+  const days = [];
+  for (let i = 1; i <= REACH_BACKFILL_DAYS; i++) days.push(reachShiftDay(yesterday, -i));
+  let have = [];
+  try {
+    have = await d1all(env.AUDIT, "SELECT id FROM cloud_ops_events WHERE id IN (" + days.map(function() {
+      return "?";
+    }).join(",") + ")", days.map(function(d) {
+      return "reach-ingest-" + d;
+    }));
+  } catch (e) {
+    return { live, backfill: { error: reachErr(e) } };
+  }
+  const seen = {};
+  for (const r of have) seen[String(r.id).replace("reach-ingest-", "")] = 1;
+  const missing = days.find(function(d) {
+    return !seen[d];
+  });
+  if (!missing) return { live, backfill: null };
+  const b = await ingestReachSignals(env, Object.assign({ day: missing }, opts.nowMs ? { nowMs: opts.nowMs } : {}));
+  return { live, backfill: { day: missing, written: b && b.written, skipped: b && b.skipped } };
+}
 // Q08-REVIEW-2026-10-31 (agent_issues 1716, docs/STRATEGY.md s7; charter pillar: cost). q08-signal-engine writes an AI
 // essay every 2 hours, and published_pieces.reads counts every GET, bots included, so it cannot decide q08's future. The
 // review measures human page views on q08.org and www.q08.org from Cloudflare Web Analytics (RUM) over the 7 complete UTC
@@ -3612,7 +3686,7 @@ function objRevPlan(statement, weights, objective) {
   if (!stmt) return no("the active objective-function statement has no SAI formula naming exactly these weights.");
   return { kind: "weights", applicable: true, changes, next, statement: stmt, text: "Ratify applies it now: " + changes.map(function(c) {
     return c.term + " " + objRevFmt(c.from) + " -> " + objRevFmt(c.to);
-  }).join(", ") + " (weights sum 1.00); objective-function v" + objective.version + " -> v" + (Number(objective.version) + 1) + "." };
+  }).join(", ") + " (weights sum 1.00); objective-function v" + objective.version + " -> v" + (Number(objective.version) + 1) + ". Only your emailed-code sign-in can ratify a weight change (OBJECTIVE-WEIGHT-OWNER-ONLY-1)." };
 }
 async function objRevContext(env) {
   const w = await d1all(env.AUDIT, "SELECT k, v FROM sai_config WHERE k LIKE 'w\\_%' ESCAPE '\\'");
@@ -3633,6 +3707,36 @@ var OBJREV_RATIFIED_BY = {
   "owner-key": "owner-key cookie (fleet.qnfo.org, OWNER_TOKEN holder)",
   unknown: "unknown credential"
 };
+// OBJECTIVE-CARD-PLAIN-1 (#1944; owner note 2026-10-04 on this card: "I don't understand the ask"): every proposal opens
+// with one plain sentence of what it changes and what Ratify, Reject and no decision each do; the statement and rationale
+// follow unchanged (OBJECTIVE-AUTHORITY-TRUTH-1). An OBJECTIVE-LIMITS-REVIEW-1 proposal names the goal and its ungradable terms.
+function objRevPlain(statement, alignment, plan) {
+  const s = String(statement || ""), al = String(alignment || "");
+  const list = function(m) {
+    return m && !/^\s*none\s*$/i.test(m[1]) ? m[1].trim().replace(/\s*,\s*/g, ", ") : "";
+  };
+  const goal = /^Revise terminal objective ([^:]+):/i.exec(s);
+  let what;
+  if (goal) {
+    const undecidable = list(/no decidable target[^:]*:\s*([^|]+)/i.exec(al)), unseen = list(/not observed[^:]*:\s*([^|]+)/i.exec(al));
+    what = "The fleet cannot tell whether its goal '" + goal[1].trim() + "' is met" + (undecidable ? ": " + undecidable + " have no pass/fail threshold" : "") + (unseen ? (undecidable ? "; " : ": ") + unseen + " are not measured" : "") + ". It asks to give each of them a threshold it can check, or to stop grading the goal on them.";
+  } else if (plan && plan.kind === "weights") {
+    what = "This changes how much each part of the fleet's score counts.";
+  } else {
+    what = "This changes a goal or a rule the fleet works to.";
+  }
+  const yes = plan && plan.kind === "weights" ? plan.applicable ? "Ratify: the new weights take effect at once (your emailed-code sign-in only)." : "As written it cannot be applied, so only Reject is offered." : "Ratify: the fleet opens one work item to make this change and closes it with evidence; nothing changes before then.";
+  return what + " " + yes + " Reject: nothing changes. No decision: the current goals stay in force.";
+}
+// OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823; human_actions #17 decision (c), decided by delegation 2026-10-02 10:45Z): a revision
+// that changes an objective weight is applied only with the owner's emailed-code session. The loop token, the legacy
+// owner-key cookie and a ratification with no recorded credential leave it proposed (the route answers 403 and records a
+// 'ratify-held' decision row; the cron sweep returns it to 'proposed'). Constraint and other revisions stay delegable and
+// are stamped with the credential that acted.
+var OBJREV_WEIGHT_OWNER_MSG = "A weight change needs the owner's own sign-in (emailed code); it stays proposed. Constraint and other revisions can be ratified with this credential (OBJECTIVE-WEIGHT-OWNER-ONLY-1).";
+function objRevWeightAllowed(cred) {
+  return cred === "owner-session";
+}
 // The credential behind an owner-route request: the loop token wins when present (it alone can skip the fresh-code check).
 function ownerCredential(owner) {
   if (owner && owner.loop) return "loop-token";
@@ -3673,6 +3777,11 @@ async function objectiveRevisionApply(env, id, runner, credential) {
   if (!plan.applicable) {
     await log("not-applicable", plan.text, null, null).run();
     return { ok: false, id, outcome: "not-applicable", detail: plan.text };
+  }
+  if (plan.kind === "weights" && !objRevWeightAllowed(cred)) {
+    // Not logged in objective_revision_applies, so the owner can still ratify it later; the card shows it again.
+    await A.prepare("UPDATE goals SET status='proposed', updated_at=datetime('now') WHERE id=?1 AND goal_type='objective-revision' AND status='ratified'").bind(id).run();
+    return { ok: false, id, outcome: "held", detail: OBJREV_WEIGHT_OWNER_MSG + " Credential: " + by + "." };
   }
   if (plan.kind === "work") {
     const title = "OBJECTIVE-REVISION-" + id + ": apply the ratified objective revision";
@@ -3869,6 +3978,11 @@ var WATCHMAKER_OPS = [
     sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'ol-tick-' AND id < 'ol-tick.' AND status IN ('ok', 'degraded')",
     stuck_sql: "SELECT COUNT(*) AS stuck FROM cloud_ops_events j WHERE j.id >= 'jr-outreach-' AND j.id < 'jr-outreach.' AND j.id NOT LIKE 'jr-outreach-learner-%' AND j.ts >= ?1 AND COALESCE(j.status, '') NOT IN ('gated', '') AND NOT EXISTS (SELECT 1 FROM cloud_ops_events a WHERE a.id >= 'ol-alloc-' || substr(j.ts, 1, 10) AND a.id < 'ol-alloc-' || substr(j.ts, 1, 10) || '.')",
     stuck_note: "outreach runs in 48h with no logged learner allocation" },
+  // IDEA-TOPIC-METRIC-1 (qnfo-cloud-ops 1.19.1, #1947): a daily companion of the 06:20 Amsterdam quality-score slot
+  // recomputes idea_topic_concentration_30d; each run writes a job-run row jr-idea-topic-metric-<id> with its status.
+  { key: "idea-topic-metric", what: "Idea topic concentration: share of accepted idea_proposals in the largest keyword cluster over 30 days into idea_topic_concentration_30d (IDEA-TOPIC-METRIC-1, qnfo-cloud-ops daily with the 06:20 Amsterdam quality-score run)", runner: "cron:qnfo-cloud-ops", cadence_h: 24, first_due: "2026-10-07T06:00:00Z",
+    sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'jr-idea-topic-metric-' AND id < 'jr-idea-topic-metric.' AND status = 'ok'",
+    why_sql: "SELECT status FROM cloud_ops_events WHERE id >= 'jr-idea-topic-metric-' AND id < 'jr-idea-topic-metric.' ORDER BY ts DESC LIMIT 1" },
   { key: "job-market-watch", what: "Weekly job-market scan of three boards into handoffs and the vault (radar-hub JOB-MARKET-INLINE-1, Mondays 07:00Z)", runner: "cron:radar-hub", cadence_h: 168, sql: "SELECT MAX(timestamp) AS last FROM handoffs WHERE project_id >= 'job-market-watch-workflow-' AND project_id < 'job-market-watch-workflow.'" },
   { key: "events-radar", what: "Conferences, workshops and calls from the radar sources into events_radar (radar-hub, Mondays 05:00Z; EVENTS-RADAR-CF-DOW-1)", runner: "cron:radar-hub", cadence_h: 168, sql: "SELECT MAX(scanned_at) AS last FROM events_radar" },
   { key: "charter-loop", what: "Charter live block and snapshot (CHARTER-LOOP-1)", runner: "cron:qnfo-fleet-control", cadence_h: 24, first_due: "2026-10-02T06:00:00Z", sql: "SELECT MAX(ts) AS last FROM charter_snapshots" },
@@ -3907,6 +4021,9 @@ var WATCHMAKER_OPS = [
   // whether the op needs a person now); a failed automatic revert in the last 30 days (revert_failed). Columns come from
   // the runner's schema step; until it has run, the query fails and the op counts as unmeasured.
   { key: "branch-hygiene", what: "Deleting merged branches and archiving abandoned ones in qnfo-workers (BRANCH-HYGIENE-1, qnfo-fleet-control hourly)", runner: "cron:qnfo-fleet-control", cadence_h: 1, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'branch-hygiene-tick-' AND id < 'branch-hygiene-tick.' AND status = 'ok'", why_sql: "SELECT status FROM cloud_ops_events WHERE id >= 'branch-hygiene-tick-' AND id < 'branch-hygiene-tick.' ORDER BY ts DESC LIMIT 1" },
+  // CF-CHANGELOG-WATCH-1 (agent_issues 1958): qnfo-fleet-control 0.4.112 CF-CHANGELOG-LOOP-1 reads Cloudflare's changelog once a
+  // day inside its hourly tick and writes one cf_changelog_runs row per run.
+  { key: "cf-changelog", what: "Reading Cloudflare's changelog and acting on it: billing and deprecation issues, reopened catalog rows, new catalog rows (CF-CHANGELOG-LOOP-1, qnfo-fleet-control, daily in the hourly tick)", runner: "cron:qnfo-fleet-control", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cf_changelog_runs WHERE status IN ('ok','partial')", why_sql: "SELECT status FROM cf_changelog_runs ORDER BY id DESC LIMIT 1" },
   { key: "code-task-merge", what: "Opening and merging code-loop PRs (CODE-TASK-MERGE-RUNNER-1, qnfo-fleet-control hourly)", runner: "cron:qnfo-fleet-control", cadence_h: 1,
     sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' AND status = 'ok'",
     why_sql: "SELECT status FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' ORDER BY ts DESC LIMIT 1",
@@ -4030,6 +4147,12 @@ function safeLink(u) {
 function mailDomain(addr) {
   const m = String(addr || "").toLowerCase().match(/@([a-z0-9.-]+)\s*>?\s*$/);
   return m ? m[1] : "unknown sender";
+}
+// HUMAN-SEV-HIGH-1 (#1896): sessions and loops file human_actions with sev "high" or "critical" as well as "urgent";
+// all three are urgent on the queue (they rendered as normal, so the urgent count stayed 0).
+function urgentSev(sev) {
+  const s = String(sev || "").toLowerCase();
+  return s === "urgent" || s === "high" || s === "critical";
 }
 function ageDaysOf(raw) {
   if (raw == null || raw === "") return null;
@@ -4261,7 +4384,7 @@ async function collectHumanActions(env) {
   await read("human_actions", async function() {
     await ensureHumanTable(env);
     const rows = await d1all(env.AUDIT, "SELECT slug, title, why, default_in_effect, action, url, sev, due, created_at FROM human_actions WHERE status='open' ORDER BY id");
-    for (const r of rows) add({ key: "ha:" + r.slug, source: "queue", title: r.title, why: r.why || "", fallback: r.default_in_effect || "", action: r.action || "", url: safeLink(r.url), sev: r.sev === "urgent" ? "urgent" : "normal", due: r.due || "", age: ageDaysOf(r.created_at) });
+    for (const r of rows) add({ key: "ha:" + r.slug, source: "queue", title: r.title, why: r.why || "", fallback: r.default_in_effect || "", action: r.action || "", url: safeLink(r.url), sev: urgentSev(r.sev) ? "urgent" : "normal", due: r.due || "", age: ageDaysOf(r.created_at) });
   });
   await read("register", async function() {
     const rows = await d1all(env.AUDIT, "SELECT id, title, dod, due, updated_at FROM v_waiting_on_human ORDER BY due = '', due, id");
@@ -4351,10 +4474,10 @@ async function collectHumanActions(env) {
         const a = ageDaysOf(r.created_at);
         if (a != null && (oldest == null || a > oldest)) oldest = a;
       }
-      add({ key: "goals:objective-revision", source: "objectives", title: "Ratify or reject " + n + " objective revision" + (n > 1 ? "s" : ""), why: "The fleet cannot change its own objectives; only you can ratify them.", fallback: "The current objectives stay in force.", action: "Decide each one on this card. A weight change is applied the moment you ratify it; anything else becomes fleet work (OBJECTIVE-REVISION-APPLY-1). Each line says which.", url: "", due: "", age: oldest, detail: rows.map(function(r) {
+      add({ key: "goals:objective-revision", source: "objectives", title: "Yes or no: " + n + " proposed change" + (n > 1 ? "s" : "") + " to the fleet's goals", why: "The fleet proposes changes to its own goals but may not adopt them by itself. Each line starts with what the change means in plain words.", fallback: "Nothing changes: the current goals stay in force.", action: "For each line press Ratify (yes, adopt it) or Reject (no, keep the goal as it is). A weight change takes effect at once and needs your emailed-code sign-in; any other change becomes one fleet work item that reports back with evidence.", url: "", due: "", age: oldest, detail: rows.map(function(r) {
         const plan = r.status === "ratified" ? { applicable: false, text: "Ratified but not applied: " + String(r.apply_detail || "") } : objRevPlan(r.statement, cx.weights, cx.objective);
         // OBJECTIVE-AUTHORITY-TRUTH-1: the full statement and rationale, so the owner reads exactly what a ratify adopts.
-        return { id: r.id, statement: String(r.statement || ""), why: String(r.alignment || ""), plan: plan.text, can_ratify: r.status === "proposed" && plan.applicable };
+        return { id: r.id, plain: objRevPlain(r.statement, r.alignment, plan), statement: String(r.statement || ""), why: String(r.alignment || ""), plan: plan.text, can_ratify: r.status === "proposed" && plan.applicable };
       }) });
     }
   });
@@ -5068,7 +5191,7 @@ function humanFragment(v) {
     if (it.mail && it.mail.length) for (const m of it.mail) o.push('<div class="pr"><div>' + e(m.from_address ? (m.from_name ? m.from_name + " <" + m.from_address + ">" : m.from_address) : "someone at " + m.domain) + (m.from_address ? " &middot; " + e(m.subject || "(no subject)") : "") + '</div><div class="meta">received ' + e(agoText(ageDaysOf(m.received_at))) + " &middot; " + e(m.category) + " &middot; " + e(m.auth) + "</div></div>");
     o.push("</div>");
     if (it.detail && it.detail.length) {
-      for (const dd of it.detail) o.push('<div class="pr"><div>#' + e(dd.id) + " " + e(dd.statement) + '</div><div class="meta">' + e(dd.why) + "</div>" + (dd.plan ? '<div class="meta"><b>' + e(dd.plan) + "</b></div>" : "") + (v.owner && v.owner.authed ? '<div class="acts" data-key="goals:objective-revision:' + e(dd.id) + '">' + (dd.can_ratify === false ? "" : '<button data-act="ratify" data-oid="' + e(dd.id) + '">Ratify</button>') + '<button data-act="reject" data-oid="' + e(dd.id) + '">Reject</button></div>' : "") + "</div>");
+      for (const dd of it.detail) o.push('<div class="pr">' + (dd.plain ? "<div><b>" + e(dd.plain) + "</b></div>" : "") + '<div>#' + e(dd.id) + " " + e(dd.statement) + '</div><div class="meta">' + e(dd.why) + "</div>" + (dd.plan ? '<div class="meta"><b>' + e(dd.plan) + "</b></div>" : "") + (v.owner && v.owner.authed ? '<div class="acts" data-key="goals:objective-revision:' + e(dd.id) + '">' + (dd.can_ratify === false ? "" : '<button data-act="ratify" data-oid="' + e(dd.id) + '">Ratify</button>') + '<button data-act="reject" data-oid="' + e(dd.id) + '">Reject</button></div>' : "") + "</div>");
       if (!(v.owner && v.owner.authed)) o.push('<div class="meta">Ratify and reject are not on the public page: they change the live objective weights.</div>');
     }
     const open = /^https:\/\//.test(it.url || "") ? '<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>' : "";
@@ -5121,7 +5244,7 @@ function humanFragment(v) {
     return e(m.domain) + " (" + e(m.why) + ")";
   }).join("; ") + ".</div>");
   o.push('<div class="meta" style="margin-top:8px">Red flags, drift, queues and retries are worked by the issue loop and qnfo-fleet-control and are not your job unless they appear above.' + (s.drift ? " Drift: " + e(s.drift) + "." : "") + "</div></details></section>");
-  o.push('<section class="card links"><h3>Open data</h3><a href="/api/human">Queue JSON</a><a href="/api/decision">Decision JSON</a><a href="/api/watchmaker">Watchmaker index</a><a href="/api/state">Fleet state</a><a href="/cmd">Command line</a></section></aside></div>');
+  o.push('<section class="card links"><h3>Open data</h3><a href="/api/human">Queue JSON</a><a href="/api/decision">Decision JSON</a><a href="/api/watchmaker">Watchmaker index</a><a href="/api/state">Fleet state</a><a href="/cmd">Command line</a><a href="https://github.com/QNFO/qnfo-workers/blob/main/docs/keys/owner-api-keys.md">Write access: how it is granted</a></section></aside></div>');
   // ---- the business case
   o.push('<section class="fl-biz" id="business" aria-labelledby="biz-h"><h2 class="fl-h" id="biz-h">The business case</h2>');
   if (!b) o.push('<div class="meta">Measuring for the first time, back in a moment.</div>');
@@ -5443,6 +5566,10 @@ async function ownerRoutes(request, env, ctx, path, owner) {
       const cx = await objRevContext(env);
       const plan = objRevPlan(g.statement, cx.weights, cx.objective);
       if (!plan.applicable) return ownerJson({ error: plan.text }, 409);
+      if (plan.kind === "weights" && !objRevWeightAllowed(cred)) {
+        await env.AUDIT.prepare("INSERT INTO human_responses (key, kind, note, credential) VALUES (?1,'ratify-held',?2,?3)").bind("goals:objective-revision:" + id, "weight change held for the owner's emailed-code session", cred || "unknown").run();
+        return ownerJson({ ok: false, id, status: "proposed", held: true, decided_by: credLabel, error: OBJREV_WEIGHT_OWNER_MSG }, 403);
+      }
     }
     await env.AUDIT.prepare(OBJREV_DDL).run();
     const r = await env.AUDIT.prepare(decision === "ratify" ? "UPDATE goals SET status='ratified', updated_at=datetime('now') WHERE id=?1 AND goal_type='objective-revision' AND status='proposed'" : "UPDATE goals SET status='rejected', updated_at=datetime('now') WHERE id=?1 AND goal_type='objective-revision' AND (status='proposed' OR (status='ratified' AND id IN (SELECT goal_id FROM objective_revision_applies WHERE outcome IN ('not-applicable','partial'))))").bind(id).run();
@@ -5899,7 +6026,7 @@ function cmdSuggest(c) {
     }
     if (String(i.key).indexOf("goals:objective-revision") === 0 && i.detail) {
       for (const d of i.detail.slice(0, 3)) {
-        lines.push("Objective #" + d.id + ": " + String(d.statement) + (d.why ? "\n   Why: " + String(d.why) : ""));
+        lines.push("Objective #" + d.id + ": " + (d.plain ? String(d.plain) + "\n   Proposal: " : "") + String(d.statement) + (d.why ? "\n   Why: " + String(d.why) : ""));
         if (d.plan) acts.push(cmdAction("ratify", { id: Number(d.id) }, d.plan));
         acts.push(cmdAction("reject", { id: Number(d.id) }));
       }
