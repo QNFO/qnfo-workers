@@ -74,3 +74,6 @@ BEGIN
   VALUES ('QNFO.INFRA.DNS', datetime('now'), 'fk-violation', 0, 0.0,
   json_object('fk_violation', 'CNAME target ' || NEW.target || ' has no audit_pages entry', 'record_source', NEW.source, 'record_target', NEW.target));
 END;
+
+-- APPLIED 2026-10-05 ~19:30Z to qnfo-audit by session_01KzS1yjXATqG3KDBSEyNTAs (old DDL also in qnfo-audit
+-- bak_20261005_trigger_ddl); guard_registry verified_at set for both (backup bak_20261005_guard_registry_3).
