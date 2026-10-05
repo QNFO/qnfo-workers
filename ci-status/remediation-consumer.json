@@ -1,71 +1,63 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@c596cc7cc098",
- "due": 8,
- "pass": 3,
- "fail": 4,
+ "verifier": "remediation-consumer@2b4ba4c33379",
+ "due": 7,
+ "pass": 1,
+ "fail": 5,
  "skipped": 1,
  "contracts": [
   {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
    "verdict": "fail",
-   "expected": "all-sources-ok",
+   "expected": "fixed",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
    "verdict": "vacuous-probe-result",
-   "expected": "within-cap",
+   "expected": "connected",
    "observed": null,
    "reason": "probe returned no expected/observed pair"
   },
   {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
+   "class": "issue-1825",
+   "issue_id": 1825,
    "verdict": "fail",
-   "expected": "seven-days",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-1891",
+   "issue_id": 1891,
+   "verdict": "fail",
+   "expected": "clean",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1730",
-   "issue_id": 1730,
-   "verdict": "pass",
-   "expected": "tracked",
-   "observed": "tracked",
-   "written": true
-  },
-  {
-   "class": "issue-LIFECYCLE-PING-1042-1",
-   "issue_id": 1994,
+   "class": "issue-1939",
+   "issue_id": 1939,
    "verdict": "fail",
    "expected": "ok",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1907",
-   "issue_id": 1907,
+   "class": "issue-1986",
+   "issue_id": 1986,
    "verdict": "fail",
-   "expected": "linked",
+   "expected": "ok",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1865",
-   "issue_id": 1865,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1879",
-   "issue_id": 1879,
+   "class": "issue-1855",
+   "issue_id": 1855,
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
@@ -88,8 +80,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 21521,
- "head": "c596cc7cc098d440c959486cf00bd11a9b684b81",
+ "spent_ms": 19315,
+ "head": "2b4ba4c333798b36aa58a92b35d5c7c7831cd95f",
  "job_status": "success",
- "ts": "2026-10-05T20:33:43Z"
+ "ts": "2026-10-05T22:09:36Z"
 }
