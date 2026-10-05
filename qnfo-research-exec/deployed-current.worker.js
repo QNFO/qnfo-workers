@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.59-math-latex"; // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.60-zenodo-related"; // ZENODO-READ-ONLINE-1 (2026-10-05, #1907, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2989,6 +2989,128 @@ async function drainMetadataEdits(env, limit) {
   }
   return out;
 }
+// ZENODO-READ-ONLINE-1 (2026-10-05, agent_issues #1907; owner decision YES 2026-10-02): kind='related' rows of the same
+// queue add one related identifier to a published record, {identifier: https://papers.qnfo.org/papers/<slug>/, relation:
+// isVariantFormOf, resource_type: publication-preprint}, the form publishStage writes for new records, so a Zenodo
+// visitor (13,307 downloads) has a path to the paper page, its Ask panel and the subscribe box. Metadata edit only: no new
+// version, no new DOI. The edit goes to the LATEST version of the record's concept (an older id in the row is resolved
+// through the public API first), because that is the page Zenodo shows. A record that already lists the URL is
+// 'unchanged' without an edit; any failure after `edit` discards the draft. metadata_json: {"related_link": {"slug":
+// "<slug>"}}; the URL form lives here, never in a row. Up to RELATED_LINKS_PER_RUN rows per run.
+var RELATED_LINKS_PER_RUN = 12;
+var RELATED_SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,199}$/;
+var RELATED_ISSUE_PREFIX = "ZENODO-READ-ONLINE-1";
+function relatedLinkUrl(slug) {
+  return "https://papers.qnfo.org/papers/" + slug + "/";
+}
+function validateRelatedPatch(patch) {
+  var p = patch && patch.related_link;
+  if (!p || typeof p.slug !== "string" || !RELATED_SLUG_RE.test(p.slug)) return "metadata_json.related_link.slug missing or malformed";
+  return null;
+}
+function relatedUrlNorm(u) {
+  return String(u || "").trim().replace(/\/+$/, "").toLowerCase();
+}
+function applyRelatedLink(metadata, patch) {
+  var bad = validateRelatedPatch(patch);
+  if (bad) return { error: bad };
+  var url = relatedLinkUrl(patch.related_link.slug);
+  var before = Array.isArray(metadata && metadata.related_identifiers) ? metadata.related_identifiers : [];
+  var present = before.some(function(r) {
+    return relatedUrlNorm(r && r.identifier) === relatedUrlNorm(url) && String(r && r.relation || "") === "isVariantFormOf";
+  });
+  if (present) return { related_identifiers: before, changed: false, url: url };
+  return { related_identifiers: before.concat([{ identifier: url, relation: "isVariantFormOf", resource_type: "publication-preprint" }]), changed: true, url: url };
+}
+async function latestRecordId(recId, fetchImpl) {
+  var f = fetchImpl || fetch;
+  try {
+    var r = await f("https://zenodo.org/api/records/" + recId + "/versions/latest", { headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
+    var j = r && r.ok ? await r.json() : null;
+    if (j && Number(j.id) > 0) return Number(j.id);
+  } catch (e) {
+  }
+  return recId;
+}
+async function drainRelatedLinks(env, limit, fetchImpl) {
+  if (!env.ZENODO_TOKEN || !env.QNFO_AUDIT) return [];
+  var rs = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE kind='related' AND status='pending' ORDER BY id ASC LIMIT ?").bind(limit || RELATED_LINKS_PER_RUN).all();
+  var out = [];
+  var rows = (rs && rs.results) || [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var claim = await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status='publishing', updated_at=datetime('now') WHERE id=? AND status='pending'").bind(row.id).run();
+    if (!claim || !claim.meta || claim.meta.changes !== 1) continue;
+    var recId = Number(row.record_id), target = recId, editing = false, status = "error", error = null;
+    try {
+      var patch = JSON.parse(row.metadata_json || "{}");
+      var bad = validateRelatedPatch(patch);
+      if (bad) throw new Error(bad);
+      target = await latestRecordId(recId, fetchImpl);
+      var dep = await zenodo(env, "GET", "/" + target);
+      if (!dep || dep._status || !dep.metadata) throw new Error("read failed: " + JSON.stringify(dep).slice(0, 200));
+      var first = applyRelatedLink(dep.metadata, patch);
+      if (first.error) throw new Error(first.error);
+      if (!first.changed) {
+        status = "unchanged";
+      } else {
+        var ed = await zenodo(env, "POST", "/" + target + "/actions/edit", {});
+        if (!ed || ed._status) throw new Error("edit failed: " + JSON.stringify(ed).slice(0, 200));
+        editing = true;
+        var base = ed.metadata || dep.metadata;
+        var applied = applyRelatedLink(base, patch);
+        if (applied.error) throw new Error(applied.error);
+        var put = await zenodo(env, "PUT", "/" + target, { metadata: Object.assign({}, base, { related_identifiers: applied.related_identifiers }) });
+        if (!put || put._status) throw new Error("metadata put failed: " + JSON.stringify(put).slice(0, 200));
+        var pub = await zenodo(env, "POST", "/" + target + "/actions/publish", {});
+        if (!pub || pub._status || !pub.id) throw new Error("publish failed: " + JSON.stringify(pub).slice(0, 200));
+        editing = false;
+        status = "published";
+      }
+    } catch (e) {
+      error = String(e && e.message || e).slice(0, 300);
+      if (editing) {
+        try { await zenodo(env, "POST", "/" + target + "/actions/discard", {}); } catch (e2) {}
+      }
+    }
+    await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status=?, result_record_id=?, error=?, updated_at=datetime('now') WHERE id=?").bind(status, status === "error" ? null : target, error, row.id).run();
+    out.push({ id: row.id, record: recId, target: target, status: status, error: error });
+  }
+  return out;
+}
+// ZENODO-READ-ONLINE-1 closing probe (CLOUD-ONLY-VERIFICATION-1): once no related row is pending or publishing and none is
+// in error, 20 random published/unchanged rows are re-read on the PUBLIC records API; all listing the page URL as
+// isVariantFormOf closes the issue with that measurement as close_evidence (evidence row first, then the close, per
+// METADATA-VERIFY-ORDER-1). Otherwise the counts are logged and the issue stays open.
+async function verifyRelatedBackfill(env, fetchImpl) {
+  var f = fetchImpl || fetch;
+  var db = env.QNFO_AUDIT;
+  if (!db) return null;
+  var iss = await db.prepare("SELECT id FROM agent_issues WHERE status='open' AND title LIKE ? ORDER BY id ASC LIMIT 1").bind(RELATED_ISSUE_PREFIX + "%").first();
+  if (!iss) return null;
+  var c = await db.prepare("SELECT SUM(status IN ('pending','publishing')) AS busy, SUM(status='error') AS err, SUM(status='published') AS pub, SUM(status='unchanged') AS unch, COUNT(*) AS n FROM zenodo_version_requests WHERE kind='related'").first();
+  if (!c || !Number(c.n) || Number(c.busy)) return { issue: iss.id, waiting: Number(c && c.busy || 0) };
+  var rs = await db.prepare("SELECT record_id, result_record_id, metadata_json FROM zenodo_version_requests WHERE kind='related' AND status IN ('published','unchanged') ORDER BY random() LIMIT 20").all();
+  var sample = (rs && rs.results) || [], pass = 0, fails = [];
+  for (var i = 0; i < sample.length; i++) {
+    var s = sample[i], ok = false, rid = Number(s.result_record_id || s.record_id);
+    try {
+      var want = relatedLinkUrl(String((JSON.parse(s.metadata_json || "{}").related_link || {}).slug || ""));
+      var r = await f("https://zenodo.org/api/records/" + rid, { headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
+      var j = r && r.ok ? await r.json() : null;
+      ok = ((j && j.metadata && j.metadata.related_identifiers) || []).some(function(x) {
+        return relatedUrlNorm(x && x.identifier) === relatedUrlNorm(want) && String(x && x.relation || "") === "isVariantFormOf";
+      });
+    } catch (e) { ok = false; }
+    if (ok) pass++; else fails.push(rid);
+  }
+  var summary = "rows=" + c.n + " published=" + (c.pub || 0) + " unchanged=" + (c.unch || 0) + " error=" + (c.err || 0) + "; public re-read " + pass + "/" + sample.length + " list the papers.qnfo.org page as isVariantFormOf" + (fails.length ? " (failed: " + fails.slice(0, 10).join(",") + ")" : "");
+  if (Number(c.err) || fails.length || !sample.length) return { issue: iss.id, closed: false, summary: summary };
+  var ev = "ZENODO-READ-ONLINE-1 verify " + new Date().toISOString() + ": " + summary;
+  await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'ZENODO-READ-ONLINE-1', 'closed', 'qnfo-research-exec', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(iss.id, ev).run();
+  await db.prepare("UPDATE agent_issues SET status='closed', updated_at=? WHERE id=? AND status='open'").bind(Date.now(), iss.id).run();
+  return { issue: iss.id, closed: true, summary: summary };
+}
 // METADATA-BACKFILL-VERIFY-1 (2026-10-01, CLOUD-ONLY-VERIFICATION-1): the backfill's open agent_issues row
 // ('ZENODO-METADATA-EDITS-1 backfill...') closes itself instead of waiting for a session. Once no metadata row is pending
 // or publishing, it re-reads up to 20 random published/unchanged records on the PUBLIC records API and checks that the
@@ -3116,6 +3238,16 @@ var worker_default = {
       } catch (e) {
         await logEvent(env, "error", "drainMetadataEdits threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
+      try {
+        var rl = await drainRelatedLinks(env);
+        if (rl.length) await logEvent(env, "zenodo-related", JSON.stringify(rl).slice(0, 700), rl.some(function(x) { return x.status === "error"; }) ? "error" : "ok");
+        else if (new Date().getUTCMinutes() < 15) {
+          var rv = await verifyRelatedBackfill(env);
+          if (rv && rv.summary) await logEvent(env, "zenodo-related-verify", "issue " + rv.issue + (rv.closed ? " closed: " : " open: ") + rv.summary, rv.closed ? "ok" : "error");
+        }
+      } catch (e) {
+        await logEvent(env, "error", "drainRelatedLinks threw: " + String(e && e.message || e).slice(0, 200), "error");
+      }
       if (env.RESEARCH_HALT === "1") return;
       try {
         const lr = await runLeased(env, "cron-" + Date.now().toString(36), 8, RUN_LOOP_BUDGET_MS);
@@ -3152,7 +3284,9 @@ var worker_default = {
 export {
   worker_default as default,
   applyCreatorPatch,
+  applyRelatedLink,
   drainMetadataEdits,
+  drainRelatedLinks,
   drainVersionRequests,
   groundQueries,
   markError,
@@ -3163,6 +3297,7 @@ export {
   stageGround,
   stageReview,
   stageVerify,
-  verifyMetadataBackfill
+  verifyMetadataBackfill,
+  verifyRelatedBackfill
 };
 //# sourceMappingURL=worker.js.map
