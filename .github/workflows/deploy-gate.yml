@@ -222,6 +222,11 @@ jobs:
         run: node --no-warnings idea-hub/ask-gap.test.mjs
       - name: OPEN-ACCESS-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/open-access.test.mjs
+      # FLEET-CONSOLE-1: the owner console in the command line (issue detail, SQL, issue edits, dispatch, deploy, merge):
+      # owner-only reads and actions, destructive ones behind a confirm button and a fresh code, no loop-token access,
+      # SQL writes refused on protected tables and backed up before UPDATE/DELETE.
+      - name: FLEET-CONSOLE-1 offline suite (qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-fleet-dashboard/fleet-console.test.mjs
       # OPS-PUBLIC-READ-1: qnfo-ops answers a chat with no key, or a stale one, in public read-only mode (free tier, only
       # fleet_status, backlog_status and privacy-safe public_data, capped per visitor and per day); private stores, writes,
       # paid upstreams, caches, durable jobs and checkpoints stay behind the key.

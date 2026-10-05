@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.21.7-weekday-backfill"; /* 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.22.0-fleet-console"; /* 1.22.0 FLEET-CONSOLE-1 (owner request 2026-10-05: full control, input and remediation from the dashboard, every detail and decision without leaving it): the command line gains issue <id> (row, triage, contracts, verifications, claims, code task), backlog, info <queue item> (a Details button on every queue card), tasks, locks, prs, pr <n>, runs (open reads); logs <worker>, sql [db] <select>, prio/owner/comment/codetask/reopen (owner session); close/wontfix with evidence, sql! writes backed up to console_backups first, worker calls, workflow dispatch, deploy via canonical-deploy.yml, merge and close PRs (owner + fresh code, confirm button); the loop token cannot run console actions; auto-run owner actions are logged in cmd_log; 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2119,7 +2119,7 @@ async function handleRequest(request, env, ctx) {
   // doc is read AND changed on Cloudflare; its claude.ai copy is retired.
   if (path === "/owner" || path === "/owner/" || path.indexOf("/owner/doc/") === 0 || path.indexOf("/owner/edit/") === 0) return await ownerRoute(request, env, path, owner);
   if (path === "/health") {
-    return json({ ok: true, worker: NAME, version: VERSION, capabilities: ["fleet-dashboard", "owner-queue", "objective-decisions", "watchmaker-index", "command-line", "owner-documents", "ctl-link"], limitations: ["every read, every read-only command and plain-English answers are open to everyone; plain-English answers are capped at 5 a day per anonymous visitor and by a global daily cap", "actions (done, dismiss, snooze, notes, tasks, ratify, reject) need the owner: an emailed 6-digit code opens a 12h session, destructive ones need a code from the last 15 minutes; x-loop-token still works for loops; private owner documents keep their gate", "the state refreshes on the */15 cron, so a view can be up to 15 minutes old"], generated_at: (/* @__PURE__ */ new Date()).toISOString() });
+    return json({ ok: true, worker: NAME, version: VERSION, capabilities: ["fleet-dashboard", "owner-queue", "objective-decisions", "watchmaker-index", "command-line", "owner-console", "owner-documents", "ctl-link"], limitations: ["every read, every read-only command and plain-English answers are open to everyone; plain-English answers are capped at 5 a day per anonymous visitor and by a global daily cap", "actions (done, dismiss, snooze, notes, tasks, ratify, reject) need the owner: an emailed 6-digit code opens a 12h session, destructive ones need a code from the last 15 minutes; x-loop-token still works for loops; private owner documents keep their gate", "FLEET-CONSOLE-1 console reads (issue, backlog, info, tasks, locks, prs, pr, runs) are open; logs, SQL reads and issue edits need the owner's code session; SQL writes, closes, non-GET worker calls, workflow dispatch, deploy, merge and PR close need a code from the last 15 minutes; the loop token cannot run console actions; no DROP/ALTER/REPLACE, UPDATE/DELETE need a WHERE and are backed up to console_backups first; fleet_budget, remediation_verifications, work_claims and the sign-in tables are read-only; qnfo-identity is not reachable; worker calls carry no credential (a worker that demands its own token answers 401)", "the state refreshes on the */15 cron, so a view can be up to 15 minutes old"], generated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
   if (path === "/api/refresh") {
     const st = await runRefresh(env, ctx);
@@ -5194,9 +5194,10 @@ function humanFragment(v) {
       for (const dd of it.detail) o.push('<div class="pr">' + (dd.plain ? "<div><b>" + e(dd.plain) + "</b></div>" : "") + '<div>#' + e(dd.id) + " " + e(dd.statement) + '</div><div class="meta">' + e(dd.why) + "</div>" + (dd.plan ? '<div class="meta"><b>' + e(dd.plan) + "</b></div>" : "") + (v.owner && v.owner.authed ? '<div class="acts" data-key="goals:objective-revision:' + e(dd.id) + '">' + (dd.can_ratify === false ? "" : '<button data-act="ratify" data-oid="' + e(dd.id) + '">Ratify</button>') + '<button data-act="reject" data-oid="' + e(dd.id) + '">Reject</button></div>' : "") + "</div>");
       if (!(v.owner && v.owner.authed)) o.push('<div class="meta">Ratify and reject are not on the public page: they change the live objective weights.</div>');
     }
-    const open = /^https:\/\//.test(it.url || "") ? '<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>' : "";
+    // FLEET-CONSOLE-1: Details shows everything behind the card in the pinned command line, without leaving the page.
+    const open = (/^https:\/\//.test(it.url || "") ? '<a class="do" href="' + e(it.url) + '" rel="noopener">Open</a>' : "") + '<button type="button" data-fleet-cmd="info ' + e(it.key) + '">Details</button>';
     if (v.owner && v.owner.authed) o.push('<div class="acts" data-key="' + e(it.key) + '">' + open + (String(it.key).indexOf("ha:") === 0 ? '<button data-act="done">Done</button><button data-act="dismiss">Not doing</button>' : "") + '<button data-act="snooze" data-days="3">Snooze 3d</button><button data-act="snooze" data-days="7">Snooze 7d</button><button data-act="note">Add note</button></div>');
-    else if (open) o.push('<div class="acts">' + open + "</div>");
+    else o.push('<div class="acts">' + open + "</div>");
     o.push("</article>");
   }
   if (shown > 5) o.push("</details>");
@@ -6346,7 +6347,7 @@ function cmdAiContext(c) {
   if (c.ipatent) ctx.ipatent = c.ipatent.error ? { error: c.ipatent.error } : { version: c.ipatent.version, note: "counts only; iPatent never stores search or draft text", windows: c.ipatent.windows };
   return JSON.stringify(ctx).slice(0, 9e3);
 }
-var CMD_AI_SYS = "You are the command line of the QNFO fleet dashboard. Reply with ONE JSON object and nothing else: {\"answer\": string, \"actions\": array}. 'answer' is brief, concrete and uses only CONTEXT (say plainly when CONTEXT lacks it; never invent numbers). 'actions' proposes 0-4 actions the owner can approve with one tap, each one of: {\"op\":\"snooze\",\"key\":<queue key>,\"days\":1-90}, {\"op\":\"note\",\"key\":<queue key>,\"note\":string}, {\"op\":\"done\",\"key\":<queue key starting ha:>}, {\"op\":\"dismiss\",\"key\":<queue key starting ha:>}, {\"op\":\"task\",\"text\":string}, {\"op\":\"ratify\",\"id\":number}, {\"op\":\"reject\",\"id\":number}, {\"op\":\"refresh\"}. Use queue keys exactly as in CONTEXT.queue_keys. A request to change, fix, build or investigate something becomes a 'task' whose text is a complete, self-contained instruction for the fleet's issue loop (include the page URL and worker when CONTEXT.page is set). Propose only what the user asked for or what clearly follows; never claim an action was taken. Each action may carry \"why\": string." + ASK_MAIL_RULE;
+var CMD_AI_SYS = "You are the command line of the QNFO fleet dashboard. Reply with ONE JSON object and nothing else: {\"answer\": string, \"actions\": array}. 'answer' is brief, concrete and uses only CONTEXT (say plainly when CONTEXT lacks it; never invent numbers). 'actions' proposes 0-4 actions the owner can approve with one tap, each one of: {\"op\":\"snooze\",\"key\":<queue key>,\"days\":1-90}, {\"op\":\"note\",\"key\":<queue key>,\"note\":string}, {\"op\":\"done\",\"key\":<queue key starting ha:>}, {\"op\":\"dismiss\",\"key\":<queue key starting ha:>}, {\"op\":\"task\",\"text\":string}, {\"op\":\"ratify\",\"id\":number}, {\"op\":\"reject\",\"id\":number}, {\"op\":\"refresh\"}, {\"op\":\"cmd\",\"text\":<a read command: issue <id>, backlog <word>, info <queue key>, tasks <word>, prs, pr <n>, runs, locks, logs <worker>>}. Use queue keys exactly as in CONTEXT.queue_keys. A request to change, fix, build or investigate something becomes a 'task' whose text is a complete, self-contained instruction for the fleet's issue loop (include the page URL and worker when CONTEXT.page is set). Propose only what the user asked for or what clearly follows; never claim an action was taken. Each action may carry \"why\": string." + ASK_MAIL_RULE;
 function cmdSalvageJson(s) {
   const m = /"answer"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(s);
   if (!m) return null;
@@ -6392,6 +6393,11 @@ function cmdParseAi(content, c) {
   for (const i of cmdQueue(c.v)) keys[i.key] = i;
   const acts = [];
   for (const x of Array.isArray(obj.actions) ? obj.actions.slice(0, 4) : []) {
+    if (x && x.op === "cmd") {
+      const ct = String(x.text || "").trim();
+      if (CON_AI_CMD.test(ct)) acts.push({ cmd: ct, label: ct, why: x.why ? String(x.why).slice(0, 200) : null });
+      continue;
+    }
     if (!x || !CMD_OPS[x.op]) continue;
     const why = x.why ? String(x.why).slice(0, 200) : null;
     if (x.op === "snooze" || x.op === "note" || x.op === "done" || x.op === "dismiss") {
@@ -6514,6 +6520,7 @@ async function cmdSweep(env) {
 }
 // Execute one action through the same code the queue-card buttons use (ownerRoutes), so the rules stay in one place.
 async function cmdExec(request, env, ctx, owner, op, args) {
+  if (CON_OPS[op]) return await conExec(env, owner, op, args);
   if (op === "refresh") {
     if (!(owner && owner.authed)) {
       const cached = await currentState(env, ctx, 10 * 6e4);
@@ -6645,7 +6652,10 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   if (text.length < 1 || text.length > 2e3) return ownerJson({ error: "type 1-2000 characters" }, 400);
   const c = await cmdContext(env, from, holder);
   if (/^(i-?patent|patent)( usage| queries| searches| metrics| stats)?\??$/i.test(text.trim())) return ownerJson({ ok: true, kind: "answer", text: ipatentText(await ipatentUsage(env)), links: [{ label: "iPatent metrics JSON", href: "https://ipatent.qnfo.org/api/metrics" }], holder });
-  const p = cmdParse(text, c, holder);
+  // FLEET-CONSOLE-1: console reads first ("issue 12" would otherwise be read as an issue filter), then the console's actions.
+  const cr = await conRead(env, text, c, owner);
+  if (cr) return ownerJson(Object.assign({ ok: cr.ok !== false, kind: "answer", holder }, cr), cr.ok === false && cr.need ? 401 : 200);
+  const p = cmdParse(text, c, holder) || conParse(text);
   if (p && p.login) {
     const r = await cmdSendCode(env, request);
     return ownerJson(Object.assign({ kind: "code" }, r, { text: r.ok ? r.note + " Type the 6 digits here." : r.error }), r.ok ? 200 : r.status || 400);
@@ -6666,6 +6676,10 @@ async function cmdRoutes(request, env, ctx, path, owner) {
       const allowed = a.open || holder && !a.destructive;
       if (allowed) {
         const r = await cmdExec(request, env, ctx, owner, a.op, a.args);
+        try {
+          await env.AUDIT.prepare("INSERT INTO cmd_log (id, text, kind, status, answer, error, owner, done_ms) VALUES (?1, ?2, 'action', ?3, ?4, ?5, ?6, ?7)").bind("cmd-" + cmdRandHex(10), (a.op + " " + JSON.stringify(a.args)).slice(0, 2e3), r.ok ? "done" : "failed", r.text || null, r.error || null, holder ? 1 : 0, Date.now()).run();
+        } catch (e) {
+        }
         return ownerJson({ ok: r.ok, kind: "answer", text: r.ok ? r.text : null, error: r.ok ? null : r.error, executed: a.op, holder });
       }
     }
@@ -6696,13 +6710,573 @@ async function cmdRoutes(request, env, ctx, path, owner) {
   }));
   return ownerJson({ ok: true, kind: "pending", id, holder }, 202);
 }
+// FLEET-CONSOLE-1 (2026-10-05, owner request: "full control, input and remediation from the UI ... get all information and
+// execute all decisions without ever leaving the fleet dashboard"). The command line gains the server-side operations a
+// session used to run by hand, so the owner never needs a session or another site to inspect or remediate a task:
+//   read (open, like every fleet read):  issue <id>, backlog [word], info <queue item>, tasks [word], locks, prs, pr <n>,
+//     runs [workflow]
+//   owner (emailed-code session):  logs <worker> [n], sql [db] <select>, prio/owner/comment/codetask/reopen <issue>,
+//     call <worker> GET <path>, rerun <run id>
+//   owner + a code from the last 15 minutes (destructive, always a confirm button, never auto-run):  close|wontfix <id>
+//     <evidence>, sql! [db] <write>, call <worker> POST|PUT|PATCH|DELETE <path> [json], dispatch <workflow> [k=v ...],
+//     deploy <worker ...>, merge <pr>, closepr <pr>
+// Console actions take the owner's session (cookie from the emailed code) or the legacy owner key; the fleet's LOOP_TOKEN
+// is not enough, so a leaked loop token cannot run SQL writes, merges or deploys.
+// Limits kept on purpose (QUNIVERSE core prompt rules 7 and 8, CLAUDE.md): one SQL statement at a time; no DROP, ALTER,
+// ATTACH, triggers, REPLACE or upserts; UPDATE and DELETE need a WHERE, touch at most CON_BACKUP_MAX rows and copy those rows
+// into qnfo-audit.console_backups before they run; fleet_budget, remediation_verifications, work_claims, the sign-in tables
+// and the audit trail are read-only here; the private qnfo-identity D1 is not reachable (its editor is /owner); deploys run
+// canonical-deploy.yml (the canonical path), never a direct upload; every console action is written to cmd_log.
+var CON_REPO = "QNFO/qnfo-workers";
+var CON_DBS = { audit: "AUDIT", outreach: "OUTREACH", living: "LIVING", graph: "GRAPH" };
+var CON_PROTECTED = ["fleet_budget", "remediation_verifications", "work_claims", "owner_sessions", "owner_codes", "cmd_log", "console_backups"];
+var CON_SVC = { "qnfo-ai": "SVC_QNFO_AI", "qnfo-ipatent": "SVC_QNFO_IPATENT", "personal-api": "SVC_PERSONAL_API", "qnfo-ops": "SVC_QNFO_OPS", "qnfo-kaizen": "SVC_QNFO_KAIZEN", "qnfo-paper-reviser": "SVC_QNFO_PAPER_REVISER", "qnfo-research-exec": "SVC_QNFO_RESEARCH_EXEC" };
+var CON_MAX_ROWS = 200;
+var CON_BACKUP_MAX = 2e3;
+var CON_BACKUP_CHARS = 19e5;
+var CON_OUT_MAX = 6e3;
+var CON_DDL = "CREATE TABLE IF NOT EXISTS console_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT DEFAULT (datetime('now')), db TEXT NOT NULL, table_name TEXT NOT NULL, stmt TEXT NOT NULL, row_count INTEGER NOT NULL, rows_json TEXT NOT NULL)";
+var CON_OPS = {
+  iprio: { destructive: false, label: "Set priority" },
+  iowner: { destructive: false, label: "Set owner" },
+  icomment: { destructive: false, label: "Comment" },
+  icodetask: { destructive: false, label: "Hand to the code loop" },
+  ireopen: { destructive: false, label: "Reopen" },
+  iclose: { destructive: true, label: "Close" },
+  sqlw: { destructive: true, label: "Run SQL write" },
+  callr: { destructive: false, label: "Call" },
+  callw: { destructive: true, label: "Call" },
+  dispatch: { destructive: true, label: "Run workflow" },
+  merge: { destructive: true, label: "Merge" },
+  closepr: { destructive: true, label: "Close PR" },
+  rerun: { destructive: false, label: "Re-run failed jobs" }
+};
+for (const k in CON_OPS) CMD_OPS[k] = CON_OPS[k];
+var CON_HELP = [
+  "Console (FLEET-CONSOLE-1):",
+  "  issue <id>             everything about one fleet issue: row, triage, contracts, verifications, claims, code task",
+  "  backlog [word]         the priority queue of open issues (v_issue_queue), with ids",
+  "  info <queue item>      full detail behind a queue card",
+  "  tasks [word]           code-loop tasks;  locks   live work claims;  prs / pr <n>   pull requests;  runs [workflow]",
+  "  logs <worker> [n]      recent captured worker errors (code)",
+  "  sql [db] <select>      read any fleet D1: audit (default), outreach, living, graph (code)",
+  "  prio <id> <critical|high|medium|low>, owner <id> <worker>, comment <id> <text>, reopen <id>   (code)",
+  "  codetask <id> <dir/file> [anchor text]   hand an issue to the code loop (code)",
+  "  close <id> <evidence> / wontfix <id> <reason>   (fresh code; evidence is a live measurement)",
+  "  sql! [db] <insert|update|delete|create>   (fresh code; UPDATE/DELETE rows are backed up first)",
+  "  call <worker> [GET|POST|...] <path> [json]   call a fleet worker (GET: code; others: fresh code)",
+  "  dispatch <workflow.yml> [k=v ...], deploy <worker ...>, merge <pr>, closepr <pr>   (fresh code), rerun <run id> (code)"
+].join("\n");
+CMD_HELP = CMD_HELP.replace("Sign in:", CON_HELP + "\nSign in:");
+var conDdlDone = /* @__PURE__ */ new WeakSet();
+async function conEnsure(env) {
+  if (conDdlDone.has(env.AUDIT)) return;
+  await env.AUDIT.prepare(CON_DDL).run();
+  conDdlDone.add(env.AUDIT);
+}
+function conIsOwner(owner) {
+  return !!(owner && (owner.session || owner.legacy));
+}
+function conIso(ms) {
+  const n = Number(ms);
+  return n > 0 ? new Date(n < 1e11 ? n * 1e3 : n).toISOString().slice(0, 16) + "Z" : "?";
+}
+function conClip(s, n) {
+  s = s == null ? "" : String(s);
+  return s.length > n ? s.slice(0, n) + "\u2026" : s;
+}
+function conCmd(cmd, label) {
+  return { cmd, label: label || cmd };
+}
+// SQL text with string literals, quoted identifiers and comments blanked, same length, so keyword checks never see data and
+// positions found in the mask index the original statement.
+function conMask(sql) {
+  const blank = function(s) {
+    return s[0] + " ".repeat(Math.max(0, s.length - 2)) + s[s.length - 1];
+  };
+  return String(sql).replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]/g, blank).replace(/--[^\n]*/g, function(s) {
+    return " ".repeat(s.length);
+  }).replace(/\/\*[\s\S]*?\*\//g, function(s) {
+    return " ".repeat(s.length);
+  });
+}
+var CON_PRAGMA_READ = /^pragma\s+(?:table_list|(?:table_info|table_xinfo|index_list|index_info|foreign_key_list)\s*\(\s*['"]?[A-Za-z_][A-Za-z0-9_]*['"]?\s*\))\s*$/i;
+function conSqlKind(sql) {
+  const raw = String(sql || "").trim().replace(/;\s*$/, "");
+  const m = conMask(raw);
+  if (!m.trim()) return { error: "Type a statement." };
+  if (m.indexOf(";") >= 0) return { error: "One statement at a time." };
+  const lo = m.toLowerCase();
+  const first = (/^\s*([a-z]+)/.exec(lo) || [])[1] || "";
+  if (first === "pragma") return CON_PRAGMA_READ.test(raw) ? { read: true, sql: raw, masked: m } : { error: "Only PRAGMA table_list, table_info, table_xinfo, index_list, index_info and foreign_key_list are allowed." };
+  const writes = /\b(insert|update|delete|drop|alter|create|attach|detach|vacuum|reindex|analyze|pragma)\b|\breplace\b(?!\s*\()/.test(lo);
+  if ((first === "select" || first === "with" || first === "explain" || first === "values") && !writes) return { read: true, sql: raw, masked: m };
+  return { read: false, sql: raw, masked: m, first };
+}
+// A write the console will run: what it touches and the SELECT that backs those rows up first.
+function conWritePlan(sql) {
+  const k = conSqlKind(sql);
+  if (k.error) return k;
+  if (k.read) return { error: "That statement only reads: use 'sql' (no '!')." };
+  const rawLo = k.sql.toLowerCase();
+  for (const t of CON_PROTECTED) if (new RegExp("\\b" + t + "\\b").test(rawLo)) return { error: t + " is read-only from the console (budget caps, verification evidence, claims, sign-in and the audit trail are never written here)." };
+  const lo = k.masked.toLowerCase();
+  if (/^\s*with\b/.test(lo)) return { error: "Write it without the WITH clause, so the rows it changes can be backed up first." };
+  if (/^\s*(drop|alter|attach|detach|vacuum|reindex|analyze|pragma)\b/.test(lo)) return { error: (k.first || "That").toUpperCase() + " is not run from the console: schema changes ship as a migration in qnfo-workers (backed up, reviewed, reverted on a guard breach)." };
+  if (/^\s*create\s+(temp\s+|temporary\s+)?trigger\b/.test(lo)) return { error: "Triggers change what every other writer does; ship one as a migration in qnfo-workers." };
+  if (/^\s*(replace\b|insert\s+or\s+replace\b)/.test(lo) || /\bon\s+conflict\b[\s\S]*\bdo\s+update\b/.test(lo)) return { error: "REPLACE and upserts overwrite rows without a backup; use UPDATE ... WHERE (backed up first) or INSERT OR IGNORE." };
+  if (/^\s*insert\b/.test(lo)) return { kind: "insert", sql: k.sql };
+  if (/^\s*create\s+(unique\s+)?(table|index|view)\b/.test(lo)) return { kind: "create", sql: k.sql };
+  let m = /^\s*update\s+(?:or\s+[a-z]+\s+)?([a-z_][a-z0-9_]*)\s+set\s/.exec(lo);
+  if (m) {
+    const w = /\bwhere\b/.exec(lo.slice(m[0].length));
+    if (!w) return { error: "UPDATE without WHERE is refused: say which rows." };
+    const setPart = lo.slice(m[0].length, m[0].length + w.index);
+    if (/\bselect\b/.test(setPart)) return { error: "A subquery in SET hides which rows change; compute the value first and UPDATE with a literal." };
+    let where = k.sql.slice(m[0].length + w.index + 5);
+    const ret = /\breturning\b/.exec(lo.slice(m[0].length + w.index + 5));
+    if (ret) where = where.slice(0, ret.index);
+    return { kind: "update", table: m[1], where: where.trim(), sql: k.sql };
+  }
+  m = /^\s*delete\s+from\s+([a-z_][a-z0-9_]*)\s*(?:\bwhere\b([\s\S]*))?$/.exec(lo);
+  if (m) {
+    if (!m[2] || !m[2].trim()) return { error: "DELETE without WHERE is refused: say which rows." };
+    let where = k.sql.slice(lo.length - m[2].length);
+    const ret = /\breturning\b/.exec(m[2]);
+    if (ret) where = where.slice(0, ret.index);
+    return { kind: "delete", table: m[1], where: where.trim(), sql: k.sql };
+  }
+  return { error: "The console runs INSERT, UPDATE ... WHERE, DELETE ... WHERE and CREATE TABLE/INDEX/VIEW. Anything else ships as a migration." };
+}
+function conDbOf(word) {
+  const w = String(word || "").toLowerCase();
+  return CON_DBS[w] ? w : null;
+}
+function conFmtRows(rows, total) {
+  if (!rows.length) return "(no rows)";
+  const cols = Object.keys(rows[0]);
+  const lines = [cols.join("\t")];
+  for (const r of rows) lines.push(cols.map(function(c2) {
+    const v = r[c2];
+    return conClip(v == null ? "NULL" : typeof v === "object" ? JSON.stringify(v) : String(v).replace(/\s+/g, " "), 300);
+  }).join("\t"));
+  let out = lines.join("\n");
+  if (out.length > CON_OUT_MAX) out = out.slice(0, CON_OUT_MAX) + "\n\u2026 (output cut at " + CON_OUT_MAX + " characters)";
+  return out + "\n(" + rows.length + (total > rows.length ? " of " + total : "") + " row" + (rows.length === 1 ? "" : "s") + ")";
+}
+async function conSqlRead(env, dbKey, sql) {
+  const k = conSqlKind(sql);
+  if (k.error) return { ok: false, error: k.error };
+  if (!k.read) return { ok: false, error: "That statement writes: use 'sql!' (needs a fresh code; UPDATE/DELETE rows are backed up first)." };
+  const db = env[CON_DBS[dbKey]];
+  if (!db) return { ok: false, error: "No " + dbKey + " database bound." };
+  try {
+    const r = await db.prepare(k.sql).all();
+    const rows = r.results || [];
+    return { ok: true, text: dbKey + ": " + conFmtRows(rows.slice(0, CON_MAX_ROWS), rows.length) };
+  } catch (e) {
+    return { ok: false, error: "D1 " + dbKey + ": " + String(e && e.message || e).slice(0, 400) };
+  }
+}
+async function conSqlWrite(env, dbKey, sql) {
+  const p = conWritePlan(sql);
+  if (p.error) return { ok: false, error: p.error };
+  const db = env[CON_DBS[dbKey]];
+  if (!db) return { ok: false, error: "No " + dbKey + " database bound." };
+  let backup = "";
+  try {
+    if (p.kind === "update" || p.kind === "delete") {
+      await conEnsure(env);
+      const rows = (await db.prepare("SELECT * FROM " + p.table + " WHERE " + p.where + " LIMIT " + (CON_BACKUP_MAX + 1)).all()).results || [];
+      if (rows.length > CON_BACKUP_MAX) return { ok: false, error: "That touches more than " + CON_BACKUP_MAX + " rows; narrow the WHERE (nothing was changed)." };
+      if (!rows.length) return { ok: true, text: "No row matches that WHERE; nothing was changed." };
+      const js = JSON.stringify(rows);
+      if (js.length > CON_BACKUP_CHARS) return { ok: false, error: "The rows it touches are too large to back up in one go (" + js.length + " characters); narrow the WHERE (nothing was changed)." };
+      const b = await env.AUDIT.prepare("INSERT INTO console_backups (db, table_name, stmt, row_count, rows_json) VALUES (?1, ?2, ?3, ?4, ?5)").bind(dbKey, p.table, p.sql.slice(0, 4e3), rows.length, js).run();
+      const bid = b && b.meta && b.meta.last_row_id;
+      backup = " Backed up " + rows.length + " row" + (rows.length === 1 ? "" : "s") + " first: qnfo-audit console_backups id " + bid + " (read it with: sql select rows_json from console_backups where id = " + bid + ").";
+    }
+    const r = await db.prepare(p.sql).run();
+    const ch = r && r.meta ? r.meta.changes : null;
+    return { ok: true, text: dbKey + ": " + p.kind + " done, " + (ch != null ? ch : "?") + " row" + (ch === 1 ? "" : "s") + " changed." + backup };
+  } catch (e) {
+    return { ok: false, error: "D1 " + dbKey + ": " + String(e && e.message || e).slice(0, 400) + (backup ? " (the backup row was written; the statement did not run)" : "") };
+  }
+}
+async function conFirst(env, sql, params) {
+  try {
+    const rows = await d1all(env.AUDIT, sql, params || []);
+    return rows;
+  } catch (e) {
+    return null;
+  }
+}
+// Everything the fleet knows about one agent_issues row, in one answer.
+async function conIssue(env, id) {
+  const a = await env.AUDIT.prepare("SELECT * FROM agent_issues WHERE id = ?1").bind(id).first();
+  if (!a) return { text: "No issue #" + id + " in qnfo-audit.agent_issues." };
+  const r = await Promise.all([
+    conFirst(env, "SELECT * FROM issue_triage WHERE issue_id = ?1", [id]),
+    conFirst(env, "SELECT pos FROM v_issue_queue WHERE id = ?1", [id]),
+    conFirst(env, "SELECT class, status, last_verdict, last_attempt_at, attempts, max_attempts, verify_transport, verify_probe, next_due_at FROM remediation_contracts WHERE issue_id = ?1", [id]),
+    conFirst(env, "SELECT pass, observed, expected, verified_at, verifier FROM remediation_verifications WHERE issue_id = ?1 ORDER BY id DESC LIMIT 5", [id]),
+    conFirst(env, "SELECT holder, intent, pr, claimed_at, expires_at, released_at, outcome FROM work_claims WHERE issue_id = ?1 ORDER BY id DESC LIMIT 5", [id]),
+    conFirst(env, "SELECT * FROM issue_plans WHERE issue_id = ?1", [id])
+  ]);
+  const t = r[0] && r[0][0], pos = r[1] && r[1][0], plan = r[5] && r[5][0];
+  let task = null;
+  if (plan && plan.task_id) task = ((await conFirst(env, "SELECT id, status, step, attempts, pr_url, merge_state, last_error, updated_at FROM code_tasks WHERE id = ?1", [plan.task_id])) || [])[0] || null;
+  const L = [];
+  L.push("#" + a.id + " [" + a.priority + "] " + a.status + (pos ? " - queue position " + pos.pos : "") + "\n" + a.title);
+  L.push("category " + (a.category || "?") + ", source " + (a.source || "?") + ", created " + conIso(a.created_at) + ", updated " + conIso(a.updated_at) + (a.recheck_count ? ", rechecked " + a.recheck_count + "x" : "") + (a.linked_session ? ", session " + a.linked_session : "") + (a.close_channel ? ", closed via " + a.close_channel : ""));
+  L.push("", "Description:", conClip(a.description || "(none)", 3500));
+  if (t) L.push("", "Triage: owner " + t.owner + ", state " + t.triage_state + ", rc " + t.rc + (t.reopened_count ? ", reopened " + t.reopened_count + "x" : "") + (t.remediation ? "\n  remediation: " + conClip(t.remediation, 600) : "") + (t.close_evidence ? "\n  close evidence: " + conClip(t.close_evidence, 600) : ""));
+  else L.push("", "Triage: none (no owner recorded).");
+  if (r[2] && r[2].length) {
+    L.push("", "Remediation contracts:");
+    for (const c2 of r[2]) L.push("  " + c2.class + " - " + c2.status + ", last verdict " + (c2.last_verdict || "none") + " at " + (c2.last_attempt_at || "never") + ", attempts " + (c2.attempts || 0) + "/" + c2.max_attempts + (c2.next_due_at ? ", next " + c2.next_due_at : "") + "\n    probe (" + c2.verify_transport + "): " + conClip(c2.verify_probe, 300));
+  }
+  if (r[3] && r[3].length) {
+    L.push("", "Latest verifications:");
+    for (const v of r[3]) L.push("  " + (Number(v.pass) ? "PASS" : "FAIL") + " " + v.verified_at + (v.verifier ? " by " + v.verifier : "") + " - observed " + conClip(v.observed, 200) + (v.expected ? " (expected " + conClip(v.expected, 120) + ")" : ""));
+  }
+  if (r[4] && r[4].length) {
+    L.push("", "Work claims:");
+    for (const w of r[4]) L.push("  " + w.holder + " since " + w.claimed_at + (w.released_at ? ", released " + w.released_at + " (" + (w.outcome || "?") + ")" : ", until " + w.expires_at) + (w.pr ? ", PR " + w.pr : "") + " - " + conClip(w.intent, 160));
+  }
+  if (plan) L.push("", "Code-loop plan: " + plan.outcome + " at " + plan.planned_at + (plan.path ? " on " + plan.path : "") + (plan.detail ? " - " + conClip(plan.detail, 300) : ""));
+  if (task) L.push("Code task " + task.id + ": " + task.status + "/" + task.step + ", attempts " + task.attempts + (task.pr_url ? ", " + task.pr_url : "") + (task.merge_state ? ", merge " + task.merge_state : "") + (task.last_error ? "\n  last error: " + conClip(task.last_error, 300) : ""));
+  const acts = [];
+  if (a.status === "open") {
+    for (const p of ["critical", "high", "medium", "low"]) if (p !== a.priority) acts.push(conCmd("prio " + a.id + " " + p, "Priority " + p));
+    if (!/code-task:/.test(a.description || "")) L.push("", "Hand it to the code loop: codetask " + a.id + " <dir>/worker.js [anchor text]");
+    L.push("Close it: close " + a.id + " <the live measurement that shows it is fixed>");
+  } else acts.push(conCmd("reopen " + a.id, "Reopen"));
+  if (t && t.owner && /^[a-z0-9-]+$/.test(t.owner)) acts.push(conCmd("logs " + t.owner, "Errors of " + t.owner));
+  if (task && task.pr_url) {
+    const pn = /\/pull\/(\d+)/.exec(task.pr_url);
+    if (pn) acts.push(conCmd("pr " + pn[1], "PR " + pn[1]));
+  }
+  return { text: L.join("\n"), actions: acts };
+}
+async function conBacklog(env, word) {
+  const f = String(word || "").trim();
+  const where = f ? " WHERE title LIKE ?1 OR owner LIKE ?1 OR category LIKE ?1" : "";
+  const rows = await d1all(env.AUDIT, "SELECT pos, id, priority, title, owner, has_code_task, has_contract FROM v_issue_queue" + where + " ORDER BY pos LIMIT 25", f ? ["%" + f + "%"] : []);
+  const n = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM v_issue_queue" + where, f ? ["%" + f + "%"] : []);
+  if (!rows.length) return { text: f ? "No open issue mentions '" + f + "'." : "No open issues." };
+  return { text: rows.map(function(x) {
+    return x.pos + ". #" + x.id + " [" + x.priority + "] " + conClip(x.title, 110) + " - " + (x.owner || "no owner") + (Number(x.has_code_task) ? ", code task" : "") + (Number(x.has_contract) ? ", contract" : "");
+  }).join("\n") + "\n" + (Number(n[0].n) > rows.length ? "\u2026 " + (Number(n[0].n) - rows.length) + " more. " : "") + "Type 'issue <id>' for everything about one.", actions: rows.slice(0, 4).map(function(x) {
+    return conCmd("issue " + x.id, "#" + x.id + " " + conClip(x.title, 40));
+  }) };
+}
+async function conInfo(env, c, ref) {
+  const res = cmdResolveItem(c.v, ref);
+  if (res.error) return { text: res.error };
+  const it = res.item;
+  const L = [it.title, "key " + it.key + (it.source ? ", source " + it.source : "") + (it.due ? ", due " + it.due : "") + (it.sev ? ", " + it.sev : "")];
+  if (it.why) L.push("Why you: " + it.why);
+  if (it.fallback) L.push("If you wait: " + it.fallback);
+  if (it.action) L.push("To do: " + it.action);
+  if (it.url) L.push("Link: " + it.url);
+  const k = String(it.key);
+  const acts = [];
+  if (k.indexOf("ha:") === 0) {
+    const h = ((await conFirst(env, "SELECT * FROM human_actions WHERE slug = ?1", [k.slice(3)])) || [])[0];
+    if (h) {
+      L.push("", "Card row (human_actions #" + h.id + "): status " + h.status + ", source " + (h.source || "?") + ", created " + h.created_at + ", updated " + h.updated_at + (h.resolution ? "\nResolution: " + h.resolution : ""));
+      const ids = {};
+      String((h.why || "") + " " + (h.action || "") + " " + (h.source || "") + " " + (h.slug || "")).replace(/(?:issue|agent_issues|#)\s*(\d{3,6})\b/gi, function(_, d) {
+        ids[d] = 1;
+        return _;
+      });
+      for (const d of Object.keys(ids).slice(0, 3)) acts.push(conCmd("issue " + d, "Issue #" + d));
+    }
+  } else if (k.indexOf("code:") === 0) {
+    const ct = ((await conFirst(env, "SELECT id, repo, path, goal, status, step, attempts, branch, pr_url, last_error, merge_state, merge_note, updated_at FROM code_tasks WHERE id = ?1", [k.slice(5)])) || [])[0];
+    if (ct) L.push("", "Code task " + ct.id + " on " + ct.repo + "/" + ct.path + ": " + ct.status + "/" + ct.step + ", attempts " + ct.attempts + (ct.branch ? ", branch " + ct.branch : "") + (ct.pr_url ? ", " + ct.pr_url : "") + "\nGoal: " + conClip(ct.goal, 1200) + (ct.last_error ? "\nLast error: " + conClip(ct.last_error, 500) : "") + (ct.merge_note ? "\nMerge: " + (ct.merge_state || "") + " " + conClip(ct.merge_note, 300) : ""));
+  }
+  if (it.detail && it.detail.length) for (const d of it.detail) L.push("", "#" + d.id + " " + d.statement + (d.why ? "\n  " + d.why : "") + (d.plan ? "\n  " + d.plan : ""));
+  if (it.mail && it.mail.length) for (const m of it.mail) L.push("", "Mail: " + (m.from_address || "someone at " + m.domain) + " - " + (m.subject || "(subject for the owner only)") + ", " + (m.category || "") + (m.excerpt ? "\n  " + conClip(m.excerpt, 300) : ""));
+  return { text: L.join("\n"), actions: acts };
+}
+async function conTasks(env, word) {
+  const f = String(word || "").trim();
+  const rows = await d1all(env.AUDIT, "SELECT id, path, status, step, attempts, pr_url, merge_state, substr(COALESCE(last_error,''),1,160) AS err, updated_at FROM code_tasks" + (f ? " WHERE path LIKE ?1 OR goal LIKE ?1 OR status = ?2" : "") + " ORDER BY updated_at DESC LIMIT 15", f ? ["%" + f + "%", f] : []);
+  if (!rows.length) return { text: "No code task matches." };
+  return { text: rows.map(function(x) {
+    return x.id + " " + x.status + "/" + x.step + " " + x.path + " (" + x.attempts + " tries, " + String(x.updated_at).slice(0, 16) + ")" + (x.pr_url ? " " + x.pr_url : "") + (x.merge_state ? " merge " + x.merge_state : "") + (x.err ? "\n   " + x.err : "");
+  }).join("\n") };
+}
+async function conLocks() {
+  try {
+    const r = await fetch("https://qnfo-deploy-guard.q08.workers.dev/work-locks", { signal: AbortSignal.timeout(8e3) });
+    const j = await r.json();
+    const cl = j.claims || [], inf = j.in_flight || [];
+    return { text: (cl.length ? cl.map(function(x) {
+      return x.key + " - " + x.holder + " until " + x.expires_at;
+    }).join("\n") : "No live work claims.") + (inf.length ? "\n\nIn flight:\n" + inf.slice(0, 15).map(function(x) {
+      return (x.path || x.issue_id || "?") + " - " + x.kind + " " + (x.holder || "") + " " + conClip(x.intent, 100);
+    }).join("\n") : "") };
+  } catch (e) {
+    return { text: "The work-lock service did not answer: " + String(e && e.message || e).slice(0, 160) };
+  }
+}
+async function conLogs(env, worker, n) {
+  const rows = await d1all(env.AUDIT, "SELECT ts_ms, event_type, outcome, method, status, url, substr(COALESCE(exceptions_json,''),1,400) AS ex, substr(COALESCE(logs_json,''),1,300) AS lg FROM worker_logs WHERE script_name = ?1 ORDER BY ts_ms DESC LIMIT ?2", [worker, n]);
+  if (!rows.length) return { text: "No captured log events for " + worker + " (worker_logs holds error events copied by qnfo-ops ERROR-DETAIL-CAPTURE-1)." };
+  return { text: rows.map(function(x) {
+    return conIso(x.ts_ms) + " " + (x.event_type || "") + " " + (x.outcome || "") + (x.status ? " HTTP " + x.status : "") + (x.method ? " " + x.method : "") + (x.url ? " " + conClip(String(x.url).replace(/([?&](?:t|token|key|code)=)[^&]+/gi, "$1***"), 120) : "") + (x.ex && x.ex !== "[]" ? "\n   " + x.ex : "") + (x.lg && x.lg !== "[]" ? "\n   logs: " + x.lg : "");
+  }).join("\n") };
+}
+function conGhErr(r) {
+  return "GitHub " + (r.status || "network") + ": " + (r.json && r.json.message ? r.json.message : r.error || "no detail") + (r.status === 403 || r.status === 404 ? " (the dashboard's GITHUB_TOKEN may lack this permission on " + CON_REPO + ")" : "");
+}
+async function conPrs(env) {
+  const r = await ghCall(env, "GET", "/repos/" + CON_REPO + "/pulls?state=open&per_page=30");
+  if (!r.ok) return { text: conGhErr(r) };
+  const list = r.json || [];
+  if (!list.length) return { text: "No open pull requests on " + CON_REPO + "." };
+  return { text: list.map(function(p) {
+    return "#" + p.number + " " + conClip(p.title, 110) + " (" + (p.head && p.head.ref) + ", " + (p.user && p.user.login) + ", updated " + String(p.updated_at).slice(0, 16) + ")";
+  }).join("\n"), actions: list.slice(0, 4).map(function(p) {
+    return conCmd("pr " + p.number, "PR " + p.number);
+  }) };
+}
+async function conPr(env, n) {
+  const r = await ghCall(env, "GET", "/repos/" + CON_REPO + "/pulls/" + n);
+  if (!r.ok) return { text: conGhErr(r) };
+  const p = r.json;
+  const L = ["#" + p.number + " " + p.title, p.state + (p.merged ? " (merged)" : "") + ", " + (p.draft ? "draft, " : "") + "mergeable " + p.mergeable + " (" + p.mergeable_state + "), " + p.changed_files + " files +" + p.additions + "/-" + p.deletions + ", " + p.head.ref + " -> " + p.base.ref, p.html_url];
+  if (p.body) L.push("", conClip(p.body, 1500));
+  const acts = [];
+  const cr = await ghCall(env, "GET", "/repos/" + CON_REPO + "/commits/" + p.head.sha + "/check-runs?per_page=100");
+  if (cr.ok && cr.json) {
+    const runs = cr.json.check_runs || [];
+    const bad = runs.filter(function(x) {
+      return x.conclusion && ["success", "neutral", "skipped"].indexOf(x.conclusion) < 0;
+    });
+    const pending = runs.filter(function(x) {
+      return x.status !== "completed";
+    });
+    L.push("", "Checks: " + runs.length + " total, " + bad.length + " failing, " + pending.length + " running.");
+    for (const b of bad.slice(0, 10)) L.push("  FAIL " + b.name + (b.output && b.output.title ? " - " + conClip(b.output.title, 140) : ""));
+    const ids = {};
+    for (const b of bad) {
+      const m = /\/actions\/runs\/(\d+)/.exec(b.details_url || "");
+      if (m) ids[m[1]] = 1;
+    }
+    for (const id of Object.keys(ids).slice(0, 3)) acts.push(cmdAction("rerun", { run: Number(id), title: "run " + id }));
+  } else L.push("", "Checks: " + conGhErr(cr));
+  if (p.state === "open") {
+    acts.push(cmdAction("merge", { pr: p.number, title: "#" + p.number + " " + conClip(p.title, 40) }));
+    acts.push(cmdAction("closepr", { pr: p.number, title: "#" + p.number }));
+  }
+  return { text: L.join("\n"), actions: acts };
+}
+async function conRuns(env, wf) {
+  const path = wf ? "/repos/" + CON_REPO + "/actions/workflows/" + encodeURIComponent(wf) + "/runs?per_page=15" : "/repos/" + CON_REPO + "/actions/runs?per_page=15";
+  const r = await ghCall(env, "GET", path);
+  if (!r.ok) return { text: conGhErr(r) };
+  const runs = r.json && r.json.workflow_runs || [];
+  if (!runs.length) return { text: "No runs." };
+  return { text: runs.map(function(x) {
+    return x.id + " " + conClip(x.name, 40) + " - " + (x.conclusion || x.status) + " on " + x.head_branch + " (" + x.event + ", " + String(x.created_at).slice(0, 16) + ")";
+  }).join("\n") + "\nRe-run a failed one: rerun <id>." };
+}
+// Read commands. Returns null when the text is not one; owner-only reads ask for the code.
+async function conRead(env, text, c, owner) {
+  const t = String(text || "").trim();
+  const lo = t.toLowerCase();
+  let m;
+  if ((m = /^issue\s+#?(\d{1,7})$/.exec(lo))) return await conIssue(env, Number(m[1]));
+  if ((m = /^backlog(?:\s+(.{1,60}))?$/.exec(lo))) return await conBacklog(env, m[1]);
+  if ((m = /^(?:info|details?)\s+(\S{1,160})$/.exec(t))) return await conInfo(env, c, m[1]);
+  if ((m = /^(?:code\s*)?tasks(?:\s+(.{1,60}))?$/.exec(lo))) return await conTasks(env, m[1]);
+  if (/^(locks|claims|work-?locks)$/.test(lo)) return await conLocks();
+  if (/^(prs|pull requests|pulls)$/.test(lo)) return await conPrs(env);
+  if ((m = /^pr\s+#?(\d{1,6})$/.exec(lo))) return await conPr(env, Number(m[1]));
+  if ((m = /^runs(?:\s+([a-z0-9._-]{1,80}\.ya?ml))?$/.exec(lo))) return await conRuns(env, m[1]);
+  const lm = /^logs\s+([a-z0-9][a-z0-9-]{1,62})(?:\s+(\d{1,2}))?$/.exec(lo);
+  const sm = /^sql\s+(?:(audit|outreach|living|graph)\s+)?([\s\S]+)$/i.exec(t);
+  if (!lm && !(sm && !/^sql!/i.test(t))) return null;
+  if (!conIsOwner(owner)) return { ok: false, error: (lm ? "Worker logs" : "SQL") + " needs your email code (type 'login').", need: "code" };
+  if (lm) return await conLogs(env, lm[1], Math.max(1, Math.min(20, Number(lm[2]) || 8)));
+  const r = await conSqlRead(env, conDbOf(sm[1]) || "audit", sm[2]);
+  return r.ok ? { text: r.text } : { ok: false, error: r.error };
+}
+// Action commands: the same shape as cmdParse, so the command line runs owner ops at once and shows destructive ones as a
+// confirm button. Returns null when the text is not one.
+var CON_PRIOS = ["critical", "high", "medium", "low"];
+function conParse(text) {
+  const t = String(text || "").trim();
+  const lo = t.toLowerCase();
+  let m;
+  if ((m = /^(?:prio|priority)\s+#?(\d{1,7})\s+(critical|high|medium|low)$/.exec(lo))) return { actions: [cmdAction("iprio", { id: Number(m[1]), priority: m[2], title: "#" + m[1] + " -> " + m[2] })], auto: true, text: "Priority of #" + m[1] + " -> " + m[2] };
+  if ((m = /^owner\s+#?(\d{1,7})\s+([a-z0-9][a-z0-9-]{1,62})$/.exec(lo))) return { actions: [cmdAction("iowner", { id: Number(m[1]), owner: m[2], title: "#" + m[1] + " -> " + m[2] })], auto: true, text: "Owner of #" + m[1] + " -> " + m[2] };
+  if ((m = /^comment\s+#?(\d{1,7})\s+([\s\S]{2,1500})$/i.exec(t))) return { actions: [cmdAction("icomment", { id: Number(m[1]), text: m[2].trim(), title: "#" + m[1] })], auto: true, text: "Comment on #" + m[1] };
+  if ((m = /^reopen\s+#?(\d{1,7})$/.exec(lo))) return { actions: [cmdAction("ireopen", { id: Number(m[1]), title: "#" + m[1] })], auto: true, text: "Reopen #" + m[1] };
+  if ((m = /^code-?task\s+#?(\d{1,7})\s+([A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9._\/-]+)(?:\s+([\s\S]{3,300}))?$/i.exec(t))) return { actions: [cmdAction("icodetask", { id: Number(m[1]), path: m[2], anchor: (m[3] || "").trim(), title: "#" + m[1] + " " + m[2] })], auto: true, text: "Hand #" + m[1] + " to the code loop on " + m[2] };
+  if ((m = /^(close|wontfix)\s+#?(\d{1,7})\s+([\s\S]+)$/i.exec(t))) {
+    const ev = m[3].trim();
+    if (ev.length < 20) return { text: "Say what shows it, in at least 20 characters: the live measurement that proves it is fixed (or, for wontfix, why it is not worth doing). The guard metric issue_wontfix_share_7d counts wontfix closes." };
+    return { actions: [cmdAction("iclose", { id: Number(m[2]), evidence: ev.slice(0, 2e3), wontfix: m[1].toLowerCase() === "wontfix", title: (m[1].toLowerCase() === "wontfix" ? "wontfix #" : "close #") + m[2] })], text: (m[1].toLowerCase() === "wontfix" ? "Close #" + m[2] + " as wontfix" : "Close #" + m[2]) + " with: " + ev };
+  }
+  if ((m = /^sql!\s+(?:(audit|outreach|living|graph)\s+)?([\s\S]+)$/i.exec(t))) {
+    const db = conDbOf(m[1]) || "audit";
+    const p = conWritePlan(m[2]);
+    if (p.error) return { text: p.error };
+    return { actions: [cmdAction("sqlw", { db, sql: p.sql, title: db + ": " + conClip(p.sql, 50) })], text: "Run on " + db + " (" + p.kind + (p.table ? " " + p.table + ", rows backed up first" : "") + "):\n" + p.sql };
+  }
+  if ((m = /^call\s+([a-z0-9][a-z0-9-]{1,62})\s+(?:(get|post|put|patch|delete)\s+)?(\/\S{0,500})(?:\s+([\s\S]{1,8000}))?$/i.exec(t))) {
+    const method = (m[2] || (m[4] ? "POST" : "GET")).toUpperCase();
+    let body = null;
+    if (m[4]) {
+      try {
+        body = JSON.stringify(JSON.parse(m[4]));
+      } catch (e) {
+        return { text: "The body must be JSON." };
+      }
+    }
+    const args = { worker: m[1].toLowerCase(), method, path: m[3], body, title: method + " " + m[1] + m[3] };
+    if (method === "GET") return { actions: [cmdAction("callr", args)], auto: true, text: "GET " + m[1] + m[3] };
+    return { actions: [cmdAction("callw", args)], text: method + " " + m[1] + m[3] + (body ? "\n" + conClip(body, 500) : "") };
+  }
+  if ((m = /^dispatch\s+([a-z0-9._-]{1,80}\.ya?ml)((?:\s+[A-Za-z_][A-Za-z0-9_-]*=(?:"[^"]*"|\S+))*)\s*$/i.exec(t))) {
+    const inputs = {};
+    String(m[2] || "").replace(/([A-Za-z_][A-Za-z0-9_-]*)=("([^"]*)"|\S+)/g, function(_, k, v, q) {
+      inputs[k] = q != null ? q : v;
+      return _;
+    });
+    return { actions: [cmdAction("dispatch", { workflow: m[1], inputs, title: m[1] + " " + conClip(JSON.stringify(inputs), 40) })], text: "Run " + m[1] + " on main with " + JSON.stringify(inputs) };
+  }
+  if ((m = /^deploy\s+([a-z0-9][a-z0-9 -]{1,300})$/.exec(lo))) {
+    const ws = m[1].trim().split(/\s+/).filter(function(w) {
+      return /^[a-z0-9][a-z0-9-]{1,62}$/.test(w);
+    });
+    if (!ws.length) return { text: "Name the worker(s) to deploy." };
+    return { actions: [cmdAction("dispatch", { workflow: "canonical-deploy.yml", inputs: { workers: ws.join(" ") }, title: "deploy " + ws.join(" ") })], text: "Deploy " + ws.join(", ") + " from main through canonical-deploy.yml (deploy lock, ledger, bindings, crons)." };
+  }
+  if ((m = /^merge\s+#?(\d{1,6})$/.exec(lo))) return { actions: [cmdAction("merge", { pr: Number(m[1]), title: "#" + m[1] })], text: "Squash-merge #" + m[1] + " into main (required checks still apply; the merge deploys through canonical-deploy)." };
+  if ((m = /^close-?pr\s+#?(\d{1,6})$/.exec(lo))) return { actions: [cmdAction("closepr", { pr: Number(m[1]), title: "#" + m[1] })], text: "Close #" + m[1] + " without merging." };
+  if ((m = /^rerun\s+(\d{6,14})$/.exec(lo))) return { actions: [cmdAction("rerun", { run: Number(m[1]), title: "run " + m[1] })], auto: true, text: "Re-run the failed jobs of run " + m[1] };
+  return null;
+}
+async function conIssueTouch(env, id) {
+  const a = await env.AUDIT.prepare("SELECT id, status, priority, title FROM agent_issues WHERE id = ?1").bind(id).first();
+  return a || null;
+}
+async function conExec(env, owner, op, args) {
+  if (!conIsOwner(owner)) return { ok: false, error: "Console actions need your own sign-in (type 'login'); the fleet's loop token cannot run them." };
+  const now = Date.now();
+  const stamp = "[owner " + new Date(now).toISOString().slice(0, 16) + "Z, fleet console]";
+  try {
+    if (/^i(prio|owner|comment|codetask|reopen|close)$/.test(op)) {
+      const id = Number(args.id);
+      const a = Number.isInteger(id) && id > 0 ? await conIssueTouch(env, id) : null;
+      if (!a) return { ok: false, error: "No issue #" + args.id + "." };
+      if (op === "iprio") {
+        if (CON_PRIOS.indexOf(args.priority) < 0) return { ok: false, error: "Priority is critical, high, medium or low." };
+        await env.AUDIT.prepare("UPDATE agent_issues SET priority = ?1, updated_at = ?2 WHERE id = ?3").bind(args.priority, now, id).run();
+        const pos = ((await conFirst(env, "SELECT pos FROM v_issue_queue WHERE id = ?1", [id])) || [])[0];
+        return { ok: true, text: "#" + id + " is now " + args.priority + (pos ? ", queue position " + pos.pos : "") + "." };
+      }
+      if (op === "iowner") {
+        await env.AUDIT.prepare("INSERT OR IGNORE INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) VALUES (?1, 'OWNER-CONSOLE', 'triaged', ?2, datetime('now'))").bind(id, args.owner).run();
+        await env.AUDIT.prepare("UPDATE issue_triage SET owner = ?1 WHERE issue_id = ?2").bind(String(args.owner), id).run();
+        return { ok: true, text: "#" + id + " is owned by " + args.owner + "." };
+      }
+      if (op === "icomment") {
+        const txt = String(args.text || "").trim().slice(0, 1500);
+        if (txt.length < 2) return { ok: false, error: "Say something." };
+        await env.AUDIT.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1, updated_at = ?2 WHERE id = ?3").bind("\n\n" + stamp + " " + txt, now, id).run();
+        return { ok: true, text: "Comment added to #" + id + "; the loops read it on their next pass." };
+      }
+      if (op === "icodetask") {
+        const path = String(args.path || "");
+        if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9._\/-]+$/.test(path) || path.indexOf("..") >= 0) return { ok: false, error: "Give a repository path like qnfo-ops/worker.js." };
+        const anchor = String(args.anchor || "").replace(/[\r\n]+/g, " ").trim().slice(0, 300);
+        await env.AUDIT.prepare("UPDATE agent_issues SET description = COALESCE(description, '') || ?1, updated_at = ?2 WHERE id = ?3").bind("\n\n" + stamp + " handed to the code loop.\ncode-task: repo=qnfo-workers path=" + path + (anchor ? "\ncode-anchor: " + anchor : ""), now, id).run();
+        return { ok: true, text: "#" + id + " now carries 'code-task: repo=qnfo-workers path=" + path + "'" + (anchor ? " with an anchor" : "") + "; the code loop opens the PR and the merge runner merges it on green checks. Follow it with 'issue " + id + "' or 'tasks " + path + "'." };
+      }
+      if (op === "ireopen") {
+        if (a.status === "open") return { ok: true, text: "#" + id + " is already open." };
+        await env.AUDIT.batch([
+          env.AUDIT.prepare("UPDATE issue_triage SET triage_state = 'triaged', reopened_count = reopened_count + 1 WHERE issue_id = ?1").bind(id),
+          env.AUDIT.prepare("UPDATE agent_issues SET status = 'open', close_channel = NULL, description = COALESCE(description, '') || ?1, updated_at = ?2 WHERE id = ?3").bind("\n\n" + stamp + " reopened.", now, id)
+        ]);
+        return { ok: true, text: "#" + id + " is open again." };
+      }
+      if (op === "iclose") {
+        const ev = String(args.evidence || "").trim();
+        if (ev.length < 20) return { ok: false, error: "Close evidence needs at least 20 characters: the live measurement." };
+        if (a.status !== "open") return { ok: true, text: "#" + id + " is already " + a.status + "." };
+        const st = args.wontfix ? "wontfix" : "closed";
+        await env.AUDIT.batch([
+          env.AUDIT.prepare("INSERT OR IGNORE INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at) VALUES (?1, 'OWNER-CONSOLE', 'triaged', 'owner', datetime('now'))").bind(id),
+          env.AUDIT.prepare("UPDATE issue_triage SET close_evidence = ?1 WHERE issue_id = ?2").bind(stamp + " " + ev.slice(0, 2e3), id),
+          env.AUDIT.prepare("UPDATE agent_issues SET status = ?1, close_channel = 'owner:fleet-console', updated_at = ?2 WHERE id = ?3 AND status = 'open'").bind(st, now, id)
+        ]);
+        return { ok: true, text: "#" + id + " " + st + " with your evidence (issue_triage.close_evidence)." };
+      }
+      return { ok: false, error: "unknown issue action" };
+    }
+    if (op === "sqlw") {
+      const db = conDbOf(args.db) || "audit";
+      return await conSqlWrite(env, db, String(args.sql || ""));
+    }
+    if (op === "callr" || op === "callw") {
+      const worker = String(args.worker || "");
+      const path = String(args.path || "");
+      const method = String(args.method || "GET").toUpperCase();
+      if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(worker) || path.charAt(0) !== "/" || ["GET", "POST", "PUT", "PATCH", "DELETE"].indexOf(method) < 0) return { ok: false, error: "call <worker> [METHOD] </path> [json]" };
+      if ((method === "GET") !== (op === "callr")) return { ok: false, error: "method does not match the action" };
+      if (worker === NAME) return { ok: false, error: "The console does not call this dashboard through itself; type the command instead." };
+      const url = "https://" + worker + ".q08.workers.dev" + path;
+      const init = { method, headers: { "Content-Type": "application/json", "User-Agent": NAME + "/" + VERSION + " fleet-console" }, body: method === "GET" ? void 0 : args.body || void 0, signal: AbortSignal.timeout(25e3) };
+      const svc = CON_SVC[worker] && env[CON_SVC[worker]];
+      const r = svc ? await svc.fetch(url, init) : await fetch(url, init);
+      const body = await r.text();
+      return { ok: r.status < 500, text: method + " " + worker + path + (svc ? " (service binding)" : "") + " -> HTTP " + r.status + " " + (r.headers.get("content-type") || "") + "\n" + conClip(body, 4e3), error: r.status >= 500 ? "HTTP " + r.status + ": " + conClip(body, 600) : void 0 };
+    }
+    if (op === "dispatch") {
+      const wf = String(args.workflow || "");
+      if (!/^[a-z0-9._-]{1,80}\.ya?ml$/i.test(wf)) return { ok: false, error: "workflow file name, e.g. cf-ops-actions.yml" };
+      const inputs = {};
+      for (const k of Object.keys(args.inputs || {}).slice(0, 10)) inputs[k] = String(args.inputs[k]).slice(0, 500);
+      const r = await ghCall(env, "POST", "/repos/" + CON_REPO + "/actions/workflows/" + encodeURIComponent(wf) + "/dispatches", { ref: "main", inputs });
+      if (!r.ok) return { ok: false, error: conGhErr(r) };
+      return { ok: true, text: wf + " started on main with " + JSON.stringify(inputs) + ". Watch it: runs " + wf };
+    }
+    if (op === "merge" || op === "closepr") {
+      const n = Number(args.pr);
+      if (!Number.isInteger(n) || n < 1) return { ok: false, error: "PR number" };
+      const r = op === "merge" ? await ghCall(env, "PUT", "/repos/" + CON_REPO + "/pulls/" + n + "/merge", { merge_method: "squash" }) : await ghCall(env, "PATCH", "/repos/" + CON_REPO + "/pulls/" + n, { state: "closed" });
+      if (!r.ok) return { ok: false, error: conGhErr(r) };
+      return { ok: true, text: op === "merge" ? "#" + n + " merged (" + String(r.json && r.json.sha || "").slice(0, 10) + "). canonical-deploy.yml deploys the changed workers from main." : "#" + n + " closed." };
+    }
+    if (op === "rerun") {
+      const id = Number(args.run);
+      if (!Number.isInteger(id) || id < 1) return { ok: false, error: "run id" };
+      const r = await ghCall(env, "POST", "/repos/" + CON_REPO + "/actions/runs/" + id + "/rerun-failed-jobs", {});
+      if (!r.ok) return { ok: false, error: conGhErr(r) };
+      return { ok: true, text: "Re-running the failed jobs of run " + id + "." };
+    }
+  } catch (e) {
+    return { ok: false, error: op + ": " + String(e && e.message || e).slice(0, 400) };
+  }
+  return { ok: false, error: "unknown console action " + op };
+}
+// Proposals the model may make: console read commands only, shown as buttons that type the command (its own gates apply).
+var CON_AI_CMD = /^(issue \d{1,7}|backlog( [\w .:-]{1,60})?|info \S{1,160}|tasks( [\w .\/:-]{1,60})?|locks|prs|pr \d{1,6}|runs( [a-z0-9._-]+\.ya?ml)?|logs [a-z0-9-]{2,63}( \d{1,2})?)$/i;
 // ---- UI ----
 var CMD_CSS = ".cmd{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}.cmd form{display:flex;gap:8px;align-items:flex-start}.cmd .pr0{font:600 15px/34px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--link)}#ctext{flex:1;min-width:0;resize:none;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:15px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;height:36px;max-height:160px}#ctext:focus{outline:2px solid var(--link);outline-offset:0}.cmd button{padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;cursor:pointer;white-space:nowrap}.cmd button.p{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}.cmd button.d{border-color:var(--act);color:var(--act)}.cmd button:disabled{opacity:.5;cursor:default}#cout{margin-top:8px}.co{border-top:1px solid var(--line);padding:8px 0 4px;font-size:14px}.co .q{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--mute)}.co pre{white-space:pre-wrap;word-break:break-word;margin:4px 0 0;font:13.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.co .err{color:var(--act)}.co .acts{margin-top:6px}.co .acts button{white-space:normal;text-align:left;max-width:100%}.co .why{font-size:12px;color:var(--mute);margin:2px 0 0 2px}.cmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}.cmeta a{color:var(--mute)}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chips button{font-size:12px;padding:3px 9px;border-radius:99px}.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--line);border-top-color:var(--link);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:6px}@keyframes sp{to{transform:rotate(360deg)}}";
 function cmdPanelHtml(holder, from, q) {
   return '<section class="cmd" id="cmd" data-from="' + esc(from || "") + '" data-q="' + esc(q || "") + '"><form id="cform" autocomplete="off"><span class="pr0">&rsaquo;</span><textarea id="ctext" rows="1" maxlength="2000" placeholder="Ask or tell the fleet" aria-label="Fleet command line"></textarea><button class="p" id="cgo" type="submit">Run</button></form><div class="chips" id="cchips"><button type="button" data-c="status">status</button><button type="button" data-c="queue">queue</button><button type="button" data-c="suggest">suggest</button><button type="button" data-c="issues">issues</button><button type="button" data-c="spend">spend</button><button type="button" data-c="help">help</button></div><div id="cout" aria-live="polite"></div><div class="cmeta"><span id="cwho">' + (holder ? "Signed in: actions enabled" : "Reading and asking are open to everyone. Actions need your email code.") + '</span><span>' + (holder ? '<a href="#" id="clogout">sign out</a>' : '<a href="#" id="clogin">email me a code</a>') + (from ? ' &middot; from <a href="' + esc(from) + '">' + esc(String(from).replace(/^https?:\/\//, "").slice(0, 48)) + "</a>" : "") + "</span></div></section>";
 }
 // Client: submit, history (Up/Down), "/" to focus, background polling, action buttons, inline code sign-in.
-var CMD_JS = "(function(){var f=document.getElementById('cform');if(!f)return;var box=document.getElementById('cmd'),ta=document.getElementById('ctext'),out=document.getElementById('cout'),go=document.getElementById('cgo'),who=document.getElementById('cwho'),from=box.getAttribute('data-from')||'',H={'Content-Type':'application/json','x-fleet-ui':'1'},hist=[],hi=-1,holder=" + "HOLDER" + ";try{hist=JSON.parse(sessionStorage.getItem('fleetcmd')||'[]')}catch(e){}function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}function fit(){ta.style.height='36px';if(ta.value)ta.style.height=Math.min(160,ta.scrollHeight+2)+'px'}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}function setHolder(h){holder=h;who.textContent=h?'Signed in: actions enabled':'Reading and asking are open to everyone. Actions need your email code.'}function card(q){var c=el('div','co');if(q)c.appendChild(el('div','q','\\u203a '+q));out.insertBefore(c,out.firstChild);while(out.children.length>8)out.removeChild(out.lastChild);return c}function body(c,j){var w=c.querySelector('.wait');if(w)c.removeChild(w);if(j.error)c.appendChild(el('pre','err',j.error));var t=j.text||j.answer;if(t)c.appendChild(el('pre',null,t));if(j.need)codeUi(c,j.need);if(j.links)j.links.forEach(function(l){var a=el('a',null,l.label);a.href=l.href;c.appendChild(a);c.appendChild(document.createTextNode(' '))});if(j.go&&/^\\//.test(j.go)&&j.go!=='/'){location.href=j.go;return}if(j.actions&&j.actions.length){var a=el('div','acts');j.actions.forEach(function(x){var b=el('button',x.destructive?'d':null,x.label);b.type='button';b.onclick=function(){run(x,b,c)};a.appendChild(b);if(x.why){a.appendChild(el('div','why',x.why))}});c.appendChild(a)}if(j.signed_in)setHolder(true);if(j.signed_out)setHolder(false);if(j.executed&&window.fleetTick)window.fleetTick(true)}function codeUi(c,need){var a=el('div','acts'),i=el('input');i.inputMode='numeric';i.maxLength=6;i.placeholder='6-digit code';i.style.cssText='width:9em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)';var s=el('button','p','Email me a code');s.type='button';var v=el('button',null,'Verify');v.type='button';s.onclick=function(){s.disabled=true;post('/api/cmd/code',{}).then(function(j){a.appendChild(el('div','why',j.note||j.error||''));i.focus()}).then(function(){s.disabled=false})};v.onclick=function(){post('/api/cmd/verify',{code:i.value}).then(function(j){if(j.ok){setHolder(true);a.appendChild(el('div','why',j.text));if(c._retry)c._retry()}else a.appendChild(el('div','why',j.error||'failed'))})};i.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();v.click()}};a.appendChild(s);a.appendChild(i);a.appendChild(v);c.appendChild(a)}function run(x,b,c){b.disabled=true;var w=el('div','why');w.innerHTML='<span class=\"spin\"></span>working...';c.appendChild(w);post('/api/cmd/run',{op:x.op,args:x.args}).then(function(j){c.removeChild(w);if(j.ok){b.textContent='\\u2713 '+x.label;c.appendChild(el('div','why',j.text||'done'));if(window.fleetTick)window.fleetTick(true)}else{b.disabled=false;c.appendChild(el('div','why',j.error||'failed'));if(j.need){c._retry=function(){run(x,b,c)};codeUi(c,j.need)}}}).catch(function(){b.disabled=false;c.removeChild(w);c.appendChild(el('div','why','network error'))})}function poll(c,id,t0){fetch('/api/cmd/job/'+id,{cache:'no-store',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){if(j.status==='running'&&Date.now()-t0<45000){var w=c.querySelector('.wait span.t');if(w)w.textContent='thinking '+Math.round((Date.now()-t0)/1000)+'s';setTimeout(function(){poll(c,id,t0)},1200);return}if(j.status==='running')j={error:'No answer after 45s; the fleet may be busy. Try again, or use a command (type help).'};body(c,j);done()}).catch(function(){setTimeout(function(){poll(c,id,t0)},2000)})}function done(){go.disabled=false;ta.disabled=false;ta.focus()}function send(q){q=(q||'').trim();if(!q)return;hist=hist.filter(function(h){return h!==q});hist.unshift(q);hist=hist.slice(0,30);hi=-1;try{sessionStorage.setItem('fleetcmd',JSON.stringify(hist))}catch(e){}ta.value='';fit();var c=card(q);var w=el('div','why wait');w.innerHTML='<span class=\"spin\"></span><span class=\"t\">working</span>';c.appendChild(w);go.disabled=true;post('/api/cmd',{text:q,from:from}).then(function(j){if(j.holder!=null&&j.holder!==holder)setHolder(j.holder);if(j.kind==='pending'&&j.id){poll(c,j.id,Date.now());return}body(c,j);done()}).catch(function(){body(c,{error:'Network error - nothing was sent.'});done()})}f.addEventListener('submit',function(e){e.preventDefault();send(ta.value)});ta.addEventListener('input',fit);ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(ta.value)}else if(e.key==='ArrowUp'&&(!ta.value||hi>=0)&&hist.length){e.preventDefault();hi=Math.min(hist.length-1,hi+1);ta.value=hist[hi];fit()}else if(e.key==='ArrowDown'&&hi>=0){e.preventDefault();hi--;ta.value=hi>=0?hist[hi]:'';fit()}else if(e.key==='Escape'){ta.value='';hi=-1;fit()}});document.getElementById('cchips').addEventListener('click',function(e){var c=e.target&&e.target.getAttribute&&e.target.getAttribute('data-c');if(c)send(c)});var li=document.getElementById('clogin');if(li)li.addEventListener('click',function(e){e.preventDefault();var c=card('login');codeUi(c,'code')});var lo=document.getElementById('clogout');if(lo)lo.addEventListener('click',function(e){e.preventDefault();send('logout')});document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement&&!/^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName)){e.preventDefault();ta.focus()}});var q0=box.getAttribute('data-q');if(q0)send(q0)})();";
+var CMD_JS = "(function(){var f=document.getElementById('cform');if(!f)return;var box=document.getElementById('cmd'),ta=document.getElementById('ctext'),out=document.getElementById('cout'),go=document.getElementById('cgo'),who=document.getElementById('cwho'),from=box.getAttribute('data-from')||'',H={'Content-Type':'application/json','x-fleet-ui':'1'},hist=[],hi=-1,holder=" + "HOLDER" + ";try{hist=JSON.parse(sessionStorage.getItem('fleetcmd')||'[]')}catch(e){}function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}function fit(){ta.style.height='36px';if(ta.value)ta.style.height=Math.min(160,ta.scrollHeight+2)+'px'}function post(u,b){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(b),credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return{ok:false,error:'HTTP '+r.status}})})}function setHolder(h){holder=h;who.textContent=h?'Signed in: actions enabled':'Reading and asking are open to everyone. Actions need your email code.'}function card(q){var c=el('div','co');if(q)c.appendChild(el('div','q','\\u203a '+q));out.insertBefore(c,out.firstChild);while(out.children.length>8)out.removeChild(out.lastChild);return c}function body(c,j){var w=c.querySelector('.wait');if(w)c.removeChild(w);if(j.error)c.appendChild(el('pre','err',j.error));var t=j.text||j.answer;if(t)c.appendChild(el('pre',null,t));if(j.need)codeUi(c,j.need);if(j.links)j.links.forEach(function(l){var a=el('a',null,l.label);a.href=l.href;c.appendChild(a);c.appendChild(document.createTextNode(' '))});if(j.go&&/^\\//.test(j.go)&&j.go!=='/'){location.href=j.go;return}if(j.actions&&j.actions.length){var a=el('div','acts');j.actions.forEach(function(x){var b=el('button',x.destructive?'d':null,x.label);b.type='button';b.onclick=function(){if(x.cmd)send(x.cmd);else run(x,b,c)};a.appendChild(b);if(x.why){a.appendChild(el('div','why',x.why))}});c.appendChild(a)}if(j.signed_in)setHolder(true);if(j.signed_out)setHolder(false);if(j.executed&&window.fleetTick)window.fleetTick(true)}function codeUi(c,need){var a=el('div','acts'),i=el('input');i.inputMode='numeric';i.maxLength=6;i.placeholder='6-digit code';i.style.cssText='width:9em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)';var s=el('button','p','Email me a code');s.type='button';var v=el('button',null,'Verify');v.type='button';s.onclick=function(){s.disabled=true;post('/api/cmd/code',{}).then(function(j){a.appendChild(el('div','why',j.note||j.error||''));i.focus()}).then(function(){s.disabled=false})};v.onclick=function(){post('/api/cmd/verify',{code:i.value}).then(function(j){if(j.ok){setHolder(true);a.appendChild(el('div','why',j.text));if(c._retry)c._retry()}else a.appendChild(el('div','why',j.error||'failed'))})};i.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();v.click()}};a.appendChild(s);a.appendChild(i);a.appendChild(v);c.appendChild(a)}function run(x,b,c){b.disabled=true;var w=el('div','why');w.innerHTML='<span class=\"spin\"></span>working...';c.appendChild(w);post('/api/cmd/run',{op:x.op,args:x.args}).then(function(j){c.removeChild(w);if(j.ok){b.textContent='\\u2713 '+x.label;c.appendChild(el('div','why',j.text||'done'));if(window.fleetTick)window.fleetTick(true)}else{b.disabled=false;c.appendChild(el('div','why',j.error||'failed'));if(j.need){c._retry=function(){run(x,b,c)};codeUi(c,j.need)}}}).catch(function(){b.disabled=false;c.removeChild(w);c.appendChild(el('div','why','network error'))})}function poll(c,id,t0){fetch('/api/cmd/job/'+id,{cache:'no-store',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){if(j.status==='running'&&Date.now()-t0<45000){var w=c.querySelector('.wait span.t');if(w)w.textContent='thinking '+Math.round((Date.now()-t0)/1000)+'s';setTimeout(function(){poll(c,id,t0)},1200);return}if(j.status==='running')j={error:'No answer after 45s; the fleet may be busy. Try again, or use a command (type help).'};body(c,j);done()}).catch(function(){setTimeout(function(){poll(c,id,t0)},2000)})}function done(){go.disabled=false;ta.disabled=false;ta.focus()}function send(q){q=(q||'').trim();if(!q)return;hist=hist.filter(function(h){return h!==q});hist.unshift(q);hist=hist.slice(0,30);hi=-1;try{sessionStorage.setItem('fleetcmd',JSON.stringify(hist))}catch(e){}ta.value='';fit();var c=card(q);var w=el('div','why wait');w.innerHTML='<span class=\"spin\"></span><span class=\"t\">working</span>';c.appendChild(w);go.disabled=true;post('/api/cmd',{text:q,from:from}).then(function(j){if(j.holder!=null&&j.holder!==holder)setHolder(j.holder);if(j.kind==='pending'&&j.id){poll(c,j.id,Date.now());return}body(c,j);done()}).catch(function(){body(c,{error:'Network error - nothing was sent.'});done()})}f.addEventListener('submit',function(e){e.preventDefault();send(ta.value)});ta.addEventListener('input',fit);ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(ta.value)}else if(e.key==='ArrowUp'&&(!ta.value||hi>=0)&&hist.length){e.preventDefault();hi=Math.min(hist.length-1,hi+1);ta.value=hist[hi];fit()}else if(e.key==='ArrowDown'&&hi>=0){e.preventDefault();hi--;ta.value=hi>=0?hist[hi]:'';fit()}else if(e.key==='Escape'){ta.value='';hi=-1;fit()}});document.getElementById('cchips').addEventListener('click',function(e){var c=e.target&&e.target.getAttribute&&e.target.getAttribute('data-c');if(c)send(c)});var li=document.getElementById('clogin');if(li)li.addEventListener('click',function(e){e.preventDefault();var c=card('login');codeUi(c,'code')});var lo=document.getElementById('clogout');if(lo)lo.addEventListener('click',function(e){e.preventDefault();send('logout')});document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement&&!/^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName)){e.preventDefault();ta.focus()}});document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-fleet-cmd]');if(!t)return;e.preventDefault();send(t.getAttribute('data-fleet-cmd'));if(box.scrollIntoView)box.scrollIntoView({behavior:'smooth',block:'start'})});var q0=box.getAttribute('data-q');if(q0)send(q0)})();";
 function cmdScript(holder) {
   return "<script>" + CMD_JS.replace("holder=HOLDER;", "holder=" + (holder ? "true" : "false") + ";") + "</script>";
 }
