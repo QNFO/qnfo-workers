@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.7-probe-errors"; /* 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.10.0-bench-dataset"; /* 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -932,6 +932,139 @@ async function benchSourceProbe(request, ctx) {
   var res = new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600" } });
   if (cache && ctx && ctx.waitUntil) { try { ctx.waitUntil(cache.put(key, res.clone())); } catch (e) {} }
   return res;
+}
+// BENCH-DATASET-1 (3.10.0, #1779 step 1): the benchmark's patent sample, built server-side from the keyless USPTO Patent
+// Public Search API proven by BENCH-SOURCE-PROBE-2. Method (fixed, so anyone can rebuild the same sample):
+//   - three fields by CPC subclass: G06N (machine learning and AI), A61B (diagnosis and surgery), H01M (batteries);
+//   - granted US utility patents (USPAT) published 2025-01-01 to 2025-06-30, newest first, as the search returns them;
+//   - a patent qualifies when its text cites a US provisional application (60/, 61/, 62/ or 63/ series) AND its own
+//     application was filed within 366 days of the earliest related filing date, i.e. it claims the provisional directly
+//     rather than through a continuation chain (what an AI-drafted provisional would be measured against);
+//   - the first 10 qualifying patents per field are kept, at most 40 documents are read per field.
+// Stored once in R2 at benchmark/dataset.json with the query, the rule and verbatim abstract and claims text. GET answers
+// the stored summary; POST builds it only when it is missing (a build lock stops concurrent builds), so the endpoint cannot
+// be used to hammer the USPTO. No user input reaches a USPTO request. No model is called: the drafting and scoring steps are
+// separate and wait while fleet_budget caps are breached (QUNIVERSE core rule 8).
+var BENCH_DATASET_KEY = "benchmark/dataset.json";
+var BENCH_DATASET_LOCK = "benchmark/dataset.lock";
+var BENCH_DATASET_PARTIAL = "benchmark/dataset.partial.json";
+var BENCH_FIELDS = [{ key: "ml", cpc: "G06N", label: "machine learning and AI (CPC G06N)" }, { key: "medical", cpc: "A61B", label: "medical diagnosis and surgery (CPC A61B)" }, { key: "batteries", cpc: "H01M", label: "batteries and fuel cells (CPC H01M)" }];
+var BENCH_WINDOW = { from: "20250101", to: "20250630" };
+var BENCH_PER_FIELD = 10;
+var BENCH_MAX_READ = 40;
+var BENCH_PROV_RX = /[Pp]rovisional (?:[Pp]atent )?[Aa]pplication(?:s)?,? (?:[Ss]er(?:ial)?\.? )?(?:[Nn]o\.? ?|[Nn]umber )?(6[0-3]\/\d{3},?\d{3})/;
+function benchText(x) {
+  return String(x || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+}
+function benchDays(a, b) {
+  var x = Date.parse(a), y = Date.parse(b);
+  return isFinite(x) && isFinite(y) ? Math.round((x - y) / 864e5) : null;
+}
+// Pure: does one search hit plus its document text qualify, and what is kept. Exported for the offline suite.
+function benchQualify(hit, doc) {
+  var all = benchText(doc.backgroundTextHtml) + " " + benchText(doc.briefHtml) + " " + benchText(doc.descriptionHtml);
+  var m = BENCH_PROV_RX.exec(all);
+  if (!m) return { ok: false, why: "no provisional reference" };
+  var filed = (hit.applicationFilingDate || [])[0] || null;
+  var rel = (hit.relatedApplFilingDate || []).slice().sort()[0] || null;
+  var gap = benchDays(filed, rel);
+  if (gap === null || gap < 0 || gap > 366) return { ok: false, why: "not a direct claim to the provisional (filing gap " + gap + " days)" };
+  var claims = benchText(doc.claimsHtml);
+  if (claims.length < 200) return { ok: false, why: "claims text missing" };
+  return { ok: true, row: { guid: hit.guid, title: hit.inventionTitle || null, published: String(hit.datePublished || "").slice(0, 10), filed: String(filed).slice(0, 10), provisional_filed: String(rel).slice(0, 10), provisional_no: m[1], filing_gap_days: gap, cpc: hit.cpcInventiveFlattened || null, abstract: benchText(doc.abstractHtml).slice(0, 4e3), claims: claims.slice(0, 6e4), claims_chars: claims.length, source_url: "https://ppubs.uspto.gov/pubwebapp/ (" + hit.guid + ")" } };
+}
+async function ppubsSession() {
+  var hd = { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (compatible; QNFO-iPatent-benchmark/1.0; +https://ipatent.qnfo.org/)" };
+  var s = await fetch(PPUBS_API + "users/me/session", { method: "POST", headers: hd, body: "-1" });
+  var tok = s.headers.get("X-Access-Token"), sj = await s.json().catch(function() { return null; });
+  if (!tok || !sj || !sj.userCase) throw new Error("ppubs session " + s.status);
+  hd["X-Access-Token"] = tok;
+  return { hd: hd, caseId: sj.userCase.caseId };
+}
+async function ppubsSearch(ss, q, start, n) {
+  var body = { start: start, pageCount: n, sort: "date_publ desc", docFamilyFiltering: "familyIdFiltering", searchType: 1, familyIdEnglishOnly: true, familyIdFirstPreferred: "USPAT", familyIdSecondPreferred: "US-PGPUB", familyIdThirdPreferred: "FPRS", showDocPerFamilyPref: "showEnglish", queryId: 0, tagDocSearch: false, query: { caseId: ss.caseId, hl_snippets: "2", op: "OR", q: q, queryName: q, highlights: "1", qt: "brs", spellCheck: false, viewName: "tile", plurals: true, britishEquivalents: true, databaseFilters: [{ databaseName: "USPAT", countryCodes: [] }], searchType: 1, ignorePersist: false, userEnteredQuery: q } };
+  var j = await ppubsPaced(PPUBS_API + "searches/searchWithBeFamily", { method: "POST", headers: ss.hd, body: JSON.stringify(body) }, "ppubs search");
+  return { hits: j.patents || [], queryId: j.query && j.query.id };
+}
+// The USPTO answers 429 to back-to-back document reads (measured 2026-10-05), so reads are paced and a 429 backs off.
+var BENCH_PACE_MS = 1200;
+function benchSleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+async function ppubsPaced(url, init, what) {
+  for (var i = 0; i < 4; i++) {
+    var r = await fetch(url, init);
+    if (r.status !== 429) {
+      if (!r.ok) throw new Error(what + " " + r.status);
+      return await r.json();
+    }
+    await benchSleep(BENCH_PACE_MS * 4 * (i + 1));
+  }
+  throw new Error(what + " 429 after retries");
+}
+async function ppubsDoc(ss, hit, queryId) {
+  await benchSleep(BENCH_PACE_MS);
+  return await ppubsPaced(PPUBS_API + "patents/highlightSections/" + encodeURIComponent(hit.guid) + "?queryId=" + encodeURIComponent(hit.queryId || queryId || 1) + "&source=" + encodeURIComponent(hit.type || "USPAT"), { method: "POST", headers: ss.hd, body: '["all"]' }, "ppubs document");
+}
+async function benchBuildField(f) {
+  var ss = await ppubsSession();
+  var q = f.cpc + '$.cpc. AND @pd>="' + BENCH_WINDOW.from + '"<="' + BENCH_WINDOW.to + '"';
+  var kept = [], skipped = {}, start = 0, read = 0;
+  while (kept.length < BENCH_PER_FIELD && read < BENCH_MAX_READ) {
+    var page = await ppubsSearch(ss, q, start, 20);
+    if (!page.hits.length) break;
+    for (var h of page.hits) {
+      if (kept.length >= BENCH_PER_FIELD || read >= BENCH_MAX_READ) break;
+      if (h.type && h.type !== "USPAT") continue;
+      read++;
+      var qv = benchQualify(h, await ppubsDoc(ss, h, page.queryId));
+      if (qv.ok) kept.push(qv.row);
+      else { var why = qv.why.replace(/ \(.*$/, ""); skipped[why] = (skipped[why] || 0) + 1; }
+    }
+    start += page.hits.length;
+  }
+  return { key: f.key, label: f.label, query: q, read: read, kept: kept.length, skipped: skipped, patents: kept };
+}
+function benchAssemble(fields) {
+  var total = fields.reduce(function(a, x) { return a + x.kept; }, 0);
+  return { schema: "ipatent-benchmark-dataset/v1", built_at: new Date().toISOString(), built_by: "qnfo-ipatent " + VERSION + " BENCH-DATASET-1", source: "USPTO Patent Public Search API (ppubs.uspto.gov/api), no key", window: BENCH_WINDOW, rule: "granted USPAT, CPC subclass per field, published in the window, newest first; kept when the text cites a US provisional (60-63 series) and the application was filed within 366 days of the earliest related filing; first " + BENCH_PER_FIELD + " per field, at most " + BENCH_MAX_READ + " documents read per field", documents_read: fields.reduce(function(a, x) { return a + x.read; }, 0), patents_total: total, complete: total === BENCH_PER_FIELD * BENCH_FIELDS.length, fields: fields };
+}
+function benchSummary(ds) {
+  return { schema: ds.schema, built_at: ds.built_at, built_by: ds.built_by, source: ds.source, window: ds.window, rule: ds.rule, documents_read: ds.documents_read, patents_total: ds.patents_total, complete: ds.complete, fields: (ds.fields || []).map(function(f) { return { key: f.key, label: f.label, query: f.query, read: f.read, kept: f.kept, skipped: f.skipped, patents: (f.patents || []).map(function(p) { return { guid: p.guid, title: p.title, published: p.published, provisional_no: p.provisional_no, provisional_filed: p.provisional_filed, filed: p.filed, filing_gap_days: p.filing_gap_days, claims_chars: p.claims_chars }; }) }; }), r2_key: BENCH_DATASET_KEY };
+}
+async function benchDataset(request, env) {
+  var jh = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+  if (!env.IPATENT_R2) return new Response(JSON.stringify({ error: "no R2 binding" }), { status: 503, headers: jh });
+  var have = await env.IPATENT_R2.get(BENCH_DATASET_KEY);
+  if (have) {
+    var ds = await have.json();
+    return new Response(JSON.stringify(Object.assign({ status: "stored" }, benchSummary(ds))), { headers: jh });
+  }
+  if (request.method !== "POST") return new Response(JSON.stringify({ status: "missing", how: "POST /api/benchmark/dataset builds it one field per call (three calls, up to 40 paced keyless USPTO reads each); once complete, calls return the stored sample" }), { status: 404, headers: jh });
+  var lock = await env.IPATENT_R2.get(BENCH_DATASET_LOCK);
+  if (lock) {
+    var at = Date.parse(await lock.text());
+    if (isFinite(at) && Date.now() - at < 15 * 6e4) return new Response(JSON.stringify({ status: "building", since: new Date(at).toISOString() }), { status: 409, headers: jh });
+  }
+  await env.IPATENT_R2.put(BENCH_DATASET_LOCK, new Date().toISOString());
+  try {
+    // One field per call (each is up to 40 paced USPTO reads, about a minute); progress lives in R2 between calls.
+    var pobj = await env.IPATENT_R2.get(BENCH_DATASET_PARTIAL);
+    var done = pobj ? (await pobj.json()).fields || [] : [];
+    var next = BENCH_FIELDS.find(function(f) { return !done.some(function(d) { return d.key === f.key; }); });
+    if (next) {
+      done.push(await benchBuildField(next));
+      await env.IPATENT_R2.put(BENCH_DATASET_PARTIAL, JSON.stringify({ fields: done }));
+    }
+    if (done.length < BENCH_FIELDS.length) return new Response(JSON.stringify({ status: "partial", fields_done: done.map(function(d) { return { key: d.key, kept: d.kept, read: d.read }; }), next: "POST again to build the next field" }), { status: 202, headers: jh });
+    var built = benchAssemble(done);
+    if (built.patents_total > 0) await env.IPATENT_R2.put(BENCH_DATASET_KEY, JSON.stringify(built), { httpMetadata: { contentType: "application/json" } });
+    await env.IPATENT_R2.delete(BENCH_DATASET_PARTIAL);
+    return new Response(JSON.stringify(Object.assign({ status: built.patents_total > 0 ? "built" : "empty" }, benchSummary(built))), { status: built.patents_total > 0 ? 201 : 502, headers: jh });
+  } catch (e) {
+    console.log("BENCH_DATASET_ERROR " + String(e && e.message || e).slice(0, 200));
+    return new Response(JSON.stringify({ status: "failed", error: "the USPTO source failed mid-field (see worker log); fields already built are kept, POST again to resume" }), { status: 502, headers: jh });
+  } finally {
+    try { await env.IPATENT_R2.delete(BENCH_DATASET_LOCK); } catch (e) {}
+  }
 }
 // GUIDE-PAGES-1 (3.9.0): the iPatent guide family as data, rendered by one template. Attribution, dates, licence, share
 // card, canonical and structured data come from renderGuidePage, never from a page entry, so an automated edit cannot
@@ -2018,6 +2151,7 @@ var qnfo_ipatent_default = {
       // fixed public Google Patents page and reports only status, size and whether claims and a provisional reference were found.
       // Edge-cached 1 h, so it cannot be used to hammer the source; no user input reaches the URL.
       if (path === "/api/benchmark/source-probe" && isRead) return benchSourceProbe(request, ctx);
+      if (path === "/api/benchmark/dataset" && (request.method === "GET" || request.method === "POST")) return benchDataset(request, env);
       if (path === "/llms.txt" && isRead) return new Response(LLMS_TXT, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
       if (path === "/" + INDEXNOW_KEY + ".txt" && isRead) return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       if (path === "/robots.txt" && isRead) {
