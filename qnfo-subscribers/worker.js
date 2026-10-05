@@ -2,7 +2,21 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.6-client-ip"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
+var VERSION = "1.1.7-confirm-post-send-log"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
+// 1.1.7 (2026-10-05, pillar: reach): SUBSCRIBE-CONFIRM-POST-1 (#1904) and SUBSCRIBE-SEND-LOG-1 (#1905).
+// (1) GET /confirm?token=... no longer confirms. Mail link scanners (for example Microsoft Safe Links) fetch every link in a
+//     message, so a confirming GET turned scanner traffic into subscribers nobody opted in. GET returns a page with one
+//     "Confirm subscription" button; only its POST sets status='subscribed'. The button posts to this worker's own origin,
+//     because qnfo-gateway forwards /api/confirm upstream as a GET whatever the browser's method. The link in the email is
+//     unchanged. Each page view and each confirmation is one cloud_ops_events row (kind 'subscribers-confirm', no address),
+//     so the double opt-in completion rate is measurable.
+// (2) Every send writes one cloud_ops_events row (kind 'subscribers-send', status ok|error, meta {kind: confirm|digest,
+//     domain, messageId or error}); the address itself is never written, only its domain. Digest sends carry
+//     List-Unsubscribe <https unsubscribe URL> and List-Unsubscribe-Post: List-Unsubscribe=One-Click (Cloudflare Email
+//     Service send() accepts headers; refused headers fall back to a send without them, recorded as headers_refused).
+//     The one-click POST reaches /unsubscribe, which already unsubscribes on GET or POST.
+// The cron "0 16 * * 1" fires on Sunday 16:00 UTC (Cloudflare cron day-of-week 1 = Sunday; subscriber_digest_runs rows
+// 2026-09-13..10-04 are all Sundays), so /health now says Sunday.
 var SITE = "https://qnfo.org";
 // FLEET-CTL-STATIC-1 (issue 1778; owner request 1757): the owner's fleet command-line link on the subscribe, confirm and
 // unsubscribe pages, as static HTML scoped to the subscribe surface. Not fleet.qnfo.org/ctl.js: it scopes the link with
@@ -55,16 +69,66 @@ function confirmUrl(token) {
   return SITE + "/api/confirm?token=" + encodeURIComponent(token);
 }
 __name(confirmUrl, "confirmUrl");
-async function sendEmail(env, to, subject, text) {
-  if (!env.SEND_EMAIL) return { error: "SEND_EMAIL binding missing" };
+// SUBSCRIBE-SEND-LOG-1 (#1905): one cloud_ops_events row per event; never throws, never stores an address.
+async function logEvent(env, kind, status, text, meta) {
   try {
-    const r = await env.SEND_EMAIL.send({ to, from: FROM, subject, text });
-    return { ok: true, messageId: r && r.messageId || null };
+    if (!env.AUDIT) return;
+    await env.AUDIT.prepare(
+      "INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, ?3, ?4, ?5, 'subscribers', ?6)"
+    ).bind(kind + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), (/* @__PURE__ */ new Date()).toISOString(), kind, String(text).slice(0, 300), JSON.stringify(Object.assign({ v: VERSION }, meta || {})), status).run();
   } catch (e) {
-    return { error: String(e && e.message || e) };
+  }
+}
+__name(logEvent, "logEvent");
+function emailDomain(to) {
+  return String(to || "").toLowerCase().split("@").pop().slice(0, 120);
+}
+__name(emailDomain, "emailDomain");
+async function sendEmail(env, to, subject, text, kind, headers) {
+  kind = kind || "confirm";
+  const domain = emailDomain(to);
+  if (!env.SEND_EMAIL) {
+    await logEvent(env, "subscribers-send", "error", "subscribers " + kind + " send error (" + domain + ")", { kind, domain, error: "SEND_EMAIL binding missing" });
+    return { error: "SEND_EMAIL binding missing" };
+  }
+  const msg = { to, from: FROM, subject, text };
+  let headersRefused = null;
+  try {
+    let r;
+    if (headers) {
+      try {
+        r = await env.SEND_EMAIL.send(Object.assign({}, msg, { headers }));
+      } catch (e) {
+        const m = String(e && e.message || e);
+        if (!/header/i.test(m)) throw e;
+        headersRefused = m.slice(0, 200);
+        r = await env.SEND_EMAIL.send(msg);
+      }
+    } else {
+      r = await env.SEND_EMAIL.send(msg);
+    }
+    const messageId = r && r.messageId || null;
+    const meta = { kind, domain, messageId };
+    if (headers) meta.list_unsubscribe = !headersRefused;
+    if (headersRefused) meta.headers_refused = headersRefused;
+    await logEvent(env, "subscribers-send", "ok", "subscribers " + kind + " send ok (" + domain + ")", meta);
+    return { ok: true, messageId };
+  } catch (e) {
+    const err = String(e && e.message || e);
+    await logEvent(env, "subscribers-send", "error", "subscribers " + kind + " send error (" + domain + ")", { kind, domain, error: err.slice(0, 300) });
+    return { error: err };
   }
 }
 __name(sendEmail, "sendEmail");
+// RFC 2369 / RFC 8058 one-click unsubscribe for the digest (Gmail and Yahoo expect it on bulk mail).
+function listUnsubscribeHeaders(token) {
+  return { "List-Unsubscribe": "<" + unsubUrl(token) + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
+}
+__name(listUnsubscribeHeaders, "listUnsubscribeHeaders");
+function escAttr(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+__name(escAttr, "escAttr");
 function confirmText(token) {
   return [
     "Thanks for subscribing to QNFO.",
@@ -149,7 +213,7 @@ async function handleSubscribe(request, env) {
     const alreadyConfirmed = !!(existing && existing.status === "subscribed");
     let sent = false;
     if (!alreadyConfirmed) {
-      const res = await sendEmail(env, email, "Confirm your QNFO subscription", confirmText(token));
+      const res = await sendEmail(env, email, "Confirm your QNFO subscription", confirmText(token), "confirm");
       if (res && res.ok) {
         sent = true;
         await env.AUDIT.prepare("UPDATE subscribers SET welcomed_at = datetime('now') WHERE email = ?1").bind(email).run();
@@ -161,9 +225,35 @@ async function handleSubscribe(request, env) {
   }
 }
 __name(handleSubscribe, "handleSubscribe");
+// SUBSCRIBE-CONFIRM-POST-1 (#1904): only a POST confirms; a GET (the emailed link, or a scanner fetching it) shows the button.
+async function confirmToken(request, u) {
+  let token = u.searchParams.get("token") || "";
+  if (!token && request.method.toUpperCase() === "POST") {
+    try {
+      const ct = String(request.headers.get("Content-Type") || "").toLowerCase();
+      if (ct.includes("application/x-www-form-urlencoded") || ct.includes("multipart/form-data")) {
+        const f = await request.formData();
+        token = String(f.get("token") || "");
+      } else if (ct.includes("application/json")) {
+        const b = await request.json();
+        token = String(b && b.token || "");
+      }
+    } catch (e) {
+      token = "";
+    }
+  }
+  return token;
+}
+__name(confirmToken, "confirmToken");
+function confirmButtonPage(origin, token) {
+  const action = origin + "/confirm?token=" + encodeURIComponent(token);
+  return html('<h1>Confirm your subscription</h1><p>Press the button to receive the weekly digest of new QNFO papers: titles, links and DOIs. Nothing is sent until you do.</p><form method="post" action="' + escAttr(action) + '"><input type="hidden" name="token" value="' + escAttr(token) + '"><button type="submit" style="font:inherit;font-size:1rem;padding:.7rem 1.4rem;border:0;border-radius:8px;background:#24315e;color:#fff;cursor:pointer">Confirm subscription</button></form><p>If you did not ask for this, close this page; no email will follow.</p>');
+}
+__name(confirmButtonPage, "confirmButtonPage");
 async function handleConfirm(request, env) {
   const u = new URL(request.url);
-  const token = u.searchParams.get("token") || "";
+  const method = request.method.toUpperCase();
+  const token = await confirmToken(request, u);
   if (!token) return html("<h1>Missing link</h1><p>This confirmation link is incomplete.</p>", 400);
   try {
     const row = await env.AUDIT.prepare("SELECT email, status FROM subscribers WHERE unsub_token = ?1").bind(token).first();
@@ -171,9 +261,14 @@ async function handleConfirm(request, env) {
     if (row.status === "subscribed") {
       return html("<h1>Already confirmed</h1><p>Your subscription is active. The next digest will reach you by email.</p>");
     }
-    await env.AUDIT.prepare(
+    if (method !== "POST") {
+      await logEvent(env, "subscribers-confirm", "page", "subscribers confirm page shown (" + emailDomain(row.email) + ")", { method, changed: 0, domain: emailDomain(row.email) });
+      return confirmButtonPage(u.origin, token);
+    }
+    const r = await env.AUDIT.prepare(
       "UPDATE subscribers SET status='subscribed', confirmed_at=datetime('now'), updated_at=datetime('now') WHERE unsub_token = ?1"
     ).bind(token).run();
+    await logEvent(env, "subscribers-confirm", "confirmed", "subscribers confirmed (" + emailDomain(row.email) + ")", { method, changed: Number(r && r.meta && r.meta.changes || 0), domain: emailDomain(row.email) });
     return html("<h1>Subscription confirmed</h1><p>You are on the list. The next digest of new QNFO papers will reach you by email.</p>");
   } catch (e) {
     return html("<h1>Something went wrong</h1><p>Please try again later.</p>", 500);
@@ -222,7 +317,9 @@ async function runDigest(env, opts) {
   let subs = [];
   try {
     const sr = await env.AUDIT.prepare(
-      "SELECT email, unsub_token FROM subscribers WHERE status='subscribed' ORDER BY created_at LIMIT " + MAX_RECIPIENTS
+      // SUPPRESSION-AT-DIGEST-1 (1.1.7): /health promises "suppressed addresses are never mailed"; the digest now honours
+      // email_suppression too (before, only sign-up did).
+      "SELECT email, unsub_token FROM subscribers WHERE status='subscribed' AND NOT EXISTS (SELECT 1 FROM email_suppression es WHERE lower(es.email) = lower(subscribers.email)) ORDER BY created_at LIMIT " + MAX_RECIPIENTS
     ).all();
     subs = sr && sr.results || [];
   } catch (e) {
@@ -242,7 +339,7 @@ async function runDigest(env, opts) {
   for (let i = 0; i < subs.length; i += BATCH) {
     const slice = subs.slice(i, i + BATCH);
     const results = await Promise.all(slice.map(function(s) {
-      return sendEmail(env, s.email, subject, digestText(papers, s.unsub_token));
+      return sendEmail(env, s.email, subject, digestText(papers, s.unsub_token), "digest", listUnsubscribeHeaders(s.unsub_token));
     }));
     for (let j = 0; j < results.length; j++) {
       if (results[j] && results[j].ok) sent++;
@@ -275,7 +372,7 @@ async function health(env) {
     worker: "qnfo-subscribers",
     version: VERSION,
     capabilities: ["subscribe", "double-opt-in", "unsubscribe", "weekly-digest"],
-    limitations: ["no send before double opt-in", "the digest sends only on the Monday 16:00 cron or an authenticated POST /run/digest", "suppressed addresses are never mailed"],
+    limitations: ["no send before double opt-in", "a confirmation link confirms only when its page's button is pressed (POST); a GET never confirms", "the digest sends only on the Sunday 16:00 UTC cron or an authenticated POST /run/digest", "suppressed addresses are never mailed"],
     subscribers: confirmed,
     pending,
     send_email: !!env.SEND_EMAIL,

@@ -15,7 +15,7 @@ const IMPORT = 'import { connect } from "cloudflare:sockets";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: update the loader in this test");
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
-  "\nexport { jobOutreach as __jobOutreach, OUTREACH_OPT_OUT as __OPT_OUT, LEARNER_RNG as __RNG };\n";
+  "\nexport { jobOutreach as __jobOutreach, OUTREACH_OPT_OUT as __OPT_OUT, LEARNER_RNG as __RNG, outreachWorkLine as __workLine };\n";
 const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
 const jobOutreach = mod.__jobOutreach;
 const OPT_OUT = mod.__OPT_OUT;
@@ -198,6 +198,24 @@ ok(typeof OPT_OUT === "string" && /stop/i.test(OPT_OUT), "OUTREACH_OPT_OUT is a 
   ok(to[0] === "e1@gmail.com" && to.filter((x) => /^e\d@gmail\.com$/.test(x)).length === 3, "learner order: the segment that answers is mailed first and gets 3 slots where oldest-first reaches only 2 (" + to.join(",") + ")");
   ok(!to.includes("opted@gmail.com") && qStatus(t, "opted@gmail.com") === "skipped-suppressed" && !to.includes("seen@gmail.com") && qStatus(t, "seen@gmail.com") === "skipped-dup", "learner order: suppression and no-repeat contact hold");
   ok(t.sent.every((m) => String(m.text).includes(OPT_OUT) && !isRe(m.subject)), "learner order: every mail carries the opt-out line and no fake Re:");
+}
+
+// 6. OUTREACH-REASON-LEAK-1 (1.19.1, #1875): the pipeline's reason text never reaches the recipient verbatim. A radar row
+// is named by its title and arXiv id; a model note or a non-arXiv id falls back to the generic line.
+{
+  const W = mod.__workLine;
+  ok(W("2609.30069v1", "arxiv-radar widened: Design Principles for Ultra-High-Rate Quantum Codes") === "I came across your recent paper, “Design Principles for Ultra-High-Rate Quantum Codes” (arXiv:2609.30069), and it looks directly relevant to this program.", "a radar row is named by title and arXiv id, label dropped");
+  ok(W("2609.30069", "Author works on QEC thresholds; relevant to JPCUB") === "I came across your recent paper (arXiv:2609.30069), and it looks directly relevant to this program.", "a model-written note is not echoed");
+  ok(W("jpcub-qec-landauer", "cited/related work match") === "I came across your recent work and it looks directly relevant to this program.", "a QNFO slug is not called an arXiv id and the match label is not echoed");
+  const long = "arxiv-radar widened: " + "Word ".repeat(30).slice(0, 120);
+  const l = W("2610.00001v2", long);
+  ok(/…” \(arXiv:2610\.00001\)/.test(l) && !/Word\s…/.test(l), "a radar title cut at 120 characters ends on a word with an ellipsis");
+  const t = fresh("1");
+  t.audit.prepare("INSERT INTO ops_config (key, value) VALUES ('outreach_learner_enabled', '0')").run();
+  t.audit.prepare("INSERT INTO outreach_queue (id, paper_id, author, email, reason, status, created_at) VALUES ('aq-r1', '2609.39016v1', '', 'r1@uni-r.edu', 'arxiv-radar widened: Entropy threshold: A simple proxy for performance of quantum error correction', 'pending', datetime('now','-5 minutes'))").run();
+  await jobOutreach(t.env);
+  const body = t.sent[0] ? String(t.sent[0].text) : "";
+  ok(t.sent.length === 1 && !/arxiv-radar|widened/i.test(body) && body.includes("“Entropy threshold: A simple proxy for performance of quantum error correction” (arXiv:2609.39016)"), "the mail sent for a radar row carries the title, not the pipeline label");
 }
 
 console.log(pass + " passed, " + fail + " failed");
