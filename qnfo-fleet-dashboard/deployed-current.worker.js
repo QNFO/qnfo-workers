@@ -3869,6 +3869,11 @@ var WATCHMAKER_OPS = [
     sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'ol-tick-' AND id < 'ol-tick.' AND status IN ('ok', 'degraded')",
     stuck_sql: "SELECT COUNT(*) AS stuck FROM cloud_ops_events j WHERE j.id >= 'jr-outreach-' AND j.id < 'jr-outreach.' AND j.id NOT LIKE 'jr-outreach-learner-%' AND j.ts >= ?1 AND COALESCE(j.status, '') NOT IN ('gated', '') AND NOT EXISTS (SELECT 1 FROM cloud_ops_events a WHERE a.id >= 'ol-alloc-' || substr(j.ts, 1, 10) AND a.id < 'ol-alloc-' || substr(j.ts, 1, 10) || '.')",
     stuck_note: "outreach runs in 48h with no logged learner allocation" },
+  // IDEA-TOPIC-METRIC-1 (qnfo-cloud-ops 1.19.1, #1947): a daily companion of the 06:20 Amsterdam quality-score slot
+  // recomputes idea_topic_concentration_30d; each run writes a job-run row jr-idea-topic-metric-<id> with its status.
+  { key: "idea-topic-metric", what: "Idea topic concentration: share of accepted idea_proposals in the largest keyword cluster over 30 days into idea_topic_concentration_30d (IDEA-TOPIC-METRIC-1, qnfo-cloud-ops daily with the 06:20 Amsterdam quality-score run)", runner: "cron:qnfo-cloud-ops", cadence_h: 24, first_due: "2026-10-07T06:00:00Z",
+    sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'jr-idea-topic-metric-' AND id < 'jr-idea-topic-metric.' AND status = 'ok'",
+    why_sql: "SELECT status FROM cloud_ops_events WHERE id >= 'jr-idea-topic-metric-' AND id < 'jr-idea-topic-metric.' ORDER BY ts DESC LIMIT 1" },
   { key: "job-market-watch", what: "Weekly job-market scan of three boards into handoffs and the vault (radar-hub JOB-MARKET-INLINE-1, Mondays 07:00Z)", runner: "cron:radar-hub", cadence_h: 168, sql: "SELECT MAX(timestamp) AS last FROM handoffs WHERE project_id >= 'job-market-watch-workflow-' AND project_id < 'job-market-watch-workflow.'" },
   { key: "events-radar", what: "Conferences, workshops and calls from the radar sources into events_radar (radar-hub, Mondays 05:00Z; EVENTS-RADAR-CF-DOW-1)", runner: "cron:radar-hub", cadence_h: 168, sql: "SELECT MAX(scanned_at) AS last FROM events_radar" },
   { key: "charter-loop", what: "Charter live block and snapshot (CHARTER-LOOP-1)", runner: "cron:qnfo-fleet-control", cadence_h: 24, first_due: "2026-10-02T06:00:00Z", sql: "SELECT MAX(ts) AS last FROM charter_snapshots" },

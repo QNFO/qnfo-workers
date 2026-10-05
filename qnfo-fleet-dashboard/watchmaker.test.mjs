@@ -154,6 +154,18 @@ ok(!op(m, "cf-changelog").counted && op(m, "cf-changelog").runner === "cron:qnfo
   db.prepare("DELETE FROM cf_changelog_runs WHERE status = 'error'").run();
   db.prepare("UPDATE cf_changelog_runs SET ts = ?").run(ago(4));
 }
+{
+  // IDEA-TOPIC-METRIC-1: listed and not counted before its first due date; after it, no ok run counts, a fresh ok run clears it
+  const it = (t) => op(m, "idea-topic-metric");
+  ok(!it().counted && it().runner === "cron:qnfo-cloud-ops", "idea-topic-metric is listed and not counted before 2026-10-07 (" + it().state + ")");
+  const LATER = Date.parse("2026-10-08T08:00:00Z");
+  let s = op(await api.watchmakerMeasure(env, LATER), "idea-topic-metric");
+  ok(s.counted, "after its first due date a missing run counts (" + s.state + ")");
+  db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('jr-idea-topic-metric-t1', ?, 'job-run', 'idea-topic-metric', 'ok')").run(new Date(LATER - 3 * 36e5).toISOString());
+  s = op(await api.watchmakerMeasure(env, LATER), "idea-topic-metric");
+  ok(!s.counted && /^ok/.test(s.state), "a 3h-old ok run is fresh (" + s.state + ")");
+  db.prepare("DELETE FROM cloud_ops_events WHERE id = 'jr-idea-topic-metric-t1'").run();
+}
 // CODE-TASK-MERGE-RUNNER-1: the runner merges; what a person still did or must do counts. The runner's first ok tick
 // (code-merge-first-ok, written once) was 5 days ago: a person merge before it is history, not a dependency.
 const cm = async () => op(await api.watchmakerMeasure(env, NOW), "code-task-merge");

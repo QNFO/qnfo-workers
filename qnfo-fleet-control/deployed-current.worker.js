@@ -1003,7 +1003,7 @@ var calibratorMod = (function() {
     async scheduled(controller, env, ctx) {
       const cron = controller.cron || "";
       let type = "daily";
-      if (cron === "30 3 * * 1") type = "stress"; // CAL-STRESS-CRON-1: wrangler declares Monday (1); the Sunday key never matched
+      if (cron === "30 3 * * 1") type = "stress"; // CAL-STRESS-CRON-1: the old key '30 3 * * 0' never matched the declared cron. CF-DOW (2026-10-05): Cloudflare weekday 1 is SUNDAY (1=Sun..7=Sat), so this is the Sunday 03:30Z stress run the original calibrator intended ('0' = Sunday in Unix cron); fleet_cal_runs shows it firing on Sundays (2026-09-06..10-04)
       else if (cron === "0 4 1 * *") type = "monthly";
       const out = await runCalibration(env, type, "cron:" + cron, null);
       await stateSet2(env, "last_cron", sjs({ cron, type, out, at: nowIso() }));
