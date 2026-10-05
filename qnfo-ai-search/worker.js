@@ -28,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.2.4-guard-clean"; // 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
+var VERSION = "2.2.5-ai-attribution"; // 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -163,9 +163,51 @@ function params(c) {
   return o;
 }
 
+// WORKERS-AI-ATTRIBUTION-2 (qnfo-ai-search 2.2.5, agent_issues 1997): this worker called env.AI directly and was absent from
+// ai_call_counters; on 2026-10-05 GraphQL billed 30 deepseek-v4-flash, 15 qwen3-30b and 20 llama-3.3 calls against 3, 2 and 9
+// attributed. The block below is copied verbatim from q08-signal-engine (WORKERS-AI-ATTRIBUTION-1). Streamed answers carry no
+// usage object, so their neurons are estimated from the prompt length only (input side); output tokens read 0.
+// WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
+// binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
+// Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
+var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
+function __aiAttrEnv(env, worker, aiKey, dbKey) {
+  try {
+    if (!env || env.__aiAttr) return env;
+    var ai = env[aiKey], db = env[dbKey];
+    if (!ai || typeof ai.run !== "function" || !db) return env;
+    var wrapped = new Proxy(ai, { get: function (t, p) {
+      if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
+      return async function (model, input, opts) {
+        var t0 = Date.now(), ok = 1, res;
+        try { res = await t.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+        finally {
+          try {
+            var u = res && typeof res === "object" && res.usage || {};
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
+            var outTok = Number(u.completion_tokens || u.output_tokens || 0);
+            var r = __AI_ATTR_RATES[String(model)] || [0, 0];
+            var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
+            await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
+              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
+          } catch (e2) {}
+        }
+      };
+    } });
+    var copy = Object.assign({}, env);
+    copy[aiKey] = wrapped;
+    copy.__aiAttr = 1;
+    return copy;
+  } catch (e) {
+    return env;
+  }
+}
+
 // ---------------------------------------------------------------- entry
 var worker_default = {
   async fetch(request, env, ctx) {
+    env = __aiAttrEnv(env, "qnfo-ai-search", "AI", "QNFO_AUDIT");
     var url = new URL(request.url);
     var path = url.pathname;
     var method = request.method;
@@ -189,6 +231,7 @@ var worker_default = {
     }
   },
   async scheduled(event, env, ctx) {
+    env = __aiAttrEnv(env, "qnfo-ai-search", "AI", "QNFO_AUDIT");
     ctx.waitUntil(loopTick(env, new Date(event.scheduledTime || Date.now())));
   },
 };
