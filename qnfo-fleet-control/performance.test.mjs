@@ -170,6 +170,7 @@ plan = P.perfExperimentPlan(facts({ experiments: [Object.assign({}, running, { e
 ok(plan.evaluations[0].d.decision === "kept" && plan.starts.length === 0 && /cooldown/.test(skipWhy(plan)), "a decision taken in the same run starts the lever's cooldown");
 // fleet-wide cap and per-metric dedupe with synthetic levers (restored afterwards)
 const extra = ["x1", "x2", "x3"].map((k) => ({ key: k, metric: "m_" + k, ops_config_key: "knob_" + k, min: 0, max: 10, step: 1, default_value: 5, direction: -1, effect: "lower", owner_voice: 0, eval_days: 14 }));
+const leversBefore = P.PERF_LEVERS.length;
 extra.forEach((l) => P.PERF_LEVERS.push(l));
 const trigX = extra.map((l, i) => ({ id: 900 + i, metric_key: l.metric, operator: "gte", threshold: 1, action: "perf-lever:" + l.key, hit: 1 }));
 const histX = extra.reduce((acc, l) => acc.concat(series(l.metric, [9, 9, 9, 9])), []);
@@ -177,7 +178,10 @@ plan = P.perfExperimentPlan(facts({ triggers: [TRIG].concat(trigX), history: ser
 eq(plan.starts.length, 3, "at most 3 experiments start fleet-wide");
 ok(plan.skipped.some((s) => /fleet-wide cap/.test(s.why)), "the fourth is held by the fleet cap");
 extra.forEach(() => P.PERF_LEVERS.pop());
-eq(P.PERF_LEVERS.length, 1, "synthetic levers removed");
+eq(P.PERF_LEVERS.length, leversBefore, "synthetic levers removed");
+// Q08-SELF-TUNE-1 (0.4.120): the q08-temperature lever answers trigger #537 (lt -> "higher") in the same direction.
+const q08t = P.PERF_LEVERS.find((l) => l.key === "q08-temperature");
+ok(!!q08t && q08t.metric === "q08_gate_pass_rate_7d" && q08t.effect === "higher" && q08t.direction === -1 && q08t.min === 0.4 && q08t.max === 0.8 && q08t.owner_voice === 0 && q08t.lock_key === "q08_review_2026_10_31", "q08-temperature lever: gate pass rate, effect higher, bounded 0.4..0.8, no owner voice, review lock");
 
 // --- keep or revert -------------------------------------------------------------------------------------------------
 const hx = (vals, base) => { const o = {}; vals.forEach((v, k) => { o[day(k, base)] = v; }); return o; };   // vals[k] = k days before base
@@ -390,7 +394,7 @@ CREATE TABLE invest_facts (key TEXT PRIMARY KEY, value TEXT, evidence TEXT, upda
   ok(t.experiments.error && /triggers/.test(t.experiments.error) && one("SELECT COUNT(*) n FROM perf_runs").n === before && knob() === null, "no trigger state: no decision, no ledger row");
 
   const status = await P.perfExperimentsStatus(env);
-  ok(status.loop === "PERFORMANCE-LOOP-1" && status.levers.length === 1 && status.finished.length >= 4 && status.running.length === 0, "the /improvement experiments section lists the levers and the finished experiments");
+  ok(status.loop === "PERFORMANCE-LOOP-1" && status.levers.length === P.PERF_LEVERS.length && status.finished.length >= 4 && status.running.length === 0, "the /improvement experiments section lists the levers and the finished experiments");
   ok(!JSON.stringify(status).includes("@"), "the read-out carries no address");
 }
 
