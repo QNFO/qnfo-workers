@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-05 16:06:52",
+  "audited_at": "2026-10-05 16:43:31",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -407,7 +407,7 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.5.3-questions-feed-leakfix",
+        "version": "1.5.4-reach-swr",
         "worker": "idea-hub"
       },
       {
@@ -442,7 +442,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.2.2-judge-visible",
+        "version": "2.2.4-guard-clean",
         "worker": "qnfo-ai-search"
       },
       {
@@ -462,7 +462,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.19.0-single-trigger",
+        "version": "1.19.1-reach-intake",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -487,12 +487,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.115-cycle-time-1",
+        "version": "0.4.116-idea-buildable-truth",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.21.4-owner-keys-view",
+        "version": "1.21.7-weekday-backfill",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -512,7 +512,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.9.4-filing-path",
+        "version": "3.9.5-patent-probe",
         "worker": "qnfo-ipatent"
       },
       {
@@ -577,7 +577,7 @@
       },
       {
         "dir": "qnfo-subscribers",
-        "version": "1.1.6-client-ip",
+        "version": "1.1.7-confirm-post-send-log",
         "worker": "qnfo-subscribers"
       },
       {
@@ -592,7 +592,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.2.3",
+        "version": "1.2.4",
         "worker": "radar-hub"
       }
     ]
@@ -688,9 +688,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.5.3-questions-feed-leakfix",
+      "before": "1.5.4-reach-swr",
       "http": 200,
-      "live": "1.5.3-questions-feed-leakfix",
+      "live": "1.5.4-reach-swr",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -896,9 +896,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.2.2-judge-visible",
+      "before": "2.2.4-guard-clean",
       "http": 200,
-      "live": "2.2.2-judge-visible",
+      "live": "2.2.4-guard-clean",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1016,9 +1016,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.19.0-single-trigger",
+      "before": "1.19.1-reach-intake",
       "http": 200,
-      "live": "1.19.0-single-trigger",
+      "live": "1.19.1-reach-intake",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1144,17 +1144,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.115-cycle-time-1",
+      "before": "0.4.116-idea-buildable-truth",
       "http": 200,
-      "live": "0.4.115-cycle-time-1",
+      "live": "0.4.116-idea-buildable-truth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.21.4-owner-keys-view",
+      "before": "1.21.7-weekday-backfill",
       "http": 200,
-      "live": "1.21.4-owner-keys-view",
+      "live": "1.21.7-weekday-backfill",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1232,9 +1232,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.9.4-filing-path",
+      "before": "3.9.5-patent-probe",
       "http": 200,
-      "live": "3.9.4-filing-path",
+      "live": "3.9.5-patent-probe",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1424,9 +1424,9 @@
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": "1.1.6-client-ip",
+      "before": "1.1.7-confirm-post-send-log",
       "http": 200,
-      "live": "1.1.6-client-ip",
+      "live": "1.1.7-confirm-post-send-log",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"
@@ -1472,9 +1472,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.2.3",
+      "before": "1.2.4",
       "http": 200,
-      "live": "1.2.3",
+      "live": "1.2.4",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
