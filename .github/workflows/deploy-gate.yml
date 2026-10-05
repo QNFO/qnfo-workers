@@ -446,6 +446,9 @@ jobs:
         run: node --no-warnings personal-api/ai-attr.test.mjs
       - name: TOOL-TRACE-MEMORY-1 offline suite (personal-api 4.7.1, #1805)
         run: node --no-warnings personal-api/tool-trace-memory.test.mjs
+      # TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary glm-5.3-flash, per-request fallback, automatic revert.
+      - name: TWIN-FLASH-1 offline suite (personal-api)
+        run: node --no-warnings personal-api/twin-flash.test.mjs
       - name: CALLER-PROPS + PREDATORY-BODY offline suite (qnfo-email 2.5.x, #1923, #1924)
         run: node --no-warnings qnfo-email/caller-props-predatory.test.mjs
       - name: BROWSER-SAMPLE-1 offline suite (qnfo-gateway, #1890)
