@@ -14,15 +14,16 @@ const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).defau
 const net = [];
 globalThis.fetch = async (u, o) => {
   const url = String(u && u.url || u);
+  const host = new URL(url).host;
   net.push({ url, method: (o && o.method) || "GET", headers: (o && o.headers) || {}, body: o && o.body });
-  if (url.indexOf("https://api.github.com/") === 0) {
+  if (host === "api.github.com") {
     if (/\/dispatches$/.test(url)) return new Response(null, { status: 204 });
     if (/\/pulls\/42\/merge$/.test(url)) return new Response(JSON.stringify({ merged: true, sha: "abcdef1234567890" }), { status: 200 });
     if (/\/pulls\/42$/.test(url)) return new Response(JSON.stringify({ number: 42, title: "t", state: "open", merged: false, draft: false, mergeable: true, mergeable_state: "clean", changed_files: 1, additions: 2, deletions: 1, head: { ref: "b", sha: "s1" }, base: { ref: "main" }, html_url: "https://github.com/QNFO/qnfo-workers/pull/42", body: "" }), { status: 200 });
     if (/\/check-runs/.test(url)) return new Response(JSON.stringify({ check_runs: [{ name: "deploy-gate", status: "completed", conclusion: "failure", details_url: "https://github.com/QNFO/qnfo-workers/actions/runs/123456789/job/1", output: { title: "boom" } }] }), { status: 200 });
     return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
   }
-  if (url.indexOf(".q08.workers.dev/") > 0) return new Response("{\"ok\":true}", { status: 200, headers: { "content-type": "application/json" } });
+  if (/^[a-z0-9-]+\.q08\.workers\.dev$/.test(host)) return new Response("{\"ok\":true}", { status: 200, headers: { "content-type": "application/json" } });
   return new Response("{}", { status: 503 });
 };
 
