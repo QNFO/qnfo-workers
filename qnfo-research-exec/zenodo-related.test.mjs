@@ -6,7 +6,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { applyRelatedLink, drainRelatedLinks, verifyRelatedBackfill } from "./worker.js";
+import { applyRelatedLink, drainRelatedLinks, seedRelatedLinks, verifyRelatedBackfill } from "./worker.js";
 
 const db = new DatabaseSync(":memory:");
 db.exec(readFileSync(new URL("../migrations/2026-10-01-zenodo-version-requests.sql", import.meta.url), "utf8"));
@@ -113,4 +113,27 @@ assert.equal(db.prepare("SELECT status FROM agent_issues WHERE id=1907").get().s
 assert.match(db.prepare("SELECT close_evidence FROM issue_triage WHERE issue_id=1907").get().close_evidence, /^ZENODO-READ-ONLINE-1 verify /);
 assert.equal(await verifyRelatedBackfill(env, pub), null, "nothing to do once the issue is closed");
 
-console.log("zenodo-related: 32 checks passed");
+// 4 seeding from LIVING_PAPER.papers: one pending row per published page whose record maps to exactly one page, once.
+const lp = new DatabaseSync(":memory:");
+lp.exec("CREATE TABLE papers (slug TEXT, status TEXT, doi TEXT, zenodo_doi TEXT)");
+lp.exec("INSERT INTO papers (slug, status, doi, zenodo_doi) VALUES ('a-paper', 'published', '10.5281/zenodo.500', NULL), ('b-paper', 'published', '10.5281/zenodo.1', '10.5281/zenodo.501'), ('shared-one', 'published', '10.5281/zenodo.502', NULL), ('shared-two', 'published', '10.5281/zenodo.502', NULL), ('adelic-constraints-on-quantum-field-theory-phase-1', 'published', '10.5281/zenodo.503', NULL), ('quarantined-paper', 'quarantined', '10.5281/zenodo.504', NULL), ('no-doi-paper', 'published', 'arXiv:2501.00001', NULL), ('Bad Slug', 'published', '10.5281/zenodo.505', NULL), ('some-paper', 'published', '10.5281/zenodo.100', NULL)");
+function lpStmt(sql) {
+  let args = [];
+  const o = { bind(...a) { args = a; return o; }, async run() { lp.prepare(sql).run(...args); return { meta: { changes: 1 } }; }, async first() { return lp.prepare(sql).get(...args) || null; }, async all() { return { results: lp.prepare(sql).all(...args) }; } };
+  return o;
+}
+const env2 = { QNFO_AUDIT: { prepare: stmt }, LIVING_PAPER: { prepare: lpStmt }, ZENODO_TOKEN: "t" };
+let sd = await seedRelatedLinks(env2);
+assert.deepEqual(sd, { candidates: 3, shared: 1, existing: 1, seeded: 2 }, "500 and 501 seeded; 100 already queued; 502 shared by two pages; 503 on the skip list; quarantined, no-DOI and bad-slug rows ignored");
+const seeded = db.prepare("SELECT record_id, metadata_json, status, requested_by FROM zenodo_version_requests WHERE kind='related' AND record_id IN (500, 501) ORDER BY record_id").all();
+assert.equal(seeded.length, 2);
+assert.equal(seeded[0].status, "pending");
+assert.equal(JSON.parse(seeded[0].metadata_json).related_link.slug, "a-paper");
+assert.equal(JSON.parse(seeded[1].metadata_json).related_link.slug, "b-paper", "zenodo_doi wins over doi when both are set");
+assert.equal(seeded[0].requested_by, "qnfo-research-exec/seedRelatedLinks");
+assert.equal(db.prepare("SELECT COUNT(*) AS n FROM zenodo_version_requests WHERE kind='related' AND record_id IN (502, 503, 504, 505)").get().n, 0);
+sd = await seedRelatedLinks(env2);
+assert.deepEqual([sd.seeded, sd.existing], [0, 3], "a second run seeds nothing");
+assert.deepEqual(await seedRelatedLinks({ QNFO_AUDIT: { prepare: stmt } }), { seeded: 0, skipped: "no binding" });
+
+console.log("zenodo-related: 42 checks passed");

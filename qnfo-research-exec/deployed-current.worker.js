@@ -3078,6 +3078,40 @@ async function drainRelatedLinks(env, limit, fetchImpl) {
   }
   return out;
 }
+// ZENODO-READ-ONLINE-1 seeding: the queue fills itself from LIVING_PAPER.papers, so no session loads rows by hand and a
+// paper published later is picked up too. A published paper with a slug and a Zenodo DOI whose record maps to exactly
+// one page gets one pending related row, once (records already queued are skipped; a record shared by several pages,
+// such as the three continuum-trilogy pages, is left alone). RELATED_SKIP_SLUGS names pages that must not be linked yet
+// (#1843: a page still showing a transcript body instead of the paper). Runs in the first quarter of each hour and
+// inserts at most RELATED_SEED_PER_RUN rows per run.
+var RELATED_SEED_PER_RUN = 200;
+var RELATED_SKIP_SLUGS = ["adelic-constraints-on-quantum-field-theory-phase-1"];
+async function seedRelatedLinks(env, limit) {
+  if (!env.LIVING_PAPER || !env.QNFO_AUDIT) return { seeded: 0, skipped: "no binding" };
+  var rs = await env.LIVING_PAPER.prepare("SELECT slug, CAST(replace(COALESCE(NULLIF(zenodo_doi,''), doi), '10.5281/zenodo.', '') AS INTEGER) AS rec FROM papers WHERE COALESCE(status,'published')='published' AND COALESCE(NULLIF(zenodo_doi,''), doi) LIKE '10.5281/zenodo.%' AND slug IS NOT NULL AND slug <> '' ORDER BY rec").all();
+  var rows = (rs && rs.results) || [];
+  var bySlug = {}, count = {};
+  for (var i = 0; i < rows.length; i++) {
+    var rec = Number(rows[i].rec), slug = String(rows[i].slug || "");
+    if (!(rec > 0) || !RELATED_SLUG_RE.test(slug)) continue;
+    count[rec] = (count[rec] || 0) + 1;
+    if (!bySlug[rec]) bySlug[rec] = slug;
+  }
+  var recs = Object.keys(count).map(Number).sort(function(a, b) { return a - b; });
+  var want = recs.filter(function(r) { return count[r] === 1 && RELATED_SKIP_SLUGS.indexOf(bySlug[r]) < 0; });
+  var have = await env.QNFO_AUDIT.prepare("SELECT record_id FROM zenodo_version_requests WHERE kind='related'").all();
+  var seen = {};
+  var hv = (have && have.results) || [];
+  for (var h = 0; h < hv.length; h++) seen[Number(hv[h].record_id)] = 1;
+  var out = { candidates: want.length, shared: recs.length - recs.filter(function(r) { return count[r] === 1; }).length, existing: 0, seeded: 0 };
+  var max = limit || RELATED_SEED_PER_RUN;
+  for (var k = 0; k < want.length && out.seeded < max; k++) {
+    if (seen[want[k]]) { out.existing++; continue; }
+    await env.QNFO_AUDIT.prepare("INSERT INTO zenodo_version_requests (record_id, files_json, metadata_json, kind, requested_by, note) VALUES (?1, '[]', ?2, 'related', 'qnfo-research-exec/seedRelatedLinks', 'ZENODO-READ-ONLINE-1 #1907')").bind(want[k], JSON.stringify({ related_link: { slug: bySlug[want[k]] } })).run();
+    out.seeded++;
+  }
+  return out;
+}
 // ZENODO-READ-ONLINE-1 closing probe (CLOUD-ONLY-VERIFICATION-1): once no related row is pending or publishing and none is
 // in error, 20 random published/unchanged rows are re-read on the PUBLIC records API; all listing the page URL as
 // isVariantFormOf closes the issue with that measurement as close_evidence (evidence row first, then the close, per
@@ -3239,6 +3273,10 @@ var worker_default = {
         await logEvent(env, "error", "drainMetadataEdits threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
       try {
+        if (new Date().getUTCMinutes() < 15) {
+          var sd = await seedRelatedLinks(env);
+          if (sd && sd.seeded) await logEvent(env, "zenodo-related-seed", JSON.stringify(sd).slice(0, 300), "ok");
+        }
         var rl = await drainRelatedLinks(env);
         if (rl.length) await logEvent(env, "zenodo-related", JSON.stringify(rl).slice(0, 700), rl.some(function(x) { return x.status === "error"; }) ? "error" : "ok");
         else if (new Date().getUTCMinutes() < 15) {
@@ -3294,6 +3332,7 @@ export {
   parkPoisonRow,
   pseudoMathScan,
   reclaimStaleResearching,
+  seedRelatedLinks,
   stageGround,
   stageReview,
   stageVerify,
