@@ -37,5 +37,17 @@ Host plane (0.7.0, CAL-HOST-PLANE-1): a third plane `host` = open-house availabi
   them (scrubbed at read time). Guest records never go in qnfo-audit.
 Tests: node --no-warnings calendar-api/host.test.mjs
 
-Deploy: cd qnfo-workers/calendar && npx wrangler deploy
-Canonical source: github.com/QNFO/qnfo-workers -> qnfo-workers/calendar/worker.js
+Internal callers (0.7.1, CAL-CALLER-PROPS-1): a service binding that declares props = { caller = "<worker>" } in its
+wrangler.toml is authorized like the CAL_TOKEN bearer (radar-hub declares caller radar-hub; it holds no CAL_TOKEN).
+Public requests never carry props. Tests: node --no-warnings calendar-api/caller-props.test.mjs
+
+Source of truth (CAL-SURFACES-1, #1883, recorded 2026-10-05): Cloudflare writes first. The personal calendar is this
+store (qnfo-audit.calendar, plane personal) plus personal-life.events (trips and bookings; the brief and the away gate read
+it). Google Calendar (rwnquni@gmail.com) is a downstream view only: no worker treats it as truth. personal-api reads Google
+only when the owner sets GOOGLE_ICS_URL or connects OAuth (neither is set: /health google_calendar=no-client), its ICS
+reader is a plain GET, and it writes to Google only when OAuth-connected. Outlook and Google subscribe to the tokenised R2
+feeds published from this store. Events that exist only in Google (for example the two weekly "Free Lunchtime Concert"
+entries on 2026-10-08, while the owner is in Krakow) are not seen by the fleet.
+
+Deploy: canonical path only (merge to main in QNFO/qnfo-workers; canonical-deploy.yml -> qnfo-ops /ops/deploy).
+Canonical source: QNFO/qnfo-workers -> calendar-api/worker.js
