@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.116-idea-buildable-truth"; /* 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.117-merge-lane"; /* 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -3106,7 +3106,9 @@ var CM_MERGEABLE_WAIT_MS = 2000;
 var CM_OK = ["success", "neutral", "skipped"];
 var CM_INFLIGHT = ["deploying", "deployed", "reverting"];
 var CM_COLS = ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"];
-var CM_VDECL = /^(?:var|const|let) VERSION = "/;
+// MERGE-RUNNER-VERSION-FORM-1 (0.4.117, agent_issues 1960): `var VERSION="x"` with no spaces or semicolon (qnfo-email, qnfo-gateway)
+// is one bumpable declaration too; the old exact `var VERSION = "x";` form made those workers "not auto-revertible".
+var CM_VDECL = /^(?:var|const|let)\s+VERSION\s*=\s*"/;
 function cmCtx(t) {
   try { return t && t.ctx ? JSON.parse(t.ctx) : {}; } catch (e) { return null; }
 }
@@ -3244,19 +3246,19 @@ function cmApply(text, hunks, reverse, wild) {
 __name(cmApply, "cmApply");
 // Like evBump, but tolerates a trailing comment after the VERSION literal (several workers keep a changelog there).
 function cmBump(content, tag) {
-  var all = String(content).match(/^var\sVERSION\s=\s"[^"\n]*";/gm) || [];
+  var all = String(content).match(/^var\s+VERSION\s*=\s*"[^"\n]*"/gm) || [];
   if (all.length !== 1) return null;
-  var m = /^var\sVERSION\s=\s"(\d+)\.(\d+)\.(\d+)([^"\n]*)";/m.exec(content);
+  var m = /^var\s+VERSION\s*=\s*"(\d+)\.(\d+)\.(\d+)([^"\n]*)"(;?)/m.exec(content);
   if (!m) return null;
   var from = m[1] + "." + m[2] + "." + m[3] + m[4], to = m[1] + "." + m[2] + "." + (Number(m[3]) + 1) + tag;
-  return { from: from, to: to, content: content.replace(m[0], function() { return 'var VERSION = "' + to + '";'; }) };
+  return { from: from, to: to, content: content.replace(m[0], function() { return 'var VERSION = "' + to + '"' + m[5]; }) };
 }
 __name(cmBump, "cmBump");
 // Inverse of the merged patch on today's main: undo the task's hunks, keep main's VERSION and bump it.
 function cmRevertText(mainText, hunks, tag) {
   var rev = cmApply(mainText, hunks, true, true);
   if (rev == null) return null;
-  var mv = /^var\sVERSION\s=\s"[^"\n]*";/m.exec(mainText), rv = /^var\sVERSION\s=\s"[^"\n]*";/m.exec(rev);
+  var mv = /^var\s+VERSION\s*=\s*"[^"\n]*";?/m.exec(mainText), rv = /^var\s+VERSION\s*=\s*"[^"\n]*";?/m.exec(rev);
   if (!mv || !rv) return null;
   return cmBump(rev.replace(rv[0], function() { return mv[0]; }), tag);
 }
@@ -3338,12 +3340,22 @@ function cmDecide(t, g, nowMs) {
   if (ck.failed.length) return Object.assign(refuse("required check(s) failed on " + sha7 + ": " + ck.failed.join(", ")), { stale_check: true });
   if (ck.status === "failure" || ck.status === "error") return refuse("the commit status on " + sha7 + " is " + ck.status);
   if (ck.missing.length === req.length && !ck.pending.length) {
+    // NOCHECKS-CONFLICT-1 (0.4.117, agent_issues 1877, 1975): GitHub runs no pull_request workflow on a head that conflicts with
+    // main, so "no checks" on a dirty PR is a stale base, not a missing trigger. PR 597 (ct_c2v0em2q6nj8ry) was opened by this
+    // runner with the fleet token, got only CodeQL (a push check), was refused after 3h as "no required check started" and then
+    // closed unmerged by CYCLE-TIME-1; its mergeable_state was dirty. It now goes the CODE-LOOP-STALE-VERSION-1 way at once.
+    if (pr.mergeable === false || pr.mergeable_state === "dirty") return Object.assign(refuse("no required check started on " + sha7 + " because the pull request conflicts with main (mergeable_state " + pr.mergeable_state + "; GitHub runs no pull_request workflow on a conflicted head)"), { stale_check: true });
     // No required check started on this head. A PR the runner opened starts them within minutes; one opened with the
     // Actions GITHUB_TOKEN never does. The clock starts the first time the runner sees this head without checks.
-    if (t.nochecks_sha === head.sha) {
+    // MERGE-NOCHECKS-REOPEN-1 (0.4.117, agent_issues 1975; the re-queue half of closed PR 609 without its model calls): after
+    // CM_CHECKS_WAIT_H the runner closes and reopens the PR once with the fleet token, which fires pull_request 'reopened' and
+    // starts the checks; only a head that still has none CM_CHECKS_WAIT_H later is refused.
+    var reopened = t.nochecks_sha === head.sha + "+reopened";
+    if (t.nochecks_sha === head.sha || reopened) {
       var nAge = (nowMs - Date.parse(t.nochecks_since || "")) / 36e5;
-      if (nAge > CM_CHECKS_WAIT_H) return refuse("no required check (" + req.join(", ") + ") started on " + sha7 + " within " + CM_CHECKS_WAIT_H + "h (a pull request opened with the Actions GITHUB_TOKEN starts none; push to the branch or reopen the PR, then set the task back to 'published')");
-      return wait("no required check has started on " + sha7 + " yet");
+      if (nAge > CM_CHECKS_WAIT_H && !reopened) return { action: "reopen", why: "no required check (" + req.join(", ") + ") started on " + sha7 + " within " + CM_CHECKS_WAIT_H + "h; closing and reopening the pull request with the fleet token so pull_request runs", mark: { nochecks_sha: head.sha + "+reopened", nochecks_since: new Date(nowMs).toISOString() } };
+      if (nAge > CM_CHECKS_WAIT_H) return refuse("no required check (" + req.join(", ") + ") started on " + sha7 + " within " + CM_CHECKS_WAIT_H + "h, nor within " + CM_CHECKS_WAIT_H + "h after the runner closed and reopened the pull request with the fleet token");
+      return wait("no required check has started on " + sha7 + " yet" + (reopened ? " (reopened by the runner)" : ""));
     }
     var w = wait("no required check has started on " + sha7 + " yet");
     w.mark = { nochecks_sha: head.sha, nochecks_since: new Date(nowMs).toISOString() };
@@ -3398,7 +3410,7 @@ async function cmIntegrity(env, t, head, names, sc, mergeBase) {
   }
   out.merge_base = mb;
   if (sc.kind === "worker") {
-    var vm = /^(?:var|const|let) VERSION = "([^"\n]*)"/m.exec(headText || "");
+    var vm = /^(?:var|const|let)\s+VERSION\s*=\s*"([^"\n]*)"/m.exec(headText || "");
     out.version_to = vm ? vm[1] : null;
     if (!hunks) { out.revertible = false; out.revert_why = "a code-agent pull request stores no patch to invert"; }
     else if (!vm || !cmBump(headText, "-x")) { out.revertible = false; out.revert_why = "no single `var VERSION = \"x.y.z...\"` line to bump"; }
@@ -3500,6 +3512,29 @@ async function cmRevert(env, cx, t, why) {
   return { ok: true, rid: rid, pr: pr.pr };
 }
 __name(cmRevert, "cmRevert");
+// CRON-ONLY-VERIFY-1 (0.4.117, agent_issues 1928): a worker with no public route is probed by worker_live_audit as note
+// CRON_ONLY with http null, so evLiveCheck read every merge to it as "post-deploy live check failed: http null, live version
+// null". ct_02oohvsbf1gbji (ai-health-prober 2.3.11-codeagent, PR 581, a harmless addition of four probe models) was declared
+// failed on 2026-10-03, its revert was declared failed the same way (evolve candidate 119: "revert live check failed: http null
+// version null"), and CODE-MERGE-REVERT-FAILED-1 asked for a manual revert of a healthy worker. A cron-only worker is verified
+// by its own fleet_heartbeat row (version, ok) written after the deploy; with no heartbeat after CM_DEPLOY_WAIT_H it is
+// 'unverifiable', recorded as such, and never reverted on a missing HTTP probe.
+async function cmLiveCheck(env, worker, versionTo, sinceIso, nowMs) {
+  var lc = await evLiveCheck(env, worker, versionTo, sinceIso);
+  if (lc.state !== "failed" || !lc.la || lc.la.http != null) return lc;
+  var la = null, hb = null;
+  try { la = await env.AUDIT.prepare("SELECT note FROM worker_live_audit WHERE worker=?1").bind(worker).first(); } catch (e) {}
+  if (!la || String(la.note || "") !== "CRON_ONLY") return lc;
+  try { hb = await env.AUDIT.prepare("SELECT version, ts, ok FROM fleet_heartbeat WHERE worker=?1").bind(worker).first(); } catch (e) {}
+  var since = Date.parse(sinceIso), hbMs = hb ? Date.parse(String(hb.ts || "").replace(" ", "T") + (/[zZ]$|[+-]\d\d:?\d\d$/.test(String(hb.ts || "")) ? "" : "Z")) : NaN;
+  if (!hb || !(hbMs > since)) {
+    if ((nowMs || Date.now()) - since > CM_DEPLOY_WAIT_H * 36e5) return { state: "unverifiable", la: { http: null, live_version: hb ? hb.version : null, via: "cron-only, no fleet_heartbeat after the deploy" } };
+    return { state: "waiting", la: lc.la };
+  }
+  var good = Number(hb.ok) === 1 && (hb.version === versionTo || lc.superseded);
+  return { state: good ? "ok" : "failed", la: { http: good ? 200 : null, live_version: hb.version, via: "fleet_heartbeat (cron-only worker)" }, superseded: lc.superseded };
+}
+__name(cmLiveCheck, "cmLiveCheck");
 // Post-merge verification of a runner merge: the same ledger and live-audit checks as evAdvance.
 async function cmAdvance(env, cx, t) {
   var sc = cmScope(t.path), ageH = (cx.now - Date.parse(t.merged_at || t.updated_at)) / 36e5;
@@ -3510,8 +3545,13 @@ async function cmAdvance(env, cx, t) {
     return { id: t.id, merge_state: "deploying", note: "waiting on canonical deploy" };
   }
   if (t.merge_state === "deployed") {
-    var lc = await evLiveCheck(env, sc.worker, t.version_to, t.deployed_at || t.merged_at);
+    var lc = await cmLiveCheck(env, sc.worker, t.version_to, t.deployed_at || t.merged_at, cx.now);
     if (lc.state === "waiting") return { id: t.id, merge_state: "deployed", note: "waiting on a live audit after deploy" };
+    if (lc.state === "unverifiable") {
+      await cmSave(env, cx, t.id, { merge_state: "unverifiable", merge_note: "deployed " + (t.deployed_at || "") + "; a cron-only worker with no fleet_heartbeat row after the deploy, so the live state cannot be read (not reverted on a missing HTTP probe)" }, { touch: true });
+      await cmEvent(env, cx, "unverifiable", t, sc.worker + " " + t.version_to + " deployed; cron-only, no heartbeat to verify it", "error");
+      return { id: t.id, merge_state: "unverifiable" };
+    }
     if (lc.state === "ok") {
       await cmSave(env, cx, t.id, { merge_state: "verified", merge_note: "live " + lc.la.live_version + " http 200" + (lc.superseded ? " (a later deploy superseded it)" : "") }, { touch: true });
       await cmEvent(env, cx, "verified", t, sc.worker + " live " + lc.la.live_version + " http 200 after the merge of " + t.pr_url);
@@ -3580,6 +3620,30 @@ async function cmRequeueStale(env, cx, t, pr, num, why) {
   return { id: id, why: note };
 }
 __name(cmRequeueStale, "cmRequeueStale");
+// MERGE-RUNNER-REFUSAL-TAXONOMY-1 (0.4.117, agent_issues 1975; owner directive 2026-10-04: most "things need you" need no
+// person). A refusal used to park the task as needs_human, which the dashboard shows as an owner card: 8 of 16 owner cards on
+// 2026-10-04 were such mechanical refusals (no VERSION line to bump, checks never started, an untrusted origin, a control-plane
+// path). None is an owner decision. A refusal now ends the task 'failed' (like SELF-REPAIR-1's exhausted ladder) and hands it to
+// the fleet: a note on its source issue, which stays open, or one deduped CODE-MERGE-REFUSED-1 issue for a direct enqueue. The
+// gates are unchanged; nothing that was refused merges.
+async function cmRefuseTask(env, cx, t, why, ifStatus) {
+  var changed = await cmSave(env, cx, t.id, { status: "failed", last_error: ("merge-runner: " + why).slice(0, 500), merge_note: String(why).slice(0, 500), green_since: null, merge_checked_at: cx.iso }, { touch: true, ifStatus: ifStatus });
+  if (!changed) return false;
+  if (cmIssueId(t.goal)) await cmIssueNote(env, t, "code task " + t.id + " was refused by the merge runner (" + (t.pr_url || t.branch || "") + "): " + why + ". The task is failed and this issue stays open for the fleet; a session can rebuild the change as its own pull request, which STALE-PR-MERGE-FIRST-1 merges on green checks.");
+  else await cmFileIssue(env, "CODE-MERGE-REFUSED-1: code task " + t.id + " (" + t.path + ")", "The merge runner (qnfo-fleet-control CODE-TASK-MERGE-RUNNER-1) refused code task " + t.id + " (" + (t.pr_url || "no pull request") + "): " + why + ". Goal: " + String(t.goal || "").slice(0, 400) + ". Fleet work, not an owner card: fix the cause or rebuild the change as a session pull request (STALE-PR-MERGE-FIRST-1 merges it on green checks), then close this with evidence.");
+  return true;
+}
+__name(cmRefuseTask, "cmRefuseTask");
+// CODE-CLOSE-REASON-1 (0.4.117, agent_issues 1877): a task whose pull request was closed outside the runner kept the runner's
+// last wait note ("GitHub is still computing mergeability") as if that were why it closed, and 3 closures had no reason at all.
+// The closure reason is now recorded: CYCLE-TIME-1's own close (branch_hygiene_log) or a close outside the fleet.
+async function cmClosedWhy(env, num, pr, t) {
+  var row = null;
+  try { row = await env.AUDIT.prepare("SELECT ts, why FROM branch_hygiene_log WHERE pr = ?1 AND action = 'close-stale-pr' AND ok = 1 AND dry = 0 ORDER BY id DESC LIMIT 1").bind(num).first(); } catch (e) {}
+  var who = row ? "closed unmerged by the stale-PR closer (CYCLE-TIME-1, qnfo-fleet-control) at " + row.ts + ": " + String(row.why || "").slice(0, 200) : "pull request #" + num + " was closed unmerged outside the runner" + (pr && pr.closed_at ? " at " + pr.closed_at : "");
+  return (who + (t && t.merge_note ? "; the runner's last note was: " + String(t.merge_note).slice(0, 160) : "")).slice(0, 500);
+}
+__name(cmClosedWhy, "cmClosedWhy");
 async function cmHandle(env, cx, t, cfg, busy, out) {
   var num = Number((CM_PULL_RE.exec(String(t.pr_url || "")) || [])[1] || 0), g = {};
   var d = cmDecide(t, g, cx.now);
@@ -3623,15 +3687,23 @@ async function cmHandle(env, cx, t, cfg, busy, out) {
   }
   var greenSince = d.green ? (t.green_since || cx.iso) : null;
   if (d.action === "refuse") {
-    var changed = await cmSave(env, cx, t.id, { status: "needs_human", last_error: ("merge-runner: " + d.why).slice(0, 500), merge_note: d.why.slice(0, 500), green_since: null, merge_checked_at: cx.iso }, { touch: true, ifStatus: t.status });
+    var changed = await cmRefuseTask(env, cx, t, d.why, t.status);
     if (changed) {
-      if (num && g.pr && g.pr.state === "open") await evApi(env, "POST", "/issues/" + num + "/comments", { body: "CODE-TASK-MERGE-RUNNER-1 (qnfo-fleet-control) did not merge this pull request: " + d.why + ".\n\nCode task `" + t.id + "` is now `needs_human`. Merge or close it here; the runner records the outcome." });
+      if (num && g.pr && g.pr.state === "open") await evApi(env, "POST", "/issues/" + num + "/comments", { body: "CODE-TASK-MERGE-RUNNER-1 (qnfo-fleet-control) did not merge this pull request: " + d.why + ".\n\nCode task `" + t.id + "` is now `failed` and handed to the fleet (its source issue, or a CODE-MERGE-REFUSED-1 issue); no owner action is needed. A merge or close made here is still recorded by the runner." });
       await cmEvent(env, cx, "refused", t, t.pr_url + ": " + d.why, "refused");
     }
+  } else if (d.action === "reopen") {
+    var c1 = await evApi(env, "PATCH", "/pulls/" + num, { state: "closed" });
+    var c2 = c1.ok ? await evApi(env, "PATCH", "/pulls/" + num, { state: "open" }) : c1;
+    if (c2.ok) res.why = d.why;
+    else { res.action = "reopen-failed"; res.why = "close/reopen HTTP " + c1.status + "/" + c2.status; }
+    await cmSave(env, cx, t.id, Object.assign({ merge_note: String(res.why).slice(0, 500), green_since: null, merge_checked_at: cx.iso }, c2.ok ? d.mark : {}));
+    await cmEvent(env, cx, c2.ok ? "reopened" : "reopen-failed", t, t.pr_url + ": " + res.why, c2.ok ? "ok" : "error");
   } else if (d.action === "reconcile") {
     var f = { status: d.status, merge_checked_at: cx.iso };
     if (d.status === "merged") { f.merged_by = d.by; f.merged_sha = g.pr.merge_commit_sha || null; f.merged_at = g.pr.merged_at || cx.iso; }
-    if (await cmSave(env, cx, t.id, f, { touch: true, ifStatus: t.status })) await cmEvent(env, cx, "reconciled", t, t.pr_url + " was " + d.status + (d.by ? " by " + d.by : "") + " outside the runner");
+    else { f.merge_note = await cmClosedWhy(env, num, g.pr, t); if (!t.last_error) f.last_error = ("closed: " + f.merge_note).slice(0, 500); }
+    if (await cmSave(env, cx, t.id, f, { touch: true, ifStatus: t.status })) await cmEvent(env, cx, "reconciled", t, t.pr_url + " was " + d.status + (d.by ? " by " + d.by : "") + " outside the runner" + (f.merge_note ? ": " + f.merge_note : ""));
   } else if (d.action === "merge") {
     var head2 = g.pr.head.sha, names = g.files.map(function(x) { return x.filename; });
     if (!t.green_since) await cmSave(env, cx, t.id, { green_since: greenSince });
@@ -3706,7 +3778,7 @@ async function cmOpenHandle(env, cx, t, cfg, out) {
       await cmEvent(env, cx, "pr-open-failed", t, branch + ": " + res.why, "error");
     }
   } else if (d.action === "refuse") {
-    if (await cmSave(env, cx, t.id, { status: "needs_human", last_error: ("merge-runner: " + d.why).slice(0, 500), merge_note: d.why.slice(0, 500), merge_checked_at: cx.iso }, { touch: true, ifStatus: "branch_pushed" })) await cmEvent(env, cx, "refused", t, branch + " not opened as a pull request: " + d.why, "refused");
+    if (await cmRefuseTask(env, cx, t, d.why, "branch_pushed")) await cmEvent(env, cx, "refused", t, branch + " not opened as a pull request: " + d.why, "refused");
   } else {
     await cmSave(env, cx, t.id, { merge_note: String(d.why || "").slice(0, 500), merge_checked_at: cx.iso });
   }
@@ -3744,7 +3816,7 @@ async function codeMergeTick(env, opts) {
   for (var j = 0; j < cands.length; j++) out.decided.push(await cmHandle(env, cx, cands[j], cfg, busy, out));
   // A refused PR (or a refused branch whose PR a person opened) that a person later merged or closed: record the outcome
   // (code-task-publish reconciles only waiting rows).
-  var refused = await all("SELECT id, branch, pr_url, status FROM code_tasks WHERE status = 'needs_human' AND last_error LIKE 'merge-runner:%' AND branch LIKE 'codeagent-%' ORDER BY updated_at ASC LIMIT 10");
+  var refused = await all("SELECT id, branch, pr_url, status, merge_note FROM code_tasks WHERE status IN ('needs_human', 'failed') AND last_error LIKE 'merge-runner:%' AND branch LIKE 'codeagent-%' ORDER BY updated_at ASC LIMIT 10");
   for (var q = 0; q < refused.length; q++) {
     var rt = refused[q], rn = Number((CM_PULL_RE.exec(String(rt.pr_url || "")) || [])[1] || 0);
     if (!rn) {
@@ -3755,9 +3827,9 @@ async function codeMergeTick(env, opts) {
     }
     var rp = await evApi(env, "GET", "/pulls/" + rn);
     if (!rp.ok || !rp.j || (rp.j.state !== "closed" && !rp.j.merged)) continue;
-    var rf = rp.j.merged ? { status: "merged", merged_by: rp.j.merged_by && rp.j.merged_by.login ? "gh:" + rp.j.merged_by.login : "person", merged_sha: rp.j.merge_commit_sha || null, merged_at: rp.j.merged_at || cx.iso, merge_checked_at: cx.iso } : { status: "closed", merge_checked_at: cx.iso };
+    var rf = rp.j.merged ? { status: "merged", merged_by: rp.j.merged_by && rp.j.merged_by.login ? "gh:" + rp.j.merged_by.login : "person", merged_sha: rp.j.merge_commit_sha || null, merged_at: rp.j.merged_at || cx.iso, merge_checked_at: cx.iso } : { status: "closed", merge_checked_at: cx.iso, merge_note: await cmClosedWhy(env, rn, rp.j, rt) };
     rf.pr_url = "https://github.com/" + EVOLVE_REPO + "/pull/" + rn;
-    if (await cmSave(env, cx, rt.id, rf, { touch: true, ifStatus: "needs_human" })) { out.reconciled.push({ id: rt.id, status: rf.status }); await cmEvent(env, cx, "reconciled", rt, rf.pr_url + " was " + rf.status + " by a person after a refusal"); }
+    if (await cmSave(env, cx, rt.id, rf, { touch: true, ifStatus: rt.status })) { out.reconciled.push({ id: rt.id, status: rf.status }); await cmEvent(env, cx, "reconciled", rt, rf.pr_url + " was " + rf.status + " after a refusal" + (rf.merge_note ? ": " + rf.merge_note : "")); }
   }
   // GitHub unreachable for every task (a revoked token, an outage): the heartbeat says 'error', so the watchmaker sees
   // the runner go stale after 2h instead of a healthy loop that merges nothing.
@@ -3790,6 +3862,23 @@ var BH_GRACE_CLOSED_H = 12;
 var BH_GRACE_ORPHAN_H = 24;
 var BH_NEEDS_HUMAN_DAYS = 1;
 var BH_STALE_PR_H = 24; // CYCLE-TIME-1: an open PR idle this long with no live code task is archived, commented and closed
+// STALE-PR-MERGE-FIRST-1 (0.4.117, agent_issues 1965 MERGE-BACKLOG-1, 1960 PR-LANE-ZERO-TOUCH-1; pillar autonomy). Nothing in the
+// fleet merged a pull request a session opened: CODE-TASK-MERGE-RUNNER-1 takes only code_tasks rows on codeagent-<id> branches
+// (cmDecide refuses any other branch) and evolveTick only its own evolve/<worker>-c<id> branches; sessions are refused the merge
+// call ("Merge Without Review", #1965); the owner directive of 2026-10-04 is that merges never wait on the owner. So green work
+// sat until CYCLE-TIME-1 closed it unmerged: PR 586 (CLEF-CANDIDATE-1) was closed 2026-10-05 09:00Z with all 12 check runs
+// green (gate, guard x3, mirror-guard, comparator, charter, identity-guard, CodeQL, Analyze x3) and mergeable_state clean the day
+// before. Now an open session PR idle BH_MERGE_IDLE_H is merged when every required check of its files (cmRequired: gate,
+// mirror-guard, comparator, guard for worker sources, charter for charter or fleet-control files, test for the code loop) ended
+// success on the head, no other check failed or is running, the commit status is not failing and GitHub says mergeable_state
+// clean; never a draft, a PR that says do-not-merge or WIP, a PR that changes .github/, a fork, or a codeagent-/evolve/ branch
+// (their own runners decide). Only what is still not mergeable at BH_STALE_PR_H is closed, with the reason in the comment.
+// Kill switch: ops_config stale_pr_merge_enabled ('0' / 'off'); every merge is a branch_hygiene_log row 'merge-stale-pr'.
+var BH_MERGE_IDLE_H = 2;
+var BH_MERGE_MAX = 10; // pull requests evaluated for a merge per tick (4 GitHub reads each)
+var BH_MERGEABLE_READS = 3;
+var BH_MERGEABLE_WAIT_MS = 2000;
+var BH_HOLD_RE = /\b(do[\s-]*not[\s-]*merge|don'?t[\s-]*merge|wip|work[\s-]in[\s-]progress)\b/i;
 var BH_MAX_ACTIONS = 40;
 var BH_MAX_COMPARES = 60;
 var BH_ARCHIVE_PREFIX = "refs/archive/";
@@ -3818,18 +3907,71 @@ function bhDecide(f) {
 }
 __name(bhDecide, "bhDecide");
 async function bhConfig(env) {
-  var cfg = { enabled: true, dry: false, raw: "(unset)" };
+  var cfg = { enabled: true, dry: false, raw: "(unset)", mergeStale: true };
   try {
-    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run')").all()).results || [];
+    var rows = (await env.AUDIT.prepare("SELECT key, value FROM ops_config WHERE key IN ('branch_hygiene_enabled', 'branch_hygiene_dry_run', 'stale_pr_merge_enabled')").all()).results || [];
     rows.forEach(function(r) {
       var v = String(r.value == null ? "" : r.value).trim().toLowerCase();
       if (r.key === "branch_hygiene_enabled" && v) { cfg.raw = v; cfg.enabled = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0; }
       if (r.key === "branch_hygiene_dry_run") cfg.dry = ["1", "on", "true", "yes"].indexOf(v) >= 0;
+      if (r.key === "stale_pr_merge_enabled" && v) cfg.mergeStale = ["0", "off", "false", "no", "disabled"].indexOf(v) < 0;
     });
   } catch (e) {}
   return cfg;
 }
 __name(bhConfig, "bhConfig");
+// STALE-PR-MERGE-FIRST-1: the merge decision for a session pull request (pure). pr is GET /pulls/{n}, files GET /pulls/{n}/files,
+// runs the head's check runs, statusJ its combined status. Returns { merge: true, why, required } or { merge: false, why }.
+function bhMergeDecide(pr, files, runs, statusJ) {
+  var no = function(why) { return { merge: false, why: why }; };
+  if (!pr || typeof pr !== "object" || Array.isArray(pr) || !pr.number) return no("pull request not read");
+  if (pr.state !== "open" || pr.merged) return no("not open");
+  if (pr.draft) return no("a draft");
+  var head = pr.head || {}, base = pr.base || {}, ref = String(head.ref || "");
+  if (/^codeagent-/.test(ref) || /^evolve\//.test(ref)) return no("a code-loop or evolve branch: its own runner decides");
+  if (!head.repo || head.repo.full_name !== EVOLVE_REPO || base.ref !== "main" || !base.repo || base.repo.full_name !== EVOLVE_REPO) return no("not a branch of " + EVOLVE_REPO + " into main");
+  var labels = (pr.labels || []).map(function(l) { return String(l && l.name || ""); }).join(" ");
+  if (BH_HOLD_RE.test(String(pr.title || "")) || BH_HOLD_RE.test(labels) || /(^|\s)(on-)?hold(\s|$)/i.test(labels) || /\bdo[\s-]*not[\s-]*merge\b/i.test(String(pr.body || ""))) return no("the pull request asks not to be merged (title, label or body)");
+  if (!Array.isArray(files) || !files.length || files.length >= 100) return no("its changed files could not be read (or 100+)");
+  var names = files.map(function(f) { return String(f && f.filename || ""); });
+  var gh = names.filter(function(n) { return /^\.github\//.test(n); });
+  if (gh.length) return no("it changes " + gh[0] + "; workflows and repository settings are never merged automatically");
+  var sha7 = String(head.sha || "").slice(0, 7);
+  if (pr.mergeable !== true || ["clean", "has_hooks"].indexOf(String(pr.mergeable_state || "")) < 0) return no("GitHub reports mergeable " + pr.mergeable + ", mergeable_state " + pr.mergeable_state);
+  var req = cmRequired(names), ck = cmChecks(runs || [], statusJ, req);
+  if (ck.missing.length) return no("required check(s) " + ck.missing.join(", ") + " never ran on " + sha7);
+  if (ck.failed.length) return no("required check(s) failed on " + sha7 + ": " + ck.failed.join(", "));
+  if (ck.pending.length) return no("check(s) still running on " + sha7 + ": " + ck.pending.join(", "));
+  if (ck.other.length) return no("check(s) failed on " + sha7 + ": " + ck.other.join(", "));
+  if (ck.status === "failure" || ck.status === "error" || ck.status === "pending") return no("the commit status on " + sha7 + " is " + ck.status);
+  return { merge: true, why: "required checks " + req.join(", ") + " green on " + sha7 + ", no other check failing, mergeable_state " + pr.mergeable_state, required: req };
+}
+__name(bhMergeDecide, "bhMergeDecide");
+// Reads what bhMergeDecide needs and merges (squash, pinned to the tested head). { merged, why, keep } -- keep: GitHub was
+// asked to bring the branch up to date (merge HTTP 405/409), so its checks run again and the pull request is not closed now.
+async function bhTryMerge(env, p) {
+  var n = p.number, pr = await evApi(env, "GET", "/pulls/" + n);
+  for (var i = 1; i < BH_MERGEABLE_READS && pr.ok && pr.j && pr.j.state === "open" && pr.j.mergeable == null; i++) {
+    if (BH_MERGEABLE_WAIT_MS > 0) await new Promise(function(res) { setTimeout(res, BH_MERGEABLE_WAIT_MS); });
+    var again = await evApi(env, "GET", "/pulls/" + n);
+    if (again.ok && again.j) pr = again;
+  }
+  if (!pr.ok || !pr.j || Array.isArray(pr.j)) return { merged: false, why: "pull request HTTP " + pr.status };
+  var head = pr.j.head && pr.j.head.sha;
+  if (!head) return { merged: false, why: "no head commit" };
+  var fl = await evApi(env, "GET", "/pulls/" + n + "/files?per_page=100");
+  var cr = await evApi(env, "GET", "/commits/" + head + "/check-runs?per_page=100");
+  var st = await evApi(env, "GET", "/commits/" + head + "/status");
+  if (!fl.ok || !cr.ok || !st.ok) return { merged: false, why: "files HTTP " + fl.status + ", check-runs HTTP " + cr.status + ", status HTTP " + st.status };
+  var d = bhMergeDecide(pr.j, fl.j, (cr.j && cr.j.check_runs) || [], st.j);
+  if (!d.merge) return { merged: false, why: d.why };
+  var title = String(pr.j.title || "pull request " + n).replace(/\s+/g, " ").slice(0, 200) + " (#" + n + ")";
+  var msg = "Merged by qnfo-fleet-control STALE-PR-MERGE-FIRST-1 after " + BH_MERGE_IDLE_H + "h without activity: " + d.why + ". Owner directive 2026-10-04: merges never wait on the owner.";
+  var mg = await evMergePr(env, n, head, title, msg);
+  if (!mg.ok) return { merged: false, keep: mg.status === 405 || mg.status === 409, why: "merge HTTP " + mg.status + " " + String(mg.j && mg.j.message || "").slice(0, 100) };
+  return { merged: true, why: d.why, sha: (mg.j && mg.j.sha) || null, ref: pr.j.head.ref };
+}
+__name(bhTryMerge, "bhTryMerge");
 async function bhSchema(env) {
   await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS branch_hygiene_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, branch TEXT NOT NULL, sha TEXT, action TEXT NOT NULL, why TEXT, pr INTEGER, archive_ref TEXT, ok INTEGER DEFAULT 1, dry INTEGER DEFAULT 0)").run();
 }
@@ -3915,14 +4057,32 @@ async function branchHygieneTick(env, opts) {
   // for BH_STALE_PR_H hours is not waiting on anything the fleet will do. Save the head tip as refs/archive/<ref>, comment, then
   // close it through the REST API (the branch sweeper archives and deletes the branch on a later tick). This is what turns the
   // open-PR backlog over inside a day; a live code task (branch_pushed / published / pr_open / recent needs_human) is always kept.
-  var prClosed = 0;
+  var prClosed = 0, mergeTries = 0;
+  out.merged_prs = [];
   for (var pi = 0; pi < prs.items.length && prClosed < BH_MAX_ACTIONS; pi++) {
     var p = prs.items[pi];
     if (!p || p.state !== "open" || p.draft) continue;
     if (!p.head || !p.head.ref || !p.head.repo || p.head.repo.full_name !== EVOLVE_REPO) continue;
     if (BH_PRESERVE.indexOf(p.head.ref) >= 0 || live[p.head.ref]) continue;
     var updMs = p.updated_at ? Date.parse(p.updated_at) : NaN;
-    if (isNaN(updMs) || (nowMs - updMs) < BH_STALE_PR_H * 36e5) continue;
+    if (isNaN(updMs)) continue;
+    // STALE-PR-MERGE-FIRST-1: a quiet session pull request that is green and clean is merged, not left to be closed.
+    var notMerged = "";
+    if (cfg.mergeStale && !dry && (nowMs - updMs) >= BH_MERGE_IDLE_H * 36e5 && mergeTries < BH_MERGE_MAX && !/^(codeagent-|evolve\/)/.test(p.head.ref)) {
+      mergeTries++;
+      var tm = await bhTryMerge(env, p);
+      if (tm.merged) {
+        await evApi(env, "DELETE", "/git/refs/heads/" + bhPath(p.head.ref));
+        await evApi(env, "POST", "/issues/" + p.number + "/comments", { body: "STALE-PR-MERGE-FIRST-1 (qnfo-fleet-control): merged after " + BH_MERGE_IDLE_H + "h without activity because " + tm.why + ". The canonical deploy ships it from main." });
+        try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'merge-stale-pr', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, tm.sha || p.head.sha || null, String(tm.why).slice(0, 500), p.number).run(); } catch (e) {}
+        out.merged_prs.push(p.number);
+        prClosed++;
+        continue;
+      }
+      if (tm.keep) continue; // GitHub is bringing the branch up to date; its checks run again, so it is not idle any more
+      notMerged = tm.why;
+    }
+    if ((nowMs - updMs) < BH_STALE_PR_H * 36e5) continue;
     var href = BH_ARCHIVE_PREFIX + p.head.ref, hok = true;
     if (!dry) {
       var har = await evApi(env, "POST", "/git/refs", { ref: href, sha: p.head.sha || p.head.ref });
@@ -3930,11 +4090,11 @@ async function branchHygieneTick(env, opts) {
       if (!har.ok && !hexists) { hok = false; out.errors.push("PR " + p.number + ": archive ref HTTP " + har.status); }
     }
     if (!dry && hok) {
-      await evApi(env, "POST", "/issues/" + p.number + "/comments", { body: "CYCLE-TIME-1 (qnfo-fleet-control): this pull request has had no activity for over " + BH_STALE_PR_H + "h and its head is not a live code task. Its tip is saved as `" + href + "`; the branch sweeper archives and deletes the branch. Reopen or re-push if it is still wanted." });
+      await evApi(env, "POST", "/issues/" + p.number + "/comments", { body: "CYCLE-TIME-1 (qnfo-fleet-control): this pull request has had no activity for over " + BH_STALE_PR_H + "h and its head is not a live code task. " + (notMerged ? "It was not merged automatically: " + notMerged + ". " : "") + "Its tip is saved as `" + href + "`; the branch sweeper archives and deletes the branch. Reopen or re-push if it is still wanted." });
       var hcl = await evApi(env, "PATCH", "/pulls/" + p.number, { state: "closed" });
       if (!hcl.ok) { hok = false; out.errors.push("PR " + p.number + ": close HTTP " + hcl.status); }
     }
-    try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'close-stale-pr', ?4, ?5, ?6, ?7, ?8)").bind(iso, p.head.ref, p.head.sha || null, "open PR idle over " + BH_STALE_PR_H + "h with no live code task", p.number, href, hok ? 1 : 0, dry ? 1 : 0).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'close-stale-pr', ?4, ?5, ?6, ?7, ?8)").bind(iso, p.head.ref, p.head.sha || null, ("open PR idle over " + BH_STALE_PR_H + "h with no live code task" + (notMerged ? "; not merged: " + notMerged : "")).slice(0, 500), p.number, href, hok ? 1 : 0, dry ? 1 : 0).run(); } catch (e) {}
     if (hok) { out.closed_prs.push(p.number); prClosed++; }
   }
   // GitHub's own switch, so a merge made by anyone removes its branch at once. Best effort: needs a token that may administer the repo.
@@ -3948,7 +4108,7 @@ async function branchHygieneTick(env, opts) {
   if (!dry) {
     try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'repo_branches_open'").bind(String(out.remaining), iso).run(); } catch (e) {}
   }
-  await beat(out.errors.length && !out.deleted.length && !out.archived.length ? "error" : "ok", { branches: out.branches, remaining: out.remaining, deleted: out.deleted.length, archived: out.archived.length, closed_prs: out.closed_prs.length, errors: out.errors.length, dry: dry });
+  await beat(out.errors.length && !out.deleted.length && !out.archived.length ? "error" : "ok", { branches: out.branches, remaining: out.remaining, deleted: out.deleted.length, archived: out.archived.length, closed_prs: out.closed_prs.length, merged_prs: out.merged_prs.length, errors: out.errors.length, dry: dry });
   return out;
 }
 __name(branchHygieneTick, "branchHygieneTick");
@@ -6843,7 +7003,7 @@ var worker_default2 = {
       var bhc = await bhConfig(env);
       var bhl = await env.AUDIT.prepare("SELECT ts, branch, sha, action, why, pr, archive_ref, ok, dry FROM branch_hygiene_log ORDER BY id DESC LIMIT 40").all().catch(function() { return { results: [] }; });
       var bhh = await env.AUDIT.prepare("SELECT ts, status, text FROM cloud_ops_events WHERE id >= 'branch-hygiene-tick-' AND id < 'branch-hygiene-tick.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
-      return json({ ok: true, version: VERSION, loop: "BRANCH-HYGIENE-1", enabled: bhc.enabled, dry_run: bhc.dry, switch: "ops_config branch_hygiene_enabled = " + bhc.raw, grace_hours: { merged: BH_GRACE_MERGED_H, closed_pr: BH_GRACE_CLOSED_H, no_pr: BH_GRACE_ORPHAN_H }, needs_human_days: BH_NEEDS_HUMAN_DAYS, stale_pr_hours: BH_STALE_PR_H, max_actions_per_tick: BH_MAX_ACTIONS, archive_refs: BH_ARCHIVE_PREFIX + "<branch>", last_tick: bhh, recent: bhl.results || [] });
+      return json({ ok: true, version: VERSION, loop: "BRANCH-HYGIENE-1", enabled: bhc.enabled, dry_run: bhc.dry, switch: "ops_config branch_hygiene_enabled = " + bhc.raw, grace_hours: { merged: BH_GRACE_MERGED_H, closed_pr: BH_GRACE_CLOSED_H, no_pr: BH_GRACE_ORPHAN_H }, needs_human_days: BH_NEEDS_HUMAN_DAYS, stale_pr_hours: BH_STALE_PR_H, stale_pr_merge: { loop: "STALE-PR-MERGE-FIRST-1", enabled: bhc.mergeStale, switch: "ops_config stale_pr_merge_enabled", idle_hours: BH_MERGE_IDLE_H, max_per_tick: BH_MERGE_MAX }, max_actions_per_tick: BH_MAX_ACTIONS, archive_refs: BH_ARCHIVE_PREFIX + "<branch>", last_tick: bhh, recent: bhl.results || [] });
     }
     if (p === "/branch-hygiene/tick" && request.method === "POST") {
       var bha = request.headers.get("Authorization") || "";
