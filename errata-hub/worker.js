@@ -1,11 +1,11 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.3.1-errata-judge"; // 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.4.0-internal-sweep"; // 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
-var WATCH_VERSION = "0.2.3";
+var WATCH_VERSION = "0.2.4-internal-sweep";
 var RESPOND_VERSION = "0.4.3-judge";
 var PUBLISH_VERSION = "0.8.0-publish-gate";
 // ERRATA-HUB-CRONS-UNDECLARED-1 (2026-10-02, #1747, pillar research): wrangler.toml now declares the three hourly members
@@ -124,13 +124,18 @@ var worker_default = {
     return json({ error: "not found" }, 404);
   },
   async scheduled(event, env, ctx) {
+    // ERRATA-INTERNAL-SWEEP-1 (#1164): internal findings enter errata_queue before the email triage. The sweep makes no
+    // model call and never throws; its outcome rides in this member's tick row (internal_sweep), so the existing
+    // WATCHMAKER_OPS errata-watch entry covers it.
+    const sweep = await sweepInternalErrata(env);
+    if (sweep.queued || !sweep.ok) console.log("[qnfo-errata-watch] internal sweep:", JSON.stringify(sweep));
     try {
       const r = await runCheck(env, "live");
       console.log("[qnfo-errata-watch] cron done:", JSON.stringify({ scanned: r.scanned, classified: r.classified, detected: r.detectedCount }));
-      await errataTick(env, "errata-watch", true, { version: WATCH_VERSION, scanned: r.scanned, classified: r.classified, detected: r.detectedCount, last_email_id: r.advancedTo });
+      await errataTick(env, "errata-watch", true, { version: WATCH_VERSION, scanned: r.scanned, classified: r.classified, detected: r.detectedCount, last_email_id: r.advancedTo, internal_sweep: sweep });
     } catch (e) {
       console.error("[qnfo-errata-watch] cron error:", e.message);
-      await errataTick(env, "errata-watch", false, { version: WATCH_VERSION, error: String(e && e.message || e).slice(0, 300) });
+      await errataTick(env, "errata-watch", false, { version: WATCH_VERSION, error: String(e && e.message || e).slice(0, 300), internal_sweep: sweep });
     }
   }
 };
@@ -21724,6 +21729,49 @@ return { default: publish_worker_src_default };
 
 // ===== MERGE errata-hub =====
 
+// ---- ERRATA-INTERNAL-SWEEP-1:BEGIN
+// ERRATA-INTERNAL-SWEEP-1 (2026-10-05, #1164, pillar: research). POST /internal-errata (below) was the only way into errata_queue
+// for an internal finding, and nothing called it: qnfo-ops wrote err-20260926-001 (a known false claim, status open) straight into
+// internal_errata on 2026-09-26 and errata_queue still held only the two inbound-email rows on 2026-10-05. The :00 watch
+// tick now sweeps: every internal_errata row that is still open (the terminal set idea-hub's public gate uses) and has no
+// errata_queue row gets one, written by the same insert the intake uses. The queue row is keyed by the erratum id in
+// `subject` with email_id NULL (the intake and qnfo-paper-reviser write it that way), so the INSERT .. WHERE NOT EXISTS
+// adds nothing for an erratum already queued. Rows enter as 'internal-open', which errata-respond (status 'detected') and
+// errata-publish (errata_actions 'drafted') never select; pipeline_flags.errata_publish_enabled is not read here. No
+// model call. internal_errata has no source column: detected_by naming a red team maps to red_team, anything else to
+// internal_audit (the two sources the intake accepts).
+var INTERNAL_SWEEP_MAX = 20;
+function internalErrataSource(detectedBy) {
+  return /red[\s_-]?team/i.test(String(detectedBy || "")) ? "red_team" : "internal_audit";
+}
+async function queueInternalErratum(env, e) {
+  const r = await env.WATCH_DB.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status) SELECT NULL, ?1, ?2, ?3, ?4, ?5, 1.0, 'internal-open' WHERE NOT EXISTS (SELECT 1 FROM errata_queue WHERE email_id IS NULL AND subject = ?3)")
+    .bind(e.source, e.sender, e.id, e.paper_doi || null, e.claim || null).run();
+  return r && r.meta ? Number(r.meta.changes || 0) : 0;
+}
+async function sweepInternalErrata(env) {
+  const out = { ok: true, max: INTERNAL_SWEEP_MAX, candidates: 0, queued: 0, ids: [] };
+  try {
+    const rows = (await env.WATCH_DB.prepare("SELECT ie.id, ie.target_ref, ie.detected_by, ie.claim_text FROM internal_errata ie WHERE COALESCE(ie.status, 'open') NOT IN ('closed', 'resolved', 'rejected') AND NOT EXISTS (SELECT 1 FROM errata_queue q WHERE q.email_id IS NULL AND q.subject = ie.id) ORDER BY ie.detected_at ASC, ie.id ASC LIMIT ?1")
+      .bind(INTERNAL_SWEEP_MAX).all()).results || [];
+    out.candidates = rows.length;
+    for (const row of rows) {
+      const by = typeof row.detected_by === "string" && row.detected_by.trim() ? row.detected_by.trim().slice(0, 128) : null;
+      const source = internalErrataSource(by);
+      const doi = (String(row.target_ref || "").match(/10\.5281\/zenodo\.\d+/) || [null])[0];
+      const claim = typeof row.claim_text === "string" && row.claim_text.trim() ? row.claim_text.trim().slice(0, 4000) : null;
+      if (await queueInternalErratum(env, { id: row.id, source, sender: by || source, paper_doi: doi, claim }) > 0) {
+        out.queued++;
+        out.ids.push(row.id);
+      }
+    }
+  } catch (e) {
+    out.ok = false;
+    out.error = String(e && e.message || e).slice(0, 300);
+  }
+  return out;
+}
+// ---- ERRATA-INTERNAL-SWEEP-1:END
 // CONTENT-INTEGRITY-NO-INTERNAL-ERRATA-PATH-1 (#1164): intake for errors detected inside QNFO's own output.
 // Writes internal_errata (source of truth, read by idea-hub's public gate) and a errata_queue row with
 // source in (internal_audit, red_team), email_id NULL and status 'internal-open' so the email-driven
@@ -21743,8 +21791,7 @@ async function internalErrataIntake(request, env) {
   try {
     await env.WATCH_DB.prepare("INSERT OR IGNORE INTO internal_errata (id, target_kind, target_ref, detected_at, detected_by, severity, claim_text, falsification, evidence, remediation, status, owner, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,'open',?11,?4)")
       .bind(id, kind, ref, now, str(b.detected_by, 128) || source, sev, claim, str(b.falsification, 8000), str(b.evidence, 8000), str(b.remediation, 4000), str(b.owner, 128)).run();
-    await env.WATCH_DB.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status) VALUES (NULL, ?1, ?2, ?3, NULL, ?4, 1.0, 'internal-open')")
-      .bind(source, str(b.detected_by, 128) || source, id, claim).run();
+    await queueInternalErratum(env, { id, source, sender: str(b.detected_by, 128) || source, paper_doi: null, claim });
   } catch (e) { console.error("[errata-hub] internal-errata intake failed:", e && e.message); return j({ ok: false, error: "intake failed" }, 500); }
   return j({ ok: true, id, source });
 }
@@ -21794,7 +21841,7 @@ async function cronTickDispatch(event, one) {
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction goes to Zenodo only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction goes to Zenodo only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)"] }), { headers: { "content-type": "application/json" } });
     if (p === "/internal-errata" && request.method === "POST") return internalErrataIntake(request, env);
     if (p === "/errata-watch" || p.startsWith("/errata-watch/")) { const u = new URL(request.url); u.pathname = p.slice(13) || "/"; return erratawatchMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/errata-respond" || p.startsWith("/errata-respond/")) { const u = new URL(request.url); u.pathname = p.slice(15) || "/"; return erratarespondMod.default.fetch(new Request(u.toString(), request), env, ctx); }
