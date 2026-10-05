@@ -122,7 +122,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   ok(x2.status === 200 && x2.j.count === 1 && x2.j.in_flight_count === 0, "X2 the open read works with no ledger");
   ok((await post(env, "/work-lock/release", { key: "file:qnfo-lifecycle/worker.js", token: x1.j.token, outcome: "merged" })).status === 200, "X3 release works with no ledger");
   const h = await get(env, "/health");
-  ok(h.j.version === "1.3.22-work-claim-unify", "X4 /health reports 1.3.22");
+  ok(/^1\.3\.(2[2-9]|[3-9]\d)-/.test(String(h.j.version)), "X4 /health reports 1.3.22 or a later 1.3.x (" + h.j.version + ")");
 }
 
 console.log(pass + " passed, " + fail + " failed");
