@@ -12,11 +12,18 @@ Microsoft credential (fleet audit `integration_state`, 2026-09-28: no `MS_`/`AZU
 
 ## One-time setup (owner only, about 10 minutes)
 
-1. Microsoft Entra admin center (entra.microsoft.com) -> App registrations -> New registration.
+0. **A real Microsoft Entra directory is required first** (checked live 2026-10-04, agent_issues #1897). Both mailboxes
+   are personal Microsoft accounts without a directory. entra.microsoft.com fails for them with AADSTS16000; the working
+   entry point, portal.azure.com -> Microsoft Entra ID -> App registrations -> New registration, now says "The ability to
+   create applications outside of a directory has been deprecated. You may get a new directory by joining the M365
+   Developer Program or signing up for Azure." So the owner first gets a directory: the free Microsoft 365 Developer
+   Program, or an Azure free account (phone and card identity check). Both need the owner's own identity; no session can
+   do it. The older advice "create the free default directory" no longer works.
+1. portal.azure.com -> Microsoft Entra ID -> App registrations -> New registration (inside that directory).
    - Supported account types: **Personal Microsoft accounts only** (or the "any organizational directory and personal
      Microsoft accounts" option; the worker uses the `/consumers` authority either way).
-   - Redirect URI: platform **Web**, `https://<personal-api origin>/microsoft/callback`.
-   - If the portal says your account has no directory, create the free default one; no Azure subscription is needed.
+   - Redirect URI: platform **Web**, `https://<personal-api origin>/microsoft/callback` (both
+     `https://personal-api.q08.workers.dev/microsoft/callback` and `https://personal.qnfo.org/microsoft/callback`).
 2. API permissions -> Add -> Microsoft Graph -> **Delegated**: `Mail.Read`, `offline_access` (openid, email, profile and
    `User.Read` are already there). Do not add any `ReadWrite`, `Send` or `Delete` permission.
 3. Certificates & secrets -> New client secret. Copy the **Value** now; it is shown once. Put a calendar reminder at its
@@ -54,13 +61,19 @@ reports which mailbox (`store`) a message came from.
   without use; the daily cron keeps it alive, but a 90-day outage means reconnecting.
 - One-time codes are never indexed (MSGRAPH-NO-CODES-1): mail whose subject is a verification/security/sign-in/one-time code, or that carries the fleet's own `Fleet code` mail, is skipped (counted as `skipped` in the sync response). The owner's emailed dashboard code would otherwise be readable by any tool that reads `email_index`, which would make that gate a formality. Rows loaded by the 2026-08-29 import are not filtered.
 - Mail previews (first 280 characters of the body) are stored in `email_index.summary`, as the existing rows already do.
-- Not covered: Outlook calendar, sending mail, Gmail (Gmail still has only the 2026-08-29 snapshot; adding Gmail means
-  adding a Gmail scope to the Google flow and a second writer into the same `email_index`, using the helper pattern here).
+- Not covered: Outlook calendar, sending mail, Gmail. Gmail keeps only the 2026-08-29 snapshot: a Gmail writer would need
+  the Google Cloud OAuth client the owner declined on 2026-10-04 (human_actions gcal-1-link-google-calendar, "too many
+  manual steps"). Gmail and Outlook mail reach the fleet only when forwarded to rowan.quni@qnfo.org (human_actions
+  personal-booking-forward-rule); qnfo-email 2.4.0+ copies qnfo.org mail into `email_index` as store `qnfo.org` on its
+  07:00 cron (EMAIL-INDEX-WRITER-1).
+- qnfo-email `RETIRED_STORES` (2.4.0) stops freshness alerts for the stores `gmail`, `rowan.quni@outlook.com` and
+  `rwnquni@outlook.com`. When the Microsoft app exists and the sync runs, remove the two Outlook stores from that list so
+  a stalled Graph sync is reported again.
 
 ## Build and test
 
 ```
-# source of the patch (apply_patch.py, live 4.4.0 backup) lives in QNFO/personal-life-workers PR 3
+# personal-api/worker.js in this repository is the source and the deployed bundle (canonical deploy, see ../README-deploy.md)
 node --test personal-api/msgraph/msgraph.test.mjs    # 16 tests against the patched bundle
 ```
 

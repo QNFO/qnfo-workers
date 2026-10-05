@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.40-error-detail-capture";
+var VERSION = "2.38.41-ds-402-breaker";
 // ---- UTF8-DEPLOY-1:BEGIN (2.38.36, 2026-10-02, pillar core) ----
 // The GitHub contents API returns base64 of the file's UTF-8 bytes. atob() alone gives one character per BYTE
 // (Latin-1), and fetch() then encodes that string as UTF-8 again, so every non-ASCII character in a worker was
@@ -2618,7 +2618,15 @@ async function d1Write(env, args, userText) {
     var res = await stmt.run();
     return { ok: true, db: bind, changes: res && res.meta ? res.meta.changes : null, last_row_id: res && res.meta ? res.meta.last_row_id : null };
   } catch (e) {
-    return { ok: false, error: e && e.message ? e.message : String(e) };
+    var _wErr = e && e.message ? e.message : String(e);
+    var _wOut = { ok: false, error: _wErr };
+    // D1-CALLER-REJECT-1 (2026-10-05, #1925): D1 refusing the caller's own SQL (a constraint, a syntax error, an unknown
+    // column or table, a type mismatch) is the database working, not the tool failing: the model gets the error to correct
+    // itself and the event is logged 'rejected', so tool_error_files_issue_v2 no longer files a TOOL-FAILURE for it. The
+    // filed case: INSERT INTO issue_triage (NOT NULL sla_due_at, then UNIQUE issue_id) when the row already exists.
+    if (/SQLITE_CONSTRAINT|syntax error|no such (column|table)|has no column named|datatype mismatch|SQLITE_MISMATCH/i.test(_wErr)) _wOut.rejected = true;
+    if (/issue_triage/i.test(_wErr) && /^insert/i.test(sql)) _wOut.hint = "issue_triage rows are created by trigger with each agent_issues row: UPDATE issue_triage SET ... WHERE issue_id = ?; never INSERT and never set sla_due_at.";
+    return _wOut;
   }
 }
 __name(d1Write, "d1Write");
@@ -4201,6 +4209,41 @@ async function agentLoopIncapable(env) {
     _capIncap = s; _capTs = now; return s;
   } catch (e) { return _capIncap || {}; }
 }
+// DEEPSEEK-402-BREAKER-1 (2026-10-05, #1939): the DeepSeek BYOK balance behind AI Gateway is exhausted (HTTP 402
+// "Insufficient Balance" on every deepseek/* call since 2026-10-05T15:36Z; flash and pro share the balance). Every
+// agent step paid a ~3 s 402 round trip (callDeepSeek then retried pro, a second 402) before the free fallback. One 402
+// opens this breaker: deepseek/* calls skip the paid fetch for DS_402_BREAKER_MS (60 min) and go straight to
+// budgetFallback (free @cf tier); the first call after the window probes the paid path again. Opening writes one
+// cloud_ops_events row (kind ds-402-breaker) and one log line; skips are silent. The row is also the shared state: an
+// isolate whose own breaker is closed reads the newest row (idx_coe_kind_ts, at most once per DS_402_SHARED_TTL_MS), so
+// the whole worker makes about one paid 402 per hour while the balance is empty (#1986; owner 2026-10-05: no top-up).
+var DS_402_BREAKER_MS = 36e5;
+var DS_402_SHARED_TTL_MS = 3e5;
+var _ds402Until = 0, _ds402Read = 0;
+async function dsPaidBlocked(env, model) {
+  if (!/^deepseek\//i.test(String(model || ""))) return false;
+  const now = Date.now();
+  if (now < _ds402Until) return true;
+  if (now - _ds402Read > DS_402_SHARED_TTL_MS && env && env.QNFO_AUDIT) {
+    _ds402Read = now;
+    try {
+      const r = await env.QNFO_AUDIT.prepare("SELECT ts FROM cloud_ops_events WHERE kind = 'ds-402-breaker' ORDER BY ts DESC LIMIT 1").first();
+      const t = r && r.ts ? Date.parse(r.ts) : 0;
+      if (t && t + DS_402_BREAKER_MS > now) _ds402Until = t + DS_402_BREAKER_MS;
+    } catch (_) {}
+  }
+  return now < _ds402Until;
+}
+async function dsPaidTrip(env, model, status, where) {
+  if (status !== 402 || !/^deepseek\//i.test(String(model || ""))) return false;
+  const _wasOpen = Date.now() < _ds402Until;
+  _ds402Until = Date.now() + DS_402_BREAKER_MS;
+  if (!_wasOpen) {
+    console.log("OPS_DS_402_BREAKER open " + Math.round(DS_402_BREAKER_MS / 6e4) + "m via " + where + " (" + model + ")");
+    try { await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ds-402-breaker', ?3, ?4, 'qnfo-ops', 'open')").bind(randId("evt-"), iso(), "deepseek 402: paid path skipped for " + Math.round(DS_402_BREAKER_MS / 6e4) + " min", JSON.stringify({ where: where, model: model, until: new Date(_ds402Until).toISOString(), version: VERSION })).run(); } catch (_) {}
+  }
+  return true;
+}
 async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   const o = opts || {};
   // COST-ROUTING-STACK-1 L7: T2 daily cap breached -> skip the paid tier entirely and serve the free
@@ -4230,6 +4273,7 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
+  if (await dsPaidBlocked(env, modelToUse)) { const _fbB = await budgetFallback(env, messages, maxTokens, tools, o); if (_fbB) return _fbB; }
   const _isOAI = isOAIUpstream(modelToUse);
   let body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: false } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: false };
   if (tools && tools.length) {
@@ -4254,6 +4298,8 @@ async function callDeepSeek(env, messages, maxTokens, tools, opts) {
     // fleet on gateway 'default'. Retrying the capped paid route 3x only burns time; go straight to the
     // free Workers-AI binding (which bypasses AI Gateway entirely and is NOT subject to that cap).
     if (resp.status === 429) { console.log("OPS_GW_429_FREE_FALLBACK " + _dsLastErr.slice(0, 120)); break; }
+    // DEEPSEEK-402-BREAKER-1: a 402 is the shared DeepSeek balance; the pro fallback would 402 too, so go free now.
+    if (await dsPaidTrip(env, body.model, resp.status, "callDeepSeek")) { const _fb402 = await budgetFallback(env, messages, maxTokens, tools, o); if (_fb402) return _fb402; throw new Error(_dsLastErr); }
     if (resp.status < 500 && resp.status !== 429) {
       const _fbFrom = o.upstreamModel && body.model === o.upstreamModel && o.upstreamModel !== UPSTREAM_MODEL_FB ? o.upstreamModel : !o.upstreamModel && body.model === UPSTREAM_MODEL && UPSTREAM_MODEL_FB ? UPSTREAM_MODEL : null;
       if (_fbFrom) {
@@ -4304,6 +4350,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
   const msgs = truncateToContext(messages, OPS_PROMPT_CTX - Math.max(maxTokens || 0, 0) - 8192);
   let modelToUse = o.upstreamModel || UPSTREAM_MODEL;
   if (tools && tools.length) { try { const _inc = await agentLoopIncapable(env); if (_inc[modelToUse]) modelToUse = UPSTREAM_TOOLCALL_MODEL; } catch (_) {} }
+  if (await dsPaidBlocked(env, modelToUse)) { const _fbB = await budgetFallback(env, messages, maxTokens, tools, o); if (_fbB) return _fbB; }
   const _isOAI = isOAIUpstream(modelToUse);
   const body = _isOAI ? { model: modelToUse, messages: msgs, max_completion_tokens: Math.min(maxTokens, gwMaxOut(env)), stream: true } : { model: modelToUse, messages: msgs, max_tokens: Math.min(maxTokens, gwMaxOut(env)), temperature: o.temperature != null ? o.temperature : 0.5, top_p: o.topP != null ? o.topP : 0.9, stream: true };
   if (tools && tools.length) {
@@ -4320,6 +4367,7 @@ async function callDeepSeekStream(env, messages, maxTokens, tools, opts, onDelta
     try { _tx = await resp.text(); } catch (e) {}
     _dsLastErr = "deepseek stream " + _st + ": " + String(_tx || "").slice(0, 200);
     if (_st === 429) { console.log("OPS_GW_429_FREE_FALLBACK stream " + _dsLastErr.slice(0, 120)); break; }
+    if (await dsPaidTrip(env, body.model, _st, "callDeepSeekStream")) break;
     console.log("OPS_DS_STREAM_RETRY attempt=" + (_dsTry + 1) + " " + _dsLastErr.slice(0, 120));
     if (_st < 500 && _st !== 429) break;
     if (_dsTry < 2) await new Promise(function(rr) { setTimeout(rr, 800 * (_dsTry + 1) + Math.floor(Math.random() * 400)); });
@@ -4704,14 +4752,16 @@ async function handleRelay(env, body, messages, maxTokens, isStream, ua, ctx, up
         upBody.tools = clientTools;
         upBody.tool_choice = clientToolChoice;
       }
-      const resp = await fetch(DEEPSEEK_URL, {
+      // DEEPSEEK-402-BREAKER-1: while the breaker is open a deepseek/* relay skips the paid fetch (treated as a 402).
+      const resp = (await dsPaidBlocked(env, relayUp)) ? null : await fetch(DEEPSEEK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") },
         body: JSON.stringify(upBody)
       });
-      if (!resp.ok || !resp.body) {
-        const _rs = resp.status;
-        const _rtxt = await resp.text().catch(function() { return ""; });
+      if (!resp || !resp.ok || !resp.body) {
+        const _rs = resp ? resp.status : 402;
+        const _rtxt = resp ? await resp.text().catch(function() { return ""; }) : "";
+        if (resp) await dsPaidTrip(env, relayUp, _rs, "handleRelay");
         if (_rs === 401 || _rs === 403 || _rs === 429 || _rs === 402) {
           const _fb = await budgetFallback(env, norm, maxOut, clientTools, { temperature: relayTemp, topP: relayTopP, toolChoice: clientToolChoice });
           const _fc = _fb && _fb.resp && _fb.resp.choices && _fb.resp.choices[0] && _fb.resp.choices[0].message;
@@ -5099,10 +5149,26 @@ async function handleChatCore(env, body, ua, ctx, pub) {
     const _streamModel = execUpstream || UPSTREAM_MODEL;
     const _streamIsOAI = isOAIUpstream(_streamModel);
     const upBody = _streamIsOAI ? { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_completion_tokens: Math.min(answerCap, gwMaxOut(env)), stream: true } : { model: _streamModel, messages: truncateToContext(work, OPS_PROMPT_CTX - answerCap - 8192), max_tokens: Math.min(answerCap, gwMaxOut(env)), temperature, top_p: topP, stream: true };
+    // DEEPSEEK-402-BREAKER-1: with the DeepSeek balance exhausted the final answer comes from the free tier (as in the
+    // public branch above) instead of surfacing "ops stream error: deepseek 402" to the owner.
+    const _freeFinal = /* @__PURE__ */ __name222222(async function() {
+      try {
+        const _fbF = await budgetFallback(env, work, answerCap, null, { temperature, topP });
+        const _fcF = _fbF && _fbF.resp && _fbF.resp.choices && _fbF.resp.choices[0];
+        content = String(_fcF && _fcF.message && _fcF.message.content || "");
+        if (_fbF && _fbF.resp && _fbF.resp.usage) upstreamUsage = _fbF.resp.usage;
+        if (_fbF && _fbF.servedBy) servedBy = _fbF.servedBy;
+      } catch (e) {
+      }
+      if (!String(content || "").trim()) content = fallback;
+      return await finalize();
+    }, "_freeFinal");
+    if (await dsPaidBlocked(env, _streamModel)) return await _freeFinal();
     try {
       const up = await fetch(DEEPSEEK_URL, { method: "POST", headers: { "Content-Type": "application/json", "cf-aig-authorization": "Bearer " + (env.CF_API_TOKEN || "") }, body: JSON.stringify(upBody) });
       if (!up.ok || !up.body) {
         const t = up.ok ? "" : await up.text();
+        if (await dsPaidTrip(env, _streamModel, up.status, "streamFinalAnswer")) return await _freeFinal();
         throw new Error("deepseek " + up.status + ": " + String(t || "").slice(0, 300));
       }
       const reader = up.body.getReader();

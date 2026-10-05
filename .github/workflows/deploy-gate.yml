@@ -163,6 +163,10 @@ jobs:
       # the log entry, one plain-binding retry on a gateway error); chat calls and caller options are unchanged.
       - name: AIG-BINDING-1 offline suite (qnfo-ai)
         run: node qnfo-ai/aig-binding.test.mjs
+      # DS-402-BREAKER-1 (qnfo-ai 5.31.2): an empty DeepSeek balance (HTTP 402) opens a 60-minute breaker instead of a
+      # failed paid round trip per request.
+      - name: DS-402-BREAKER-1 offline suite (qnfo-ai)
+        run: node --no-warnings qnfo-ai/ds-402-breaker.test.mjs
       # UTF8-DEPLOY-1: worker source fetched from GitHub reaches the upload as the same UTF-8 text (no double encoding).
       - name: UTF8-DEPLOY-1 offline suite (qnfo-ops)
         run: node qnfo-ops/utf8-deploy.test.mjs
@@ -222,6 +226,11 @@ jobs:
         run: node --no-warnings idea-hub/ask-gap.test.mjs
       - name: OPEN-ACCESS-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/open-access.test.mjs
+      # FLEET-CONSOLE-1: the owner console in the command line (issue detail, SQL, issue edits, dispatch, deploy, merge):
+      # owner-only reads and actions, destructive ones behind a confirm button and a fresh code, no loop-token access,
+      # SQL writes refused on protected tables and backed up before UPDATE/DELETE.
+      - name: FLEET-CONSOLE-1 offline suite (qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-fleet-dashboard/fleet-console.test.mjs
       # OPS-PUBLIC-READ-1: qnfo-ops answers a chat with no key, or a stale one, in public read-only mode (free tier, only
       # fleet_status, backlog_status and privacy-safe public_data, capped per visitor and per day); private stores, writes,
       # paid upstreams, caches, durable jobs and checkpoints stay behind the key.
@@ -235,6 +244,12 @@ jobs:
       # message; URL path only, emails, tokens and long numbers masked, as worker_logs is served publicly).
       - name: ERROR-DETAIL-CAPTURE-1 offline suite (qnfo-ops)
         run: node qnfo-ops/error-capture.test.mjs
+      # DS-402-BREAKER-1 (qnfo-ops 2.38.41, #1986, #1939): one paid 402 per hour at most, shared across isolates via
+      # cloud_ops_events kind ds-402-breaker; D1-CALLER-REJECT-1 (#1925): a refused model SQL is logged as rejected.
+      - name: DS-402-BREAKER-1 offline suite (qnfo-ops)
+        run: node --no-warnings qnfo-ops/ds-402-breaker.test.mjs
+      - name: D1-CALLER-REJECT-1 offline suite (qnfo-ops)
+        run: node --no-warnings qnfo-ops/d1-caller-reject.test.mjs
       # GUARD-RCS-CANCELLED-1: a concurrency-cancelled or skipped guard run is not a guard that failed closed.
       - name: GUARD-RCS-CANCELLED-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/guard-rcs.test.mjs
@@ -270,6 +285,10 @@ jobs:
       # human-only pageviews, a 60 s poll and a public refresh that does not re-measure the whole fleet.
       - name: OWNER-MORNING-1 offline suite (qnfo-fleet-dashboard)
         run: node --no-warnings qnfo-fleet-dashboard/owner-morning.test.mjs
+      # REACH-INGEST-BACKFILL-1 (qnfo-fleet-dashboard 1.21.7, #1711): a day the reach ingest missed in the last 7 is
+      # filled by the next tick (one day per tick).
+      - name: REACH-INGEST-BACKFILL-1 offline suite (qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-fleet-dashboard/reach-backfill.test.mjs
 
       # SAI-COMPOSITE-WEIGHTS-1 (#1739): survival_state.sai and the charter's Autonomy composite are the owner-weighted SAI.
       # The suite locks the scorer's SAI formula to the dashboard's computeSai (parity on a live fixture and 400 random
@@ -309,6 +328,10 @@ jobs:
         run: node qnfo-social/reach-select.test.mjs
       - name: EMAIL-TRIAGE-D1-1 and ZENODO-UA-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/email-zenodo.test.mjs
+      # GW-402-UNFUNDED-1 (qnfo-ai-calibration 1.2.9, #1992): a provider 402 (insufficient balance) is class unfunded: no
+      # [gw-fail] issue, no degraded health row, ignored by the 24h reconcile, so MODEL-DEGRADED is not refiled for it.
+      - name: GW-402-UNFUNDED-1 offline suite (qnfo-ai-calibration)
+        run: node qnfo-ai-calibration/gw-unfunded.test.mjs
       # WORKER-HEALTH-PROBE-AUTH-1 + GMAIL-TRIAGE-UNCONFIGURED-1 (qnfo-cloud-ops 1.18.2): the qnfo-ai chat probe uses the
       # props-authenticated QNFO_AI binding, a probe without its credential is skipped (never a 401 false alarm), real
       # failures still alert, one job-run row per run, and gmail-triage without GMAIL_PASS is skipped rather than an error.
@@ -359,6 +382,10 @@ jobs:
       # acknowledgement per thread, no substantive answer for reserved categories, the kill switch and the metrics.
       - name: INBOUND-SLA-1 offline suite (qnfo-email-orchestrator)
         run: node qnfo-email-orchestrator/inbound-sla.test.mjs
+      # CLEARED-SEND-RETRY-1 (qnfo-email-orchestrator 0.5.3): a cleared reply whose send fails keeps its auto-send marker
+      # and is retried up to 3 times.
+      - name: CLEARED-SEND-RETRY-1 offline suite (qnfo-email-orchestrator)
+        run: node --no-warnings qnfo-email-orchestrator/send-retry.test.mjs
 
       # ERRATA-HUB-CRONS-UNDECLARED-1 + ERRATA-PUBLISH-GATE-1 (#1747): errata-hub's hourly members run, record a tick, and
       # make no Zenodo call, store re-point or mail from the publish member while pipeline_flags.errata_publish_enabled is off.
@@ -374,6 +401,25 @@ jobs:
       # RUN-INTERNAL-1 (#1783): research-exec's inline run and drain-v2 refuse public hostnames; service bindings still reach them.
       - name: RUN-INTERNAL-1 offline suite (qnfo-research-exec)
         run: node qnfo-research-exec/run-internal.test.mjs
+      # MATH-LATEX-2 (qnfo-research-exec 0.9.59, #1891): LaTeX rule in every paper prompt and a deterministic plain-text
+      # math check (blocking only with ops_config research_math_gate=enforce).
+      - name: MATH-LATEX-2 offline suite (qnfo-research-exec)
+        run: node --no-warnings qnfo-research-exec/math-latex.test.mjs
+      # 2026-10-05 remediation (session bold-thompson): suites added by clusters C2, D and E.
+      - name: CALLER-PROPS-1 offline suite (calendar-api 0.7.1, #1987)
+        run: node --no-warnings calendar-api/caller-props.test.mjs
+      - name: IDEA-TRIAGE-BUDGET-1 offline suite (idea-hub 1.5.5, #1878)
+        run: node --no-warnings idea-hub/triage-budget.test.mjs
+      - name: AI-ATTR offline suite (personal-api 4.7.2, #1833)
+        run: node --no-warnings personal-api/ai-attr.test.mjs
+      - name: TOOL-TRACE-MEMORY-1 offline suite (personal-api 4.7.1, #1805)
+        run: node --no-warnings personal-api/tool-trace-memory.test.mjs
+      - name: CALLER-PROPS + PREDATORY-BODY offline suite (qnfo-email 2.5.x, #1923, #1924)
+        run: node --no-warnings qnfo-email/caller-props-predatory.test.mjs
+      - name: BROWSER-SAMPLE-1 offline suite (qnfo-gateway, #1890)
+        run: node --test qnfo-gateway/browser-sample.test.mjs
+      - name: MATH-CHECK offline suite (qnfo-pdf 1.1.0, #1890)
+        run: node --test qnfo-pdf/math-check.test.mjs
       # IDEA-CHAIN-SINGLE-PRODUCER-1: qnfo-signal-loop proposes at most 2 signals x 3 questions a run and never pushes the
       # idea backlog above the 30 ceiling (it wrote 55 rows in one run on 2026-10-02 and flooded triage).
       - name: IDEA-CHAIN-SINGLE-PRODUCER-1 offline suite (qnfo-signal-loop)

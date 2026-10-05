@@ -53,3 +53,7 @@ jobs:
       # SELF-REPAIR-1: failed model rounds back off and end as one fleet issue, never a needs_human owner card.
       - name: Self-repair test (SELF-REPAIR-1)
         run: node --no-warnings qnfo-code-orchestrator/self-repair.test.mjs
+      # CODE-DISPATCH-DEDUPE-1 + RETIRED-TARGET-1 (qnfo-code-orchestrator 0.3.16, #1876): one unfinished task or live
+      # session claim per file; RETIRED/FOLDED targets refused before the model call.
+      - name: Dispatch dedupe (CODE-DISPATCH-DEDUPE-1)
+        run: node --no-warnings qnfo-code-orchestrator/dispatch-dedupe.test.mjs

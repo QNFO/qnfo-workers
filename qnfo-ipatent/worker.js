@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.5-patent-probe"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.7-probe-errors"; /* 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -884,9 +884,40 @@ async function handleSuggest(env, url) {
 }
 __name(handleSuggest, "handleSuggest");
 var BENCH_PROBE_URL = "https://patents.google.com/patent/US11000000B2/en";
+// BENCH-SOURCE-PROBE-2 (3.9.6, #1779): a second keyless source, the USPTO's own Patent Public Search JSON API (the API behind
+// ppubs.uspto.gov). A session read it verbatim on 2026-10-05: US 11,000,000 B2 gave an 853-character abstract, 3,804
+// characters of claims and the "claims the benefit of U.S. Provisional Application Ser. No. 62/731,230" cross-reference,
+// with no key (anonymous session token, then search, then the document sections). Google Patents answers a Worker 200 in
+// some colos and 503 in others, so the probe now reports both. Same fixed patent, no user input reaches either request.
+var PPUBS_API = "https://ppubs.uspto.gov/api/";
+async function ppubsProbe() {
+  var o = { source: "ppubs.uspto.gov (USPTO Patent Public Search API, no key)" };
+  try {
+    var hd = { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (compatible; QNFO-iPatent-benchmark/1.0; +https://ipatent.qnfo.org/)" };
+    var s = await fetch(PPUBS_API + "users/me/session", { method: "POST", headers: hd, body: "-1" });
+    var tok = s.headers.get("X-Access-Token"), sj = await s.json().catch(function() { return null; });
+    o.session_status = s.status;
+    if (!tok || !sj || !sj.userCase) { o.error = "no anonymous session token"; return o; }
+    hd["X-Access-Token"] = tok;
+    var q = { start: 0, pageCount: 1, sort: "date_publ desc", docFamilyFiltering: "familyIdFiltering", searchType: 1, familyIdEnglishOnly: true, familyIdFirstPreferred: "US-PGPUB", familyIdSecondPreferred: "USPAT", familyIdThirdPreferred: "FPRS", showDocPerFamilyPref: "showEnglish", queryId: 0, tagDocSearch: false, query: { caseId: sj.userCase.caseId, hl_snippets: "2", op: "OR", q: "11000000.pn.", queryName: "11000000.pn.", highlights: "1", qt: "brs", spellCheck: false, viewName: "tile", plurals: true, britishEquivalents: true, databaseFilters: [{ databaseName: "USPAT", countryCodes: [] }], searchType: 1, ignorePersist: false, userEnteredQuery: "11000000.pn." } };
+    var r = await fetch(PPUBS_API + "searches/searchWithBeFamily", { method: "POST", headers: hd, body: JSON.stringify(q) });
+    var rj = await r.json().catch(function() { return null; }), d0 = rj && rj.patents && rj.patents[0];
+    o.search_status = r.status;
+    if (!d0 || !d0.guid) { o.error = "search returned no document"; return o; }
+    var t = await fetch(PPUBS_API + "patents/highlightSections/" + encodeURIComponent(d0.guid) + "?queryId=" + encodeURIComponent(d0.queryId || rj.query && rj.query.id || 1) + "&source=" + encodeURIComponent(d0.type || "USPAT"), { method: "POST", headers: hd, body: '["all"]' });
+    var tj = await t.json().catch(function() { return {}; });
+    var txt = function(x) { return String(x || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); };
+    o.status = t.status;
+    o.abstract_chars = txt(tj.abstractHtml).length;
+    o.claims_chars = txt(tj.claimsHtml).length;
+    o.claims_found = o.claims_chars > 200;
+    o.provisional_ref_found = /Provisional Application/i.test(txt(tj.backgroundTextHtml) + " " + txt(tj.briefHtml) + " " + txt(tj.descriptionHtml));
+  } catch (e) { console.log("PPUBS_PROBE_ERROR " + String(e && e.message || e).slice(0, 200)); o.error = "probe failed (see worker log)"; }
+  return o;
+}
 async function benchSourceProbe(request, ctx) {
   var cache = typeof caches !== "undefined" ? caches.default : null;
-  var key = new Request("https://ipatent.qnfo.org/__bench-source-probe-v1");
+  var key = new Request("https://ipatent.qnfo.org/__bench-source-probe-v2");
   if (cache) { try { var hit = await cache.match(key); if (hit) return hit; } catch (e) {} }
   var out = { source: BENCH_PROBE_URL, checked_at: new Date().toISOString() };
   try {
@@ -895,7 +926,9 @@ async function benchSourceProbe(request, ctx) {
     out.status = r.status; out.bytes = h.length;
     out.claims_found = /class="claim"|itemprop="claims"/.test(h);
     out.provisional_ref_found = /[Pp]rovisional/.test(h);
-  } catch (e) { out.error = String(e && e.message || e).slice(0, 200); }
+  } catch (e) { console.log("SOURCE_PROBE_ERROR " + String(e && e.message || e).slice(0, 200)); out.error = "fetch failed (see worker log)"; }
+  out.ppubs = await ppubsProbe();
+  out.keyless_text = !!((out.status === 200 && out.claims_found) || (out.ppubs.status === 200 && out.ppubs.claims_found));
   var res = new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600" } });
   if (cache && ctx && ctx.waitUntil) { try { ctx.waitUntil(cache.put(key, res.clone())); } catch (e) {} }
   return res;
@@ -945,7 +978,7 @@ var GUIDE_PAGES = [
     description: "The happy path from a finished description to a USPTO filing date: what to upload, what it costs, the 12-month deadline, and what a US filing does and does not secure in Europe.",
     sections: [
       ["What you need before you start", "<ul><li>a written description that explains the invention well enough for a skilled person to make and use it (35 U.S.C. 112(a)); it is the only thing the filing date protects;</li><li>drawings wherever they help a reader understand the invention (35 U.S.C. 113);</li><li>the names and residences of every inventor;</li><li>a cover sheet identifying the filing as a provisional application: USPTO form PTO/SB/16, or an application data sheet (37 CFR 1.51(c)(1), 1.76).</li></ul><p>Claims, an oath or declaration and an information disclosure statement are not required for a provisional (35 U.S.C. 111(b)(2); see <a href=\"/guide/claims-in-a-provisional\">claims in a provisional</a>).</p>"],
-      ["The happy path, step by step", "<ol><li><b>Create a USPTO.gov account</b> and open Patent Center, the USPTO's electronic filing system. The USPTO may ask you to verify your identity before you can file; allow a few days for that the first time.</li><li><b>Start a new provisional utility application</b> and upload the cover sheet, the description and the drawings as separate documents.</li><li><b>Choose your entity status.</b> Small entity: generally an individual, a company with fewer than 500 employees, a university or a non-profit that has not licensed the invention to a large entity (37 CFR 1.27). Micro entity: a small entity that also meets an income limit and is named on no more than four earlier applications, not counting provisionals (37 CFR 1.29). Claiming a status you do not qualify for can make a later patent unenforceable, so check before you tick the box.</li><li><b>Pay the filing fee</b>: $325, $130 for a small entity, $65 for a micro entity (USPTO fee schedule since 19 January 2025, 37 CFR 1.16(d)). A description and drawings longer than 100 sheets add an application size fee (37 CFR 1.16(s)).</li><li><b>Keep the electronic acknowledgement receipt.</b> It shows your application number and the date of receipt, which is your filing date; the formal filing receipt follows by post or in Patent Center.</li><li><b>Put the 12-month deadline in your calendar now.</b> The provisional lapses twelve months after filing and that period cannot be extended (35 U.S.C. 111(b)(5), 119(e)); see <a href=\"/guide/provisional-vs-nonprovisional\">provisional vs nonprovisional</a> for what to file before then.</li></ol><p>From the filing date you may describe the invention as \"patent pending\" for what the provisional describes.</p>"],
+      ["The happy path, step by step", "<ol><li><b>Create a USPTO.gov account</b> and open Patent Center, the USPTO's electronic filing system. The USPTO may ask you to verify your identity before you can file; allow a few days for that the first time.</li><li><b>Start a new provisional utility application</b> and upload the cover sheet, the description and the drawings as separate documents.</li><li><b>Choose your entity status.</b> Small entity: generally an individual, a company with fewer than 500 employees, a university or a non-profit that has not licensed the invention to a large entity (37 CFR 1.27). Micro entity: a small entity that also meets an income limit and is named on no more than four earlier applications, not counting provisionals (37 CFR 1.29). Claiming a status you do not qualify for can make a later patent unenforceable, so check before you tick the box.</li><li><b>Pay the filing fee</b>: $325, $130 for a small entity, $65 for a micro entity (USPTO fee schedule since 19 January 2025, 37 CFR 1.16(d)). A description and drawings longer than 100 sheets add an application size fee (37 CFR 1.16(s)).</li><li><b>Keep the electronic acknowledgement receipt.</b> It shows your application number and the date of receipt, which is your filing date; the formal filing receipt follows by post or in Patent Center.</li><li><b>Put the 12-month deadline in your calendar now.</b> The provisional lapses twelve months after filing and cannot be revived (35 U.S.C. 111(b)(5)); the nonprovisional or PCT application that claims its date must be filed within those twelve months (35 U.S.C. 119(e)). Only an unintentional miss can be repaired, by a petition to restore the right of priority within fourteen months (37 CFR 1.78(b)), so plan on twelve; see <a href=\"/guide/provisional-vs-nonprovisional\">provisional vs nonprovisional</a> for what to file before then.</li></ol><p>From the filing date you may describe the invention as \"patent pending\" for what the provisional describes.</p>"],
       ["What a US provisional secures outside the US", "<p>A US provisional is a regular first filing under the Paris Convention (Art. 4). A European patent application or an international (PCT) application filed within twelve months can claim its date as a priority date (Art. 87 EPC), and the priority date then counts as the filing date when novelty is judged (Art. 89 EPC). So a talk, preprint or sale <i>after</i> the provisional's date does not destroy novelty in Europe for what the provisional describes.</p><p>Four limits matter:</p><ul><li>It covers only what the provisional discloses. The European Patent Office allows priority only for subject matter that a skilled person can derive directly and unambiguously from the earlier filing (Enlarged Board of Appeal, G 2/98). A thin provisional gives a thin priority.</li><li>It does nothing for a disclosure made <i>before</i> its date: Europe has no general grace period (Art. 54, 55 EPC; see <a href=\"/guide/before-you-publish\">before you publish</a>).</li><li>It protects nothing abroad by itself. The European or PCT application must be filed, in your name or your successor's, before the twelve months run out.</li><li>Some countries require their residents to file at home first or to obtain clearance before filing abroad, for example the United Kingdom for inventions in certain sensitive fields (Patents Act 1977, s. 23). Check your own country's rule before filing in the US first.</li></ul>"],
       ["When to pay for help", "<p>A provisional you file yourself secures a date for what it describes, and nothing more. Before you rely on it for an investment, a public launch or a European filing, have a registered patent attorney or agent check that the description supports everything you will want to claim. In the US, only a registered practitioner or the inventor may prepare and file an application (37 CFR 11.5(b)).</p>"]
     ] },

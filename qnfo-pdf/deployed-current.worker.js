@@ -14981,7 +14981,7 @@ function renderFullHTML(md, opts) {
 __name(renderFullHTML, "renderFullHTML");
 
 // worker.js
-var VERSION = "1.0.2-utf8-redeploy"; // UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "1.1.0-math-browser-check"; // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -15041,6 +15041,17 @@ async function stash(env, slug, bytes) {
   }
 }
 __name(stash, "stash");
+function mathReport(html) {
+  const body = String(html || "");
+  const typeset = (body.match(/<mjx-container/g) || []).length;
+  const errors = (body.match(/data-mjx-error|<mjx-merror|<merror/g) || []).length;
+  const text = body.replace(/<span class="usd">\$<\/span>/g, " ").replace(/<(script|style|pre|code)[\s\S]*?<\/\1>/g, " ").replace(/<mjx-container[\s\S]*?<\/mjx-container>/g, " ").replace(/<[^>]+>/g, " ");
+  const rawDollar = (text.match(/\$[^$\n]{1,200}\$/g) || []).length;
+  // identifiers with a multi-letter stem ("noise_sigma") are names, not math (same rule as the gateway renderDefectCount)
+  const pseudo = (text.replace(/(?<![\w\\])[A-Za-z][A-Za-z0-9]+_\w+/g, " ").match(/[A-Za-z\u0370-\u03ff\)\]][_^][{(]?[A-Za-z0-9+\-]|[\u00b2\u00b3\u00b9\u2070-\u209f]/g) || []).length;
+  return { typeset, errors, raw_dollar: rawDollar, pseudo_residual: pseudo, pass: errors === 0 && rawDollar === 0 && pseudo < 3 };
+}
+__name(mathReport, "mathReport");
 var worker_default = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -15050,8 +15061,8 @@ var worker_default = {
         ok: true,
         worker: "qnfo-pdf",
         version: VERSION,
-        capabilities: ["markdown-to-pdf", "markdown-to-html", "corpus-paper-render"],
-        limitations: ["POST /pdf and /html (arbitrary Markdown) answer only service-binding callers; public callers get 403", "GET /pdf/<slug> and /html/<slug> render corpus papers only", "each render opens a Cloudflare Browser Rendering session"],
+        capabilities: ["markdown-to-pdf", "markdown-to-html", "corpus-paper-render", "math-browser-check"],
+        limitations: ["POST /pdf and /html (arbitrary Markdown) answer only service-binding callers; public callers get 403", "GET /pdf/<slug> and /html/<slug> render corpus papers only", "each render opens a Cloudflare Browser Rendering session", "GET /math-check/<slug> (MathJax typeset report of the live page) answers only service-binding callers; qnfo-gateway samples 5 papers a day"],
         browser: !!env.BROWSER,
         living: !!env.LIVING,
         releases: !!env.RELEASES
@@ -15074,6 +15085,20 @@ var worker_default = {
         return await respond(env, format, slug, paper.title, paper.body_md);
       } catch (e) {
         return Response.json({ ok: false, error: String(e && e.message || e) }, { status: 500 });
+      }
+    }
+    // MATH-BROWSER-1 (2026-10-03): real-browser typeset check. Loads the live paper in Cloudflare Browser Run, waits for MathJax,
+    // and reports typeset containers, MathJax errors, and raw $...$ / pseudo-math text left on the page. Internal only (opens a session per call).
+    const mc = path2.match(/^\/math-check\/([^/]+)$/);
+    if (mc) {
+      if (/\.workers\.dev$|(^|\.)qnfo\.org$/i.test(url.hostname)) return Response.json({ ok: false, error: "forbidden: internal only (MATH-BROWSER-1)" }, { status: 403 });
+      const slug = decodeURIComponent(mc[1]);
+      try {
+        const r = await env.BROWSER.quickAction("content", { url: "https://papers.qnfo.org/papers/" + encodeURIComponent(slug), gotoOptions: { waitUntil: "networkidle0", timeout: 45000 } });
+        const html = new TextDecoder().decode(await toBytes(r));
+        return Response.json(Object.assign({ ok: true, slug }, mathReport(html)));
+      } catch (e) {
+        return Response.json({ ok: false, slug, error: String(e && e.message || e) }, { status: 502 });
       }
     }
     if (path2 === "/pdf" || path2 === "/html") {
