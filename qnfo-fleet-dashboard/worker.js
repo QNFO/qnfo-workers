@@ -7146,12 +7146,17 @@ function conParse(text) {
     if (method === "GET") return { actions: [cmdAction("callr", args)], auto: true, text: "GET " + m[1] + m[3] };
     return { actions: [cmdAction("callw", args)], text: method + " " + m[1] + m[3] + (body ? "\n" + conClip(body, 500) : "") };
   }
-  if ((m = /^dispatch\s+([a-z0-9._-]{1,80}\.ya?ml)((?:\s+[A-Za-z_][A-Za-z0-9_-]*=(?:"[^"]*"|\S+))*)\s*$/i.exec(t))) {
+  if ((m = /^dispatch\s+([a-z0-9._-]{1,80}\.ya?ml)(?:\s+([\s\S]{1,1000}))?$/i.exec(t))) {
+    // Inputs are read one k=v (or k="v w") token at a time with an anchored, linear pattern: a single regex over the whole
+    // list backtracked exponentially on crafted input (CodeQL js/redos on PR 623).
     const inputs = {};
-    String(m[2] || "").replace(/([A-Za-z_][A-Za-z0-9_-]*)=("([^"]*)"|\S+)/g, function(_, k, v, q) {
-      inputs[k] = q != null ? q : v;
-      return _;
-    });
+    let rest = String(m[2] || "").trim(), n = 0;
+    while (rest) {
+      const x = /^([A-Za-z_][A-Za-z0-9_-]{0,60})=(?:"([^"]*)"|([^\s"]+))(?:\s+|$)/.exec(rest);
+      if (!x || ++n > 10) return { text: "Workflow inputs are up to 10 k=v pairs; quote a value with spaces: k=\"a b\"." };
+      inputs[x[1]] = x[2] != null ? x[2] : x[3];
+      rest = rest.slice(x[0].length);
+    }
     return { actions: [cmdAction("dispatch", { workflow: m[1], inputs, title: m[1] + " " + conClip(JSON.stringify(inputs), 40) })], text: "Run " + m[1] + " on main with " + JSON.stringify(inputs) };
   }
   if ((m = /^deploy\s+([a-z0-9][a-z0-9 -]{1,300})$/.exec(lo))) {

@@ -193,6 +193,14 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   ok(j.ok && d && /\/repos\/QNFO\/qnfo-workers\/actions\/workflows\/canonical-deploy\.yml\/dispatches$/.test(d.url) && JSON.parse(d.body).ref === "main" && JSON.parse(d.body).inputs.workers === "qnfo-ops qnfo-ai", "C21 deploy dispatches canonical-deploy.yml on main", d);
   j = await (await cmd(env, "dispatch cf-ops-actions.yml action=report target=\"a b\"", C)).json();
   ok(j.actions[0].args.inputs.action === "report" && j.actions[0].args.inputs.target === "a b", "C22 dispatch parses k=v inputs, quoted values too", j.actions[0]);
+  {
+    // CodeQL js/redos (PR 623): the CodeQL attack shape answers at once instead of backtracking.
+    const t0 = Date.now();
+    j = await (await cmd(env, "dispatch -.yml" + " _=\"\"".repeat(120) + " !", C)).json();
+    ok(Date.now() - t0 < 1000 && /up to 10 k=v pairs/.test(j.text) && !(j.actions && j.actions.length), "C22b crafted dispatch inputs are refused in linear time", { ms: Date.now() - t0, j });
+    j = await (await cmd(env, "dispatch cf-ops-actions.yml action=report target=\"unclosed", C)).json();
+    ok(/k=v pairs/.test(j.text) && !(j.actions && j.actions.length), "C22c a malformed input list is refused, never half-parsed");
+  }
   r = await run(env, "merge", { pr: 42 }, C); j = await r.json();
   const mg = net.find((n) => /\/pulls\/42\/merge$/.test(n.url));
   ok(j.ok && mg && mg.method === "PUT" && JSON.parse(mg.body).merge_method === "squash", "C23 merge squash-merges through the GitHub API");
