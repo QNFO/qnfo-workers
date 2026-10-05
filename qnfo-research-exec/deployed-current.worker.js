@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.57-codeagent"; // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.58-writer-flash"; // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1598,9 +1598,14 @@ __name2(drainV2, "drainV2");
 __name22(drainV2, "drainV2");
 __name222(drainV2, "drainV2");
 __name2222(drainV2, "drainV2");
+// WRITER-FLASH-1 (2026-10-05, #1795/#1780, pillar cost): the second writer leg ran @cf/zai-org/glm-5.3 at 3,279 neurons per
+// draft (ai_call_counters 09-28..10-04: 123 calls, 403,270 neurons, 41% of the fleet's attributed Workers AI) while the
+// glm-5.3-flash leg returned drafts of the same length (17-35k chars, ensembles of 2026-10-04/05) at about a tenth of the
+// cost. Drafts are verified downstream (review, verify, finalGates), so the leg now runs glm-5.3-flash. Guard:
+// full_reports_live_30d (28 on 2026-10-05) must not fall and reconcile-degrade events must not rise.
 var WRITER_MODELS = [
   "@cf/openai/gpt-oss-120b",
-  "@cf/zai-org/glm-5.3",
+  "@cf/zai-org/glm-5.3-flash",
   "@cf/zai-org/glm-5.3-flash"
 ];
 var WRITER_FALLBACK_MODELS = [
@@ -2266,7 +2271,8 @@ async function stageRevise(env, row) {
     // its 240 s budget (12:08Z), and a short JSON answer does not need deep reasoning.
     const _pprompt = REVISE_PATCH_PROMPT + "\n" + fixes.slice(0, 8e3) + "\n\nPAPER:\n" + paper.slice(0, 34e3);
     let _praw = await aiText(env, MODELS[0], _pprompt, 8192, "low");
-    if (!_praw || _praw.indexOf("[") < 0) _praw = await aiText(env, MODELS[1], _pprompt, 8192, "low");
+    // WRITER-FLASH-1: the retry for a short JSON patch uses gpt-oss-120b (another family, ~500 neurons) instead of glm-5.3 (~3,300).
+    if (!_praw || _praw.indexOf("[") < 0) _praw = await aiText(env, MODELS[2], _pprompt, 8192, "low");
     const _p = applyRevisePatch(paper, _praw);
     await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length, _p.applied ? "ok" : "warn");
     if (_p.applied > 0 && _p.text.length >= 1e4) {
