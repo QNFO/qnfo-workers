@@ -1,176 +1,128 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@94726f52a50f",
- "due": 21,
- "pass": 8,
- "fail": 12,
- "skipped": 1,
+ "verifier": "remediation-consumer@b3bbb0b6540c",
+ "due": 15,
+ "pass": 0,
+ "fail": 13,
+ "skipped": 2,
  "contracts": [
   {
-   "class": "issue-1825",
-   "issue_id": 1825,
+   "class": "issue-1793",
+   "issue_id": 1793,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1794",
+   "issue_id": 1794,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1795",
+   "issue_id": 1795,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1798",
+   "issue_id": 1798,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1834",
+   "issue_id": 1834,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "EVID-1641-MENTIONS",
+   "issue_id": 1641,
+   "verdict": "fail",
+   "expected": "all-sources-ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1838",
+   "issue_id": 1838,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
    "verdict": "fail",
    "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
-  },
-  {
-   "class": "issue-1891",
-   "issue_id": 1891,
-   "verdict": "fail",
-   "expected": "clean",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1925",
-   "issue_id": 1925,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1926",
-   "issue_id": 1926,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1939",
-   "issue_id": 1939,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1986",
-   "issue_id": 1986,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1865",
-   "issue_id": 1865,
+   "class": "issue-1810",
+   "issue_id": 1810,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1977",
-   "issue_id": 1977,
-   "verdict": "pass",
+   "class": "issue-1884",
+   "issue_id": 1884,
+   "verdict": "vacuous-probe-result",
+   "expected": null,
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-1922",
+   "issue_id": 1922,
+   "verdict": "probe-not-machine-executable",
+   "reason": "multi-statement"
+  },
+  {
+   "class": "issue-1683",
+   "issue_id": 1683,
+   "verdict": "fail",
    "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1978",
-   "issue_id": 1978,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1979",
-   "issue_id": 1979,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1976",
-   "issue_id": 1976,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1958",
-   "issue_id": 1958,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1959",
-   "issue_id": 1959,
-   "verdict": "probe-error",
-   "reason": "HTTP Error 400: Bad Request"
-  },
-  {
-   "class": "issue-1879",
-   "issue_id": 1879,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1882",
-   "issue_id": 1882,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1863",
-   "issue_id": 1863,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1980",
-   "issue_id": 1980,
-   "verdict": "pass",
-   "expected": "open",
-   "observed": "open",
-   "written": true
-  },
-  {
-   "class": "issue-1829",
-   "issue_id": 1829,
-   "verdict": "pass",
-   "expected": "1",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1832",
-   "issue_id": 1832,
-   "verdict": "pass",
-   "expected": "resolved",
-   "observed": "resolved",
-   "written": true
-  },
-  {
-   "class": "issue-1848",
-   "issue_id": 1848,
-   "verdict": "pass",
-   "expected": "answered",
-   "observed": "answered",
-   "written": true
-  },
-  {
-   "class": "issue-1956",
-   "issue_id": 1956,
-   "verdict": "pass",
-   "expected": "1",
+   "class": "issue-1836",
+   "issue_id": 1836,
+   "verdict": "fail",
+   "expected": "0",
    "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-1711",
+   "issue_id": 1711,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "EVID-1711-REACH",
+   "issue_id": 1711,
+   "verdict": "fail",
+   "expected": "seven-days",
+   "observed": "pending",
    "written": true
   }
  ],
@@ -190,8 +142,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 66592,
- "head": "94726f52a50ff1c928a42f2bdd0b01dc04b95627",
+ "spent_ms": 46894,
+ "head": "b3bbb0b6540c4f8f83366bfa0f9b6f38a2f2c1f8",
  "job_status": "success",
- "ts": "2026-10-05T16:28:22Z"
+ "ts": "2026-10-05T17:02:42Z"
 }
