@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-05 19:13:19",
+  "audited_at": "2026-10-05 19:49:55",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -400,7 +400,7 @@
       },
       {
         "dir": "errata-hub",
-        "version": "1.4.0-internal-sweep",
+        "version": "1.4.1-ai-attribution",
         "worker": "errata-hub"
       },
       {
@@ -445,7 +445,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.2.4-guard-clean",
+        "version": "2.2.5-ai-attribution",
         "worker": "qnfo-ai-search"
       },
       {
@@ -490,7 +490,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.124-drift-confirm",
+        "version": "0.4.126-citation-dedupe",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -654,9 +654,9 @@
       "worker": "docs"
     },
     "errata-hub": {
-      "before": "1.4.0-internal-sweep",
+      "before": "1.4.1-ai-attribution",
       "http": 200,
-      "live": "1.4.0-internal-sweep",
+      "live": "1.4.1-ai-attribution",
       "match": 1,
       "note": "SYNC",
       "worker": "errata-hub"
@@ -894,9 +894,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.2.4-guard-clean",
+      "before": "2.2.5-ai-attribution",
       "http": 200,
-      "live": "2.2.4-guard-clean",
+      "live": "2.2.5-ai-attribution",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1142,9 +1142,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.124-drift-confirm",
+      "before": "0.4.126-citation-dedupe",
       "http": 200,
-      "live": "0.4.124-drift-confirm",
+      "live": "0.4.126-citation-dedupe",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
