@@ -3936,6 +3936,10 @@ function bhMergeDecide(pr, files, runs, statusJ) {
   var names = files.map(function(f) { return String(f && f.filename || ""); });
   var gh = names.filter(function(n) { return /^\.github\//.test(n); });
   if (gh.length) return no("it changes " + gh[0] + "; workflows and repository settings are never merged automatically");
+  // CONTROL-PLANE-MANUAL-1: owner decision (a), human_responses 27 / human_actions 21 (2026-10-02): the verifier and
+  // control-plane workers (CM_DENY) are never changed by an automatic merge, a session pull request included.
+  var cp = names.filter(function(n) { return CM_DENY.indexOf(n.split("/")[0]) >= 0; });
+  if (cp.length) return no("it changes " + cp[0] + ", a control-plane or code-loop worker, which never auto-merges (owner decision (a), human_actions 21)");
   var sha7 = String(head.sha || "").slice(0, 7);
   if (pr.mergeable !== true || ["clean", "has_hooks"].indexOf(String(pr.mergeable_state || "")) < 0) return no("GitHub reports mergeable " + pr.mergeable + ", mergeable_state " + pr.mergeable_state);
   var req = cmRequired(names), ck = cmChecks(runs || [], statusJ, req);

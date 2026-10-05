@@ -83,7 +83,7 @@ async function run(sc, opts) {
   const gh = makeGh(sc);
   const sandbox = { evApi: gh.evApi, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, __export: null };
   vm.createContext(sandbox);
-  const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
+  const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_DENY = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
   vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, branchHygieneTick, BH_MAX_ACTIONS };", sandbox, { filename: "bh-block.js" });
   const env = { GITHUB_TOKEN: "x", AUDIT: d1.AUDIT };
   const out = await sandbox.__export.branchHygieneTick(env, Object.assign({ now: NOW }, opts || {}));
@@ -258,7 +258,13 @@ const scenario = () => ({
   eq(dec(prj(48, "x", "h", { body: "Please do not merge until the owner looks." }), W2(), green("h", ALL)).merge, false, "pure: 'do not merge' in the body blocks the merge");
   eq(dec(prj(49, "x", "h", { title: "HOLD-LIST-1: holdout set" }), W2(), green("h", ALL)).merge, true, "pure: the word hold inside a title tag does not block");
   eq(JSON.stringify(dec(prj(50, "x", "h"), [{ filename: "docs/a.md" }], green("h", ["gate", "mirror-guard", "comparator"]))).indexOf('"merge":true') >= 0, true, "pure: a docs PR needs gate, mirror-guard and comparator only");
-  eq(dec(prj(51, "x", "h"), [{ filename: "qnfo-fleet-control/worker.js" }, { filename: "qnfo-fleet-control/deployed-current.worker.js" }], green("h", ALL)).why.indexOf("charter never ran") >= 0, true, "pure: a fleet-control PR also needs charter-guard");
+  eq(dec(prj(51, "x", "h"), [{ filename: "docs/QUNIVERSE-CHARTER.md" }], green("h", ALL)).why.indexOf("charter never ran") >= 0, true, "pure: a charter PR also needs charter-guard");
+  // CONTROL-PLANE-MANUAL-1: owner decision (a) (human_actions 21): a control-plane or code-loop worker never auto-merges.
+  for (const [n, w] of [[52, "qnfo-fleet-control"], [53, "qnfo-ops"], [54, "qnfo-deploy-guard"], [55, "qnfo-code-orchestrator"], [56, "qnfo-ai"]]) {
+    const d = dec(prj(n, "x", "h"), [{ filename: w + "/worker.js" }, { filename: w + "/deployed-current.worker.js" }], green("h", ALL.concat(["charter", "test"])));
+    eq(d.merge === false && /control-plane or code-loop worker/.test(d.why), true, "pure: a green " + w + " PR is never auto-merged (owner decision (a))");
+  }
+  eq(dec(prj(57, "x", "h"), [{ filename: "docs/a.md" }, { filename: "qnfo-ops/README.md" }], green("h", ["gate", "mirror-guard", "comparator"])).merge, false, "pure: any file under a control-plane worker dir blocks the auto-merge");
 }
 { // kill switch and dry run: no merge
   const R = { full_name: "QNFO/qnfo-workers" };
