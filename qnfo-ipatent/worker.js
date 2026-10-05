@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.5-patent-probe"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.6-ppubs-probe"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -884,9 +884,40 @@ async function handleSuggest(env, url) {
 }
 __name(handleSuggest, "handleSuggest");
 var BENCH_PROBE_URL = "https://patents.google.com/patent/US11000000B2/en";
+// BENCH-SOURCE-PROBE-2 (3.9.6, #1779): a second keyless source, the USPTO's own Patent Public Search JSON API (the API behind
+// ppubs.uspto.gov). A session read it verbatim on 2026-10-05: US 11,000,000 B2 gave an 853-character abstract, 3,804
+// characters of claims and the "claims the benefit of U.S. Provisional Application Ser. No. 62/731,230" cross-reference,
+// with no key (anonymous session token, then search, then the document sections). Google Patents answers a Worker 200 in
+// some colos and 503 in others, so the probe now reports both. Same fixed patent, no user input reaches either request.
+var PPUBS_API = "https://ppubs.uspto.gov/api/";
+async function ppubsProbe() {
+  var o = { source: "ppubs.uspto.gov (USPTO Patent Public Search API, no key)" };
+  try {
+    var hd = { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (compatible; QNFO-iPatent-benchmark/1.0; +https://ipatent.qnfo.org/)" };
+    var s = await fetch(PPUBS_API + "users/me/session", { method: "POST", headers: hd, body: "-1" });
+    var tok = s.headers.get("X-Access-Token"), sj = await s.json().catch(function() { return null; });
+    o.session_status = s.status;
+    if (!tok || !sj || !sj.userCase) throw new Error("no anonymous session token");
+    hd["X-Access-Token"] = tok;
+    var q = { start: 0, pageCount: 1, sort: "date_publ desc", docFamilyFiltering: "familyIdFiltering", searchType: 1, familyIdEnglishOnly: true, familyIdFirstPreferred: "US-PGPUB", familyIdSecondPreferred: "USPAT", familyIdThirdPreferred: "FPRS", showDocPerFamilyPref: "showEnglish", queryId: 0, tagDocSearch: false, query: { caseId: sj.userCase.caseId, hl_snippets: "2", op: "OR", q: "11000000.pn.", queryName: "11000000.pn.", highlights: "1", qt: "brs", spellCheck: false, viewName: "tile", plurals: true, britishEquivalents: true, databaseFilters: [{ databaseName: "USPAT", countryCodes: [] }], searchType: 1, ignorePersist: false, userEnteredQuery: "11000000.pn." } };
+    var r = await fetch(PPUBS_API + "searches/searchWithBeFamily", { method: "POST", headers: hd, body: JSON.stringify(q) });
+    var rj = await r.json().catch(function() { return null; }), d0 = rj && rj.patents && rj.patents[0];
+    o.search_status = r.status;
+    if (!d0 || !d0.guid) throw new Error("search returned no document");
+    var t = await fetch(PPUBS_API + "patents/highlightSections/" + encodeURIComponent(d0.guid) + "?queryId=" + encodeURIComponent(d0.queryId || rj.query && rj.query.id || 1) + "&source=" + encodeURIComponent(d0.type || "USPAT"), { method: "POST", headers: hd, body: '["all"]' });
+    var tj = await t.json().catch(function() { return {}; });
+    var txt = function(x) { return String(x || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); };
+    o.status = t.status;
+    o.abstract_chars = txt(tj.abstractHtml).length;
+    o.claims_chars = txt(tj.claimsHtml).length;
+    o.claims_found = o.claims_chars > 200;
+    o.provisional_ref_found = /Provisional Application/i.test(txt(tj.backgroundTextHtml) + " " + txt(tj.briefHtml) + " " + txt(tj.descriptionHtml));
+  } catch (e) { o.error = String(e && e.message || e).slice(0, 200); }
+  return o;
+}
 async function benchSourceProbe(request, ctx) {
   var cache = typeof caches !== "undefined" ? caches.default : null;
-  var key = new Request("https://ipatent.qnfo.org/__bench-source-probe-v1");
+  var key = new Request("https://ipatent.qnfo.org/__bench-source-probe-v2");
   if (cache) { try { var hit = await cache.match(key); if (hit) return hit; } catch (e) {} }
   var out = { source: BENCH_PROBE_URL, checked_at: new Date().toISOString() };
   try {
@@ -896,6 +927,8 @@ async function benchSourceProbe(request, ctx) {
     out.claims_found = /class="claim"|itemprop="claims"/.test(h);
     out.provisional_ref_found = /[Pp]rovisional/.test(h);
   } catch (e) { out.error = String(e && e.message || e).slice(0, 200); }
+  out.ppubs = await ppubsProbe();
+  out.keyless_text = !!((out.status === 200 && out.claims_found) || (out.ppubs.status === 200 && out.ppubs.claims_found));
   var res = new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600" } });
   if (cache && ctx && ctx.waitUntil) { try { ctx.waitUntil(cache.put(key, res.clone())); } catch (e) {} }
   return res;
