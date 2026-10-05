@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.31.2-ds-402-breaker"; // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 30-min per-isolate breaker so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.31.2-ds-402-breaker"; // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1453,9 +1453,9 @@ function isOAIUpstream(m) {
 __name(isOAIUpstream, "isOAIUpstream");
 // DEEPSEEK-402-BREAKER-1 (2026-10-05, #1939): the direct DeepSeek API key answers HTTP 402 "Insufficient Balance" since
 // 2026-10-05T08:30Z (211 qnfo-ai "fetch 402" events by 16:01Z, each followed by QNFO_AI_FREE_FALLBACK). One 402 opens this
-// per-isolate breaker for 30 min: callDeepSeek then fails fast with the same "deepseek 402" error (no paid round trip, no
+// per-isolate breaker for 60 min: callDeepSeek then fails fast with the same "deepseek 402" error (no paid round trip, no
 // spend-guard read), so every caller's existing free fallback runs at once. The first call after the window probes again.
-var DS_402_BREAKER_MS = 18e5;
+var DS_402_BREAKER_MS = 36e5;
 var _ds402Until = 0;
 async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, opts = {}) {
   if (Date.now() < _ds402Until) throw new Error("deepseek 402: balance exhausted, paid call skipped until " + new Date(_ds402Until).toISOString() + " (DEEPSEEK-402-BREAKER-1)");
@@ -1475,7 +1475,7 @@ async function callDeepSeek(env, apiModel, messages, maxTokens, stream, tools, o
     body: JSON.stringify(body)
   });
   if (!resp.ok) {
-    if (resp.status === 402) { if (Date.now() >= _ds402Until) console.log("QNFO_AI_DS_402_BREAKER open 30m (" + apiModel + ")"); _ds402Until = Date.now() + DS_402_BREAKER_MS; }
+    if (resp.status === 402) { if (Date.now() >= _ds402Until) console.log("QNFO_AI_DS_402_BREAKER open 60m (" + apiModel + ")"); _ds402Until = Date.now() + DS_402_BREAKER_MS; }
     throw new Error(`deepseek ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
   }
   if (stream) return spendMeterStream(env, resp, "deepseek", apiModel, spendInEstimate(messages));

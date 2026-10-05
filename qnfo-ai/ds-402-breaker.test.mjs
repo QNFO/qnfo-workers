@@ -1,5 +1,5 @@
 // DEEPSEEK-402-BREAKER-1 (#1939) offline suite for qnfo-ai callDeepSeek. Run: node qnfo-ai/ds-402-breaker.test.mjs
-// A direct DeepSeek 402 (balance exhausted) opens a 30-min per-isolate breaker: later calls fail fast with the same
+// A direct DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker: later calls fail fast with the same
 // "deepseek 402" error (no fetch, no spend-guard read) so the caller's free fallback runs at once; after the window the
 // paid path is probed again; other statuses and successes never open it.
 import { readFileSync } from "node:fs";
@@ -39,7 +39,7 @@ ok(t.seen.fetches === 1 && t.seen.guards === 1, "open breaker made no fetch and 
 
 // 3. after the window the paid path is probed again (and a recovered balance answers)
 const realNow = Date.now;
-Date.now = () => realNow() + 31 * 60e3;
+Date.now = () => realNow() + 61 * 60e3;
 try {
   t.status = 200;
   err = await tryCall(t.fn);
