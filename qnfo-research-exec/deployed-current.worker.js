@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.58-writer-flash"; // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.59-math-latex"; // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1805,6 +1805,50 @@ __name2(b64, "b64");
 __name22(b64, "b64");
 __name222(b64, "b64");
 __name2222(b64, "b64");
+// MATH-LATEX-2 (#1891, 2026-10-05, pillar reach): the generator wrote math as plain text. A scan of the 40 newest
+// papers.qnfo.org papers (2026-10-05) found 27 with 3 or more plain-text math tokens and every research-exec paper since
+// 2026-10-02 carrying 70-416 (Unicode powers of ten, subscripted T1, bra-ket overlaps, bare d^3 and N_c), which MathJax cannot typeset because nothing is inside
+// $...$; paper_render_defect_pages read 0 because none of its tests looks at math. The fix is generation-side: MATH_RULE is in
+// every prompt that writes paper text, and pseudoMathScan() is a deterministic check (no model call) that review and the
+// pre-publish gates use. The earlier MATH-LATEX-1 gate (#424, md2tex_v3) converts for the PDF path only, so it never saw the
+// paper body that research-exec publishes.
+var MATH_RULE = "- Mathematics: write every formula, equation, variable with a subscript or superscript, and power of ten in LaTeX, inline as $...$ and display as $$...$$ on its own lines (for example $T_1$, $10^{-4}$, $\\approx$, $|\\langle\\alpha|\\beta\\rangle|^2$). Never write math as plain text: no Unicode superscripts or subscripts (x\u00b2, 10\u207b\u2074, T\u2081), no Unicode math operators (\u2248 \u2264 \u2297 \u221a \u2211 \u27e8 \u27e9), no bare ^ or _ outside $...$. Put any diagram or ASCII art inside a fenced code block.";
+var PSEUDO_MATH_MAX = 2;
+var PM_SUPSUB_RE = /[\u2070\u00b9\u00b2\u00b3\u2074-\u207f\u2080-\u209c\u1d62-\u1d6a\u2c7c]+/g;
+var PM_OPS_RE = /[\u2264\u2265\u2248\u2260\u226a\u226b\u2208\u2209\u2297\u2295\u2211\u220f\u221a\u222b\u2202\u2207\u27e8\u27e9\u221e\u00b1\u2213\u221d\u2261\u2282\u2286\u222a\u2229]/g;
+var PM_SCRIPT_RE = /(?<![A-Za-z0-9_\\.])(?:\d+(?:\.\d+)?|[A-Za-z\u0391-\u03c9)\]])\^(?:\{[^{}\n]{1,40}\}|\([^()\n]{1,30}\)|[-\u2212]?[A-Za-z0-9]{1,6})|(?<![A-Za-z0-9_\\])[A-Za-z\u0391-\u03c9]_(?:\{[^{}\n]{1,40}\}|[A-Za-z0-9]{1,4})(?![A-Za-z0-9_])/g;
+var PM_BOX_RE = /[\u2500-\u257f]/;
+// Counts plain-text math outside $...$, $$...$$, \(...\), \[...\], code and links: Unicode super/subscript runs, Unicode math
+// operators, bare ^ and _ scripts on a single symbol or number (snake_case never matches), and box-drawing lines outside a
+// fence. The References list is skipped (titles are copied verbatim from the bibliography). Greek letters are not counted.
+function pseudoMathScan(md) {
+  let t = String(md || "");
+  const hm = /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?(?:References|Bibliography)\b.*$/im.exec(t);
+  if (hm) {
+    const after = t.slice(hm.index + hm[0].length);
+    const nx = after.search(/^#{1,2}\s/m);
+    t = t.slice(0, hm.index) + "\n" + (nx >= 0 ? after.slice(nx) : "");
+  }
+  t = t.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, " ").replace(/`[^`\n]*`/g, " ").replace(/\$\$[\s\S]*?\$\$/g, " ").replace(/\\\[[\s\S]*?\\\]/g, " ").replace(/\\\([\s\S]*?\\\)/g, " ").replace(/(?<!\\)\$[^$\n]+?(?<!\\)\$/g, " ").replace(/\]\([^)\s]*\)/g, "]").replace(/https?:\/\/\S+|\b10\.\d{4,}\/\S+|\barXiv:\s*\S+/gi, " ");
+  const samples = [];
+  let count = 0;
+  const take = function(re) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(t)) !== null) {
+      count++;
+      if (samples.length < 8) samples.push(t.slice(Math.max(0, m.index - 24), m.index + m[0].length + 16).replace(/\s+/g, " ").trim());
+    }
+  };
+  take(PM_SUPSUB_RE);
+  take(PM_SCRIPT_RE);
+  take(PM_OPS_RE);
+  t.split("\n").forEach(function(l) { if (PM_BOX_RE.test(l)) { count++; if (samples.length < 8) samples.push(l.trim().slice(0, 60)); } });
+  return { count, samples };
+}
+function mathLatexFix(scan) {
+  return { id: "gate-math-latex", severity: "HARD", claim: scan.count + " plain-text math tokens outside $...$", reason: "MATH-LATEX-2: math written as Unicode super/subscripts, Unicode operators or bare ^ and _ is not typeset on papers.qnfo.org. Examples: " + scan.samples.map(function(s) { return "\u00ab" + s + "\u00bb"; }).join(" "), fix: "Rewrite each such expression in LaTeX inside $...$ (inline) or $$...$$ (display), for example 10\u207b\u2074 -> $10^{-4}$, T\u2081 -> $T_1$, \u2248 -> $\\approx$, d^3 -> $d^3$. Change only the notation, not the values." };
+}
 var WRITER_PROMPT = [
   "You are one of three independent research writers producing a full-length preprint for open publication. All three writers receive the SAME input block; write independently and do not imitate a template beyond the required structure.",
   "Requirements:",
@@ -1820,6 +1864,7 @@ var WRITER_PROMPT = [
   "- References: list ONLY works from the provided Bibliography, in the same order, numbered [1]..[n]. Copy titles and identifiers EXACTLY from the bibliography. NEVER invent a reference. If the bibliography has fewer than 8 works, cite all of them and state the limitation in the Discussion.",
   "- No meta-commentary about writing, authorship, or AI. No 'Let me', no thinking text, no placeholder text, no '[to verify]' markers. Every quantitative claim is either computed here or explicitly labeled a projection with stated assumptions.",
   "- Write for an adjacent-field expert; define jargon once.",
+  MATH_RULE,
   "INPUT BLOCK:"
 ].join("\n");
 var RECONCILE_PROMPT = [
@@ -1833,6 +1878,7 @@ var RECONCILE_PROMPT = [
   "6. Quantitative claims: computed with shown arithmetic, or labeled projections with stated assumptions. No '[to verify]', no invented data.",
   "7. Appendix B: the claim table (C1..Cn, source drafts, agreement status).",
   "8. Output ONLY the paper markdown. No meta-commentary.",
+  "9. " + MATH_RULE.slice(2) + " Convert any plain-text or Unicode math taken from the drafts.",
   "DRAFTS:"
 ].join("\n");
 var REVIEW_PROMPT = [
@@ -1852,6 +1898,7 @@ var REVIEW_PROMPT = [
 var REVISE_PROMPT = [
   "You are the revising author. Apply the reviewer's HARD fixes to the paper. Return ONLY the full revised paper markdown with the same required structure and headings.",
   "For each fix: correct the quantitative claim using the computed value, remove or move-to-Discussion-as-explicitly-labeled-hypothesis unverifiable claims, replace invented references with bibliography entries (or remove the sentence), fix structure and length. Do not add new unsupported claims. Output ONLY the paper.",
+  MATH_RULE,
   "FIXES (JSON):"
 ].join("\n");
 // REVISE-PATCH-1 (2026-10-01, #1620/#1504): a revise asked for the WHOLE paper back even when the reviewer raised one
@@ -1864,6 +1911,7 @@ var REVISE_PATCH_PROMPT = [
   "You are the revising author. Resolve each HARD fix below by editing the paper in place.",
   'Return ONLY a JSON array, no prose and no code fence: [{"find":"<exact verbatim excerpt of the PAPER, 40 to 800 characters, occurring once>","replace":"<corrected text>"}].',
   "Copy each find excerpt character for character from the PAPER. Use at most 8 edits. To remove a sentence, replace it with an empty string.",
+  "Every replace text writes its mathematics in LaTeX inside $...$ (inline) or $$...$$ (display), never as Unicode superscripts, subscripts or operators.",
   "FIXES (JSON):"
 ].join("\n");
 function applyRevisePatch(paper, raw) {
@@ -2244,6 +2292,10 @@ async function stageReview(env, row) {
   const hard = findings.hard.filter(function(f) {
     return String(f.severity || "").toUpperCase() === "HARD";
   });
+  // MATH-LATEX-2 (#1891): plain-text math is a HARD finding decided deterministically (no model call). It rides the existing
+  // review -> revise cycles (bounded by MAX_REVIEW_CYCLES) and the patch reviser converts the listed expressions to LaTeX.
+  const _pm = pseudoMathScan(paper);
+  if (_pm.count > PSEUDO_MATH_MAX) hard.push(mathLatexFix(_pm));
   if (hard.length && cycle < MAX_REVIEW_CYCLES) {
     await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(hard));
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardCount: hard.length, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
@@ -2401,6 +2453,34 @@ __name2(finalGates, "finalGates");
 __name22(finalGates, "finalGates");
 __name222(finalGates, "finalGates");
 __name2222(finalGates, "finalGates");
+// MATH-LATEX-2 (#1891): every verify logs a math-scan event (status ok below the threshold, warn at or above it), so the
+// residual on papers about to publish is measured without a session. ops_config research_math_gate = 'enforce' makes it a
+// pre-publish gate: a first failing pass goes back to revise (the existing rewrite path) and a second failing pass whose
+// only failure is math parks the row (no re-arm: the same prompts would repeat it at full pipeline cost). Any other value
+// (the default) measures only, so a prompt rule that has not taken hold yet cannot stop publishing.
+async function mathGate(env, row, paper, gates) {
+  const pm = pseudoMathScan(paper);
+  let mode = "measure";
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_math_gate'").first();
+    if (r && String(r.value || "").trim() === "enforce") mode = "enforce";
+  } catch (e) {
+  }
+  await logEvent(env, "math-scan", "row=" + row.id + " pseudo_math=" + pm.count + " mode=" + mode, pm.count > PSEUDO_MATH_MAX ? "warn" : "ok");
+  if (mode === "enforce" && pm.count > PSEUDO_MATH_MAX) {
+    gates.fixes.push(mathLatexFix(pm));
+    gates.ok = false;
+    gates.reason = gates.fixes.map(function(f) { return f.id; }).join(",");
+  }
+  return pm;
+}
+function mathOnlyFailure(gates, mismatch) {
+  return !mismatch && !gates.ok && gates.fixes.length > 0 && gates.fixes.every(function(f) { return f && f.id === "gate-math-latex"; });
+}
+async function parkMathRow(env, row, pm) {
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', error=?, claimed_at=NULL WHERE id=? AND status IN ('researching','queued','failed')").bind(("PARKED-MATH-LATEX-2: " + pm.count + " plain-text math tokens remain after the rewrite; not re-armed (the same prompts would repeat it)").slice(0, 300), row.id).run();
+  await logEvent(env, "math-park", "parked research row " + String(row.id).slice(0, 8) + " pseudo_math=" + pm.count, "warn");
+}
 async function stageVerify(env, row) {
   let paper = await r2Get(env, String(row.id) + "/reconciled.md");
   try {
@@ -2431,10 +2511,15 @@ async function stageVerify(env, row) {
   if (!claims.length) {
     await r2Put(env, String(row.id) + "/verification.md", "# Verification\n\nNo quantitative claims were found; the paper is qualitative. Results are framed as qualitative analysis with explicit limitations.\n\nExtraction output:\n" + String(exRaw).slice(0, 3e3));
     const gates2 = finalGates(paper, gateOpts);
+    const _pm2 = await mathGate(env, row, paper, gates2);
     // VERIFY-LOOP-BOUND-1 (2026-10-01): this qualitative branch sent the row back to revise on every failing gate with no
     // verifyPass check, and review/revise dropped verifyPass from the context, so row 567 cycled verify -> revise ->
     // review -> verify every 15 minutes (13:21Z to 14:07Z) on gate-refcount. A second failing pass is terminal here, as
     // in the claims branch below; the recover loop re-arms the row from ground.
+    if (ctx.verifyPass && mathOnlyFailure(gates2, false)) {
+      await parkMathRow(env, row, _pm2);
+      return { ok: false, stage: "verify", gate: gates2.reason, parked: true };
+    }
     if (!gates2.ok && ctx.verifyPass) {
       await markError(env, row, "verify: unresolved after revision - gates=" + gates2.reason);
       return { ok: false, stage: "verify", gate: gates2.reason };
@@ -2478,6 +2563,11 @@ async function stageVerify(env, row) {
   await r2Put(env, String(row.id) + "/verification.md", verifMd);
   const mismatch = /match\s*=\s*no/i.test(out) || /VERIFICATION SUMMARY[^\n]*mismatch\s*[1-9]/i.test(out);
   const gates = finalGates(paper, gateOpts);
+  const _pm = await mathGate(env, row, paper, gates);
+  if (ctx.verifyPass && mathOnlyFailure(gates, mismatch)) {
+    await parkMathRow(env, row, _pm);
+    return { ok: false, stage: "verify", gate: gates.reason, parked: true };
+  }
   if ((mismatch || !gates.ok) && !ctx.verifyPass) {
     const fixes = gates.fixes.slice();
     if (mismatch) fixes.push({ id: "verify-mismatch", severity: "HARD", claim: "computed values do not match paper claims", reason: out.slice(0, 2e3), fix: "Correct each quantitative claim to match the independently computed value, or move the claim to the Discussion as an explicitly-labeled hypothesis with stated assumptions." });
@@ -3066,9 +3156,13 @@ export {
   drainVersionRequests,
   groundQueries,
   markError,
+  mathGate,
   parkPoisonRow,
+  pseudoMathScan,
   reclaimStaleResearching,
   stageGround,
+  stageReview,
+  stageVerify,
   verifyMetadataBackfill
 };
 //# sourceMappingURL=worker.js.map
