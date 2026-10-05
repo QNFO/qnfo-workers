@@ -12,11 +12,18 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.61-zenodo-related"; // ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.62-stage-attr"; // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
 var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
+// AI-STAGE-ATTRIBUTION-1 (2026-10-05, #1795/#1780): every call was recorded as purpose 'binding', so the run-rate could be
+// attributed to this worker but not to a pipeline stage, and the next cost lever (27-30 verify failures a day re-arm whole
+// runs from ground) could not be sized. Each stage function sets __AI_ATTR_STAGE on entry and the counter row becomes
+// purpose 'binding:<stage>' (ground, ensemble, reconcile, review, revise, verify). Readers that sum neurons per worker or
+// day are unchanged. Measurement only: no prompt, model, route or call count changes. A label set by one stage can tag a
+// call of another only if two stages of different rows overlap in one isolate, which the one-stage-per-run cron avoids.
+var __AI_ATTR_STAGE = "";
 function __aiAttrEnv(env, worker, aiKey, dbKey) {
   try {
     if (!env || env.__aiAttr) return env;
@@ -35,8 +42,8 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
             var r = __AI_ATTR_RATES[String(model)] || [0, 0];
             var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
-            await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
-              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
+            await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,?10,?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
+              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons, __AI_ATTR_STAGE ? "binding:" + __AI_ATTR_STAGE : "binding").run();
           } catch (e2) {}
         }
       };
@@ -2006,6 +2013,7 @@ function groundQueries(idea, parentTitle) {
   }).join(" OR ")]);
 }
 async function stageGround(env, row) {
+  __AI_ATTR_STAGE = "ground";
   const idea = row.idea || row.summary || "";
   const rid = String(row.id);
   let existing = "";
@@ -2149,6 +2157,7 @@ __name22(stageGround, "stageGround");
 __name222(stageGround, "stageGround");
 __name2222(stageGround, "stageGround");
 async function stageEnsemble(env, row) {
+  __AI_ATTR_STAGE = "ensemble";
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
   if (!grounding) {
     await markError(env, row, "ensemble: grounding missing");
@@ -2218,6 +2227,7 @@ __name22(stageEnsemble, "stageEnsemble");
 __name222(stageEnsemble, "stageEnsemble");
 __name2222(stageEnsemble, "stageEnsemble");
 async function stageReconcile(env, row) {
+  __AI_ATTR_STAGE = "reconcile";
   const parts = [];
   for (let i = 0; i < 3; i++) {
     const d = await r2Get(env, String(row.id) + "/draft-" + i + ".md");
@@ -2270,6 +2280,7 @@ __name22(stageReconcile, "stageReconcile");
 __name222(stageReconcile, "stageReconcile");
 __name2222(stageReconcile, "stageReconcile");
 async function stageReview(env, row) {
+  __AI_ATTR_STAGE = "review";
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const grounding = await r2Get(env, String(row.id) + "/grounding.md");
   let ctx = { cycles: 0 };
@@ -2311,6 +2322,7 @@ __name22(stageReview, "stageReview");
 __name222(stageReview, "stageReview");
 __name2222(stageReview, "stageReview");
 async function stageRevise(env, row) {
+  __AI_ATTR_STAGE = "revise";
   const paper = await r2Get(env, String(row.id) + "/reconciled.md");
   const fixes = await r2Get(env, String(row.id) + "/fixes.json");
   let ctx = { cycles: 0 };
@@ -2482,6 +2494,7 @@ async function parkMathRow(env, row, pm) {
   await logEvent(env, "math-park", "parked research row " + String(row.id).slice(0, 8) + " pseudo_math=" + pm.count, "warn");
 }
 async function stageVerify(env, row) {
+  __AI_ATTR_STAGE = "verify";
   let paper = await r2Get(env, String(row.id) + "/reconciled.md");
   try {
     const _rr = renderReferences(paper, await r2Get(env, String(row.id) + "/grounding.md"));
