@@ -37,6 +37,7 @@ CREATE TABLE improvement_loop_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEX
 CREATE TABLE reach_idea_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE ask_loop_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, version TEXT, kind TEXT NOT NULL, ok INTEGER NOT NULL, note TEXT);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, last_attempt_at TEXT);
+CREATE TABLE cf_changelog_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT, items INTEGER, note TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
 CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merged_by TEXT, merged_at TEXT, merge_state TEXT, green_since TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
@@ -79,6 +80,7 @@ db.prepare("INSERT INTO perf_runs (ts, day, kind) VALUES (?, '2026-10-05', 'expe
 const PERF_KPIS = ["issue_mttr_h_30d", "deploy_failure_rate_7d", "worker_health_failure_rate", "credibility_events_90d", "selected_works_citation_coverage"];
 for (const k of PERF_KPIS) db.prepare("INSERT INTO metric_registry (metric, layer, kind, source_of_truth, disposition_actor, refresh_cadence, last_value, last_refreshed, state) VALUES (?, 'operational', 'leading', 's', 'a', 'hourly', 'n/a: unmeasured', ?, 'UNMEASURED')").run(k, ago(0.5));
 db.prepare("INSERT INTO remediation_contracts (class, last_attempt_at) VALUES ('EVID-1', ?)").run(new Date(NOW - 2 * 36e5).toISOString().replace("T", " ").slice(0, 19));
+db.prepare("INSERT INTO cf_changelog_runs (ts, status, items) VALUES (?, 'ok', 60)").run(ago(4));   // CF-CHANGELOG-WATCH-1
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pending', 'research', ?)").run(ago(10));
 // errata-hub hourly ticks (#1747): the watchmaker reads $.last_ok, which a failed tick carries forward.
 db.prepare("INSERT INTO errata_watch (key, value) VALUES ('tick:errata-watch', ?)").run(JSON.stringify({ ts: ago(0.5), ok: true, last_ok: ago(0.5) }));
@@ -142,6 +144,16 @@ ok(op(m, "identity-weekly").state.startsWith("ok") && op(m, "time-gated-verifica
 ok(!op(m, "linkedin-draft-approval").counted && /by policy/.test(op(m, "linkedin-draft-approval").state), "by-policy owner approvals are listed, not counted");
 ok(!op(m, "code-task-merge").counted && op(m, "code-task-merge").runner === "cron:qnfo-fleet-control" && /^ok, last run 0.5h ago$/.test(op(m, "code-task-merge").state), "a fresh merge-runner heartbeat with nothing for a person: not counted");
 ok(!op(m, "branch-hygiene").counted && op(m, "branch-hygiene").runner === "cron:qnfo-fleet-control", "a fresh branch-sweeper heartbeat: not counted (BRANCH-HYGIENE-1)");
+ok(!op(m, "cf-changelog").counted && op(m, "cf-changelog").runner === "cron:qnfo-fleet-control" && op(m, "cf-changelog").age_h === 4, "a changelog run 4h ago: listed, not counted (CF-CHANGELOG-WATCH-1)");
+{
+  // a changelog audit whose last ok run is over 2 days old counts as stalled; a later error run does not prove it ran
+  db.prepare("UPDATE cf_changelog_runs SET ts = ?").run(ago(50));
+  db.prepare("INSERT INTO cf_changelog_runs (ts, status, items) VALUES (?, 'error', 0)").run(ago(1));
+  const s = op(await api.watchmakerMeasure(env, NOW), "cf-changelog");
+  ok(s.counted && /stalled/.test(s.state), "a changelog audit with no ok run for 50h counts as stalled (" + s.state + ")");
+  db.prepare("DELETE FROM cf_changelog_runs WHERE status = 'error'").run();
+  db.prepare("UPDATE cf_changelog_runs SET ts = ?").run(ago(4));
+}
 // CODE-TASK-MERGE-RUNNER-1: the runner merges; what a person still did or must do counts. The runner's first ok tick
 // (code-merge-first-ok, written once) was 5 days ago: a person merge before it is history, not a dependency.
 const cm = async () => op(await api.watchmakerMeasure(env, NOW), "code-task-merge");

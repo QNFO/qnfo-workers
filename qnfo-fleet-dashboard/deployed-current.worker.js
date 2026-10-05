@@ -4016,6 +4016,9 @@ var WATCHMAKER_OPS = [
   // whether the op needs a person now); a failed automatic revert in the last 30 days (revert_failed). Columns come from
   // the runner's schema step; until it has run, the query fails and the op counts as unmeasured.
   { key: "branch-hygiene", what: "Deleting merged branches and archiving abandoned ones in qnfo-workers (BRANCH-HYGIENE-1, qnfo-fleet-control hourly)", runner: "cron:qnfo-fleet-control", cadence_h: 1, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'branch-hygiene-tick-' AND id < 'branch-hygiene-tick.' AND status = 'ok'", why_sql: "SELECT status FROM cloud_ops_events WHERE id >= 'branch-hygiene-tick-' AND id < 'branch-hygiene-tick.' ORDER BY ts DESC LIMIT 1" },
+  // CF-CHANGELOG-WATCH-1 (agent_issues 1958): qnfo-fleet-control 0.4.112 CF-CHANGELOG-LOOP-1 reads Cloudflare's changelog once a
+  // day inside its hourly tick and writes one cf_changelog_runs row per run.
+  { key: "cf-changelog", what: "Reading Cloudflare's changelog and acting on it: billing and deprecation issues, reopened catalog rows, new catalog rows (CF-CHANGELOG-LOOP-1, qnfo-fleet-control, daily in the hourly tick)", runner: "cron:qnfo-fleet-control", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cf_changelog_runs WHERE status IN ('ok','partial')", why_sql: "SELECT status FROM cf_changelog_runs ORDER BY id DESC LIMIT 1" },
   { key: "code-task-merge", what: "Opening and merging code-loop PRs (CODE-TASK-MERGE-RUNNER-1, qnfo-fleet-control hourly)", runner: "cron:qnfo-fleet-control", cadence_h: 1,
     sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' AND status = 'ok'",
     why_sql: "SELECT status FROM cloud_ops_events WHERE id >= 'code-merge-tick-' AND id < 'code-merge-tick.' ORDER BY ts DESC LIMIT 1",
