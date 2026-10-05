@@ -45,7 +45,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.7.0-gcal-ics";
+var VERSION = "4.7.1-tool-trace-memory"; // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
 // FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
 // <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
 // any script loaded here can read it; a remote script from a shared, open worker would put calendar write access and
@@ -198,7 +198,9 @@ async function loadPrimeContext(env, q, currentThread) {
       lines.push("OPEN REMINDERS / DESIRES (recent):");
       for (const r of op.results) lines.push("- (" + String(r.ts || "").slice(0, 10) + " " + (r.kind || "") + ") " + String(r.content || "").slice(0, 220));
     }
-    const cr = currentThread ? await env.PERSONAL.prepare("SELECT role, content, thread, ts FROM chat WHERE thread != ?1 AND role='assistant' ORDER BY ts DESC LIMIT 3").bind(currentThread).all() : null;
+    // TOOL-TRACE-MEMORY-1 (#1805): rows logged with model tool/mcp-tool are the internal trace ("tool:web_search args={..} => ERROR ..."),
+    // not answers Rowan saw; feeding them back as prior ASSISTANT turns taught the model to answer in tool syntax.
+    const cr = currentThread ? await env.PERSONAL.prepare("SELECT role, content, thread, ts FROM chat WHERE thread != ?1 AND role='assistant' AND COALESCE(model,'') NOT IN ('tool','mcp-tool') ORDER BY ts DESC LIMIT 3").bind(currentThread).all() : null;
     if (cr && cr.results && cr.results.length) {
       lines.push("RECENT CROSS-THREAD ANSWERS (for continuity):");
       for (const r of cr.results) lines.push("- [" + String(r.ts || "").slice(0, 10) + "] " + String(r.content || "").replace(/\s+/g, " ").slice(0, 260));
@@ -2480,7 +2482,8 @@ __name2(logChat, "logChat");
 __name22(logChat, "logChat");
 async function loadThreadMemory(env, thread, clientMessages) {
   try {
-    const rows = await env.PERSONAL.prepare("SELECT role, content FROM chat WHERE thread = ?1 AND role IN ('user','assistant') ORDER BY ts DESC LIMIT 10").bind(thread).all();
+    // TOOL-TRACE-MEMORY-1 (#1805): skip the internal tool-trace rows (model tool/mcp-tool); see loadPrimeContext.
+    const rows = await env.PERSONAL.prepare("SELECT role, content FROM chat WHERE thread = ?1 AND role IN ('user','assistant') AND COALESCE(model,'') NOT IN ('tool','mcp-tool') ORDER BY ts DESC LIMIT 10").bind(thread).all();
     const prior = (rows.results || []).reverse();
     if (!prior.length) return null;
     const clientSet = /* @__PURE__ */ new Set();
