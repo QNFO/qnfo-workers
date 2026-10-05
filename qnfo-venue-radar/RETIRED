@@ -1,0 +1,12 @@
+qnfo-venue-radar is RETIRED (2026-10-05, WORKER-RETIRE-WAVE-1, agent_issues 1756, owner standing decision 3 of 2026-10-05:
+"retire the lowest-value workers without waiting for proof they're idle. Start with qnfo-venue-radar and qnfo-signal-loop").
+
+What it did: a daily 06:45Z read radar over LessWrong, the Alignment Forum, the EA Forum and Hacker News, writing
+venue_radar_runs, venue_radar_config and venue_signal in qnfo-audit. Measured 2026-10-05: no worker.js in the fleet reads
+any of those tables (STRATEGY.md lists its mentions bucket as "collected, no reader"), no wrangler.toml binds it, no
+worker calls its URL, and no metric, remediation contract or fleet_cron names it. Its 7-day request count on Cloudflare
+(1387) is the fleet's /health probes, which read service_registry; that row is set to state 'retired' with this change.
+
+Its tables and rows stay in qnfo-audit (nothing is deleted). The script is removed with cf-ops-actions delete-worker.
+Bringing it back is a charter net-zero decision recorded in a PR that removes this file and redeploys the code below,
+never a way to get a deploy through. canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file.

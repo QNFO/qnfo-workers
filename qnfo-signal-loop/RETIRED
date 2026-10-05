@@ -1,0 +1,14 @@
+qnfo-signal-loop is RETIRED (2026-10-05, WORKER-RETIRE-WAVE-1, agent_issues 1756, owner standing decision 3 of 2026-10-05:
+"retire the lowest-value workers without waiting for proof they're idle. Start with qnfo-venue-radar and qnfo-signal-loop").
+
+What it did: the hourly L8 re-entry loop (published DOIs -> signals source=artifact_reentry -> open questions ->
+idea_proposals). Measured 2026-10-05: its consume leg was already off (signal_worker_boundary qnfo-signal-loop /
+artifact_reentry permitted=0, so every run counted skipped_boundary), and its re-entry leg duplicates idea-hub's bounded
+port of the same leg (idea-hub/worker.js "L8 re-entry loop (ported from qnfo-signal-loop 1.1.2, bounded)"), which reads
+500 papers once instead of 2 queries per paper every hour. No wrangler.toml binds it, no worker calls its URL, and no
+metric or fleet_cron names it. idea-hub stays the single L8 producer and consumer (agent_issues 1654 tracks the drain).
+
+Its tables and rows stay in qnfo-audit and living-paper (nothing is deleted). The script is removed with cf-ops-actions
+delete-worker. Bringing it back is a charter net-zero decision recorded in a PR that removes this file and redeploys
+the code below, never a way to get a deploy through. canonical-deploy.yml skips any directory containing a RETIRED or
+FOLDED file.
