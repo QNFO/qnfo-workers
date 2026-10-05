@@ -492,10 +492,6 @@ export const REGISTRY = {
    "url": "https://qnfo-autopilot.q08.workers.dev/health"
   },
   {
-   "name": "qnfo-signal-loop",
-   "url": "https://qnfo-signal-loop.q08.workers.dev/health"
-  },
-  {
    "name": "personal-companion",
    "url": "https://personal-companion.q08.workers.dev/health"
   }

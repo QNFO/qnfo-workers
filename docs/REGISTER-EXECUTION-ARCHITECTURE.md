@@ -58,11 +58,11 @@ Executed against the 41 live scripts (Cloudflare workers list). The result is re
 
 | Class | n | Workers |
 |---|---|---|
-| executor | 21 | qnfo-signal-loop, errata-hub, qnfo-email-orchestrator, qnfo-agent-orchestrator, qnfo-social, qnfo-outreach, q08-signal-engine, qnfo-deploy-guard, personal-companion, idea-hub, fleet-exec, qnfo-fleet-control, qnfo-paper-reviser, qnfo-research-exec, qnfo-backlog-exec, qnfo-intent-orchestrator, qnfo-ops, qnfo-skill-sync, qnfo-paper-indexer, qnfo-email, qnfo-lifecycle |
+| executor | 20 | errata-hub, qnfo-email-orchestrator, qnfo-agent-orchestrator, qnfo-social, qnfo-outreach, q08-signal-engine, qnfo-deploy-guard, personal-companion, idea-hub, fleet-exec, qnfo-fleet-control, qnfo-paper-reviser, qnfo-research-exec, qnfo-backlog-exec, qnfo-intent-orchestrator, qnfo-ops, qnfo-skill-sync, qnfo-paper-indexer, qnfo-email, qnfo-lifecycle |
 | detector | 6 | qnfo-autonomy-scorer, ai-health-prober, qnfo-ai-calibration, qnfo-observability, qnfo-cloud-ops, qnfo-kaizen |
 | display/gateway | 14 | qnfo-subscribers, qnfo-fleet-dashboard, calendar-api, qnfo-infra, qnfo-tools-mcp, personal-api, qnfo-ai-search, qnfo-memory-mcp, qnfo-archive, qnfo-gateway, qnfo-ai, qnfo-ipatent, qnfo-pdf, qnfo-containers-pilot |
 | self-serving | 0 | none: every live worker has at least one consumer |
-| retired | 2 | qnfo-fleet-feed, qnfo-proof (contracts kept, scripts not deployed) |
+| retired | 4 | qnfo-fleet-feed, qnfo-proof (contracts kept, scripts not deployed); qnfo-venue-radar, qnfo-signal-loop (2026-10-05, #1756, scripts deleted, tables kept) |
 
 Two workers have no in-fleet consumer. Both are kept on external-consumer evidence:
 - **qnfo-tools-mcp:** external MCP clients. It took 904 requests in 24h against a health-probe baseline of about 480.
