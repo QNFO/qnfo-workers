@@ -79,7 +79,7 @@ function fakeDbs(seed) {
       if (/max\(datetime\(received_at\)\) AS last_seen FROM emails/.test(q)) return { last_seen: kind === "audit" ? new Date(Date.now() - 1 * 864e5).toISOString().slice(0, 19).replace("T", " ") : null };
       if (/FROM events/.test(q) && /max\(datetime\(ingested_at\)/.test(q)) return { last_seen: "2026-09-01 00:00:00" };
       return null },
-    all: async () => ({ results: /GROUP BY store/.test(q) ? [{ store: "gmail", last_seen: "2026-08-18 10:12:43" }, { store: "fresh", last_seen: new Date().toISOString().slice(0, 19).replace("T", " ") }] : [] }),
+    all: async () => /FROM events WHERE booking_ref/.test(q) ? { results: [...events.values()].filter((r) => r.booking_ref === a[0] && r.category === a[1]).map((r) => ({ id: r.id, title: r.title, start_date: r.start_date })) } : ({ results: /GROUP BY store/.test(q) ? [{ store: "gmail", last_seen: "2026-08-18 10:12:43" }, { store: "fresh", last_seen: new Date().toISOString().slice(0, 19).replace("T", " ") }] : [] }),
     run: async () => {
       log.push(q.slice(0, 30));
       if (/^INSERT INTO events/.test(q)) events.set(a[0], { id: a[0], category: a[1], title: a[2], city: a[4], country: a[5], start_date: a[6], end_date: a[7], booking_ref: a[8], source: a[9], notes: a[11] });
