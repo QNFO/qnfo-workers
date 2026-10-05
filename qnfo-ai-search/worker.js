@@ -468,7 +468,7 @@ async function pinPaper(env, slug, query) {
   if (!p || !p.slug || !p.title) return null;
   var body = String(p.body_md || "").replace(/^---[\s\S]*?---\s*/, "");
   // Sections split at level-1 to level-3 headings (some papers number their sections as '# 6.'), and words compared on a
-  // six-letter stem, so "falsify" finds the "Falsification conditions" of section 6 (#1813).
+  // six-letter stem, so "falsify" finds the section 6 heading on what would falsify the framework (#1813).
   var stem = function (w) { return w.length > 6 ? w.slice(0, 6) : w; };
   var qt = new Set(keywordsAll(query).map(stem));
   var secs = body.split(/\n(?=#{1,3}\s)/).map(function (t, i) {

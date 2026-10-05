@@ -244,7 +244,7 @@ ok(models.includes("@cf/deepseek-ai/deepseek-v4-flash-0731"), "the judge is a di
 // 10. ASK-IDEA-HANDOFF-1 (#1936): an uncovered answer points to the ideas pipeline; thread links use /s/<id>.
 {
   const p = (await call("/")).text;
-  ok(p.includes("if (d.uncovered){") && p.includes('href=\\"https://ideas.qnfo.org/\\">ideas.qnfo.org</a>') && !p.includes("ideas.qnfo.org/#/s/") && p.includes("https://ideas.qnfo.org/s/"), "the page hands an uncovered question to ideas.qnfo.org and links threads at /s/<id>");
+  ok(p.includes("if (d.uncovered){") && p.includes('href=\\"https://ideas.qnfo.org/\\">ideas.qnfo.org</a>') && !p.includes("ideas.qnfo.org/#/s/") && /https:\/\/ideas\.qnfo\.org\/s\//.test(p), "the page hands an uncovered question to ideas.qnfo.org and links threads at /s/<id>");
   const real = AI.run;
   AI.run = async (m, o) => { if (!o || !o.stream) return real(m, o); const enc = new TextEncoder(); return new ReadableStream({ start(c) { c.enqueue(enc.encode("data: " + JSON.stringify({ response: "The excerpts do not cover this question. Nothing in the corpus addresses it." }) + "\n\n")); c.close(); } }); };
   const u = await call("/api/ask", { query: "What is the boiling point of adelic tea?" }, "5.5.5.8");
