@@ -1,3 +1,6 @@
+// idea-hub v1.5.6-reentry-drain-20261005: REENTRY-DRAIN-1 (#1654 SIGNALS-TRIAGE-GAP-1: status='new' artifact_reentry signals
+//   had no terminal state; weight-0 ones are expired after REENTRY_NOQ_TTL_H with one last re-check, weight>0 ones after
+//   REENTRY_TTL_DAYS, no emission while the boundary row is not permitted; no model call, no new cron).
 // idea-hub v1.5.5-triage-budget-20261005: IDEA-TRIAGE-BREACH-DEFER-1 (#1878: no triage model call while a fleet_budget
 //   ai_spend cap is breached; proposals wait as deferred_budget and are released when the caps clear), COST-ATTRIBUTION
 //   (#1833: triage and think-loop calls counted in ai_call_counters via aiRunAttr), OWNER-TOKEN-SHADOW-1 (#1966: intake
@@ -82,7 +85,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.5.5-triage-budget"; // 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.5.6-reentry-drain"; // 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -379,6 +382,22 @@ var REENTRY_BATCH = 20, CONSUME_SIGNALS = 2, CONSUME_QUESTIONS = 3, PROPOSAL_BAC
 // re-checks RESCORE_BATCH weight-0 signals, oldest-checked first (ts rotates); a signal whose paper is no longer in
 // living-paper is expired with that reason instead of being re-checked forever.
 var RESCORE_BATCH = 10;
+// REENTRY-DRAIN-1 (1.5.6, #1654 SIGNALS-TRIAGE-GAP-1): status='new' re-entry signals had no terminal state. A weight-0
+// signal (no open question found in its paper) fails the consume filter (evidential_weight > 0) for ever, and the re-score
+// leg above only expired it when the paper had left living-paper; otherwise it rotated ts. On 2026-10-05 242 of the 245
+// status='new' rows were weight 0 (all re-checked within the last 24 h, none ever re-scored: no weight>0 row has
+// ts <> created_at), and the 3 weight>0 rows wait on the owner's pause (signal_worker_boundary idea-hub/artifact_reentry
+// permitted=0, OWNER-NARROW-SIGNAL-1, until SIGNAL-INTAKE-1 #1947). Consuming them would feed the two-model triage
+// (paid Workers AI) while fleet_budget caps are breached, so the remedy is an age rule, model-free and bounded:
+//   1. a weight-0 signal older than REENTRY_NOQ_TTL_H gets one last re-check against its paper (oldest first, at most
+//      REENTRY_EXPIRE_BATCH a run) and is expired if it still has no open question, so every such signal leaves 'new'
+//      inside the 24 h window this issue's contract measures;
+//   2. a weight>0 signal still status='new' after REENTRY_TTL_DAYS is expired (a week for a paused or backed-up consumer
+//      to take it; younger rows stay consumable when the pause lifts);
+//   3. while the boundary row is not permitted, no new signal is emitted (the owner paused re-entry; emitting rows that
+//      nothing may consume only regrows the backlog).
+// Expiry is a status change only: the row, its open_questions and its weight are kept and the reason is in decision.
+var REENTRY_NOQ_TTL_H = 20, REENTRY_TTL_DAYS = 7, REENTRY_EXPIRE_BATCH = 50;
 function extractOpenQuestions(bodyMd) {
   if (!bodyMd) return [];
   var text = String(bodyMd), out = [], seen = new Set();
@@ -396,11 +415,20 @@ function extractOpenQuestions(bodyMd) {
   (text.match(/[^.\n?]{25,300}\?/g) || []).forEach(push);
   return out;
 }
+async function reentryPermitted(env) {
+  try {
+    var b = await env.QNFO_AUDIT.prepare("SELECT permitted FROM signal_worker_boundary WHERE worker='idea-hub' AND source='artifact_reentry'").first();
+    return !!b && Number(b.permitted) === 1;
+  } catch (e) { return false; }
+}
 async function runReentry(env) {
-  var out = { scanned: 0, emitted: 0, errors: 0 };
-  var papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' ORDER BY created_at DESC LIMIT 500").all()).results || [];
+  var out = { scanned: 0, emitted: 0, errors: 0, permitted: await reentryPermitted(env) };
+  var papers = [], have = new Set();
+  if (out.permitted) {
+    papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' ORDER BY created_at DESC LIMIT 500").all()).results || [];
+    have = new Set(((await env.QNFO_AUDIT.prepare("SELECT source_ref FROM signals WHERE source='artifact_reentry'").all()).results || []).map(function (r) { return String(r.source_ref); }));
+  } else out.emit_paused = "signal_worker_boundary idea-hub/artifact_reentry not permitted";
   out.scanned = papers.length;
-  var have = new Set(((await env.QNFO_AUDIT.prepare("SELECT source_ref FROM signals WHERE source='artifact_reentry'").all()).results || []).map(function (r) { return String(r.source_ref); }));
   var todo = papers.filter(function (p) { return !have.has(String(p.doi)); }).slice(0, REENTRY_BATCH);
   for (var i = 0; i < todo.length; i++) {
     var p = todo[i];
@@ -413,8 +441,36 @@ async function runReentry(env) {
       out.emitted++;
     } catch (e) { out.errors++; }
   }
-  out.rescored = 0; out.expired = 0;
-  var zero = (await env.QNFO_AUDIT.prepare("SELECT id, source_ref FROM signals WHERE source='artifact_reentry' AND status='new' AND COALESCE(evidential_weight,0)=0 ORDER BY ts ASC LIMIT ?1").bind(RESCORE_BATCH).all()).results || [];
+  out.rescored = 0; out.expired = 0; out.expired_noq = 0; out.expired_stale = 0;
+  var nowMs = Date.now(), cutNoq = new Date(nowMs - REENTRY_NOQ_TTL_H * 3600e3).toISOString();
+  // REENTRY-DRAIN-1 rule 2 (runs first, so a signal re-scored below still gets this run's consume leg): a weight>0 signal
+  // older than REENTRY_TTL_DAYS, bounded, oldest first.
+  try {
+    var st = await env.QNFO_AUDIT.prepare("UPDATE signals SET status='expired', decision=?1, ts=?2 WHERE id IN (SELECT id FROM signals WHERE source='artifact_reentry' AND status='new' AND COALESCE(evidential_weight,0) > 0 AND created_at < ?3 ORDER BY created_at ASC LIMIT ?4)")
+      .bind("idea-hub " + VERSION + ": REENTRY-DRAIN-1 not consumed within " + REENTRY_TTL_DAYS + " days (consume leg paused or backed up); open_questions kept", new Date().toISOString(), new Date(nowMs - REENTRY_TTL_DAYS * 864e5).toISOString(), REENTRY_EXPIRE_BATCH).run();
+    out.expired_stale = Number(st && st.meta && st.meta.changes) || 0;
+  } catch (e) { out.errors++; }
+  // REENTRY-DRAIN-1 rule 1: weight-0 signals past REENTRY_NOQ_TTL_H, oldest first, one paper read for the whole batch.
+  var old0 = (await env.QNFO_AUDIT.prepare("SELECT id, source_ref FROM signals WHERE source='artifact_reentry' AND status='new' AND COALESCE(evidential_weight,0)=0 AND created_at < ?1 ORDER BY created_at ASC LIMIT ?2").bind(cutNoq, REENTRY_EXPIRE_BATCH).all()).results || [];
+  if (old0.length) {
+    var refs = old0.map(function (r) { return String(r.source_ref); }), bodies = new Map();
+    try {
+      var pb = (await env.LIVING_PAPER.prepare("SELECT doi, substr(body_md, 1, 12000) AS b FROM papers WHERE doi IN (" + refs.map(function () { return "?"; }).join(",") + ")").bind(...refs).all()).results || [];
+      pb.forEach(function (r) { var k = String(r.doi); if (!bodies.has(k) || (!bodies.get(k) && r.b)) bodies.set(k, r.b || ""); });
+    } catch (e) { out.errors++; old0 = []; }
+    for (var x = 0; x < old0.length; x++) {
+      var so = old0[x], ref = String(so.source_ref), nowX = new Date().toISOString();
+      try {
+        if (!bodies.has(ref)) { await env.QNFO_AUDIT.prepare("UPDATE signals SET status='expired', decision=?, ts=? WHERE id=? AND status='new'").bind("idea-hub " + VERSION + ": paper " + ref.slice(0, 80) + " not in living-paper", nowX, so.id).run(); out.expired++; continue; }
+        var oqx = extractOpenQuestions(bodies.get(ref));
+        if (oqx.length) { await env.QNFO_AUDIT.prepare("UPDATE signals SET open_questions=?, evidential_weight=0.9, ts=? WHERE id=?").bind(JSON.stringify(oqx), nowX, so.id).run(); out.rescored++; continue; }
+        await env.QNFO_AUDIT.prepare("UPDATE signals SET status='expired', decision=?, ts=? WHERE id=? AND status='new'").bind("idea-hub " + VERSION + ": REENTRY-DRAIN-1 no open question found in the paper after " + REENTRY_NOQ_TTL_H + " h of re-checks (a weight-0 signal is never consumed)", nowX, so.id).run();
+        out.expired_noq++;
+      } catch (e) { out.errors++; }
+    }
+  }
+  // Re-score rotation for the younger weight-0 signals (REENTRY-RESCORE-1).
+  var zero = (await env.QNFO_AUDIT.prepare("SELECT id, source_ref FROM signals WHERE source='artifact_reentry' AND status='new' AND COALESCE(evidential_weight,0)=0 AND created_at >= ?1 ORDER BY ts ASC LIMIT ?2").bind(cutNoq, RESCORE_BATCH).all()).results || [];
   for (var z = 0; z < zero.length; z++) {
     var sg = zero[z], nowZ = new Date().toISOString();
     try {

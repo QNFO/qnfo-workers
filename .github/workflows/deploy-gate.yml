@@ -451,6 +451,9 @@ jobs:
         run: node --no-warnings calendar-api/caller-props.test.mjs
       - name: IDEA-TRIAGE-BUDGET-1 offline suite (idea-hub 1.5.5, #1878)
         run: node --no-warnings idea-hub/triage-budget.test.mjs
+      # REENTRY-DRAIN-1 (#1654): status='new' artifact_reentry signals drain by a model-free age rule, oldest first, bounded.
+      - name: REENTRY-DRAIN-1 offline suite (idea-hub 1.5.6, #1654)
+        run: node --no-warnings idea-hub/reentry-drain.test.mjs
       - name: AI-ATTR offline suite (personal-api 4.7.2, #1833)
         run: node --no-warnings personal-api/ai-attr.test.mjs
       - name: TOOL-TRACE-MEMORY-1 offline suite (personal-api 4.7.1, #1805)
