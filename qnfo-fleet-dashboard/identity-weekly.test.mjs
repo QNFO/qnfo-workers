@@ -64,6 +64,9 @@ class FixedDate extends Date { constructor(...a) { super(...(a.length ? a : [NOW
 const ctx = vm.createContext({
   Date: FixedDate, JSON, Math, String, Number, Object, Array, RegExp, Promise, encodeURIComponent, setTimeout, clearTimeout,
   AbortController, console, TextEncoder, NAME: "qnfo-fleet-dashboard", VERSION: "test", fetch: fetchStub, __name: (f) => f,
+  // NAME-HELPER-STUBS-1: every bundler rename helper the block uses (__name2, __name22, ...); a landing of deployed code
+  // adds a new suffix each time (1e97bab added __name2 and broke deploy-gate for every PR from 2026-10-04).
+  ...Object.fromEntries([...new Set(block.match(/\b__name\d+\b/g) || [])].map((k) => [k, (f) => f])),
   ownerStore: async (env) => env.IDENTITY || env.AUDIT, d1all: d1allStub, reachErr: (e) => String(e && e.message || e),
   PORTFOLIO_RUNNING_STALE_MS: 600000, PORTFOLIO_MAX_ATTEMPTS: 3
 });

@@ -2,14 +2,14 @@
  "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
  "probe_map_entries": 45,
- "open_issues": 125,
- "with_contract_before": 125,
+ "open_issues": 119,
+ "with_contract_before": 119,
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
  "active_contracts": 78,
- "active_with_executable_probe": 61,
- "active_with_prose_probe": 17,
+ "active_with_executable_probe": 60,
+ "active_with_prose_probe": 18,
  "prose_probe_contracts": [
   {
    "class": "detect-threshold-blindspot",
@@ -95,10 +95,15 @@
    "class": "issue-1922",
    "issue_id": 1922,
    "reason": "multi-statement"
+  },
+  {
+   "class": "issue-1951",
+   "issue_id": 1951,
+   "reason": "multi-statement"
   }
  ],
  "contracts_needs_machine_probe": 161,
- "open_issues_without_active_contract": 95,
+ "open_issues_without_active_contract": 91,
  "residual_gap_ids": [
   1750,
   1779,
@@ -136,7 +141,6 @@
   1936,
   1937,
   1939,
-  1940,
   1941,
   1942,
   1944,
@@ -150,7 +154,6 @@
   1885,
   1889,
   1974,
-  1980,
   1760,
   1815,
   1818,
@@ -159,9 +162,11 @@
   1857,
   1861,
   1872,
-  1873
+  1873,
+  1879,
+  1881
  ],
- "head": "197b8a9fb75656809c0840f2920d7195e474920c",
+ "head": "0f88add83f7aade313890274b1346ba3d3ddc888",
  "job_status": "success",
- "ts": "2026-10-05T15:15:13Z"
+ "ts": "2026-10-05T15:56:28Z"
 }

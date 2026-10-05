@@ -1,4 +1,4 @@
-var VERSION="3.9.3-allowlist";
+var VERSION="3.9.4-hub-swr";
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -1645,6 +1645,36 @@ async function handleHub(env) {
   }
 }
 __name(handleHub, "handleHub");
+// HUB-SWR-1 (3.9.4, GATEWAY-COLD-TTFB-1 #1910): the qnfo.org home ran three D1 reads in ENAM on every request (first byte
+// 0.5-0.8 s steady, 8.5 s and 18 s right after deploys). It is now served from the colo's edge cache and rebuilt in the
+// background once older than HUB_FRESH_MS, so a visitor never waits on D1 unless the colo has no copy at all. A failed
+// rebuild (handleHub's catch returns an empty hub with max-age=60) is never cached over a good copy.
+var HUB_CACHE_KEY = "https://qnfo.org/__hub-cache-v1";
+var HUB_FRESH_MS = 5 * 60 * 1000;
+async function hubBuildAndStore(env, cache) {
+  const res = await handleHub(env);
+  if (res.status !== 200 || /max-age=60\b/.test(res.headers.get("Cache-Control") || "")) return res;
+  const html = await res.text();
+  const hd = new Headers(res.headers);
+  hd.set("X-Hub-Built", String(Date.now()));
+  hd.set("Cache-Control", "public, max-age=86400");
+  try { await cache.put(new Request(HUB_CACHE_KEY), new Response(html, { status: 200, headers: hd })); } catch (e) {}
+  return new Response(html, { status: 200, headers: res.headers });
+}
+async function handleHubCached(env, ctx) {
+  const cache = typeof caches !== "undefined" && caches.default;
+  if (!cache) return handleHub(env);
+  let hit = null;
+  try { hit = await cache.match(new Request(HUB_CACHE_KEY)); } catch (e) { hit = null; }
+  if (!hit) return hubBuildAndStore(env, cache);
+  const age = Date.now() - Number(hit.headers.get("X-Hub-Built") || 0);
+  if (age > HUB_FRESH_MS && ctx && ctx.waitUntil) ctx.waitUntil(hubBuildAndStore(env, cache).catch(function() {}));
+  const hd = new Headers(hit.headers);
+  hd.set("Cache-Control", "public, max-age=300");
+  hd.set("X-Hub-Cache", age > HUB_FRESH_MS ? "stale-revalidating" : "fresh");
+  hd.delete("X-Hub-Built");
+  return new Response(hit.body, { status: 200, headers: hd });
+}
 __name2(handleHub, "handleHub");
 __name22(handleHub, "handleHub");
 __name222(handleHub, "handleHub");
@@ -3113,15 +3143,15 @@ function reachOgImage() {
 }
 // ---- REACH-LAYER-1:END ----
 var gateway_worker_default = {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     // HEAD too: some link-preview crawlers check the image with HEAD before fetching it (REACH-LAYER-1 3.8.7).
     if ((request.method === "GET" || request.method === "HEAD") && new URL(request.url).pathname === "/og.jpg" && RL_HOSTS[new URL(request.url).hostname]) {
       var ogr = reachOgImage();
       return request.method === "HEAD" ? new Response(null, { status: 200, headers: ogr.headers }) : ogr;
     }
-    return withFleetCtl(await withReachLayer(await gateway_worker_default.serve(request, env), request));
+    return withFleetCtl(await withReachLayer(await gateway_worker_default.serve(request, env, ctx), request));
   },
-  async serve(request, env) {
+  async serve(request, env, ctx) {
     const u = new URL(request.url);
     const p = u.pathname.replace(/\/+$/, "") || "/";
     const origin = request.headers.get("Origin") || "https://qnfo.org";
@@ -3222,7 +3252,7 @@ var gateway_worker_default = {
       if (p === "/about") return handleAbout(env);
       if (p === "/work-with-me") return handleWorkWithMe();
       if (p === "/contact") return new Response(null, { status: 301, headers: { Location: "https://qnfo.org/work-with-me" } });
-      if (p === "/" || p === "") return handleHub(env);
+      if (p === "/" || p === "") return handleHubCached(env, ctx);
       return notFoundPage(request, env, host, p, null);
     }
     if (p === "/health") return health();
