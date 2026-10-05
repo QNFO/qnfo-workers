@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.8-capability-contract";
+var VERSION = "1.2.9-gw-402-unfunded"; /* 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -377,6 +377,21 @@ async function closeIssue(env, title, reason) {
   return true;
 }
 __name(closeIssue, "closeIssue");
+// GW-402-UNFUNDED-1 (1.2.9): one place decides the failure class of a gateway log bucket from its HTTP status and the
+// upstream response head. "unfunded" (402, or an insufficient-balance / payment-required body) and "rate-capacity" are
+// not evidence against the model: no [gw-fail] issue, no degraded health row, and the 24h reconcile ignores them.
+var GW_NO_DEGRADE_CLASSES = { "rate-capacity": 1, "unfunded": 1 };
+function gwErrorClass(status, rh) {
+  var s = Number(status) || 0, h = String(rh || "");
+  if (s === 402 || /insufficient[ _-]?balance|payment required|insufficient[ _-]?quota|billing (?:hard )?limit|exceeded your current quota/i.test(h)) return "unfunded";
+  if (/string' not in 'array'|oneOf|Bad input/.test(h)) return "content-shape";
+  if (/capacity temporarily|rate limit/i.test(h)) return "rate-capacity";
+  if (/image|dimensions|at least 10px/i.test(h)) return "image-input";
+  if (/arguments must be valid JSON/i.test(h)) return "tool-args-json";
+  if (/unavailable|5[0-9][0-9]|internal/i.test(h)) return "upstream";
+  return "other";
+}
+__name(gwErrorClass, "gwErrorClass");
 async function gatewayFailureSweep(env, t0) {
   var out = { ok: true, classes: 0, total: 0, summary: "" };
   try {
@@ -430,17 +445,13 @@ async function gatewayFailureSweep(env, t0) {
   var parts = [];
   for (var ci = 0; ci < cls.length; ci++) {
     var b = buckets[cls[ci]];
-    var clsLabel = "other";
+    var clsLabel = gwErrorClass(b.status, "");
     try {
       if (b.sample) {
         var d = await jfetch(env, CATALOG + "/ai-gateway/gateways/default/logs/" + encodeURIComponent(b.sample.split("@")[0]), { Authorization: "Bearer " + env.CF_API_TOKEN }, null, 2e4);
         var dres = d.data && d.data.result;
         var rh = dres && dres.response_head ? String(dres.response_head) : d.data && d.data.response_head ? String(d.data.response_head) : "";
-        if (/string' not in 'array'|oneOf|Bad input/.test(rh)) clsLabel = "content-shape";
-        else if (/capacity temporarily|rate limit/i.test(rh)) clsLabel = "rate-capacity";
-        else if (/image|dimensions|at least 10px/i.test(rh)) clsLabel = "image-input";
-        else if (/arguments must be valid JSON/i.test(rh)) clsLabel = "tool-args-json";
-        else if (/unavailable|5[0-9][0-9]|internal/i.test(rh)) clsLabel = "upstream";
+        clsLabel = gwErrorClass(b.status, rh);
         b.sample = rh.slice(0, 200) || b.sample;
       }
     } catch (e) {
@@ -455,13 +466,13 @@ async function gatewayFailureSweep(env, t0) {
       var dispo = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title LIKE ?1 AND status IN ('wontfix','closed','resolved') LIMIT 1").bind("%" + b.model + "%").first();
       var prev = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND status = ?2 AND ts < ?3 AND ts > ?4").bind(b.model, b.status, lastTs, lastTs - 45 * 60 * 1e3).first();
       var prevCount = prev ? Number(prev.c || 0) : 0;
-      if (!dispo && clsLabel !== "rate-capacity" && (b.count >= 2 || prevCount > 0)) {
+      if (!dispo && !GW_NO_DEGRADE_CLASSES[clsLabel] && (b.count >= 2 || prevCount > 0)) {
         await fileIssue(env, title, "gateway failures in sweep window: " + b.count + "x status=" + b.status + " class=" + clsLabel + " sample=" + String(b.sample || "").slice(0, 200) + ". Router-level self-heal handles content-shape/rate classes; escalate if this class persists.", "high");
       }
     } catch (e) {
     }
     try {
-      var recurring = clsLabel !== "rate-capacity" && (b.count >= 2 || prevCount > 0);
+      var recurring = !GW_NO_DEGRADE_CLASSES[clsLabel] && (b.count >= 2 || prevCount > 0);
       var targetId = internalId(b.model);
       try {
         var hrow = await env.QNFO_AUDIT.prepare("SELECT model_id FROM ai_model_health WHERE model_id = ?1").bind(targetId).first();
@@ -483,7 +494,7 @@ async function gatewayFailureSweep(env, t0) {
       var ttl = openTitles.results[oi].title;
       var modelPart = ttl.replace(/^\[gw-fail\] \d+ /, "");
       try {
-        var recent = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND error_class != 'rate-capacity' AND ts > ?2").bind(modelPart, t0 - 24 * 3600 * 1e3).first();
+        var recent = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND error_class NOT IN ('rate-capacity','unfunded') AND ts > ?2").bind(modelPart, t0 - 24 * 3600 * 1e3).first();
         if (!recent || Number(recent.c || 0) === 0) await closeIssue(env, ttl, "no non-transient failures for 24h");
       } catch (e) {
       }
@@ -500,7 +511,7 @@ async function gatewayFailureSweep(env, t0) {
     for (var di = 0; di < degList.length; di++) {
       var dmid = degList[di].model_id;
       if (Number(degList[di].consecutive_failures || 0) !== 0) continue;
-      var drec = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND error_class != 'rate-capacity' AND ts > ?2").bind(internalId(dmid), t0 - 24 * 60 * 60 * 1000).first();
+      var drec = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM ai_gateway_failures WHERE model = ?1 AND error_class NOT IN ('rate-capacity','unfunded') AND ts > ?2").bind(internalId(dmid), t0 - 24 * 60 * 60 * 1000).first();
       if (drec && Number(drec.c || 0) > 0) continue;
       await env.QNFO_AUDIT.prepare("UPDATE ai_model_health SET status = 'ok', updated_at = ?1 WHERE model_id = ?2").bind((/* @__PURE__ */ new Date()).toISOString(), dmid).run();
     }

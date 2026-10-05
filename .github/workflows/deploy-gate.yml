@@ -313,6 +313,10 @@ jobs:
         run: node qnfo-social/reach-select.test.mjs
       - name: EMAIL-TRIAGE-D1-1 and ZENODO-UA-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/email-zenodo.test.mjs
+      # GW-402-UNFUNDED-1 (qnfo-ai-calibration 1.2.9, #1992): a provider 402 (insufficient balance) is class unfunded: no
+      # [gw-fail] issue, no degraded health row, ignored by the 24h reconcile, so MODEL-DEGRADED is not refiled for it.
+      - name: GW-402-UNFUNDED-1 offline suite (qnfo-ai-calibration)
+        run: node qnfo-ai-calibration/gw-unfunded.test.mjs
       # WORKER-HEALTH-PROBE-AUTH-1 + GMAIL-TRIAGE-UNCONFIGURED-1 (qnfo-cloud-ops 1.18.2): the qnfo-ai chat probe uses the
       # props-authenticated QNFO_AI binding, a probe without its credential is skipped (never a 401 false alarm), real
       # failures still alert, one job-run row per run, and gmail-triage without GMAIL_PASS is skipped rather than an error.
