@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.6-ppubs-probe"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.7-probe-errors"; /* 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -897,13 +897,13 @@ async function ppubsProbe() {
     var s = await fetch(PPUBS_API + "users/me/session", { method: "POST", headers: hd, body: "-1" });
     var tok = s.headers.get("X-Access-Token"), sj = await s.json().catch(function() { return null; });
     o.session_status = s.status;
-    if (!tok || !sj || !sj.userCase) throw new Error("no anonymous session token");
+    if (!tok || !sj || !sj.userCase) { o.error = "no anonymous session token"; return o; }
     hd["X-Access-Token"] = tok;
     var q = { start: 0, pageCount: 1, sort: "date_publ desc", docFamilyFiltering: "familyIdFiltering", searchType: 1, familyIdEnglishOnly: true, familyIdFirstPreferred: "US-PGPUB", familyIdSecondPreferred: "USPAT", familyIdThirdPreferred: "FPRS", showDocPerFamilyPref: "showEnglish", queryId: 0, tagDocSearch: false, query: { caseId: sj.userCase.caseId, hl_snippets: "2", op: "OR", q: "11000000.pn.", queryName: "11000000.pn.", highlights: "1", qt: "brs", spellCheck: false, viewName: "tile", plurals: true, britishEquivalents: true, databaseFilters: [{ databaseName: "USPAT", countryCodes: [] }], searchType: 1, ignorePersist: false, userEnteredQuery: "11000000.pn." } };
     var r = await fetch(PPUBS_API + "searches/searchWithBeFamily", { method: "POST", headers: hd, body: JSON.stringify(q) });
     var rj = await r.json().catch(function() { return null; }), d0 = rj && rj.patents && rj.patents[0];
     o.search_status = r.status;
-    if (!d0 || !d0.guid) throw new Error("search returned no document");
+    if (!d0 || !d0.guid) { o.error = "search returned no document"; return o; }
     var t = await fetch(PPUBS_API + "patents/highlightSections/" + encodeURIComponent(d0.guid) + "?queryId=" + encodeURIComponent(d0.queryId || rj.query && rj.query.id || 1) + "&source=" + encodeURIComponent(d0.type || "USPAT"), { method: "POST", headers: hd, body: '["all"]' });
     var tj = await t.json().catch(function() { return {}; });
     var txt = function(x) { return String(x || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); };
@@ -912,7 +912,7 @@ async function ppubsProbe() {
     o.claims_chars = txt(tj.claimsHtml).length;
     o.claims_found = o.claims_chars > 200;
     o.provisional_ref_found = /Provisional Application/i.test(txt(tj.backgroundTextHtml) + " " + txt(tj.briefHtml) + " " + txt(tj.descriptionHtml));
-  } catch (e) { o.error = String(e && e.message || e).slice(0, 200); }
+  } catch (e) { console.log("PPUBS_PROBE_ERROR " + String(e && e.message || e).slice(0, 200)); o.error = "probe failed (see worker log)"; }
   return o;
 }
 async function benchSourceProbe(request, ctx) {
@@ -926,7 +926,7 @@ async function benchSourceProbe(request, ctx) {
     out.status = r.status; out.bytes = h.length;
     out.claims_found = /class="claim"|itemprop="claims"/.test(h);
     out.provisional_ref_found = /[Pp]rovisional/.test(h);
-  } catch (e) { out.error = String(e && e.message || e).slice(0, 200); }
+  } catch (e) { console.log("SOURCE_PROBE_ERROR " + String(e && e.message || e).slice(0, 200)); out.error = "fetch failed (see worker log)"; }
   out.ppubs = await ppubsProbe();
   out.keyless_text = !!((out.status === 200 && out.claims_found) || (out.ppubs.status === 200 && out.ppubs.claims_found));
   var res = new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600" } });
