@@ -163,6 +163,10 @@ jobs:
       # the log entry, one plain-binding retry on a gateway error); chat calls and caller options are unchanged.
       - name: AIG-BINDING-1 offline suite (qnfo-ai)
         run: node qnfo-ai/aig-binding.test.mjs
+      # DS-402-BREAKER-1 (qnfo-ai 5.31.2): an empty DeepSeek balance (HTTP 402) opens a 60-minute breaker instead of a
+      # failed paid round trip per request.
+      - name: DS-402-BREAKER-1 offline suite (qnfo-ai)
+        run: node --no-warnings qnfo-ai/ds-402-breaker.test.mjs
       # UTF8-DEPLOY-1: worker source fetched from GitHub reaches the upload as the same UTF-8 text (no double encoding).
       - name: UTF8-DEPLOY-1 offline suite (qnfo-ops)
         run: node qnfo-ops/utf8-deploy.test.mjs
@@ -235,6 +239,12 @@ jobs:
       # message; URL path only, emails, tokens and long numbers masked, as worker_logs is served publicly).
       - name: ERROR-DETAIL-CAPTURE-1 offline suite (qnfo-ops)
         run: node qnfo-ops/error-capture.test.mjs
+      # DS-402-BREAKER-1 (qnfo-ops 2.38.41, #1986, #1939): one paid 402 per hour at most, shared across isolates via
+      # cloud_ops_events kind ds-402-breaker; D1-CALLER-REJECT-1 (#1925): a refused model SQL is logged as rejected.
+      - name: DS-402-BREAKER-1 offline suite (qnfo-ops)
+        run: node --no-warnings qnfo-ops/ds-402-breaker.test.mjs
+      - name: D1-CALLER-REJECT-1 offline suite (qnfo-ops)
+        run: node --no-warnings qnfo-ops/d1-caller-reject.test.mjs
       # GUARD-RCS-CANCELLED-1: a concurrency-cancelled or skipped guard run is not a guard that failed closed.
       - name: GUARD-RCS-CANCELLED-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/guard-rcs.test.mjs
@@ -374,6 +384,10 @@ jobs:
       # RUN-INTERNAL-1 (#1783): research-exec's inline run and drain-v2 refuse public hostnames; service bindings still reach them.
       - name: RUN-INTERNAL-1 offline suite (qnfo-research-exec)
         run: node qnfo-research-exec/run-internal.test.mjs
+      # MATH-LATEX-2 (qnfo-research-exec 0.9.59, #1891): LaTeX rule in every paper prompt and a deterministic plain-text
+      # math check (blocking only with ops_config research_math_gate=enforce).
+      - name: MATH-LATEX-2 offline suite (qnfo-research-exec)
+        run: node --no-warnings qnfo-research-exec/math-latex.test.mjs
       # IDEA-CHAIN-SINGLE-PRODUCER-1: qnfo-signal-loop proposes at most 2 signals x 3 questions a run and never pushes the
       # idea backlog above the 30 ceiling (it wrote 55 rows in one run on 2026-10-02 and flooded triage).
       - name: IDEA-CHAIN-SINGLE-PRODUCER-1 offline suite (qnfo-signal-loop)
