@@ -1,10 +1,11 @@
-// DEEPSEEK-402-BREAKER-1 offline suite (qnfo-ops 2.38.41, agent_issues 1939).
+// DEEPSEEK-402-BREAKER-1 offline suite (qnfo-ops 2.38.41, agent_issues 1939 and 1986).
 // Loads the real worker.js (the cloudflare:workers import swapped for stubs) and drives keyed /v1/chat/completions turns
 // against in-memory SQLite D1, a scripted Workers AI binding and a fetch stub whose AI Gateway answers HTTP 402
 // "Insufficient Balance" (the DeepSeek BYOK state measured 2026-10-05). Proves: the first 402 opens the breaker, writes
 // exactly one cloud_ops_events row (kind ds-402-breaker) and is answered from the free tier; no deepseek-v4-pro retry is
 // sent after a 402 (flash and pro share the balance); while the breaker is open no paid fetch is made at all, on the
-// non-streamed and the streamed path; after the window the paid path is probed once more; a healthy gateway (200) never
+// non-streamed and the streamed path; after the 60-minute window the paid path is probed once more; a fresh isolate honours
+// another isolate's recent breaker row (shared state, about one paid 402 per hour fleet-wide); a healthy gateway (200) never
 // opens the breaker.
 // Run: node qnfo-ops/ds-402-breaker.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
@@ -114,9 +115,9 @@ const breakerRows = (t) => t.audit.prepare("SELECT kind, status, meta FROM cloud
   ok(gwCalls(t3).length === 0, "C no paid fetch on the streamed path while open, saw " + gwCalls(t3).length);
   ok(/Free-tier answer/.test(c.text) && c.text.indexOf("ops stream error") < 0, "C streamed answer from the free tier, no stream error: " + c.text.slice(0, 300));
 
-  // D. after the window the paid path is probed once more (and re-opens on another 402).
+  // D. after the 60-minute window the paid path is probed once more (and re-opens on another 402).
   const realNow = Date.now;
-  Date.now = () => realNow() + 31 * 60e3;
+  Date.now = () => realNow() + 61 * 60e3;
   try {
     const t4 = mk(402);
     const d = await call(W, t4, Q(false));
@@ -134,6 +135,23 @@ const breakerRows = (t) => t.audit.prepare("SELECT kind, status, meta FROM cloud
   ok(res.status === 200 && text.indexOf("ops stream error") < 0, "E streamed 402 answered without a stream error: " + text.slice(0, 300));
   ok(gwCalls(t).length === 1, "E exactly one paid attempt on the streamed path, saw " + gwCalls(t).length);
   ok(breakerRows(t).length === 1, "E streamed 402 opened the breaker");
+}
+
+// G. shared state (#1986): a fresh isolate whose D1 already holds a ds-402-breaker row from 10 minutes ago makes no paid
+// call; a row older than the window does not block.
+{
+  const W = await load();
+  const t = mk(402);
+  t.audit.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('evt-x', ?, 'ds-402-breaker', 'x', '{}', 'qnfo-ops', 'open')").run(new Date(Date.now() - 10 * 60e3).toISOString());
+  const { res, text } = await call(W, t, Q(false));
+  ok(res.status === 200 && /Free-tier answer/.test(text), "G answered from the free tier");
+  ok(gwCalls(t).length === 0, "G another isolate's breaker row blocks the paid path here, saw " + gwCalls(t).length);
+  ok(breakerRows(t).length === 1, "G no new breaker row");
+  const W2 = await load();
+  const t2 = mk(402);
+  t2.audit.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('evt-y', ?, 'ds-402-breaker', 'x', '{}', 'qnfo-ops', 'open')").run(new Date(Date.now() - 70 * 60e3).toISOString());
+  await call(W2, t2, Q(false));
+  ok(gwCalls(t2).length === 1, "G an expired row does not block: one paid probe, saw " + gwCalls(t2).length);
 }
 
 // F. a healthy gateway never opens the breaker and keeps the paid path.
