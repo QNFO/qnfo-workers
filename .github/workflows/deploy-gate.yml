@@ -325,6 +325,10 @@ jobs:
         run: node --no-warnings qnfo-fleet-control/land-bundle.test.mjs
       - name: REPO-LIVE-DRIFT-1 offline suite (qnfo-fleet-control)
         run: node --no-warnings qnfo-fleet-control/repo-live-drift.test.mjs
+      # ATTRIBUTION-COVERAGE-DTD-1 (qnfo-fleet-control 0.4.127, #1997): workers_ai_attribution_coverage_pct is the
+      # day-to-date ratio, not one hourly delta, and writes nothing while today's GraphQL total is under the floor.
+      - name: ATTRIBUTION-COVERAGE-DTD-1 offline suite (qnfo-fleet-control)
+        run: node --no-warnings qnfo-fleet-control/attribution-coverage.test.mjs
       - name: REMEDIATION-REOPEN-1 offline suite (qnfo-fleet-control)
         run: node --no-warnings qnfo-fleet-control/remediation-reopen.test.mjs
       - name: METRIC-FRESHNESS cadence units offline suite (qnfo-lifecycle)
