@@ -53,6 +53,21 @@ ACTIONS
                          and compared by SHA-256. Fixes pages that were imported from a supplementary chat transcript instead
                          of the deposited paper. Prints hashes and lengths, never the text.
 
+  d1-backup NAME         D1-FOLD-1 (#1822): full SQL dump (schema + every row as literals) of an allowlisted database
+                         (D1_RETIRE) into qnfo-audit.d1_fold_backups, written in pieces and verified by SHA-256 read-back,
+                         with a per-table manifest (row count + SHA-256 of the rows). Prints counts and hashes, never data.
+  unbind-d1 WORKER:BINDING
+                         D1-FOLD-1: remove one D1 binding to an allowlisted database from a live worker. The canonical deploy
+                         re-declares every live binding (qnfo-ops BINDING-PRESERVE-1) and prunes only dead SERVICE bindings, so
+                         deleting a still-bound database would fail that worker's every later deploy. Refused for a PROTECTED
+                         worker, when the worker's wrangler.toml still declares the database, or when its worker.js or a
+                         fleet_tasks definition names the binding. Holds the secret-lock lease secrets:<worker> (#1701) and
+                         patches settings with every other binding inherited from the latest version (values are never sent).
+  delete-d1 NAME         D1-FOLD-1: delete an allowlisted database. Refused unless no wrangler.toml outside a RETIRED/FOLDED
+                         directory names it, no live worker binds it, it had zero write queries in 7 days (GraphQL), and the
+                         newest d1_fold_backups row is at least 7 days old, verifies (stored SHA-256) and still matches the
+                         live per-table manifest (the owner-stated observation window).
+
 Every action prints one line `RESULT_JSON=<json>` so the job log is machine-readable.
 """
 
@@ -530,9 +545,256 @@ def paper_body_from_zenodo(acct: str, token: str, target: str) -> int:
     return 0 if (ok3 and want == got) else 1
 
 
+# D1-FOLD-1 (2026-10-05, agent_issues 1822, owner delegated the decision 2026-10-05): fleet_budget.d1_databases is 11 against
+# a cap of 10. jnl-audit is bound only by the RETIRED jnl-referee/jnl-watch (not deployed) and, unused, by fleet-exec (binding
+# JNL: no fleet_tasks definition and no worker.js line names it); 0 write queries in 7 days (read 2026-10-05). Its 8 jnl_*
+# tables collide by name with an older, different jnl_* dataset in qnfo-audit, so the backup is a verified SQL dump row, not a
+# merge. Order: d1-backup, unbind-d1 fleet-exec:JNL (after the wrangler.toml line is gone), delete-d1. Every step re-checks.
+D1_RETIRE = {"jnl-audit": "8be80cdb-979d-401f-b3ab-6a16869473ec"}
+AUDIT_DB = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
+D1_PIECE = 16000
+D1_OBSERVE_DAYS = 7
+
+
+def d1x(acct: str, token: str, db: str, sql: str, params: list | None = None) -> tuple[bool, list]:
+    st, j = call("POST", f"/accounts/{acct}/d1/database/{db}/query", token, {"sql": sql, "params": params or []}, timeout=90)
+    if st != 200 or not j.get("success"):
+        return False, [str(j.get("errors"))[:300]]
+    res = j.get("result") or [{}]
+    return True, res[0].get("results") or []
+
+
+def sql_lit(v) -> str:
+    if v is None:
+        return "NULL"
+    if isinstance(v, bool):
+        return "1" if v else "0"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        if v != v or v in (float("inf"), float("-inf")):
+            return "NULL"
+        return repr(v)
+    if isinstance(v, str):
+        return "'" + v.replace("'", "''") + "'"
+    raise ValueError("unsupported value type " + type(v).__name__)
+
+
+def rows_sha(rows: list) -> str:
+    import hashlib
+    return hashlib.sha256(json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+
+
+def d1_dump(acct: str, token: str, db: str, run=None) -> tuple[str, dict]:
+    """(sql_text, manifest). manifest = {table: {"n": rows, "sha256": sha of the rows in rowid order}}."""
+    run = run or (lambda sql: d1x(acct, token, db, sql))
+    ok, objs = run("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 ELSE 2 END, name")
+    if not ok:
+        raise RuntimeError("schema read failed: " + str(objs)[:200])
+    out, manifest = ["-- D1-FOLD-1 dump " + db + " " + time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())], {}
+    tables = [o for o in objs if o.get("type") == "table"]
+    for o in tables:
+        out.append(o["sql"].rstrip(";") + ";")
+    for o in tables:
+        t = o["name"]
+        ok, rows = run('SELECT * FROM "' + t.replace('"', '""') + '" ORDER BY rowid')
+        if not ok:
+            raise RuntimeError("read failed for " + t)
+        manifest[t] = {"n": len(rows), "sha256": rows_sha(rows)}
+        for r in rows:
+            cols = list(r.keys())
+            out.append('INSERT INTO "' + t + '" (' + ",".join('"' + c + '"' for c in cols) + ") VALUES (" + ",".join(sql_lit(r[c]) for c in cols) + ");")
+    for o in objs:
+        if o.get("type") != "table":
+            out.append(o["sql"].rstrip(";") + ";")
+    return "\n".join(out) + "\n", manifest
+
+
+def wrangler_binders(db_id: str, root: str = ".") -> list:
+    """Repo directories whose wrangler.toml names the database id, except RETIRED/FOLDED ones."""
+    hits = []
+    for d in sorted(os.listdir(root)):
+        w = os.path.join(root, d, "wrangler.toml")
+        if not os.path.isfile(w) or any(os.path.isfile(os.path.join(root, d, m)) for m in ("RETIRED", "FOLDED")):
+            continue
+        if db_id in open(w, encoding="utf-8").read():
+            hits.append(d)
+    return hits
+
+
+def worker_dir(worker: str, root: str = ".") -> str | None:
+    for d in sorted(os.listdir(root)):
+        w = os.path.join(root, d, "wrangler.toml")
+        if os.path.isfile(w) and re.search(r'^\s*name\s*=\s*"' + re.escape(worker) + '"', open(w, encoding="utf-8").read(), re.M):
+            return d
+    return None
+
+
+def live_binders(acct: str, token: str, db_id: str) -> list:
+    st, j = call("GET", f"/accounts/{acct}/workers/scripts", token)
+    if st != 200:
+        raise RuntimeError("workers list HTTP " + str(st))
+    hits = []
+    for s in j.get("result") or []:
+        name = s.get("id")
+        st2, j2 = call("GET", f"/accounts/{acct}/workers/scripts/{name}/settings", token)
+        if st2 != 200:
+            raise RuntimeError("settings HTTP " + str(st2) + " for " + str(name))
+        for b in (j2.get("result") or {}).get("bindings") or []:
+            if b.get("type") == "d1" and (b.get("id") == db_id or b.get("database_id") == db_id):
+                hits.append(name + ":" + str(b.get("name")))
+    return hits
+
+
+def d1_writes_7d(acct: str, token: str, db_id: str) -> int | None:
+    since = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 7 * 86400))
+    until = time.strftime("%Y-%m-%d", time.gmtime())
+    q = ('query { viewer { accounts(filter: { accountTag: "%s" }) { d1AnalyticsAdaptiveGroups(limit: 100, filter: { date_geq: "%s", '
+         'date_leq: "%s", databaseId: "%s" }) { sum { writeQueries } } } } }') % (acct, since, until, db_id)
+    d = graphql(q, token)
+    if "_error" in d:
+        return None
+    rows = (((d.get("viewer") or {}).get("accounts") or [{}])[0] or {}).get("d1AnalyticsAdaptiveGroups") or []
+    return sum(int((r.get("sum") or {}).get("writeQueries") or 0) for r in rows)
+
+
+def d1_backup(name: str, acct: str, token: str) -> int:
+    import hashlib
+    if name not in D1_RETIRE:
+        emit({"action": "d1-backup", "db": name, "ok": False, "refused": "not in D1_RETIRE"})
+        return 3
+    db_id = D1_RETIRE[name]
+    sql, manifest = d1_dump(acct, token, db_id)
+    want = hashlib.sha256(sql.encode()).hexdigest()
+    ok, r = d1x(acct, token, AUDIT_DB, "CREATE TABLE IF NOT EXISTS d1_fold_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, db_name TEXT NOT NULL, db_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), bytes INTEGER NOT NULL, sql_sha256 TEXT NOT NULL, manifest_json TEXT NOT NULL, sql_text TEXT NOT NULL)")
+    pieces = [sql[i:i + D1_PIECE] for i in range(0, len(sql), D1_PIECE)]
+    ok2, ins = d1x(acct, token, AUDIT_DB, "INSERT INTO d1_fold_backups (db_name, db_id, bytes, sql_sha256, manifest_json, sql_text) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id", [name, db_id, len(sql.encode()), want, json.dumps(manifest, sort_keys=True), pieces[0]])
+    if not (ok and ok2 and ins and ins[0].get("id")):
+        emit({"action": "d1-backup", "db": name, "ok": False, "error": "backup row not written", "detail": str([r, ins])[:300]})
+        return 1
+    bid = ins[0]["id"]
+    for p in pieces[1:]:
+        okp, rp = d1x(acct, token, AUDIT_DB, "UPDATE d1_fold_backups SET sql_text = sql_text || ?1 WHERE id = ?2", [p, bid])
+        if not okp:
+            emit({"action": "d1-backup", "db": name, "ok": False, "backup_id": bid, "error": "append failed", "detail": str(rp)[:300]})
+            return 1
+    okb, back = d1x(acct, token, AUDIT_DB, "SELECT sql_text FROM d1_fold_backups WHERE id = ?1", [bid])
+    got = hashlib.sha256((back[0].get("sql_text") or "").encode()).hexdigest() if okb and back else ""
+    emit({"action": "d1-backup", "db": name, "db_id": db_id, "ok": got == want, "backup_id": bid, "bytes": len(sql.encode()), "sql_sha256": want, "read_back_match": got == want, "manifest": manifest})
+    return 0 if got == want else 1
+
+
+def multipart(fields: dict) -> tuple[bytes, str]:
+    b = "----d1fold" + str(int(time.time() * 1000))
+    parts = []
+    for k, v in fields.items():
+        parts.append("--" + b + '\r\nContent-Disposition: form-data; name="' + k + '"\r\nContent-Type: application/json\r\n\r\n' + json.dumps(v) + "\r\n")
+    return ("".join(parts) + "--" + b + "--\r\n").encode(), "multipart/form-data; boundary=" + b
+
+
+def unbind_d1(target: str, acct: str, token: str) -> int:
+    from secret_lock import secret_lock
+    worker, _, binding = target.partition(":")
+    if not worker or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", binding or ""):
+        emit({"action": "unbind-d1", "ok": False, "error": "target must be WORKER:BINDING"})
+        return 2
+    if worker in PROTECTED:
+        emit({"action": "unbind-d1", "worker": worker, "ok": False, "refused": "protected"})
+        return 3
+    st, j = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
+    bindings = (j.get("result") or {}).get("bindings") or [] if st == 200 else None
+    if bindings is None:
+        emit({"action": "unbind-d1", "worker": worker, "ok": False, "error": "settings HTTP " + str(st)})
+        return 1
+    hit = next((b for b in bindings if b.get("name") == binding), None)
+    if not hit:
+        emit({"action": "unbind-d1", "worker": worker, "binding": binding, "ok": True, "already_absent": True})
+        return 0
+    db_id = hit.get("id") or hit.get("database_id")
+    if hit.get("type") != "d1" or db_id not in D1_RETIRE.values():
+        emit({"action": "unbind-d1", "worker": worker, "binding": binding, "ok": False, "refused": "not a D1 binding to a D1_RETIRE database"})
+        return 3
+    d = worker_dir(worker)
+    src = open(os.path.join(d, "worker.js"), encoding="utf-8").read() if d and os.path.isfile(os.path.join(d, "worker.js")) else None
+    wt = open(os.path.join(d, "wrangler.toml"), encoding="utf-8").read() if d else ""
+    if d is None or src is None:
+        emit({"action": "unbind-d1", "worker": worker, "ok": False, "refused": "no repo directory/worker.js for the worker"})
+        return 3
+    if db_id in wt:
+        emit({"action": "unbind-d1", "worker": worker, "ok": False, "refused": d + "/wrangler.toml still declares the database"})
+        return 3
+    if re.search(r"\b" + re.escape(binding) + r"\b", src):
+        emit({"action": "unbind-d1", "worker": worker, "ok": False, "refused": d + "/worker.js names the binding"})
+        return 3
+    okt, tasks = d1x(acct, token, AUDIT_DB, "SELECT COUNT(*) AS n FROM fleet_tasks WHERE definition LIKE ?1", ['%"' + binding + '"%'])
+    if not okt or int((tasks[0] or {}).get("n") or 0) > 0:
+        emit({"action": "unbind-d1", "worker": worker, "ok": False, "refused": "a fleet_tasks definition names the binding (or the check failed)"})
+        return 3
+    keep = [{"type": "inherit", "name": b.get("name")} for b in bindings if b.get("name") != binding]
+    body, ctype = multipart({"settings": {"bindings": keep}})
+    with secret_lock(worker, ttl_sec=600, owner="ci/cf-ops-actions/unbind-d1"):
+        req = urllib.request.Request(API + f"/accounts/{acct}/workers/scripts/{worker}/settings", data=body, method="PATCH",
+                                     headers={"Authorization": "Bearer " + token, "Content-Type": ctype})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                pst, pj = r.status, json.loads(r.read().decode() or "{}")
+        except urllib.error.HTTPError as e:
+            pst, pj = e.code, json.loads(e.read().decode() or "{}")
+    st2, j2 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
+    after = (j2.get("result") or {}).get("bindings") or []
+    ok = bool(pj.get("success")) and not any(b.get("name") == binding for b in after) and len(after) == len(bindings) - 1
+    emit({"action": "unbind-d1", "worker": worker, "binding": binding, "db_id": db_id, "ok": ok, "http": pst, "bindings_before": len(bindings), "bindings_after": len(after), "errors": pj.get("errors")})
+    return 0 if ok else 1
+
+
+def delete_d1(name: str, acct: str, token: str) -> int:
+    import hashlib
+    if name not in D1_RETIRE:
+        emit({"action": "delete-d1", "db": name, "ok": False, "refused": "not in D1_RETIRE"})
+        return 3
+    db_id = D1_RETIRE[name]
+    st0, _ = call("GET", f"/accounts/{acct}/d1/database/{db_id}", token)
+    if st0 == 404:
+        emit({"action": "delete-d1", "db": name, "ok": True, "already_absent": True})
+        return 0
+    refusals = []
+    wb = wrangler_binders(db_id)
+    if wb:
+        refusals.append("wrangler.toml still names it: " + ",".join(wb))
+    lb = live_binders(acct, token, db_id)
+    if lb:
+        refusals.append("live bindings: " + ",".join(lb))
+    w7 = d1_writes_7d(acct, token, db_id)
+    if w7 is None or w7 > 0:
+        refusals.append("write queries in 7 days: " + str(w7))
+    okb, back = d1x(acct, token, AUDIT_DB, "SELECT id, sql_sha256, manifest_json, sql_text, CAST((julianday('now') - julianday(created_at)) AS REAL) AS age_days FROM d1_fold_backups WHERE db_id = ?1 ORDER BY id DESC LIMIT 1", [db_id])
+    bid = None
+    if not okb or not back:
+        refusals.append("no d1_fold_backups row")
+    else:
+        bid = back[0]["id"]
+        if hashlib.sha256((back[0].get("sql_text") or "").encode()).hexdigest() != back[0].get("sql_sha256"):
+            refusals.append("backup hash does not verify")
+        _, live_manifest = d1_dump(acct, token, db_id)
+        if json.loads(back[0].get("manifest_json") or "{}") != live_manifest:
+            refusals.append("database changed since the backup")
+        # The owner was told the delete waits for 7 clean days after the backup and unbind (2026-10-05): a backup at least
+        # D1_OBSERVE_DAYS old that still matches the live manifest proves nothing wrote to the database in that window.
+        if float(back[0].get("age_days") or 0) < D1_OBSERVE_DAYS:
+            refusals.append("backup is younger than %d days (observation window)" % D1_OBSERVE_DAYS)
+    if refusals:
+        emit({"action": "delete-d1", "db": name, "ok": False, "refused": refusals, "backup_id": bid})
+        return 3
+    st, j = call("DELETE", f"/accounts/{acct}/d1/database/{db_id}", token)
+    st2, _ = call("GET", f"/accounts/{acct}/d1/database/{db_id}", token)
+    ok = bool(j.get("success")) and st2 == 404
+    emit({"action": "delete-d1", "db": name, "db_id": db_id, "ok": ok, "http": st, "verify_http": st2, "backup_id": bid, "writes_7d": w7, "errors": j.get("errors")})
+    return 0 if ok else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["paper-body-from-zenodo", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "paper-body-from-zenodo", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -541,6 +803,12 @@ def main() -> int:
     if a.action == "ops-intake-probe":
         return ops_intake_probe()
     token, acct = env("CLOUDFLARE_API_TOKEN"), env("CLOUDFLARE_ACCOUNT_ID")
+    if a.action in ("d1-backup", "unbind-d1", "delete-d1"):
+        if not a.target:
+            print("::error::" + a.action + " needs --target")
+            return 2
+        fn = {"d1-backup": d1_backup, "unbind-d1": unbind_d1, "delete-d1": delete_d1}[a.action]
+        return fn(a.target, acct, token)
     if a.action == "delete-worker":
         if not a.target:
             print("::error::delete-worker needs --target")

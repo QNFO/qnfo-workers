@@ -32,10 +32,8 @@ binding = "IPATENT"
 database_name = "ipatent-db"
 database_id = "19cc87d6-4207-477c-bf8c-94fb231b8965"
 
-[[d1_databases]]
-binding = "JNL"
-database_name = "jnl-db"
-database_id = "8be80cdb-979d-401f-b3ab-6a16869473ec"
+# D1-FOLD-1 (2026-10-05, #1822): binding JNL to jnl-audit removed. No worker.js line and no fleet_tasks definition used it;
+# the database is backed up into qnfo-audit.d1_fold_backups and retired (cf-ops-actions d1-backup / unbind-d1 / delete-d1).
 
 [[d1_databases]]
 binding = "LIVING"

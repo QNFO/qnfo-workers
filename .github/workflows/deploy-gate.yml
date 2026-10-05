@@ -431,6 +431,9 @@ jobs:
       # AI-STAGE-ATTRIBUTION-1: research-exec Workers AI counters carry the pipeline stage; the AI call itself is unchanged.
       - name: AI-STAGE-ATTRIBUTION-1 offline suite (qnfo-research-exec)
         run: node --no-warnings qnfo-research-exec/stage-attr.test.mjs
+      # D1-FOLD-1 (#1822): cf-ops-actions d1-backup / unbind-d1 / delete-d1 - dump round-trip, every refusal, inherit-only PATCH.
+      - name: D1-FOLD-1 offline suite (scripts/cf_ops_actions.py)
+        run: python3 scripts/cf_ops_d1_fold_test.py
       # 2026-10-05 remediation (session bold-thompson): suites added by clusters C2, D and E.
       - name: CALLER-PROPS-1 offline suite (calendar-api 0.7.1, #1987)
         run: node --no-warnings calendar-api/caller-props.test.mjs
