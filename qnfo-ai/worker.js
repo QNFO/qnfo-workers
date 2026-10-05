@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.31.3-ensemble-run-log"; // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.31.4-ensemble-family-disjoint"; // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -862,6 +862,9 @@ var ENSEMBLE = {
   // frontier coder (262k ctx, reasoning + vision, $0.95/M)
   validator: { wa: "@cf/deepseek-ai/deepseek-v4-flash-0731", ctx: 65536 },
   // fast flash judgment (~0.3s small-prompt; proven fallback model)
+  // ENSEMBLE-FAMILY-DISJOINT-1: used instead of validator when the primary is a deepseek model (a judge from the writer's
+  // family is not an independent layer, docs/ENSEMBLE-POLICY.md); small, cheap, already a pool member.
+  validator_alt: { wa: "@cf/zai-org/glm-5.3-flash", ctx: 65536 },
   reviewer: { wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", ctx: 1048576 }
   // 1M-ctx reasoning refinement ($1.32/M) Ã¢ÂÂ LAZY: runs only on validator FAIL
 };
@@ -914,10 +917,32 @@ function ensembleRunMeta(ens, domain, text) {
     reviewer_ran: !!e.reviewer_ran,
     result: e.verification_result || "",
     latency_ms: Number(e.latency_ms) || 0,
+    validator_switched: !!e.validator_switched,
     text_hash: textHash32(text),
     text_len: String(text || "").length,
     v: VERSION
   };
+}
+// ENSEMBLE-FAMILY-DISJOINT-1: the validator spec for a given primary. The default validator is used unless it shares the
+// primary's family, then validator_alt (another family) judges. Never the same family, never an extra call.
+function ensembleValidatorFor(ens, primaryModel) {
+  var e = ens || {};
+  var def = e.validator || { wa: "", ctx: 65536 };
+  var alt = e.validator_alt;
+  if (alt && alt.wa && primaryModel && modelFamily(primaryModel) === modelFamily(def.wa) && modelFamily(alt.wa) !== modelFamily(primaryModel)) {
+    return { wa: alt.wa, ctx: alt.ctx || 65536, switched: true };
+  }
+  return { wa: def.wa, ctx: def.ctx || 65536, switched: false };
+}
+// ENSEMBLE-FAMILY-DISJOINT-1: true when no two entries of a pool share a family (the invariant the suite checks).
+function poolFamiliesDistinct(pool) {
+  var seen = {};
+  for (var i = 0; i < (pool || []).length; i++) {
+    var f = modelFamily(pool[i]);
+    if (seen[f]) return false;
+    seen[f] = 1;
+  }
+  return true;
 }
 async function logEnsembleRun(env, ens, domain, text) {
   try {
@@ -937,8 +962,11 @@ async function logEnsembleRun(env, ens, domain, text) {
 // end ensemble-run-log
 var ENSEMBLE_POOL = {
   code: ["@cf/moonshotai/kimi-k2.7-code"],
-  science: ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-pro-0813"],
-  general: ["@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3-flash"]
+  // ENSEMBLE-FAMILY-DISJOINT-1: one model per family per pool (deepseek, moonshot, zai, openai). deepseek-v4-pro
+  // (science) and glm-5.3 (general) were the second member of their family and are dropped; glm-5.3-flash is kept in
+  // general because the policy prefers the smaller model. The order is unchanged otherwise (seededPick is positional).
+  science: ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b"],
+  general: ["@cf/zai-org/glm-5.3-flash", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6"]
 };
 var json = /* @__PURE__ */ __name22((obj, status = 200) => new Response(JSON.stringify(obj), {
   status,
@@ -1686,7 +1714,8 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   let verificationResult = primaryModel === intendedPrimary ? "passed" : "degraded";
   let agreementRate = 0;
   let validatorVerdict = "skipped";
-  let verifiedBy = ENSEMBLE.validator.wa;
+  const validatorSpec = ensembleValidatorFor(ENSEMBLE, primaryModel);
+  let verifiedBy = validatorSpec.wa;
   let finalText = primaryText;
   let membersRun = ["primary", "validator"];
   if (primaryModel !== ENSEMBLE.primary.wa) {
@@ -1704,7 +1733,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
         ...messages,
         { role: "assistant", content: primaryText }
       ];
-      const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), Math.min(15e3, _remaining()), "ensemble-validator");
+      const vOut = await withTimeout(runWorkersAI(env, validatorSpec.wa, truncateMessagesToFit(vMsg, validatorSpec.ctx), 1024, false), Math.min(15e3, _remaining()), "ensemble-validator");
       const vText = (vOut ? extractWAContent(vOut) : "").trim();
       const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
       validatorVerdict = pass ? "pass" : "fail";
@@ -1741,7 +1770,8 @@ async function runEnsemble(env, messages, maxTokens, domain) {
     agreement_rate: agreementRate,
     primary_model: primaryModel,
     intended_primary: intendedPrimary,
-    validator_model: ENSEMBLE.validator.wa,
+    validator_model: validatorSpec.wa,
+    validator_switched: validatorSpec.switched,
     validator_verdict: validatorVerdict,
     reviewer_ran: membersRun.indexOf("reviewer") >= 0,
     latency_ms: Date.now() - t0,
