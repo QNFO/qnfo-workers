@@ -316,6 +316,8 @@ jobs:
         run: node --no-warnings qnfo-fleet-control/land-bundle.test.mjs
       - name: REPO-LIVE-DRIFT-1 offline suite (qnfo-fleet-control)
         run: node --no-warnings qnfo-fleet-control/repo-live-drift.test.mjs
+      - name: REMEDIATION-REOPEN-1 offline suite (qnfo-fleet-control)
+        run: node --no-warnings qnfo-fleet-control/remediation-reopen.test.mjs
       - name: METRIC-FRESHNESS cadence units offline suite (qnfo-lifecycle)
         run: node --no-warnings qnfo-lifecycle/metric-freshness.test.mjs
       - name: SECRET-ONLY-LEDGER-1 offline suite (qnfo-deploy-guard)

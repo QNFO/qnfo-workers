@@ -1,0 +1,67 @@
+// REMEDIATION-REOPEN-1 offline suite (qnfo-fleet-control 0.4.119, agent_issues 1297): remediationContractsTick against
+// node:sqlite with the live tables and the live auto-close trigger. Proves: a contract on a wontfix issue is marked
+// superseded without a probe run; a probe that fails max_attempts times after its issue was closed reopens the issue once
+// (description note with the prior close_evidence, reopened_count + 1, close_evidence cleared) and fewer failures do not;
+// a pass on an open issue closes it (trigger) and closes the contract; verification rows are only ever added.
+// Run: node --no-warnings qnfo-fleet-control/remediation-reopen.test.mjs   -> prints "N failure(s)"
+import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+import vm from "node:vm";
+
+const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
+const a = src.indexOf("var __RT_WRITE_KW"), b = src.indexOf('__name(rtReopenOnRelapse, "rtReopenOnRelapse");');
+if (a < 0 || b < a) throw new Error("REMEDIATION-REOPEN-1 block not found in worker.js");
+let fails = 0;
+const check = (c, m) => { if (!c) { fails++; console.log("FAIL " + m); } };
+
+function makeDb() {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT, action TEXT, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER DEFAULT 3, escalate_to TEXT, expected_cadence_h INTEGER, status TEXT DEFAULT 'active', ts TEXT DEFAULT (datetime('now')), last_attempt_at TEXT, last_verdict TEXT, next_due_at TEXT, attempts INTEGER DEFAULT 0);
+    CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, issue_id INTEGER, class TEXT, probe_url TEXT, transport TEXT NOT NULL, expected TEXT, observed TEXT, pass INTEGER NOT NULL, verified_at TEXT DEFAULT (datetime('now')), verifier TEXT);
+    CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, close_channel TEXT, updated_at INTEGER);
+    CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT, triage_state TEXT, owner TEXT, sla_due_at TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE probe_src (k TEXT PRIMARY KEY, v TEXT);
+    CREATE TRIGGER remediation_verification_autoclose_ins AFTER INSERT ON remediation_verifications WHEN NEW.pass = 1 BEGIN INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) SELECT NEW.issue_id, 'verified-remediation', 'closed', 'fleet-autoremediation', datetime('now','+7 days'), 'remediation_verifications#' || NEW.id || ' pass=1 class=' || COALESCE(NEW.class,'') WHERE EXISTS (SELECT 1 FROM agent_issues WHERE id = NEW.issue_id AND status = 'open') ON CONFLICT(issue_id) DO UPDATE SET close_evidence = excluded.close_evidence WHERE COALESCE(issue_triage.close_evidence,'') = ''; UPDATE agent_issues SET status='closed', close_channel='auto:verified-remediation-trigger', updated_at = CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id = NEW.issue_id AND status = 'open'; END;`);
+  const stmt = (sql, args) => ({
+    bind: (...x) => stmt(sql, x),
+    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: r.changes } }; },
+    first: async () => db.prepare(sql).get(...args) || null,
+    all: async () => ({ results: db.prepare(sql).all(...args) })
+  });
+  return { db, env: { AUDIT: { prepare: (sql) => stmt(sql, []) } } };
+}
+const ctx = vm.createContext({ VERSION: "test", __name: (f) => f, Date, Math, Number, String, JSON, Object, console });
+const W = vm.runInContext(src.slice(a, b) + "\n;({ remediationContractsTick });", ctx, { filename: "fleet-control#REMEDIATION-REOPEN-1" });
+
+const probe = (k) => "SELECT 'ok' AS expected, (SELECT v FROM probe_src WHERE k = '" + k + "') AS observed";
+const closedLongAgo = Date.now() - 3 * 86400e3;
+const { db, env } = makeDb();
+db.exec(`INSERT INTO agent_issues VALUES (1, 'closed, relapses', 'desc1', 'closed', NULL, ${closedLongAgo}), (2, 'closed, fails twice', 'desc2', 'closed', NULL, ${closedLongAgo}), (3, 'wontfix', 'desc3', 'wontfix', NULL, ${closedLongAgo}), (4, 'open, fixed', 'desc4', 'open', NULL, ${closedLongAgo});
+  INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (1, 'x', 'closed', 'o', 'n', 'deployed, looks fine'), (2, 'x', 'closed', 'o', 'n', 'ev2'), (4, 'x', 'triaged', 'o', 'n', NULL);
+  INSERT INTO probe_src VALUES ('p1', 'pending'), ('p2', 'pending'), ('p3', 'pending'), ('p4', 'ok');`);
+const add = (cls, issue, k, max) => db.prepare("INSERT INTO remediation_contracts (class, issue_id, verify_probe, verify_transport, max_attempts, expected_cadence_h) VALUES (?, ?, ?, 'd1-query', ?, 1)").run(cls, issue, probe(k), max);
+add("c1", 1, "p1", 3); add("c2", 2, "p2", 5); add("c3", 3, "p3", 3); add("c4", 4, "p4", 3);
+const tick = async () => { db.exec("UPDATE remediation_contracts SET next_due_at = NULL"); return W.remediationContractsTick(env); };
+
+let out = await tick();
+check(out.superseded === 1 && db.prepare("SELECT status, last_verdict FROM remediation_contracts WHERE class='c3'").get().status === "superseded", "a contract on a wontfix issue is superseded");
+check(db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class='c3'").get().n === 0, "the wontfix contract's probe is not run");
+check(db.prepare("SELECT status FROM agent_issues WHERE id=4").get().status === "closed" && db.prepare("SELECT status FROM remediation_contracts WHERE class='c4'").get().status === "closed", "a pass on an open issue closes the issue (trigger) and the contract");
+check(out.reopened.length === 0 && db.prepare("SELECT status FROM agent_issues WHERE id=1").get().status === "closed", "one failure after closure does not reopen");
+await tick();
+out = await tick();
+check(out.reopened.length === 1 && out.reopened[0] === 1, "the third failure after closure reopens issue 1 (max_attempts 3)");
+const i1 = db.prepare("SELECT status, description FROM agent_issues WHERE id=1").get();
+const t1 = db.prepare("SELECT reopened_count, triage_state, close_evidence FROM issue_triage WHERE issue_id=1").get();
+check(i1.status === "open" && /REOPENED .*REMEDIATION-REOPEN-1.*contract c1 failed 3x.*expected ok, observed pending.*Prior close_evidence: deployed, looks fine/.test(i1.description), "the reopened issue says why and keeps the old evidence");
+check(t1.reopened_count === 1 && t1.triage_state === "triaged" && t1.close_evidence === null, "triage: reopened_count + 1, triaged, close_evidence cleared");
+check(db.prepare("SELECT status FROM agent_issues WHERE id=2").get().status === "closed", "max_attempts 5: three failures do not reopen issue 2");
+out = await tick();
+check(out.reopened.length === 0 && db.prepare("SELECT reopened_count FROM issue_triage WHERE issue_id=1").get().reopened_count === 1, "an open issue is not reopened again");
+db.exec("UPDATE probe_src SET v = 'ok' WHERE k = 'p1'");
+await tick();
+check(db.prepare("SELECT status FROM agent_issues WHERE id=1").get().status === "closed" && /^remediation_verifications#/.test(db.prepare("SELECT close_evidence FROM issue_triage WHERE issue_id=1").get().close_evidence), "the next pass closes the reopened issue with probe evidence");
+const rows = db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class IN ('c1','c2')").get().n;
+check(rows === 10, "every tick wrote one verification row per due c1/c2 contract (got " + rows + ")");
+console.log(fails + " failure(s)");
+process.exit(fails ? 1 : 0);

@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.118-metric-truth"; /* 0.4.118 (2026-10-05, remediation B2): LAND-BUNDLE-GUARD-1 (issues 1976, 1979): landFix refuses to commit a deployed script that adds esbuild __name helper layers or keeps under half of main's comment lines (the 2026-10-04 qnfo-fleet-dashboard 1.21.4 landing replaced the hand-written source with a wrangler bundle) and files one LAND-BUNDLE-REFUSED-1 issue instead; REPO-LIVE-DRIFT-1 (issue 1879): drift_total adds the fleet self-audit's DRIFT and CONTENT_DRIFT rows (live version or script sha256 differs from main) and counts a missing or 26h-old audit as 1; CF-CHANGELOG-LEADS-1 (issue 1959): a launch of a proposed or not_considered catalog row writes a dated when_to_choose line (max 5 a day) and GET /cf-changelog lists cost, speed and consolidation leads; CLEF-CANDIDATE-1 re-landed (PR 586 closed unmerged): clef_candidate_calls_7d is written hourly; IMPROVEMENT-UNMEASURED-STAMP-1 (issue 1865): the improvement loop stamps last_refreshed with state UNMEASURED while its trend metrics have too little history. 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.119-reopen-on-relapse"; /* 0.4.119 REMEDIATION-REOPEN-1 (agent_issues 1297, pillar autonomy): remediationContractsTick reads the issue status; a contract on a wontfix issue is marked superseded, and a contract whose probe fails max_attempts times after its issue was closed (or since its last pass) reopens that issue once, with the failure and the prior close_evidence in its description (59 contracts had failed hourly on closed issues with nothing acting on it; INTEGRITY-GUARDS-1: a failing probe on a closed issue is a closure that did not hold); verification rows are never deleted. 0.4.118 (2026-10-05, remediation B2): LAND-BUNDLE-GUARD-1 (issues 1976, 1979): landFix refuses to commit a deployed script that adds esbuild __name helper layers or keeps under half of main's comment lines (the 2026-10-04 qnfo-fleet-dashboard 1.21.4 landing replaced the hand-written source with a wrangler bundle) and files one LAND-BUNDLE-REFUSED-1 issue instead; REPO-LIVE-DRIFT-1 (issue 1879): drift_total adds the fleet self-audit's DRIFT and CONTENT_DRIFT rows (live version or script sha256 differs from main) and counts a missing or 26h-old audit as 1; CF-CHANGELOG-LEADS-1 (issue 1959): a launch of a proposed or not_considered catalog row writes a dated when_to_choose line (max 5 a day) and GET /cf-changelog lists cost, speed and consolidation leads; CLEF-CANDIDATE-1 re-landed (PR 586 closed unmerged): clef_candidate_calls_7d is written hourly; IMPROVEMENT-UNMEASURED-STAMP-1 (issue 1865): the improvement loop stamps last_refreshed with state UNMEASURED while its trend metrics have too little history. 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -7315,12 +7315,18 @@ var __RT_WRITE_KW = ["insert ", "update ", "delete ", "drop ", "alter ", "create
 async function remediationContractsTick(env) {
   var db = env.AUDIT_DB || env.AUDIT || env.DB_AUDIT;
   if (!db) return { ok: false };
-  var out = { ok: true, due: 0, pass: 0, fail: 0, skipped: 0 };
-  var rs = await db.prepare("SELECT class, issue_id, verify_probe, verify_transport, expected_cadence_h FROM remediation_contracts WHERE status = 'active' AND verify_transport = 'd1-query' AND (next_due_at IS NULL OR datetime(next_due_at) <= datetime('now')) ORDER BY COALESCE(next_due_at, ts) LIMIT 15").all().catch(function () { return { results: [] }; });
+  var out = { ok: true, due: 0, pass: 0, fail: 0, skipped: 0, superseded: 0, reopened: [] };
+  var rs = await db.prepare("SELECT c.class, c.issue_id, c.verify_probe, c.verify_transport, c.expected_cadence_h, c.max_attempts, a.status AS issue_status, a.updated_at AS issue_updated_at FROM remediation_contracts c LEFT JOIN agent_issues a ON a.id = c.issue_id WHERE c.status = 'active' AND c.verify_transport = 'd1-query' AND (c.next_due_at IS NULL OR datetime(c.next_due_at) <= datetime('now')) ORDER BY COALESCE(c.next_due_at, c.ts) LIMIT 15").all().catch(function () { return { results: [] }; });
   var rows = rs.results || [];
   out.due = rows.length;
   for (var i = 0; i < rows.length; i++) {
-    var c = rows[i], verdict = null;
+    var c = rows[i], verdict = null, es = "", os = "";
+    // REMEDIATION-REOPEN-1 (0.4.119, agent_issues 1297): a contract on a wontfix issue measures nothing anyone will act
+    // on, so it is marked superseded (its verification rows stay).
+    if (c.issue_status === "wontfix") {
+      try { await db.prepare("UPDATE remediation_contracts SET status = 'superseded', last_verdict = 'superseded:issue-wontfix', last_attempt_at = datetime('now') WHERE class = ?1").bind(c.class).run(); out.superseded++; } catch (e0) {}
+      continue;
+    }
     try {
       var q = String(c.verify_probe || "").trim();
       var ql = " " + q.toLowerCase().replace(/\s+/g, " ") + " ";
@@ -7331,7 +7337,7 @@ async function remediationContractsTick(env) {
         var keys = r ? Object.keys(r) : [];
         var exp = r ? (r.expected !== undefined ? r.expected : r[keys[0]]) : null;
         var obs = r ? (r.observed !== undefined ? r.observed : r[keys[1]]) : null;
-        var es = exp == null ? "" : String(exp).trim(), os = obs == null ? "" : String(obs).trim();
+        es = exp == null ? "" : String(exp).trim(); os = obs == null ? "" : String(obs).trim();
         if (!es || !os) { verdict = "vacuous-probe-result"; out.skipped++; }
         else {
           var passed = es === os ? 1 : 0;
@@ -7346,9 +7352,32 @@ async function remediationContractsTick(env) {
     try {
       await db.prepare("UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, last_attempt_at = datetime('now'), last_verdict = ?1, next_due_at = datetime('now', ?2), status = CASE WHEN ?1 = 'pass' THEN 'closed' ELSE status END WHERE class = ?3").bind(verdict, "+" + Math.max(1, Number(c.expected_cadence_h) || 1) + " hours", c.class).run();
     } catch (e2) {}
+    // REMEDIATION-REOPEN-1: a failing probe on a closed or resolved issue is a closure that did not hold (the
+    // INTEGRITY-GUARDS-1 reading). After max_attempts failures since the closure (or since its last pass), the issue is
+    // reopened once, with the failure and the old close_evidence in its description; the contract keeps running and
+    // closes it again on a pass. Nothing is deleted; 59 contracts failed hourly on closed issues before this.
+    if (verdict === "fail" && (c.issue_status === "closed" || c.issue_status === "resolved")) {
+      try { if (await rtReopenOnRelapse(db, c, es, os)) out.reopened.push(c.issue_id); } catch (e3) {}
+    }
   }
   return out;
 }
+async function rtReopenOnRelapse(db, c, es, os) {
+  var closedMs = Number(c.issue_updated_at) || 0;
+  var since = closedMs > 0 ? new Date(closedMs).toISOString().replace("T", " ").slice(0, 19) : "1970-01-01 00:00:00";
+  var lastPass = await db.prepare("SELECT MAX(verified_at) AS t FROM remediation_verifications WHERE class = ?1 AND pass = 1").bind(c.class).first();
+  if (lastPass && lastPass.t && String(lastPass.t) > since) since = String(lastPass.t);
+  var n = await db.prepare("SELECT COUNT(*) AS n FROM remediation_verifications WHERE class = ?1 AND pass = 0 AND verified_at > ?2").bind(c.class, since).first();
+  var fails = n ? Number(n.n) || 0 : 0;
+  if (fails < Math.max(1, Number(c.max_attempts) || 3)) return false;
+  var tri = await db.prepare("SELECT close_evidence FROM issue_triage WHERE issue_id = ?1").bind(c.issue_id).first();
+  var note = "\nREOPENED " + new Date().toISOString() + " (REMEDIATION-REOPEN-1, qnfo-fleet-control " + VERSION + "): contract " + c.class + " failed " + fails + "x after the closure (expected " + es.slice(0, 60) + ", observed " + os.slice(0, 60) + "). Prior close_evidence: " + String(tri && tri.close_evidence || "(none)").slice(0, 300);
+  var u = await db.prepare("UPDATE agent_issues SET status = 'open', description = COALESCE(description, '') || ?2, updated_at = ?3 WHERE id = ?1 AND status IN ('closed', 'resolved')").bind(c.issue_id, note, Date.now()).run();
+  if (u && u.meta && u.meta.changes === 0) return false;
+  await db.prepare("UPDATE issue_triage SET reopened_count = COALESCE(reopened_count, 0) + 1, triage_state = 'triaged', close_evidence = NULL WHERE issue_id = ?1").bind(c.issue_id).run();
+  return true;
+}
+__name(rtReopenOnRelapse, "rtReopenOnRelapse");
 __name(remediationContractsTick, "remediationContractsTick");
 async function scriptUsage7d(env, name) {
   var db = env.AUDIT_DB || env.AUDIT;
