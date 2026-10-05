@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.15-priority-queue"; // 0.3.15 PRIORITY-QUEUE-1: code-task intake takes issues in master-queue order (critical, high, medium, low, then oldest), not creation order (owner directive 2026-10-03; v_issue_queue); 0.3.14 PLAN-DENY-NEGATION-1: the issue planner refuses an issue that asks to raise a cap, rotate a secret or delete, not one whose advice forbids it ("never raise a cap"; agent_issues 1807; 0.3.13 was the rejected code task ct_fd830vzqefw1ti); 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.16-dispatch-dedupe"; // 0.3.16 CODE-DISPATCH-DEDUPE-1 (agent_issues 1876, 1834): a new code task is refused while the same repo file (or its deployed-current mirror) has an unfinished code task or a live session work claim (qnfo-audit.work_claims, the ledger GET /work-locks reads), and the planner skips such an issue before its model call; RETIRED-TARGET-1: a <dir>/worker.js that is not a live worker in service_registry (RETIRED or FOLDED) is refused, because the canonical deploy skips it; VERSION_DECL accepts `VERSION="x"` without spaces and without a semicolon (qnfo-email, qnfo-gateway); 0.3.15 PRIORITY-QUEUE-1: code-task intake takes issues in master-queue order (critical, high, medium, low, then oldest), not creation order (owner directive 2026-10-03; v_issue_queue); 0.3.14 PLAN-DENY-NEGATION-1: the issue planner refuses an issue that asks to raise a cap, rotate a secret or delete, not one whose advice forbids it ("never raise a cap"; agent_issues 1807; 0.3.13 was the rejected code task ct_fd830vzqefw1ti); 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -209,9 +209,56 @@ async function save(env, id, f) {
   const st = env.AUDIT_DB.prepare("UPDATE code_tasks SET " + sets + " WHERE id=?");
   await st.bind.apply(st, vals).run();
 }
+// CODE-DISPATCH-DEDUPE-1 (0.3.16, agent_issues 1876, 1834; pillar autonomy). Measured 2026-10-05 over the 56 code tasks finished in
+// 30 days: 16 merged; 26 of the 40 others ended because another change to the SAME file got there first (19 superseded by a
+// parallel task or a session's PR, 7 stale bases: every worker edit rewrites the VERSION line, so two changes to one worker always
+// conflict), e.g. 5 tasks on qnfo-ipatent/worker.js inside 20 minutes on 2026-10-02. Each one spent model calls. A new task is
+// now refused while the file (or its deployed-current mirror) has an unfinished code task, or while a session holds a live work
+// claim on it in qnfo-audit.work_claims (the WORK-CLAIM-1 ledger behind qnfo-deploy-guard /work-lock and GET /work-locks; one
+// store, not a second one). Intake retries a refused code-task line on the next tick; the planner skips the issue before its
+// model call and does not record it, so it is planned once the file is free.
+const CODE_TASK_DONE = ["merged", "closed", "publish_failed", "needs_human", "failed", "reverted"]; // = qnfo-deploy-guard CODE_TASK_DONE
+function taskPaths(path) {
+  const m = /^([a-z0-9][a-z0-9-]*)\/(?:deployed-current\.)?worker\.js$/.exec(String(path || ""));
+  return m ? [m[1] + "/worker.js", m[1] + "/deployed-current.worker.js"] : [String(path || ""), String(path || "")];
+}
+async function pathBusy(env, repo, path) {
+  const ps = taskPaths(path);
+  try {
+    const ph = CODE_TASK_DONE.map(function (_, i) { return "?" + (i + 4); }).join(",");
+    const st = env.AUDIT_DB.prepare("SELECT id, path, status FROM code_tasks WHERE repo = ?1 AND path IN (?2, ?3) AND status NOT IN (" + ph + ") ORDER BY created_at LIMIT 1");
+    const t = await st.bind.apply(st, [repo, ps[0], ps[1]].concat(CODE_TASK_DONE)).first();
+    if (t) return "code task " + t.id + " (" + t.status + ") is still in flight on " + repo + "/" + t.path + "; one change per file at a time";
+  } catch (e) { /* no code_tasks columns yet: nothing in flight */ }
+  if (repo !== "qnfo-workers") return null;
+  try {
+    const c = await env.AUDIT_DB.prepare("SELECT holder, intent, expires_at FROM work_claims WHERE released_at IS NULL AND expires_at > strftime('%Y-%m-%dT%H:%M:%SZ','now') AND path IN (?1, ?2) ORDER BY claimed_at LIMIT 1").bind(ps[0], ps[1]).first();
+    if (c) return "session " + c.holder + " holds the work claim on " + path + " until " + c.expires_at + " (" + String(c.intent || "").slice(0, 120) + ")";
+  } catch (e) { /* no work_claims ledger: the code-task check above is the whole guard */ }
+  return null;
+}
+// RETIRED-TARGET-1 (0.3.16, agent_issues 1960): ct_ocx96hst24qljy (qnfo-paper-explainer, RETIRED) and ct_y18ekypqyqm05
+// (qnfo-errata-respond, FOLDED) were proposed, verified and pushed, then parked by the merge runner: the canonical deploy skips a
+// directory with a RETIRED or FOLDED file, so such an edit can never ship. service_registry lists exactly the live workers (44 on
+// 2026-10-05, the 44 directories without a marker); a worker.js outside it is refused before any model call.
+async function retiredTarget(env, repo, path) {
+  if (repo !== "qnfo-workers") return null;
+  const m = /^([a-z0-9][a-z0-9-]*)\/(?:deployed-current\.)?worker\.js$/.exec(String(path || ""));
+  if (!m) return null;
+  let live = [];
+  try { live = ((await env.AUDIT_DB.prepare("SELECT service FROM service_registry WHERE kind = 'worker' AND state = 'live'").all()).results || []).map(function (r) { return String(r.service || ""); }); }
+  catch (e) { return null; }
+  if (!live.length || live.indexOf(m[1]) >= 0) return null;
+  return m[1] + " is not a live worker (service_registry; its directory carries RETIRED or FOLDED and the canonical deploy skips it), so an edit to " + path + " can never ship";
+}
 async function enqueue(env, b) {
   await ensureSchema(env);
   const bad = validTask(b); if (bad) return { ok: false, status: 400, error: bad };
+  const repo0 = String(b.repo).trim(), path0 = String(b.path).trim();
+  const gone = await retiredTarget(env, repo0, path0);
+  if (gone) return { ok: false, status: 422, error: gone };
+  const busy = await pathBusy(env, repo0, path0);
+  if (busy) return { ok: false, status: 409, error: "path busy: " + busy, busy: true };
   const open = await env.AUDIT_DB.prepare("SELECT COUNT(*) AS n FROM code_tasks WHERE status='queued'").first();
   if (open && open.n >= MAX_OPEN_TASKS) return { ok: false, status: 429, error: "queue full (" + MAX_OPEN_TASKS + " queued tasks); drain it first" };
   const id = randId("ct_");
@@ -310,7 +357,8 @@ function applyEdits(base, win, edits) {
 }
 // A worker source edited by the loop must carry a new VERSION (version-bump-guard). Bumps the patch number when the file has
 // exactly one VERSION declaration and the edit left it alone.
-const VERSION_DECL = /^((?:var|const|let) VERSION = ")(\d+)\.(\d+)\.(\d+)([^"\n]*)(";)/m;
+// 0.3.16: `var VERSION="x.y.z"` with no spaces and no semicolon counts too (qnfo-email, qnfo-gateway write it that way).
+const VERSION_DECL = /^((?:var|const|let) VERSION\s*=\s*")(\d+)\.(\d+)\.(\d+)([^"\n]*)(";?)/m;
 function bumpVersion(base, next) {
   const a = VERSION_DECL.exec(base), b = VERSION_DECL.exec(next);
   if (!a || !b || a[0] !== b[0] || countOf(next, a[0]) !== 1) return next;
@@ -925,7 +973,7 @@ async function planIssues(env, opts) {
     await audit(env, "code-task.plan", "[issue #" + id + "] " + outcome + ": " + String(detail || "").slice(0, 200), { issue: id, task: taskId || null }, outcome === "queued" ? "ok" : "skip");
   };
   let cheap = 0;
-  const decided = [];
+  const decided = [], deferred = [];
   let names = [];
   try {
     names = ((await env.AUDIT_DB.prepare("SELECT service FROM service_registry WHERE state = 'live' AND kind = 'worker'").all()).results || [])
@@ -945,6 +993,10 @@ async function planIssues(env, opts) {
     const workers = planWorkers(text, names);
     if (!workers.length) { await record(r.id, "not-code", "the issue names no worker the code loop may change"); cheap++; decided.push({ issue: r.id, outcome: "not-code" }); continue; }
     const worker = workers[0], path = worker + "/worker.js";
+    // CODE-DISPATCH-DEDUPE-1: a file another task or a session is changing is not planned now (no model call, nothing recorded),
+    // so the issue is planned on a later tick once the file is free, instead of producing a colliding change.
+    const busy = await pathBusy(env, "qnfo-workers", path);
+    if (busy) { cheap++; deferred.push({ issue: r.id, why: busy.slice(0, 160) }); continue; }
     const f = await readRepoFile(env, "qnfo-workers", path, PLAN_FILE_MAX + 1);
     if (!f || !f.ok || f.truncated) { await record(r.id, "not-code", "could not read " + path + (f && f.error ? ": " + f.error : ""), null, path); cheap++; decided.push({ issue: r.id, outcome: "not-code" }); continue; }
     const file = String(f.content || "");
@@ -967,7 +1019,7 @@ async function planIssues(env, opts) {
     await record(r.id, "queued", String(p.reason || "single-file change").slice(0, 300), res.id, path, model);
     return { planned: true, issue: r.id, outcome: "queued", task: res.id, path: path };
   }
-  return decided.length ? { planned: true, issue: decided[decided.length - 1].issue, outcome: decided[decided.length - 1].outcome, decided: decided } : { planned: false, why: "no plannable issue" };
+  return decided.length ? { planned: true, issue: decided[decided.length - 1].issue, outcome: decided[decided.length - 1].outcome, decided: decided, deferred: deferred } : { planned: false, why: deferred.length ? "every plannable issue names a file in flight" : "no plannable issue", deferred: deferred };
 }
 // Runs steps until the budget or step cap is hit. Called by cron and by POST /v1/tick.
 async function tick(env, opts) {
@@ -1030,7 +1082,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["orchestrator", "github-read", "container-exec", "server-side", "task-loop", "model-ladder", "pr-gated", "patch-mode", "issue-planner", "self-repair"], limitations: ["every route except /health needs ORCH_TOKEN", "changes ship only as pull requests: commits to main or master are refused, and in pull mode a workflow opens the PR", "the task loop runs on the */10 cron with a 20-second budget and at most 8 steps per tick", "SELF-REPAIR-1: a task whose " + MAX_ATTEMPTS + " model attempts all fail waits (" + RETRY_BACKOFF_MS.map(function (ms) { return ms / 3600000 + "h"; }).join(", then ") + ") and retries from the first rung, " + RETRY_ROUNDS + " rounds in all; then it is 'failed' and filed once to agent_issues for the fleet, never as an owner card. Policy refusals (path, anchor, no verifier, no-op) still end needs_human", "ISSUE-PLANNER-1 turns at most one open issue per tick (8 a day, at most 3 unfinished tasks in flight) into a code task, only from trusted sources and never for security, governance or outreach issues, secrets, caps or deletions, or a control-plane worker", "files over 60000 characters need a code-anchor line (patch mode, pull mode only)", "verifies py, json, md and txt; js and mjs only while the platform-enforced Dynamic Workers check is on (see js_verify)"],
+      return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["orchestrator", "github-read", "container-exec", "server-side", "task-loop", "model-ladder", "pr-gated", "patch-mode", "issue-planner", "self-repair"], limitations: ["every route except /health needs ORCH_TOKEN", "changes ship only as pull requests: commits to main or master are refused, and in pull mode a workflow opens the PR", "the task loop runs on the */10 cron with a 20-second budget and at most 8 steps per tick", "SELF-REPAIR-1: a task whose " + MAX_ATTEMPTS + " model attempts all fail waits (" + RETRY_BACKOFF_MS.map(function (ms) { return ms / 3600000 + "h"; }).join(", then ") + ") and retries from the first rung, " + RETRY_ROUNDS + " rounds in all; then it is 'failed' and filed once to agent_issues for the fleet, never as an owner card. Policy refusals (path, anchor, no verifier, no-op) still end needs_human", "ISSUE-PLANNER-1 turns at most one open issue per tick (8 a day, at most 3 unfinished tasks in flight) into a code task, only from trusted sources and never for security, governance or outreach issues, secrets, caps or deletions, or a control-plane worker", "CODE-DISPATCH-DEDUPE-1: one change per file at a time; a task on a file with an unfinished code task or a live session work claim (work_claims) is refused and retried later, and a worker.js of a RETIRED or FOLDED worker is refused", "files over 60000 characters need a code-anchor line (patch mode, pull mode only)", "verifies py, json, md and txt; js and mjs only while the platform-enforced Dynamic Workers check is on (see js_verify)"],
         verifiers: VERIFIABLE.concat((await jsVerifyOn(env)) ? ["js", "mjs"] : []), js_verify: env.JS_VERIFY === "dynamic" ? "dynamic" : env.JS_VERIFY === "auto" ? ((await jsVerifyOn(env)) ? "auto-on" : "auto-off") : "off", patch_mode: true, ladder: ladder(env), bindings: { ai: !!env.AI, audit_db: !!env.AUDIT_DB, container: !!env.PY_CONTAINER } });
     }
     if (!(await authed(env, req))) return json({ ok: false, error: "unauthorized (ORCH_TOKEN required)" }, 401);

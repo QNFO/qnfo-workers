@@ -17,7 +17,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-var VERSION = "3.0.11-render-health"; // RENDER-HEALTH-1 (2026-10-02): publishes paper_render_defect_pages at 06:05 from papers.render_defects (gateway 06:00 sweep).
+var VERSION = "3.0.12-math-browser-metric"; // MATH-BROWSER-2 (#1890): publishes paper_math_browser_fail_pages from the gateway browser_sample at 06:05. 3.0.11 RENDER-HEALTH-1 (2026-10-02): publishes paper_render_defect_pages at 06:05 from papers.render_defects (gateway 06:00 sweep).
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var CHUNK_SIZE = 1e3;
 var CHUNK_OVERLAP = 200;
@@ -391,6 +391,17 @@ var worker_default = {
           if (rh && rh.checked > 0) await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'paper_render_defect_pages'").bind(String(rh.bad || 0), new Date().toISOString()).run();
           console.log("[qnfo-paper-indexer] render health:", JSON.stringify(rh));
         } catch (e) { console.error("[qnfo-paper-indexer] render health error:", e.message); }
+        // MATH-BROWSER-2 (3.0.12, #1890): the gateway's 06:00 cron loads five live pages in a real browser (qnfo-pdf
+        // /math-check) and serves the report as browser_sample in its open /api/render-health. This publishes the failing
+        // count as paper_math_browser_fail_pages (trigger 798). A sample older than two days, or none, leaves the metric
+        // unmeasured (null) rather than passing.
+        try {
+          const r = await fetch("https://papers.qnfo.org/api/render-health", { headers: { "User-Agent": "qnfo-paper-indexer/" + VERSION } });
+          const bs = r.ok ? ((await r.json()) || {}).browser_sample : null;
+          const fresh = bs && bs.pages > 0 && Date.now() - Date.parse(bs.checked_at) < 2 * 86400000;
+          await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'paper_math_browser_fail_pages'").bind(fresh ? String(bs.failing || 0) : null, new Date().toISOString()).run();
+          console.log("[qnfo-paper-indexer] browser math sample:", fresh ? JSON.stringify({ pages: bs.pages, failing: bs.failing, errors: bs.errors }) : "none or stale");
+        } catch (e) { console.error("[qnfo-paper-indexer] browser math sample error:", e.message); }
         const p = await handlePurge(env, false);
         console.log("[qnfo-paper-indexer] scheduled purge:", JSON.stringify({ records: p.records, vectors_deleted: p.vectors_deleted }));
         // #1188 PAPER-INDEXER-CRON-WINDOW-STARVATION-1 (2026-09-27): the window used to be

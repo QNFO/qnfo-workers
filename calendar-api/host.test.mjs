@@ -29,7 +29,7 @@ const call = (method, path, opts) => W.fetch(new Request("https://calendar-api.q
 
 const h = await (await call("GET", "/health", { headers: A })).json();
 ok(h.planes.join() === "qnfo,personal,host", "health lists planes qnfo, personal, host: " + h.planes);
-ok(h.capabilities.includes("host-plane") && /^0\.7\.0/.test(h.version), "health version and capability");
+ok(h.capabilities.includes("host-plane") && /^0\.7\.\d/.test(h.version), "health version and capability");
 
 // writes need the bearer
 const noAuth = await call("POST", "/events?plane=host", { headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "x", dtstart: "2099-01-01" }) });

@@ -94,6 +94,8 @@ function fresh(opts) {
   ok(cat({ sender: "stranger@corp.example", subject: "About your grant application", text: "The fund has a question." , correspondent: false }) === "funder", "a funding subject from outside the campaign is held as a funder");
   ok(cat({ sender: "noreply@journal.example" }) === "automated", "no-reply address");
   ok(cat({ sender: "notifications@service.example" }) === "automated", "notifications address");
+  ok(cat({ sender: "010101a10c4b41f5-79d806bd-5ac7-4847-bd0b-3aba25f6e60d-000000@sesmail.ipostal1.com", subject: "Anibarro Team - Order Confirmation", correspondent: false }) === "automated", "an Amazon SES message-id envelope is a transactional sender (SLA-SES-ENVELOPE-1, #1957)");
+  ok(cat({ sender: "0101a10c4b41f5@lab.example", correspondent: false }) === "unknown_human" && cat({ sender: "a.b-c@ses.example", correspondent: false }) === "unknown_human", "short hex-like or dashed local parts are not mistaken for SES envelopes");
   ok(cat({ headers: { "auto-submitted": "auto-replied" } }) === "automated", "Auto-Submitted header");
   ok(cat({ headers: { "list-unsubscribe": "<mailto:x>" } }) === "automated", "list mail");
   ok(cat({ headers: { precedence: "bulk" } }) === "automated", "Precedence: bulk");

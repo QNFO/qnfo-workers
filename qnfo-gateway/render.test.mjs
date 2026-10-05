@@ -61,4 +61,28 @@ ok(subscribeSource(req("https://papers.qnfo.org/x?utm_campaign=a%22%3Cb"), {}).l
 const rd = await renderReadingHTML().text();
 ok(/Research papers you can actually read/.test(rd) && /href="\/papers\/joules-per-solution-metric"/.test(rd) && /not peer reviewed/.test(rd) && /canonical" href="https:\/\/papers\.qnfo\.org\/reading"/.test(rd), "LIVING-PAPERS-PAGE-1: /reading states the format, the sample, the limits and its canonical URL", rd.slice(0, 300));
 console.log(fails + " failure(s)");
+// MATH-TYPESET-1 (3.9.3): plain-text/Unicode pseudo-math is typeset at render time.
+h = renderMarkdown("The central charge satisfies c = 1/2 and the modular data obey S\u00b2 = (ST)\u00b3 with \u03b1\u2081 \u2192 \u221a2 here.");
+ok(math(h).length >= 1 && !/S\u00b2/.test(h), "Unicode pseudo-math becomes $...$", h);
+h = renderMarkdown("Plain prose with no formulas, a price of 5 dollars, and the word state-of-the-art.");
+ok(math(h).length === 0, "prose is left alone", h);
+h = renderMarkdown("Already $x_1^2$ typeset and `code a_b^2` stay.");
+ok(math(h).length === 1 && /<code>code a_b\^2<\/code>/.test(h), "existing math and code spans untouched", h);
+ok(renderDefectCount("<p>a_1 b_2 c_3 d_4 e_5</p>") >= 1, "defect counter flags residual pseudo-math");
+ok(renderDefectCount("<p>$a_1$ and $b_2$ and $c_3$ ok</p>") === 0, "defect counter ignores typeset math");
+// 3.9.7: fixes from the live-corpus check (467 papers) of the re-applied normalizer, and MATH-ESCAPE-1 (#1935).
+h = renderMarkdown("**Step 1:** D_C\u00b2 = 1 + 1 = 2, and N_D = 63 \u00d7 7 = **441 detectors**.");
+ok(/<strong>Step 1:<\/strong>/.test(h) && /<strong>441 detectors<\/strong>/.test(h) && !math(h).some((x) => /\*/.test(x)), "bold markers stay outside pseudo-math", h);
+h = renderMarkdown("The ratio D_D/D_C = \u221a(3/7) holds.");
+ok(math(h).includes("$D_{D}/D_{C} = \\sqrt{3/7}$") && !/\$\$/.test(h), "a formula starting with D stays inline (the display flag no longer eats the D)", h);
+h = renderMarkdown("The \u211a-as-base-field thesis and the \u211a-vs-\u211d question.");
+ok(!math(h).some((x) => /as|vs/.test(x)), "prose compounds are not typeset", h);
+ok(renderDefectCount("<p>noise_sigma and curve_fit and MODEL_HTS_45 and run_simulation(x)</p>") === 0, "identifiers are not residual pseudo-math");
+h = renderMarkdown("Constant [\\\\(\\alpha\\\\)]{.math .inline} and ratio [\\\\(m\\_\\mu / m_e\\\\)]{.math .inline}.\n\n[\\\\\\[\\frac{N\\^{(X)}}{N} \\in \\mathbb{Q}\\^+\\\\\\]]{.math .display}\n\nAt a \\\\(\\approx\\\\) 0.5.");
+ok(!/\{\.math/.test(h) && math(h).includes("$\\alpha$") && math(h).includes("$m_\\mu / m_e$") && h.includes("$$\\frac{N^{(X)}}{N} \\in \\mathbb{Q}^+$$") && h.includes("At a $\\approx$ 0.5"), "pandoc math spans and \\\\( \\\\) become math with markdown escapes removed", h);
+h = renderMarkdown("Planck units (\u210f = c = k\\_B = 1) and $\\tilde{x}$\\_i here; a \\| b.");
+ok(!/\\_|\\\|/.test(h.replace(/\$[^$]*\$/g, "")) && math(h).includes("${\\tilde{x}}_{i}$"), "markdown escapes print the character; a script after a formula joins it", h);
+h = renderMarkdown("$$\n\\begin{CD} A @>f>> B \\end{CD}\n$$\n\n\\[\n$x = 1$\n\\]");
+ok(/@&gt;f&gt;&gt;/.test(h) && !/\\gt/.test(h) && /\$\$\s*x = 1\s*\$\$/.test(h), "amsCD arrows survive and nested delimiters inside display math are dropped", h);
+
 process.exit(fails ? 1 : 0);
