@@ -29,7 +29,7 @@ const get = (path, headers, ctx) => api.handler.fetch(new Request("https://email
   const k = await get("/queue", { authorization: "Bearer gw-key" }, {});
   ok(k.status === 200, "the GATEWAY_EMAIL_KEY bearer still works", k.status);
   const h = await (await get("/health", {}, {})).json();
-  ok(h.version === api.VERSION && /^2\.5\.1/.test(h.version) && /props\.caller/.test(h.limitations[0]), "health reports 2.5.1 and names the props path", h.version);
+  ok(h.version === api.VERSION && /^2\.5\.[1-9]/.test(h.version) && /props\.caller/.test(h.limitations[0]), "health reports 2.5.1+ and names the props path", h.version);
   ok(api.internalCaller({ props: { caller: "radar-hub" } }) === "radar-hub" && api.internalCaller(null) === "", "internalCaller returns the caller name or empty");
 }
 
