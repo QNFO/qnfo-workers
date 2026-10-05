@@ -307,6 +307,18 @@ jobs:
         run: node qnfo-cloud-ops/outreach-learner.test.mjs
       - name: OUTREACH-CF-DOW-1 cron weekday check (qnfo-outreach)
         run: node qnfo-outreach/cron-dow.test.mjs
+      - name: KAIZEN-CF-MONDAY-1 cron weekday check (qnfo-kaizen)
+        run: node qnfo-kaizen/cron-dow.test.mjs
+      # 2026-10-05 remediation (cluster B2): LAND-BUNDLE-GUARD-1 (#1985), REPO-LIVE-DRIFT-1 (#1879), lifecycle cadence units
+      # and UNMEASURED class (#1865), SECRET-ONLY-LEDGER-1 (#1976).
+      - name: LAND-BUNDLE-GUARD-1 offline suite (qnfo-fleet-control)
+        run: node --no-warnings qnfo-fleet-control/land-bundle.test.mjs
+      - name: REPO-LIVE-DRIFT-1 offline suite (qnfo-fleet-control)
+        run: node --no-warnings qnfo-fleet-control/repo-live-drift.test.mjs
+      - name: METRIC-FRESHNESS cadence units offline suite (qnfo-lifecycle)
+        run: node --no-warnings qnfo-lifecycle/metric-freshness.test.mjs
+      - name: SECRET-ONLY-LEDGER-1 offline suite (qnfo-deploy-guard)
+        run: node --no-warnings qnfo-deploy-guard/secret-only-ledger.test.mjs
 
       # REACH-LOOPS-WATCH-1: the delegated identity and reach loops record their runs on Cloudflare (WATCHMAKER_OPS reads
       # them). qnfo-social SOCIAL-RUN-LEDGER-1; qnfo-cloud-ops EMAIL-TRIAGE-D1-1 (triage reads D1, no EMAIL_API_KEY) and
