@@ -123,7 +123,13 @@ on:
       - "ci-status/**"
       - "audits/**"
   workflow_run:
-    workflows: ["mirror-sync", "deploy-qnfo-ops", "apply-backlog-health-cheap"]
+    # DRIFT-AUDIT-AFTER-DEPLOY-1 (2026-10-05, agent_issues 1993): the push run audits while canonical-deploy is still
+    # deploying the same commit, so the just-merged worker is written to worker_live_audit as DRIFT (live still the old
+    # version) and stays so until an unrelated push. qnfo-fleet-control counts those rows into drift_total
+    # (REPO-LIVE-DRIFT-1): drift_total read 1 at 2026-10-05 18:00Z for fleet-control 0.4.119, deployed at 18:03Z, and
+    # METRIC-TRIGGER-360 filed #1993 with no drifting worker. Re-auditing when canonical-deploy completes records the
+    # deployed state. canonical-deploy has no workflow_run trigger, so the chain stays acyclic.
+    workflows: ["mirror-sync", "deploy-qnfo-ops", "apply-backlog-health-cheap", "canonical-deploy"]
     types: [completed]
   workflow_dispatch:
     inputs:
