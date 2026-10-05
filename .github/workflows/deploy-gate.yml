@@ -325,6 +325,8 @@ jobs:
         run: node --no-warnings qnfo-fleet-control/remediation-reopen.test.mjs
       - name: METRIC-FRESHNESS cadence units offline suite (qnfo-lifecycle)
         run: node --no-warnings qnfo-lifecycle/metric-freshness.test.mjs
+      - name: LIFECYCLE-PING-1042-1 strict public fetch flag (qnfo-lifecycle)
+        run: node --no-warnings qnfo-lifecycle/strict-public-fetch.test.mjs
       - name: SECRET-ONLY-LEDGER-1 offline suite (qnfo-deploy-guard)
         run: node --no-warnings qnfo-deploy-guard/secret-only-ledger.test.mjs
 

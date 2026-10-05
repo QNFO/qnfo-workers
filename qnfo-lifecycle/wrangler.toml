@@ -1,6 +1,11 @@
 name = "qnfo-lifecycle"
 main = "worker.js"
 compatibility_date = "2026-08-10"
+# LIFECYCLE-PING-1042-1 (2026-10-05, agent_issues 1994): runPing and runSync fetch *.q08.workers.dev; without
+# global_fetch_strictly_public that subrequest is Cloudflare error 1042 (same zone), served as HTTP 404. Measured:
+# 150 "[lifecycle] PING FAIL ... HTTP 404" rows in worker_logs 2026-10-02..05 while both URLs answer 200 from outside.
+# Same fix as FLEET-PROBE-1042-1 in qnfo-fleet-control/wrangler.toml.
+compatibility_flags = ["global_fetch_strictly_public"]
 
 
 [observability]
