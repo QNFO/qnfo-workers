@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.31.4-ensemble-family-disjoint"; // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.31.5-ensemble-validator-budget"; // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -918,6 +918,7 @@ function ensembleRunMeta(ens, domain, text) {
     result: e.verification_result || "",
     latency_ms: Number(e.latency_ms) || 0,
     validator_switched: !!e.validator_switched,
+    stages: e.stages && typeof e.stages === "object" ? e.stages : null,
     text_hash: textHash32(text),
     text_len: String(text || "").length,
     v: VERSION
@@ -1733,13 +1734,26 @@ async function runEnsemble(env, messages, maxTokens, domain) {
         ...messages,
         { role: "assistant", content: primaryText }
       ];
-      const vOut = await withTimeout(runWorkersAI(env, validatorSpec.wa, truncateMessagesToFit(vMsg, validatorSpec.ctx), 1024, false), Math.min(15e3, _remaining()), "ensemble-validator");
+      // ENSEMBLE-VALIDATOR-BUDGET-1 (5.31.5, #1889): the validator was capped at 15s while Workers AI primaries take 55-60s
+      // (first two 5.31.4 ensemble-run rows: latency 70034 and 79203 ms, both verdict skipped = validator timed out), so
+      // the verification layer never got to vote. It now keeps a 30% slice of the 120s budget (36s, floor 15s), like
+      // the other stages, and its outcome is a stage row (ms, ok, rem) so a starved validator is visible in the run row.
+      var _sv = Date.now();
+      let vOut;
+      try {
+        vOut = await withTimeout(runWorkersAI(env, validatorSpec.wa, truncateMessagesToFit(vMsg, validatorSpec.ctx), 1024, false), _stageCap(0.3, 15e3), "ensemble-validator");
+        _mk("validator", _sv, true);
+      } catch (eV) {
+        _mk("validator", _sv, false, eV);
+        throw eV;
+      }
       const vText = (vOut ? extractWAContent(vOut) : "").trim();
       const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
       validatorVerdict = pass ? "pass" : "fail";
       if (pass) {
         agreementRate = 1;
       } else {
+        var _sr = Date.now();
         try {
           const rOut = await withTimeout(runWorkersAI(env, ENSEMBLE.reviewer.wa, truncateMessagesToFit(rMsg, ENSEMBLE.reviewer.ctx), Math.max(clampTokens(maxTokens, MAX_OUT[ENSEMBLE.reviewer.wa]), 1024), false), Math.min(35e3, _remaining()), "ensemble-reviewer");
           const rText = rOut ? extractWAContent(rOut) : "";
@@ -1751,7 +1765,9 @@ async function runEnsemble(env, messages, maxTokens, domain) {
             verificationResult = "reviewed";
           }
           membersRun.push("reviewer");
+          _mk("reviewer", _sr, !!rText.trim());
         } catch (e) {
+          _mk("reviewer", _sr, false, e);
           verificationResult = "reviewed";
         }
       }
