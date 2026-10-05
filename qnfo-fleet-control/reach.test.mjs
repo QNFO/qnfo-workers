@@ -36,7 +36,10 @@ eq(mix[0].score === 9 && mix[0].surface === "qnfo-home" && mix[0].buildable === 
 eq(mix.every((f, i) => i === 0 || mix[i - 1].score >= f.score), true, "findings are in score order");
 eq(mix.filter((f) => f.worker === "qnfo-gateway").every((f) => f.buildable === false), true, "gateway ideas are marked not auto-buildable");
 eq(/NOT AUTO-BUILDABLE/.test(R.ideaDescription(mix.find((f) => !f.buildable))), true, "description says so");
-eq(/qnfo-ipatent\/worker\.js/.test(R.ideaDescription(mix.find((f) => f.buildable))), true, "description names the worker file for the planner");
+eq(/qnfo-ipatent\/worker\.js/.test(R.ideaDescription(mix.find((f) => f.worker === "qnfo-ipatent"))), true, "description names the worker file for the planner");
+// IDEA-BUILDABLE-TRUTH-1: with no edit point (IDEA_BUILD_HINT empty) nothing is marked buildable, and the description says why.
+const ip = mix.find((f) => f.worker === "qnfo-ipatent");
+eq(ip.buildable === false && /no edit point the code agent may use/.test(R.ideaDescription(ip)) && !/code-task:/.test(R.ideaDescription(ip)), true, "an idea without an edit point is not marked buildable (it would never be built and would hold a WIP slot)");
 // Selection: buildable ideas fill free WIP slots, one slot for the best gap, never more than IDEA_MAX_NEW.
 const sel = (fs, open, ob, og) => R.ideaSelect(fs, open || {}, ob || 0, og || 0).map((f) => f.key);
 const F = (k, s, b) => ({ key: k, score: s, buildable: b });
@@ -62,7 +65,7 @@ eq(disc[1].url, "https://ipatent.qnfo.org/pricing/a", "the busiest page stands f
 eq(disc[0].weight > disc[2].weight, true, "weight follows traffic");
 eq(disc[1].flagship, true, "flagship hosts are not asked to link to themselves");
 const dprobe = R.reachIdeasEvaluate([{ surface: "rum:ipatent.qnfo.org/pricing", url: "https://ipatent.qnfo.org/pricing/a", status: 200, ms: 100, html: "<html></html>" }], [], disc);
-eq(dprobe.length > 0 && dprobe.every((f) => f.buildable && /found by traffic/.test(f.evidence)), true, "a discovered page yields buildable ideas with traffic evidence");
+eq(dprobe.length > 0 && dprobe.every((f) => !f.buildable && f.nobuild === "no-edit-point" && /found by traffic/.test(f.evidence)), true, "a discovered page yields ideas with traffic evidence, filed as needing a session (no edit point)");
 eq(R.reachIdeasEvaluate([{ surface: "rum:q08.org", url: "u", status: 200, ms: 100, html: "<html></html>" }], []).length, 0, "an undeclared surface yields nothing (two-arg call stays compatible)");
 // Efficacy: 7-day deltas per check kind; a kind with n >= 3 and no gain is halved, one with a gain is raised.
 const eff = R.ideaEfficacy([
