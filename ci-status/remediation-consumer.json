@@ -1,74 +1,26 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@48b33ad99787",
- "due": 8,
+ "verifier": "remediation-consumer@8c7d3ff80fd0",
+ "due": 2,
  "pass": 2,
- "fail": 6,
+ "fail": 0,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1919",
-   "issue_id": 1919,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1920",
-   "issue_id": 1920,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1935",
-   "issue_id": 1935,
-   "verdict": "fail",
-   "expected": "fixed-and-watched",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1892",
-   "issue_id": 1892,
-   "verdict": "fail",
-   "expected": "baseline-recorded",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1890",
-   "issue_id": 1890,
-   "verdict": "fail",
-   "expected": "measured",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1878",
-   "issue_id": 1878,
+   "class": "issue-1865",
+   "issue_id": 1865,
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1992",
-   "issue_id": 1992,
+   "class": "issue-1879",
+   "issue_id": 1879,
    "verdict": "pass",
-   "expected": "clear",
-   "observed": "clear",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "fail",
-   "expected": "fixed",
-   "observed": "pending",
+   "expected": "1",
+   "observed": "1",
    "written": true
   }
  ],
@@ -88,8 +40,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 25040,
- "head": "48b33ad9978731a3f1695cde76e2015bd5ecb085",
+ "spent_ms": 8233,
+ "head": "8c7d3ff80fd04ad253c2740c415ee1c585fc3395",
  "job_status": "success",
- "ts": "2026-10-05T17:58:43Z"
+ "ts": "2026-10-05T18:28:55Z"
 }
