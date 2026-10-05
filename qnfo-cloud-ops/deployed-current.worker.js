@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.19.1-outreach-reason"; /* 1.19.1 OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.19.1-reach-intake"; /* 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -748,8 +748,51 @@ function h32(s) {
   return "scan" + (h >>> 0).toString(36) + s.length.toString(36);
 }
 __name(h32, "h32");
+/* SIGNAL-INTAKE-QEC-1 (1.19.1, #1947; owner directive 2026-10-04: arXiv QEC must not dominate the intake). The scan took the
+   10 newest papers matching any of its terms, and plain "quantum error correction" out-publishes every other term, so on
+   2026-10-05 all 10 hits (and all 5 auto-scan idea_proposals, all accepted) were generic QEC. QEC now enters only with an
+   energy angle (pillar 1, STRATEGY 2.3); the same query then returned thermodynamics, ultrametric, p-adic and
+   quantum-battery papers (read live 2026-10-05). Same cadence, same 10 results, no model call added. */
+var RESEARCH_SCAN_QUERY = '(all:"ultrametric" OR all:"p-adic" OR all:"Bruhat-Tits" OR all:"quantum energy" OR all:"joules per solution" OR (all:"quantum error correction" AND (all:energy OR all:thermodynamic OR all:Landauer)) OR all:"ZBW" OR all:"quantum thermodynamics") AND (cat:quant-ph OR cat:math-ph OR cat:hep-th OR cat:cs.ET)';
+/* IDEA-TOPIC-METRIC-1 (1.19.1, #1947): metric_registry idea_topic_concentration_30d (trigger: > 0.50) was written once by
+   hand on 2026-10-04 (0.588) and had no producer, so its trigger state could never change. This daily companion recomputes
+   it from qnfo-audit.idea_proposals: the share of ACCEPTed items in the last 30 days that fall in the largest keyword
+   cluster. The classifier reproduces the registration's reading (a "quantum" cluster over name, idea and rationale: 30/51
+   on 10-04, 31/52 on 10-05) and checks "quantum" first, so a quantum-thermodynamics item still counts as quantum and the
+   number cannot fall by re-labelling. Read-only except the one registry row; no model call. */
+var IDEA_TOPIC_CLUSTERS = [
+  ["quantum", /quantum|qubit|error[- ]correct|qec/i],
+  ["ultrametric", /ultrametric|p-adic|padic|bruhat|adelic|non-archimedean|\bzbw\b/i],
+  ["energy", /energy|thermodynam|landauer|joule|entropy/i],
+  ["ai-epistemics", /\bllms?\b|language model|\bagents?\b|epistem|ignorance|\bai\b|machine learning/i]
+];
+function ideaTopicCluster(text) {
+  for (const [k, rx] of IDEA_TOPIC_CLUSTERS) if (rx.test(String(text || ""))) return k;
+  return "other";
+}
+__name(ideaTopicCluster, "ideaTopicCluster");
+function ideaTopicConcentration(rows) {
+  const by = {};
+  for (const r of rows || []) {
+    const k = ideaTopicCluster([r.name, r.idea, r.rationale].filter(Boolean).join(" "));
+    by[k] = (by[k] || 0) + 1;
+  }
+  let top = null;
+  for (const k of Object.keys(by)) if (top === null || by[k] > by[top]) top = k;
+  const n = (rows || []).length;
+  return { accepted_30d: n, top, share: n ? Math.round(1e3 * by[top] / n) / 1e3 : null, by_cluster: by };
+}
+__name(ideaTopicConcentration, "ideaTopicConcentration");
+async function jobIdeaTopicMetric(env) {
+  const rs = await env.AUDIT.prepare("SELECT name, idea, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND replace(substr(created_at, 1, 19), 'T', ' ') >= datetime('now', '-30 day')").all();
+  const c = ideaTopicConcentration(rs && rs.results || []);
+  if (c.share === null) return { status: "ok", notes: Object.assign({ skipped: "no accepted idea_proposals in 30 days" }, c) };
+  await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'idea_topic_concentration_30d'").bind(String(c.share), (/* @__PURE__ */ new Date()).toISOString()).run();
+  return { status: "ok", notes: c };
+}
+__name(jobIdeaTopicMetric, "jobIdeaTopicMetric");
 async function jobResearchScan(env) {
-  const q = encodeURIComponent('(all:"ultrametric" OR all:"p-adic" OR all:"Bruhat-Tits" OR all:"quantum energy" OR all:"joules per solution" OR all:"quantum error correction" OR all:"ZBW" OR all:"quantum thermodynamics") AND (cat:quant-ph OR cat:math-ph OR cat:hep-th OR cat:cs.ET)');
+  const q = encodeURIComponent(RESEARCH_SCAN_QUERY);
   let hits = [];
   try {
     const r = await fetch("https://export.arxiv.org/api/query?search_query=" + q + "&start=0&max_results=10&sortBy=submittedDate&sortOrder=descending", {
@@ -3205,14 +3248,16 @@ var JOBS = {
   "owner-voice-resume": jobOwnerVoiceResume,
   "radar": jobRadar,
   "grant-followup": jobGrantFollowup,
-  "outreach-learner": jobOutreachLearner
+  "outreach-learner": jobOutreachLearner,
+  "idea-topic-metric": jobIdeaTopicMetric
 };
 // GRANT-FOLLOWUP-1: a job that rides another job's cron slot, because the dispatch map holds one job per cron and a new
 // cron would count against the account cap (charter rule 2). Companions run first, each in its own try and logged under
 // its own name, so neither job can stop or hide the other. worker-health fires twice a day, every day (05:05 and 17:05
 // Amsterdam). OUTREACH-LEARNER-1 (1.18.0): outreach-learner rides the daily engagement slot (07:15 Amsterdam, every day)
 // and runs before it, so the sent-as-you digest inside engagement reports that day's learner tick.
-var CRON_COMPANIONS = { "worker-health": ["grant-followup"], "engagement": ["outreach-learner"] };
+// IDEA-TOPIC-METRIC-1 (1.19.1): idea-topic-metric rides the daily quality-score slot (06:20 Amsterdam, every day).
+var CRON_COMPANIONS = { "worker-health": ["grant-followup"], "engagement": ["outreach-learner"], "quality-score": ["idea-topic-metric"] };
 // JOB-REASON-1 (1.18.3): the job-run row's meta carries the job's own one-line reason when a run is not 'ok', and 'via'
 // when a catch-up ran it, so a ledger query can say why without parsing the truncated text column.
 function jobRunMeta(job, out, extra) {
