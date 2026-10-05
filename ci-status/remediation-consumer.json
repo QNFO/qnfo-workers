@@ -1,12 +1,50 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@8b6e0b9b8a7d",
- "due": 4,
- "pass": 1,
+ "verifier": "remediation-consumer@dee876446227",
+ "due": 9,
+ "pass": 2,
  "fail": 3,
- "skipped": 0,
+ "skipped": 4,
  "contracts": [
+  {
+   "class": "EVID-1649-BRIEF",
+   "issue_id": 1649,
+   "verdict": "pass",
+   "expected": "recorded",
+   "observed": "recorded",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "vacuous-probe-result",
+   "expected": "fixed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "GCAL-CONNECTED-1",
+   "issue_id": 1816,
+   "verdict": "vacuous-probe-result",
+   "expected": "connected",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "vacuous-probe-result",
+   "expected": "connected",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "act-half-unverified",
+   "issue_id": 1207,
+   "verdict": "probe-not-machine-executable",
+   "reason": "not-a-select"
+  },
   {
    "class": "PREDICT-WEEK-1",
    "issue_id": 1908,
@@ -56,8 +94,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 12660,
- "head": "8b6e0b9b8a7d6265d9759476d54a9800f1777d71",
+ "spent_ms": 22494,
+ "head": "dee876446227fce3ef77585c902c9bb8e19a33d8",
  "job_status": "success",
- "ts": "2026-10-05T02:02:53Z"
+ "ts": "2026-10-05T09:08:31Z"
 }
