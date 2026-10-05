@@ -30,6 +30,12 @@ bucket_name = "qnfo"
 binding = "RELEASES"
 bucket_name = "qnfo-releases"
 
+# MATH-BROWSER-2 (#1890): the 06:00 cron samples five live paper pages through qnfo-pdf's internal /math-check
+# (Browser Run + MathJax) and serves the report as browser_sample in /api/render-health.
+[[services]]
+binding = "PDF_SVC"
+service = "qnfo-pdf"
+
 # Secrets (wrangler secret put): SYNC_TOKEN, TURNSTILE_SECRET
 
 [triggers]

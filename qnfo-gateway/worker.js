@@ -2320,11 +2320,53 @@ async function renderHealthSweep(env) {
   console.log("RENDER-HEALTH-1 checked " + checked + " pages, " + withDefects + " with defects");
   return { checked, with_defects: withDefects };
 }
+// MATH-BROWSER-2 (3.9.7, #1890, #1935): the string tests above cannot see what MathJax does in a browser. Once a day, after
+// the sweep and inside the same 06:00 cron, five live paper pages are loaded in a real browser through qnfo-pdf's internal
+// /math-check (PDF_SVC service binding): the two-index anyon paper every day plus four more in rowid rotation. The report
+// (typeset containers, MathJax errors, raw $...$ and pseudo-math left on the page) is kept in RELEASES
+// render-health/browser-latest.json and served as browser_sample by /api/render-health. No new worker, cron or model call;
+// Browser Run time is not a fleet_budget class (read 2026-10-05) and five pages a day is a few minutes a month.
+var BROWSER_SAMPLE_PIN = "a-two-index-framework-for-the-bulk-boundary-correspondence-of-anyon-condensation";
+var BROWSER_SAMPLE_KEY = "render-health/browser-latest.json";
+async function browserMathSample(env) {
+  if (!env.PDF_SVC || !env.RELEASES || !env.LIVING_PAPER) return null;
+  let prev = null;
+  try {
+    const o = await env.RELEASES.get(BROWSER_SAMPLE_KEY);
+    if (o) prev = await o.json();
+  } catch (e) {
+  }
+  const pick = (after, n) => env.LIVING_PAPER.prepare("SELECT rowid AS rid, slug FROM papers WHERE rowid > ?1 AND slug IS NOT NULL AND slug <> ?2 AND status IN ('published','distributed','external_preprint') ORDER BY rowid LIMIT ?3").bind(after, BROWSER_SAMPLE_PIN, n).all();
+  let rows = (await pick(prev && Number(prev.cursor) || 0, 4)).results || [];
+  if (rows.length < 4) rows = rows.concat((await pick(0, 4 - rows.length)).results || []);
+  const results = [], started = Date.now();
+  for (const slug of [BROWSER_SAMPLE_PIN].concat(rows.map((x) => x.slug))) {
+    if (Date.now() - started > 240000) break;
+    try {
+      const res = await env.PDF_SVC.fetch("https://qnfo-pdf/math-check/" + encodeURIComponent(slug));
+      const j = await res.json();
+      results.push(j && j.ok ? { slug, ok: true, typeset: j.typeset, errors: j.errors, raw_dollar: j.raw_dollar, pseudo_residual: j.pseudo_residual, pass: !!j.pass } : { slug, ok: false, pass: false, error: String(j && j.error || "HTTP " + res.status).slice(0, 200) });
+    } catch (e) {
+      results.push({ slug, ok: false, pass: false, error: String(e && e.message || e).slice(0, 200) });
+    }
+  }
+  const sum = (k) => results.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+  const out = { checked_at: new Date().toISOString(), source: "qnfo-pdf /math-check (Browser Run, MathJax typeset)", pages: results.length, typeset: sum("typeset"), errors: sum("errors"), raw_dollar: sum("raw_dollar"), failing: results.filter((x) => !x.pass).length, cursor: rows.length ? rows[rows.length - 1].rid : 0, results };
+  await env.RELEASES.put(BROWSER_SAMPLE_KEY, JSON.stringify(out), { httpMetadata: { contentType: "application/json" } });
+  console.log("MATH-BROWSER-2 sampled " + out.pages + " pages: typeset " + out.typeset + ", errors " + out.errors + ", failing " + out.failing);
+  return out;
+}
 async function handleRenderHealth(env) {
   try {
     const r = await env.LIVING_PAPER.prepare("SELECT slug, render_defects, render_checked_at FROM papers WHERE status IN ('published','distributed','external_preprint') AND render_defects IS NOT NULL AND render_defects <> 0 ORDER BY render_defects DESC, slug").all();
     const n = await env.LIVING_PAPER.prepare("SELECT COUNT(*) AS checked, MAX(render_checked_at) AS last FROM papers WHERE status IN ('published','distributed','external_preprint') AND render_checked_at IS NOT NULL").first();
-    return json({ metric: "paper_render_defect_pages", value: (r.results || []).length, checked: n ? n.checked : 0, last_checked: n ? n.last : null, tests: ["raw ** opening a word", "raw heading marker", "raw table rule", "odd number of unescaped $"], pages: r.results || [] });
+    let browser = null;
+    try {
+      const o = env.RELEASES ? await env.RELEASES.get(BROWSER_SAMPLE_KEY) : null;
+      if (o) browser = await o.json();
+    } catch (e) {
+    }
+    return json({ metric: "paper_render_defect_pages", value: (r.results || []).length, checked: n ? n.checked : 0, last_checked: n ? n.last : null, tests: ["raw ** opening a word", "raw heading marker", "raw table rule", "odd number of unescaped $", "3+ pseudo-math tokens outside math (MATH-TYPESET-1)"], pages: r.results || [], browser_sample: browser });
   } catch (e) {
     console.log("RENDER-HEALTH-1 read failed: " + String(e && e.message || e).slice(0, 200));
     return json({ error: "render health unavailable" }, 503);
@@ -3598,6 +3640,11 @@ var gateway_worker_default = {
       await renderHealthSweep(env);
     } catch (e) {
       console.log("RENDER-HEALTH-1 sweep failed: " + String(e && e.message || e).slice(0, 200));
+    }
+    try {
+      await browserMathSample(env);
+    } catch (e) {
+      console.log("MATH-BROWSER-2 sample failed: " + String(e && e.message || e).slice(0, 200));
     }
   }
 };
