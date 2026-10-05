@@ -1,127 +1,73 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@b3bbb0b6540c",
- "due": 15,
- "pass": 0,
- "fail": 13,
- "skipped": 2,
+ "verifier": "remediation-consumer@48b33ad99787",
+ "due": 8,
+ "pass": 2,
+ "fail": 6,
+ "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1793",
-   "issue_id": 1793,
+   "class": "issue-1919",
+   "issue_id": 1919,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1794",
-   "issue_id": 1794,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1795",
-   "issue_id": 1795,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1798",
-   "issue_id": 1798,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1834",
-   "issue_id": 1834,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
-   "verdict": "fail",
-   "expected": "all-sources-ok",
+   "expected": "1",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1838",
-   "issue_id": 1838,
+   "class": "issue-1920",
+   "issue_id": 1920,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
-   "verdict": "fail",
-   "expected": "within-cap",
+   "expected": "1",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1810",
-   "issue_id": 1810,
+   "class": "issue-1935",
+   "issue_id": 1935,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": "fixed-and-watched",
+   "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1884",
-   "issue_id": 1884,
-   "verdict": "vacuous-probe-result",
-   "expected": null,
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-1922",
-   "issue_id": 1922,
-   "verdict": "probe-not-machine-executable",
-   "reason": "multi-statement"
-  },
-  {
-   "class": "issue-1683",
-   "issue_id": 1683,
+   "class": "issue-1892",
+   "issue_id": 1892,
    "verdict": "fail",
-   "expected": "0",
+   "expected": "baseline-recorded",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1890",
+   "issue_id": 1890,
+   "verdict": "fail",
+   "expected": "measured",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1878",
+   "issue_id": 1878,
+   "verdict": "pass",
+   "expected": "1",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1836",
-   "issue_id": 1836,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
+   "class": "issue-1992",
+   "issue_id": 1992,
+   "verdict": "pass",
+   "expected": "clear",
+   "observed": "clear",
    "written": true
   },
   {
-   "class": "issue-1711",
-   "issue_id": 1711,
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
-   "verdict": "fail",
-   "expected": "seven-days",
+   "expected": "fixed",
    "observed": "pending",
    "written": true
   }
@@ -142,8 +88,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 46894,
- "head": "b3bbb0b6540c4f8f83366bfa0f9b6f38a2f2c1f8",
+ "spent_ms": 25040,
+ "head": "48b33ad9978731a3f1695cde76e2015bd5ecb085",
  "job_status": "success",
- "ts": "2026-10-05T17:02:42Z"
+ "ts": "2026-10-05T17:58:43Z"
 }
