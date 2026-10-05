@@ -373,6 +373,10 @@ jobs:
       # acknowledgement per thread, no substantive answer for reserved categories, the kill switch and the metrics.
       - name: INBOUND-SLA-1 offline suite (qnfo-email-orchestrator)
         run: node qnfo-email-orchestrator/inbound-sla.test.mjs
+      # CLEARED-SEND-RETRY-1 (qnfo-email-orchestrator 0.5.3): a cleared reply whose send fails keeps its auto-send marker
+      # and is retried up to 3 times.
+      - name: CLEARED-SEND-RETRY-1 offline suite (qnfo-email-orchestrator)
+        run: node --no-warnings qnfo-email-orchestrator/send-retry.test.mjs
 
       # ERRATA-HUB-CRONS-UNDECLARED-1 + ERRATA-PUBLISH-GATE-1 (#1747): errata-hub's hourly members run, record a tick, and
       # make no Zenodo call, store re-point or mail from the publish member while pipeline_flags.errata_publish_enabled is off.
