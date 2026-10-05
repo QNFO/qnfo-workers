@@ -53,9 +53,10 @@ ACTIONS
                          and compared by SHA-256. Fixes pages that were imported from a supplementary chat transcript instead
                          of the deposited paper. Prints hashes and lengths, never the text.
 
-  d1-backup NAME         D1-FOLD-1 (#1822): full SQL dump (schema + every row as literals) of an allowlisted database
-                         (D1_RETIRE) into qnfo-audit.d1_fold_backups, written in pieces and verified by SHA-256 read-back,
-                         with a per-table manifest (row count + SHA-256 of the rows). Prints counts and hashes, never data.
+  d1-backup NAME         D1-FOLD-1 (#1822): three verified copies of an allowlisted database (D1_RETIRE): a full SQL dump row in
+                         qnfo-audit.d1_fold_backups (SHA-256 read-back), the same dump in R2 qnfo-backups/d1-folds/ (SHA-256
+                         read-back), and every table copied into qnfo-audit as jnlaudit_* (row count + SHA-256 of the rows).
+                         Prints counts and hashes, never data.
   unbind-d1 WORKER:BINDING
                          D1-FOLD-1: remove one D1 binding to an allowlisted database from a live worker. The canonical deploy
                          re-declares every live binding (qnfo-ops BINDING-PRESERVE-1) and prunes only dead SERVICE bindings, so
@@ -65,8 +66,9 @@ ACTIONS
                          patches settings with every other binding inherited from the latest version (values are never sent).
   delete-d1 NAME         D1-FOLD-1: delete an allowlisted database. Refused unless no wrangler.toml outside a RETIRED/FOLDED
                          directory names it, no live worker binds it, it had zero write queries in 7 days (GraphQL), and the
-                         newest d1_fold_backups row is at least 7 days old, verifies (stored SHA-256) and still matches the
-                         live per-table manifest (the owner-stated observation window).
+                         newest d1_fold_backups row verifies, its R2 copy verifies, every jnlaudit_* copy matches, no fleet_tasks
+                         definition names JNL or the database, and the live manifest is unchanged (owner directive 2026-10-05:
+                         no observation window).
 
 Every action prints one line `RESULT_JSON=<json>` so the job log is machine-readable.
 """
@@ -553,7 +555,10 @@ def paper_body_from_zenodo(acct: str, token: str, target: str) -> int:
 D1_RETIRE = {"jnl-audit": "8be80cdb-979d-401f-b3ab-6a16869473ec"}
 AUDIT_DB = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 D1_PIECE = 16000
-D1_OBSERVE_DAYS = 7
+# Owner directive 2026-10-05 ~18:15Z ("delete jnl-audit now, no 7-day wait"): no observation window. The backup must still be
+# verified three ways (dump row, R2 object, jnlaudit_* table copies) and match the live database at delete time.
+D1_OBSERVE_DAYS = 0
+D1_BACKUP_BUCKET = "qnfo-backups"
 
 
 def d1x(acct: str, token: str, db: str, sql: str, params: list | None = None) -> tuple[bool, list]:
@@ -658,7 +663,75 @@ def d1_writes_7d(acct: str, token: str, db_id: str) -> int | None:
     return sum(int((r.get("sum") or {}).get("writeQueries") or 0) for r in rows)
 
 
+def r2_put_text(acct: str, token: str, bucket: str, key: str, text: str) -> int:
+    import urllib.parse
+    req = urllib.request.Request(API + f"/accounts/{acct}/r2/buckets/{bucket}/objects/" + urllib.parse.quote(key, safe="/"), data=text.encode(), method="PUT",
+                                 headers={"Authorization": "Bearer " + token, "Content-Type": "text/plain; charset=utf-8"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+
+def r2_get_text(acct: str, token: str, bucket: str, key: str) -> tuple[int, str]:
+    import urllib.parse
+    req = urllib.request.Request(API + f"/accounts/{acct}/r2/buckets/{bucket}/objects/" + urllib.parse.quote(key, safe="/"), method="GET",
+                                 headers={"Authorization": "Bearer " + token})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return r.status, r.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        return e.code, ""
+
+
+def copy_name(table: str) -> str:
+    """jnl_records -> jnlaudit_records (owner directive: the copies live in qnfo-audit as jnlaudit_*)."""
+    return "jnlaudit_" + (table[4:] if table.startswith("jnl_") else table)
+
+
+def copy_tables(acct: str, token: str, db_id: str, manifest: dict, run_src=None, run_dst=None) -> dict:
+    """Copy every table of the source into qnfo-audit as jnlaudit_*; verify count + SHA-256 per table. Idempotent: an existing
+    copy that already matches is kept, one that differs is refused (never overwritten)."""
+    run_src = run_src or (lambda sql, params=None: d1x(acct, token, db_id, sql, params))
+    run_dst = run_dst or (lambda sql, params=None: d1x(acct, token, AUDIT_DB, sql, params))
+    out = {}
+    for t, m in manifest.items():
+        dst = copy_name(t)
+        ok, ddl = run_src("SELECT sql FROM sqlite_master WHERE type='table' AND name = ?1", [t])
+        if not ok or not ddl:
+            out[t] = {"ok": False, "error": "source DDL unreadable"}
+            continue
+        ok, ex = run_dst("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = ?1", [dst])
+        exists = ok and int((ex[0] or {}).get("n") or 0) > 0
+        if not exists:
+            new_ddl = re.sub(r'^\s*CREATE TABLE\s+"?' + re.escape(t) + r'"?', 'CREATE TABLE "' + dst + '"', ddl[0]["sql"], count=1)
+            ok, err = run_dst(new_ddl)
+            if not ok:
+                out[t] = {"ok": False, "error": "create failed: " + str(err)[:160]}
+                continue
+            ok, rows = run_src('SELECT * FROM "' + t + '" ORDER BY rowid')
+            if rows:
+                cols = list(rows[0].keys())
+                per = max(1, 90 // len(cols))
+                for k in range(0, len(rows), per):
+                    chunk = rows[k:k + per]
+                    sql = 'INSERT INTO "' + dst + '" (' + ",".join('"' + c + '"' for c in cols) + ") VALUES " + ",".join("(" + ",".join("?" for _ in cols) + ")" for _ in chunk)
+                    okc, errc = run_dst(sql, [r[c] for r in chunk for c in cols])
+                    if not okc:
+                        out[t] = {"ok": False, "error": "insert failed: " + str(errc)[:160]}
+                        break
+                if t in out:
+                    continue
+        ok, back = run_dst('SELECT * FROM "' + dst + '" ORDER BY rowid')
+        got = {"n": len(back), "sha256": rows_sha(back)} if ok else None
+        out[t] = {"ok": got == m, "copy": dst, "n": m["n"], "existed": exists, "sha256_match": bool(got and got["sha256"] == m["sha256"])}
+    return out
+
+
 def d1_backup(name: str, acct: str, token: str) -> int:
+    """Three verified copies before any delete: a SQL dump row in qnfo-audit.d1_fold_backups, the same dump in R2
+    qnfo-backups (read back by SHA-256), and every table copied into qnfo-audit as jnlaudit_* (count + row hash)."""
     import hashlib
     if name not in D1_RETIRE:
         emit({"action": "d1-backup", "db": name, "ok": False, "refused": "not in D1_RETIRE"})
@@ -666,7 +739,7 @@ def d1_backup(name: str, acct: str, token: str) -> int:
     db_id = D1_RETIRE[name]
     sql, manifest = d1_dump(acct, token, db_id)
     want = hashlib.sha256(sql.encode()).hexdigest()
-    ok, r = d1x(acct, token, AUDIT_DB, "CREATE TABLE IF NOT EXISTS d1_fold_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, db_name TEXT NOT NULL, db_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), bytes INTEGER NOT NULL, sql_sha256 TEXT NOT NULL, manifest_json TEXT NOT NULL, sql_text TEXT NOT NULL)")
+    ok, r = d1x(acct, token, AUDIT_DB, "CREATE TABLE IF NOT EXISTS d1_fold_backups (id INTEGER PRIMARY KEY AUTOINCREMENT, db_name TEXT NOT NULL, db_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), bytes INTEGER NOT NULL, sql_sha256 TEXT NOT NULL, manifest_json TEXT NOT NULL, sql_text TEXT NOT NULL, r2_key TEXT, copies_json TEXT)")
     pieces = [sql[i:i + D1_PIECE] for i in range(0, len(sql), D1_PIECE)]
     ok2, ins = d1x(acct, token, AUDIT_DB, "INSERT INTO d1_fold_backups (db_name, db_id, bytes, sql_sha256, manifest_json, sql_text) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id", [name, db_id, len(sql.encode()), want, json.dumps(manifest, sort_keys=True), pieces[0]])
     if not (ok and ok2 and ins and ins[0].get("id")):
@@ -679,9 +752,19 @@ def d1_backup(name: str, acct: str, token: str) -> int:
             emit({"action": "d1-backup", "db": name, "ok": False, "backup_id": bid, "error": "append failed", "detail": str(rp)[:300]})
             return 1
     okb, back = d1x(acct, token, AUDIT_DB, "SELECT sql_text FROM d1_fold_backups WHERE id = ?1", [bid])
-    got = hashlib.sha256((back[0].get("sql_text") or "").encode()).hexdigest() if okb and back else ""
-    emit({"action": "d1-backup", "db": name, "db_id": db_id, "ok": got == want, "backup_id": bid, "bytes": len(sql.encode()), "sql_sha256": want, "read_back_match": got == want, "manifest": manifest})
-    return 0 if got == want else 1
+    row_ok = (hashlib.sha256((back[0].get("sql_text") or "").encode()).hexdigest() if okb and back else "") == want
+    r2_key = "d1-folds/" + name + "/" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + want[:12] + ".sql"
+    put_st = r2_put_text(acct, token, D1_BACKUP_BUCKET, r2_key, sql)
+    get_st, r2_text = r2_get_text(acct, token, D1_BACKUP_BUCKET, r2_key) if put_st in (200, 201) else (put_st, "")
+    r2_ok = get_st == 200 and hashlib.sha256(r2_text.encode()).hexdigest() == want
+    copies = copy_tables(acct, token, db_id, manifest)
+    copies_ok = bool(copies) and all(c.get("ok") for c in copies.values())
+    d1x(acct, token, AUDIT_DB, "UPDATE d1_fold_backups SET r2_key = ?1, copies_json = ?2 WHERE id = ?3", [r2_key if r2_ok else None, json.dumps(copies, sort_keys=True), bid])
+    ok_all = row_ok and r2_ok and copies_ok
+    emit({"action": "d1-backup", "db": name, "db_id": db_id, "ok": ok_all, "backup_id": bid, "bytes": len(sql.encode()), "sql_sha256": want,
+          "row_read_back_match": row_ok, "r2": {"bucket": D1_BACKUP_BUCKET, "key": r2_key, "put_http": put_st, "get_http": get_st, "sha256_match": r2_ok},
+          "copies": copies, "manifest": manifest})
+    return 0 if ok_all else 1
 
 
 def multipart(fields: dict) -> tuple[bytes, str]:
@@ -764,10 +847,13 @@ def delete_d1(name: str, acct: str, token: str) -> int:
     lb = live_binders(acct, token, db_id)
     if lb:
         refusals.append("live bindings: " + ",".join(lb))
+    okt, tasks = d1x(acct, token, AUDIT_DB, "SELECT COUNT(*) AS n FROM fleet_tasks WHERE definition LIKE '%JNL%' OR definition LIKE ?1", ["%" + db_id + "%"])
+    if not okt or int((tasks[0] or {}).get("n") or 0) > 0:
+        refusals.append("a fleet_tasks definition names JNL or the database (or the check failed)")
     w7 = d1_writes_7d(acct, token, db_id)
     if w7 is None or w7 > 0:
         refusals.append("write queries in 7 days: " + str(w7))
-    okb, back = d1x(acct, token, AUDIT_DB, "SELECT id, sql_sha256, manifest_json, sql_text, CAST((julianday('now') - julianday(created_at)) AS REAL) AS age_days FROM d1_fold_backups WHERE db_id = ?1 ORDER BY id DESC LIMIT 1", [db_id])
+    okb, back = d1x(acct, token, AUDIT_DB, "SELECT id, sql_sha256, manifest_json, sql_text, r2_key, CAST((julianday('now') - julianday(created_at)) AS REAL) AS age_days FROM d1_fold_backups WHERE db_id = ?1 ORDER BY id DESC LIMIT 1", [db_id])
     bid = None
     if not okb or not back:
         refusals.append("no d1_fold_backups row")
@@ -778,9 +864,18 @@ def delete_d1(name: str, acct: str, token: str) -> int:
         _, live_manifest = d1_dump(acct, token, db_id)
         if json.loads(back[0].get("manifest_json") or "{}") != live_manifest:
             refusals.append("database changed since the backup")
+        if not back[0].get("r2_key"):
+            refusals.append("no verified R2 copy of the dump")
+        else:
+            gst, gtext = r2_get_text(acct, token, D1_BACKUP_BUCKET, back[0]["r2_key"])
+            if gst != 200 or hashlib.sha256(gtext.encode()).hexdigest() != back[0].get("sql_sha256"):
+                refusals.append("R2 copy missing or its SHA-256 differs")
+        cps = copy_tables(acct, token, db_id, live_manifest)
+        if not cps or not all(c.get("ok") and c.get("existed") for c in cps.values()):
+            refusals.append("jnlaudit_* table copies missing or not identical")
         # The owner was told the delete waits for 7 clean days after the backup and unbind (2026-10-05): a backup at least
         # D1_OBSERVE_DAYS old that still matches the live manifest proves nothing wrote to the database in that window.
-        if float(back[0].get("age_days") or 0) < D1_OBSERVE_DAYS:
+        if D1_OBSERVE_DAYS and float(back[0].get("age_days") or 0) < D1_OBSERVE_DAYS:
             refusals.append("backup is younger than %d days (observation window)" % D1_OBSERVE_DAYS)
     if refusals:
         emit({"action": "delete-d1", "db": name, "ok": False, "refused": refusals, "backup_id": bid})

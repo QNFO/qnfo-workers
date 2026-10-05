@@ -78,6 +78,29 @@ ok([r["id"] for r in DST.execute("SELECT id FROM jnl_log ORDER BY id")] == [1, 3
 ok(DST.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='jnl_log_detail'").fetchone()[0] == 1, "indexes recreated")
 ok("Heffner" not in json.dumps(manifest), "the manifest carries counts and hashes, never row text")
 
+# --- copy_tables (jnlaudit_* in qnfo-audit) -----------------------------------------------------------------------------
+AUD = sqlite3.connect(":memory:")
+AUD.row_factory = sqlite3.Row
+def mk_run(conn):
+    def run(sql, params=None):
+        try:
+            cur = conn.execute(sql, params or [])
+            conn.commit()
+            return True, [dict(r) for r in cur.fetchall()]
+        except Exception as e:  # noqa: BLE001
+            return False, [str(e)]
+    return run
+cp = C.copy_tables("a", "t", DB_ID, manifest, run_src=mk_run(SRC), run_dst=mk_run(AUD))
+ok(all(v["ok"] and v["sha256_match"] and not v["existed"] for v in cp.values()) and set(v["copy"] for v in cp.values()) == {"jnlaudit_records", "jnlaudit_log"}, "every table is copied as jnlaudit_* and verified by count and hash", cp)
+ok([dict(r) for r in AUD.execute("SELECT * FROM jnlaudit_log ORDER BY rowid")] == [dict(r) for r in SRC.execute("SELECT * FROM jnl_log ORDER BY rowid")], "the copy is row-for-row identical (ids kept)")
+cp2 = C.copy_tables("a", "t", DB_ID, manifest, run_src=mk_run(SRC), run_dst=mk_run(AUD))
+ok(all(v["ok"] and v["existed"] for v in cp2.values()) and AUD.execute("SELECT COUNT(*) FROM jnlaudit_log").fetchone()[0] == 2, "a re-run keeps a matching copy and inserts nothing twice")
+AUD.execute("UPDATE jnlaudit_records SET title = 'changed' WHERE recid = 15877875"); AUD.commit()
+cp3 = C.copy_tables("a", "t", DB_ID, manifest, run_src=mk_run(SRC), run_dst=mk_run(AUD))
+ok(not cp3["jnl_records"]["ok"] and AUD.execute("SELECT title FROM jnlaudit_records WHERE recid = 15877875").fetchone()[0] == "changed", "a copy that differs is reported, never overwritten")
+AUD.execute("UPDATE jnlaudit_records SET title = 'Sculpting Intelligence' WHERE recid = 15877875"); AUD.commit()
+ok(C.copy_name("jnl_review_log") == "jnlaudit_review_log" and C.copy_name("misc") == "jnlaudit_misc", "copy names follow the owner's jnlaudit_* scheme")
+
 # --- wrangler_binders / worker_dir -------------------------------------------------------------------------------------
 root = tempfile.mkdtemp()
 def mkw(d, name, extra="", marker=None, js="export default {}"):
@@ -164,7 +187,16 @@ C.d1_writes_7d = lambda a, t, db_id: state["writes"]
 C.d1_dump = lambda a, t, db, run=None: (sql, manifest)
 
 
+FT = {"n": 0}
+R2 = {"text": None}
+COPIES = {"ok": True}
+C.r2_get_text = lambda a, t, bucket, key: (200, R2["text"]) if R2["text"] is not None else (404, "")
+C.copy_tables = lambda a, t, db_id, m, run_src=None, run_dst=None: {k: {"ok": COPIES["ok"], "existed": True} for k in m}
+
+
 def fake_call2(method, path, token, body=None, timeout=60):
+    if "/query" in path and "fleet_tasks" in body["sql"]:
+        return 200, {"success": True, "result": [{"results": [{"n": FT["n"]}]}]}
     if path.endswith("/d1/database/" + DB_ID):
         if method == "DELETE":
             state["exists"] = False
@@ -177,7 +209,8 @@ def fake_call2(method, path, token, body=None, timeout=60):
 
 
 C.call = fake_call2
-good = {"id": 7, "sql_sha256": hashlib.sha256(sql.encode()).hexdigest(), "manifest_json": json.dumps(manifest, sort_keys=True), "sql_text": sql, "age_days": 7.2}
+good = {"id": 7, "sql_sha256": hashlib.sha256(sql.encode()).hexdigest(), "manifest_json": json.dumps(manifest, sort_keys=True), "sql_text": sql, "age_days": 0.01, "r2_key": "d1-folds/jnl-audit/x.sql"}
+R2["text"] = sql
 ok(C.delete_d1("qnfo-audit", "a", "t") == 3 and state["deleted"] == 0, "a database outside D1_RETIRE is refused")
 ok(C.delete_d1("jnl-audit", "a", "t") == 3 and "no d1_fold_backups row" in emitted[-1]["refused"] and state["deleted"] == 0, "refused without a backup")
 state["backup"] = dict(good, sql_text=sql + "tampered")
@@ -193,9 +226,19 @@ ok(C.delete_d1("jnl-audit", "a", "t") == 3 and any("write queries" in r for r in
 state["writes"] = None
 ok(C.delete_d1("jnl-audit", "a", "t") == 3 and state["deleted"] == 0, "refused when the write count cannot be read (fail closed)")
 state["writes"] = 0
-state["backup"] = dict(good, age_days=6.9)
-ok(C.delete_d1("jnl-audit", "a", "t") == 3 and any("observation window" in r for r in emitted[-1]["refused"]) and state["deleted"] == 0, "refused inside the 7-day observation window after the backup")
+state["backup"] = dict(good, r2_key=None)
+ok(C.delete_d1("jnl-audit", "a", "t") == 3 and "no verified R2 copy of the dump" in emitted[-1]["refused"] and state["deleted"] == 0, "refused without a verified R2 copy")
 state["backup"] = good
+R2["text"] = sql + "x"
+ok(C.delete_d1("jnl-audit", "a", "t") == 3 and any("R2 copy" in r for r in emitted[-1]["refused"]) and state["deleted"] == 0, "refused when the R2 copy's SHA-256 differs")
+R2["text"] = sql
+COPIES["ok"] = False
+ok(C.delete_d1("jnl-audit", "a", "t") == 3 and any("jnlaudit_" in r for r in emitted[-1]["refused"]) and state["deleted"] == 0, "refused when a jnlaudit_* copy is missing or differs")
+COPIES["ok"] = True
+FT["n"] = 1
+ok(C.delete_d1("jnl-audit", "a", "t") == 3 and any("fleet_tasks" in r for r in emitted[-1]["refused"]) and state["deleted"] == 0, "refused when a fleet_tasks definition names JNL")
+FT["n"] = 0
+ok(C.D1_OBSERVE_DAYS == 0, "owner directive: no observation window")
 ok(C.delete_d1("jnl-audit", "a", "t") == 0 and emitted[-1]["ok"] and state["deleted"] == 1 and emitted[-1]["backup_id"] == 7, "deletes when every check passes", emitted[-1])
 ok(C.delete_d1("jnl-audit", "a", "t") == 0 and emitted[-1].get("already_absent") and state["deleted"] == 1, "a second run is a no-op")
 
