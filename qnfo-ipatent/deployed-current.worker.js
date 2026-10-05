@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.9.4-filing-path"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.9.5-patent-probe"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -883,6 +883,23 @@ async function handleSuggest(env, url) {
   return json(out);
 }
 __name(handleSuggest, "handleSuggest");
+var BENCH_PROBE_URL = "https://patents.google.com/patent/US11000000B2/en";
+async function benchSourceProbe(request, ctx) {
+  var cache = typeof caches !== "undefined" ? caches.default : null;
+  var key = new Request("https://ipatent.qnfo.org/__bench-source-probe-v1");
+  if (cache) { try { var hit = await cache.match(key); if (hit) return hit; } catch (e) {} }
+  var out = { source: BENCH_PROBE_URL, checked_at: new Date().toISOString() };
+  try {
+    var r = await fetch(BENCH_PROBE_URL, { headers: { "User-Agent": "Mozilla/5.0 (compatible; QNFO-iPatent-benchmark/1.0; +https://ipatent.qnfo.org/)", "Accept": "text/html" } });
+    var h = await r.text();
+    out.status = r.status; out.bytes = h.length;
+    out.claims_found = /class="claim"|itemprop="claims"/.test(h);
+    out.provisional_ref_found = /[Pp]rovisional/.test(h);
+  } catch (e) { out.error = String(e && e.message || e).slice(0, 200); }
+  var res = new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600" } });
+  if (cache && ctx && ctx.waitUntil) { try { ctx.waitUntil(cache.put(key, res.clone())); } catch (e) {} }
+  return res;
+}
 // GUIDE-PAGES-1 (3.9.0): the iPatent guide family as data, rendered by one template. Attribution, dates, licence, share
 // card, canonical and structured data come from renderGuidePage, never from a page entry, so an automated edit cannot
 // invent an author, an ORCID, a date or a copyright line (2026-10-02: a code-agent draft did all four and replaced
@@ -1964,6 +1981,10 @@ var qnfo_ipatent_default = {
       }
       if (path === "/api/metrics" && request.method === "GET") return handleMetrics(env);
       if (path === "/api/subscribe" && request.method === "POST") return handleSubscribe(request);
+      // BENCH-SOURCE-PROBE-1 (3.9.5, #1779): can the fleet read issued-patent text server-side without a USPTO key? Fetches ONE
+      // fixed public Google Patents page and reports only status, size and whether claims and a provisional reference were found.
+      // Edge-cached 1 h, so it cannot be used to hammer the source; no user input reaches the URL.
+      if (path === "/api/benchmark/source-probe" && isRead) return benchSourceProbe(request, ctx);
       if (path === "/llms.txt" && isRead) return new Response(LLMS_TXT, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
       if (path === "/" + INDEXNOW_KEY + ".txt" && isRead) return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       if (path === "/robots.txt" && isRead) {

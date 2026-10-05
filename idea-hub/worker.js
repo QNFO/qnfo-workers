@@ -78,7 +78,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.5.3-questions-feed-leakfix";
+var VERSION = "1.5.4-reach-swr"; // 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -130,7 +130,7 @@ function qdsHead(o) {
     "<title>" + t + '</title><meta name="description" content="' + d + '">' + (o.canonical ? '<link rel="canonical" href="' + qdsAttr(o.canonical) + '">' : "") +
     (o.robots ? '<meta name="robots" content="' + qdsAttr(o.robots) + '">' : "") +
     '<meta name="author" content="Rowan Brad Quni-Gudzinas"><meta property="og:site_name" content="' + site + '"><meta property="og:title" content="' + t + '"><meta property="og:description" content="' + d + '"><meta property="og:type" content="' + (o.ogType || "website") + '">' +
-    (o.canonical ? '<meta property="og:url" content="' + qdsAttr(o.canonical) + '">' : "") + '<meta name="twitter:card" content="summary"><meta name="twitter:title" content="' + t + '"><meta name="twitter:description" content="' + d + '">' +
+    (o.canonical ? '<meta property="og:url" content="' + qdsAttr(o.canonical) + '">' : "") + '' + (brand === "qwav" ? '<meta name="twitter:card" content="summary">' : '<meta property="og:image" content="https://qnfo.org/og.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">') + '<meta name="twitter:title" content="' + t + '"><meta name="twitter:description" content="' + d + '">' +
     '<meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#121731" media="(prefers-color-scheme: dark)">' +
     '<link rel="icon" type="image/svg+xml" href="' + QDS_FAVICON[brand === "qwav" ? "qwav" : "qnfo"] + '">' +
     (o.rss ? '<link rel="alternate" type="application/rss+xml" title="QNFO Papers" href="https://papers.qnfo.org/rss.xml">' : "") +
@@ -157,7 +157,7 @@ function qdsFooter(brand) {
       '<div class="q-foot-base"><span>\u00a9 2025\u20132026 Rowan Brad Quni-Gudzinas</span><span>Research content under QNFO-ULA v2.0. No commercial product exists yet.</span></div></div></footer>';
   }
   return '<footer class="q-foot"><div class="q-wrap"><div class="q-foot-grid"><div><a class="q-brand" href="https://qnfo.org/">' + QDS_MARK.qnfo + 'QNFO</a><p style="margin-top:12px;max-width:38ch">The independent research imprint of Rowan Brad Quni-Gudzinas. Every work carries a DOI, and corrections ship as new versions.</p></div>' +
-    '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://qnfo.org/#selected-works">Selected works</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://ideas.qnfo.org/">Ideas</a></li><li><a href="https://archive.qnfo.org/">Archive</a></li></ul></div>' +
+    '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://qnfo.org/#selected-works">Selected works</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://ideas.qnfo.org/">Ideas</a></li><li><a href="https://archive.qnfo.org/">Archive</a></li><li><a href="https://ipatent.qnfo.org/?utm_source=ideas.qnfo.org&amp;utm_medium=referral&amp;utm_campaign=footer">iPatent: free provisional patent drafting</a></li></ul></div>' +
     '<div><h2>Author</h2><ul><li><a href="https://qnfo.org/about">About</a></li><li><a href="https://qnfo.org/work-with-me">Work with me</a></li><li><a href="https://orcid.org/' + QDS_OWNER_ORCID + '">ORCID ' + QDS_OWNER_ORCID + '</a></li><li><a href="https://qnfo.org/work-with-me#contact">Contact</a></li></ul></div>' +
     '<div><h2>Follow</h2><ul><li><a href="https://qnfo.org/#subscribe">New papers by email</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li><li><a href="https://legal.qnfo.org/">License (QNFO-ULA v2.0)</a></li><li><a href="https://legal.qnfo.org/privacy">Privacy</a></li></ul></div></div>' +
     '<div class="q-foot-base"><span>\u00a9 2025\u20132026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><span>Prepared with an AI-assisted research pipeline; the author is responsible for the content.</span></div></div></footer>';
@@ -630,13 +630,31 @@ async function ideasThread(env, rawId) {
     jsonld: ideaLd({ "@type": "DiscussionForumPosting", headline: qTitle.slice(0, 110), url: BASE + "/s/" + encodeURIComponent(id), datePublished: created, dateModified: updated }) }, body);
 }
 async function ideasCached(req, ctx, make) {
+  // IDEAS-SWR-1 (1.5.4): a cached copy is served at once; older than IDEAS_FRESH_MS it is rebuilt in the background, so a
+  // visitor never waits on the ~12 s uncached build. The internal build stamp is not sent to visitors.
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const key = new Request(new URL(req.url).origin + new URL(req.url).pathname, { method: "GET" });
-  if (cache) { try { const hit = await cache.match(key); if (hit) return hit; } catch (e) {} }
-  const res = await make();
-  if (cache && res.status === 200 && ctx && ctx.waitUntil) { try { ctx.waitUntil(cache.put(key, res.clone())); } catch (e) {} }
-  return res;
+  const key = new Request(new URL(req.url).origin + new URL(req.url).pathname + "?__swr=1", { method: "GET" });
+  const store = async function() {
+    const res = await make();
+    if (!cache || res.status !== 200) return res;
+    const body = await res.text();
+    const hd = new Headers(res.headers);
+    hd.set("X-Ideas-Built", String(Date.now()));
+    hd.set("Cache-Control", "public, max-age=604800");
+    try { await cache.put(key, new Response(body, { status: 200, headers: hd })); } catch (e) {}
+    return new Response(body, { status: 200, headers: res.headers });
+  };
+  let hit = null;
+  if (cache) { try { hit = await cache.match(key); } catch (e) { hit = null; } }
+  if (!hit) return store();
+  const age = Date.now() - Number(hit.headers.get("X-Ideas-Built") || 0);
+  if (age > IDEAS_FRESH_MS && ctx && ctx.waitUntil) ctx.waitUntil(store().catch(function() {}));
+  const hd = new Headers(hit.headers);
+  hd.delete("X-Ideas-Built");
+  hd.set("Cache-Control", "public, max-age=14400");
+  return new Response(hit.body, { status: 200, headers: hd });
 }
+var IDEAS_FRESH_MS = 15 * 60 * 1000;
 // ---- IDEAS-QDS-1:END ----
 
 
