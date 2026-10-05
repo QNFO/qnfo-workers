@@ -121,6 +121,8 @@ jobs:
       # WATCHMAKER-INDEX-1: the fleet's own daily count of recurring operations that still need a person or a session.
       - name: WATCHMAKER-INDEX-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/watchmaker.test.mjs
+      - name: TEXT-QUALITY-LOOP-1 generator inventory offline suite (qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-fleet-dashboard/generators.test.mjs
 
       # OWNER-QUEUE-MCP-1 (pillar autonomy): the owner's queue is readable and answerable from any MCP client through the
       # dashboard's own emailed-code gate (qnfo-tools-mcp owner_queue / owner_code / owner_act); the code never reaches mcp_log.
@@ -147,6 +149,8 @@ jobs:
       # Q08-METRICS-1 (pillar reach): q08 counts human vs crawler reads per day and serves the 7d aggregates on /api/metrics.
       - name: Q08-METRICS-1 offline suite (q08-signal-engine)
         run: node q08-signal-engine/metrics.test.mjs
+      - name: Q08-WRITE-ROUTES-TOKEN-1 offline suite (q08-signal-engine)
+        run: node --no-warnings q08-signal-engine/write-routes.test.mjs
       - name: WORK-WITH-ME-1 page suite (qnfo-gateway)
         run: node qnfo-gateway/work-with-me.test.mjs
       - name: WORK-WITH-ME-METRIC-1 offline suite (qnfo-fleet-dashboard)
