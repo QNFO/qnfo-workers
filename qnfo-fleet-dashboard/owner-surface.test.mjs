@@ -11,7 +11,11 @@
 //      authentication verdict and classification for everyone, name, address and at most 300 body characters only for the
 //      owner;
 //   O. the ratify route records the credential that acted and the apply step stamps it: owner session, loop token, or
-//      'unknown credential' when nothing was recorded (never the owner); the objective card shows the full text.
+//      'unknown credential' when nothing was recorded (never the owner); the objective card shows the full text;
+//      OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight change is applied only with the owner's emailed-code session (the
+//      loop token and an unrecorded ratification leave it proposed), constraint revisions stay delegable;
+//      OBJECTIVE-CARD-PLAIN-1 (#1944): each proposal opens with a plain sentence;
+//   H. HUMAN-SEV-HIGH-1 (#1896): human_actions sev 'high' is urgent on the queue.
 // Run: node qnfo-fleet-dashboard/owner-surface.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
@@ -274,28 +278,40 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   const a = db.prepare("SELECT via, outcome FROM objective_revision_applies WHERE goal_id = 58").get();
   ok(r.status === 200 && j.outcome === "applied" && o.ratified_by === "owner (fleet.qnfo.org, emailed code)" && a.via === "route:owner-session", "O1 an owner-session ratification is stamped as the owner's (" + o.ratified_by + ", " + (a && a.via) + ")");
   ok(db.prepare("SELECT credential FROM human_responses WHERE key = 'goals:objective-revision:58'").get().credential === "owner-session" && /by owner \(fleet\.qnfo\.org, emailed code\)/.test(o.source), "O2 the decision row records the credential and the source text names it");
+  // OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): the loop token cannot ratify a weight change; it stays proposed, nothing is applied.
+  const w0 = db.prepare("SELECT v FROM sai_config WHERE k = 'w_governance'").get().v;
   r = await post(env, "/api/owner/objective", { id: 61, decision: "ratify" }, T);
   j = await r.json();
+  const held = db.prepare("SELECT credential FROM human_responses WHERE key = 'goals:objective-revision:61' AND kind = 'ratify-held'").get();
+  ok(r.status === 403 && j.held === true && j.status === "proposed" && db.prepare("SELECT status FROM goals WHERE id = 61").get().status === "proposed" && db.prepare("SELECT v FROM sai_config WHERE k = 'w_governance'").get().v === w0 && !db.prepare("SELECT 1 FROM objective_revision_applies WHERE goal_id = 61").get() && held && held.credential === "loop-token", "O3 a loop-token ratification of a weight change is held as proposed (403, ratify-held row), never applied");
+  r = await post(env, "/api/owner/objective", { id: 61, decision: "ratify" }, S);
+  j = await r.json();
   const o2 = db.prepare("SELECT ratified_by FROM objectives WHERE objective_key = 'objective-function'").get();
-  ok(r.status === 200 && j.outcome === "applied" && o2.ratified_by === "delegated (loop token, OWNER-QUEUE-DELEGATION-1)" && db.prepare("SELECT via FROM objective_revision_applies WHERE goal_id = 61").get().via === "route:loop-token", "O3 a loop-token ratification is stamped as delegated, not the owner's");
+  ok(r.status === 200 && j.outcome === "applied" && o2.ratified_by === "owner (fleet.qnfo.org, emailed code)" && db.prepare("SELECT via FROM objective_revision_applies WHERE goal_id = 61").get().via === "route:owner-session", "O3b the held weight change is still the owner's to ratify, with the emailed-code session");
   r = await post(env, "/api/owner/objective", { id: 57, decision: "ratify" }, Object.assign({}, T, S));
   j = await r.json();
   const w = db.prepare("SELECT description FROM agent_issues WHERE title LIKE 'OBJECTIVE-REVISION-57:%'").get();
   ok(j.outcome === "filed-as-work" && /was ratified on fleet\.qnfo\.org by delegated \(loop token, OWNER-QUEUE-DELEGATION-1\) \(applied [0-9-]+\)/.test(w.description) && !/The owner ratified/.test(w.description), "O4 with the loop token present the work item says delegated, never 'the owner'");
   ok(j.decided_by === "delegated (loop token, OWNER-QUEUE-DELEGATION-1)", "O5 the route reports who it recorded");
+  db.prepare("INSERT INTO goals (id, goal_key, statement, goal_type, alignment, status, created_at) VALUES (62, 'rev-62', 'Add a constraint that every public page links its source paper', 'objective-revision', 'rationale: synthetic', 'proposed', '2026-10-01 10:00:00')").run();
+  r = await post(env, "/api/owner/objective", { id: 62, decision: "ratify" }, T);
+  j = await r.json();
+  ok(r.status === 200 && j.outcome === "filed-as-work" && j.decided_by === "delegated (loop token, OWNER-QUEUE-DELEGATION-1)" && db.prepare("SELECT status FROM goals WHERE id = 62").get().status === "ratified" && db.prepare("SELECT via FROM objective_revision_applies WHERE goal_id = 62").get().via === "route:loop-token", "O5b a constraint revision stays delegable: the loop token alone ratifies it, labelled delegated");
 }
 {
-  // A revision ratified with no record (a direct D1 write): the cron sweep, replayed from the worker source.
+  // Revisions ratified with no record (a direct D1 write): the cron sweep, replayed from the worker source.
   const { db, AUDIT } = mk();
   const src = readFileSync(join(here, "worker.js"), "utf8");
   const a = src.indexOf("var OBJREV_WEIGHT_RE"), b = src.indexOf("// NO-CLAUDE-RUNTIME-DEPENDENCY-1: the owner's data and workflow live on Cloudflare.");
   const cx = vm.createContext({ console, Date, JSON, Math, Number, String, Object, RegExp });
   vm.runInContext("async function d1all(db, sql, params) { let ps = db.prepare(sql); if (params && params.length) ps = ps.bind.apply(ps, params); const r = await ps.all(); return r.results || []; }\n" + src.slice(a, b) + "\n;this.__api = { objectiveRevisionSweep };", cx);
-  db.prepare("UPDATE goals SET status = 'ratified' WHERE id = 61").run();
+  db.prepare("UPDATE goals SET status = 'ratified' WHERE id IN (61, 57)").run();
   const sw = await cx.__api.objectiveRevisionSweep({ AUDIT });
   const o = db.prepare("SELECT ratified_by, source FROM objectives WHERE objective_key = 'objective-function'").get();
-  ok(/^goals\.id=61 ratified with no recorded decision \(unknown credential\)/.test(o.source) && !/fleet\.qnfo\.org by/.test(o.source), "O6a with no record the source text does not even claim the dashboard (" + o.source.slice(0, 80) + ")");
-  ok(sw.length === 1 && sw[0].outcome === "applied" && o.ratified_by === "unknown credential" && db.prepare("SELECT via FROM objective_revision_applies WHERE goal_id = 61").get().via === "cron:unknown", "O6 a ratification with no recorded credential is stamped 'unknown credential', never the owner");
+  const s61 = sw.find((x) => x.id === 61), s57 = sw.find((x) => x.id === 57);
+  ok(sw.length === 2 && s61 && s61.outcome === "held" && /unknown credential/.test(s61.detail) && db.prepare("SELECT status FROM goals WHERE id = 61").get().status === "proposed" && !db.prepare("SELECT 1 FROM objective_revision_applies WHERE goal_id = 61").get() && o.ratified_by === "seed", "O6 a weight change ratified with no recorded credential is not applied: back to proposed, unlogged, objective untouched");
+  const wi = db.prepare("SELECT description FROM agent_issues WHERE title LIKE 'OBJECTIVE-REVISION-57:%'").get();
+  ok(s57 && s57.outcome === "filed-as-work" && /ratified with no recorded decision \(unknown credential\)/.test(wi.description) && !/fleet\.qnfo\.org by/.test(wi.description) && db.prepare("SELECT via FROM objective_revision_applies WHERE goal_id = 57").get().via === "cron:unknown", "O6a a constraint with no record is filed as work stamped 'unknown credential': it does not even claim the dashboard, never the owner");
 }
 {
   const { env } = mk();
@@ -306,6 +322,18 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   const card = j.items.find((i) => i.key === "goals:objective-revision");
   const d = card && card.detail.find((x) => x.id === 59);
   ok(d && d.statement === LONG_STATEMENT && d.why === LONG_ALIGNMENT, "O8 /api/human carries the full text too");
+  // OBJECTIVE-CARD-PLAIN-1 (#1944): each proposal opens with a plain sentence of what it changes and what each answer does.
+  const d58 = card && card.detail.find((x) => x.id === 58);
+  ok(d && /^The fleet cannot tell whether its goal 'return-on-spend v3' is met\./.test(d.plain) && /Reject: nothing changes\. No decision: the current goals stay in force\.$/.test(d.plain) && /^Yes or no: \d+ proposed changes? to the fleet's goals$/.test(card.title), "O9 the card says in plain words what the proposal changes and what Ratify, Reject and no decision do");
+  ok(d58 && /how much each part of the fleet's score counts/.test(d58.plain) && /emailed-code sign-in only/.test(d58.plain) && h.includes(esc(d.plain)), "O10 a weight proposal says it changes the score weights and needs the owner's sign-in; the page shows the plain sentence");
+}
+{
+  // HUMAN-SEV-HIGH-1 (#1896): a human_actions card filed with sev 'high' is urgent on the queue.
+  const { env, db } = mk();
+  db.prepare("INSERT INTO human_actions (slug, title, sev, status) VALUES ('sev-high-card', 'A high-severity owner card', 'high', 'open'), ('sev-medium-card', 'A medium card', 'medium', 'open')").run();
+  const j = await (await call(env, "/api/human")).json();
+  const hi = j.items.find((i) => i.key === "ha:sev-high-card"), md = j.items.find((i) => i.key === "ha:sev-medium-card");
+  ok(hi && hi.sev === "urgent" && md && md.sev === "normal" && j.urgent >= 1, "H1 sev 'high' renders urgent and counts in /api/human urgent (" + j.urgent + "); 'medium' stays normal");
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
