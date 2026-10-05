@@ -1,49 +1,63 @@
-name = "qnfo-email"
+name = "radar-hub"
 main = "worker.js"
 compatibility_date = "2026-08-01"
-# OWNER-CMD-OPS-522-1 (2026-09-30): same-zone subrequests (email handler on qnfo.org -> ops.qnfo.org) only reach
-# another Worker with this flag; without it every owner command 522d (#1472). Applied by the deployers' declared-flag union.
-compatibility_flags = ["global_fetch_strictly_public"]
+workers_dev = true
 
-# Bindings verified from live CF API 2026-09-22 (BINDING-PRESERVATION-1).
-# This config was previously ABSENT from the repo, so every deploy had to carry
-# the bindings + compatibility_date out-of-band; an omitted compatibility_date
-# silently dropped the live value. Tracked here so the repo is the deploy source
-# of truth (REPO-IS-DEPLOY-SOURCE-1).
-
-# Native Email Routing send binding — tokenless (no API key needed).
-send_email = [
-  { name = "SEND_EMAIL" }
-]
-
-
-
-[observability]
-enabled = true
-head_sampling_rate = 1
+# Bindings verified from live CF API 2026-09-13 (BINDING-PRESERVATION-1)
+[[d1_databases]]
+binding = "AUDIT"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
 [[d1_databases]]
 binding = "AUDIT_DB"
 database_name = "qnfo-audit"
 database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
-# ITINERARY-INGEST-1 (#1881, charter pillar personal): the itinerary parser writes personal-life.events (lodging/travel rows
-# the away gate and the brief read). Writes happen only for DMARC-verified booking-company or owner mail; see worker.js.
+[[services]]
+binding = "CAL_API"
+service = "calendar-api"
+environment = "production"
+
+[[services]]
+binding = "EMAIL"
+service = "qnfo-email"
+environment = "production"
+
+# workflow binding: JOB_MARKET_WATCH -> class JobMarketWatchWorkflow
+# Set via CF dashboard or wrangler.toml [[workflows]] block when class is defined in main
+
+# OBSIDIAN_WRITER service binding removed 2026-10-01 (RADAR-HUB-REDEPLOY-1): its target worker obsidian-writer is no longer in the
+# account, and Cloudflare rejects an upload that binds a missing worker (error 10144). worker.js guards every use with
+# `if (env.OBSIDIAN_WRITER)`, so the vault-note step is skipped and the D1 writes (the actual output) are unaffected.
+
 [[d1_databases]]
-binding = "PERSONAL"
+binding = "PERSONAL_DB"
 database_name = "personal-life"
 database_id = "e8d6c61a-10b7-4086-b81e-9e6e85afa407"
 
-# Daily inbound-digest cron. NOTE: qnfo-email is also invoked via the qnfo.org
-# email-routing worker (fetch handler); this cron drives scheduled() ->
-# sendInboundDigest(). Reminder dispatch lives in qnfo-calendar-intake.
-# CRON-RATE-CEILING-1 (owner directive 2026-09-23): this declaration previously said
-# "*/5 * * * *" while the LIVE schedule was already "0 7 * * *" -- a latent violation
-# (288 fires/24h) that any wrangler deploy would have applied. Repo now matches LIVE.
-[triggers]
-crons = ["0 7 * * *"]
+[[d1_databases]]
+binding = "RADAR_DB"
+database_name = "qnfo-audit"
+database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
-# Secrets (set via `wrangler secret put`, never committed):
-#   GATEWAY_EMAIL_KEY   - AI Gateway key for reply drafting
-#   INGEST_TOKEN        - /ingest auth
-#   OPS_KEY             - ops command passthrough
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "obsidian-vault"
+
+# workflow binding (AUDIT-REMEDIATE-1 2026-09-22; verified vs live CF bindings)
+[[workflows]]
+binding = "JOB_MARKET_WATCH"
+name = "job-market-watch"
+class_name = "JobMarketWatchWorkflow"
+
+# RADAR-HUB-REDEPLOY-1 (2026-10-01): the worker vanished unrecorded around 2026-09-25 and a deleted worker loses its schedules,
+# so they are declared here (the canonical deploy applies them). They are exactly the cron strings the default export routes:
+# events 0 5 * * 2 | arxiv 30 8 * * * | research 0 6 1 * *, 0 8 * * 7, 0 9 * * 7 | citation 0 11 1,15 * * |
+# job-market 0 7 * * 2 | personal 30 5 * * 2, 0 6 * * *
+# EVENTS-RADAR-CF-DOW-1 (2026-10-02): events was "0 5 * * 1", which is Sunday in Cloudflare's numbering (1=Sunday..7=Saturday);
+# the radar reads its weekly sources only on Mondays, so "0 5 * * 2" (Monday 05:00Z). Same count of crons (net-zero).
+[triggers]
+# CRON-SINGLE-TRIGGER-1 (2026-10-02, #1785): ONE hourly trigger; worker.js CRON_TABLE holds the former list
+# (0 5 * * 2, 30 8 * * *, 0 6 1 * *, 0 8 * * 7, 0 9 * * 7, 0 11 1,15 * *, 0 7 * * 2, 30 5 * * 2, 0 6 * * *) and runs each entry in the hour it fired.
+crons = ["0 * * * *"]
