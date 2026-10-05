@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.31.2-ds-402-breaker"; // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.31.3-ensemble-run-log"; // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -865,6 +865,76 @@ var ENSEMBLE = {
   reviewer: { wa: "@cf/deepseek-ai/deepseek-v4-pro-0813", ctx: 1048576 }
   // 1M-ctx reasoning refinement ($1.32/M) Ã¢ÂÂ LAZY: runs only on validator FAIL
 };
+// ENSEMBLE-RUN-LOG-1 (2026-10-05, agent_issues #1889 ENSEMBLE-POLICY-1): the ensemble is primary (seeded pick from the
+// pool) -> validator (PASS/FAIL) -> reviewer on FAIL, and until now a call left only one ai_gateway_usage row with
+// model=ensemble, so same-family vs cross-family agreement (docs/ENSEMBLE-POLICY.md: correlated judges are worth fewer
+// votes) could not be measured. Each call now leaves one cloud_ops_events row (kind ensemble-run) with the primary and
+// validator models and their families, the validator's verdict, whether the reviewer ran, and a short hash of the final
+// text. No new table, no extra model call. The table that decides which pool entry to drop is then one query:
+//   SELECT json_extract(meta,'$.primary_family') pf, json_extract(meta,'$.validator_family') vf,
+//          json_extract(meta,'$.verdict') v, COUNT(*) n FROM cloud_ops_events WHERE kind='ensemble-run' GROUP BY 1,2,3
+function modelFamily(id) {
+  var s = String(id || "").toLowerCase();
+  if (!s) return "none";
+  if (s.indexOf("deepseek") >= 0) return "deepseek";
+  if (s.indexOf("moonshot") >= 0 || s.indexOf("kimi") >= 0) return "moonshot";
+  if (s.indexOf("zai-org") >= 0 || s.indexOf("glm-") >= 0) return "zai";
+  if (s.indexOf("openai") >= 0 || s.indexOf("gpt-") >= 0) return "openai";
+  if (s.indexOf("meta") >= 0 || s.indexOf("llama") >= 0) return "meta";
+  if (s.indexOf("qwen") >= 0) return "qwen";
+  if (s.indexOf("google") >= 0 || s.indexOf("gemma") >= 0) return "google";
+  if (s.indexOf("nvidia") >= 0 || s.indexOf("nemotron") >= 0) return "nvidia";
+  if (s.indexOf("mistral") >= 0) return "mistral";
+  var m = /^@cf\/([^/]+)\//.exec(s);
+  return m ? m[1] : s.split("/")[0].split("-")[0] || "other";
+}
+function textHash32(s) {
+  var h = 2166136261;
+  var t = String(s || "");
+  for (var i = 0; i < t.length; i++) {
+    h ^= t.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return ("00000000" + h.toString(16)).slice(-8);
+}
+function ensembleRunMeta(ens, domain, text) {
+  var e = ens || {};
+  var primary = e.primary_model || "";
+  var validator = e.validator_model || "";
+  return {
+    domain: String(domain || ""),
+    primary: primary,
+    intended: e.intended_primary || "",
+    primary_fell_back: !!(e.intended_primary && primary && e.intended_primary !== primary),
+    primary_family: modelFamily(primary),
+    validator: validator,
+    validator_family: modelFamily(validator),
+    same_family: !!primary && !!validator && modelFamily(primary) === modelFamily(validator),
+    verdict: e.validator_verdict || "skipped",
+    reviewer_ran: !!e.reviewer_ran,
+    result: e.verification_result || "",
+    latency_ms: Number(e.latency_ms) || 0,
+    text_hash: textHash32(text),
+    text_len: String(text || "").length,
+    v: VERSION
+  };
+}
+async function logEnsembleRun(env, ens, domain, text) {
+  try {
+    if (!env || !env.QNFO_AUDIT) return false;
+    var meta = ensembleRunMeta(ens, domain, text);
+    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'ensemble-run', ?3, ?4, 'qnfo-ai', 'ok')").bind(
+      "ensrun-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36),
+      (/* @__PURE__ */ new Date()).toISOString(),
+      ("ensemble " + meta.domain + ": " + meta.primary_family + " -> " + meta.validator_family + " " + meta.verdict + (meta.reviewer_ran ? " +reviewer" : "") + (meta.same_family ? " (same family)" : "")).slice(0, 300),
+      JSON.stringify(meta).slice(0, 1800)
+    ).run();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+// end ensemble-run-log
 var ENSEMBLE_POOL = {
   code: ["@cf/moonshotai/kimi-k2.7-code"],
   science: ["@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3", "@cf/openai/gpt-oss-120b", "@cf/deepseek-ai/deepseek-v4-pro-0813"],
@@ -1615,6 +1685,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
   }
   let verificationResult = primaryModel === intendedPrimary ? "passed" : "degraded";
   let agreementRate = 0;
+  let validatorVerdict = "skipped";
   let verifiedBy = ENSEMBLE.validator.wa;
   let finalText = primaryText;
   let membersRun = ["primary", "validator"];
@@ -1636,6 +1707,7 @@ async function runEnsemble(env, messages, maxTokens, domain) {
       const vOut = await withTimeout(runWorkersAI(env, ENSEMBLE.validator.wa, truncateMessagesToFit(vMsg, ENSEMBLE.validator.ctx), 1024, false), Math.min(15e3, _remaining()), "ensemble-validator");
       const vText = (vOut ? extractWAContent(vOut) : "").trim();
       const pass = /\bpass\b/i.test(vText) && !/\bfail\b/i.test(vText);
+      validatorVerdict = pass ? "pass" : "fail";
       if (pass) {
         agreementRate = 1;
       } else {
@@ -1667,6 +1739,11 @@ async function runEnsemble(env, messages, maxTokens, domain) {
     verified_by: verifiedBy,
     verification_result: verificationResult,
     agreement_rate: agreementRate,
+    primary_model: primaryModel,
+    intended_primary: intendedPrimary,
+    validator_model: ENSEMBLE.validator.wa,
+    validator_verdict: validatorVerdict,
+    reviewer_ran: membersRun.indexOf("reviewer") >= 0,
     latency_ms: Date.now() - t0,
     stages: _stages,
     budget_ms: ENSEMBLE_BUDGET_MS
@@ -2129,6 +2206,8 @@ async function handleChat(env, body, authHeader, ctx, ua) {
       const ensCap = clampTokens(max_tokens, MAX_OUT[ENSEMBLE.primary.wa]);
       const ens = await runEnsemble(env, messages, ensCap, cls.domain);
       const ensText = (ens.text || "").trim() || FALLBACK_TEXT;
+      // ENSEMBLE-RUN-LOG-1 (#1889): one row per ensemble call with the models and the verdict, no extra model call.
+      ctx.waitUntil(logEnsembleRun(env, ens, cls.domain, ensText));
       if (ensText === FALLBACK_TEXT) {
         // ENSEMBLE-STAGE-SHARE-1 (#1504): record which stage(s) failed so canned share per stage is queryable.
         try {
