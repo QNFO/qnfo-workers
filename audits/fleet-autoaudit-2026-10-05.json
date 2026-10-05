@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-05 18:33:35",
+  "audited_at": "2026-10-05 19:13:19",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -23,16 +23,9 @@
         ],
         "dir": "qnfo-email-orchestrator",
         "worker": "qnfo-email-orchestrator"
-      },
-      {
-        "crons": [
-          "0 * * * *"
-        ],
-        "dir": "qnfo-signal-loop",
-        "worker": "qnfo-signal-loop"
       }
     ],
-    "cron_only_count": 3,
+    "cron_only_count": 2,
     "drift": [],
     "live_err": [],
     "multi_version": [],
@@ -136,13 +129,15 @@
       "qnfo-research-radar",
       "qnfo-research-supervisor",
       "qnfo-scorecard",
+      "qnfo-signal-loop",
       "qnfo-thread-ingest",
       "qnfo-twin-maintain",
+      "qnfo-venue-radar",
       "research-daily-brief",
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 60,
+    "not_deployed_notdrift": 62,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -365,12 +360,20 @@
         "worker": "qnfo-scorecard"
       },
       {
+        "dir": "qnfo-signal-loop",
+        "worker": "qnfo-signal-loop"
+      },
+      {
         "dir": "qnfo-thread-ingest",
         "worker": "qnfo-thread-ingest"
       },
       {
         "dir": "qnfo-twin-maintain",
         "worker": "qnfo-twin-maintain"
+      },
+      {
+        "dir": "qnfo-venue-radar",
+        "worker": "qnfo-venue-radar"
       },
       {
         "dir": "research-daily-brief",
@@ -388,7 +391,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 41,
+    "sync": 40,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -397,7 +400,7 @@
       },
       {
         "dir": "errata-hub",
-        "version": "1.3.1-errata-judge",
+        "version": "1.4.0-internal-sweep",
         "worker": "errata-hub"
       },
       {
@@ -407,7 +410,7 @@
       },
       {
         "dir": "idea-hub",
-        "version": "1.5.5-triage-budget",
+        "version": "1.5.6-reentry-drain",
         "worker": "idea-hub"
       },
       {
@@ -422,7 +425,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.8.5-ensemble",
+        "version": "0.8.6-write-routes-token",
         "worker": "q08-signal-engine"
       },
       {
@@ -487,12 +490,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.123-remediation-hold",
+        "version": "0.4.124-drift-confirm",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.22.1-fleet-console",
+        "version": "1.22.2-generator-inventory",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -586,11 +589,6 @@
         "worker": "qnfo-tools-mcp"
       },
       {
-        "dir": "qnfo-venue-radar",
-        "version": "1.0.5",
-        "worker": "qnfo-venue-radar"
-      },
-      {
         "dir": "radar-hub",
         "version": "1.2.4",
         "worker": "radar-hub"
@@ -656,9 +654,9 @@
       "worker": "docs"
     },
     "errata-hub": {
-      "before": "1.3.1-errata-judge",
+      "before": "1.4.0-internal-sweep",
       "http": 200,
-      "live": "1.3.1-errata-judge",
+      "live": "1.4.0-internal-sweep",
       "match": 1,
       "note": "SYNC",
       "worker": "errata-hub"
@@ -688,9 +686,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.5.5-triage-budget",
+      "before": "1.5.6-reentry-drain",
       "http": 200,
-      "live": "1.5.5-triage-budget",
+      "live": "1.5.6-reentry-drain",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -848,9 +846,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.8.5-ensemble",
+      "before": "0.8.6-write-routes-token",
       "http": 200,
-      "live": "0.8.5-ensemble",
+      "live": "0.8.6-write-routes-token",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1144,17 +1142,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.123-remediation-hold",
+      "before": "0.4.124-drift-confirm",
       "http": 200,
-      "live": "0.4.123-remediation-hold",
+      "live": "0.4.124-drift-confirm",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.22.1-fleet-console",
+      "before": "1.22.2-generator-inventory",
       "http": 200,
-      "live": "1.22.1-fleet-console",
+      "live": "1.22.2-generator-inventory",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1393,10 +1391,10 @@
     },
     "qnfo-signal-loop": {
       "before": null,
-      "http": null,
+      "http": 404,
       "live": null,
       "match": 0,
-      "note": "CRON_ONLY",
+      "note": "NOT_DEPLOYED",
       "worker": "qnfo-signal-loop"
     },
     "qnfo-skill-sync": {
@@ -1456,11 +1454,11 @@
       "worker": "qnfo-twin-maintain"
     },
     "qnfo-venue-radar": {
-      "before": "1.0.5",
-      "http": 200,
-      "live": "1.0.5",
-      "match": 1,
-      "note": "SYNC",
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
       "worker": "qnfo-venue-radar"
     },
     "qnfo-web-unified": {
