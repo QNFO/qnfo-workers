@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-05 17:17:47",
+  "audited_at": "2026-10-05 18:01:09",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -477,7 +477,7 @@
       },
       {
         "dir": "qnfo-deploy-guard",
-        "version": "1.3.22-work-claim-unify",
+        "version": "1.3.23-secret-only-ledger",
         "worker": "qnfo-deploy-guard"
       },
       {
@@ -487,7 +487,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.117-merge-lane",
+        "version": "0.4.118-metric-truth",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -512,17 +512,17 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.9.7-probe-errors",
+        "version": "3.10.1-bench-dataset",
         "worker": "qnfo-ipatent"
       },
       {
         "dir": "qnfo-kaizen",
-        "version": "0.3.3-scan-internal",
+        "version": "0.3.4-cf-monday",
         "worker": "qnfo-kaizen"
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.7.1-ping-hourly",
+        "version": "1.7.2-cadence-units",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -1056,9 +1056,9 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": "1.3.22-work-claim-unify",
+      "before": "1.3.23-secret-only-ledger",
       "http": 200,
-      "live": "1.3.22-work-claim-unify",
+      "live": "1.3.23-secret-only-ledger",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-deploy-guard"
@@ -1144,9 +1144,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.117-merge-lane",
+      "before": "0.4.118-metric-truth",
       "http": 200,
-      "live": "0.4.117-merge-lane",
+      "live": "0.4.118-metric-truth",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1232,25 +1232,25 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.9.7-probe-errors",
+      "before": "3.10.1-bench-dataset",
       "http": 200,
-      "live": "3.9.7-probe-errors",
+      "live": "3.10.1-bench-dataset",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
     },
     "qnfo-kaizen": {
-      "before": "0.3.3-scan-internal",
+      "before": "0.3.4-cf-monday",
       "http": 200,
-      "live": "0.3.3-scan-internal",
+      "live": "0.3.4-cf-monday",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.7.1-ping-hourly",
+      "before": "1.7.2-cadence-units",
       "http": 200,
-      "live": "1.7.1-ping-hourly",
+      "live": "1.7.2-cadence-units",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
