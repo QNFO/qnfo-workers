@@ -161,7 +161,7 @@ ok(aiCalls.length === 0 && sends.length === 0 && fetches.length === 0, "still no
 
 // 8. /health states the sweep.
 const h = await (await worker.fetch(new Request("https://errata-hub.example/health"), env, ctx)).json();
-ok(h.internal_sweep === true && h.capabilities.includes("internal-errata-sweep") && /ERRATA-INTERNAL-SWEEP-1/.test(h.limitations.join(" ")) && /^1\.4\.0/.test(h.version), "/health states the sweep (" + h.version + ")");
+ok(h.internal_sweep === true && h.capabilities.includes("internal-errata-sweep") && /ERRATA-INTERNAL-SWEEP-1/.test(h.limitations.join(" ")) && /^1\.(?:4|[5-9]|[1-9][0-9])\./.test(h.version), "/health states the sweep (" + h.version + ")");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

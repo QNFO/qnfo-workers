@@ -1,6 +1,6 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.4.0-internal-sweep"; // 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.4.1-ai-attribution"; // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
@@ -21838,8 +21838,49 @@ async function cronTickDispatch(event, one) {
   if (TICK_PARALLEL) { await Promise.all(due.map(run)); return; }
   for (var i = 0; i < due.length; i++) await run(due[i]);
 }
+// WORKERS-AI-ATTRIBUTION-2 (errata-hub 1.4.1, agent_issues 1997): the three members called env.AI directly (glm-5.3-flash
+// drafts, gemma-4 judge) and wrote nothing to ai_call_counters. The block below is copied verbatim from q08-signal-engine
+// (WORKERS-AI-ATTRIBUTION-1); the env each member receives is wrapped once at this entry, counters go to WATCH_DB (qnfo-audit).
+// WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
+// binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
+// Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
+var __AI_ATTR_RATES = { "@cf/zai-org/glm-5.3": [127273, 400000], "@cf/zai-org/glm-5.3-flash": [13636, 45455], "@cf/nvidia/nemotron-3-120b-a12b": [45455, 136364], "@cf/moonshotai/kimi-k2.6": [86364, 363636], "@cf/moonshotai/kimi-k2.7-code": [86364, 363636], "@cf/openai/gpt-oss-120b": [31818, 68182], "@cf/openai/gpt-oss-20b": [18182, 27273], "@cf/deepseek-ai/deepseek-v4-pro-0813": [120000, 360000], "@cf/deepseek-ai/deepseek-v4-flash-0731": [40000, 120000], "@cf/meta/llama-3.3-70b-instruct-fp8-fast": [26668, 204805], "@cf/qwen/qwen3-30b-a3b-fp8": [4625, 30475], "@cf/qwen/qwen3.8-27b": [40909, 290909], "@cf/baai/bge-base-en-v1.5": [6058, 0], "@cf/baai/bge-small-en-v1.5": [1841, 0], "@cf/baai/bge-large-en-v1.5": [18582, 0] };
+function __aiAttrEnv(env, worker, aiKey, dbKey) {
+  try {
+    if (!env || env.__aiAttr) return env;
+    var ai = env[aiKey], db = env[dbKey];
+    if (!ai || typeof ai.run !== "function" || !db) return env;
+    var wrapped = new Proxy(ai, { get: function (t, p) {
+      if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
+      return async function (model, input, opts) {
+        var t0 = Date.now(), ok = 1, res;
+        try { res = await t.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+        finally {
+          try {
+            var u = res && typeof res === "object" && res.usage || {};
+            var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
+            var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
+            var outTok = Number(u.completion_tokens || u.output_tokens || 0);
+            var r = __AI_ATTR_RATES[String(model)] || [0, 0];
+            var neurons = (inTok * r[0] + outTok * r[1]) / 1e6;
+            await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (?1,?2,'binding',?3,1,?4,?5,?6,?7,?8,?9) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+excluded.errors, in_chars=in_chars+excluded.in_chars, ms=ms+excluded.ms, in_tok=in_tok+excluded.in_tok, out_tok=out_tok+excluded.out_tok, neurons=neurons+excluded.neurons")
+              .bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), ok ? 0 : 1, chars, Date.now() - t0, inTok, outTok, neurons).run();
+          } catch (e2) {}
+        }
+      };
+    } });
+    var copy = Object.assign({}, env);
+    copy[aiKey] = wrapped;
+    copy.__aiAttr = 1;
+    return copy;
+  } catch (e) {
+    return env;
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
+    env = __aiAttrEnv(env, "errata-hub", "AI", "WATCH_DB");
     const p = new URL(request.url).pathname;
     if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction goes to Zenodo only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)"] }), { headers: { "content-type": "application/json" } });
     if (p === "/internal-errata" && request.method === "POST") return internalErrataIntake(request, env);
@@ -21849,6 +21890,7 @@ export default {
     return new Response("errata-hub", { status: 200 });
   },
   async scheduled(event, env, ctx) {
+    env = __aiAttrEnv(env, "errata-hub", "AI", "WATCH_DB");
     return cronTickDispatch(event, async function (event) {
     const c = event.cron;
     if (c === "0 * * * *") return erratawatchMod.default.scheduled(event, env, ctx);

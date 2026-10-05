@@ -422,6 +422,10 @@ jobs:
       # (email_id NULL, internal-open, at most 20 per tick, no model call), and neither respond nor publish acts on them.
       - name: ERRATA-INTERNAL-SWEEP-1 offline suite (errata-hub)
         run: node errata-hub/internal-sweep.test.mjs
+      - name: WORKERS-AI-ATTRIBUTION-2 offline suites (qnfo-ai-search, errata-hub)
+        run: |
+          node --no-warnings qnfo-ai-search/ai-attribution.test.mjs
+          node --no-warnings errata-hub/ai-attribution.test.mjs
 
       # GROUND-OR-SLOT-1 + GROUND-THIN-FAILFAST-1 (agent_issues 1751): the arXiv OR fallback keeps its query slot, and a
       # grounding too thin to pass gate-refcount stops at ground instead of running the whole pipeline.
