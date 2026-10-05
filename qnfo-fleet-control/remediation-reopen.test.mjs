@@ -1,4 +1,4 @@
-// REMEDIATION-REOPEN-1 offline suite (qnfo-fleet-control 0.4.119, agent_issues 1297): remediationContractsTick against
+// REMEDIATION-REOPEN-1 + REMEDIATION-HOLD-1 offline suite (qnfo-fleet-control 0.4.119/0.4.121/0.4.123, agent_issues 1297): remediationContractsTick against
 // node:sqlite with the live tables and the live auto-close trigger. Proves: a contract on a wontfix issue is marked
 // superseded without a probe run; a probe that fails max_attempts times after its issue was closed reopens the issue once
 // (description note with the prior close_evidence, reopened_count + 1, close_evidence cleared) and fewer failures do not;
@@ -46,7 +46,7 @@ const tick = async () => { db.exec("UPDATE remediation_contracts SET next_due_at
 let out = await tick();
 check(out.superseded === 1 && db.prepare("SELECT status, last_verdict FROM remediation_contracts WHERE class='c3'").get().status === "superseded", "a contract on a wontfix issue is superseded");
 check(db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class='c3'").get().n === 0, "the wontfix contract's probe is not run");
-check(db.prepare("SELECT status FROM agent_issues WHERE id=4").get().status === "closed" && db.prepare("SELECT status FROM remediation_contracts WHERE class='c4'").get().status === "closed", "a pass on an open issue closes the issue (trigger) and the contract");
+check(db.prepare("SELECT status FROM agent_issues WHERE id=4").get().status === "closed" && db.prepare("SELECT status FROM remediation_contracts WHERE class='c4'").get().status === "holding", "a pass on an open issue closes the issue (trigger) and the contract holds (REMEDIATION-HOLD-1)");
 check(out.reopened.length === 0 && db.prepare("SELECT status FROM agent_issues WHERE id=1").get().status === "closed", "one failure after closure does not reopen");
 await tick();
 out = await tick();
@@ -79,5 +79,39 @@ check(!out.reopened.includes(5) && db.prepare("SELECT status FROM agent_issues W
 await tick(); out = await tick();
 check(out.reopened.includes(5) && db.prepare("SELECT status FROM agent_issues WHERE id=5").get().status === "open", "the third real failure reopens issue 5");
 check(db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class='c5'").get().n === 8, "pending observations are still recorded as rows");
+
+// 0.4.123 REMEDIATION-HOLD-1: a pass holds the contract for 7 days at a daily cadence; a relapse inside the hold reopens the
+// issue and returns the contract to active; a 7-day pass streak closes it; a 'pending' read while holding keeps it holding.
+const ago = (h) => new Date(Date.now() - h * 3600e3).toISOString().replace("T", " ").slice(0, 19);
+db.exec(`INSERT INTO agent_issues VALUES (6, 'open, passes then relapses', 'desc6', 'open', NULL, ${closedLongAgo}), (7, 'open, holds 8 days', 'desc7', 'open', NULL, ${closedLongAgo}), (8, 'open, pending in hold', 'desc8', 'open', NULL, ${closedLongAgo});
+  INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (6, 'x', 'triaged', 'o', 'n', NULL), (7, 'x', 'triaged', 'o', 'n', NULL), (8, 'x', 'triaged', 'o', 'n', NULL);
+  INSERT INTO probe_src VALUES ('p6', 'ok'), ('p7', 'ok'), ('p8', 'ok');`);
+add("c6", 6, "p6", 3); add("c7", 7, "p7", 3); add("c8", 8, "p8", 3);
+out = await tick();
+const st = (k) => db.prepare("SELECT status, next_due_at FROM remediation_contracts WHERE class=?").get(k);
+const due6 = (Date.parse(st("c6").next_due_at.replace(" ", "T") + "Z") - Date.now()) / 3600e3;
+check(st("c6").status === "holding" && db.prepare("SELECT status FROM agent_issues WHERE id=6").get().status === "closed" && due6 > 23 && due6 < 25, "a first pass closes the issue and holds the contract, next read in 24h (got " + st("c6").status + ", " + due6.toFixed(1) + "h)");
+check(out.holding >= 3, "the tick reports held contracts (holding " + out.holding + ")");
+// time passes: the pass and the closure are 2h old, then the probe breaks three times
+db.prepare("UPDATE remediation_verifications SET verified_at = ? WHERE class = 'c6'").run(ago(2));
+db.prepare("UPDATE agent_issues SET updated_at = ? WHERE id = 6").run(Date.now() - 2 * 3600e3);
+db.exec("UPDATE probe_src SET v = 'broken' WHERE k = 'p6'");
+await tick(); await tick();
+check(db.prepare("SELECT status FROM agent_issues WHERE id=6").get().status === "closed" && st("c6").status === "holding", "two failures inside the hold do not reopen yet");
+const due6f = (Date.parse(st("c6").next_due_at.replace(" ", "T") + "Z") - Date.now()) / 3600e3;
+check(due6f < 2, "a failing read inside the hold uses the contract's own cadence to confirm (got " + due6f.toFixed(1) + "h)");
+out = await tick();
+check(out.reopened.includes(6) && db.prepare("SELECT status FROM agent_issues WHERE id=6").get().status === "open" && st("c6").status === "active", "the third failure inside the hold reopens the issue and the contract is active again");
+// a pass streak of 8 days closes the contract
+db.prepare("UPDATE remediation_verifications SET verified_at = ? WHERE class = 'c7'").run(ago(8 * 24));
+out = await tick();
+check(st("c7").status === "closed" && out.held >= 1, "a pass after an 8-day pass streak closes the contract (got " + st("c7").status + ")");
+// pending inside the hold keeps it holding at the daily cadence and reopens nothing
+db.exec("UPDATE probe_src SET v = 'pending' WHERE k = 'p8'");
+for (let i = 0; i < 4; i++) await tick();
+const due8 = (Date.parse(st("c8").next_due_at.replace(" ", "T") + "Z") - Date.now()) / 3600e3;
+check(st("c8").status === "holding" && db.prepare("SELECT status FROM agent_issues WHERE id=8").get().status === "closed" && due8 > 23, "'pending' inside the hold keeps holding at 24h and reopens nothing");
+const vr = db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class IN ('c6','c7','c8')").get().n, at = db.prepare("SELECT SUM(attempts) n FROM remediation_contracts WHERE class IN ('c6','c7','c8')").get().n;
+check(vr === at && vr > 12, "every held read writes its verification row (rows " + vr + ", attempts " + at + ")");
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);
