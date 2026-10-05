@@ -20,5 +20,7 @@ W4 Storage pruning: vectorize qnfo-infra (3 vectors) + qnfo-ops-semcache (9 vect
 ## Rules every wave must satisfy
 - Never retire on invocation counts alone: check repo bindings (wrangler.toml + worker.js consumers) FIRST.
 - CONSOLIDATION-VS-LIVE-FUNCTION-1: a cron-mediated worker's value is INDIRECT (distribution/digest/sync).
-- Drain-then-dispose: re-point consumers, verify 24h of ~0 traffic, then disposeRetired (it re-checks).
+- Drain-then-dispose: re-point consumers, then dispose. Since 2026-10-05 (OWNER-STANDING-GRANT-1, charter rule 9) a worker
+  with no binder, URL caller or live reader of a table only it writes is retired without idle proof; disposeRetired keeps
+  its own traffic re-check for the disposals it makes on its own.
 - After each wave: service_registry == live scripts, drift_total 0, fleet_budget.current re-measured.

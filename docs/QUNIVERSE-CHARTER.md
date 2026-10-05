@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.7, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.8, written 2026-10-01 (1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1; 1.0.8, 2026-10-05: the owner's standing grant OWNER-STANDING-GRANT-1, which lets the fleet retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 2, 7 and 8). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -80,7 +80,8 @@ owner as an override and never a dependency.
 
 **Non-goals.** The Quniverse is not a general cloud platform, a social-media growth engine, a product company, or a
 multi-tenant service. It does not chase journals, buy attention, run paid promotion, or keep a worker alive because it
-was fun to build. It does not delete research data automatically, ever.
+was fun to build. It never loses research data: a store is deleted only after a verified, restorable copy exists
+(OWNER-STANDING-GRANT-1, rule 9), and data with no such copy is never deleted automatically.
 
 ## 3. Objectives and value-add
 
@@ -317,7 +318,8 @@ disposition, the DO agents decision, qnfo-agent-ws. None of these blocks anythin
 approve each LinkedIn draft with one tap; grant GA4 Viewer and Search Console access to the service account; ask one
 established arXiv author for an endorsement; add the selected works to ORCID; paste the bio into LinkedIn; rotate the
 identity-bound Cloudflare token; ratify or reject the seven proposed objective revisions; change any spend cap; confirm
-any data deletion by email. Everything else is the fleet's.
+by email any deletion of data that has no verified backup. Everything else is the fleet's, including what the standing
+grant (rule 9) covers.
 
 ## 8. Decision rules: how the charter is baked into development
 
@@ -333,9 +335,10 @@ close-evidence trigger) and stated here for the rest.
 3. **Measure before you claim.** A change that affects a graded metric is reported with the metric's value before and
    after. "Deployed" is never evidence; a live probe is. An issue closes only with `close_evidence`.
 4. **Automatic safe default.** No critical-path step waits for a human. Tier 1 decisions (reversible, bounded, inside
-   limits) are taken and recorded; tier 2 (credentials, spend, external publication as the owner, data deletion) park
-   with the default stated; the "never" list (raise a cap, mint or rotate a live credential, delete data, disable a
-   guard, bypass the canonical deploy, post or mail as the owner outside the STRATEGY-1 gates) is refused.
+   limits) are taken and recorded; tier 2 (credentials, spend, external publication as the owner, deleting data that
+   has no verified backup) park with the default stated; the "never" list (raise a cap, mint or rotate a live
+   credential, delete data that has no verified backup, disable a guard, bypass the canonical deploy, post or mail as
+   the owner outside the STRATEGY-1 gates) is refused.
 5. **Prefer the cheapest correct path.** Deterministic before cached before cheap model before cascade before ensemble;
    paid paths only with a verifier; one cost policy per path.
 6. **Reach inside the gates.** Every outgoing item passes the owner-voice gates (fact check, identity lexicon, encoding,
@@ -345,6 +348,22 @@ close-evidence trigger) and stated here for the rest.
    bump; the generated section is never hand-edited.
 8. **Record the decision where the next session will look.** PR text, `agent_issues` description, `issue_triage`,
    `roadmap_implementation.evidence`, or this document. A decision that lives only in a chat transcript was not made.
+9. **Act on the standing grant (OWNER-STANDING-GRANT-1).** Owner directive 2026-10-05: "I don't want the 'safest'
+   choice. I want bold autonomous systems that think and act entirely on their own." Without an owner card the fleet
+   (its loops and its sessions) retires idle or low-value workers, deletes unused databases after a verified backup, and
+   switches to cheaper models:
+   - a worker retirement needs a dependency check, not idle proof (no binder, no URL caller, no live reader of a table
+     only it writes); it stops at the first real dependent, which is folded or recorded on its issue. It lands by PR
+     with a `RETIRED` marker, leaves the probes and registries (`service_registry` state `retired`), then the script is
+     deleted with cf-ops-actions delete-worker. The code stays in git, so a redeploy undoes it.
+   - a database is deleted only after every table is copied and checked by row count and SHA-256, a full dump is read
+     back from R2 `qnfo-backups` by SHA-256, and no binder, `fleet_tasks` reference or write in 7 days remains
+     (D1-FOLD-1: cf-ops-actions d1-backup, unbind-d1, delete-d1).
+   - a model switch needs no A/B test when it keeps a per-request fallback to the previous model and an automatic
+     revert on errors or empty replies (TWIN-FLASH-1 is the pattern).
+   Each act is recorded on its issue with the live measurement. Unchanged: caps stay owner-held and are never raised,
+   no paid model call is added while a cap is breached, credentials are not minted or rotated, guards and verification
+   probes are not weakened, and data with no verified backup is never deleted (core prompt rule 8).
 
 ## 9. How this charter maintains itself (CHARTER-LOOP-1)
 
