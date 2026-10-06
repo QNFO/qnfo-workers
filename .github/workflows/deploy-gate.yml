@@ -183,7 +183,9 @@ jobs:
       # Q08-METRICS-1 (pillar reach): q08 counts human vs crawler reads per day and serves the 7d aggregates on /api/metrics.
       - name: Q08-METRICS-1 offline suite (q08-signal-engine)
         if: ${{ !cancelled() }}
-        run: node q08-signal-engine/metrics.test.mjs
+        run: |
+          node q08-signal-engine/metrics.test.mjs
+          node q08-signal-engine/phrase-revise.test.mjs
       - name: Q08-WRITE-ROUTES-TOKEN-1 offline suite (q08-signal-engine)
         if: ${{ !cancelled() }}
         run: node --no-warnings q08-signal-engine/write-routes.test.mjs

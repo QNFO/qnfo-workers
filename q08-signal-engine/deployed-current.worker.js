@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.8.11-budget-soft"; // 0.8.11 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the attempt-bound note no longer cites a budget stop; the bound is publishing cadence. // 0.8.10 Q08-STALL-METRIC-1 writes q08_hours_since_last_piece (#2034); 0.8.9 unknown paths 404 noindex (no soft 404); 0.8.8 Q08-SITEMAP-INDEXABLE-1: canonical home loc, no feed in the sitemap, www -> apex 301; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.8.12-phrase-revise"; // 0.8.12 Q08-PHRASE-REVISE-1: a phrase-level-only gate failure is retried as a revision of the same draft, not a rewrite from scratch (#2034); 0.8.11 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the attempt-bound note no longer cites a budget stop; the bound is publishing cadence. // 0.8.10 Q08-STALL-METRIC-1 writes q08_hours_since_last_piece (#2034); 0.8.9 unknown paths 404 noindex (no soft 404); 0.8.8 Q08-SITEMAP-INDEXABLE-1: canonical home loc, no feed in the sitemap, www -> apex 301; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1006,6 +1006,23 @@ async function emitContentSignal(env, piece, saved) {
 // 4 fresh panel from families other than W, the editor and the first panel where the pool allows. Publish only on a passing last
 // read. A panel with no valid verdict fails open (the gate already passed), so a model outage never stalls q08; every such case is
 // written as a 'panel_unavailable' row, so a panel that silently never runs shows in /api/ensemble and in the unavailable-share metric.
+// Q08-PHRASE-REVISE-1 (2026-10-06, agent_issues 2034): 5 of the 7 gate failures in runs 234-245 were phrase-level
+// only (a stock framing sentence, label phrases, soft register, a Title Case title), yet the retry threw the whole essay
+// away and asked for a new one from scratch, which brings new tells. When every problem is phrase-level, the retry is a
+// revision of the same draft that rewrites only the offending sentences and the title; any other problem keeps the
+// rewrite from scratch. Same single compose call; the gate and the reader panel judge the result as before.
+var PHRASE_LEVEL_RE = /^(?:stock framing tell|abstraction labels|abstraction-summary phrases|soft register|Title Case title|label title|management-babble|stock analogy prop|dry\/abstract title|formula title)/;
+function phraseLevelOnly(problems) {
+  return !!(problems && problems.length && problems.every(function (p) { return PHRASE_LEVEL_RE.test(String(p)); }));
+}
+function retryPromptFor(prompt, draft, problems) {
+  var list = (problems || []).join("; ");
+  if (phraseLevelOnly(problems) && draft && draft.length >= 4000) {
+    return prompt + "\n\n--- REVISION: your draft below was rejected only for these phrases: " + list
+      + ". Return the SAME essay with only those sentences and, if named, the title rewritten so that each names the concrete mechanism (who does what, which information is missing, where it breaks) in plain words. Keep every other sentence, the facts, the structure, the length and the final 'worth your time' line exactly as they are. Output the full essay, starting with its '# ' H1 title line, and nothing else. ---\n\n" + draft;
+  }
+  return prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure \u2014 continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay \u2014 fixing only these issues ---\n" + list;
+}
 async function runLevels(env, a) {
   var piece = a.piece, gateResult = a.gateResult, banned = a.banned, rows = [];
   if (!gateResult.ok) return { piece: piece, gateResult: gateResult, rows: rows };
@@ -1099,7 +1116,7 @@ async function generate(env) {
   // Gate \u2014 one corrective retry on failure
   var gateResult = gate(piece.text, banned);
   if (!gateResult.ok) {
-    var retryPrompt = prompt + "\n\n--- CORRECTIVE FEEDBACK: your previous draft was rejected. Rewrite the ENTIRE essay from scratch with a completely different structure \u2014 continuous prose, no '##' section headers, but KEEP exactly one '# ' H1 title line as the FIRST line of the essay \u2014 fixing only these issues ---\n" + gateResult.problems.join("; ");
+    var retryPrompt = retryPromptFor(prompt, piece.text, gateResult.problems);
     var retryPiece = null;
     try { retryPiece = await compose(env, retryPrompt, banned); } catch (e) { retryPiece = null; }
     if (retryPiece && retryPiece.text) {
