@@ -60,7 +60,7 @@ ok(before >= 4, "the counter counts recorded clicks");
 // ---- dashboard half: the real reach ingest reads GRAPH.utm_clicks into reach_signals source utm ----
 const helpers = cut(dsrc, "function reachErr(e) {", "// Keeps the `cap` largest entries");
 const ingest = cut(dsrc, "var REACH_DDL = [", "// Q08-REVIEW-2026-10-31 (agent_issues 1716");
-ok(/var VERSION = "1\.26\.0-/.test(dsrc), "qnfo-fleet-dashboard VERSION is 1.26.x");
+{ const dv = (/var VERSION = "(\d+)\.(\d+)\.(\d+)/.exec(dsrc) || []).slice(1).map(Number); ok(dv.length === 3 && (dv[0] > 1 || (dv[0] === 1 && dv[1] >= 26)), "qnfo-fleet-dashboard VERSION is at least 1.26.0 (a minimum, not a pin)"); }
 const audit = new DatabaseSync(":memory:");
 audit.exec(`CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
 CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));

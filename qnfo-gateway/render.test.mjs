@@ -106,4 +106,16 @@ ok(renderDefectCount("<p>Here y_true, t_gate, d_practical and I_syn are names.</
 ok(renderDefectCount("<p>Bound (p/p_th)^(d/2) and zeta(s) = (1 - p^{-s})^{-1} and x^2.</p>") === 1, "PRECISION-1: real raw math still counts (p_th, ^( and ^{ remain residue)");
 ok(renderDefectCount("<p>A x_1 and y_2 and z^3 left raw.</p>") === 1, "PRECISION-1: short raw subscripts still count");
 
+// MATH-RESIDUE-3 (3.11.2, agent_issues 2023): paren-wrapped bases with scripts, a run that needs its first "(", unit powers.
+h = renderMarkdown("The logical error scales as (p/p_th)^(d/2), a modest gain; the identity (−1)^{2s} holds; size (p+1)p^{n−1} each.");
+ok(math(h).includes("$(p/p_{th})^{d/2}$") && math(h).includes("$(-1)^{2s}$") && math(h).includes("$(p+1)p^{n-1}$") && renderDefectCount(h) === 0, "MATH-RESIDUE-3: a word opening with ( keeps it when its closer balances the script", math(h));
+h = renderMarkdown("Euler: zeta(s) = (1 - p^{-s})^{-1}, done.");
+ok(math(h).includes("$(1 - p^{-s})^{-1}$") && math(h).length === 1 && /, done\./.test(h) && renderDefectCount(h) === 0, "MATH-RESIDUE-3: a run takes back its first word's ( when that balances it", math(h));
+h = renderMarkdown("The kilogram is the mass of 1 dm^3 of water; 1 cm^3 too.");
+ok(math(h).includes("$1 \\,\\mathrm{dm}^{3}$") && math(h).includes("$1 \\,\\mathrm{cm}^{3}$") && /of water/.test(h), "MATH-RESIDUE-3: a unit power is typeset and the prose around it stays", math(h));
+h = renderMarkdown("The wave function transforms as e^(ieλ/ħc) here.");
+ok(math(h).includes("$e^{ie\\lambda /\\hbar c}$"), "MATH-RESIDUE-3: Latin h-bar inside a run converts to \\hbar", math(h));
+h = renderMarkdown("Setting *c* = 1, *ħ* = 1, and *k*e = 1 here.");
+ok(!math(h).some((x) => /hbar/.test(x)), "MATH-RESIDUE-3: Latin h-bar never anchors a run on its own (emphasis pairing stays intact)", math(h));
+
 process.exit(fails ? 1 : 0);
