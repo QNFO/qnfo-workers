@@ -1,4 +1,4 @@
-var VERSION="3.11.2-math-residue-3"; /* 3.11.2 MATH-RESIDUE-3 (2026-10-06, agent_issues 2023, pillar reach): the typesetter catches three shapes the 22 real render defects left: a word opening with "(" whose script follows its closer ("(p/p_th)^(d/2)", "(\u22121)^{2s}", "(p+1)p^{n\u22121}") keeps the "(", script-l is a subscript base ("\\u2113_P"), an emphasis opened before a word and closed inside it stays emphasis, a run takes back its first word's "(" when that balances it ("(1 - p^{-s})^{-1}"), and a unit power ("1 dm^3") is math; Latin h-bar converts to \\hbar inside a run but never anchors one. scripts/math-corpus-check.mjs over 469 pages: defect pages 22 -> 14, 0 KaTeX failures, 0 prose words lost, visible raw "*" 156 -> 140, raw x_y 2847 -> 2811. 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
+var VERSION="3.11.2-math-residue-3"; /* 3.11.2 MATH-RESIDUE-3 (2026-10-06, agent_issues 2023, pillar reach): the typesetter catches three shapes the 22 real render defects left: a word opening with "(" whose script follows its closer ("(p/p_th)^(d/2)", "(\u22121)^{2s}", "(p+1)p^{n\u22121}") keeps the "(", script-l is a subscript base ("\\u2113_P"), an emphasis opened before a word and closed inside it stays emphasis, sign and sgn are functions, a comma subscript with no space ("t_Q,total") is one subscript, a link target may hold balanced parentheses, a run takes back its first word's "(" when that balances it ("(1 - p^{-s})^{-1}"), and a unit power ("1 dm^3") is math; Latin h-bar converts to \\hbar inside a run but never anchors one. scripts/math-corpus-check.mjs over 469 pages: defect pages 22 -> 12, 0 KaTeX failures, 0 prose words lost, visible raw "*" 156 -> 140, raw x_y 2847 -> 2805. 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -754,7 +754,7 @@ var PM_SYM = {"\u00d7":"\\times ","\u00b7":"\\cdot ","\u22c5":"\\cdot ","\u2212"
 var PM_SUPM = {"\u2070":"0","\u00b9":"1","\u00b2":"2","\u00b3":"3","\u2074":"4","\u2075":"5","\u2076":"6","\u2077":"7","\u2078":"8","\u2079":"9","\u207a":"+","\u207b":"-","\u207c":"=","\u207d":"(","\u207e":")","\u207f":"n","\u2071":"i","\u1d43":"a","\u1d47":"b","\u1d9c":"c","\u1d48":"d","\u1d49":"e","\u1da0":"f","\u1d4d":"g","\u02b0":"h","\u02b2":"j","\u1d4f":"k","\u02e1":"l","\u1d50":"m","\u1d52":"o","\u1d56":"p","\u02b3":"r","\u02e2":"s","\u1d57":"t","\u1d58":"u","\u1d5b":"v","\u02b7":"w","\u02e3":"x","\u02b8":"y","\u1dbb":"z"};
 var PM_SUBM = {"\u2080":"0","\u2081":"1","\u2082":"2","\u2083":"3","\u2084":"4","\u2085":"5","\u2086":"6","\u2087":"7","\u2088":"8","\u2089":"9","\u208a":"+","\u208b":"-","\u208c":"=","\u208d":"(","\u208e":")","\u2090":"a","\u2091":"e","\u2092":"o","\u2093":"x","\u2095":"h","\u2096":"k","\u2097":"l","\u2098":"m","\u2099":"n","\u209a":"p","\u209b":"s","\u209c":"t","\u1d62":"i","\u2c7c":"j","\u1d63":"r","\u1d64":"u","\u1d65":"v"};
 var PM_SUPC = Object.keys(PM_SUPM).join(""), PM_SUBC = Object.keys(PM_SUBM).join("");
-var PM_FUNCS = "dim|log|ln|exp|sin|cos|tan|sinh|cosh|tanh|max|min|det|gcd|lim|sup|inf|tr|Tr|deg|arg|ord|val|rank|Re|Im|mod|Pr|Var|Cov";
+var PM_FUNCS = "dim|log|ln|exp|sin|cos|tan|sinh|cosh|tanh|max|min|det|gcd|lim|sup|inf|tr|Tr|deg|arg|ord|val|rank|Re|Im|mod|Pr|Var|Cov|sign|sgn";  // MATH-RESIDUE-3: sign, sgn
 var PM_FUNC_RE = new RegExp("^(" + PM_FUNCS + ")$");
 var PM_UNITS = "fJ|pJ|nJ|\u00b5J|mJ|J|fs|ps|ns|\u00b5s|ms|s|Hz|kHz|MHz|GHz|THz|mK|K|eV|meV|keV|MeV|GeV|TeV|nm|\u00b5m|mm|cm|dm|km|m|W|mW|\u00b5W|nW|pW|V|mV|A|mA|dB|kB|MB|GB|Gb|bits?|qubits?";
 var PM_UNIT_RE = new RegExp("^(" + PM_UNITS + ")$");
@@ -905,7 +905,7 @@ function pmToTex(s) {
   s = s.replace(/[\u0391-\u03a9\u03b1-\u03c9\u03d1\u03d5\u03d6\u03f1\u03f5\u00b5]/g, function (c) { return PM_GREEK[c] != null ? PM_GREEK[c] + (/[A-Za-z]$/.test(PM_GREEK[c]) && PM_GREEK[c].length > 1 ? " " : "") : c; });
   s = s.replace(/[^\x00-\x7f]/g, function (c) { return PM_SYM[c] != null ? PM_SYM[c] : c; });
   // functions and units
-  s = s.replace(new RegExp("(?<![A-Za-z\\\\])(" + PM_FUNCS + ")(?![A-Za-z])", "g"), function (m, f) { return f === "mod" ? "\\bmod " : "\\" + (f === "Tr" || f === "tr" ? "operatorname{" + f + "}" : f === "ord" || f === "val" || f === "rank" || f === "Var" || f === "Cov" || f === "Pr" || f === "Re" || f === "Im" ? "operatorname{" + f + "}" : f); });
+  s = s.replace(new RegExp("(?<![A-Za-z\\\\])(" + PM_FUNCS + ")(?![A-Za-z])", "g"), function (m, f) { return f === "mod" ? "\\bmod " : "\\" + (f === "Tr" || f === "tr" ? "operatorname{" + f + "}" : f === "ord" || f === "val" || f === "rank" || f === "sign" || f === "sgn" || f === "Var" || f === "Cov" || f === "Pr" || f === "Re" || f === "Im" ? "operatorname{" + f + "}" : f); });
   s = s.replace(new RegExp("(?<![A-Za-z\\\\{])(" + PM_UNITS + ")(?![A-Za-z\\\\}])", "g"), function (m, u, off, str) {
     // only treat as unit when it follows a number token
     var before = str.slice(0, off);
@@ -941,6 +941,10 @@ function pseudoMath(text, save, stats) {
   for (var i = 0; i < parts.length; i++) {
     if (i % 2 === 1 || parts[i] === "") continue;
     var sp = pmStripPunct(parts[i]);
+    // MATH-RESIDUE-3: a comma subscript with no space after the comma ("t_Q,total", "P_q,op") is one subscript; the
+    // original text stays in res, so the braces reach only an emitted run.
+    var csub = /^([A-Za-z\u0391-\u03a9\u03b1-\u03c9])_([A-Za-z0-9]{1,3}),([A-Za-z]{2,8})(?![A-Za-z0-9_,])/.exec(sp.core);
+    if (csub) sp = { lead: sp.lead, core: csub[1] + "_{" + csub[2] + "," + csub[3] + "}" + sp.core.slice(csub[0].length), trail: sp.trail };
     var hs = /^(.+?)(-[A-Za-z]{2,}(?:-[A-Za-z]+)*)$/.exec(sp.core);   // 3.9.7: two-letter suffixes too ("Q-as-base")
     if (hs && pmClassify(hs[1]) === "strong" && !/^[A-Za-z]+$/.test(hs[1])) { sp = { lead: sp.lead, core: hs[1], trail: hs[2] + sp.trail }; }
     // MATH-RESIDUE-3: an emphasis opened in the lead ("*") that closes inside the core ("*\u0127c*/\u2113P\u00b2") is markdown, not math.
@@ -1080,8 +1084,10 @@ function _mdInline(t) {
     return String.fromCharCode(57344 + c.charCodeAt(0));
   });
   t = esc(t).replace(/\$/g, "\u0007");
-  t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
-  t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  // MATH-RESIDUE-3 (3.11.2): a link target may hold one level of balanced parentheses ("..._(Dourmashkin)/03..."), as in
+  // CommonMark; the first ")" no longer ends the target and spills the rest of the URL into the text.
+  t = t.replace(/!\[([^\]]*)\]\(((?:[^()]|\([^()]*\))+)\)/g, '<img src="$2" alt="$1">');
+  t = t.replace(/\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)/g, '<a href="$2">$1</a>');
   t = t.replace(/\*\*\*(?=\S)([^*]+?)\*\*\*/g, "<strong><em>$1</em></strong>");
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/(?<![\w)\]*])\*\*(?=\S)((?:[^*]|\*(?!\*))+?)\*\*(?![\w(])/g, "<strong>$1</strong>");

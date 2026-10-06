@@ -123,4 +123,11 @@ ok(math(h).some((x) => x.includes("r_{e}/\\ell _{P}")) && math(h).some((x) => x.
 h = renderMarkdown("Using F = *ħc*/ℓP² and more.");
 ok(/<em>ħc<\/em>/.test(h) && !math(h).some((x) => /\*/.test(x)), "MATH-RESIDUE-3: emphasis opened before a word and closed inside it stays emphasis", h);
 
+h = renderMarkdown("Since O_A = x_A ⊕ sign(ψ_src), the sign of the result holds.");
+ok(math(h).some((x) => x.includes("\\operatorname{sign}(\\psi _{\\mathrm{src}})")) && /the sign of the result/.test(h), "MATH-RESIDUE-3: sign() is a function; the word sign stays prose", math(h));
+h = renderMarkdown("Break-even: t_Q,total = N_iter × t_shot = 1,000 s.");
+ok(math(h).some((x) => x.includes("t_{Q,total}")) && renderDefectCount(h) === 0, "MATH-RESIDUE-3: a comma subscript with no space is one subscript", math(h));
+h = renderMarkdown("See [the notes](https://x.org/Mechanics_(Dourmashkin)/03_Vectors) here.");
+ok(/<a href="https:\/\/x\.org\/Mechanics_\(Dourmashkin\)\/03_Vectors">the notes<\/a> here/.test(h), "MATH-RESIDUE-3: a link target keeps balanced parentheses", h);
+
 process.exit(fails ? 1 : 0);
