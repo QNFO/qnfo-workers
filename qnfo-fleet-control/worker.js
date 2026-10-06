@@ -6404,7 +6404,7 @@ async function googleIdentityDetect(env) {
     var recs = (j.Answer || []).map(function(a) { return String(a.data || "").replace(/^"|"$/g, ""); });
     var gsv = recs.filter(function(t) { return /^google-site-verification=/.test(t); });
     var verified = gsv.length > 0 ? 1 : 0;
-    try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_updated = datetime('now') WHERE metric = 'gsc_verified'").bind(verified).run(); } catch (e) {}
+    try { await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'gsc_verified'").bind(verified, new Date().toISOString()).run(); } catch (e) {}
     if (verified) {
       await env.AUDIT.prepare("UPDATE human_actions SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now'), resolution = ?1 WHERE slug = 'google-identity-one-sitting' AND status = 'open'")
         .bind("auto " + new Date().toISOString().slice(0, 10) + ": GOOGLE-IDENTITY-DETECT-1 found " + gsv[0].slice(0, 80) + " in public DNS for qnfo.org; the Search Console domain property is verified.").run();

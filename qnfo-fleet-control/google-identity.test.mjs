@@ -18,7 +18,7 @@ async function run(answer, status) {
 let a = await run([{ data: '"v=spf1 include:_spf.mx.cloudflare.net ~all"' }, { data: '"google-site-verification=abc123XYZ"' }]);
 ok(a.r.ok && a.r.verified === 1, "TXT present: verified", a.r);
 ok(a.writes.some((w) => /UPDATE human_actions SET status = 'resolved'/.test(w.sql) && /google-site-verification=abc123XYZ/.test(w.a[0])), "card resolved with the record as evidence");
-ok(a.writes.some((w) => /gsc_verified/.test(w.sql) && w.a[0] === 1), "metric set to 1");
+ok(a.writes.some((w) => w.sql.includes("last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'gsc_verified'") && w.a[0] === 1), "metric set to 1 (last_refreshed, MEASURED)");
 let b = await run([{ data: '"v=spf1 include:_spf.mx.cloudflare.net ~all"' }]);
 ok(b.r.verified === 0 && !b.writes.some((w) => /human_actions/.test(w.sql)) && b.writes.some((w) => /gsc_verified/.test(w.sql) && w.a[0] === 0), "no TXT: metric 0, card untouched");
 let c = await run([], 502);
