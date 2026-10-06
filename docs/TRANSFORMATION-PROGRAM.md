@@ -68,10 +68,11 @@ qnfo-autonomy-scorer, qnfo-fleet-dashboard, fleet-exec, qnfo-lifecycle), and fou
   auto-merged (CONTROL-PLANE-MANUAL-1); "stale base" when main moved; "anchor occurs 0 times"; "patch does not apply";
   "file larger than 60000 chars needs an anchor"; "no single var VERSION line"; "source issue came from a chat session".
   The code agent edits one anchor in one file; it does not run the 154 offline suites before opening a PR. Read from
-  the source: the orchestrator stores a verified patch and waits for `.github/workflows/code-task-publish.yml` to push
-  the branch, and that workflow has no cron and runs only after another workflow has run, so publish latency is
-  unbounded; the merge runner opens and merges at most one PR per hourly tick (`code_merge_max_merges_per_tick`,
-  default 1); the planner trusts `REACH-IDEA-*` issues that the merge runner's trusted-origin list refuses, so every
+  the source: the orchestrator stores a verified patch and `.github/workflows/code-task-publish.yml` pushes the branch
+  after the next main push (measured 2026-10-06: 30 runs in 23 minutes, ready to `branch_pushed` in 24 s, so publish
+  is not the wait); qnfo-fleet-control opens the PR only inside the hourly merge tick, so ready to `pr_opened_at` is
+  40 to 50 minutes on every task with a PR and 5 hours overnight (ready 01:00Z, opened 06:00Z on 2026-10-03), and the
+  runner merges at most `code_merge_max_merges_per_tick` (3) per hourly tick; the planner trusts `REACH-IDEA-*` issues that the merge runner's trusted-origin list refuses, so every
   reach-idea task is built and then refused; nine workers are on the `CM_DENY` list; a PR touching more than one file
   is refused; `needs_human` is a terminal state for an anchor that occurs 0 or 2 times, a file over 60,000 characters
   without an anchor, or a JavaScript verifier that is not "enforced"; 19 of 153 suites are referenced by no workflow.
@@ -169,9 +170,11 @@ evidence. A session is called only when a task fails twice. `code_task_success_r
 1. **(code)** Trusted-origin parity: the merge runner's trusted list equals the planner's (`REACH-IDEA-*` and
    `METRIC-TRIGGER-*` included) so a task the planner builds is never refused for provenance.
    `qnfo-fleet-control/worker.js`.
-2. **(code)** The orchestrator pushes its own branch through the GitHub Contents API with the fleet token the merge
-   runner already holds, instead of waiting for `code-task-publish.yml`; publish latency drops from unbounded to one
-   tick, and that workflow is deleted.
+2. **(code)** PR-open on the 20-minute tick (TP-1b2, `agent_issues` 2017): fleet-control's `*/20` cron also runs
+   `codeMergeTick` in an open-only mode, so a pushed branch has its PR (and its CI) within 20 minutes instead of at
+   the next hour; merges stay hourly. `qnfo-fleet-control/worker.js`. (The first form of this lever, the orchestrator
+   pushing through the Contents API, was refuted by measurement on 2026-10-06 and closed as issue 2006: the push
+   already takes under a minute, and the orchestrator holds no GitHub credential by design.)
 3. **(code)** Rebase-before-publish: re-anchor against current main immediately before the push and retry once on
    "stale base" or "patch does not apply" (7 closures named these). `qnfo-code-orchestrator/worker.js`.
 4. **(code)** Anchor repair instead of `needs_human`: when the anchor occurs 0 or 2 times, ask the model for a new
