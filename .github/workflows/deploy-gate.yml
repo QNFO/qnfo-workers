@@ -458,6 +458,9 @@ jobs:
       # REENTRY-DRAIN-1 (#1654): status='new' artifact_reentry signals drain by a model-free age rule, oldest first, bounded.
       - name: REENTRY-DRAIN-1 offline suite (idea-hub 1.5.6, #1654)
         run: node --no-warnings idea-hub/reentry-drain.test.mjs
+      # REACH-IDEA-1 (#2001): ideas.qnfo.org carries a subscribe box that forwards to the qnfo-subscribers double opt-in.
+      - name: REACH-IDEA-1 offline suite (idea-hub 1.5.7, #2001)
+        run: node --no-warnings idea-hub/subscribe-box.test.mjs
       - name: AI-ATTR offline suite (personal-api 4.7.2, #1833)
         run: node --no-warnings personal-api/ai-attr.test.mjs
       - name: TOOL-TRACE-MEMORY-1 offline suite (personal-api 4.7.1, #1805)
