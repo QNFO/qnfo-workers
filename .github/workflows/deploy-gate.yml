@@ -662,7 +662,7 @@ jobs:
       - name: ASK-LEXICAL-CATALOG-1 offline suite (qnfo-ai-search 2.2.7)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-ai-search/lexical-catalog.test.mjs
-      # ASK-CORPUS-FEEDER-1 + QGEN-COMPLETE-1 (#2029): the vector index is fed again, never while an ai_spend cap is breached.
+      # ASK-CORPUS-FEEDER-1 + QGEN-COMPLETE-1 (#2029): the vector index is fed again (lean, CORPUS_SYNC_LEAN a tick, while an ai_spend cap is breached: BUDGET-SOFT-ROUTE-1).
       - name: ASK-CORPUS-FEEDER-1 offline suite (qnfo-ai-search 2.2.8)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-ai-search/corpus-feeder.test.mjs

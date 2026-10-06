@@ -4,7 +4,7 @@
 // Proves: the cluster table is identical to the metric's; a generated ACCEPT whose cluster would exceed half of the 30-day
 // accepts waits as deferred_diversity with its score kept, is not queued for research and is not counted by the metric;
 // owner and intake:* rows are never held; other clusters still pass; below DIVERSITY_MIN_N nothing is held; held rows are
-// released best score first, with no model call, only when the share allows and no ai_spend cap is breached, with the hold
+// released best score first, with no model call, only when the share allows (an ai_spend cap no longer matters, 1.6.0), with the hold
 // note stripped; a held row that left the 30-day window becomes a terminal HOLD and is never released; the run publishes
 // the held count and the share, and that share equals the metric's reading of the same rows.
 // Run: node --no-warnings idea-hub/diversity-cap.test.mjs   -> prints "N passed, 0 failed"
@@ -105,12 +105,10 @@ for (let i = 0; i < 4; i++) accepted("auto-reentry", "Adelic product formula var
 db.prepare("UPDATE fleet_budget SET current = 999 WHERE node_class = 'ai_spend:total'").run();
 calls.length = 0;
 out = await api.triageProposals(env);
-ok(row(held1).status === "deferred_diversity" && out.diversity_released === 0 && calls.length === 0, "while an ai_spend cap is breached nothing is released and no model is called", out);
-db.prepare("UPDATE fleet_budget SET current = 10 WHERE node_class = 'ai_spend:total'").run();
-calls.length = 0;
-out = await api.triageProposals(env);
+// BUDGET-SOFT-ROUTE-1 (idea-hub 1.6.0): a breached ai_spend cap no longer holds the release back.
 r = row(held1);
-ok(out.diversity_released === 1 && r.status === "triaged_accepted" && r.decision === "ACCEPT" && queued(held1) === 1, "caps clear and the share allows one: the best-scored held row is released and queued", { out, r });
+ok(out.budget_breached === true && out.diversity_released === 1 && r.status === "triaged_accepted" && r.decision === "ACCEPT" && queued(held1) === 1, "even while an ai_spend cap is breached, the share allows one: the best-scored held row is released and queued", { out, r });
+db.prepare("UPDATE fleet_budget SET current = 10 WHERE node_class = 'ai_spend:total'").run();
 ok(r.rationale === "solid" && calls.length === 0, "the release makes no model call and strips the hold note", { rationale: r.rationale, calls: calls.length });
 ok(row(held2).status === "deferred_diversity" && queued(held2) === 0, "the lower-scored held row stays held: a second release would exceed the cap", row(held2).status);
 const m1 = metricNow();

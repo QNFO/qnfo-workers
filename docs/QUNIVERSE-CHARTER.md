@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.9, written 2026-10-01 (1.0.9, 2026-10-06: `docs/TRANSFORMATION-PROGRAM.md` (TRANSFORMATION-PROGRAM-1) is an input to this charter, the source of the `RM-TP-*` roadmap rows and the `TP-*` epics; 1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1; 1.0.8, 2026-10-05: the owner's standing grant OWNER-STANDING-GRANT-1, which lets the fleet retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 2, 7 and 8). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.10, written 2026-10-01 (1.0.10, 2026-10-06: AI spend caps steer model choice and never stop work, BUDGET-SOFT-ROUTE-1, section 8; 1.0.9, 2026-10-06: `docs/TRANSFORMATION-PROGRAM.md` (TRANSFORMATION-PROGRAM-1) is an input to this charter, the source of the `RM-TP-*` roadmap rows and the `TP-*` epics; 1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1; 1.0.8, 2026-10-05: the owner's standing grant OWNER-STANDING-GRANT-1, which lets the fleet retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 2, 7 and 8). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -364,8 +364,9 @@ close-evidence trigger) and stated here for the rest.
    - a model switch needs no A/B test when it keeps a per-request fallback to the previous model and an automatic
      revert on errors or empty replies (TWIN-FLASH-1 is the pattern).
    Each act is recorded on its issue with the live measurement. Unchanged: caps stay owner-held and are never raised,
-   no paid model call is added while a cap is breached, credentials are not minted or rotated, guards and verification
-   probes are not weakened, and data with no verified backup is never deleted (core prompt rule 8).
+   credentials are not minted or rotated, guards and verification probes are not weakened, and data with no verified
+   backup is never deleted (core prompt rule 8). A breached AI spend cap steers work to the cheapest capable model and
+   never stops it (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06).
 
 ## 9. How this charter maintains itself (CHARTER-LOOP-1)
 

@@ -1,7 +1,7 @@
 // ASK-CORPUS-FEEDER-1 + QGEN-COMPLETE-1 (qnfo-ai-search 2.2.8, agent_issues 2029) offline suite. The worker runs in a vm
 // with an in-memory node:sqlite D1, a stubbed gateway (catalog list and detail) and stubbed AI Search / Workers AI.
-// Proves: while any ai_spend cap is breached (or fleet_budget is unreadable) the feeder uploads nothing and question
-// generation calls no model; with the caps clear it uploads at most CORPUS_SYNC_PER_RUN papers a tick, newest first, as
+// Proves (BUDGET-SOFT-ROUTE-1, 2.3.0): while any ai_spend cap is breached (or fleet_budget is unreadable) the feeder
+// still uploads, CORPUS_SYNC_LEAN a tick, and question generation still runs, QGEN_LEAN_CALLS calls; with the caps clear it uploads at most CORPUS_SYNC_PER_RUN papers a tick, newest first, as
 // <slug>.md with title, abstract and body, and records each in ask_corpus_sync; a later tick uploads only what is new or
 // at a new version; a failed upload is recorded and retried only after CORPUS_RETRY_H; a generated question is kept only
 // when it is complete (ends with "?", not cut at the token limit), rejections do not buy extra model calls, and the
@@ -44,22 +44,28 @@ const env = {
 };
 const sb = { console: { log() {}, error() {}, warn() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, AbortController, setTimeout, clearTimeout, crypto, fetch: fakeFetch, encodeURIComponent, decodeURIComponent };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { corpusSync, refreshGolden, completeQuestion, retrievalScore, CORPUS_SYNC_PER_RUN, GOLDEN_COMPLETE_SQL };", sb);
+vm.runInContext(src + "\n__x = { corpusSync, refreshGolden, completeQuestion, retrievalScore, CORPUS_SYNC_PER_RUN, CORPUS_SYNC_LEAN, QGEN_LEAN_CALLS, GOLDEN_COMPLETE_SQL };", sb);
 const api = sb.__x;
 const led = () => db.prepare("SELECT slug, status, source_version, error FROM ask_corpus_sync ORDER BY slug").all();
 
-// 1. Breached caps: nothing uploaded, no model call, and the tick says why.
+// 1. BUDGET-SOFT-ROUTE-1 (2.3.0): breached caps limit, never stop. The feeder uploads CORPUS_SYNC_LEAN papers and
+// question generation makes at most QGEN_LEAN_CALLS calls.
 db.prepare("INSERT INTO fleet_budget (node_class, cap, current) VALUES ('ai_spend:total', 150, 224.55), ('ai_spend:workers-ai', 25, 59.51), ('workers', 30, 38)").run();
 let r = await api.corpusSync(env);
-ok(/caps breached/.test(r.skipped || "") && state.uploads.length === 0 && led().length === 0, "while an ai_spend cap is breached the feeder uploads nothing", r);
-ok(r.caps && r.caps.length === 2 && !r.caps.some((c) => /^workers /.test(c)), "the skip names the breached ai_spend caps only", r.caps);
+ok(r.lean === true && r.uploaded === api.CORPUS_SYNC_LEAN && state.uploads.length === api.CORPUS_SYNC_LEAN && led().length === api.CORPUS_SYNC_LEAN, "while an ai_spend cap is breached the feeder still uploads, CORPUS_SYNC_LEAN a tick", r);
+ok(r.caps && r.caps.length === 2 && !r.caps.some((c) => /^workers /.test(c)), "the lean tick names the breached ai_spend caps only", r.caps);
+qgenReply = { response: "Which bound limits the energy per logical operation?", choices: [{ finish_reason: "stop" }] };
 let g = await api.refreshGolden(env);
-ok(aiCalls.length === 0 && /caps breached/.test(g.skipped || ""), "question generation makes no model call while a cap is breached", g);
-// 1b. An unreadable budget counts as breached.
+ok(g.lean === true && aiCalls.length >= 1 && aiCalls.length <= api.QGEN_LEAN_CALLS, "question generation still runs while a cap is breached, at most QGEN_LEAN_CALLS calls", { calls: aiCalls.length, g });
+// 1b. An unreadable budget counts as breached: lean, not stopped.
 db.exec("ALTER TABLE fleet_budget RENAME TO fleet_budget_x");
 r = await api.corpusSync(env);
-ok(/unreadable/.test((r.caps || []).join(" ")) && state.uploads.length === 0, "an unreadable fleet_budget blocks uploads (fail-safe)", r);
+ok(/unreadable/.test((r.caps || []).join(" ")) && r.lean === true && r.uploaded === api.CORPUS_SYNC_LEAN, "an unreadable fleet_budget selects lean uploads", r);
 db.exec("ALTER TABLE fleet_budget_x RENAME TO fleet_budget");
+ok(!/why: "spend"|why: "global"/.test(src) && /lean: "spend"/.test(src) && /lean: "global"/.test(src), "the public answer gate never stops on spend or the daily count; it selects LEAN_MODEL");
+// Reset what the lean ticks wrote, so the sections below measure the clear-caps path from an empty ledger.
+db.exec("DELETE FROM ask_corpus_sync; DELETE FROM ask_golden");
+state.uploads.length = 0; aiCalls.length = 0; qgenReply = undefined;
 
 // 2. Caps clear: at most CORPUS_SYNC_PER_RUN uploads, newest first, recorded.
 db.prepare("UPDATE fleet_budget SET current = 10 WHERE node_class LIKE 'ai_spend:%'").run();

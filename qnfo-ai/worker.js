@@ -6,7 +6,7 @@ var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "5.31.7-noindex"; // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
+var VERSION = "5.32.0-budget-soft"; // 5.32.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): the spend governor never refuses a caller; at any cap every caller is routed to the cheap Workers AI model (glm-5.3-flash, one leg, no ensemble) instead of HTTP 429. Paid upstreams over cap still fall back to Workers AI. // 5.31.5 ENSEMBLE-VALIDATOR-BUDGET-1 (#1889, 2026-10-05): the ensemble validator keeps a 30% slice of the 120s budget (36s, floor 15s) instead of a flat 15s that timed out behind 55-60s Workers AI primaries (both first 5.31.4 ensemble-run rows: verdict skipped); validator and reviewer outcomes are stage rows and the ensemble-run row carries them. // 5.31.4 ENSEMBLE-FAMILY-DISJOINT-1 (#1889 ENSEMBLE-POLICY-1, 2026-10-05): ENSEMBLE_POOL holds at most one model per family (science drops deepseek-v4-pro, general drops glm-5.3 and keeps the small glm-5.3-flash) and the validator is never the primary's family (a deepseek primary is judged by glm-5.3-flash instead of deepseek-v4-flash); same call count, smaller models, meta.validator_switched records the switch. // 5.31.3 ENSEMBLE-RUN-LOG-1 (#1889, 2026-10-05): one cloud_ops_events row (kind ensemble-run) per ensemble call with the primary and validator models and families, the validator verdict, whether the reviewer ran and a short hash of the text, so same-family vs cross-family agreement can be measured before the pool is thinned (docs/ENSEMBLE-POLICY.md); no extra model call. // 5.31.2 DEEPSEEK-402-BREAKER-1 (#1939): a DeepSeek 402 (balance exhausted) opens a 60-min per-isolate breaker (owner 2026-10-05: no DeepSeek top-up) so callDeepSeek fails fast to the free fallback; 5.31.1 AIG-BINDING-1 (#1784): gateway log entries carry metadata {worker, purpose}; 5.31.0 AIG-BINDING-1: embedding calls go through the AI Gateway (cached 24h, plain-binding fallback); 5.30.1 FLEET-CTL-ROLLOUT-1: the fleet command-line link on the chat page
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -71,8 +71,10 @@ globalThis.fetch = function(input, init) {
 //   provider >= soft fraction x cap -> premium models of that provider drop to SPEND_CHEAP_MODEL, and the ensemble
 //                                      (3-4 paid legs) collapses to one cheap leg;
 //   provider >= cap                  -> that provider is skipped (downgrade to the cheap Workers AI model);
-//   total >= SPEND_CAP_TOTAL_USD     -> critical callers are throttled to the cheap model (never refused: the owner
-//                                      directive is throttling, not a hard cap); every other caller gets HTTP 429.
+//   total >= SPEND_CAP_TOTAL_USD     -> every caller is throttled to the cheap model and never refused.
+// BUDGET-SOFT-ROUTE-1 (5.32.0, owner directive 2026-10-06): "AI spend budget should never stop any process, pipeline, or
+// workflow, only limit/suggest what models may be used." A cap steers the model choice; it is never a refusal. Before
+// 5.32.0 a non-critical caller got HTTP 429 at the total cap, which stopped every pipeline behind it.
 // Callers are named by the service-binding ctx.props.caller (INTERNAL-CALLER-PROPS-1); a router-key request without
 // props is "public" (the owner's own clients). The ledger sees only traffic through this router. Account-wide spend
 // (gateway BYOK/unified from other clients, Workers AI from other workers) is read from fleet_budget and
@@ -145,7 +147,8 @@ function spendSum(by) {
   for (var k in by) t += Number(by[k]) || 0;
   return t;
 }
-// Pure decision. by: {provider: usd30d}; returns {action: allow|downgrade|refuse, to?, noEnsemble?, reason}.
+// Pure decision. by: {provider: usd30d}; returns {action: allow|downgrade, to?, noEnsemble?, reason} (never refuse:
+// BUDGET-SOFT-ROUTE-1).
 function spendDecide(by, caps, provider, model, caller, critical, soft, wantEnsemble) {
   var total = spendSum(by);
   var cur = Number(by[provider]) || 0;
@@ -153,9 +156,8 @@ function spendDecide(by, caps, provider, model, caller, critical, soft, wantEnse
   var isCrit = !!critical[caller];
   var base = { provider: provider, model: model, caller: caller, critical: isCrit, provider_usd: Math.round(cur * 1e4) / 1e4, provider_cap: caps[provider], total_usd: Math.round(total * 1e4) / 1e4, total_cap: caps.total };
   var throttle = function (reason) {
-    if (!isCrit) return Object.assign(base, { action: "refuse", reason: reason });
-    if (model === SPEND_CHEAP_WA && !wantEnsemble) return Object.assign(base, { action: "allow", reason: reason + "; critical caller already on the cheap model" });
-    return Object.assign(base, { action: "downgrade", to: SPEND_CHEAP_MODEL, noEnsemble: true, reason: reason + "; critical caller throttled to " + SPEND_CHEAP_MODEL });
+    if (model === SPEND_CHEAP_WA && !wantEnsemble) return Object.assign(base, { action: "allow", reason: reason + "; already on the cheap model" });
+    return Object.assign(base, { action: "downgrade", to: SPEND_CHEAP_MODEL, noEnsemble: true, reason: reason + "; " + (isCrit ? "critical " : "") + "caller throttled to " + SPEND_CHEAP_MODEL });
   };
   if (total >= caps.total) return throttle("total 30d spend " + total.toFixed(2) + " >= cap " + caps.total);
   if (cur >= caps[provider]) {
@@ -2183,10 +2185,8 @@ async function handleChat(env, body, authHeader, ctx, ua) {
   const _spendSpec = MODELS[target] || (isEnsemble ? null : MODELS["deepseek-v4-flash"]);
   const _gov = await spendGovern(env, _spendWantEns ? "workers-ai" : spendModelProvider(_spendSpec), _spendWantEns ? "ensemble" : _spendSpec ? _spendSpec.wa || _spendSpec.api || _spendSpec.model || target : "deepseek-chat", _spendWantEns);
   if (_gov.action !== "allow") _govInfo = { action: _gov.action, reason: _gov.reason, caller: _gov.caller, from: _spendWantEns ? "ensemble" : target, to: _gov.to || null };
-  if (_gov.action === "refuse") {
-    return json({ error: { message: "AI spend cap reached for non-critical caller " + _gov.caller + ": " + _gov.reason + ". Retry after the rolling 30-day window falls under the cap (GET /spend).", type: "insufficient_quota", code: "spend_cap" }, _router: { spend_governor: _govInfo } }, 429);
-  }
-  if (_gov.action === "downgrade" && MODELS[_gov.to]) {
+  if ((_gov.action === "downgrade" || _gov.action === "refuse") && MODELS[_gov.to || SPEND_CHEAP_MODEL]) {
+    _gov.to = _gov.to || SPEND_CHEAP_MODEL;
     target = _gov.to;
     spec = MODELS[target];
   }
