@@ -17,9 +17,11 @@ ok(/type=["']email["']/i.test(PAGE), "the page carries an email input (the REACH
 ok(/id="ask-sub-form"/.test(PAGE) && /id="ask-sub-email"/.test(PAGE), "subscribe form and email field present");
 ok(/id="ask-sub-hp"[^>]*tabindex="-1"/.test(PAGE), "honeypot field present and out of the tab order");
 ok(/double opt-in/i.test(PAGE) && /unsubscribe/i.test(PAGE), "the box says it is double opt-in with an unsubscribe link");
-const m = PAGE.match(/<script>\(function\(\)\{var f=document\.getElementById\('ask-sub-form'\)[\s\S]*?<\/script>/);
-ok(!!m, "the subscribe script is served");
-const code = m ? m[0].replace(/^<script>/, "").replace(/<\/script>$/, "") : "";
+// The script is located by its exact opening text and sliced by index (no tag-matching regex).
+const OPEN = "<script>(function(){var f=document.getElementById('ask-sub-form')";
+const at = PAGE.indexOf(OPEN), end = at < 0 ? -1 : PAGE.indexOf("</script>", at);
+ok(at >= 0 && end > at, "the subscribe script is served");
+const code = at >= 0 && end > at ? PAGE.slice(at + "<script>".length, end) : "";
 
 function run(email, hp, respond) {
   const els = {
