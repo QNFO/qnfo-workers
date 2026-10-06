@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-06 12:30:47",
+  "audited_at": "2026-10-06 13:13:11",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -488,7 +488,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.21.0-scan-lanes",
+        "version": "1.21.1-radar-cap-grading",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -513,17 +513,17 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.5.0-dangling-bindings",
+        "version": "0.6.0-probe-transports",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.26.0-utm-ingest",
+        "version": "1.26.1-loose-ends",
         "worker": "qnfo-fleet-dashboard"
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.11.0-legal-versions",
+        "version": "3.11.3-math-residue-3",
         "worker": "qnfo-gateway"
       },
       {
@@ -553,7 +553,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.3.2-preview-error",
+        "version": "1.4.0-wm-measured",
         "worker": "qnfo-observability"
       },
       {
@@ -1012,9 +1012,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.21.0-scan-lanes",
+      "before": "1.21.1-radar-cap-grading",
       "http": 200,
-      "live": "1.21.0-scan-lanes",
+      "live": "1.21.1-radar-cap-grading",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1140,17 +1140,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.5.0-dangling-bindings",
+      "before": "0.6.0-probe-transports",
       "http": 200,
-      "live": "0.5.0-dangling-bindings",
+      "live": "0.6.0-probe-transports",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.26.0-utm-ingest",
+      "before": "1.26.1-loose-ends",
       "http": 200,
-      "live": "1.26.0-utm-ingest",
+      "live": "1.26.1-loose-ends",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1172,9 +1172,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.11.0-legal-versions",
+      "before": "3.11.3-math-residue-3",
       "http": 200,
-      "live": "3.11.0-legal-versions",
+      "live": "3.11.3-math-residue-3",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.3.2-preview-error",
+      "before": "1.4.0-wm-measured",
       "http": 200,
-      "live": "1.3.2-preview-error",
+      "live": "1.4.0-wm-measured",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
