@@ -31,5 +31,15 @@ const ws = await w.fetch(new Request("https://www.q08.org/sitemap.xml"), env, ct
 ok(ws.status === 301 && ws.headers.get("Location") === "https://q08.org/sitemap.xml", "www sitemap 301 to the canonical host");
 const wa = await w.fetch(new Request("https://www.q08.org/api/metrics"), env, ctx).catch((e) => ({ status: -1 }));
 ok(wa.status !== 301, "www API routes are not redirected");
+// soft-404 fix: unknown paths are a real 404 with noindex; the index is still served at / and /index.html.
+for (const p of ["/.ssh/id_ed25519", "/config/application.properties", "/.env", "/no-such-page"]) {
+  const r404 = await w.fetch(new Request("https://q08.org" + p), env, ctx);
+  const t404 = await r404.text();
+  ok(r404.status === 404 && /noindex/.test(t404) && /Go to q08/.test(t404), p + " -> 404 noindex", r404.status);
+}
+const home = await w.fetch(new Request("https://q08.org/"), env, ctx);
+ok(home.status === 200, "/ still serves the index", home.status);
+ok((await w.fetch(new Request("https://q08.org/index.html"), env, ctx)).status === 200, "/index.html still serves the index");
+ok((await w.fetch(new Request("https://q08.org/p/2026-10-05-a-b"), env, ctx)).status === 200, "a piece still serves 200");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
