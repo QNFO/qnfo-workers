@@ -315,6 +315,10 @@ jobs:
       # and SENT-AS-YOU-DELIVERY-1 (the daily digest mailed once to the owner's qnfo.org address).
       - name: OUTREACH-LEARNER-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/outreach-learner.test.mjs
+      # RADAR-SE-REASON-1 (qnfo-cloud-ops 1.19.2, #1641): the mention radar names why StackExchange failed and reports a
+      # per-address throttle as capped, so a degraded radar run says which source is blind and why.
+      - name: RADAR-SE-REASON-1 offline suite (qnfo-cloud-ops)
+        run: node --no-warnings qnfo-cloud-ops/radar-se-reason.test.mjs
       - name: OUTREACH-CF-DOW-1 cron weekday check (qnfo-outreach)
         run: node qnfo-outreach/cron-dow.test.mjs
       - name: KAIZEN-CF-MONDAY-1 cron weekday check (qnfo-kaizen)
