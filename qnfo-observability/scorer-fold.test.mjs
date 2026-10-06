@@ -15,7 +15,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const body = lines.slice(lines.indexOf('var VERSION = "1.2.1-priority-queue";'), lines.length).filter((l) => l.trim() && l.trim() !== "export default {");
   const missing = body.filter((l) => !src.includes(l.trim()));
   ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every scorer line is in the host except its VERSION line (and the export keyword)", missing.map((l) => l.slice(0, 60)));
-  ok(/^1\.3\.0/.test(mod.__hv) && mod.__mv === "1.2.2-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.0, member 1.2.2-folded, one quoted VERSION constant");
+  ok(/^1\.3\.1/.test(mod.__hv) && mod.__mv === "1.2.2-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1, member 1.2.2-folded, one quoted VERSION constant");
 }
 
 // the daily run happens on the 05:17 tick only

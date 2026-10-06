@@ -18,7 +18,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "3.0.12-math-browser-metric";')), lines.indexOf("export { worker_default as default };"));
   const missing = body.filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every indexer line is in the host except its VERSION line", missing.map((l) => l.slice(0, 60)));
-  ok(/^1\.3\.0/.test(mod.__hv) && mod.__mv === "3.0.13-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.0, member 3.0.13-folded, one quoted VERSION constant");
+  ok(/^1\.3\.1/.test(mod.__hv) && mod.__mv === "3.0.13-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1, member 3.0.13-folded, one quoted VERSION constant");
 }
 
 // cron dispatch with mapped bindings
