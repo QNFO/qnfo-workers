@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.3.2-preview-error"; // 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.4.0-wm-measured"; // 1.4.0 WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027) + SAI-KAIZEN-GRADIENT-1 (agent_issues 2054), pillar autonomy: the scorer member writes watchmaker_inverted as a MEASURED dimension, 5 x (1 - counted/ops) from the latest watchmaker_runs row (was a hand score of 4.8 from 2026-09-24, past due), and computeSai's kaizen term is 1 / (1 + step x open issues), keeping a gradient at every backlog size, in parity with qnfo-fleet-dashboard. 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -633,7 +633,7 @@ async function evReview(env) {
 // day on this worker's hourly "17 * * * *" tick at 05:17 UTC (its old "17 5 * * *"), and its read-only routes are served
 // at /scorer/health, /scorer/preview and /scorer/scores. Its header (why, scope, SAI formula) is in
 // qnfo-autonomy-scorer/worker.js; edit the member here, the directory there is FOLDED.
-var SCORER_VERSION = "1.2.2-folded";
+var SCORER_VERSION = "1.3.0-wm-measured";
 var scorerMod = (function() {
   var VERSION = SCORER_VERSION; // member version (SCORER-FOLD-1); was 1.2.1-priority-queue as its own worker
   // PRIORITY-QUEUE-1 (2026-10-03, owner directive "dates aren't important, the order of priority is"): the OODA decide stage
@@ -750,6 +750,14 @@ var scorerMod = (function() {
     out.push({ dimension: "ooda_closure", framework: "OODA", score: r1(5 * weakest[1]),
       evidence: "MEASURED: loop closure = weakest stage (" + stages.map(function (x) { return x[0] + " " + pct(x[1]) + "%"; }).join(", ") + ").",
       gap: "weakest stage: " + weakest[0], confidence: "medium" });
+    // WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027): was a hand score (4.8 on 2026-09-24, past its next_score); now
+    // 5 x (1 - counted / ops) from the latest watchmaker_runs row, the same index fleet.qnfo.org publishes.
+    if (f.wm && f.wm.ops > 0) {
+      var wmc = Math.min(f.wm.counted, f.wm.ops);
+      out.push({ dimension: "watchmaker_inverted", framework: "fleet", score: r1(5 * (1 - wmc / f.wm.ops)),
+        evidence: "MEASURED: watchmaker_runs " + f.wm.day + ": " + wmc + " of " + f.wm.ops + " recurring operations still need a person or a session" + (f.wm.keys ? " (" + f.wm.keys + ")" : "") + ". score = 5 x (1 - counted/ops).",
+        gap: wmc > 0 ? wmc + " operation(s) counted: " + f.wm.keys : "none counted", confidence: "high" });
+    }
     return out;
   }
   // Pure: the current table overlaid with today's measured dims (what the table holds after this run's write).
@@ -817,7 +825,9 @@ var scorerMod = (function() {
     var thinking = P.thinking_base + P.thinking_scale * (typeof bench === "number" && bench >= 0 && bench <= 1 ? bench : 0);
     var decLive = ["independent_decision", "ooda_closure", "s3_control", "s5_policy"].map(nd).filter(function (x) { return x != null; });
     var decision = decLive.length ? decLive.reduce(function (a, b) { return a + b; }, 0) / decLive.length / 5 : null;
-    var kaizen = openIssues === 0 ? 1 : openIssues > 0 ? clamp01(1 - P.kaizen_step * openIssues) : 1;
+    // SAI-KAIZEN-GRADIENT-1 (agent_issues 2054): 1 / (1 + step x open) keeps a gradient at every backlog size (the linear
+    // clamp read 0 for any backlog above 20, so closing 30 issues moved nothing); parity with qnfo-fleet-dashboard computeSai.
+    var kaizen = openIssues > 0 ? 1 / (1 + P.kaizen_step * openIssues) : 1;
     var closureRate = typeof LD.closureRate === "number" ? LD.closureRate : 0;
     var healRate = typeof LD.healRate === "number" ? LD.healRate : 0;
     var selfImprov = P.si_kaizen * kaizen + P.si_closure * closureRate + P.si_heal * healRate;
@@ -918,6 +928,12 @@ var scorerMod = (function() {
       "live_n", "live_ok", "pub30", "fg_fresh", "fg_stale", "guards_n", "guards_ok", "sig30", "sig30_done", "gates_n", "gates_met", "triaged", "breached"];
     var f = {};
     for (var i = 0; i < keys.length; i++) { var v = Number(r[keys[i]]); if (!isFinite(v) || v < 0) throw new Error("bad fact " + keys[i]); f[keys[i]] = v; }
+    // WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027): the latest published watchmaker index (qnfo-fleet-dashboard
+    // WATCHMAKER-INDEX-1, one watchmaker_runs row a day). Optional: no row leaves the dimension to its dated hand score.
+    try {
+      var wm = await env.AUDIT.prepare("SELECT day, index_value, counted, json_array_length(json_extract(json, '$.ops')) AS ops FROM watchmaker_runs ORDER BY day DESC LIMIT 1").first();
+      f.wm = wm && Number(wm.ops) > 0 ? { day: String(wm.day), counted: Number(wm.index_value) || 0, ops: Number(wm.ops), keys: String(wm.counted || "") } : null;
+    } catch (e) { f.wm = null; }
     return f;
   }
   // The SAI inputs, read from the same registers as the dashboard's loadSaiConfig, liveSaiInputs and weekly report

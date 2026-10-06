@@ -98,5 +98,36 @@ h = renderMarkdown("P = C(5,1)²p_Zp₁ = 25.");
 ok(!math(h).some((x) => /_\\mathrm\{[^}]*\}_/.test(x)), "no double subscript reaches the page (pmScriptsOk counts a command's argument)", math(h));
 h = renderMarkdown("Z[ϕ_<] = ∫*{Λ < |k|} Dϕ*> exp(x) and At $\\tau$*: $- \\nabla S(\\tau *) = 0$ here.");
 ok(!math(h).some((x) => /\*\\gt|\\int \*/.test(x)), "a lone * next to a relation or brace stays an emphasis marker", math(h));
+// RENDER-HEALTH-PRECISION-1 (3.11.1, agent_issues 2023): the four false-positive classes measured on 2026-10-06.
+ok(renderDefectCount("<p>Bi\u2082Sr\u2082CaCu\u2082O\u2088\u208a\u03b4 and <em>x</em>\u2080 + <em>v</em>\u2080<em>t</em> and m\u00b2 and n\u00b3.</p>") === 0, "PRECISION-1: correct Unicode sub- and superscripts are not residue");
+ok(renderDefectCount("<p>Inline <span class=\"math\">$C_S = \\$0$</span>M and $a_b$ and $c_d$ and text.</p>") === 0, "PRECISION-1: an escaped dollar inside math does not shift the pairing");
+ok(renderDefectCount("<p>See https://x.org/Intro_to_Boundary_Logic_v2.pdf and https://y.org/a_b_c_d.html for x_y.</p>") === 0, "PRECISION-1: URLs are not residue");
+ok(renderDefectCount("<p>Here y_true, t_gate, d_practical and I_syn are names.</p>") === 0, "PRECISION-1: a one-letter stem with a word subscript is a name");
+ok(renderDefectCount("<p>Bound (p/p_th)^(d/2) and zeta(s) = (1 - p^{-s})^{-1} and x^2.</p>") === 1, "PRECISION-1: real raw math still counts (p_th, ^( and ^{ remain residue)");
+ok(renderDefectCount("<p>A x_1 and y_2 and z^3 left raw.</p>") === 1, "PRECISION-1: short raw subscripts still count");
+
+// MATH-RESIDUE-3 (3.11.2, agent_issues 2023): paren-wrapped bases with scripts, a run that needs its first "(", unit powers.
+h = renderMarkdown("The logical error scales as (p/p_th)^(d/2), a modest gain; the identity (−1)^{2s} holds; size (p+1)p^{n−1} each.");
+ok(math(h).includes("$(p/p_{th})^{d/2}$") && math(h).includes("$(-1)^{2s}$") && math(h).includes("$(p+1)p^{n-1}$") && renderDefectCount(h) === 0, "MATH-RESIDUE-3: a word opening with ( keeps it when its closer balances the script", math(h));
+h = renderMarkdown("Euler: zeta(s) = (1 - p^{-s})^{-1}, done.");
+ok(math(h).includes("$(1 - p^{-s})^{-1}$") && math(h).length === 1 && /, done\./.test(h) && renderDefectCount(h) === 0, "MATH-RESIDUE-3: a run takes back its first word's ( when that balances it", math(h));
+h = renderMarkdown("The kilogram is the mass of 1 dm^3 of water; 1 cm^3 too.");
+ok(math(h).includes("$1 \\,\\mathrm{dm}^{3}$") && math(h).includes("$1 \\,\\mathrm{cm}^{3}$") && /of water/.test(h), "MATH-RESIDUE-3: a unit power is typeset and the prose around it stays", math(h));
+h = renderMarkdown("The wave function transforms as e^(ieλ/ħc) here.");
+ok(math(h).includes("$e^{ie\\lambda /\\hbar c}$"), "MATH-RESIDUE-3: Latin h-bar inside a run converts to \\hbar", math(h));
+h = renderMarkdown("Setting *c* = 1, *ħ* = 1, and *k*e = 1 here.");
+ok(!math(h).some((x) => /hbar/.test(x)), "MATH-RESIDUE-3: Latin h-bar never anchors a run on its own (emphasis pairing stays intact)", math(h));
+
+h = renderMarkdown("The gap is r_e/ℓ_P = 2.81 and Λ = ρ_c/(E_P/ℓ_P³) here.");
+ok(math(h).some((x) => x.includes("r_{e}/\\ell _{P}")) && math(h).some((x) => x.includes("\\ell _{P}^{3}")), "MATH-RESIDUE-3: script-l is a subscript base and converts to \\ell", math(h));
+h = renderMarkdown("Using F = *ħc*/ℓP² and more.");
+ok(/<em>ħc<\/em>/.test(h) && !math(h).some((x) => /\*/.test(x)), "MATH-RESIDUE-3: emphasis opened before a word and closed inside it stays emphasis", h);
+
+h = renderMarkdown("Since O_A = x_A ⊕ sign(ψ_src), the sign of the result holds.");
+ok(math(h).some((x) => x.includes("\\operatorname{sign}(\\psi _{\\mathrm{src}})")) && /the sign of the result/.test(h), "MATH-RESIDUE-3: sign() is a function; the word sign stays prose", math(h));
+h = renderMarkdown("Break-even: t_Q,total = N_iter × t_shot = 1,000 s.");
+ok(math(h).some((x) => x.includes("t_{Q,total}")) && renderDefectCount(h) === 0, "MATH-RESIDUE-3: a comma subscript with no space is one subscript", math(h));
+h = renderMarkdown("See [the notes](https://x.org/Mechanics_(Dourmashkin)/03_Vectors) here.");
+ok(/<a href="https:\/\/x\.org\/Mechanics_\(Dourmashkin\)\/03_Vectors">the notes<\/a> here/.test(h), "MATH-RESIDUE-3: a link target keeps balanced parentheses", h);
 
 process.exit(fails ? 1 : 0);

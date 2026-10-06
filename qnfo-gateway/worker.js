@@ -1,4 +1,4 @@
-var VERSION="3.11.0-legal-versions"; /* 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
+var VERSION="3.11.3-math-residue-3"; /* 3.11.3 MATH-RESIDUE-3 (3.11.2 + script-l, emphasis, sign, comma subscripts, link parentheses) (2026-10-06, agent_issues 2023, pillar reach): the typesetter catches three shapes the 22 real render defects left: a word opening with "(" whose script follows its closer ("(p/p_th)^(d/2)", "(\u22121)^{2s}", "(p+1)p^{n\u22121}") keeps the "(", script-l is a subscript base ("\\u2113_P"), an emphasis opened before a word and closed inside it stays emphasis, sign and sgn are functions, a comma subscript with no space ("t_Q,total") is one subscript, a link target may hold balanced parentheses, a run takes back its first word's "(" when that balances it ("(1 - p^{-s})^{-1}"), and a unit power ("1 dm^3") is math; Latin h-bar converts to \\hbar inside a run but never anchors one. scripts/math-corpus-check.mjs over 469 pages: defect pages 22 -> 12, 0 KaTeX failures, 0 prose words lost, visible raw "*" 156 -> 140, raw x_y 2847 -> 2805. 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -750,19 +750,19 @@ __name2222(cleanPunct, "cleanPunct");
 // MATH-TYPESET-1 prototype: plain-text pseudo-math -> TeX spans, conservative.
 // pseudoMath(line, save) returns the line with each detected run replaced by save(tex).
 var PM_GREEK = {"\u03b1":"\\alpha","\u03b2":"\\beta","\u03b3":"\\gamma","\u03b4":"\\delta","\u03b5":"\\varepsilon","\u03f5":"\\epsilon","\u03b6":"\\zeta","\u03b7":"\\eta","\u03b8":"\\theta","\u03d1":"\\vartheta","\u03b9":"\\iota","\u03ba":"\\kappa","\u03bb":"\\lambda","\u03bc":"\\mu","\u00b5":"\\mu","\u03bd":"\\nu","\u03be":"\\xi","\u03c0":"\\pi","\u03d6":"\\varpi","\u03c1":"\\rho","\u03f1":"\\varrho","\u03c3":"\\sigma","\u03c2":"\\varsigma","\u03c4":"\\tau","\u03c5":"\\upsilon","\u03c6":"\\varphi","\u03d5":"\\phi","\u03c7":"\\chi","\u03c8":"\\psi","\u03c9":"\\omega","\u0393":"\\Gamma","\u0394":"\\Delta","\u0398":"\\Theta","\u039b":"\\Lambda","\u039e":"\\Xi","\u03a0":"\\Pi","\u03a3":"\\Sigma","\u03a5":"\\Upsilon","\u03a6":"\\Phi","\u03a8":"\\Psi","\u03a9":"\\Omega","\u0391":"A","\u0392":"B","\u0395":"E","\u0396":"Z","\u0397":"H","\u0399":"I","\u039a":"K","\u039c":"M","\u039d":"N","\u039f":"O","\u03a1":"P","\u03a4":"T","\u03a7":"X"};
-var PM_SYM = {"\u00d7":"\\times ","\u00b7":"\\cdot ","\u22c5":"\\cdot ","\u2212":"-","\u2013":"-","\u2264":"\\leq ","\u2265":"\\geq ","\u2248":"\\approx ","\u2260":"\\neq ","\u226a":"\\ll ","\u226b":"\\gg ","\u2208":"\\in ","\u2209":"\\notin ","\u2295":"\\oplus ","\u2297":"\\otimes ","\u2192":"\\to ","\u2190":"\\leftarrow ","\u2194":"\\leftrightarrow ","\u21d2":"\\Rightarrow ","\u21d4":"\\Leftrightarrow ","\u221e":"\\infty ","\u2202":"\\partial ","\u2207":"\\nabla ","\u2211":"\\sum ","\u220f":"\\prod ","\u211a":"\\mathbb{Q}","\u211d":"\\mathbb{R}","\u2124":"\\mathbb{Z}","\u2102":"\\mathbb{C}","\u2115":"\\mathbb{N}","\u27e8":"\\langle ","\u27e9":"\\rangle ","\u2016":"\\Vert ","\u223c":"\\sim ","\u2261":"\\equiv ","\u00b1":"\\pm ","\u2213":"\\mp ","\u221d":"\\propto ","\u2200":"\\forall ","\u2203":"\\exists ","\u2227":"\\wedge ","\u2228":"\\vee ","\u00ac":"\\neg ","\u2282":"\\subset ","\u2286":"\\subseteq ","\u2283":"\\supset ","\u222a":"\\cup ","\u2229":"\\cap ","\u2205":"\\emptyset ","\u2218":"\\circ ","\u22a5":"\\perp ","\u2245":"\\cong ","\u2243":"\\simeq ","\u2032":"'","\u02b9":"'","\u02bc":"'","\u2026":"\\ldots ","\u2020":"\\dagger ","\u00b0":"^{\\circ}","\u2223":"\\mid ","\u2308":"\\lceil ","\u2309":"\\rceil ","\u230a":"\\lfloor ","\u230b":"\\rfloor ","\u2272":"\\lesssim ","\u2273":"\\gtrsim ","\u210f":"\\hbar "};
+var PM_SYM = {"\u00d7":"\\times ","\u00b7":"\\cdot ","\u22c5":"\\cdot ","\u2212":"-","\u2013":"-","\u2264":"\\leq ","\u2265":"\\geq ","\u2248":"\\approx ","\u2260":"\\neq ","\u226a":"\\ll ","\u226b":"\\gg ","\u2208":"\\in ","\u2209":"\\notin ","\u2295":"\\oplus ","\u2297":"\\otimes ","\u2192":"\\to ","\u2190":"\\leftarrow ","\u2194":"\\leftrightarrow ","\u21d2":"\\Rightarrow ","\u21d4":"\\Leftrightarrow ","\u221e":"\\infty ","\u2202":"\\partial ","\u2207":"\\nabla ","\u2211":"\\sum ","\u220f":"\\prod ","\u211a":"\\mathbb{Q}","\u211d":"\\mathbb{R}","\u2124":"\\mathbb{Z}","\u2102":"\\mathbb{C}","\u2115":"\\mathbb{N}","\u27e8":"\\langle ","\u27e9":"\\rangle ","\u2016":"\\Vert ","\u223c":"\\sim ","\u2261":"\\equiv ","\u00b1":"\\pm ","\u2213":"\\mp ","\u221d":"\\propto ","\u2200":"\\forall ","\u2203":"\\exists ","\u2227":"\\wedge ","\u2228":"\\vee ","\u00ac":"\\neg ","\u2282":"\\subset ","\u2286":"\\subseteq ","\u2283":"\\supset ","\u222a":"\\cup ","\u2229":"\\cap ","\u2205":"\\emptyset ","\u2218":"\\circ ","\u22a5":"\\perp ","\u2245":"\\cong ","\u2243":"\\simeq ","\u2032":"'","\u02b9":"'","\u02bc":"'","\u2026":"\\ldots ","\u2020":"\\dagger ","\u00b0":"^{\\circ}","\u2223":"\\mid ","\u2308":"\\lceil ","\u2309":"\\rceil ","\u230a":"\\lfloor ","\u230b":"\\rfloor ","\u2272":"\\lesssim ","\u2273":"\\gtrsim ","\u210f":"\\hbar ","\u0127":"\\hbar ","\u2113":"\\ell "};  // MATH-RESIDUE-3: script-l is a base ("\u2113_P")
 var PM_SUPM = {"\u2070":"0","\u00b9":"1","\u00b2":"2","\u00b3":"3","\u2074":"4","\u2075":"5","\u2076":"6","\u2077":"7","\u2078":"8","\u2079":"9","\u207a":"+","\u207b":"-","\u207c":"=","\u207d":"(","\u207e":")","\u207f":"n","\u2071":"i","\u1d43":"a","\u1d47":"b","\u1d9c":"c","\u1d48":"d","\u1d49":"e","\u1da0":"f","\u1d4d":"g","\u02b0":"h","\u02b2":"j","\u1d4f":"k","\u02e1":"l","\u1d50":"m","\u1d52":"o","\u1d56":"p","\u02b3":"r","\u02e2":"s","\u1d57":"t","\u1d58":"u","\u1d5b":"v","\u02b7":"w","\u02e3":"x","\u02b8":"y","\u1dbb":"z"};
 var PM_SUBM = {"\u2080":"0","\u2081":"1","\u2082":"2","\u2083":"3","\u2084":"4","\u2085":"5","\u2086":"6","\u2087":"7","\u2088":"8","\u2089":"9","\u208a":"+","\u208b":"-","\u208c":"=","\u208d":"(","\u208e":")","\u2090":"a","\u2091":"e","\u2092":"o","\u2093":"x","\u2095":"h","\u2096":"k","\u2097":"l","\u2098":"m","\u2099":"n","\u209a":"p","\u209b":"s","\u209c":"t","\u1d62":"i","\u2c7c":"j","\u1d63":"r","\u1d64":"u","\u1d65":"v"};
 var PM_SUPC = Object.keys(PM_SUPM).join(""), PM_SUBC = Object.keys(PM_SUBM).join("");
-var PM_FUNCS = "dim|log|ln|exp|sin|cos|tan|sinh|cosh|tanh|max|min|det|gcd|lim|sup|inf|tr|Tr|deg|arg|ord|val|rank|Re|Im|mod|Pr|Var|Cov";
+var PM_FUNCS = "dim|log|ln|exp|sin|cos|tan|sinh|cosh|tanh|max|min|det|gcd|lim|sup|inf|tr|Tr|deg|arg|ord|val|rank|Re|Im|mod|Pr|Var|Cov|sign|sgn";  // MATH-RESIDUE-3: sign, sgn
 var PM_FUNC_RE = new RegExp("^(" + PM_FUNCS + ")$");
-var PM_UNITS = "fJ|pJ|nJ|\u00b5J|mJ|J|fs|ps|ns|\u00b5s|ms|s|Hz|kHz|MHz|GHz|THz|mK|K|eV|meV|keV|MeV|GeV|TeV|nm|\u00b5m|mm|cm|m|W|mW|\u00b5W|nW|pW|V|mV|A|mA|dB|kB|MB|GB|Gb|bits?|qubits?";
+var PM_UNITS = "fJ|pJ|nJ|\u00b5J|mJ|J|fs|ps|ns|\u00b5s|ms|s|Hz|kHz|MHz|GHz|THz|mK|K|eV|meV|keV|MeV|GeV|TeV|nm|\u00b5m|mm|cm|dm|km|m|W|mW|\u00b5W|nW|pW|V|mV|A|mA|dB|kB|MB|GB|Gb|bits?|qubits?";
 var PM_UNIT_RE = new RegExp("^(" + PM_UNITS + ")$");
 var PM_GREEK_CLASS = "[\u0391-\u03a9\u03b1-\u03c9\u03d1\u03d5\u03d6\u03f1\u03f5\u00b5]";
-var PM_SYM_CLASS = "[" + Object.keys(PM_SYM).filter(function (k) { return !/^[\u00d7\u00b7\u22c5\u2212\u2013\u2032\u2026\u00b0]$/.test(k); }).join("") + "]";
+var PM_SYM_CLASS = "[" + Object.keys(PM_SYM).filter(function (k) { return !/^[\u00d7\u00b7\u22c5\u2212\u2013\u2032\u2026\u00b0\u0127\u2113]$/.test(k); }).join("") + "]";  // MATH-RESIDUE-3: Latin \u0127 and script-l convert inside a run but never anchor one
 var PM_OPS = new Set(["=", "\u2248", "\u2260", "\u2264", "\u2265", "<", ">", "\u226a", "\u226b", "+", "\u2212", "\u00d7", "\u00b7", "\u22c5", "\u2295", "\u2297", "\u2208", "\u2209", "\u2192", "\u2190", "\u2194", "\u21d2", "\u21d4", "\u223c", "\u2261", "\u00b1", "/", "*", "\u2218", "\u221d", "\u2282", "\u2286", "\u222a", "\u2229", "\u2243", "\u2245", "\u2272", "\u2273", "-", "\u2013", "|", "\u2223"]);
 var PM_EQ_OPS = new Set(["=", "\u2248", "\u2260", "\u2264", "\u2265", "<", ">", "\u226a", "\u226b", "\u2208", "\u2261", "\u223c"]);
-var PM_SUBBASE = "(?:\ud835[\udd38-\udd6b]|[A-Za-z\u0391-\u03a9\u03b1-\u03c9\u2115\u211a\u211d\u2124\u2102\u220f\u2211\\)\\]])";
+var PM_SUBBASE = "(?:\ud835[\udd38-\udd6b]|[A-Za-z\u0391-\u03a9\u03b1-\u03c9\u2113\u2115\u211a\u211d\u2124\u2102\u220f\u2211\\)\\]])";
 var PM_RE_SUB = new RegExp("(?:(?<![A-Za-z0-9_\\\\])" + PM_SUBBASE + "|[\\)\\]])\\\\?_(?:\\{[^{}]{1,40}\\}|[A-Za-z0-9\u03b1-\u03c9\u0391-\u03a9]{1,8}(?![A-Za-z0-9_\u03b1-\u03c9])|[A-Za-z0-9](?=[\u0391-\u03a9\u03b1-\u03c9]))");
 var PM_RE_PIPE_SUB = /\|[^|\s]{1,12}\|_[A-Za-z0-9]{1,4}/;
 var PM_RE_CARET = /(?:(?<![A-Za-z0-9_\\])[A-Za-z0-9\u0391-\u03a9\u03b1-\u03c9]|[\)\]])\^(?:\{[^{}\s]{1,40}\}|\([^()\s]{1,30}\)|[A-Za-z0-9\u03b1-\u03c9\-\u2212]{1,6}(?![A-Za-z0-9_]))/;
@@ -772,6 +772,8 @@ var PM_RE_GREEK = new RegExp(PM_GREEK_CLASS);
 var PM_RE_COEF = /^[+\u2212-]?\d+(?:\.\d+)?[A-Za-z\u0391-\u03a9\u03b1-\u03c9](?:\\?_|\^)/;              // 3p_Z, 2d^2
 var PM_RE_FUNC_SCRIPT = new RegExp("(?<![A-Za-z])(?:" + PM_FUNCS + ")[" + PM_SUBC + PM_SUPC + "]+");  // log\u2082(0.1)
 var PM_RE_PI = /(?<![A-Za-z0-9_\\])pi\^/;                                                          // pi^2/6
+// MATH-RESIDUE-3 (3.11.2, #2023): a unit raised to a power ("1 dm^3 of water", "cm^-2") is math, not a word.
+var PM_RE_UNIT_POW = new RegExp("^(?:" + PM_UNITS + ")\\^[\u2212-]?\\d$");
 var PM_CHEM = "(?:[A-Z][a-z]?[" + PM_SUBC + "]*|\\((?:[A-Z][a-z]?[" + PM_SUBC + "]*)+\\)[" + PM_SUBC + "]*)+";
 var PM_RE_CHEM = new RegExp("^" + PM_CHEM + "$");                                                      // Si\u2083N\u2084, Ca\u2089(PO\u2084)\u2086, AdS\u2083
 function pmIsChem(c) { return PM_RE_CHEM.test(c) && new RegExp("[" + PM_SUBC + "]").test(c) && /[A-Z][a-z]|[A-Z][^A-Z]*[A-Z]/.test(c); }
@@ -801,10 +803,13 @@ function pmStripPunct(w) {
   while (w[0] === "(" && !pmBalanced(w)) { lead += "("; w = w.slice(1); }
   // MATH-RESIDUE-2: a leading "(" that does close inside the word is part of it ("(1\u2212p)^N", "(31/3)^4")
   while (lead.length && lead[lead.length - 1] === "(" && !pmBalanced(w) && pmBalanced("(" + w)) { w = "(" + w; lead = lead.slice(0, -1); }
+  // MATH-RESIDUE-3 (3.11.2, #2023): a word that opens with "(" and closes a script after it ("(p/p_th)^(d/2),", "(\u22121)^{2s}",
+  // "(p+1)p^{n\u22121}") lost both ends above; take the "(" back with the first stripped closer when the pair balances it.
+  while (lead.length && lead[lead.length - 1] === "(" && /^[)\]}]/.test(trail) && !pmBalanced(w) && pmBalanced("(" + w + trail[0])) { w = "(" + w + trail[0]; lead = lead.slice(0, -1); trail = trail.slice(1); }
   return { lead: lead, core: w, trail: trail };
 }
 function pmIsStrong(c) {
-  return PM_RE_COEF.test(c) || PM_RE_FUNC_SCRIPT.test(c) || PM_RE_PI.test(c) || new RegExp("^(?:" + PM_UNITS + ")[" + PM_SUPC + "]+$").test(c) || PM_RE_SUB.test(c) || PM_RE_PIPE_SUB.test(c) || PM_RE_CARET.test(c) || PM_RE_UNI.test(c) || PM_RE_GREEK.test(c) || PM_RE_SYM.test(c) || /\u221a/.test(c);
+  return PM_RE_COEF.test(c) || PM_RE_FUNC_SCRIPT.test(c) || PM_RE_PI.test(c) || new RegExp("^(?:" + PM_UNITS + ")[" + PM_SUPC + "]+$").test(c) || PM_RE_UNIT_POW.test(c) || PM_RE_SUB.test(c) || PM_RE_PIPE_SUB.test(c) || PM_RE_CARET.test(c) || PM_RE_UNI.test(c) || PM_RE_GREEK.test(c) || PM_RE_SYM.test(c) || /\u221a/.test(c);
 }
 function pmAtomish(c) {
   if (!/^[()\[\]A-Za-z0-9.,+\-\u2212\u00b7\u00d7\u22c5*\/]{1,30}$/.test(c)) return false;
@@ -900,7 +905,7 @@ function pmToTex(s) {
   s = s.replace(/[\u0391-\u03a9\u03b1-\u03c9\u03d1\u03d5\u03d6\u03f1\u03f5\u00b5]/g, function (c) { return PM_GREEK[c] != null ? PM_GREEK[c] + (/[A-Za-z]$/.test(PM_GREEK[c]) && PM_GREEK[c].length > 1 ? " " : "") : c; });
   s = s.replace(/[^\x00-\x7f]/g, function (c) { return PM_SYM[c] != null ? PM_SYM[c] : c; });
   // functions and units
-  s = s.replace(new RegExp("(?<![A-Za-z\\\\])(" + PM_FUNCS + ")(?![A-Za-z])", "g"), function (m, f) { return f === "mod" ? "\\bmod " : "\\" + (f === "Tr" || f === "tr" ? "operatorname{" + f + "}" : f === "ord" || f === "val" || f === "rank" || f === "Var" || f === "Cov" || f === "Pr" || f === "Re" || f === "Im" ? "operatorname{" + f + "}" : f); });
+  s = s.replace(new RegExp("(?<![A-Za-z\\\\])(" + PM_FUNCS + ")(?![A-Za-z])", "g"), function (m, f) { return f === "mod" ? "\\bmod " : "\\" + (f === "Tr" || f === "tr" ? "operatorname{" + f + "}" : f === "ord" || f === "val" || f === "rank" || f === "sign" || f === "sgn" || f === "Var" || f === "Cov" || f === "Pr" || f === "Re" || f === "Im" ? "operatorname{" + f + "}" : f); });
   s = s.replace(new RegExp("(?<![A-Za-z\\\\{])(" + PM_UNITS + ")(?![A-Za-z\\\\}])", "g"), function (m, u, off, str) {
     // only treat as unit when it follows a number token
     var before = str.slice(0, off);
@@ -936,9 +941,14 @@ function pseudoMath(text, save, stats) {
   for (var i = 0; i < parts.length; i++) {
     if (i % 2 === 1 || parts[i] === "") continue;
     var sp = pmStripPunct(parts[i]);
+    // MATH-RESIDUE-3: a comma subscript with no space after the comma ("t_Q,total", "P_q,op") is one subscript; the
+    // original text stays in res, so the braces reach only an emitted run.
+    var csub = /^([A-Za-z\u0391-\u03a9\u03b1-\u03c9])_([A-Za-z0-9]{1,3}),([A-Za-z]{2,8})(?![A-Za-z0-9_,])/.exec(sp.core);
+    if (csub) sp = { lead: sp.lead, core: csub[1] + "_{" + csub[2] + "," + csub[3] + "}" + sp.core.slice(csub[0].length), trail: sp.trail };
     var hs = /^(.+?)(-[A-Za-z]{2,}(?:-[A-Za-z]+)*)$/.exec(sp.core);   // 3.9.7: two-letter suffixes too ("Q-as-base")
     if (hs && pmClassify(hs[1]) === "strong" && !/^[A-Za-z]+$/.test(hs[1])) { sp = { lead: sp.lead, core: hs[1], trail: hs[2] + sp.trail }; }
-    var kind = /\u0001/.test(sp.core) ? "break" : pmClassify(sp.core);
+    // MATH-RESIDUE-3: an emphasis opened in the lead ("*") that closes inside the core ("*\u0127c*/\u2113P\u00b2") is markdown, not math.
+    var kind = /\u0001/.test(sp.core) || (/\*/.test(sp.lead) && /\*/.test(sp.core)) ? "break" : pmClassify(sp.core);
     words.push({ idx: i, sp: sp, kind: kind });
   }
   var res = parts.slice();
@@ -988,8 +998,10 @@ function pseudoMath(text, save, stats) {
     var src = raw.join(" ");
     var retry = function () { if (depth < 3 && b > a) splitEmit(a, b, depth); };
     if (/\$/.test(src)) return;
-    var tailx = words[b].sp.trail;
+    var tailx = words[b].sp.trail, leadx = words[a].sp.lead;
     while (!pmBalanced(src) && /^[)\]}]/.test(tailx)) { src += tailx[0]; tailx = tailx.slice(1); }
+    // MATH-RESIDUE-3: a run whose first word lost its "(" ("(1 - p^{-s})^{-1}") takes it back when that balances the run.
+    if (!pmBalanced(src) && /\($/.test(leadx) && pmBalanced("(" + src)) { src = "(" + src; leadx = leadx.slice(0, -1); }
     if (!pmBalanced(src)) return retry();
     var tex;
     try { tex = pmToTex(src); } catch (e) { return retry(); }
@@ -997,7 +1009,7 @@ function pseudoMath(text, save, stats) {
     var token = save(tex, src);
     // replace in res: first word gets lead + token + ... last word's trail kept
     var fw = words[a], lw = words[b];
-    res[fw.idx] = fw.sp.lead + token + tailx;
+    res[fw.idx] = leadx + token + tailx;
     for (var z = fw.idx + 1; z <= lw.idx; z++) res[z] = "";
     n++;
   }
@@ -1072,8 +1084,10 @@ function _mdInline(t) {
     return String.fromCharCode(57344 + c.charCodeAt(0));
   });
   t = esc(t).replace(/\$/g, "\u0007");
-  t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
-  t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  // MATH-RESIDUE-3 (3.11.2): a link target may hold one level of balanced parentheses ("..._(Dourmashkin)/03..."), as in
+  // CommonMark; the first ")" no longer ends the target and spills the rest of the URL into the text.
+  t = t.replace(/!\[([^\]]*)\]\(((?:[^()]|\([^()]*\))+)\)/g, '<img src="$2" alt="$1">');
+  t = t.replace(/\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)/g, '<a href="$2">$1</a>');
   t = t.replace(/\*\*\*(?=\S)([^*]+?)\*\*\*/g, "<strong><em>$1</em></strong>");
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/(?<![\w)\]*])\*\*(?=\S)((?:[^*]|\*(?!\*))+?)\*\*(?![\w(])/g, "<strong>$1</strong>");
@@ -2344,8 +2358,13 @@ function renderDefectCount(html) {
   const rule = (t.match(/\|\s*:?-{3,}/g) || []).length;
   const odd = (t.replace(/\\\$/g, "").split("$").length - 1) % 2;
   // 3.9.7: identifiers with a multi-letter stem ("noise_sigma", "MODEL_HTS_45", "run_simulation(") are names, not math.
-  const noMath = t.replace(/\$\$[\s\S]*?\$\$/g, " ").replace(/\$[^$\n]+\$/g, " ").replace(/(?<![\w\\])[A-Za-z][A-Za-z0-9]+_\w+/g, " ");
-  const resid = (noMath.match(/[A-Za-z\u0370-\u03ff\)\]][_^][{(]?[A-Za-z0-9+\-]|[\u00b2\u00b3\u00b9\u2070-\u209f]/g) || []).length;
+  // RENDER-HEALTH-PRECISION-1 (3.11.1, agent_issues 2023): four false-positive classes measured on the 68 pages flagged on
+  // 2026-10-06 (25 of the 47 still flagged were not render defects): an escaped \$ inside math shifted the $ pairing, so
+  // drop it before pairing (the odd test already does); URLs carry file names with underscores; a one-letter stem with a
+  // word subscript of 3+ letters ("t_gate", "y_true", "I_syn") is a name, not math ("p_th" still counts); and correct
+  // Unicode sub- and superscripts ("Bi\u2082Sr\u2082", "x\u2080") display as intended, so they are no longer residue.
+  const noMath = t.replace(/\\\$/g, " ").replace(/\bhttps?:\/\/\S+/g, " ").replace(/\$\$[\s\S]*?\$\$/g, " ").replace(/\$[^$\n]+\$/g, " ").replace(/(?<![\w\\])[A-Za-z][A-Za-z0-9]+_\w+/g, " ").replace(/(?<![\w\\])[A-Za-z]_[A-Za-z]{3,}\w*/g, " ");
+  const resid = (noMath.match(/[A-Za-z\u0370-\u03ff\)\]][_^][{(]?[A-Za-z0-9+\-]/g) || []).length;
   return bold + head + rule + odd + (resid >= 3 ? 1 : 0);
 }
 function paperRenderHtml(row) {
