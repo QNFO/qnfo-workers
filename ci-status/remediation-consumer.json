@@ -1,107 +1,47 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@634eaef2c64d",
- "due": 12,
- "pass": 6,
- "fail": 5,
- "skipped": 1,
+ "verifier": "remediation-consumer@720b3708cc83",
+ "due": 5,
+ "pass": 0,
+ "fail": 3,
+ "skipped": 2,
  "contracts": [
   {
-   "class": "issue-2044",
-   "issue_id": 2044,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1907",
-   "issue_id": 1907,
-   "verdict": "pass",
-   "expected": "linked",
-   "observed": "linked",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
-   "verdict": "fail",
-   "expected": "all-sources-ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
-   "verdict": "vacuous-probe-result",
-   "expected": "within-cap",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
-   "verdict": "fail",
-   "expected": "seven-days",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1935",
-   "issue_id": 1935,
-   "verdict": "pass",
-   "expected": "fixed-and-watched",
-   "observed": "fixed-and-watched",
-   "written": true
-  },
-  {
-   "class": "issue-1892",
-   "issue_id": 1892,
-   "verdict": "pass",
-   "expected": "baseline-recorded",
-   "observed": "baseline-recorded",
-   "written": true
-  },
-  {
-   "class": "issue-1890",
-   "issue_id": 1890,
-   "verdict": "pass",
-   "expected": "measured",
-   "observed": "measured",
-   "written": true
-  },
-  {
-   "class": "transformation-loop-1",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "cost-attribution-gap-1",
-   "issue_id": null,
+   "class": "issue-2046",
+   "issue_id": 2046,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: not measured yet",
+   "observed": "pending: the fixed migration has not applied",
    "written": true
   },
   {
-   "class": "one-worker-count-1",
-   "issue_id": null,
+   "class": "issue-2037",
+   "issue_id": 2037,
+   "verdict": "probe-not-machine-executable",
+   "reason": "multi-statement"
+  },
+  {
+   "class": "issue-2049",
+   "issue_id": 2049,
    "verdict": "fail",
-   "expected": "0",
-   "observed": "pending: not measured yet",
+   "expected": "ok",
+   "observed": "pending: lever T7.15 status session",
    "written": true
+  },
+  {
+   "class": "issue-2052",
+   "issue_id": 2052,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: code task CITATION-EXISTENCE-GATE-1 (qnfo-research-exec publishStage) not merged yet",
+   "written": true
+  },
+  {
+   "class": "issue-2050",
+   "issue_id": 2050,
+   "verdict": "probe-not-machine-executable",
+   "reason": "multi-statement"
   }
  ],
  "trusted_transports": [
@@ -120,8 +60,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 30571,
- "head": "634eaef2c64d30427492343e3d62904e039f9dec",
+ "spent_ms": 9888,
+ "head": "720b3708cc83bbe86385c21a695c1d9146cebf44",
  "job_status": "success",
- "ts": "2026-10-06T10:45:41Z"
+ "ts": "2026-10-06T11:18:28Z"
 }
