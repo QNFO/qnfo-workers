@@ -407,7 +407,7 @@ ok(jb.posterior && jb.posterior.slot["us-morning"].a === 1 && /prior/.test(jb.no
   ok(er.status === 200 && ej.posterior_error === "posterior unavailable" && ej.pending_error === "pending unavailable" && ej.recent_error === "recent unavailable" && ej.switch === "switch unreadable, old order" && !/secret-internal-detail|D1_ERROR|stmtOn/.test(JSON.stringify(ej)), "GET /learner on a failing D1 names the unavailable parts and exposes no exception text (CodeQL js/stack-trace-exposure)");
 }
 const hj = await (await W.fetch(new Request("https://qnfo-social.q08.workers.dev/health"), env)).json();
-ok(/^0\.7\.(29|[3-9]\d)/.test(hj.version) && hj.capabilities.includes("distribution-learner"), "/health names the learner");
+ok(/^(0\.7\.(29|[3-9]\d)|0\.([89]|\d{2,})\.|[1-9]\d*\.)/.test(hj.version) && hj.capabilities.includes("distribution-learner"), "/health names the learner");
 reset();
 await W.scheduled({ cron: "0 7 * * *" }, env);
 const today = new Date().toISOString().slice(0, 10);
