@@ -263,10 +263,6 @@ export const REGISTRY = {
    "url": "https://personal-api.q08.workers.dev/health"
   },
   {
-   "name": "qnfo-agent-orchestrator",
-   "url": "https://qnfo-agent-orchestrator.q08.workers.dev/health"
-  },
-  {
    "name": "qnfo-agent-ws",
    "url": "https://qnfo-agent-ws.q08.workers.dev/health"
   },
@@ -412,7 +408,7 @@ export const REGISTRY = {
   },
   {
    "name": "errata-hub",
-   "url": "https://errata-hub.q08.workers.dev/health"
+   "url": "https://qnfo-research-exec.q08.workers.dev/errata-hub/health"
   },
   {
    "name": "idea-hub",

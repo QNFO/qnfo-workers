@@ -194,6 +194,9 @@ jobs:
       # REVISER-FOLD-1 (#1756): qnfo-paper-reviser runs as a member of qnfo-research-exec (cadence, bindings, props routing).
       - name: REVISER-FOLD-1 offline suite (qnfo-research-exec 0.9.64)
         run: node --no-warnings qnfo-research-exec/reviser-fold.test.mjs
+      # ERRATA-FOLD-1 (#1756): errata-hub runs as a member of qnfo-research-exec at its own minutes on the */15 tick.
+      - name: ERRATA-FOLD-1 offline suite (qnfo-research-exec 0.9.65)
+        run: node --no-warnings qnfo-research-exec/errata-fold.test.mjs
       # BACKLOG-FOLD-1 (#1756): qnfo-backlog-exec runs as a member of qnfo-lifecycle; qnfo-archive is retired.
       - name: BACKLOG-FOLD-1 offline suite (qnfo-lifecycle 1.8.0)
         run: node --no-warnings qnfo-lifecycle/backlog-fold.test.mjs

@@ -1,7 +1,16 @@
 name = "qnfo-research-exec"
 main = "worker.js"
 compatibility_date = "2026-08-01"
+# ERRATA-FOLD-1 (#1756): the folded errata-hub member imports node:buffer.
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
+# ERRATA-FOLD-1: errata-hub's outbound mail (errata notices) and its PDF rendering move here with the member.
+send_email = [
+  { name = "SEND_EMAIL" }
+]
+
+[browser]
+binding = "BROWSER"
 
 # AI binding (Workers AI) - REQUIRED for note/paper generation via env.AI.run
 [ai]
