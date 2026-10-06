@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.3.1"; // 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.3.2"; // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1477,6 +1477,7 @@ function renderReport(scannedAt, horizon, gated, budget, stats, posted, taste) {
   L.push("- away windows (lodging rows outside Amsterdam): " + ((budget.away || []).length ? budget.away.map((w) => w.city + " " + w.start + ".." + w.end).join("; ") + ". Onsite Amsterdam events inside a window are gated (check-out day not included)." : "none."));
   L.push("- Schengen exit deadline: 2026-10-17. Onsite Amsterdam events on/after that date are blocked.");
   L.push("- standing filter: QPL / CWI topics excluded from personal recommendations.");
+  if (stats.venueSilent && stats.venueSilent.length) L.push("- SILENT VENUES (zero usable candidates for " + VENUE_ZERO_LIMIT + "+ runs, RADAR-VENUE-SILENT-1): " + stats.venueSilent.join(", ") + ".");
   L.push("- posted to calendar-api plane=personal: " + posted.posted + " new (dedupe skipped " + posted.skipped + ").");
   L.push("");
   for (const x of tasteReportLines(taste)) L.push(x);
@@ -1502,8 +1503,54 @@ async function ensureSchema(env) {
   await env.AUDIT_DB.prepare(
     "CREATE TABLE IF NOT EXISTS personal_radar (slug TEXT PRIMARY KEY, report TEXT, events_json TEXT, posted_json TEXT, scanned_at TEXT, updated_at TEXT)"
   ).run();
+  try { await env.AUDIT_DB.prepare("ALTER TABLE personal_radar ADD COLUMN venue_zero TEXT").run(); } catch (e) { /* column already exists */ }
 }
 __name(ensureSchema, "ensureSchema");
+// RADAR-VENUE-SILENT-1 (charter pillar: personal): the junk and fragment-title gates, shared by the posting loop and the per-venue yield.
+function isJunkCandidate(e) {
+  if (/opslaan|dit evenement|next page|previous page|\bpage\s+\d+\b|skip to|lees meer|read more|\bcookie\b|subscribe|newsletter|privacy policy|all rights reserved/i.test(e.snippet) || String(e.snippet || "").trim().length < 15) return true;
+  if (!e.title && TITLE_STRICT_VENUES.indexOf(e.venue) !== -1) return true;
+  return false;
+}
+__name(isJunkCandidate, "isJunkCandidate");
+// Per-venue consecutive-zero counters live in the existing personal_radar table, in a venue_zero TEXT column added by ensureSchema, on
+// each day's report row (the newest row that has one is the state; no extra rows, so readers of the table are unaffected).
+// State per venue: z consecutive zero-yield days, p days with a yield, d the UTC day last counted, zb/pb the values before that day
+// (a same-day re-run recomputes from them instead of counting twice). A venue whose fetch failed is a gap, never a zero. A venue that
+// was productive on at least 2 counted days and then yields nothing for 3 days files ONE agent_issues row (open-title unique index dedupes).
+var VENUE_ZERO_LIMIT = 3;
+var VENUE_PRODUCTIVE_DAYS = 2;
+async function updateVenueCounters(env, gated, venueErrors, day) {
+  const out = { silent: [], filed: [], state: null };
+  try {
+    const row = await env.AUDIT_DB.prepare("SELECT venue_zero FROM personal_radar WHERE venue_zero IS NOT NULL ORDER BY scanned_at DESC LIMIT 1").first();
+    let st = {};
+    try { st = row && row.venue_zero ? JSON.parse(row.venue_zero) || {} : {}; } catch (e) { st = {}; }
+    const failed = new Set((venueErrors || []).map((x) => x.venue));
+    for (const src of SOURCES) {
+      if (failed.has(src.name)) continue;
+      const y = gated.filter((g) => g.e.venue === src.name && !isJunkCandidate(g.e)).length;
+      const prev = st[src.name] || { z: 0, p: 0, d: "", zb: 0, pb: 0 };
+      const baseZ = prev.d === day ? prev.zb || 0 : prev.z || 0;
+      const baseP = prev.d === day ? prev.pb || 0 : prev.p || 0;
+      const z = y > 0 ? 0 : baseZ + 1;
+      const p = y > 0 ? Math.min(60, baseP + 1) : baseP;
+      st[src.name] = { z, p, d: day, zb: baseZ, pb: baseP, y };
+      if (z >= VENUE_ZERO_LIMIT && p >= VENUE_PRODUCTIVE_DAYS) {
+        out.silent.push(src.name);
+        const now = Date.now();
+        const r = await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
+          .bind("RADAR-VENUE-SILENT-1: " + src.name, "The personal radar venue " + src.name + " (" + src.url + ") produced zero usable candidates for " + z + " consecutive runs after " + p + " productive days. Fetch succeeded, so the page markup probably changed or only fragment titles remain (they are skipped, not posted). Open the page, adjust the " + src.name + " extractor in radar-hub/worker.js with a fixture, and the counter resets on the next productive run.", "radar-hub", "personal", "low", "open", now, now).run();
+        if (r && r.meta && r.meta.changes) out.filed.push(src.name);
+      }
+    }
+    out.state = JSON.stringify(st);
+  } catch (e) {
+    console.error("updateVenueCounters", e && e.message || e);
+  }
+  return out;
+}
+__name(updateVenueCounters, "updateVenueCounters");
 async function run(env) {
   await ensureSchema(env);
   const scannedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -1552,8 +1599,7 @@ async function run(env) {
     }
     if (!g.cleared || g.e.relevance < 2) continue;
     /* junkgate-marker */
-    if (/opslaan|dit evenement|next page|previous page|\bpage\s+\d+\b|skip to|lees meer|read more|\bcookie\b|subscribe|newsletter|privacy policy|all rights reserved/i.test(g.e.snippet) || String(g.e.snippet||"").trim().length < 15) { skipped += 1; continue; }
-    if (!g.e.title && TITLE_STRICT_VENUES.indexOf(g.e.venue) !== -1) { skipped += 1; continue; }
+    if (isJunkCandidate(g.e)) { skipped += 1; continue; }
     let title = g.e.venue + ": " + g.e.snippet.slice(0, 90);
     const cut = title.lastIndexOf(" ");
     if (cut > 30) title = title.slice(0, cut);
@@ -1603,7 +1649,8 @@ async function run(env) {
       await env.RADAR_DB.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status) VALUES (?,?,?,datetime('now'),'detected')").bind("calendar-write-path-broken", "radar-hub/personal/" + scannedAt.slice(0, 10), "personal radar: cleared>0 but 0 posted (write/auth failure) - verify CAL_TOKEN matches calendar-api").run();
     } catch (e) {}
   }
-  const stats = { inWindow: uniq.length, discarded, okVenues: SOURCES.length - venueErrors.length, totalVenues: SOURCES.length, venueErrors, horizonISO: horizon };
+  const venueSilent = await updateVenueCounters(env, gated, venueErrors, scannedAt.slice(0, 10));
+  const stats = { venueSilent: venueSilent.silent, inWindow: uniq.length, discarded, okVenues: SOURCES.length - venueErrors.length, totalVenues: SOURCES.length, venueErrors, horizonISO: horizon };
   const report = renderReport(scannedAt, horizon, gated, budget, stats, { posted, skipped }, taste);
   const slugN = "personal-events-radar-" + scannedAt.slice(0, 10);
   let delivery = null;
@@ -1622,6 +1669,7 @@ async function run(env) {
   await env.AUDIT_DB.prepare(
     "INSERT OR REPLACE INTO personal_radar (slug, report, events_json, posted_json, scanned_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
   ).bind(slugN, report, JSON.stringify(gated), JSON.stringify(postedList), scannedAt, scannedAt).run();
+  if (venueSilent.state) { try { await env.AUDIT_DB.prepare("UPDATE personal_radar SET venue_zero = ? WHERE slug = ?").bind(venueSilent.state, slugN).run(); } catch (e) { console.error("venue_zero write", e && e.message || e); } }
   return {
     slug: slugN,
     version: VERSION,
@@ -1629,6 +1677,7 @@ async function run(env) {
     discarded,
     venueErrors: venueErrors.length,
     budget,
+    silentVenues: venueSilent.silent,
     taste: { active: taste.active, rows: taste.rows, droppedByFloor: taste.droppedByFloor || 0, restoredByValve: taste.restoredByValve || 0 },
     posted: postedList,
     delivery,
