@@ -1,8 +1,12 @@
 # Quniverse transformation program (TRANSFORMATION-PROGRAM-1)
 
-Version 1.1 (2026-10-06): 1.0 written from a live read of D1 `qnfo-audit`, the Cloudflare account and this repository;
+Version 1.2 (2026-10-06): 1.0 written from a live read of D1 `qnfo-audit`, the Cloudflare account and this repository;
 1.1 adds a second read (section 1.10), where each autonomy-score point is lost (1.11), and T9 (a deploy path that cannot
-lock itself out), each measured 2026-10-06 06:30-07:15Z.
+lock itself out), each measured 2026-10-06 06:30-07:15Z; 1.2 adds a third read of the engine itself after its first tick
+(section 1.12, 07:40-08:10Z): the program was dispatching work its own merge lane must refuse and counting the refusals
+against the metric its first wave waits on, a fold had lifted the guard on the autonomy scorer, T1 lever 8 contradicted an
+applied owner decision, and the footprint stood at 31 live workers (29 with PR 674). It replaces T1.8 and adds T1.13-T1.18,
+T3.10-T3.15 and T5.10.
 Owner directive 2026-10-06: *audit the systemwide backlog and roadmap for fleet improvements, optimisations and
 enhancements; not patches and bugfixes but a continuing program of active transformational change, systemwide, fully
 automatic and 100% autonomous; everything is in scope, including complete refactors, overhauls and teardown/rebuild.*
@@ -179,6 +183,58 @@ Two of these are measurement corrections that will lower a reading before they r
 frozen `handoffs` row). That is the intended direction: a score that reads high because nothing re-measures it is the
 failure mode the guard metrics exist to catch.
 
+### 1.12 Third read: the engine after its first tick (measured 2026-10-06, 07:40-08:10Z)
+
+TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132, live 07:43:45Z) ran its first tick at 08:01:00Z: wave W0, 13 levers
+landed, 38 pending, 8 session, 1 dispatched. A read of what it found, and of the code loop it depends on:
+
+| Read | Value | Source |
+|---|---|---|
+| Live workers | 31 at 07:33Z (42 at 05:40Z); 29 once PR 674 deletes errata-hub and qnfo-agent-orchestrator | Cloudflare `workers/scripts` |
+| `worker_count` metric | 38 at 07:01Z, 32 at 08:01Z: it counts `service_registry`, which trails the deletes by up to an hour | `metric_registry` |
+| W0 exit | `worker_count <= 38` met; `code_task_success_rate_30d >= 0.45` unmet (0.28 at 07:01Z, 0.26 at 08:01Z) | `transformation_runs` 1 |
+| Code tasks, 30 days | 64 created; 16 merged; `code_task_superseded_share_30d` 0.40 | `code_tasks`, `metric_registry` |
+| Metrics in breach | 22 of 95 at 08:01Z (21 at 07:01Z) | `v_metric_trigger_state` |
+| Open agent issues | 77 at 08:01Z | `metric_registry` |
+| `freshness_guard` | 16 rows, 3 stale (`kaizen`, `version_queue`, `amh_coverage`), 1 idle | `freshness_guard` 07:40Z |
+
+Five findings, each with its fix or lever:
+
+- **The program fed its own wall.** Issues carrying `code-task:` lines on control-plane paths (2005 on qnfo-fleet-control,
+  2023 on qnfo-gateway, 2013 on qnfo-fleet-control) became code tasks. The merge runner refuses those paths before it opens a
+  pull request (`cmScope`, CM_DENY), so ct_u4ih8uzgsfxzvm and ct_rwqd5kegl1awi4 spent their model calls and ended `failed`,
+  and ct_y50fywmld0qa5k was `ready_to_publish` on the same road. Every such refusal lowers `code_task_success_rate_30d`, the
+  one unmet exit of W0, which every later wave waits on. Fixed by T1.15 (MERGE-SCOPE-INTAKE-1, qnfo-code-orchestrator
+  0.3.19): the orchestrator refuses a control-plane task before any model call and turns the issue's `code-task:` line into
+  a `session-task:` line with the reason.
+- **A fold lifted a guard.** qnfo-autonomy-scorer is on the never-auto-merge list so that no loop merges a change to the
+  formula that grades the fleet. SCORER-FOLD-1 (PR 668) moved its code into qnfo-observability, which no list named: from
+  then on the planner could plan, and the merge runner could merge, a change to the scoring formula. Fixed by T3.15
+  (SCORER-HOST-DENY-1, qnfo-fleet-control 0.4.133, and FOLD-GUARD-PARITY-1, a deploy-gate suite that reads every FOLDED
+  marker, fails when a denied guest's host is not denied, and holds CM_DENY, TP_CONTROL_PLANE and PLAN_DENY_WORKERS equal).
+- **T1 lever 8 contradicted an applied owner decision.** human_actions 21 (resolved 2026-10-02 as option (a), under rule 8)
+  keeps the verifier workers (qnfo-fleet-control, qnfo-deploy-guard, qnfo-ops, the code loop) manual and allows staged
+  automatic changes to qnfo-ai and qnfo-gateway only after a staged-rollout path passes a live test. Branch protection does
+  not change that: the merge runner already merges only on green required checks, so a required-check rule adds nothing to
+  its own merges; what the verifier workers lack is a revert path that does not run through themselves. And
+  TRANSFORMATION-LOOP-1 opens the whole control plane to code dispatch the moment lever (1, 8) lands
+  (`TP_CONTROL_PLANE_LEVER`). Lever 8 is superseded by T1.17 (staged rollout for qnfo-ai and qnfo-gateway, which then leave
+  the three lists together) and T1.18 (the verifier workers stay manual: an owner-held row, never dispatched).
+- **The verifier turned fixable proposals into `needs_human`.** The Dynamic Workers sandbox passes only `err.message`, so a
+  parse error can arrive as "Unexpected identifier '__name'" with no `SyntaxError` class (ct_lc6has32addg0m, 07:41Z, the
+  code task for #2028), which the verifier read as "could not confirm the syntax" and ended the task. Fixed by T1.14
+  (JS-VERIFY-PARSE-SHAPE-1): V8 parse wording is a failed proposal the next rung retries with the error. T1.4's
+  deterministic half (ANCHOR-REPAIR-1, an anchor that no longer occurs is repaired without a model call) lands with it.
+- **A writer re-created what a migration deleted.** PR 677 deleted the dead `kaizen`, `vault_notes_index` and `handoffs`
+  rows at 07:10Z; the prober (qnfo-ai-calibration) still listed `kaizen` and re-wrote it at 07:40Z. The writer side of #2028
+  (qnfo-ai-calibration 1.3.2: no `kaizen` signal, `version_queue` an event register with a 336 h window, `amh_coverage`
+  graded over the probe roster) lands with this version. The 24 never-probed external ids sit in `ai_model_health` because
+  the prober's roster prune has never run: `_del.bind.apply(_del.bind, [null].concat(_roster))` calls `bind` with the wrong
+  receiver and the error is swallowed (T5.10).
+
+The wave design itself has a weakness this read exposes: W0 exits on a 30-day trailing ratio, and the 42 tasks closed between
+2026-10-02 and 10-05 stay in its window until 11-01 to 11-05 whatever the loop does now. T1.16 gives W0 a leading exit.
+
 ---
 
 ## 2. Diagnosis: five structural causes
@@ -236,7 +292,7 @@ evidence. A session is called only when a task fails twice. `code_task_success_r
    when the queue holds green PRs at tick time.
 7. **(code)** Evolve parse gate: a candidate that does not parse is re-asked once with the parse error; a second
    failure records the model and prompt version so the prompt is fixed, and `evolve_parse_pass_pct_7d` is graded.
-8. **GitHub branch protection on main** with `gate`, `guard`, `mirror-guard`, `comparator`, `charter` and `test` as
+8. **(superseded 1.2 by levers 17 and 18; section 1.12)** ~~GitHub branch protection on main~~ with `gate`, `guard`, `mirror-guard`, `comparator`, `charter` and `test` as
    required checks (one-time, through the repository's token in cf-ops-actions or a session), then **(code)** drop
    CONTROL-PLANE-MANUAL-1 and shrink `CM_DENY` for PRs whose head passes every required check: the platform, not the
    policy, is the gate. Control-plane changes still carry the stricter test set (T5.4).
@@ -246,10 +302,28 @@ evidence. A session is called only when a task fails twice. `code_task_success_r
 11. **(refactor)** Multi-file tasks: the task carries a file list and the agent edits a branch checkout in the
     container (clone the branch, edit, test, push); the "more than 1 file" refusal becomes "more than the task's
     file list".
-12. **(code)** Session fallback: a task that fails twice files `CODE-TASK-NEEDS-SESSION-1` with the failure text; the
+12. **(code, done 0.4.132)** Session fallback: a task that fails twice files `CODE-TASK-NEEDS-SESSION-1` with the failure text; the
     watchmaker index counts those rows, so session dependence is measured as it falls.
 
-**Executor.** qnfo-code-orchestrator (levers 2 to 5, 7, 11, 12), qnfo-fleet-control merge lane (1, 8), `ops_config`
+13. **(code, done)** No-op proposal gate (NOOP-PROPOSAL-GATE-1, issue 2018): a proposal whose non-VERSION diff only
+    rewords string literals or comments is refused and fed back to the next rung.
+14. **(code, done 1.2)** Parse-shape verifier (JS-VERIFY-PARSE-SHAPE-1, qnfo-code-orchestrator 0.3.19): V8 parse wording
+    without its class name is a failed proposal, retried with the error; JSON.parse wording is excluded.
+15. **(code, done 1.2)** Merge-scope intake (MERGE-SCOPE-INTAKE-1, 0.3.19): a task on a CM_DENY worker is refused before
+    any model call and its issue's `code-task:` line becomes a `session-task:` line with the reason (section 1.12).
+16. **(code, control plane)** A leading W0 exit: `code_task_success_rate_30d` keeps its scoreboard row, and W0 exits on the
+    success rate of tasks created after levers 14 and 15 landed (at least 8 finished), so the wave measures the engine as
+    it is, not the 42 closures of 2026-10-02 to 10-05 that stay in a 30-day window until November.
+    `qnfo-fleet-control/worker.js` (`TP_WAVES`); one change to that worker at a time (rule 7).
+17. **(refactor, W1)** Staged rollout for qnfo-ai and qnfo-gateway, the scope human_actions 21 allows: the canonical deploy
+    uploads a version, deploys it to a fraction of traffic, probes it and promotes or rolls back without running through
+    the changed worker; after a passing live test the two workers leave CM_DENY, PLAN_DENY_WORKERS and TP_CONTROL_PLANE in
+    one change (FOLD-GUARD-PARITY-1 keeps the three lists equal). qnfo-gateway carries the public site and the reach
+    pillar's surface (`paper_render_defect_pages` 68 is its breach), so this lever opens the reach work to the code loop.
+18. **(owner-held)** The verifier workers (qnfo-fleet-control, qnfo-deploy-guard, qnfo-ops, the code loop) stay manual
+    (human_actions 21, option (a), rule 8). Listed so the plan never routes around it; the owner reopens it with a card.
+
+**Executor.** qnfo-code-orchestrator (levers 2 to 5, 7, 11, 12, 14, 15), qnfo-fleet-control merge lane (1, 16, 17), `ops_config`
 (6), one migration (9), the repo (10).
 **Probe.** `code_task_success_rate_30d` >= 0.6 for 14 days and at least 10 merged control-plane PRs by the loop.
 **Rollback.** Each lever is a version; the merge lane keeps `stale_pr_merge_enabled` and CONTROL-PLANE-MANUAL-1 as
@@ -321,6 +395,26 @@ retention policy with table families and no snapshot tables older than 30 days.
 9. **(code)** `charter-guard.py` requires `# charter-pillar:` on every live `wrangler.toml` (today 2 of 42), with the
    42 declarations landed in the same PR.
 
+10. **(refactor, W2)** Personal plane in one worker: personal-companion (no binders, no URL callers, hourly) and
+    calendar-api (binders personal-api, qnfo-intent-orchestrator, radar-hub) fold into personal-api; the plane separation
+    is between planes, not inside one.
+11. **(refactor, W2)** qnfo-intent-orchestrator: its downstream (qnfo-agent-orchestrator) is retired with PR 674 and seven
+    promoted candidates wait on a dispatch that fails (epic 2010); fold its intake into idea-hub and route promotions to
+    qnfo-research-exec. Four binders (qnfo-ai, qnfo-fleet-control, qnfo-ops, qnfo-tools-mcp), three on the control plane,
+    so a session.
+12. **(refactor, W2)** qnfo-observability into qnfo-ai-calibration: both measure; the calibration's `*/30` tick carries
+    observability's hourly ingest at :00 and the scorer at 05:00 (the host already awaits a member). The scorer's
+    protection moves with it (FOLD-GUARD-PARITY-1 fails CI otherwise).
+13. **(refactor, W2)** qnfo-subscribers into qnfo-email (one list, one transport, one suppression list): its URL callers
+    (idea-hub, qnfo-gateway, qnfo-ipatent) re-point to the host route first; qnfo-gateway is control plane, so a session.
+14. **(repo)** Fold kit: `scripts/fold_worker.py <guest> <host>` generalises the three builders of waves 1 to 3 (IIFE wrap,
+    VERSION and export rewrite, env map, tick map, health route, props-member routing, the parity test), so a fold is one
+    command and a review; it is the step that lets T1.11 take folds.
+15. **(code, done 1.2)** Fold-guard parity (SCORER-HOST-DENY-1, FOLD-GUARD-PARITY-1, section 1.12).
+
+T3.2 (MCP 2 -> 1) carries a dependency the repository cannot show: the owner's desktop clients reach qnfo-memory-mcp by URL
+(`owner_client_keys`, 3 rows). The fold re-points those clients first or keeps the old hostname as a route of the host.
+
 **Executor.** Retirements by the merge lane under the standing grant; refactors by T1 lever 7 or a session; migrations
 by the lifecycle tick once T5.3 lands.
 **Probe.** `worker_count` <= 24, `d1_databases` <= 8, workflow count <= 25 (counted by `scripts/charter-guard.py`),
@@ -390,7 +484,12 @@ where the DoD names a table and a count.
    scoring, replacing the hand score; the two other judgement rows (`independent_decision`, `novelty`) get the same
    treatment when a measured input exists, and stay judgement rows, dated, until then.
 
-**Executor.** fleet-control code tasks; lever 7 in qnfo-ai-calibration and the scorer host.
+10. **(session)** Roster prune that runs: the prober's prune of `ai_model_health` rows outside its roster calls
+    `_del.bind.apply(_del.bind, ...)` and has never deleted a row (section 1.12). Back up the table, fix the receiver,
+    prune only ids outside the roster with no gateway failure in 7 days, and canonicalise the roster ids as `runProbe`
+    writes them, so the prune cannot delete the rows the probe just wrote.
+
+**Executor.** fleet-control code tasks; lever 7 in qnfo-ai-calibration and the scorer host; lever 10 a session.
 **Probe.** `breach_code_task_pct` >= 30; `needs-machine-probe` contracts on **open** issues = 0 (9 on 2026-10-06; the 82 on
 closed issues get relapse probes where the issue names a metric, 11 of them); `ooda_observe` >= 4.5 with every counted
 row re-checked within 48 hours.
@@ -543,6 +642,9 @@ charter. A wave whose exit metric has not moved in 14 days is re-planned: the le
 | SAI (`sai_weighted`) | 3.39 | >= 3.6 | >= 4.0 |
 | `dangling_bindings` (T9.4; registered with its trigger when the census is built) | 0 at 06:28Z (read once) | 0 | 0 |
 
+Read again at 08:01Z (section 1.12): `worker_count` 32 (31 scripts live, 29 with PR 674), `code_task_success_rate_30d`
+0.26, `metrics_in_breach` 22, `open_agent_issues` 77, `transformation_levers_landed_14d` 13.
+
 ---
 
 ## 7. Adversarial notes: the strongest arguments against this program, and the answer
@@ -562,6 +664,13 @@ charter. A wave whose exit metric has not moved in 14 days is re-planned: the le
   detector the fleet lacks now.
 - **"The code loop will spend what sessions spend."** It runs on the ladder (free draft, cheap verify, paid repair) with
   the governor, under the fleet cap, and is attributed; sessions are neither capped nor attributed today.
+- **"Refusing control-plane tasks at intake flatters the success rate."** It removes tasks that could not succeed: the
+  merge runner refuses them before it opens a pull request. The past refusals stay in the 30-day window, the metric's
+  formula is unchanged, and the work is not dropped: the issue keeps its target as a `session-task:` line. The guard
+  metrics (`issue_wontfix_share_7d`, `remediation_latest_pass_pct_7d`) are untouched.
+- **"A leading W0 exit (T1.16) lets the program declare victory early."** It needs at least 8 finished tasks after the
+  engine fixes, and the 30-day metric stays on the scoreboard and in its trigger; a leading exit that later relapses shows
+  as the 30-day number not following, which TP-WAVE-EXIT-STALLED-1 already files.
 - **Unknowns.** Whether Workers AI latencies (55 to 60 s for large models) allow a code agent to run suites inside the
   container budget; whether GitHub branch protection can be set through the repository token the fleet holds (it may be
   an owner step, recorded if so); whether errata-hub has an external reader (decided by its 30-day rule, not assumed).
