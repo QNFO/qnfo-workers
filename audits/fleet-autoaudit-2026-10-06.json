@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-06 11:32:21",
+  "audited_at": "2026-10-06 12:01:22",
   "d1_write_failures": [],
-  "d1_writes_ok": 113,
+  "d1_writes_ok": 114,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "q08-signal-engine"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -59,11 +52,15 @@
         "worker": "qnfo-web-unified"
       },
       {
+        "dir": "research-code",
+        "worker": "research-code"
+      },
+      {
         "dir": "scripts",
         "worker": "scripts"
       }
     ],
-    "not_a_worker_count": 9,
+    "not_a_worker_count": 10,
     "not_deployed_dirs": [
       "agent-orchestrator",
       "ai-health-prober",
@@ -466,7 +463,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.12.1-noindex",
+        "version": "1.12.3-broadcast-batch",
         "worker": "personal-companion"
       },
       {
@@ -491,12 +488,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.20.0-email-orch-fold",
+        "version": "1.21.0-scan-lanes",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.22-claims-first",
+        "version": "0.3.23-intake-depends",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -526,7 +523,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.10.2-seo-hygiene",
+        "version": "3.11.0-legal-versions",
         "worker": "qnfo-gateway"
       },
       {
@@ -541,7 +538,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.10.2-seo-guides",
+        "version": "3.12.0-mechanism-ui-v2",
         "worker": "qnfo-ipatent"
       },
       {
@@ -807,9 +804,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.12.1-noindex",
+      "before": "1.12.3-broadcast-batch",
       "http": 200,
-      "live": "1.12.1-noindex",
+      "live": "1.12.3-broadcast-batch",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1015,9 +1012,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.20.0-email-orch-fold",
+      "before": "1.21.0-scan-lanes",
       "http": 200,
-      "live": "1.20.0-email-orch-fold",
+      "live": "1.21.0-scan-lanes",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1031,9 +1028,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.22-claims-first",
+      "before": "0.3.23-intake-depends",
       "http": 200,
-      "live": "0.3.22-claims-first",
+      "live": "0.3.23-intake-depends",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1175,9 +1172,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.10.2-seo-hygiene",
+      "before": "3.11.0-legal-versions",
       "http": 200,
-      "live": "3.10.2-seo-hygiene",
+      "live": "3.11.0-legal-versions",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1231,9 +1228,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.10.2-seo-guides",
+      "before": "3.12.0-mechanism-ui-v2",
       "http": 200,
-      "live": "3.10.2-seo-guides",
+      "live": "3.12.0-mechanism-ui-v2",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1477,6 +1474,14 @@
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
+    },
+    "research-code": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_A_WORKER",
+      "worker": "research-code"
     },
     "research-daily-brief": {
       "before": null,
