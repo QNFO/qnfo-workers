@@ -269,6 +269,9 @@ jobs:
       - name: CRAWL-HEALTH-1 offline suite (qnfo-fleet-control)
         if: ${{ !cancelled() }}
         run: node qnfo-fleet-control/crawl-health.test.mjs
+      - name: Q08-SITEMAP-INDEXABLE-1 offline suite (q08-signal-engine)
+        if: ${{ !cancelled() }}
+        run: node q08-signal-engine/sitemap.test.mjs
       - name: DISCOVERY-1 offline suite (qnfo-gateway)
         if: ${{ !cancelled() }}
         run: node qnfo-gateway/discovery.test.mjs
