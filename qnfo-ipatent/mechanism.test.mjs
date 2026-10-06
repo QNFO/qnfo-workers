@@ -51,6 +51,11 @@ ok(r.status === 200 && r.j.mechanism.how_it_works === "NOT STATED", "a missing m
 ok(["how_it_works", "distinction", "nearest_known", "window_holds", "window_breaks"].every((k) => hf.includes(k)), "each missing field is a hole", hf);
 ok(hf.filter((k) => k === "what_it_does").length === 1, "an effect with no number, unit or comparison is a hole", r.j.holes);
 
+// 2b. A distinction with no nearest known approach cannot be checked: a hole on the distinction.
+reply = JSON.stringify({ what_it_is: "A ceramic tile filled with paraffin under a battery pack.", what_it_does: "Keeps cells below 40 C at the afternoon peak.", how_it_works: "Latent heat absorbed as the paraffin melts at 38 C removes heat from the cells during the peak.", distinction: "The paraffin phase-change material.", nearest_known: "NOT STATED", window_holds: "10 to 30 mm of paraffin.", window_breaks: "Under 10 mm it saturates." });
+r = await post("/api/mechanism", { title: "Cooling tile", description: desc });
+ok(r.j.holes.some((h) => h.field === "distinction" && /nearest known/.test(h.why)) && r.j.holes.some((h) => h.field === "nearest_known"), "a distinction with no nearest known approach is a hole", r.j.holes);
+
 // 3. Refusals.
 ok((await post("/api/mechanism", { title: "x", description: "too short" })).status === 400, "a short description is refused (400)");
 ok((await post("/api/mechanism", { title: "Folding drawer hinge", description: desc }, "python-requests/2.31")).status === 403, "an automated client is refused (403)");
