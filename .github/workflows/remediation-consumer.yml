@@ -36,6 +36,9 @@ on:
     branches: [main]
     paths:
       - 'scripts/remediation-consumer.py'
+      # PROBE-TRANSPORT-MONOCULTURE-1: the implementation lives in the underscore file; a change to it alone
+      # did not start a run, so a fix to the consumer waited for an unrelated workflow_run.
+      - 'scripts/remediation_consumer.py'
       - '.github/workflows/remediation-consumer.yml'
   workflow_run:
     workflows: ["apply-pending-patches", "fleet-autodeploy", "mirror-sync"]

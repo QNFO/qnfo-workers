@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-06 13:13:11",
+  "audited_at": "2026-10-06 16:20:59",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -453,7 +453,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.5.9-robots-sitemap",
+        "version": "1.6.0-budget-soft",
         "worker": "idea-hub"
       },
       {
@@ -468,12 +468,12 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.8.10-stall-metric",
+        "version": "0.8.11-budget-soft",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.31.7-noindex",
+        "version": "5.32.0-budget-soft",
         "worker": "qnfo-ai"
       },
       {
@@ -483,7 +483,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.2.9-prompt-cache",
+        "version": "2.3.0-budget-soft",
         "worker": "qnfo-ai-search"
       },
       {
@@ -513,12 +513,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.6.0-probe-transports",
+        "version": "0.6.1-charter-budget-soft",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.26.1-loose-ends",
+        "version": "1.26.2-budget-soft",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -538,7 +538,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.12.0-mechanism-ui-v2",
+        "version": "3.12.1-budget-soft",
         "worker": "qnfo-ipatent"
       },
       {
@@ -558,7 +558,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.38.47-registry-folded",
+        "version": "2.39.1-cost-soft",
         "worker": "qnfo-ops"
       },
       {
@@ -684,9 +684,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.5.9-robots-sitemap",
+      "before": "1.6.0-budget-soft",
       "http": 200,
-      "live": "1.5.9-robots-sitemap",
+      "live": "1.6.0-budget-soft",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -844,9 +844,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.8.10-stall-metric",
+      "before": "0.8.11-budget-soft",
       "http": 200,
-      "live": "0.8.10-stall-metric",
+      "live": "0.8.11-budget-soft",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -876,9 +876,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.31.7-noindex",
+      "before": "5.32.0-budget-soft",
       "http": 200,
-      "live": "5.31.7-noindex",
+      "live": "5.32.0-budget-soft",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -892,9 +892,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.2.9-prompt-cache",
+      "before": "2.3.0-budget-soft",
       "http": 200,
-      "live": "2.2.9-prompt-cache",
+      "live": "2.3.0-budget-soft",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1140,17 +1140,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.6.0-probe-transports",
+      "before": "0.6.1-charter-budget-soft",
       "http": 200,
-      "live": "0.6.0-probe-transports",
+      "live": "0.6.1-charter-budget-soft",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.26.1-loose-ends",
+      "before": "1.26.2-budget-soft",
       "http": 200,
-      "live": "1.26.1-loose-ends",
+      "live": "1.26.2-budget-soft",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1228,9 +1228,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.12.0-mechanism-ui-v2",
+      "before": "3.12.1-budget-soft",
       "http": 200,
-      "live": "3.12.0-mechanism-ui-v2",
+      "live": "3.12.1-budget-soft",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1276,9 +1276,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.47-registry-folded",
+      "before": "2.39.1-cost-soft",
       "http": 200,
-      "live": "2.38.47-registry-folded",
+      "live": "2.39.1-cost-soft",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"

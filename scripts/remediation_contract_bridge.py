@@ -208,9 +208,19 @@ def main():
     out["inserted_active"] = inserted_active
     out["inserted_needs_machine_probe"] = inserted_sentinel
 
-    active = d1("SELECT class, issue_id, verify_probe FROM remediation_contracts WHERE status = 'active'")
+    active = d1("SELECT class, issue_id, verify_probe, verify_transport FROM remediation_contracts WHERE status = 'active'")
     prose = []
     for c in active:
+        # PROBE-TRANSPORT-MONOCULTURE-1 (#2060, #2059): runner-https and external-https probes are declarative JSON run by
+        # their own executors, not SQL; a JSON object there is executable, not prose.
+        if c.get("verify_transport") in ("runner-https", "external-https"):
+            try:
+                ok = isinstance(json.loads(c.get("verify_probe") or ""), dict)
+            except ValueError:
+                ok = False
+            if not ok:
+                prose.append({"class": c.get("class"), "issue_id": c.get("issue_id"), "reason": "not-json"})
+            continue
         ok, why = is_literal_select(c.get("verify_probe"))
         if not ok:
             prose.append({"class": c.get("class"), "issue_id": c.get("issue_id"), "reason": why})

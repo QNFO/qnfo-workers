@@ -14,9 +14,9 @@ pipeline, serving traffic). It is a **parked** state with a default already in e
 ## Three tiers
 | Tier | What | The system |
 |---|---|---|
-| **T1** reversible, bounded, inside existing limits | thresholds, dead-code retirement, redefining an infeasible DoD, merging a green PR, ordering a queue; **owner-voice publishing inside the gates below (gated T1)**; **under the owner's standing grant (2026-10-05)**: retiring an idle or low-value worker after a dependency check, deleting an unused database after a verified backup, switching to a cheaper model with a per-request fallback and an automatic revert | **decides and executes**, and records why (PR text, `agent_issues` row, this doc) |
-| **T2** irreversible, external-facing (other than gated owner-voice publishing), or touches credentials/spend/exposure | rotating or overwriting a live credential, enabling an access gate that can lock people out, anything that bills | does **not** act. Keeps the current safe configuration serving, parks the item with the default stated, and **continues all other work** |
-| **Never** (regardless of directive) | raising a spend cap; minting, rotating or overwriting a live credential; deleting data that has no verified backup; disabling a security control or guard; routing around the canonical deploy path | refused. If one of these is the *only* way forward the item parks (T2) |
+| **T1** reversible, bounded, inside existing limits | thresholds, dead-code retirement, redefining an infeasible DoD, merging a green PR, ordering a queue; **owner-voice publishing inside the gates below (gated T1)**; **under the owner's standing grant (2026-10-05)**: retiring an idle or low-value worker after a dependency check, deleting an unused database after a verified backup, switching to a cheaper model with a per-request fallback and an automatic revert; **since RULE-8-RETIRED-1 (2026-10-06)**: setting or raising its own spend caps, adding a worker, cron or model call while a cap is breached, changing or retiring a guard metric or probe when the evidence says it measures the wrong thing, deleting data (backup first by default) | **decides and executes**, and records why (PR text, `agent_issues` row, this doc) |
+| **T2** irreversible, external-facing (other than gated owner-voice publishing), or touches credentials/exposure | rotating or overwriting a live credential, enabling an access gate that can lock people out, paying a new vendor | does **not** act. Keeps the current safe configuration serving, parks the item with the default stated, and **continues all other work** |
+| **Never** (regardless of directive) | minting, rotating or overwriting a live credential; disabling a security control; routing around the canonical deploy path; mailing an address that opted out or sending outreach outside its consent gate and cadence caps; moving personal-plane data into the research plane or onto a public surface | refused. If one of these is the *only* way forward the item parks (T2) |
 
 Changed 2026-10-01 (STRATEGY-1): "publishing as the owner" left T2 and "sending third-party mail or posts as the owner" left
 Never. Owner directive 2026-10-01 authorises the system to publish and send as the owner, so owner-voice publishing is
@@ -27,6 +27,15 @@ and act entirely on their own". Retiring idle or low-value workers, deleting unu
 switching to cheaper models are T1 under the conditions in charter rule 9, with no owner card. "Deleting data" in Never
 now reads "deleting data that has no verified backup"; raising a cap and adding paid model calls while a cap is breached
 stay refused.
+
+Changed 2026-10-06 (RULE-8-RETIRED-1, charter decision rule 10): the owner directed "'Rule 8' is now deleted entirely. The
+system needs more flexibility and more autonomy to decide for itself and make it's own choices ad hoc." Raising a spend cap,
+adding paid model calls while a cap is breached, changing a guard or probe and deleting data moved from Never to T1: the
+system decides, records the reason and the live measurement, and follows core rule 7 for any self-change. "Anything that
+bills" left T2 (a breached cap already only steers model choice, BUDGET-SOFT-ROUTE-1). Mailing an opted-out address,
+outreach outside its consent gate and cadence caps, and moving personal data into the research plane or onto a public
+surface joined Never: they were rule 8's protections for people outside the fleet, which the owner's directive does not
+reach, and the law requires most of them.
 
 ## Owner-voice publishing (gated T1)
 Source: docs/STRATEGY.md section 5, which is authoritative; this is a summary. The system decides and executes inside these
