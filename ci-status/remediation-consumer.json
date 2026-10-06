@@ -1,82 +1,26 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@1fad07e8c262",
- "due": 9,
+ "verifier": "remediation-consumer@3d6bf42be557",
+ "due": 2,
  "pass": 1,
- "fail": 7,
- "skipped": 1,
+ "fail": 1,
+ "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1813",
-   "issue_id": 1813,
+   "class": "issue-2046",
+   "issue_id": 2046,
    "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1833",
-   "issue_id": 1833,
-   "verdict": "fail",
-   "expected": "attributed",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
-   "verdict": "vacuous-probe-result",
-   "expected": "connected",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-1876",
-   "issue_id": 1876,
+   "class": "issue-2050",
+   "issue_id": 2050,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "a task created after the deploy ended superseded",
-   "written": true
-  },
-  {
-   "class": "issue-1877",
-   "issue_id": 1877,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: under 3 days since the deploy",
-   "written": true
-  },
-  {
-   "class": "issue-1960",
-   "issue_id": 1960,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: under 7 days of the merge lane",
-   "written": true
-  },
-  {
-   "class": "issue-1965",
-   "issue_id": 1965,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: under 24h of the merge lane",
-   "written": true
-  },
-  {
-   "class": "issue-1942",
-   "issue_id": 1942,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "agentic-collapse-repro-1",
-   "issue_id": 2061,
-   "verdict": "fail",
-   "expected": "2",
-   "observed": "pending: one version",
+   "observed": "pending: no reach tick since fleet-control 0.4.140 deployed (last 2026-10-06T08:01:00.021Z)",
    "written": true
   }
  ],
@@ -97,8 +41,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 20071,
- "head": "1fad07e8c26285f2811c5b8e860828fb449b295a",
+ "spent_ms": 7267,
+ "head": "3d6bf42be557990cc6fffaf8e037564d1efea6f9",
  "job_status": "success",
- "ts": "2026-10-06T11:49:21Z"
+ "ts": "2026-10-06T12:20:07Z"
 }
