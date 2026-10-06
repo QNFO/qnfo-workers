@@ -412,7 +412,7 @@ export const REGISTRY = {
   },
   {
    "name": "errata-hub",
-   "url": "https://errata-hub.q08.workers.dev/health"
+   "url": "https://qnfo-research-exec.q08.workers.dev/errata-hub/health"
   },
   {
    "name": "idea-hub",

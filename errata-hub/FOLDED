@@ -1,0 +1,16 @@
+errata-hub is FOLDED into qnfo-research-exec (2026-10-06, ERRATA-FOLD-1, agent_issues 1756, owner standing grant
+OWNER-STANDING-GRANT-1 / charter decision rule 9; fleet_budget workers was 31 against a cap of 30 before this fold).
+
+Its code (errata watch, respond and publish, itself the host of three folded members) runs unchanged as the member
+errataMod inside qnfo-research-exec/worker.js (member version 1.4.2-folded): only its two node:buffer imports (now one host
+import), its VERSION line and its export differ. The host's */15 tick runs its three jobs at their own minutes (:00 watch,
+:15 respond, :30 publish), awaited, with PAPERS_DB on the host's LIVING_PAPER and WATCH_DB/AUDIT_DB on QNFO_AUDIT; GRAPH_DB,
+MIRROR (qnfo-releases), AI and ZENODO_TOKEN are the host's own, and nodejs_compat, BROWSER and SEND_EMAIL moved to the host's
+wrangler.toml with it. Its Workers AI calls are still attributed to errata-hub (its own entry wrapper). GET
+/errata-hub/health on the host serves its health. Its other routes, including the token-gated POST /internal-errata intake
+(no caller in the repository), answer only a service binding whose props name the member (props.member = "errata-hub",
+props.caller = qnfo-*), which stands in for ERRATA_TOKEN (#1703).
+
+This directory is kept for reference; the separate script is removed with cf-ops-actions delete-worker once the host is
+verified running the member. canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. Un-folding is
+a charter net-zero decision recorded in a PR that removes this file, never a way to get a deploy through.

@@ -17,7 +17,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 {
   const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.every((l) => /^var VERSION = |^export \{|^  worker_default as default,|^  recordFlaggedErrata|^\};|^\/\/# sourceMappingURL/.test(l)) && missing.some((l) => l.startsWith("var VERSION = ")), "every reviser line is in the host except its VERSION line and its export block", missing.map((l) => l.slice(0, 60)));
-  ok(/^0\.9\.64/.test(mod.__hv) && mod.__mv === "1.2.8-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.9.64, member 1.2.8-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok(/^0\.9\.6[4-9]/.test(mod.__hv) && mod.__mv === "1.2.8-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.9.64+, member 1.2.8-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 
 // cadence
