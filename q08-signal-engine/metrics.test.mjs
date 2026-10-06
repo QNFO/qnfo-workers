@@ -40,9 +40,13 @@ globalThis.fetch = async () => { throw new Error("offline test"); };
 const cronWaits = [];
 await w.scheduled({ cron: "0 */2 * * *" }, env, { waitUntil: (p) => cronWaits.push(p) });
 await Promise.all(cronWaits);
-check("after the generation cron, q08 writes its five registry values", writes.sort().join(",") === "q08_confirmed_subscribers=0,q08_gate_pass_rate_7d=0.333,q08_human_reads_7d=1,q08_neurons_per_published_piece_7d=9000,q08_verified_votes_7d=0", writes);
+check("after the generation cron, q08 writes its five registry values and the stall metric (#2034)", writes.sort().join(",") === "q08_confirmed_subscribers=0,q08_gate_pass_rate_7d=0.333,q08_hours_since_last_piece=0,q08_human_reads_7d=1,q08_neurons_per_published_piece_7d=9000,q08_verified_votes_7d=0", writes);
 // Q08-SELF-TUNE-1: the compose temperature comes from ops_config, clamped; anything unreadable keeps 0.65.
 const src = (await import("node:fs")).readFileSync(join(dirname(fileURLToPath(import.meta.url)), "worker.js"), "utf8");
 const pt = new Function(src.slice(src.indexOf("var TEMP_KEY"), src.indexOf("async function composeTemperature")) + "; return parseTemperature;")();
 check("temperature knob clamps and defaults", pt(null) === 0.65 && pt("") === 0.65 && pt("abc") === 0.65 && pt("0.5") === 0.5 && pt("2") === 0.8 && pt("0.1") === 0.4, [pt(null), pt("0.5"), pt("2"), pt("0.1")]);
+// Q08-STALL-METRIC-1: hours since the newest piece, rounded to 0.1; unparseable or future timestamps are unmeasured.
+const hsf = new Function(src.slice(src.indexOf("function hoursSince"), src.indexOf("async function writeOwnMetrics")) + "; return hoursSince;")();
+const T = Date.parse("2026-10-06T12:00:00Z");
+check("hoursSince", hsf("2026-10-06T09:30:00Z", T) === 2.5 && hsf(T - 26 * 3600e3, T) === 26 && hsf(null, T) === null && hsf("nope", T) === null && hsf("2026-10-07T00:00:00Z", T) === null, [hsf("2026-10-06T09:30:00Z", T), hsf(T - 26 * 3600e3, T)]);
 console.log(fails ? fails + " FAILED" : "ALL PASSED"); process.exit(fails ? 1 : 0);

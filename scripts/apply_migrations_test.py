@@ -144,6 +144,18 @@ ok(db.execute("SELECT COUNT(*) FROM agent_issues WHERE title = 'MIGRATION-APPLY-
 
 # 7. --check never calls D1 and skips every existing migration (they were applied by hand).
 n1 = len(calls)
+# 5c. D1 caps a LIKE/GLOB pattern at 50 bytes (MIGRATION-APPLY-FAILED-1, issue 2046): --check rejects longer ones.
+long_like = """-- long like
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: none needed
+UPDATE ops_config SET value = 'y' WHERE key = 'a' AND value NOT LIKE '%code-task: repo=qnfo-workers path=idea-hub/worker.js%';
+"""
+okp, probs, inf = M.plan("migrations/long.sql", long_like)
+ok(okp and any("LIKE/GLOB pattern of 54 bytes" in p for p in probs), "a 54-byte LIKE pattern is a --check problem", probs)
+short_like = long_like.replace("'%code-task: repo=qnfo-workers path=idea-hub/worker.js%'", "'%TRIGGER-CODE-TASK-LINES-1%'")
+okp, probs, inf = M.plan("migrations/short.sql", short_like)
+ok(okp and not probs, "a short LIKE pattern and instr() pass", probs)
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf):
     rc = M.main(["--check"] + sorted(glob.glob(os.path.join(HERE, "..", "migrations", "*.sql"))))

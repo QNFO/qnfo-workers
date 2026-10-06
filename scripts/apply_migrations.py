@@ -33,12 +33,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 DATABASES = {"qnfo-audit": "35e2e573-92f3-46ac-83c6-22f6429fc5e5"}
+# D1 caps a LIKE/GLOB pattern at 50 bytes and rejects longer ones at run time ("LIKE or GLOB pattern too complex",
+# MIGRATION-APPLY-FAILED-1, issue 2046). --check catches it in the PR; use instr(col, 'text') = 0 / > 0 instead.
+LIKE_MAX_BYTES = 50
+LIKE_LITERAL = re.compile(r"\b(?:LIKE|GLOB)\s+'((?:[^']|'')*)'", re.I)
 DESTRUCTIVE = re.compile(r"^\s*(DELETE\s+FROM|DROP\s+(TABLE|INDEX|VIEW|TRIGGER))\b", re.I)
-# LIKE-PATTERN-LIMIT-1 (2026-10-06): D1 refuses a LIKE or GLOB pattern over 50 bytes ("LIKE or GLOB pattern too complex";
-# migration_runs id 6, a 54-byte guard in 2026-10-06-trigger-code-task-lines.sql, agent_issues 2046). --check refuses a
-# literal pattern that long so the PR gate catches it; instr(column, 'text') has no such limit.
-LIKE_MAX = 50
-LIKE_PATTERN = re.compile(r"\b(LIKE|GLOB)\s+'((?:[^']|'')*)'", re.I)
 LEDGER_DDL = ("CREATE TABLE IF NOT EXISTS migration_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL, "
               "sha256 TEXT NOT NULL, commit_sha TEXT, db TEXT, status TEXT NOT NULL, statements INTEGER, error TEXT, "
               "applied_by TEXT, applied_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))")
@@ -104,15 +103,14 @@ def plan(path, text):
     stmts = statements(text)
     if any(s.startswith("__INCOMPLETE__") for s in stmts):
         problems.append("the file ends with an incomplete statement")
-    for s in stmts:
-        for m in LIKE_PATTERN.finditer(body(s)):
-            pat = m.group(2).replace("''", "'")
-            n = len(pat.encode("utf-8"))
-            if n > LIKE_MAX:
-                problems.append("LIKE/GLOB pattern of " + str(n) + " bytes: D1 refuses patterns over " + str(LIKE_MAX) +
-                                " bytes ('LIKE or GLOB pattern too complex'); use instr(column, 'text') instead: " + pat[:48])
     if not [s for s in stmts if not s.startswith("__INCOMPLETE__")]:
         problems.append("no statement to apply")
+    for s in stmts:
+        for m in LIKE_LITERAL.finditer(body(s)):
+            lit = m.group(1).replace("''", "'")
+            if len(lit.encode("utf-8")) > LIKE_MAX_BYTES:
+                problems.append("LIKE/GLOB pattern of " + str(len(lit.encode("utf-8"))) + " bytes (D1 rejects over "
+                                + str(LIKE_MAX_BYTES) + "; use instr()): '" + lit[:60] + "'")
     destructive = [s for s in stmts if DESTRUCTIVE.match(body(s))]
     backup = header_value(lines, "BACKUP")
     if destructive and not backup:

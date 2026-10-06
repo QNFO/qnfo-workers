@@ -6,11 +6,8 @@
 -- code_task_success_rate_30d, the metric wave W0 waits on. One trigger names a concrete one-file change with a unique anchor:
 -- idea_topic_concentration_30d (idea-hub triageProposals: the diversity constraint). fleet_ai_run_rate_30d_usd's lever
 -- (reasoning_effort low on qnfo-research-exec glm stages) is already the default since REASONING-EFFORT-LOW-1 (#1504), so its
--- action gets a note instead of a line. Idempotent: guarded UPDATEs.
--- Re-applied 2026-10-06 (MIGRATION-APPLY-FAILED-1, agent_issues 2046, migration_runs id 6): the first run on commit 634eaef
--- failed with "LIKE or GLOB pattern too complex" because D1 refuses LIKE patterns over 50 bytes (the guard was 54 bytes;
--- the 27-byte one passed). The guards now use instr(), which has no such limit; apply_migrations.py --check refuses long
--- LIKE patterns from this file on.
+-- action gets a note instead of a line. Idempotent: guarded UPDATEs. Guards use instr(), not LIKE: D1 rejected the first
+-- version with "LIKE or GLOB pattern too complex" (MIGRATION-APPLY-FAILED-1, issue 2046).
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: UPDATE analytics_metric_triggers SET action = substr(action, 1, instr(action, char(10) || 'code-task: repo=qnfo-workers path=idea-hub/worker.js') - 1) WHERE metric_key = 'idea_topic_concentration_30d' AND instr(action, 'code-task: repo=qnfo-workers path=idea-hub/worker.js') > 0; UPDATE analytics_metric_triggers SET action = replace(action, ' (TRIGGER-CODE-TASK-LINES-1 2026-10-06: reasoning_effort low is already the default for glm models in qnfo-research-exec aiText since REASONING-EFFORT-LOW-1, #1504; the remaining lever is the model and the call count per stage, read ai_call_counters first.)', '') WHERE metric_key = 'fleet_ai_run_rate_30d_usd';
