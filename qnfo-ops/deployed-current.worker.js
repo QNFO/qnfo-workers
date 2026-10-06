@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.46-prompt-cache";
+var VERSION = "2.38.47-registry-folded"; /* 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
 // FOLD-WAVE-2 (2.38.45, 2026-10-06, #1756): qnfo-archive is retired (its 04:00 KG seed got HTTP 401 on every batch), so its
 // ARCHIVE probe binding leaves FLEET, BINDING_KEYS, wrangler.toml and the fleet_status text. BACKLOG now reaches the
 // qnfo-backlog-exec member inside qnfo-lifecycle (props.member); the code calling it is unchanged.
@@ -1116,7 +1116,9 @@ var FLEET = [
   { name: "qnfo-ai", binding: "AI" },
   { name: "qnfo-ai-search", binding: "AISEARCH" },
   { name: "qnfo-memory-mcp", binding: "MEMORY" },
-  { name: "qnfo-backlog-exec", binding: "BACKLOG" }
+  // REGISTRY-SYNC-FOLDED-1 (2.38.47, #2031): a folded member is probed through its binding as before, but its registry row
+  // names the host route that serves it (base) and kind member, never the deleted worker's workers.dev URL as a worker.
+  { name: "qnfo-backlog-exec", binding: "BACKLOG", kind: "member", base: "https://qnfo-lifecycle.q08.workers.dev/backlog" }
 ];
 var CF_ACCOUNT_ID = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var DB_MAP = { audit: "QNFO_AUDIT", living: "LIVING_PAPER", graph: "QNFO_GRAPH", portfolio: "PORTFOLIO", outreach: "QNFO_OUTREACH", cms: "QNFO_CMS", ipatent: "IPATENT", personal: "PERSONAL" };
@@ -1444,6 +1446,11 @@ function d1ReadOnlyGuard(sql) {
   return { ok: true, sql: sql };
 }
 
+// OPS-D1-LIMIT-WORD-1 (2.38.47): true when the statement ends in a LIMIT clause (LIMIT n, LIMIT n OFFSET m, LIMIT m, n or a
+// bound ?n). A LIMIT inside a parenthesised subquery does not end the statement, so the outer query still gets its cap.
+function d1HasTrailingLimit(sql) {
+  return /\blimit\s+(\d+|\?\d*)(\s*(,|\boffset\b)\s*(\d+|\?\d*))?\s*$/i.test(String(sql || ""));
+}
 async function d1Query(env, args) {
   const raw = String(args && args.sql || "").trim();
   let sql = raw.replace(/;\s*$/, "");
@@ -1453,7 +1460,9 @@ async function d1Query(env, args) {
   let sqlEff = sql;
   var _lo = sqlEff.toLowerCase();
   var _agg = _lo.indexOf("count(") >= 0 || _lo.indexOf("sum(") >= 0 || _lo.indexOf("avg(") >= 0 || _lo.indexOf("min(") >= 0 || _lo.indexOf("max(") >= 0 || _lo.indexOf("group_concat(") >= 0 || _lo.indexOf("group by") >= 0;
-  var _hasLimit = false; var _li = _lo.indexOf("limit"); if (_li >= 0) { var _k = _li + 5; while (_k < _lo.length && _lo.charAt(_k) === " ") _k++; _hasLimit = /[0-9]/.test(_lo.charAt(_k)); }
+  // OPS-D1-LIMIT-WORD-1 (2.38.47, #2033): the first "limit" substring was taken as the clause, so a column named limited
+  // hid a real trailing LIMIT 10 and a second LIMIT 100 was appended (syntax error); only a trailing LIMIT clause counts.
+  var _hasLimit = d1HasTrailingLimit(sqlEff);
   if (!_hasLimit && !_agg) sqlEff = sqlEff + " LIMIT 100";
   const bind = DB_MAP[String(args && args.db || "audit")] || DB_MAP.audit;
   if (!env[bind]) return { ok: false, error: "db not bound: " + bind + " (available: audit|living|graph|portfolio|outreach|cms|ipatent|personal)" };
@@ -5977,7 +5986,7 @@ async function registryRefresh(env) {
         } catch (e) {
         }
       }
-      await upsert(f.name, "worker", { version: exVer, base_url: CANON_BASE[f.name] || "https://" + f.name + ".q08.workers.dev", purpose: h.body.purpose || null, capabilities: h.body.capabilities || [], routes: h.body.routes || [], tools: h.body.tools || [], models: h.body.models || [], deps: [] });
+      await upsert(f.name, f.kind || "worker", { version: exVer, base_url: f.base || CANON_BASE[f.name] || "https://" + f.name + ".q08.workers.dev", purpose: h.body.purpose || null, capabilities: h.body.capabilities || [], routes: h.body.routes || [], tools: h.body.tools || [], models: h.body.models || [], deps: [] });
       rich++;
     }
   }

@@ -737,6 +737,10 @@ jobs:
       - name: DANGLING-BINDING-10143-1 offline check (qnfo-ops 2.38.43)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-ops/dangling-10143.test.mjs
+      # REGISTRY-SYNC-FOLDED-1 (#2031) + OPS-D1-LIMIT-WORD-1 (#2033), qnfo-ops 2.38.47: folded FLEET members are written with
+      # their host route and kind member; ops_d1_query finds a trailing LIMIT clause, not the first 'limit' substring.
+      - name: REGISTRY-SYNC-FOLDED-1 and OPS-D1-LIMIT-WORD-1 offline suite (qnfo-ops)
+        run: node --no-warnings qnfo-ops/registry-folded.test.mjs
       - name: BROWSER-SAMPLE-1 offline suite (qnfo-gateway, #1890)
         if: ${{ !cancelled() }}
         run: node --test qnfo-gateway/browser-sample.test.mjs
