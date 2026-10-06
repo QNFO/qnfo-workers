@@ -779,6 +779,11 @@ jobs:
       # contract_probe_templates_v1); the suite replays the migration on a replica of the production schema.
       - name: PROBE-TEMPLATES-1 offline suite (migrations/2026-10-06-probe-templates.sql)
         run: python3 scripts/probe_templates_test.py
+      # PROBE-BIRTH-RUNTIME-1 (#2075): a `runtime-probe: {json}` line in an issue becomes its runner-https contract (D1 triggers
+      # agent_issues_runtime_probe_ins/_upd); the suite replays them with the production birth and template triggers.
+      - name: PROBE-BIRTH-RUNTIME-1 offline suite (migrations/2026-10-06-runtime-probe-lines.sql)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/runtime_probe_lines_test.py
       - name: DANGLING-BINDING-10143-1 offline check (qnfo-ops 2.38.43)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-ops/dangling-10143.test.mjs
