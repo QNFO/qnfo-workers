@@ -25,6 +25,35 @@ CONTRACT (do not weaken)
   4. The verification transport must be `trusted=1` in `transport_trust`, or the
      row is not written at all.
   5. This consumer writes no repository file except its own ci-status artifact.
+
+RUNTIME PROBES (PROBE-TRANSPORT-MONOCULTURE-1, agent_issues 2060, 2026-10-06)
+  From 2026-10-01 to 2026-10-06 every automated verification (1707 rows) was a
+  SQL read of qnfo-audit: fleet-control's tick selects verify_transport =
+  'd1-query' only and this file knew only D1. transport_trust listed nine trusted
+  runtime transports with no executor behind any of them, so a runtime defect (a
+  slow page, a dead route) could only be closed by narrative. This file now runs
+  runtime probes from the GitHub-hosted runner, a vantage outside the Cloudflare
+  account whose code it checks, as transport `runner-https`. It is
+  the mirror of PROBE-TRANSPORTS-1 (agent_issues 2059): there qnfo-fleet-control
+  runs `external-https` from Cloudflare against hosts OUTSIDE the fleet and
+  refuses fleet hosts (a same-account fetch is not independent, issue 1190);
+  here the runner checks the fleet's own hosts from outside. The two transports
+  never select each other's contracts. The probe is declarative JSON, never
+  code: {"url": "https://...", "status": 200, "contains": "...", "max_ms": 3000}.
+  6. GET only, https only, no credentials, hosts in HTTPS_HOSTS only (every
+     redirect hop too), at most HTTPS_READ_CAP bytes read.
+  7. expected is the literal token 'ok'; observed is 'ok' or a failure token
+     (status=404, missing-marker, slow=4123ms, error:<type>). No response body
+     ever leaves the probe: this repository is public.
+  8. A pass holds the contract for RT_HOLD_D days before it closes (the
+     REMEDIATION-HOLD-1 rule fleet-control applies to d1-query); a fail streak of
+     max_attempts after a pass or closure reopens the issue (REMEDIATION-REOPEN-1).
+     A module 'runtime-liveness-v1' contract never closes; when it has no issue
+     and fails max_attempts times in a row it files one RUNTIME-PROBE-FAIL-1
+     issue and adopts it, so the autoclose trigger closes that issue on recovery.
+  9. Each run writes metric runtime_verified_share_24h (share of the last 24h of
+     verifications on a trusted, independent, runtime-observable transport); its
+     trigger breaches if this runner stops, which a Cloudflare cron evaluates.
 """
 
 import json
@@ -32,6 +61,7 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 CF_API = "https://api.cloudflare.com/client/v4"
@@ -53,11 +83,20 @@ SELECT class, issue_id, precondition, action, verify_probe, verify_transport,
        max_attempts, escalate_to, expected_cadence_h, module, budget_ms,
        next_due_at, max_items, attempts, last_verdict
 FROM remediation_contracts
-WHERE status = 'active'
+WHERE (status = 'active' OR (status = 'holding' AND verify_transport = 'runner-https'))
   AND (next_due_at IS NULL OR datetime(next_due_at) <= datetime('now'))
 ORDER BY COALESCE(next_due_at, ts)
 LIMIT ?
 """
+
+# PROBE-TRANSPORT-MONOCULTURE-1: the runtime transport this file executes itself (see the docstring, rules 6-9).
+HTTPS_TRANSPORT = "runner-https"
+HTTPS_HOSTS = ("qnfo.org", "q08.org", "q08.workers.dev")
+HTTPS_READ_CAP = 512 * 1024
+HTTPS_TIMEOUT_S = 20
+RT_HOLD_D = 7
+RT_HOLD_CADENCE_H = 24
+LIVENESS_MODULE = "runtime-liveness-v1"
 
 
 def log(msg):
@@ -160,6 +199,166 @@ def classify(expected, observed):
     return 0, "fail"
 
 
+def host_allowed(url):
+    """https only, and the host is an allowlisted fleet domain or a subdomain of one."""
+    try:
+        p = urllib.parse.urlsplit(str(url or ""))
+    except ValueError:
+        return False
+    if p.scheme != "https" or p.username or p.password or not p.hostname:
+        return False
+    h = p.hostname.lower().rstrip(".")
+    return any(h == d or h.endswith("." + d) for d in HTTPS_HOSTS)
+
+
+def parse_https_probe(spec):
+    """(probe dict, None) or (None, reason). The spec is JSON data, never code."""
+    try:
+        p = json.loads(spec or "")
+    except (TypeError, ValueError):
+        return None, "not-json"
+    if not isinstance(p, dict):
+        return None, "not-an-object"
+    unknown = set(p) - {"url", "status", "contains", "max_ms"}
+    if unknown:
+        return None, "unknown-key:%s" % sorted(unknown)[0]
+    if not host_allowed(p.get("url")):
+        return None, "url-not-allowlisted"
+    st = p.get("status", 200)
+    if not isinstance(st, int) or not 100 <= st <= 599:
+        return None, "bad-status"
+    c = p.get("contains")
+    if c is not None and (not isinstance(c, str) or not c or len(c) > 200):
+        return None, "bad-contains"
+    m = p.get("max_ms")
+    if m is not None and (not isinstance(m, int) or m <= 0 or m > HTTPS_TIMEOUT_S * 1000):
+        return None, "bad-max_ms"
+    return {"url": p["url"], "status": st, "contains": c, "max_ms": m}, None
+
+
+class _AllowlistRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not host_allowed(newurl):
+            raise urllib.error.URLError("redirect-off-allowlist")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_HTTPS_OPENER = urllib.request.build_opener(_AllowlistRedirect)
+
+
+def judge_https(probe, status, elapsed_ms, body):
+    """observed token for one response. Order: status, marker, latency."""
+    if status != probe["status"]:
+        return "status=%d" % status
+    if probe.get("contains") and probe["contains"].encode("utf-8") not in (body or b""):
+        return "missing-marker"
+    if probe.get("max_ms") and elapsed_ms > probe["max_ms"]:
+        return "slow=%dms" % elapsed_ms
+    return "ok"
+
+
+def run_https_probe(probe):
+    """Execute one GET. Returns the observed token; never raises."""
+    req = urllib.request.Request(probe["url"], method="GET")
+    req.add_header("User-Agent", "qnfo-remediation-consumer/2 (runner-https probe; +https://fleet.qnfo.org)")
+    req.add_header("Cache-Control", "no-cache")
+    t0 = time.time()
+    try:
+        with _HTTPS_OPENER.open(req, timeout=HTTPS_TIMEOUT_S) as r:
+            body = r.read(HTTPS_READ_CAP)
+            status = r.status
+    except urllib.error.HTTPError as e:
+        body, status = b"", e.code
+    except Exception as e:  # noqa: BLE001 - the failure is the observation
+        reason = getattr(e, "reason", None)
+        if isinstance(reason, str) and reason == "redirect-off-allowlist":
+            return "error:redirect-off-allowlist"
+        return "error:%s" % type(e).__name__
+    return judge_https(probe, status, int((time.time() - t0) * 1000), body)
+
+
+def rt_pass_streak_days(cls):
+    """Days since the first pass after the last real failure (pending/empty are deferrals). Mirrors fleet-control."""
+    rows = d1(
+        "SELECT MIN(verified_at) AS t FROM remediation_verifications WHERE class = ?1 AND pass = 1 AND verified_at > "
+        "COALESCE((SELECT MAX(verified_at) FROM remediation_verifications WHERE class = ?1 AND pass = 0 "
+        "AND COALESCE(observed, '') <> '' AND lower(trim(observed)) NOT LIKE 'pending%'), '1970-01-01')",
+        [cls])
+    t = rows[0].get("t") if rows else None
+    if not t:
+        return 0.0
+    t = str(t).replace("T", " ")[:19]
+    try:
+        ts = time.mktime(time.strptime(t, "%Y-%m-%d %H:%M:%S")) - time.timezone
+    except ValueError:
+        return 0.0
+    return max(0.0, (time.time() - ts) / 86400.0)
+
+
+def fails_since_last_pass(cls):
+    rows = d1(
+        "SELECT COUNT(*) AS n FROM remediation_verifications WHERE class = ?1 AND pass = 0 AND verified_at > "
+        "COALESCE((SELECT MAX(verified_at) FROM remediation_verifications WHERE class = ?1 AND pass = 1), '1970-01-01')",
+        [cls])
+    return int(rows[0].get("n") or 0) if rows else 0
+
+
+def https_after_verdict(c, passed, observed, out):
+    """Status transitions for a runner-https contract. Returns (next_status or None, cadence_h)."""
+    cls, cad = c.get("class"), max(1, int(c.get("expected_cadence_h") or 1))
+    liveness = c.get("module") == LIVENESS_MODULE
+    max_att = max(1, int(c.get("max_attempts") or 3))
+    if passed == 1:
+        if liveness:
+            return None, cad
+        if rt_pass_streak_days(cls) >= RT_HOLD_D:
+            return "closed", cad
+        return "holding", max(cad, RT_HOLD_CADENCE_H)
+    fails = fails_since_last_pass(cls)
+    if fails < max_att:
+        return None, cad
+    issue_id = c.get("issue_id")
+    if issue_id is None and liveness:
+        rows = d1(
+            "INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) "
+            "VALUES (?1, ?2, 'remediation-consumer', 'reliability', 'high', 'open', "
+            "CAST(strftime('%s','now') AS INTEGER)*1000, CAST(strftime('%s','now') AS INTEGER)*1000) RETURNING id",
+            ["RUNTIME-PROBE-FAIL-1: %s" % cls,
+             "Charter pillar: core. remediation-consumer (%s) ran the runner-https liveness contract %s from a "
+             "GitHub-hosted runner and it failed %d times in a row; latest observation %s. Probe: %s. The contract "
+             "keeps running and the autoclose trigger closes this issue on its first pass. agent_issues 2060."
+             % (VERIFIER, cls, fails, observed, str(c.get("verify_probe"))[:300])])
+        if rows:
+            issue_id = rows[0].get("id")
+            d1("UPDATE remediation_contracts SET issue_id = ?1 WHERE class = ?2 AND issue_id IS NULL", [issue_id, cls])
+            out.setdefault("filed", []).append(issue_id)
+        return "active", cad
+    if issue_id is not None:
+        r = d1(
+            "UPDATE agent_issues SET status = 'open', description = COALESCE(description, '') || ?2, updated_at = "
+            "CAST(strftime('%s','now') AS INTEGER)*1000 WHERE id = ?1 AND status IN ('closed', 'resolved') RETURNING id",
+            [issue_id, "\nREOPENED %s (REMEDIATION-REOPEN-1 via %s): runner-https contract %s failed %dx in a row, "
+             "observed %s." % (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), VERIFIER, cls, fails, observed)])
+        if r:
+            out.setdefault("reopened", []).append(issue_id)
+    return "active", cad
+
+
+RUNTIME_SHARE_SQL = (
+    "SELECT ROUND(100.0 * SUM(CASE WHEN t.trusted = 1 AND t.independent = 1 AND t.runtime_observable = 1 THEN 1 ELSE 0 END) "
+    "/ COUNT(*), 1) AS v, COUNT(*) AS n FROM remediation_verifications v LEFT JOIN transport_trust t ON t.transport = v.transport "
+    "WHERE replace(substr(v.verified_at, 1, 19), 'T', ' ') >= datetime('now', '-1 day')")
+
+
+def refresh_runtime_share(out):
+    rows = d1(RUNTIME_SHARE_SQL)
+    v = rows[0].get("v") if rows else None
+    out["runtime_verified_share_24h"] = v
+    d1("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' "
+       "WHERE metric = 'runtime_verified_share_24h'",
+       ["n/a" if v is None else str(v), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())])
+
+
 def _selftest():
     cases = [
         ("SELECT 'a' AS expected, 'a' AS observed", 1, "pass"),
@@ -193,9 +392,113 @@ def _selftest():
         if got != want:
             print(json.dumps({"ok": False, "probe": sql, "got": got, "why": why}))
             return 1
+    # PROBE-TRANSPORT-MONOCULTURE-1: the runner-https parser, allowlist and judge, offline.
+    hosts = [
+        ("https://qnfo.org/health", True), ("https://fleet.qnfo.org/", True), ("https://q08.org/", True),
+        ("https://x.q08.workers.dev/health", True), ("http://qnfo.org/", False), ("https://evilqnfo.org/", False),
+        ("https://qnfo.org.evil.com/", False), ("https://user:pw@qnfo.org/", False), ("ftp://qnfo.org/", False),
+        ("https://example.com/", False), ("", False),
+    ]
+    for url, want in hosts:
+        if host_allowed(url) != want:
+            print(json.dumps({"ok": False, "host": url, "want": want}))
+            return 1
+    specs = [
+        ('{"url": "https://qnfo.org/health", "status": 200, "contains": "qnfo-gateway"}', None),
+        ('{"url": "https://qnfo.org/", "max_ms": 3000}', None),
+        ('{"url": "https://example.com/"}', "url-not-allowlisted"),
+        ('{"url": "https://qnfo.org/", "method": "POST"}', "unknown-key:method"),
+        ('{"url": "https://qnfo.org/", "status": "200"}', "bad-status"),
+        ('{"url": "https://qnfo.org/", "contains": ""}', "bad-contains"),
+        ('{"url": "https://qnfo.org/", "max_ms": 999999}', "bad-max_ms"),
+        ("SELECT 1", "not-json"), ("[1]", "not-an-object"),
+    ]
+    for spec, want_err in specs:
+        p, err = parse_https_probe(spec)
+        if err != want_err or (want_err is None and p is None):
+            print(json.dumps({"ok": False, "spec": spec, "got": err, "want": want_err}))
+            return 1
+    pr = {"url": "https://qnfo.org/", "status": 200, "contains": "gateway", "max_ms": 1000}
+    judged = [
+        ((200, 50, b"..gateway.."), "ok"), ((404, 50, b"gateway"), "status=404"),
+        ((200, 50, b"nothing"), "missing-marker"), ((200, 1500, b"gateway"), "slow=1500ms"),
+    ]
+    for (st, ms, body), want in judged:
+        got = judge_https(pr, st, ms, body)
+        if got != want:
+            print(json.dumps({"ok": False, "judge": [st, ms], "got": got, "want": want}))
+            return 1
+    if classify("ok", "status=404") != (0, "fail") or classify("ok", "ok") != (1, "pass"):
+        print(json.dumps({"ok": False, "case": "https-classify"}))
+        return 1
     print(json.dumps({"ok": True, "marker": "REMEDIATION-CONSUMER-1",
-                      "selftest": "classify+probe-guard green"}))
+                      "selftest": "classify+probe-guard+runner-https green"}))
     return 0
+
+
+def consume_https(c, rec, out, trusted):
+    """Run one runner-https contract. Returns (next_status, cadence_h)."""
+    probe, why = parse_https_probe(c.get("verify_probe"))
+    if probe is None:
+        rec["verdict"], rec["reason"] = "probe-not-machine-executable", why
+        out["skipped"] += 1
+        return None, None
+    if HTTPS_TRANSPORT not in trusted:
+        rec["verdict"], rec["reason"] = "untrusted-transport", "%r not trusted" % HTTPS_TRANSPORT
+        out["skipped"] += 1
+        return None, None
+    obs = run_https_probe(probe)
+    passed, verdict = classify("ok", obs)
+    rec.update({"expected": "ok", "observed": obs, "verdict": verdict})
+    d1(
+        "INSERT INTO remediation_verifications "
+        "(issue_id, class, probe_url, transport, expected, observed, pass, verifier) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [c.get("issue_id"), c.get("class"), probe["url"], HTTPS_TRANSPORT, "ok", obs, passed, VERIFIER],
+    )
+    rec["written"] = True
+    out["pass" if passed == 1 else "fail"] += 1
+    out["https"] = out.get("https", 0) + 1
+    return https_after_verdict(c, passed, obs, out)
+
+
+def consume_d1(c, rec, out, trusted):
+    """Run one d1-query (or d1-query@plane) contract: the REMEDIATION-CONSUMER-1 path, unchanged."""
+    cls = c.get("class")
+    ok_probe, why = is_literal_select(c.get("verify_probe"))
+    if not ok_probe:
+        rec["verdict"] = "probe-not-machine-executable"
+        rec["reason"] = why
+        out["skipped"] += 1
+        return
+    transport = c.get("verify_transport")
+    rows = d1_plane(transport, c["verify_probe"]) if transport in PLANE_DBS else d1(c["verify_probe"])
+    exp, obs = extract_pair(rows)
+    passed, verdict = classify(exp, obs)
+    rec["expected"] = exp
+    rec["observed"] = obs
+    rec["verdict"] = verdict
+    if verdict == "vacuous-probe-result":
+        out["skipped"] += 1
+        rec["reason"] = "probe returned no expected/observed pair"
+    elif transport not in trusted:
+        out["skipped"] += 1
+        rec["verdict"] = "untrusted-transport"
+        rec["reason"] = "%r not trusted" % transport
+    else:
+        d1(
+            "INSERT INTO remediation_verifications "
+            "(issue_id, class, probe_url, transport, expected, observed, pass, verifier) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [c.get("issue_id"), cls,
+             "d1:remediation_contracts/" + str(cls),
+             transport, str(exp).strip(), str(obs).strip(), passed, VERIFIER],
+        )
+        rec["written"] = True
+        if passed == 1:
+            out["pass"] += 1
+        else:
+            out["fail"] += 1
 
 
 def main():
@@ -218,58 +521,35 @@ def main():
     for c in contracts:
         cls = c.get("class")
         rec = {"class": cls, "issue_id": c.get("issue_id"), "verdict": None}
+        next_status, cadence = None, None
         try:
-            ok_probe, why = is_literal_select(c.get("verify_probe"))
-            if not ok_probe:
-                rec["verdict"] = "probe-not-machine-executable"
-                rec["reason"] = why
-                out["skipped"] += 1
+            if c.get("verify_transport") == HTTPS_TRANSPORT:
+                next_status, cadence = consume_https(c, rec, out, trusted)
             else:
-                transport = c.get("verify_transport")
-                rows = d1_plane(transport, c["verify_probe"]) if transport in PLANE_DBS else d1(c["verify_probe"])
-                exp, obs = extract_pair(rows)
-                passed, verdict = classify(exp, obs)
-                rec["expected"] = exp
-                rec["observed"] = obs
-                rec["verdict"] = verdict
-                if verdict == "vacuous-probe-result":
-                    out["skipped"] += 1
-                    rec["reason"] = "probe returned no expected/observed pair"
-                elif transport not in trusted:
-                    out["skipped"] += 1
-                    rec["verdict"] = "untrusted-transport"
-                    rec["reason"] = "%r not trusted" % transport
-                else:
-                    d1(
-                        "INSERT INTO remediation_verifications "
-                        "(issue_id, class, probe_url, transport, expected, observed, pass, verifier) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        [c.get("issue_id"), cls,
-                         "d1:remediation_contracts/" + str(cls),
-                         transport, str(exp).strip(), str(obs).strip(), passed, VERIFIER],
-                    )
-                    rec["written"] = True
-                    if passed == 1:
-                        out["pass"] += 1
-                    else:
-                        out["fail"] += 1
+                consume_d1(c, rec, out, trusted)
         except Exception as e:  # noqa: BLE001 - one bad contract must not kill the run
             rec["verdict"] = "probe-error"
             rec["reason"] = str(e)[:300]
             out["skipped"] += 1
             log("contract %s error: %s" % (cls, e))
 
-        cadence = c.get("expected_cadence_h") or 6
+        if cadence is None:
+            cadence = c.get("expected_cadence_h") or 6
         try:
             d1(
                 "UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, "
                 "last_attempt_at = datetime('now'), last_verdict = ?, "
-                "next_due_at = datetime('now', ?) WHERE class = ?",
-                [rec["verdict"], "+%d hours" % int(cadence), cls],
+                "next_due_at = datetime('now', ?), status = COALESCE(?, status) WHERE class = ?",
+                [rec["verdict"], "+%d hours" % int(cadence), next_status, cls],
             )
         except Exception as e:  # noqa: BLE001
             log("contract %s stamp failed: %s" % (cls, e))
         out["contracts"].append(rec)
+
+    try:
+        refresh_runtime_share(out)
+    except Exception as e:  # noqa: BLE001 - the metric must not kill the run record
+        out["runtime_share_error"] = str(e)[:200]
 
     spent = int((time.time() - t0) * 1000)
     try:
