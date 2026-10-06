@@ -489,6 +489,11 @@ jobs:
       # UNSUB-LINK-1: the outreach footer opt-out link is public on qnfo.org/email/unsubscribe and only adds suppression rows.
       - name: UNSUB-LINK-1 offline suite (qnfo-email 2.5.4)
         run: node --no-warnings qnfo-email/unsub-link.test.mjs
+      # DANGLING-SERVICE-UNBIND-1 + DANGLING-BINDING-10143-1 (#1756): a binding to a deleted worker never blocks a deploy.
+      - name: DANGLING-SERVICE-UNBIND-1 offline suite (cf_ops_actions unbind-service)
+        run: python3 scripts/cf_ops_unbind_service_test.py
+      - name: DANGLING-BINDING-10143-1 offline check (qnfo-ops 2.38.43)
+        run: node --no-warnings qnfo-ops/dangling-10143.test.mjs
       - name: BROWSER-SAMPLE-1 offline suite (qnfo-gateway, #1890)
         run: node --test qnfo-gateway/browser-sample.test.mjs
       - name: MATH-CHECK offline suite (qnfo-pdf 1.1.0, #1890)

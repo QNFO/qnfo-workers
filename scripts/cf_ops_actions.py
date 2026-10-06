@@ -64,6 +64,9 @@ ACTIONS
                          worker, when the worker's wrangler.toml still declares the database, or when its worker.js or a
                          fleet_tasks definition names the binding. Holds the secret-lock lease secrets:<worker> (#1701) and
                          patches settings with every other binding inherited from the latest version (values are never sent).
+  unbind-service WORKER:BINDING
+                         DANGLING-SERVICE-UNBIND-1: remove one service binding whose target worker is gone (absent from
+                         the account, RETIRED/FOLDED in the repo) and that the worker's wrangler.toml no longer declares.
   delete-d1 NAME         D1-FOLD-1: delete an allowlisted database. Refused unless no wrangler.toml outside a RETIRED/FOLDED
                          directory names it, no live worker binds it, it had zero write queries in 7 days (GraphQL), and the
                          newest d1_fold_backups row verifies, its R2 copy verifies, every jnlaudit_* copy matches, no fleet_tasks
@@ -830,6 +833,70 @@ def unbind_d1(target: str, acct: str, token: str) -> int:
     return 0 if ok else 1
 
 
+# DANGLING-SERVICE-UNBIND-1 (2026-10-06, #1756): the canonical deploy re-declares every live binding (qnfo-ops
+# BINDING-PRESERVE-1). When a retired worker is deleted, a live service binding to it makes Cloudflare reject every later
+# deploy of the binder. qnfo-ops prunes that case only for error 10144; Cloudflare also answers 10143 ("Service binding 'X'
+# references Worker '' which was not found"), seen on qnfo-ops and qnfo-fleet-dashboard after the wave-2 deletes. This
+# removes one DANGLING service binding from a live worker: its target is absent from the account (settings 404, or no
+# service name), the target's repo directory (when named) carries a RETIRED or FOLDED marker, and the binder's own
+# wrangler.toml no longer declares the binding (so the next deploy cannot re-add it). A protected worker is allowed,
+# because this only removes a reference that already cannot work. Every other binding is sent as {type: inherit}, under
+# the secret-lock lease (#1701), and the result is verified.
+def unbind_service(target: str, acct: str, token: str) -> int:
+    from secret_lock import secret_lock
+    worker, _, binding = target.partition(":")
+    if not worker or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", binding or ""):
+        emit({"action": "unbind-service", "ok": False, "error": "target must be WORKER:BINDING"})
+        return 2
+    st, j = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
+    bindings = (j.get("result") or {}).get("bindings") or [] if st == 200 else None
+    if bindings is None:
+        emit({"action": "unbind-service", "worker": worker, "ok": False, "error": "settings HTTP " + str(st)})
+        return 1
+    hit = next((b for b in bindings if b.get("name") == binding), None)
+    if not hit:
+        emit({"action": "unbind-service", "worker": worker, "binding": binding, "ok": True, "already_absent": True})
+        return 0
+    if hit.get("type") != "service":
+        emit({"action": "unbind-service", "worker": worker, "binding": binding, "ok": False, "refused": "not a service binding"})
+        return 3
+    svc = str(hit.get("service") or "").strip()
+    if svc:
+        s2, _ = call("GET", f"/accounts/{acct}/workers/scripts/{svc}/settings", token)
+        if s2 != 404:
+            emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target worker still exists (settings HTTP " + str(s2) + ")"})
+            return 3
+        if os.path.isdir(svc) and not any(os.path.isfile(os.path.join(svc, m)) for m in ("RETIRED", "FOLDED")):
+            emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target's repo directory has no RETIRED/FOLDED marker"})
+            return 3
+    d = worker_dir(worker)
+    wt = open(os.path.join(d, "wrangler.toml"), encoding="utf-8").read() if d else None
+    if wt is None:
+        emit({"action": "unbind-service", "worker": worker, "ok": False, "refused": "no repo directory/wrangler.toml for the worker"})
+        return 3
+    if re.search(r'(?m)^\s*binding\s*=\s*"' + re.escape(binding) + r'"', wt):
+        emit({"action": "unbind-service", "worker": worker, "binding": binding, "ok": False, "refused": d + "/wrangler.toml still declares the binding"})
+        return 3
+    src = open(os.path.join(d, "worker.js"), encoding="utf-8").read() if os.path.isfile(os.path.join(d, "worker.js")) else ""
+    keep = [{"type": "inherit", "name": b.get("name")} for b in bindings if b.get("name") != binding]
+    body, ctype = multipart({"settings": {"bindings": keep}})
+    with secret_lock(worker, ttl_sec=600, owner="ci/cf-ops-actions/unbind-service"):
+        req = urllib.request.Request(API + f"/accounts/{acct}/workers/scripts/{worker}/settings", data=body, method="PATCH",
+                                     headers={"Authorization": "Bearer " + token, "Content-Type": ctype})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                pst, pj = r.status, json.loads(r.read().decode() or "{}")
+        except urllib.error.HTTPError as e:
+            pst, pj = e.code, json.loads(e.read().decode() or "{}")
+    st3, j3 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
+    after = (j3.get("result") or {}).get("bindings") or []
+    ok = bool(pj.get("success")) and not any(b.get("name") == binding for b in after) and len(after) == len(bindings) - 1
+    emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "protected_repair": worker in PROTECTED,
+          "code_mentions_binding": bool(re.search(r"\b" + re.escape(binding) + r"\b", src)), "ok": ok, "http": pst,
+          "bindings_before": len(bindings), "bindings_after": len(after), "errors": pj.get("errors")})
+    return 0 if ok else 1
+
+
 def delete_d1(name: str, acct: str, token: str) -> int:
     import hashlib
     if name not in D1_RETIRE:
@@ -889,7 +956,7 @@ def delete_d1(name: str, acct: str, token: str) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "paper-body-from-zenodo", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "paper-body-from-zenodo", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -898,11 +965,11 @@ def main() -> int:
     if a.action == "ops-intake-probe":
         return ops_intake_probe()
     token, acct = env("CLOUDFLARE_API_TOKEN"), env("CLOUDFLARE_ACCOUNT_ID")
-    if a.action in ("d1-backup", "unbind-d1", "delete-d1"):
+    if a.action in ("d1-backup", "unbind-d1", "delete-d1", "unbind-service"):
         if not a.target:
             print("::error::" + a.action + " needs --target")
             return 2
-        fn = {"d1-backup": d1_backup, "unbind-d1": unbind_d1, "delete-d1": delete_d1}[a.action]
+        fn = {"d1-backup": d1_backup, "unbind-d1": unbind_d1, "delete-d1": delete_d1, "unbind-service": unbind_service}[a.action]
         return fn(a.target, acct, token)
     if a.action == "delete-worker":
         if not a.target:
