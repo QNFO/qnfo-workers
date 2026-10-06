@@ -25,7 +25,7 @@ globalThis.Date = class extends RealDate { constructor(...a) { super(...(a.lengt
 await gw.scheduled({ cron: "0 6 * * *" }, env, { waitUntil() {} }).catch(() => {});
 globalThis.Date = RealDate;
 const hosts = posts.map((p) => p.body.host);
-ok(hosts.includes("papers.qnfo.org") && hosts.includes("qnfo.org"), "Monday cron submits papers and qnfo.org core pages", hosts);
+ok(hosts.some((h) => h === "papers.qnfo.org") && hosts.some((h) => h === "qnfo.org"), "Monday cron submits papers and qnfo.org core pages", hosts);
 ok(posts.every((p) => p.body.keyLocation === "https://" + p.body.host + "/" + key + ".txt"), "each submission's keyLocation is on its own host");
 ok(posts.filter((p) => p.body.host === "qnfo.org").every((p) => p.body.urlList.every((u) => u.startsWith("https://qnfo.org/"))), "qnfo.org submission lists only qnfo.org URLs");
 ok(logs.length >= 2 && logs.some((l) => l[0] === "qnfo.org" && l[2] === 4), "each submission is logged with accepted counts", logs.map((l) => l.slice(0, 3)));
