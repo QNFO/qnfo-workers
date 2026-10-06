@@ -311,10 +311,11 @@ evidence. A session is called only when a task fails twice. `code_task_success_r
     without its class name is a failed proposal, retried with the error; JSON.parse wording is excluded.
 15. **(code, done 1.2)** Merge-scope intake (MERGE-SCOPE-INTAKE-1, 0.3.19): a task on a CM_DENY worker is refused before
     any model call and its issue's `code-task:` line becomes a `session-task:` line with the reason (section 1.12).
-16. **(code, control plane)** A leading W0 exit: `code_task_success_rate_30d` keeps its scoreboard row, and W0 exits on the
-    success rate of tasks created after levers 14 and 15 landed (at least 8 finished), so the wave measures the engine as
-    it is, not the 42 closures of 2026-10-02 to 10-05 that stay in a 30-day window until November.
-    `qnfo-fleet-control/worker.js` (`TP_WAVES`); one change to that worker at a time (rule 7).
+16. **(code, done 0.4.134)** A leading W0 exit (W0-LEADING-EXIT-1): `code_task_success_rate_30d` keeps its scoreboard
+    row and trigger, and W0 exits on `code_task_success_rate_engine`, the same formula over code tasks created after lever
+    15 landed, unmeasured until 8 have finished, so the wave measures the engine as it is, not the 42 closures of
+    2026-10-02 to 10-05 that stay in a 30-day window until November. `qnfo-fleet-control/worker.js` (`TP_WAVES`,
+    `tpValues`).
 17. **(refactor, W1)** Staged rollout for qnfo-ai and qnfo-gateway, the scope human_actions 21 allows: the canonical deploy
     uploads a version, deploys it to a fraction of traffic, probes it and promotes or rolls back without running through
     the changed worker; after a passing live test the two workers leave CM_DENY, PLAN_DENY_WORKERS and TP_CONTROL_PLANE in
@@ -612,7 +613,7 @@ and 8 are `agent_issues` 2026 and 2027, each with a machine probe.
 
 | Wave | Entry | Content | Exit |
 |---|---|---|---|
-| W0 (now) | this document on main | T1.1-T1.7 and T1.9 (the engine's walls), T2.1 first retirements (PR 657), T7.1 subscribe boxes, T8.1 memory-mcp auth, T3.8 archive and applier deletion, T9.1 and T9.4, T5.6-T5.8 | `code_task_success_rate_30d` >= 0.45; `worker_count` <= 38 |
+| W0 (now) | this document on main | T1.1-T1.7 and T1.9 (the engine's walls), T2.1 first retirements (PR 657), T7.1 subscribe boxes, T8.1 memory-mcp auth, T3.8 archive and applier deletion, T9.1 and T9.4, T5.6-T5.8 | `code_task_success_rate_engine` >= 0.45 (code tasks created after T1.15 landed, at least 8 finished; T1.16); `worker_count` <= 38 |
 | W1 | W0 exit | T1.8 branch protection and control-plane merging, T1.10, T2.2-T2.4 one probe pass and heartbeats, T5.2 probe generator, T4.1-T4.2 cost lines and prefix cache, T3.5 one email transport, T7.2-T7.3 | `breach_code_task_pct` >= 30; `contracts_needing_probe` = 0; `worker_count` <= 32 |
 | W2 | W1 exit | T3.1-T3.4 folds and retirements, T3.6-T3.7 D1 folds and retention, T4.3-T4.6, T6.1 durable ops agent, T8.2-T8.3 | `worker_count` <= 26; `fleet_ai_run_rate_30d_usd` <= 40; `cron_schedules` <= 44 |
 | W3 | W2 exit | T6.2-T6.4 research and code loop on Workflows, T1.11 multi-file engine, T8.4-T8.5, research products (Ask QWAV public, living paper) only if the review gate reads MET | `worker_count` <= 24; `cron_schedules` <= 40; `watchmaker_index` 0; sessions used only for `CODE-TASK-NEEDS-SESSION-1` rows |
@@ -651,6 +652,7 @@ charter. A wave whose exit metric has not moved in 14 days is re-planned: the le
 | `cron_schedules` (fleet_budget) | 49 | <= 46 | <= 40 |
 | `d1_databases` | 10 | 10 | 8 |
 | `code_task_success_rate_30d` | 0.29 | >= 0.6 | >= 0.6 |
+| `code_task_success_rate_engine` (T1.16; tasks after T1.15) | unmeasured | >= 0.6 | >= 0.6 |
 | `breach_code_task_pct` | 0 | >= 30 | >= 50 |
 | contracts `needs-machine-probe` on open issues (1.10) | 9 | 0 | 0 |
 | contracts `needs-machine-probe` on closed issues (relapse probes) | 82 | <= 71 | metric-named ones probed |

@@ -34,11 +34,11 @@ let w = T.tpWaveState({});
 eq(w.active_key, "W0", "with nothing measured W0 is active");
 eq(w.waves[0].unmet.length, 2, "unmeasured metrics count as unmet");
 eq(/unmeasured/.test(w.waves[0].unmet[0]), true, "the unmet text names the value as unmeasured");
-w = T.tpWaveState({ code_task_success_rate_30d: 0.5, worker_count: 37, breach_code_task_pct: 12, contracts_needing_probe: 91 });
+w = T.tpWaveState({ code_task_success_rate_engine: 0.5, worker_count: 37, breach_code_task_pct: 12, contracts_needing_probe: 91 });
 eq(w.active_key, "W1", "W0 exits on its metrics and W1 becomes active");
 eq(w.waves[0].exited && !w.waves[1].exited, true, "exited flags follow the metrics");
 eq(w.waves[1].met.length === 0 && w.waves[1].unmet.length === 3, true, "W1 lists every unmet condition");
-w = T.tpWaveState({ code_task_success_rate_30d: 1, worker_count: 20, breach_code_task_pct: 90, contracts_needing_probe: 0, fleet_ai_run_rate_30d_usd: 10, cron_schedules: 30, watchmaker_index: 0 });
+w = T.tpWaveState({ code_task_success_rate_engine: 1, worker_count: 20, breach_code_task_pct: 90, contracts_needing_probe: 0, fleet_ai_run_rate_30d_usd: 10, cron_schedules: 30, watchmaker_index: 0 });
 eq(w.active_key, "W3", "with every wave exited the last wave stays active (the program never runs past its end state)");
 eq(T.tpNum("12.5%"), 12.5, "a percent string reads as a number");
 eq(T.tpNum("n/a"), null, "n/a reads as unmeasured");
@@ -61,7 +61,9 @@ T.TP_WAVES.forEach((w) => eq(w.exit.map(norm).sort().join("; "), (docWaves[w.key
 
 // ---------- wave stall: an unmet exit metric of the active wave unchanged for TP_STALL_DAYS ----------
 const NOWS = Date.parse("2026-10-20T12:00:00Z");
-const wv = T.tpWaveState({ code_task_success_rate_30d: 0.5, worker_count: 37, breach_code_task_pct: 12, contracts_needing_probe: 3 });
+const wv = T.tpWaveState({ code_task_success_rate_engine: 0.5, worker_count: 37, breach_code_task_pct: 12, contracts_needing_probe: 3 });
+// W0-LEADING-EXIT-1: the 30-day rate alone no longer exits W0 (it measures closures from before the engine's walls fell).
+eq(T.tpWaveState({ code_task_success_rate_30d: 0.9, worker_count: 37 }).active_key, "W0", "a high 30-day rate without the engine measure leaves W0 active");
 eq(wv.active_key, "W1", "fixture: W1 active with three unmet metrics");
 let ws = T.tpWaveStall(wv, { breach_code_task_pct: [{ day: "2026-10-05", value: "12" }, { day: "2026-10-20", value: "12" }], worker_count: [{ day: "2026-10-05", value: "42" }, { day: "2026-10-20", value: "37" }] }, NOWS);
 eq(ws.length === 1 && ws[0].metric === "breach_code_task_pct" && ws[0].since === "2026-10-05" && ws[0].wave === "W1", true, "a metric with the same value 15 days apart is a wave stall; one that moved is not");
@@ -189,7 +191,18 @@ const env = { AUDIT: { prepare(sql) {
   return mk([]);
 } } };
 
+// W0-LEADING-EXIT-1 (0.4.134): W0 exits on the engine success rate, over code tasks created after lever (1, 15) landed.
+db.exec("INSERT OR IGNORE INTO transformation_levers (tp, n, key, title, kind, wave, status, note, landed_at) VALUES (1, 15, 'merge-scope-intake', 'Merge-scope intake', 'code', 'W0', 'landed', 'test fixture', '2026-10-06T09:00:00Z')");
+db.exec("INSERT INTO code_tasks (id, status, created_at) VALUES ('old1', 'closed', '2026-10-03T00:00:00Z'), ('old2', 'failed', '2026-10-04T00:00:00Z'), ('e1', 'merged', '2026-10-06T10:00:00Z'), ('e2', 'merged', '2026-10-06T11:00:00Z'), ('e3', 'merged', '2026-10-06T12:00:00Z'), ('e4', 'merged', '2026-10-06T13:00:00Z'), ('e5', 'merged', '2026-10-06T14:00:00Z'), ('e6', 'closed', '2026-10-06T15:00:00Z'), ('e7', 'needs_human', '2026-10-06T16:00:00Z'), ('q1', 'queued', '2026-10-06T18:00:00Z')");
+{
+  const r0 = await T.transformationTick(env, { force: true });
+  const e0 = r0.scoreboard.find((r) => r.metric === "code_task_success_rate_engine");
+  eq(e0 && e0.value === null && r0.wave === "W0", true, "seven finished tasks after the landing leave the engine rate unmeasured and W0 active");
+  db.exec("DELETE FROM transformation_runs");
+}
+db.exec("INSERT INTO code_tasks (id, status, created_at) VALUES ('e8', 'closed', '2026-10-06T17:00:00Z')");
 const r1 = await T.transformationTick(env, { force: true });
+eq(r1.scoreboard.find((r) => r.metric === "code_task_success_rate_engine").value, 0.63, "the engine rate counts only tasks created after the landing (5 merged of 8 finished; queued and older tasks left out)");
 eq(r1.ok === true && !r1.skipped, true, "the first tick runs");
 eq(r1.actions.filed.length, 0, "the seed files no issue on its own: every W0 lever is adopted, landed, anchorless with the session slots full, or waits");
 eq(db.prepare("SELECT COUNT(*) AS n FROM transformation_runs").get().n, 1, "a transformation_runs row is written");
@@ -245,7 +258,7 @@ const r6 = await T.transformationTick(env, { force: true });
 const t14 = db.prepare("SELECT status, stalled_at FROM transformation_levers WHERE tp=1 AND n=4").get();
 eq(r6.applied.landed === 1 && t14.status === "landed" && t14.stalled_at === null, true, "closing its issue lands the stalled lever and clears the stall");
 const latest = await T.tpLatest(env);
-eq(latest.ok && latest.last_run && latest.last_run.wave === "W1" && latest.levers.length === seeded.n + 1 && latest.needs_session.length === 1, true, "GET /transformation serves the last run, every lever and the open needs-session rows");
+eq(latest.ok && latest.last_run && latest.last_run.wave === "W1" && latest.levers.length === seeded.n + 2 && latest.needs_session.length === 1, true, "GET /transformation serves the last run, every lever and the open needs-session rows");
 eq(db.prepare("SELECT COUNT(*) AS n FROM transformation_runs").get().n, 5, "every forced tick writes a run row");
 
 console.log(`${passed} passed, ${failed} failed`);
