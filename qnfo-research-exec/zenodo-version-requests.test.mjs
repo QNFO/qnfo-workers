@@ -91,6 +91,22 @@ assert.match(applyCreatorPatch(md, { creator_by_orcid: { orcid: "bad", name: "x"
 assert.match(applyCreatorPatch({ creators: [{ name: "Doe, Jane" }] }, PATCH).error, /no creator/);
 assert.match(applyCreatorPatch(md, { creator_by_orcid: { orcid: ORCID } }).error, /name or affiliation/);
 
+// 7b. ZENODO-CREATOR-CLEAN-1: drop QNFO pseudo-authors, claim records that name no ORCID person, never empty a record.
+const CLEAN = { creator_by_orcid: Object.assign({}, PATCH.creator_by_orcid, { drop_org_creators: true, claim_unattributed: true }) };
+let c1 = applyCreatorPatch({ creators: [{ name: "QNFO Research Collective" }, { name: "Quni-Gudzinas, Rowan Brad", orcid: ORCID }] }, CLEAN);
+assert.equal(c1.changed, true); assert.equal(c1.creators.length, 1); assert.equal(c1.creators[0].orcid, ORCID); assert.equal(c1.creators[0].affiliation, "QNFO (independent research)");
+let c2 = applyCreatorPatch({ creators: [{ name: "QNFO Research Agent" }] }, CLEAN);
+assert.deepEqual(c2.creators, [{ name: "Quni-Gudzinas, Rowan Brad", orcid: ORCID, affiliation: "QNFO (independent research)" }]);
+let c3 = applyCreatorPatch({ creators: [{ name: "Rowan Quni" }, { name: "QNFO Research Collective" }] }, CLEAN);
+assert.equal(c3.creators.length, 1); assert.equal(c3.creators[0].orcid, ORCID);
+let c4 = applyCreatorPatch({ creators: [{ name: "Doe, Jane", orcid: "0000-0001-2345-6789" }, { name: "QNFO Research" }] }, CLEAN);
+assert.equal(c4.creators.length, 2); assert.equal(c4.creators[0].name, "Doe, Jane"); assert.equal(c4.creators[1].orcid, ORCID);
+let c5 = applyCreatorPatch({ creators: [{ name: "Doe, Jane" }] }, CLEAN);
+assert.equal(c5.creators[0].orcid, ORCID); assert.deepEqual(c5.creators[1], { name: "Doe, Jane" });
+assert.match(applyCreatorPatch({ creators: [{ name: "QNFO Research" }] }, PATCH).error, /no creator/);
+assert.equal(applyCreatorPatch({ creators: c1.creators }, CLEAN).changed, false);
+assert.equal(applyCreatorPatch({ creators: [{ name: "QNFO Lab", orcid: "0000-0001-2345-6789" }, { name: "Quni-Gudzinas, Rowan Brad", orcid: ORCID, affiliation: "QNFO (independent research)" }] }, CLEAN).creators.length, 2);
+
 // Fake deposition API for records 501 (needs edit), 502 (already canonical), 503 (publish fails -> discard).
 const deps = {
   501: { id: 501, metadata: { title: "A", creators: [{ name: "Rowan Brad Quni-Gudzinas", affiliation: "QWAV / QNFO", orcid: ORCID }] } },
