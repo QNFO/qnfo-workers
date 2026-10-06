@@ -1,7 +1,7 @@
-var VERSION="2.5.4-unsub-link"/* 2.5.4 UNSUB-LINK-1 (2026-10-06, pillar security): qnfo-outreach footers link https://qnfo.org/email/unsubscribe?e=<email>&t=<first 16 hex of sha256(email+":qnfo-unsub-2026")>; that route belongs to this worker and answered 401, so every outreach opt-out link was dead. /email/unsubscribe is now public (GET or the RFC 8058 one-click POST): a verified link adds the address to qnfo-audit.email_suppression (checked by both outreach engines before every send) and never removes or overwrites a row; an unverifiable link changes nothing and points to the reply-STOP path. 2.5.3 PUBLIC-ERROR-2: parseBody keeps the exception text in the log and returns "parse failed" (CodeQL js/stack-trace-exposure on PR 624); 2.5.2 ITIN-BOOKING-2026-LAYOUT-1 + ITIN-ESKY-LAYOUT-1 (#1881): real Booking.com 2026 hotel mails (city only in the body, 12-hour times, time windows) and eSky ticket mails (Dutch flight blocks, PNR without a colon, HTML arrows) parsed; both returned nothing before; EMAIL-INDEX-NO-CODES-1: one-time-code mail (forwarding confirmations, sign-in codes) is not copied into email_index; FWD-NOT-COMMAND-1: a forwarded mail from an owner mailbox with nothing typed above it is filed, not run as an ops command; FRESHNESS-KEEP-NOTES-1: the daily freshness refresh keeps notes appended to an open issue. 2.5.1 EMAIL-CALLER-PROPS-1 (#1923): a service-binding caller named by ctx.props.caller is authenticated like API_KEY (personal-companion holds no key copy); PREDATORY-BODY-1 (#1924): heuristicSpam also reads the body (Dear Colleague + Scopus/multidisciplinary + journal pitch);  REBOOK-CANCEL-1 (#1881 gap D): a confirmation whose booking ref matches an existing row with other dates updates that row and its calendar mirror; a gated cancellation marks them CANCELLED, never deletes;  EMAIL-INDEX-WRITER-1 (#1962): the 07:00 cron copies new qnfo-audit.emails rows into personal-life.email_index (store qnfo.org); RETIRED_STORES;  HANDOFF-CLAIM-SHEET-1: every handoffs insert carries a claim_sheet (FRAMEWORK-DOGFOOD-1 trigger rejected them since 2026-09-27); SCHEDULES-LIVE-1 */;
+var VERSION="2.5.6-itin-audit"/* 2.5.6 ITIN-AUDIT-1 (#1881, 2026-10-06, pillar personal): (1) stale ordering uses max(Date, receive-5min) for a Date within 24h of receipt, and a mail received after the stored one is stale only when its Date is more than 24h older (a skewed sender clock no longer hides a newer confirmation); (2) the confirmation marker moved from inline notes text to the last notes line "QNFO-META: [lc:..] [rc:..] [dt:..]" (events has no spare column), itinStripMeta() removes it, legacy inline [lc:] still read; (3) ITIN-CANCEL-WHOLE-1: a whole-booking/reservation/trip cancellation (not partial) of a ref whose active rows form one trip window cancels them all; (4) ITINERARY-PARSE-MISS-1 files one issue per sender + subject shape, not per email; (5) the gate tolerates a parenthesised dmarc policy comment before header.from. 2.5.5 ITIN-STALE-CONFIRM-1 + ITIN-CANCEL-AMBIGUOUS-1 (#1881 gap D, 2026-10-06, pillar personal): a confirmation mail older than the newest one already applied to a row (Date header vs the "[lc:<iso>]" marker kept in events.notes; no schema change) is ignored, so a stale re-delivery cannot move a rebooked row back; a cancellation whose ref matches more than one active row cancels only rows whose date or flight number the mail names, and if none is named cancels nothing and files one agent_issues row "ITINERARY-CANCEL-AMBIGUOUS-1: <ref>" (medium). 2.5.4 2.5.4 UNSUB-LINK-1 (2026-10-06, pillar security): qnfo-outreach footers link https://qnfo.org/email/unsubscribe?e=<email>&t=<first 16 hex of sha256(email+":qnfo-unsub-2026")>; that route belongs to this worker and answered 401, so every outreach opt-out link was dead. /email/unsubscribe is now public (GET or the RFC 8058 one-click POST): a verified link adds the address to qnfo-audit.email_suppression (checked by both outreach engines before every send) and never removes or overwrites a row; an unverifiable link changes nothing and points to the reply-STOP path. 2.5.3 PUBLIC-ERROR-2: parseBody keeps the exception text in the log and returns "parse failed" (CodeQL js/stack-trace-exposure on PR 624); 2.5.2 ITIN-BOOKING-2026-LAYOUT-1 + ITIN-ESKY-LAYOUT-1 (#1881): real Booking.com 2026 hotel mails (city only in the body, 12-hour times, time windows) and eSky ticket mails (Dutch flight blocks, PNR without a colon, HTML arrows) parsed; both returned nothing before; EMAIL-INDEX-NO-CODES-1: one-time-code mail (forwarding confirmations, sign-in codes) is not copied into email_index; FWD-NOT-COMMAND-1: a forwarded mail from an owner mailbox with nothing typed above it is filed, not run as an ops command; FRESHNESS-KEEP-NOTES-1: the daily freshness refresh keeps notes appended to an open issue. 2.5.1 EMAIL-CALLER-PROPS-1 (#1923): a service-binding caller named by ctx.props.caller is authenticated like API_KEY (personal-companion holds no key copy); PREDATORY-BODY-1 (#1924): heuristicSpam also reads the body (Dear Colleague + Scopus/multidisciplinary + journal pitch);  REBOOK-CANCEL-1 (#1881 gap D): a confirmation whose booking ref matches an existing row with other dates updates that row and its calendar mirror; a gated cancellation marks them CANCELLED, never deletes;  EMAIL-INDEX-WRITER-1 (#1962): the 07:00 cron copies new qnfo-audit.emails rows into personal-life.email_index (store qnfo.org); RETIRED_STORES;  HANDOFF-CLAIM-SHEET-1: every handoffs insert carries a claim_sheet (FRAMEWORK-DOGFOOD-1 trigger rejected them since 2026-09-27); SCHEDULES-LIVE-1 */;
 async function unsubscribeLink(u,e){const em=String(u.searchParams.get("e")||"").trim().toLowerCase(),t=String(u.searchParams.get("t")||"").trim().toLowerCase();const esc=v=>String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);const page=(st,msg)=>new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QNFO email preferences</title><body style="font:16px/1.5 system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem"><h1>QNFO email preferences</h1><p>'+msg+"</p></body></html>",{status:st,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-robots-tag":"noindex"}});const stop="Reply STOP to the email you received and you will not be contacted again.";if(!em||em.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)||!/^[0-9a-f]{16}$/.test(t))return page(400,"This unsubscribe link is incomplete. "+stop);const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(em+":qnfo-unsub-2026"));const h=Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,16);if(h!==t)return page(400,"This unsubscribe link could not be verified. "+stop);if(!e.AUDIT_DB)return page(503,"The preference store is unavailable right now. "+stop);try{await e.AUDIT_DB.prepare("INSERT INTO email_suppression (email, reason, source) VALUES (?1,'unsubscribe','qnfo-email /email/unsubscribe') ON CONFLICT(email) DO NOTHING").bind(em).run()}catch(x){return page(503,"The preference store is unavailable right now. "+stop)}return page(200,"Unsubscribed: QNFO will not email "+esc(em)+" again.")}
 const BODY_MAX_TEXT=1e4,BODY_MAX_HTML=2e4;
-export default{async email(m,e,c){const st=Date.now(),h=m.headers,from=m.from,to=m.to,subject=h.get("subject")||"(no subject)",messageId=h.get("message-id")||(Date.now()+"-"+crypto.randomUUID()),receivedAt=new Date().toISOString();const parsed=await parseBody(m.raw),bodyText=(parsed.bodyText||"").slice(0,BODY_MAX_TEXT),bodyHtml=(parsed.bodyHtml||"").slice(0,BODY_MAX_HTML),rawText=parsed.rawText||"",headersJson=JSON.stringify(Object.fromEntries(h.entries())),classification=await classifyInbound(e.AUDIT_DB,from,to);const filter=await applyFilters(e.AUDIT_DB,from,to,subject,bodyText);if(filter.action==="reject"){m.setReject(filter.reason||"rejected");return}const emailId=await storeEmail(e.AUDIT_DB,{messageId,from,to,subject,bodyText,bodyHtml,headersJson,classification,receivedAt,inReplyTo:h.get("in-reply-to")||null,refsHdr:h.get("references")||null});c.waitUntil(archiveRaw(e,{emailId,messageId,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(itineraryIngest(e,{emailId,from,subject,bodyText,bodyHtml,authResults:h.get("authentication-results")||""}));const spam=(filter.action==="spam")||heuristicSpam(from,subject,bodyText||bodyHtml);if(spam){await logAction(e.AUDIT_DB,emailId,"spam",classification,st);return}c.waitUntil(enqueueHumanReply(e,{emailId:emailId,from:from,to:to,subject:subject,bodyText:bodyText,bodyHtml:bodyHtml,receivedAt:receivedAt}));if(String(bodyText||"").trim()||String(bodyHtml||"").trim())c.waitUntil(resolveParseFailures(e.AUDIT_DB,from,subject));c.waitUntil(recordParseFailure(e,{emailId,messageId,from,to,subject,bodyText,bodyHtml,headersJson,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(enqueueHandoff(e,{emailId,from,subject,receivedAt,classification}));try{await processCommand(e,{emailId:emailId,messageId:messageId,inReplyTo:h.get("in-reply-to")||null,from:from,to:to,subject:subject,bodyText:bodyText,authResults:h.get("authentication-results")||""})}catch(err){console.error("processCommand",err&&err.message||err)}
+export default{async email(m,e,c){const st=Date.now(),h=m.headers,from=m.from,to=m.to,subject=h.get("subject")||"(no subject)",messageId=h.get("message-id")||(Date.now()+"-"+crypto.randomUUID()),receivedAt=new Date().toISOString();const parsed=await parseBody(m.raw),bodyText=(parsed.bodyText||"").slice(0,BODY_MAX_TEXT),bodyHtml=(parsed.bodyHtml||"").slice(0,BODY_MAX_HTML),rawText=parsed.rawText||"",headersJson=JSON.stringify(Object.fromEntries(h.entries())),classification=await classifyInbound(e.AUDIT_DB,from,to);const filter=await applyFilters(e.AUDIT_DB,from,to,subject,bodyText);if(filter.action==="reject"){m.setReject(filter.reason||"rejected");return}const emailId=await storeEmail(e.AUDIT_DB,{messageId,from,to,subject,bodyText,bodyHtml,headersJson,classification,receivedAt,inReplyTo:h.get("in-reply-to")||null,refsHdr:h.get("references")||null});c.waitUntil(archiveRaw(e,{emailId,messageId,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(itineraryIngest(e,{emailId,from,subject,bodyText,bodyHtml,authResults:h.get("authentication-results")||"",sentAt:h.get("date")||""}));const spam=(filter.action==="spam")||heuristicSpam(from,subject,bodyText||bodyHtml);if(spam){await logAction(e.AUDIT_DB,emailId,"spam",classification,st);return}c.waitUntil(enqueueHumanReply(e,{emailId:emailId,from:from,to:to,subject:subject,bodyText:bodyText,bodyHtml:bodyHtml,receivedAt:receivedAt}));if(String(bodyText||"").trim()||String(bodyHtml||"").trim())c.waitUntil(resolveParseFailures(e.AUDIT_DB,from,subject));c.waitUntil(recordParseFailure(e,{emailId,messageId,from,to,subject,bodyText,bodyHtml,headersJson,rawText,rawSize:m.rawSize,receivedAt}));c.waitUntil(enqueueHandoff(e,{emailId,from,subject,receivedAt,classification}));try{await processCommand(e,{emailId:emailId,messageId:messageId,inReplyTo:h.get("in-reply-to")||null,from:from,to:to,subject:subject,bodyText:bodyText,authResults:h.get("authentication-results")||""})}catch(err){console.error("processCommand",err&&err.message||err)}
 await logAction(e.AUDIT_DB,emailId,"processed",classification,st)},async scheduled(controller,env,ctx){try{const r=await drainReplyQueue(env);console.log("qnfo-email v2.1.5 drain",JSON.stringify(r))}catch(e){console.error("drain",e&&e.message||e)}try{await replyStallGuard(env)}catch(e){}try{console.log("qnfo-email email-index",JSON.stringify(await emailIndexSync(env)))}catch(e){console.error("email-index",e&&e.message||e)}try{console.log("qnfo-email freshness",JSON.stringify(await freshnessGuard(env)))}catch(e){console.error("freshness",e&&e.message||e)}console.log("qnfo-email v2.1.5 scheduled done")},async fetch(req,e,ctx){const u=new URL(req.url),p=u.pathname==="/email"?"/":u.pathname.replace(/^\/email(?=\/)/,"");const J=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"content-type":"application/json","access-control-allow-origin":"*"}});if(p==="/health")return J({status:"ok",worker:"qnfo-email",version:VERSION,capabilities:["inbound-email", "command-control", "raw-archive", "send", "reply-queue"],limitations:["every route except /health needs API_KEY or GATEWAY_EMAIL_KEY, or an internal service binding that declares props.caller", "commands are accepted only from allowlisted senders (the list is not published)", "queued replies drain on the daily 07:00 cron"],command_control:true,raw_archive:true,mime_guard:true,bindings:{d1:!!e.AUDIT_DB,send_email:!!e.SEND_EMAIL,ops_key:!!e.OPS_KEY},timestamp:new Date().toISOString()});/* UNSUB-LINK-1: the opt-out link is public and only ever adds a suppression row */if(p==="/unsubscribe"&&(req.method==="GET"||req.method==="POST"))return unsubscribeLink(u,e);/* OPTIONS-AUTH-1 (2026-10-01): OPTIONS used to skip the key check and fall through to the data routes. */if(req.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET,POST,PATCH,OPTIONS","access-control-allow-headers":"authorization,x-api-key,content-type"}});if(p!=="/health"){const a=req.headers.get("authorization")||"",x=req.headers.get("x-api-key")||"";const ok=!!internalCaller(ctx)||(e.API_KEY&&(a==="Bearer "+e.API_KEY||x===e.API_KEY))||(e.GATEWAY_EMAIL_KEY&&(a==="Bearer "+e.GATEWAY_EMAIL_KEY||x===e.GATEWAY_EMAIL_KEY));if(!ok)return J({error:"unauthorized"},401)}try{if(p==="/stats")return J(await stats(e));if(p==="/emails/recent"){const limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),status=u.searchParams.get("status");let sql="SELECT id,message_id,sender,recipient,subject,classification,status,received_at,processing_ms FROM emails",vals=[];if(status){sql+=" WHERE status=?1";vals.push(status)}sql+=" ORDER BY id DESC LIMIT ?"+(vals.length+1);vals.push(limit);const r=await e.AUDIT_DB.prepare(sql).bind(...vals).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/body"){const id=parseInt(u.searchParams.get("id")||"0"),r=await e.AUDIT_DB.prepare("SELECT * FROM emails WHERE id=?1").bind(id).first();return r?J(r):J({error:"not found"},404)}if(p==="/emails/search"){const q="%"+(u.searchParams.get("q")||"")+"%",limit=Math.min(parseInt(u.searchParams.get("limit")||"20"),100),r=await e.AUDIT_DB.prepare("SELECT id,message_id,sender,recipient,subject,classification,status,received_at FROM emails WHERE subject LIKE ?1 OR sender LIKE ?1 OR body_text LIKE ?1 ORDER BY id DESC LIMIT ?2").bind(q,limit).all();return J({count:(r.results||[]).length,emails:r.results||[]})}if(p==="/emails/index-sync"&&req.method==="POST")return J(await emailIndexSync(e));if(p==="/emails/status"&&(req.method==="PATCH"||req.method==="POST")){const b=await req.json().catch(()=>({}));const sid=parseInt(b.id||0),sstat=String(b.status||""),ALLOWED=["received","processed","sent","replied","archived","spam","read","rejected"];if(!sid||!ALLOWED.includes(sstat))return J({ok:false,error:"id and a valid status are required",allowed:ALLOWED},400);await e.AUDIT_DB.prepare("UPDATE emails SET status=?1 WHERE id=?2").bind(sstat,sid).run();return J({ok:true,id:sid,status:sstat})}if(p==="/command"&&req.method==="POST"){try{const b=await req.json().catch(()=>({}));const sender=b.sender||b.from||"",dry=u.searchParams.get("dry")==="1"||b.dry===true,bodyText=b.body||b.command||"",subj=b.subject||"(http command)",row=await lookupSender(e.AUDIT_DB,normalizeAddress(sender));if(!row)return J({ok:false,error:"sender not in command allowlist"},403);const kind=row.kind,pc=parseCommand(bodyText,subj);let result;try{result=await routeCommand(e,pc.verb,pc.commandText,kind)}catch(err){result={ok:false,error:pubErr(err)}}const replyText=formatResult(pc.verb,pc.commandText,result,kind);let sent=false;if(!dry&&e.SEND_EMAIL&&sender){try{await e.SEND_EMAIL.send({to:sender,from:"qnfo@qnfo.org",subject:"Re: "+subj,text:replyText});sent=true}catch(err){result.reply_error=pubErr(err)}}return J({ok:result.ok!==false,verb:pc.verb,kind:kind,dry:dry,reply_sent:sent,result:result,reply:replyText})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/commands"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_commands ORDER BY id DESC LIMIT 50").all();return J({count:(r.results||[]).length,commands:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/command-senders"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT * FROM email_command_senders ORDER BY id").all();return J({senders:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(p==="/send"&&req.method==="POST")return await sendApi(req,e,J);if(p==="/queue"&&req.method==="GET"){try{const r=await e.AUDIT_DB.prepare("SELECT decision,COUNT(*) c FROM email_reply_queue GROUP BY decision").all();return J({counts:r.results||[]})}catch(err){return J({error:pubErr(err)},500)}}if(req.method==="GET")return J({ok:true,worker:"qnfo-email",version:VERSION,routes:["/health","/stats","/emails/recent","/emails/body","/emails/search","/emails/status","/emails/index-sync","/commands","/command-senders","/send","/command"]});return J({ok:false,error:"not found",path:p,method:req.method,version:VERSION},404)}catch(err){return J({error:pubErr(err)},500)}}};
 function trunc(s,n){return String(s||"").slice(0,n)}function classifyAddress(to){to=String(to||"").toLowerCase();return to.includes("rowan")||to.includes("rwn")?"personal":"general"}
 // EMAIL-CLASSIFICATION-PERSONAL-CATCHALL-1 (#1474, 2026-10-01): the owner alias alone used to make every
@@ -641,7 +641,7 @@ function itinGate(env, from, authResults) {
   if (!dom) return "";
   var raw = String(authResults || ""), first = raw.split(/,\s*(?=[a-z0-9.-]+\s*;)/i)[0];
   if (!/^\s*mx\.cloudflare\.net\s*;/i.test(first)) return "";
-  var m = /\bdmarc=(\w+)\s+header\.from=([^\s;]+)/i.exec(first);
+  var m = /\bdmarc=(\w+)\s+(?:\([^)]*\)\s*)?header\.from=([^\s;]+)/i.exec(first); // a parenthesised policy comment before header.from is tolerated
   if (!m || m[1].toLowerCase() !== "pass") return "";
   var hf = m[2].toLowerCase();
   if (hf !== dom) return "";
@@ -653,24 +653,56 @@ function itinLooksLikeBooking(subject) {
   var s = String(subject || "");
   return /confirm|itinerar|e-?ticket|your (?:booking|reservation|flight|trip)|boarding|hier is uw ticket/i.test(s) && !/review|rate your|offer|deal|survey|reminder to|newsletter/i.test(s);
 }
+// ITIN-STALE-CONFIRM-1 / ITIN-AUDIT-1: events has no spare metadata column, so the confirmation marker rides in notes as the LAST line
+// "QNFO-META: [lc:<ordering iso>] [rc:<receive iso>] [dt:<Date header iso>]". itinStripMeta() removes it (and the legacy inline "[lc:<iso>]").
+var ITIN_META_LINE = /\n?QNFO-META:[^\n]*$/;
+function itinMetaIso(notes, tag) { var m = new RegExp("\\[" + tag + ":(\\d{4}-\\d{2}-\\d{2}T[0-9:.]+Z)\\]").exec(String(notes || "")); return m ? m[1] : "" }
+function itinLcOf(notes) { return itinMetaIso(notes, "lc") }
+function itinStripMeta(notes) { return String(notes || "").replace(ITIN_META_LINE, "").replace(/\s*\[lc:\d{4}-\d{2}-\d{2}T[0-9:.]+Z\]/g, "").trim() }
+// Date header, clamped to the receive time when missing, unparseable or future-dated.
+function itinSentIso(sentAt, nowIso) {
+  var t = Date.parse(String(sentAt || "")), n = Date.parse(nowIso);
+  if (!isFinite(t) || t > n + 300000) return nowIso;
+  return new Date(t).toISOString();
+}
+// Ordering key: a Date within 24h of receipt is live mail with a possibly skewed sender clock, so it orders as max(Date, receive - 5 min);
+// an older Date (a re-delivery or a forward of old mail) keeps its own Date.
+function itinOrderKey(dateIso, nowIso) {
+  var d = Date.parse(dateIso), n = Date.parse(nowIso);
+  if (n - d <= 86400000) return new Date(Math.max(d, n - 300000)).toISOString();
+  return dateIso;
+}
+// Is this mail stale against the marker already stored on the row? A mail received after the stored one is stale only when its Date
+// is older than the stored Date by more than 24h; with no stored receive time (legacy marker) the same 24h rule applies to lc.
+function itinIsStale(notes, meta) {
+  var prevLc = itinMetaIso(notes, "lc"); if (!prevLc) return false;
+  var prevRc = itinMetaIso(notes, "rc"), prevDt = itinMetaIso(notes, "dt") || prevLc;
+  if (prevRc && meta.recvIso <= prevRc) return meta.lc < prevLc;
+  return Date.parse(meta.dateIso) < Date.parse(prevDt) - 86400000;
+}
+function itinNotes(notes, code, meta) { return trunc(itinStripMeta(itinPrivacyScrub(notes, code)), 380) + "\nQNFO-META: [lc:" + meta.lc + "] [rc:" + meta.recvIso + "] [dt:" + meta.dateIso + "]" }
 // Idempotent upsert of parsed items. db handles are injected so the fixtures can run offline.
 async function itinWrite(env, items, meta) {
   var key = env.OPS_KEY || env.API_KEY || "";
   var out = { written: 0, duplicate: 0, skipped: 0, ids: [] };
   if (!key) { out.error = "no HMAC key (OPS_KEY/API_KEY)"; return out }
   if (!env.PERSONAL) { out.error = "PERSONAL binding missing"; return out }
-  var now = new Date().toISOString();
+  var now = new Date().toISOString(), dateIso = itinSentIso(meta.sentAt, now), lm = { dateIso: dateIso, recvIso: now, lc: itinOrderKey(dateIso, now) };
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
     var id = "evt-itin-" + await itinHmac(key, [it.code, it.kind, it.start_date, it.disc].join("|"));
     // REBOOK-CANCEL-1: every row of this booking and category, hand-entered or ingested, decides duplicate vs rebooking.
     var known = [];
-    try { var kr = await env.PERSONAL.prepare("SELECT id, title, start_date FROM events WHERE booking_ref = ?1 AND category = ?2").bind(it.code, it.category).all(); known = kr.results || [] } catch (_) {}
+    try { var kr = await env.PERSONAL.prepare("SELECT id, title, start_date, notes FROM events WHERE booking_ref = ?1 AND category = ?2").bind(it.code, it.category).all(); known = kr.results || [] } catch (_) {}
     var isCancelled = function (r) { return /^CANCELLED /.test(String(r.title || "")) };
     var exact = known.filter(function (r) { return r.start_date === it.start_date });
     if (exact.length) {
       // A row for the same booking and date already feeds the gate and the brief: do not double it, and never resurrect a cancelled one.
-      if (exact.some(function (r) { return r.id === id && !isCancelled(r) })) { /* same id, refresh below */ }
+      var same = exact.filter(function (r) { return r.id === id && !isCancelled(r) });
+      if (same.length) {
+        // ITIN-STALE-CONFIRM-1: a mail not newer than the one already applied does not refresh the row.
+        if (itinIsStale(same[0].notes, lm)) { out.stale = (out.stale || 0) + 1; out.duplicate++; continue }
+      }
       else { if (exact.some(isCancelled)) out.cancelled_kept = (out.cancelled_kept || 0) + 1; out.duplicate++; continue }
     } else {
       var taken = items.filter(function (o) { return o.code === it.code && o.category === it.category }).map(function (o) { return o.start_date });
@@ -682,8 +714,9 @@ async function itinWrite(env, items, meta) {
       }
       if (cand.length === 1) {
         var row = cand[0], rc = it.cal, ruid = "trip-" + row.id + "@qnfo.cloud";
+        if (itinIsStale(row.notes, lm)) { out.stale = (out.stale || 0) + 1; continue } // ITIN-STALE-CONFIRM-1
         await env.PERSONAL.prepare("UPDATE events SET title=?2, venue=?3, city=?4, country=?5, start_date=?6, end_date=?7, source=?8, source_subject=?9, notes=?10, ingested_at=?11 WHERE id=?1")
-          .bind(row.id, trunc(it.title, 200), trunc(it.venue, 200), it.city, it.country || "", it.start_date, it.end_date, "email-itinerary:" + meta.gate, trunc(meta.subject, 200), trunc(itinPrivacyScrub(it.notes, it.code), 400), now).run();
+          .bind(row.id, trunc(it.title, 200), trunc(it.venue, 200), it.city, it.country || "", it.start_date, it.end_date, "email-itinerary:" + meta.gate, trunc(meta.subject, 200), itinNotes(it.notes, it.code, lm), now).run();
         await env.AUDIT_DB.prepare("INSERT INTO calendar (plane, uid, title, description, location, dtstart, dtend, all_day, url, source, domain, status, created, updated) VALUES ('personal',?1,?2,?3,?4,?5,?6,?7,NULL,'manual','travel','confirmed',datetime('now'),datetime('now')) ON CONFLICT(uid) DO UPDATE SET title=?2, description=?3, location=?4, dtstart=?5, dtend=?6, all_day=?7, status='confirmed', updated=datetime('now')")
           .bind(ruid, itinPrivacyScrub(rc.title, it.code), itinPrivacyScrub(rc.description, it.code), itinPrivacyScrub(rc.location, it.code), rc.dtstart, rc.dtend || null, rc.all_day).run();
         out.rebooked = (out.rebooked || 0) + 1; out.ids.push(row.id);
@@ -691,7 +724,7 @@ async function itinWrite(env, items, meta) {
       }
     }
     await env.PERSONAL.prepare("INSERT INTO events (id, category, title, venue, city, country, start_date, end_date, amount, currency, booking_ref, source, source_subject, energy, energy_label, notes, ingested_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,NULL,NULL,?9,?10,?11,NULL,NULL,?12,?13) ON CONFLICT(id) DO UPDATE SET title=?3, venue=?4, city=?5, country=?6, start_date=?7, end_date=?8, booking_ref=?9, source=?10, source_subject=?11, notes=?12, ingested_at=?13")
-      .bind(id, it.category, trunc(it.title, 200), trunc(it.venue, 200), it.city, it.country || "", it.start_date, it.end_date, it.code, "email-itinerary:" + meta.gate, trunc(meta.subject, 200), trunc(itinPrivacyScrub(it.notes, it.code), 400), now).run();
+      .bind(id, it.category, trunc(it.title, 200), trunc(it.venue, 200), it.city, it.country || "", it.start_date, it.end_date, it.code, "email-itinerary:" + meta.gate, trunc(meta.subject, 200), itinNotes(it.notes, it.code, lm), now).run();
     var c = it.cal, uid = "trip-" + id + "@qnfo.cloud";
     await env.AUDIT_DB.prepare("INSERT INTO calendar (plane, uid, title, description, location, dtstart, dtend, all_day, url, source, domain, status, created, updated) VALUES ('personal',?1,?2,?3,?4,?5,?6,?7,NULL,'manual','travel','confirmed',datetime('now'),datetime('now')) ON CONFLICT(uid) DO UPDATE SET title=?2, description=?3, location=?4, dtstart=?5, dtend=?6, all_day=?7, status='confirmed', updated=datetime('now')")
       .bind(uid, itinPrivacyScrub(c.title, it.code), itinPrivacyScrub(c.description, it.code), itinPrivacyScrub(c.location, it.code), c.dtstart, c.dtend || null, c.all_day).run();
@@ -713,19 +746,65 @@ function itinCodeTokens(subject, body) {
   while ((m = re.exec(text)) && out.length < 30) { var t = m[0]; if (seen[t] || (!/\d/.test(t) && !/^[A-Z]{6}$/.test(t))) continue; seen[t] = 1; out.push(t) }
   return out;
 }
+// ITIN-CANCEL-AMBIGUOUS-1: which of several active rows sharing one ref does the mail name? By start/end date or flight number.
+function itinMailNames(subject, body) {
+  var text = String(subject || "") + "\n" + String(body || "").slice(0, 6000), dates = {}, fns = {}, m;
+  var dre = new RegExp(ITIN_DATE_RE, "gi");
+  while ((m = dre.exec(text))) { var d = itinParseDate(m[0]); if (d) dates[d] = 1 }
+  var fre = /\b([A-Z][A-Z0-9]|[A-Z0-9][A-Z])\s?(\d{2,4})\b/g;
+  while ((m = fre.exec(text))) fns[(m[1] + m[2]).toLowerCase()] = 1;
+  return { dates: dates, fns: Object.keys(fns) };
+}
+function itinRowNamed(row, names) {
+  if ((row.start_date && names.dates[row.start_date]) || (row.end_date && names.dates[row.end_date])) return true;
+  var t = String(row.title || "").toLowerCase().replace(/\s+/g, "");
+  return names.fns.some(function (f) { return t.indexOf(f) >= 0 });
+}
+// ITIN-CANCEL-WHOLE-1: the mail says the whole booking/reservation/trip is cancelled (and not just a part, leg or segment).
+function itinWholeBookingCancel(subject, body) {
+  var t = String(subject || "") + "\n" + String(body || "").slice(0, 4000);
+  if (!ITIN_CANCEL_SUBJECT.test(t) && !ITIN_CANCEL_BODY.test(t)) return false;
+  if (!/\b(?:booking|reservation|trip|boeking|reservering|reis|r\u00e9servation|voyage|buchung|reservierung|reise)\b/i.test(t)) return false;
+  return !/\b(?:part of|parts of|one of|some of|segment|leg|partial|partly|gedeeltelijk|deel van|une partie|teilweise|teil der)\b/i.test(t);
+}
+// All active rows form one trip: sorted by start, each starts at most 2 days after the latest end so far, and the whole span is at most 45 days.
+function itinOneTripWindow(rows) {
+  var rs = rows.filter(function (r) { return r.start_date }).sort(function (a, b) { return a.start_date < b.start_date ? -1 : 1 });
+  if (rs.length !== rows.length || !rs.length) return false;
+  var day = function (iso) { return Date.parse(iso + "T00:00:00Z") / 86400000 }, maxEnd = day(rs[0].end_date || rs[0].start_date), first = day(rs[0].start_date);
+  for (var i = 1; i < rs.length; i++) {
+    if (!isFinite(day(rs[i].start_date)) || day(rs[i].start_date) > maxEnd + 2) return false;
+    maxEnd = Math.max(maxEnd, day(rs[i].end_date || rs[i].start_date));
+  }
+  return maxEnd - first <= 45;
+}
 // Marks the rows of a known booking CANCELLED (events title prefix, calendar status). Never deletes; unknown refs change nothing.
-async function itinCancel(env, subject, body) {
-  var out = { cancelled: 0, matched: 0 };
+// A ref shared by several active rows cancels only the rows the mail names; none named -> nothing is cancelled and one issue is filed.
+async function itinCancel(env, subject, body, emailId) {
+  var out = { cancelled: 0, matched: 0, ambiguous: 0 };
   if (!env.PERSONAL) { out.error = "PERSONAL binding missing"; return out }
   var codes = itinCodeTokens(subject, body);
   if (!codes.length) return out;
   var ph = codes.map(function (_, i) { return "?" + (i + 1) }).join(",");
-  var r = await env.PERSONAL.prepare("SELECT id, title, booking_ref FROM events WHERE booking_ref IN (" + ph + ") AND category IN ('lodging','travel')").bind(...codes).all();
+  var r = await env.PERSONAL.prepare("SELECT id, title, booking_ref, start_date, end_date FROM events WHERE booking_ref IN (" + ph + ") AND category IN ('lodging','travel')").bind(...codes).all();
   var rows = r.results || [];
   out.matched = rows.length;
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    if (/^CANCELLED /.test(String(row.title || ""))) continue;
+  var byRef = {}, names = itinMailNames(subject, body), todo = [], amb = [], whole = itinWholeBookingCancel(subject, body);
+  rows.forEach(function (row) { if (!/^CANCELLED /.test(String(row.title || ""))) (byRef[row.booking_ref] = byRef[row.booking_ref] || []).push(row) });
+  Object.keys(byRef).forEach(function (ref) {
+    var act = byRef[ref];
+    if (act.length === 1) { todo.push(act[0]); return }
+    var named = act.filter(function (row) { return itinRowNamed(row, names) });
+    if (named.length) { named.forEach(function (row) { todo.push(row) }); return }
+    if (whole && itinOneTripWindow(act)) { act.forEach(function (row) { todo.push(row) }); return } // ITIN-CANCEL-WHOLE-1
+    amb.push({ ref: ref, ids: act.map(function (row) { return row.id }) });
+  });
+  out.ambiguous = amb.length;
+  for (var k = 0; k < amb.length; k++) {
+    try { await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status) VALUES (?1,?2,'qnfo-email','personal','medium','open')").bind("ITINERARY-CANCEL-AMBIGUOUS-1: " + amb[k].ref, "A gated cancellation mail (audit emails.id=" + emailId + ") quotes booking ref " + amb[k].ref + ", which matches " + amb[k].ids.length + " active personal-life.events rows (" + amb[k].ids.join(", ") + ") and names none of their dates or flight numbers. Nothing was cancelled. Decide from the mail which row(s) are cancelled, then set title 'CANCELLED ' || title and calendar status 'cancelled' on uid trip-<id>@qnfo.cloud.").run() } catch (_) {}
+  }
+  for (var i = 0; i < todo.length; i++) {
+    var row = todo[i];
     await env.PERSONAL.prepare("UPDATE events SET title = 'CANCELLED ' || title, ingested_at = ?2 WHERE id = ?1 AND title NOT LIKE 'CANCELLED %'").bind(row.id, new Date().toISOString()).run();
     await env.AUDIT_DB.prepare("UPDATE calendar SET status = 'cancelled', title = CASE WHEN title LIKE 'CANCELLED %' THEN title ELSE 'CANCELLED ' || title END, updated = datetime('now') WHERE uid = ?1").bind("trip-" + row.id + "@qnfo.cloud").run();
     out.cancelled++;
@@ -738,19 +817,23 @@ async function itineraryIngest(env, x) {
     if (!gate) return { skipped: "not-gated" };
     var items = itinParse(x.subject, x.bodyText, x.bodyHtml, x.from);
     if (itinCancelIntent(x.subject, x.bodyText || String(x.bodyHtml || "").replace(/<[^>]*>/g, " "), items.length)) {
-      var cr = await itinCancel(env, x.subject, x.bodyText || String(x.bodyHtml || "").replace(/<[^>]*>/g, " "));
-      console.log("itinerary-cancel", JSON.stringify({ email: x.emailId, gate: gate, matched: cr.matched, cancelled: cr.cancelled, error: cr.error || null }));
-      return { cancel: true, matched: cr.matched, cancelled: cr.cancelled, error: cr.error || null };
+      var cr = await itinCancel(env, x.subject, x.bodyText || String(x.bodyHtml || "").replace(/<[^>]*>/g, " "), x.emailId);
+      console.log("itinerary-cancel", JSON.stringify({ email: x.emailId, gate: gate, matched: cr.matched, cancelled: cr.cancelled, ambiguous: cr.ambiguous, error: cr.error || null }));
+      return { cancel: true, matched: cr.matched, cancelled: cr.cancelled, ambiguous: cr.ambiguous, error: cr.error || null };
     }
     if (!items.length) {
       if (itinLooksLikeBooking(x.subject)) {
-        try { await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status) VALUES (?1,?2,'qnfo-email','personal','low','open')").bind("ITINERARY-PARSE-MISS-1: email " + x.emailId + " looked like a booking confirmation but nothing was parsed", "A gated sender (" + gate + ") sent a mail whose subject looks like a booking confirmation, but itinParse returned no flight or hotel. Read audit emails.id=" + x.emailId + " (subject: " + trunc(String(x.subject || "").replace(/[\r\n]+/g, " "), 120) + ") and extend itinParse in qnfo-email/worker.js with a fixture. No row was written to events or calendar.").run() } catch (_) {}
+        try {
+          var pmSender = itinSenderAddr(x.from), pmShape = normalizeSubject(decodeSubject(String(x.subject || ""))).replace(/\b[a-z0-9-]*\d[a-z0-9-]*\b/g, "#").replace(/\s+/g, " ").trim();
+          var pmTitle = trunc("ITINERARY-PARSE-MISS-1: " + pmSender + " | " + pmShape, 190);
+          await env.AUDIT_DB.prepare("INSERT OR IGNORE INTO agent_issues (title, description, source, category, priority, status) VALUES (?1,?2,'qnfo-email','personal','low','open')").bind(pmTitle, "A gated sender (" + gate + ") sent a mail whose subject looks like a booking confirmation, but itinParse returned no flight or hotel. First seen as audit emails.id=" + x.emailId + " (subject: " + trunc(String(x.subject || "").replace(/[\r\n]+/g, " "), 120) + "); one issue per sender and subject shape, later mails of the same shape are not filed again while this is open. Read the mail and extend itinParse in qnfo-email/worker.js with a fixture. No row was written to events or calendar.").run()
+        } catch (_) {}
       }
       return { parsed: 0 };
     }
-    var r = await itinWrite(env, items, { gate: gate, subject: x.subject });
-    console.log("itinerary", JSON.stringify({ email: x.emailId, gate: gate, parsed: items.length, written: r.written, duplicate: r.duplicate, rebooked: r.rebooked || 0, error: r.error || null }));
-    return { parsed: items.length, written: r.written, duplicate: r.duplicate, rebooked: r.rebooked || 0, error: r.error || null };
+    var r = await itinWrite(env, items, { gate: gate, subject: x.subject, sentAt: x.sentAt });
+    console.log("itinerary", JSON.stringify({ email: x.emailId, gate: gate, parsed: items.length, written: r.written, duplicate: r.duplicate, rebooked: r.rebooked || 0, stale: r.stale || 0, error: r.error || null }));
+    return { parsed: items.length, written: r.written, duplicate: r.duplicate, rebooked: r.rebooked || 0, stale: r.stale || 0, error: r.error || null };
   } catch (err) { console.error("itineraryIngest", err && err.message || err); return { error: String(err && err.message || err) } }
 }
 /* SOURCE-FRESHNESS-1 (#1881): rides the existing 07:00 cron. One agent_issues row per ingest source with no new row for

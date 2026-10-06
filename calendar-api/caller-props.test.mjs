@@ -63,7 +63,7 @@ await call("GET", "/health");
 {
   const h = await (await call("GET", "/health", {}, radar)).json();
   const hp = await (await call("GET", "/health")).json();
-  ok(/^0\.7\.1/.test(String(h.version)) && Array.isArray(h.ics_publish.urls) && Array.isArray(hp.ics_publish.urls) && hp.ics_publish.urls.length === 0,"health reports 0.7.1 and still hides feed URLs from a public caller", { v: h.version, pub: hp.ics_publish.urls });
+  ok(/^0\.7\.\d/.test(String(h.version)) && Array.isArray(h.ics_publish.urls) && Array.isArray(hp.ics_publish.urls) && hp.ics_publish.urls.length === 0,"health reports 0.7.x and still hides feed URLs from a public caller", { v: h.version, pub: hp.ics_publish.urls });
 }
 
 console.log(pass + " passed, " + fail + " failed");

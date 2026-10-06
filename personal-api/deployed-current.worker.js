@@ -106,7 +106,7 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.8.0-twin-flash"; // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
+var VERSION = "4.8.2-ledger-page-ams-away"; // 4.8.2 LEDGER-PAGE-1 (#1951): the Ledger sync drains calendar-api /feedback by after_id in pages of 500 (max 10 pages per run, id cursor feedback_after_id) so rows beyond the newest 500 are no longer skipped; AWAY-AMS-1 (#1883): inside an away window the brief keeps Google/ICS and manual calendar events whose location is in the Amsterdam area and hides only radar/twin suggestions and catalog rows. // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
 // FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
 // <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
 // any script loaded here can read it; a remote script from a shared, open worker would put calendar write access and
@@ -245,7 +245,7 @@ async function loadPrimeContext(env, q, currentThread) {
       if (!_seenCal.has(k)) { _seenCal.add(k); _calEvents.push({ date: String(e.dtstart || "").slice(0, 10), title: e.title, loc: e.location, tag: e.domain || e.source || "" }); }
     }
     let _evsStore = null;
-    try { _evsStore = await env.PERSONAL.prepare("SELECT title, venue, city, category, start_date FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all(); } catch (e) {}
+    try { _evsStore = await env.PERSONAL.prepare("SELECT * FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all(); } catch (e) {}
     if (_evsStore && _evsStore.results) for (const e of awayFilter(_evsStore.results, _awayW, (x) => x.start_date)) {
       const k = String(e.title || "").slice(0, 60) + "|" + String(e.start_date || "").slice(0, 10);
       if (!_seenCal.has(k)) { _seenCal.add(k); _calEvents.push({ date: String(e.start_date || "").slice(0, 10), title: e.title, loc: e.venue, tag: "personal" }); }
@@ -1035,7 +1035,7 @@ function awayReason(dateIso, windows) {
   for (const w of windows || []) if (d >= w.start && d < w.end) return "away:" + w.city;
   return null;
 }
-var AMS_LOCAL_RE = /amsterdam|bimhuis|concertgebouw|zaal 100|rijksmuseum|van gogh museum|stedelijk|openluchttheater|muziekgebouw|paradiso|melkweg|\bOBA\b/i;
+var AMS_LOCAL_RE = /amsterdam|a'dam|\bamstelveen\b|\bdiemen\b|\bduivendrecht\b|\bouderkerk\b|\bzuidoost\b|\bnieuw-west\b|bimhuis|concertgebouw|zaal 100|rijksmuseum|van gogh museum|stedelijk|openluchttheater|muziekgebouw|paradiso|melkweg|\bOBA\b/i;
 // An on-site Amsterdam event: lodging and travel rows never count; a row with a city counts only when that city is Amsterdam;
 // a row without a city counts when its venue or location names Amsterdam or a known local venue.
 function isAmsterdamOnsite(e) {
@@ -1045,9 +1045,18 @@ function isAmsterdamOnsite(e) {
   if (city) return /^amsterdam$/i.test(city);
   return AMS_LOCAL_RE.test(String((e && (e.venue || e.location)) || ""));
 }
+// AWAY-AMS-1 (4.8.2, #1883): inside an away window only suggestions are hidden. A row is a suggestion when it comes from the
+// radar, the twin's radar-fed store, a web catalog (qnfo-ops:web:*), a GTD list, or carries no source at all (legacy
+// catalog rows). The owner's own entries (Google or ICS calendar, Outlook, manual, email itineraries) stay visible even
+// when they sit in Amsterdam, because he may have an appointment there while away.
+function isRadarSuggestion(e) {
+  const src = String(e && e.source || "").toLowerCase();
+  if (!src) return true;
+  return /^(personal-radar|personal-twin|personal-profile|radar|catalog|suggestion)$/.test(src) || /^(qnfo-ops|gtd-)/.test(src);
+}
 function awayFilter(items, windows, dateOf) {
   if (!windows || !windows.length) return items;
-  return (items || []).filter((e) => !(isAmsterdamOnsite(e) && awayReason(dateOf(e), windows)));
+  return (items || []).filter((e) => !(isAmsterdamOnsite(e) && isRadarSuggestion(e) && awayReason(dateOf(e), windows)));
 }
 function calHeaders(env, extra) {
   const h = Object.assign({}, extra || {});
@@ -1611,7 +1620,7 @@ async function buildBrief(env, withSummary) {
     habits: habits.habits || []
   };
   try {
-    const _exRows = await env.PERSONAL.prepare("SELECT title, venue, city, category, start_date FROM events WHERE start_date >= ?1 AND start_date <= ?2 ORDER BY start_date LIMIT 30").bind(date, next7).all();
+    const _exRows = await env.PERSONAL.prepare("SELECT * FROM events WHERE start_date >= ?1 AND start_date <= ?2 ORDER BY start_date LIMIT 30").bind(date, next7).all();
     const _havCal = new Set();
     for (const s2 of brief.calendar.today || []) _havCal.add(String(s2.title || "").slice(0, 60).toLowerCase());
     for (const s2 of brief.calendar.tomorrow || []) _havCal.add(String(s2.title || "").slice(0, 60).toLowerCase());
@@ -1712,6 +1721,32 @@ function splitMetNames(met) {
 async function ledgerFindPerson(env, name) {
   return env.PERSONAL.prepare("SELECT id, name FROM ledger_people WHERE status = 'active' AND lower(name) = lower(?1) LIMIT 1").bind(name).first();
 }
+var LEDGER_MAX_PAGES = 10;
+async function ledgerApplyFeedback(env, f, stats, seenTs) {
+  if (!f || typeof f !== "object" || !Number.isFinite(Number(f.id)) || typeof f.ts !== "string" || !f.ts) { stats.skipped_malformed++; return; }
+  seenTs(f.ts);
+  if (f.action !== "went") return;
+  stats.went++;
+  if (f.met != null && typeof f.met !== "string") { stats.skipped_malformed++; return; }
+  const names = splitMetNames(f.met || "");
+  if (!names.length) { stats.skipped_no_met++; return; }
+  const dt = String(f.dtstart || "").slice(0, 10);
+  const metOn = /^\d{4}-\d{2}-\d{2}$/.test(dt) ? dt : f.ts.slice(0, 10);
+  const where = String(f.title || f.location || "").slice(0, 200) || null;
+  const note = typeof f.note === "string" && f.note.trim() ? f.note.trim().slice(0, 300) : null;
+  for (const name of names) {
+    let p = await ledgerFindPerson(env, name);
+    if (p) stats.people_reused++;
+    else {
+      const id = ledgerSlug(name) + "-" + metOn;
+      const ins = await env.PERSONAL.prepare("INSERT OR IGNORE INTO ledger_people (id, name, met_where, met_on, notes) VALUES (?1,?2,?3,?4,?5)").bind(id, name, where, metOn, note).run();
+      if (ins.meta && ins.meta.changes) stats.people_created++; else stats.people_reused++;
+      p = { id };
+    }
+    const ia = await env.PERSONAL.prepare("INSERT OR IGNORE INTO ledger_interactions (id, person_id, ts, kind, note) VALUES (?1,?2,?3,'in_person',?4)").bind("fb" + Number(f.id) + "-" + p.id, p.id, f.ts, note).run();
+    if (ia.meta && ia.meta.changes) stats.interactions_added++;
+  }
+}
 async function ledgerSyncFeedback(env) {
   const stats = { fetched: 0, went: 0, people_created: 0, people_reused: 0, interactions_added: 0, skipped_malformed: 0, skipped_no_met: 0 };
   const put = (k, v) => env.PERSONAL.prepare("INSERT OR REPLACE INTO ledger_sync_state (k, v) VALUES (?1, ?2)").bind(k, v).run();
@@ -1720,37 +1755,28 @@ async function ledgerSyncFeedback(env) {
     const cur = await env.PERSONAL.prepare("SELECT v FROM ledger_sync_state WHERE k = 'feedback_cursor'").first();
     const since = cur && cur.v ? String(cur.v) : "1970-01-01";
     if (!env.CAL_API) { await put("last_run", JSON.stringify({ at: new Date().toISOString(), error: "CAL_API binding missing", version: VERSION })); return { ok: false, error: "CAL_API binding missing" }; }
-    const r = await env.CAL_API.fetch("https://calendar-api/feedback?since=" + encodeURIComponent(since) + "&limit=500", { headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
-    if (!r.ok) { await put("last_run", JSON.stringify({ at: new Date().toISOString(), error: "feedback HTTP " + r.status, version: VERSION })); return { ok: false, error: "feedback HTTP " + r.status }; }
-    const j = await r.json();
-    const rows = Array.isArray(j && j.feedback) ? j.feedback.slice() : [];
-    stats.fetched = rows.length;
-    rows.sort((a, b) => Number(a && a.id || 0) - Number(b && b.id || 0));
+    // LEDGER-PAGE-1 (4.8.2): the feedback list is read in pages of 500 by id (after_id, ascending) until calendar-api says
+    // more=false, at most LEDGER_MAX_PAGES pages per run (the next run continues from the stored after_id). A calendar-api
+    // that predates after_id answers without order:"asc"; then only its single newest-first page is processed, as before.
+    const aid = await env.PERSONAL.prepare("SELECT v FROM ledger_sync_state WHERE k = 'feedback_after_id'").first();
+    let afterId = aid && Number.isFinite(Number(aid.v)) ? Math.max(0, Number(aid.v)) : 0;
     let maxTs = since;
-    for (const f of rows) {
-      if (!f || typeof f !== "object" || !Number.isFinite(Number(f.id)) || typeof f.ts !== "string" || !f.ts) { stats.skipped_malformed++; continue; }
-      if (f.ts > maxTs) maxTs = f.ts;
-      if (f.action !== "went") continue;
-      stats.went++;
-      if (f.met != null && typeof f.met !== "string") { stats.skipped_malformed++; continue; }
-      const names = splitMetNames(f.met || "");
-      if (!names.length) { stats.skipped_no_met++; continue; }
-      const dt = String(f.dtstart || "").slice(0, 10);
-      const metOn = /^\d{4}-\d{2}-\d{2}$/.test(dt) ? dt : f.ts.slice(0, 10);
-      const where = String(f.title || f.location || "").slice(0, 200) || null;
-      const note = typeof f.note === "string" && f.note.trim() ? f.note.trim().slice(0, 300) : null;
-      for (const name of names) {
-        let p = await ledgerFindPerson(env, name);
-        if (p) stats.people_reused++;
-        else {
-          const id = ledgerSlug(name) + "-" + metOn;
-          const ins = await env.PERSONAL.prepare("INSERT OR IGNORE INTO ledger_people (id, name, met_where, met_on, notes) VALUES (?1,?2,?3,?4,?5)").bind(id, name, where, metOn, note).run();
-          if (ins.meta && ins.meta.changes) stats.people_created++; else stats.people_reused++;
-          p = { id };
-        }
-        const ia = await env.PERSONAL.prepare("INSERT OR IGNORE INTO ledger_interactions (id, person_id, ts, kind, note) VALUES (?1,?2,?3,'in_person',?4)").bind("fb" + Number(f.id) + "-" + p.id, p.id, f.ts, note).run();
-        if (ia.meta && ia.meta.changes) stats.interactions_added++;
+    for (let page = 0; page < LEDGER_MAX_PAGES; page++) {
+      const r = await env.CAL_API.fetch("https://calendar-api/feedback?after_id=" + afterId + "&since=" + encodeURIComponent(since) + "&limit=500", { headers: calHeaders(env), signal: AbortSignal.timeout(8000) });
+      if (!r.ok) { await put("last_run", JSON.stringify({ at: new Date().toISOString(), error: "feedback HTTP " + r.status, version: VERSION })); return { ok: false, error: "feedback HTTP " + r.status }; }
+      const j = await r.json();
+      const asc = !!(j && j.order === "asc");
+      const rows = Array.isArray(j && j.feedback) ? j.feedback.slice() : [];
+      stats.fetched += rows.length;
+      stats.pages = page + 1;
+      rows.sort((a, b) => Number(a && a.id || 0) - Number(b && b.id || 0));
+      for (const f of rows) {
+        if (asc && f && Number.isFinite(Number(f.id)) && Number(f.id) > afterId) afterId = Number(f.id);
+        await ledgerApplyFeedback(env, f, stats, (ts) => { if (ts > maxTs) maxTs = ts; });
       }
+      if (asc && Number.isFinite(Number(j.next_after_id)) && Number(j.next_after_id) > afterId) afterId = Number(j.next_after_id);
+      if (asc) { await put("feedback_after_id", String(afterId)); await put("feedback_cursor", maxTs); }
+      if (!asc || !j.more || !rows.length) break;
     }
     await put("feedback_cursor", maxTs);
     await put("last_run", JSON.stringify(Object.assign({ at: new Date().toISOString(), version: VERSION, cursor: maxTs }, stats)));
@@ -2617,10 +2643,10 @@ function __aiAttrEnv(env, worker, aiKey, dbKey) {
       if (p !== "run") { var v = Reflect.get(t, p); return typeof v === "function" ? v.bind(t) : v; }
       return async function (model, input, opts) {
         var t0 = Date.now(), ok = 1, res;
-        try { res = await t.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
+        try { res = await t.run(model, input, (function () { /* PROMPT-CACHE-1: same model + same first 4 KB of prompt -> same instance, so Workers AI prefix caching bills repeated context at the cached-input rate (glm-5.3-flash $0.03 vs $0.15 per M) */ try { if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts; var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt); var s = typeof c === "string" ? c : JSON.stringify(c || ""); if (s.length < 1024) return opts; s = String(model) + "|" + s.slice(0, 4096); var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } var o = Object.assign({}, opts || {}); o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) }); return o; } catch (ePc) { return opts; } })()); return res; } catch (e) { ok = 0; throw e; }
         finally {
           try {
-            var u = res && typeof res === "object" && res.usage || {};
+            var u = res && typeof res === "object" && res.usage || {}; if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) try { var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0; await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(new Date().toISOString().slice(0, 10), worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run(); } catch (eCc) {}
             var chars = 0; try { chars = JSON.stringify(input && (input.messages || input.prompt || input.text) || input || "").length; } catch (e1) {}
             var inTok = Number(u.prompt_tokens || u.input_tokens || 0) || Math.round(chars / 4);
             var outTok = Number(u.completion_tokens || u.output_tokens || 0);
@@ -3908,13 +3934,13 @@ var PersonalTwinAgent = class {
       const tom = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
       const _awayM = await loadAwayWindows(this.env, today);
       const [evs, tasks, facts] = await Promise.all([
-        calList(this.env, today, tom, 10).then(function(cl) { return { results: awayFilter((cl && cl.events || []).map(function(e) { return { title: e.title, venue: e.location, start_date: String(e.dtstart || "").slice(0, 10) }; }), _awayM, function(x) { return x.start_date; }) }; }).catch(function() { return { results: [] }; }),
+        calList(this.env, today, tom, 10).then(function(cl) { return { results: awayFilter((cl && cl.events || []).map(function(e) { return { title: e.title, venue: e.location, start_date: String(e.dtstart || "").slice(0, 10), source: e.source }; }), _awayM, function(x) { return x.start_date; }) }; }).catch(function() { return { results: [] }; }),
         this.env.PERSONAL.prepare("SELECT title,due,kind FROM tasks WHERE status='open' ORDER BY due ASC LIMIT 8").all().catch(() => ({ results: [] })),
         this.env.PERSONAL.prepare("SELECT statement FROM facts ORDER BY ts DESC LIMIT 5").all().catch(() => ({ results: [] }))
       ]);
       const brief = { date: today, events: (evs.results || []).map((e) => e.title + (e.venue ? " @ " + e.venue : "") + " on " + e.start_date), tasks: (tasks.results || []).map((t) => t.title + (t.due ? " (due " + t.due + ")" : "")), facts: (facts.results || []).map((f) => f.statement) };
       try {
-        const _ex = await this.env.PERSONAL.prepare("SELECT title, venue, city, category, start_date FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all();
+        const _ex = await this.env.PERSONAL.prepare("SELECT * FROM events WHERE start_date IN (?1,?2) ORDER BY start_date LIMIT 10").bind(today, tom).all();
         _ex.results = awayFilter(_ex.results || [], _awayM, (x) => x.start_date);
         const _have = new Set();
         for (const s2 of brief.events) { const _p = String(s2).split(" @ "); _have.add(String(_p[0] || "").slice(0, 60).toLowerCase()); }

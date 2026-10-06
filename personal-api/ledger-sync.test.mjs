@@ -42,6 +42,13 @@ function makeEnv() {
       st.sinces.push(u.searchParams.get("since"));
       if (st.status !== 200) return new Response("{}", { status: st.status });
       const since = u.searchParams.get("since");
+      if (st.asc && u.searchParams.has("after_id")) {
+        st.afters = st.afters || []; st.afters.push(u.searchParams.get("after_id"));
+        const after = Number(u.searchParams.get("after_id")), lim = Number(u.searchParams.get("limit"));
+        const all = st.rows.filter((r) => r.id > after).sort((a, b) => a.id - b.id);
+        const pg = all.slice(0, lim);
+        return new Response(JSON.stringify({ ok: true, order: "asc", more: all.length > lim, next_after_id: pg.length ? pg[pg.length - 1].id : after, feedback: pg }), { status: 200 });
+      }
       return new Response(JSON.stringify({ ok: true, feedback: st.rows.filter((r) => !r || typeof r.ts !== "string" || r.ts >= since).slice().reverse() }), { status: 200 });
     }
     return new Response(JSON.stringify({ events: [] }), { status: 200 });
@@ -140,5 +147,21 @@ T.db.prepare("UPDATE ledger_interactions SET ts = datetime('now','-30 days')").r
 r = await mcp(T.env, "ledger_due", {});
 ok(r.ok && r.count === 1 && r.due[0].name === "Mira Kowalska", "ledger_due lists a person past cadence");
 
+// LEDGER-PAGE-1: 1,230 went rows (more than two pages) are all drained in one run by after_id, none skipped; a rerun adds nothing
+T = makeEnv(); T.st.asc = true;
+for (let i = 1; i <= 1230; i++) T.st.rows.push(went(i, "2026-10-05 21:00:00", "P" + i));
+await cron(T.env);
+ok(count(T.db, "ledger_people") === 1230 && count(T.db, "ledger_interactions") === 1230, "all 1230 rows reach the ledger in one run: " + count(T.db, "ledger_people"));
+ok(T.st.afters.join() === "0,500,1000", "pages follow after_id 0,500,1000: " + T.st.afters);
+ok(state(T.db, "feedback_after_id") === "1230", "after_id cursor is the last id: " + state(T.db, "feedback_after_id"));
+await cron(T.env);
+ok(count(T.db, "ledger_interactions") === 1230 && T.st.afters.slice(3).join() === "1230", "rerun fetches from 1230 and adds nothing: " + T.st.afters);
+// bounded: 12 pages of data, 10 pages per run, the next run finishes
+T = makeEnv(); T.st.asc = true;
+for (let i = 1; i <= 6000; i++) T.st.rows.push(went(i, "2026-10-05 21:00:00", "Q" + i));
+await cron(T.env);
+ok(T.st.afters.length === 10 && state(T.db, "feedback_after_id") === "5000", "a run is bounded at 10 pages: " + T.st.afters.length + " / " + state(T.db, "feedback_after_id"));
+await cron(T.env);
+ok(count(T.db, "ledger_interactions") === 6000 && state(T.db, "feedback_after_id") === "6000", "the next run drains the rest");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

@@ -3,7 +3,7 @@
 -- cf-ops-actions gateway-cost run 94) while ai_spend_ledger, the fleet's per-caller spend ledger (qnfo-ai spendRecord,
 -- qnfo-ai-search, qnfo-code-orchestrator), carried $0.44 of DeepSeek over the same days: 98.7% of the paid cost has no
 -- caller, so no loop, lever or cap can act on it (unified_cost_usd_30d breaches its cap with nobody to charge). The metric
--- is written hourly by qnfo-fleet-control 0.4.135 refreshOwnedMetrics from one 7-day GraphQL read and one ledger read;
+-- is written hourly by qnfo-fleet-control 0.4.137 refreshOwnedMetrics from one 7-day GraphQL read and one ledger read;
 -- the per-provider figures are in cloud_ops_events cost-attribution-<day>. Workers AI is excluded here (its attribution
 -- is workers_ai_attribution_coverage_pct). Guard metric with its trigger and a contract probe. Idempotent.
 -- APPLY-BY: ci
@@ -28,7 +28,7 @@ WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key =
 
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status)
 VALUES ('cost-attribution-gap-1', NULL,
-  'qnfo-fleet-control 0.4.135+ deployed with CF_API_TOKEN (GraphQL read)',
+  'qnfo-fleet-control 0.4.137+ deployed with CF_API_TOKEN (GraphQL read)',
   'observe only: refreshOwnedMetrics writes cost_attribution_gap_pct hourly and cloud_ops_events cost-attribution-<day>',
   'SELECT ''ok'' AS expected, CASE WHEN (SELECT last_refreshed FROM metric_registry WHERE metric = ''cost_attribution_gap_pct'') IS NULL THEN ''pending: not measured yet'' WHEN (SELECT last_refreshed FROM metric_registry WHERE metric = ''cost_attribution_gap_pct'') < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-3 hours'') THEN ''stale: last write older than 3h'' ELSE ''ok'' END AS observed',
   'd1-query', 3, 'qnfo-fleet-control', 24, 'active');

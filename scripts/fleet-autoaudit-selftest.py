@@ -4,7 +4,8 @@
 Proves run_guard() (a) does NOT re-run when the first pass is clean, (b) re-runs ONCE against a refreshed checkout when it
 sees drift and reports the CONFIRMED result (a race that vanished is not reported), (c) still reports a drift that survives
 the refresh, (d) keeps the first result when the checkout cannot be refreshed (no silent success, no crash), and
-(e) preserves the guard return code and persists state. Exit 0 = all passed.
+(e) preserves the guard return code and persists state; D1-TRANSIENT-RETRY-1 (#687): a transient D1 reply is retried before it
+counts as a write failure, a SQL error is not. Exit 0 = all passed.
 """
 import importlib.util, os, sys, tempfile
 
@@ -294,6 +295,42 @@ except Exception:
 finally:
     fa.d1 = real_d1
 check("a failing D1 write never breaks the audit", survived)
+
+# ---------------------------------------------------------------- D1-TRANSIENT-RETRY-1 (#687)
+def run_d1(responses):
+    """responses: list of ('ok', obj) | ('err', code, body) | ('exc',). Returns (result, attempts, slept)."""
+    os.environ.setdefault("CF_ACCOUNT_ID", "acct"); os.environ.setdefault("CLOUDFLARE_API_TOKEN", "tok")
+    seq, calls, slept = list(responses), {"n": 0}, []
+    def fake_urlopen(req, timeout=30):
+        calls["n"] += 1
+        r = seq.pop(0)
+        if r[0] == "ok":
+            return io.BytesIO(_json.dumps(r[1]).encode())
+        if r[0] == "exc":
+            raise _ue.URLError("timed out")
+        raise _ue.HTTPError(req.full_url, r[1], "x", _H({}), io.BytesIO(r[2]))
+    class _T:
+        time = staticmethod(_t.time)
+        @staticmethod
+        def sleep(x): slept.append(x)
+    real = (_ur.urlopen, fa.time)
+    _ur.urlopen, fa.time = fake_urlopen, _T
+    try:
+        res = real_d1("INSERT INTO worker_live_audit VALUES (?1)", ["radar-hub"])
+    finally:
+        _ur.urlopen, fa.time = real
+    return res, calls["n"], slept
+
+OKR = {"success": True, "result": [{"success": True, "meta": {"changes": 1}}]}
+R687 = b'{"messages":[],"result":null,"success":false,"errors":[{"code":7500,"message":"internal error; reference = e1"}]}'
+res, n, slept = run_d1([("err", 500, R687), ("ok", OKR)])
+check("the #687 reply (HTTP 500, code 7500 internal error) is retried and the write succeeds", fa.d1_ok(res) and n == 2 and slept == [2], (res, n, slept))
+res, n, slept = run_d1([("exc",), ("err", 503, b"busy"), ("ok", OKR)])
+check("a transport failure and a 503 are retried with backoff", fa.d1_ok(res) and n == 3 and slept == [2, 5], (res, n, slept))
+res, n, slept = run_d1([("err", 400, b'{"success":false,"errors":[{"code":7500,"message":"no such column: x: SQLITE_ERROR"}]}')])
+check("a SQL error (HTTP 400, code 7500, SQLITE_ERROR) is not retried", not fa.d1_ok(res) and n == 1 and slept == [] and "HTTP 400" in fa.d1_err(res), (res, n, slept))
+res, n, slept = run_d1([("err", 500, R687)] * 3)
+check("three transient failures count as one write failure that says so", not fa.d1_ok(res) and n == 3 and "after 3 attempts" in fa.d1_err(res), (res, n, slept))
 
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
