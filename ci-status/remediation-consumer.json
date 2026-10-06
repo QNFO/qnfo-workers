@@ -1,125 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@92b700717588",
- "due": 14,
- "pass": 10,
- "fail": 4,
+ "verifier": "remediation-consumer@0f6941bbe04a",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "issue-2042",
-   "issue_id": 2042,
-   "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ipatent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2083",
-   "issue_id": 2083,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-lifecycle-metric-freshness, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-1683",
-   "issue_id": 1683,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1711",
-   "issue_id": 1711,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1836",
-   "issue_id": 1836,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -143,10 +30,9 @@
   "http",
   "runner-https"
  ],
- "https": 8,
  "runtime_verified_share_24h": 4.6,
- "spent_ms": 40628,
- "head": "92b700717588b8a39016ed5616b5d0e4983cfa6e",
+ "spent_ms": 3152,
+ "head": "0f6941bbe04acd8d89de11afae25ce3610b5ed9c",
  "job_status": "success",
- "ts": "2026-10-06T19:05:00Z"
+ "ts": "2026-10-06T19:09:48Z"
 }
