@@ -129,9 +129,23 @@ because each one was broken at least once; the linked issue holds the evidence.
   - delete an unused D1 database after a verified backup (cf-ops-actions d1-backup, unbind-d1, delete-d1; D1-FOLD-1).
   - switch a worker to a cheaper model with no A/B test, when it keeps a per-request fallback to the previous model and an
     automatic revert on errors or empty replies (personal-api TWIN-FLASH-1 is the pattern), recorded on its issue.
-- Unchanged: caps are never raised, no paid model call is added while a `fleet_budget` cap is breached, credentials are not
-  minted or rotated, guards and probes are not weakened, data with no verified backup is never deleted, and governance
-  changes (this file, the charter) land by PR.
+- Unchanged: caps are never raised, credentials are not minted or rotated, guards and probes are not weakened, data with no
+  verified backup is never deleted, and governance changes (this file, the charter) land by PR. A breached `fleet_budget`
+  AI spend cap steers model choice and never stops work (BUDGET-SOFT-ROUTE-1 below).
+
+## AI spend budgets steer, never stop (BUDGET-SOFT-ROUTE-1)
+- Owner directive 2026-10-06: "AI spend budget should never stop any process, pipeline, or workflow, only limit/suggest
+  what models may be used (there are many free and low-cost coding models available through Cloudflare and these budgets
+  shall never be hard and fast limits)." It replaces the earlier reading of core prompt rule 8 that no paid model call may
+  run while a cap is breached, and extends BUDGET-CAP-FREE-FALLBACK-1 (`ops_config budget_cap_free_fallback`).
+- While an `ai_spend:*` cap in `fleet_budget` is breached, work continues on the cheapest capable model: a single cheap
+  Workers AI model (glm-5.3-flash, qwen3-30b-a3b and peers) instead of a premium model, one leg instead of an ensemble,
+  fewer items per tick instead of none. Never a refusal, a deferral queue, an HTTP 429 on spend, or a skipped run. The qnfo-ai
+  router downgrades every caller at a cap (5.32.0); idea-hub scores lean (1.6.0); qnfo-ai-search answers, indexes and
+  generates questions lean (2.3.0); qnfo-ops falls back to free models.
+- Caps are still measured, reported and never raised, and a breach still files its metric issue; the lever is a cheaper
+  model or a smaller batch, never a stop. Limits that protect an open endpoint from abuse (per-address rate limits) and
+  publishing or outreach cadence caps are not spend budgets and stay.
 
 ## No loose ends (OWNER-NO-LOOSE-ENDS-1)
 - Owner directive 2026-10-06: "The system shall fully execute and implement its own suggestions and enhancements across
@@ -198,8 +212,8 @@ because each one was broken at least once; the linked issue holds the evidence.
 ## Writing that outsiders read (ENSEMBLE-POLICY-1)
 - Read `docs/ENSEMBLE-POLICY.md` before adding or changing a worker that writes prose for readers outside the fleet. LLM errors are
   correlated (a 9-judge, 7-family panel is worth about 2.2 votes), so layers must come from disjoint model families, stay few and
-  small, keep the non-model layers (deterministic gate, reader votes, owner verdict), record their verdicts, and add no net model
-  calls while a `fleet_budget` cap is breached.
+  small, keep the non-model layers (deterministic gate, reader votes, owner verdict), and record their verdicts. While a
+  `fleet_budget` cap is breached the layers use the cheapest models (BUDGET-SOFT-ROUTE-1); they are not removed.
 
 ## One priority queue, no due dates (PRIORITY-QUEUE-1)
 - Owner directive 2026-10-03: dates are not important, the order of priority is. D1 `qnfo-audit.v_issue_queue` is the

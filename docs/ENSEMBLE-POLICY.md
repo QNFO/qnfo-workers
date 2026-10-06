@@ -45,8 +45,10 @@ So the fleet does not get risk-free by stacking models. It gets lower risk by (1
 6. **Measure the correlation you assumed.** q08 records every judge's verdict in `q08_reader_tests` and publishes
    `q08_panel_effective_votes_30d` (n_eff = 2 / (1 + phi)); a trigger fires below 1.3 and its lever replaces the most correlated
    family. A worker that adopts a panel records its verdicts the same way.
-7. **Budget (core prompt rule 8).** While any `fleet_budget` cap is breached (2026-10-03: ai_spend total 224.55 against 150), a
-   ladder may not add net model calls. q08 offsets with `ops_config q08_max_per_day = 3` (was 10), a daily attempt cap of twice
+7. **Budget (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06; it replaces the 2026-10-03 reading of core prompt rule 8).** A
+   breached `fleet_budget` cap never stops a ladder; it moves each layer to the cheapest capable model in its family (a cheap
+   Workers AI model, one leg instead of an ensemble). Before 2026-10-06 a ladder could not add net model calls while a cap was
+   breached (2026-10-03: ai_spend total 224.55 against 150), and q08 offset with `ops_config q08_max_per_day = 3` (was 10), a daily attempt cap of twice
    that, and small judges. Guard: `q08_neurons_per_published_piece_7d` was 643 on 2026-10-03; the change is judged by that figure
    not rising (its existing trigger fires at 6000, which is a ceiling, not the bar for this change).
 8. Do not tune the panel to a pass rate. Raising or lowering the bar to hit publication volume turns the layer into a rubber stamp

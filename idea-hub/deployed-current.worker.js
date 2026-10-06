@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.5.9-robots-sitemap"; // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.6.0-budget-soft"; // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -282,8 +282,8 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
     } catch (e3) {}
   }
 }
-// IDEA-TRIAGE-BREACH-DEFER-1 (#1878): true while any fleet_budget ai_spend cap is breached (current > cap). An unreadable
-// fleet_budget counts as breached, so a D1 fault can only defer spending, never cause it.
+// True while any fleet_budget ai_spend cap is breached (current > cap). Since 1.6.0 (BUDGET-SOFT-ROUTE-1) a breach only
+// selects lean scoring (one cheap model); an unreadable fleet_budget counts as breached, so a D1 fault selects lean too.
 async function aiBudgetBreach(env) {
   try {
     var rows = (await env.QNFO_AUDIT.prepare("SELECT node_class, cap, current FROM fleet_budget WHERE node_class LIKE 'ai_spend:%' AND current > cap ORDER BY node_class").all()).results || [];
@@ -308,8 +308,16 @@ async function tRunModel(env, name, prompt) {
   }
   return { error: lastErr };
 }
-async function scoreIdea(env, desire) {
+// BUDGET-SOFT-ROUTE-1 (1.6.0): lean = an ai_spend cap is breached. The proposal is still scored, by one cheap model
+// (T_MODELS.a with the T_CHAIN fallbacks) instead of two plus a tiebreak; the cap steers the model, it never stops triage.
+async function scoreIdea(env, desire, lean) {
   var prompt = SCORECARD_PROMPT + String(desire || "").slice(0, 3000);
+  if (lean) {
+    var one = await tRunModel(env, T_MODELS.a, prompt);
+    if (!one.card) return { error: "lean scoring failed: " + one.error };
+    var lc = one.card, ls = 0.3 * lc.novelty + 0.3 * lc.technical_merit + 0.2 * lc.impact_potential + 0.2 * lc.exposure_potential;
+    return { score: Math.round(ls * 1000) / 1000, decision: ls >= ACCEPT_MIN && lc.feasibility >= FEAS_MIN && lc.risk <= RISK_MAX ? "ACCEPT" : "HOLD", rationale: lc.rationale, model: one.model + " (lean: ai_spend cap breached)" };
+  }
   var res = await Promise.all([tRunModel(env, T_MODELS.a, prompt), tRunModel(env, T_MODELS.b, prompt)]);
   var a = res[0].card ? res[0] : null, b = res[1].card ? res[1] : null, card, models;
   if (a && b) {
@@ -334,7 +342,7 @@ function isQuestion(t) { t = String(t || "").trim(); return t.length < 160 && /\
 // idea, rationale) and, while (cluster + 1) / (n + 1) > DIVERSITY_MAX_SHARE with n >= DIVERSITY_MIN_N accepts in the
 // window, holds it as status 'deferred_diversity' (decision DEFER-DIVERSITY, score kept, never sent to research_queue
 // and not counted by the metric). Held rows are released best score first, with no model call, when the share allows
-// and no ai_spend cap is breached (a release adds research work, which spends). A held row whose created_at leaves the
+// (1.6.0 BUDGET-SOFT-ROUTE-1: an ai_spend cap no longer holds a release back). A held row whose created_at leaves the
 // 30-day window becomes a terminal HOLD instead, so a release can never land outside the window the metric reads.
 // Owner-authored rows (name owner-* or rowan-*, contact 'owner') and intake:<family> rows (radar-hub
 // SIGNAL-INTAKE-SOURCES-1) are never held; they still count in the mix. The cluster table must stay identical to
@@ -375,13 +383,13 @@ function mixShare(mix) {
 async function enqueueAccepted(env, id, idea, score, now) {
   await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,?5,'queued',?6)").bind(crypto.randomUUID(), String(id), String(idea || "").slice(0, 3000), score, "ACCEPT", now).run();
 }
-// Expire held rows that left the window (terminal HOLD, score kept); then, unless a cap is breached, release the best
-// held rows the current mix allows, up to TRIAGE_BATCH a run. No model call either way.
+// Expire held rows that left the window (terminal HOLD, score kept); then release the best held rows the current mix
+// allows, up to TRIAGE_BATCH a run. No model call either way. Since 1.6.0 (BUDGET-SOFT-ROUTE-1) a cap no longer holds
+// the release back; the breached argument is kept for callers and ignored.
 async function diversityRelease(env, mix, breached, out) {
   var now = new Date().toISOString();
   var ex = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status = 'triaged_hold', decision = 'HOLD', triaged_at = ?1, rationale = substr('[diversity hold expired: left the 30-day window] ' || COALESCE(rationale, ''), 1, 2000) WHERE status = 'deferred_diversity' AND NOT COALESCE(" + DIVERSITY_WINDOW_SQL + ", 0)").bind(now).run();
   out.diversity_expired = Number(ex && ex.meta && ex.meta.changes) || 0;
-  if (breached) return;
   var held = (await env.QNFO_AUDIT.prepare("SELECT id, name, idea, rationale, score FROM idea_proposals WHERE status = 'deferred_diversity' AND " + DIVERSITY_WINDOW_SQL + " ORDER BY score DESC, created_at ASC LIMIT ?1").bind(DIVERSITY_RELEASE_SCAN).all()).results || [];
   for (var i = 0; i < held.length && out.diversity_released < TRIAGE_BATCH; i++) {
     var h = held[i], rationale = String(h.rationale || "").replace(DIVERSITY_NOTE_RE, ""), k = proposalCluster(h.name, h.idea, rationale);
@@ -393,7 +401,11 @@ async function diversityRelease(env, mix, breached, out) {
     out.diversity_released++; out.accepted++;
   }
 }
-// IDEA-TRIAGE-BREACH-DEFER-1 (#1878, pillar cost): while a fleet_budget ai_spend cap is breached, triage makes no model
+// BUDGET-SOFT-ROUTE-1 (1.6.0, owner directive 2026-10-06: "AI spend budget should never stop any process, pipeline, or
+// workflow, only limit/suggest what models may be used") replaces the deferral below: while a cap is breached every
+// proposal is still scored, by one cheap model (scoreIdea lean), and rows left as deferred_budget by 1.5.5-1.5.8 are
+// released every run, oldest first, TRIAGE_BATCH at a time. The text below is the retired 1.5.5 rule, kept for history.
+// IDEA-TRIAGE-BREACH-DEFER-1 (#1878, pillar cost, retired): while a fleet_budget ai_spend cap is breached, triage made no model
 // call. The zero-cost noise and chat-question rules still run; a proposal that needs scoring is set to status
 // 'deferred_budget' (never dropped or closed, human ideas included). Once no cap is breached, deferred rows go back to
 // 'new' oldest first, TRIAGE_BATCH a run, and are scored through the normal path. Each run writes the deferred count and
@@ -403,7 +415,9 @@ async function triageProposals(env) {
   var out = { triaged: 0, accepted: 0, errors: 0, deferred: 0, released: 0, diversity_held: 0, diversity_released: 0, diversity_expired: 0 };
   var budget = await aiBudgetBreach(env);
   out.budget_breached = budget.breached;
-  if (!budget.breached) {
+  out.lean = budget.breached;
+  {
+    // Rows a 1.5.x run left as deferred_budget go back to 'new' every run (the cap no longer defers scoring).
     try {
       var rel = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status='new' WHERE id IN (SELECT id FROM idea_proposals WHERE status='deferred_budget' ORDER BY created_at ASC LIMIT ?1)").bind(TRIAGE_BATCH).run();
       out.released = Number(rel && rel.meta && rel.meta.changes) || 0;
@@ -424,11 +438,7 @@ async function triageProposals(env) {
         await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision='HOLD', rationale=?, triaged_at=?, status='triaged_hold' WHERE id=?").bind("noise/question filter", now, row.id).run();
         out.triaged++; continue;
       }
-      if (budget.breached) {
-        await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status='deferred_budget', rationale=? WHERE id=?").bind("deferred " + now.slice(0, 16) + "Z: AI budget caps breached (" + budget.caps.join(", ").slice(0, 200) + "); scored once no cap is breached", row.id).run();
-        out.deferred++; continue;
-      }
-      var s = await scoreIdea(env, row.idea);
+      var s = await scoreIdea(env, row.idea, budget.breached);
       if (s.error) { out.errors++; continue; }
       var cluster = s.decision === "ACCEPT" ? proposalCluster(row.name, row.idea, s.rationale) : null;
       if (cluster && mix && !diversityExempt(row) && diversityBlocks(mix, cluster)) {
@@ -446,7 +456,7 @@ async function triageProposals(env) {
     } catch (e) { out.errors++; }
   }
   if (mix) {
-    try { await diversityRelease(env, mix, budget.breached, out); } catch (e) { out.errors++; }
+    try { await diversityRelease(env, mix, false, out); } catch (e) { out.errors++; }
     out.diversity = mixShare(mix);
   }
   try {
@@ -456,9 +466,9 @@ async function triageProposals(env) {
     out.diversity_held_total = Number(dd && dd.n) || 0;
     var at = new Date().toISOString();
     await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('idea-triage-budget', ?1, 'idea-triage-budget', ?2, ?3, 'idea-hub', ?4)")
-      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, no model call; " + out.deferred + " deferred this run, " : "caps clear; " + out.released + " released, ") + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null }), budget.breached ? "deferred" : "ok").run();
+      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null }), budget.breached ? "lean" : "ok").run();
   } catch (e) {}
-  console.log("IDEA-TRIAGE-BREACH-DEFER-1 " + JSON.stringify(out));
+  console.log("BUDGET-SOFT-ROUTE-1 idea-triage " + JSON.stringify(out));
   try { await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('idea-hub', ?1, ?2, ?3) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind(VERSION, new Date().toISOString(), out.errors ? 0 : 1).run(); } catch (e) {}
   return out;
 }
