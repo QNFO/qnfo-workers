@@ -76,5 +76,5 @@ let f = await flagUndeliverableQuestions(T.env);
 let iss = T.a.prepare("SELECT * FROM agent_issues").all();
 ok(f.filed === 1 && iss.length === 1 && iss[0].title === "OWNER-QUESTION-UNDELIVERABLE-1: Stuck q" && iss[0].source === "personal-companion" && iss[0].category === "personal" && iss[0].priority === "medium" && iss[0].status === "open", "one medium personal issue for the stuck question only");
 f = await flagUndeliverableQuestions(T.env); ok(f.filed === 0 && T.a.prepare("SELECT count(*) n FROM agent_issues").get().n === 1, "no duplicate while an open one exists");
-T.a.exec("UPDATE agent_issues SET status='closed'"); f = await flagUndeliverableQuestions(T.env); ok(f.filed === 1, "a closed one is refiled if still stuck");
+T.a.exec("UPDATE agent_issues SET status='closed'"); f = await flagUndeliverableQuestions(T.env); ok(f.filed === 0, "PERSONAL-RESILIENCE-1: a closed issue is not refiled while the same row is still stuck (flagged once per row)");
 console.log(pass + " passed, " + fail + " failed"); process.exit(fail ? 1 : 0);
