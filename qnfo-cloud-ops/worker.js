@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.20.0-email-orch-fold"; /* 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.21.0-scan-lanes"; /* 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -754,6 +754,44 @@ __name(h32, "h32");
    energy angle (pillar 1, STRATEGY 2.3); the same query then returned thermodynamics, ultrametric, p-adic and
    quantum-battery papers (read live 2026-10-05). Same cadence, same 10 results, no model call added. */
 var RESEARCH_SCAN_QUERY = '(all:"ultrametric" OR all:"p-adic" OR all:"Bruhat-Tits" OR all:"quantum energy" OR all:"joules per solution" OR (all:"quantum error correction" AND (all:energy OR all:thermodynamic OR all:Landauer)) OR all:"ZBW" OR all:"quantum thermodynamics") AND (cat:quant-ph OR cat:math-ph OR cat:hep-th OR cat:cs.ET)';
+/* RESEARCH-SCAN-LANES-1 (1.21.0, 2026-10-06, pillar research; docs/CODE-REACH-PROGRAM.md). Owner directive 2026-10-06:
+   widen QNFO research beyond quantum to AI, systems and mathematics (formal verification), including AI research about AI
+   research. Measured 2026-10-06: idea_topic_concentration_30d 0.596 (trigger > 0.50, in breach), the query above had no AI
+   or formal-methods term, and the most-downloaded QNFO paper is an AI-agents paper (Agentic Collapse, 3,251 downloads).
+   One mixed query would let cs.AI volume take all ten newest slots, so each lane is its own arXiv query with its own
+   quota: the same ten results and five idea_proposals a day as before (4/3/3 results, 2/2/1 proposals), one extractor
+   call, no model call added. The quantum lane is RESEARCH_SCAN_QUERY unchanged. Prediction: the concentration falls under
+   0.50 within 30 days as accepted ideas spread across lanes; the classifier is unchanged so the metric cannot move by
+   re-labelling. */
+var RESEARCH_SCAN_LANES = [
+  { lane: "quantum-energy", query: RESEARCH_SCAN_QUERY, results: 4, proposals: 2 },
+  { lane: "ai-agents-epistemics", query: '(all:"autonomous agents" OR all:"agentic" OR all:"LLM agents" OR all:"AI scientist" OR all:"automated research" OR all:"AI for science" OR all:"metascience" OR all:"epistemic") AND (cat:cs.AI OR cat:cs.CL OR cat:cs.LG OR cat:cs.MA OR cat:cs.DL OR cat:cs.CY)', results: 3, proposals: 2 },
+  { lane: "formal-verification", query: '(all:"formal verification" OR all:"theorem proving" OR all:"autoformalization" OR all:"proof assistant" OR all:"Lean 4" OR all:"Isabelle" OR all:"Coq") AND (cat:cs.LO OR cat:cs.PL OR cat:math.LO OR cat:cs.SE OR cat:cs.AI OR cat:cs.DC)', results: 3, proposals: 1 }
+];
+async function researchScanLane(lane) {
+  const hits = [];
+  const r = await fetch("https://export.arxiv.org/api/query?search_query=" + encodeURIComponent(lane.query) + "&start=0&max_results=" + lane.results + "&sortBy=submittedDate&sortOrder=descending", {
+    headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" }
+  });
+  const txt = await r.text();
+  for (const en of txt.split("<entry>").slice(1)) {
+    const t = (en.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "";
+    const id = (en.match(/<id>[\s\S]*?arxiv\.org\/abs\/([^<]+)<\/id>/) || [])[1] || "";
+    const pub = (en.match(/<published>([^<]+)<\/published>/) || [])[1] || "";
+    const authors = [];
+    for (const a of en.match(/<name>([\s\S]*?)<\/name>/g) || []) authors.push(a.replace(/<\/?name>/g, "").trim());
+    if (t) hits.push({ id: id.trim(), title: t.replace(/\s+/g, " ").trim().slice(0, 200), published: pub.slice(0, 10), authors: authors.slice(0, 6), lane: lane.lane });
+  }
+  return hits;
+}
+__name(researchScanLane, "researchScanLane");
+// Pure: the scan's hits -> the ones that become idea_proposals, at most each lane's quota, in lane order.
+function researchScanProposals(hits) {
+  const out = [];
+  for (const lane of RESEARCH_SCAN_LANES) out.push(...(hits || []).filter((h) => !h.error && h.lane === lane.lane).slice(0, lane.proposals));
+  return out;
+}
+__name(researchScanProposals, "researchScanProposals");
 /* IDEA-TOPIC-METRIC-1 (1.19.1, #1947): metric_registry idea_topic_concentration_30d (trigger: > 0.50) was written once by
    hand on 2026-10-04 (0.588) and had no producer, so its trigger state could never change. This daily companion recomputes
    it from qnfo-audit.idea_proposals: the share of ACCEPTed items in the last 30 days that fall in the largest keyword
@@ -792,25 +830,17 @@ async function jobIdeaTopicMetric(env) {
 }
 __name(jobIdeaTopicMetric, "jobIdeaTopicMetric");
 async function jobResearchScan(env) {
-  const q = encodeURIComponent(RESEARCH_SCAN_QUERY);
   let hits = [];
-  try {
-    const r = await fetch("https://export.arxiv.org/api/query?search_query=" + q + "&start=0&max_results=10&sortBy=submittedDate&sortOrder=descending", {
-      headers: { "User-Agent": "Mozilla/5.0 (QNFO cloud ops)" }
-    });
-    const txt = await r.text();
-    const entries = txt.split("<entry>").slice(1);
-    for (const en of entries) {
-      const t = (en.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "";
-      const id = (en.match(/<id>[\s\S]*?arxiv\.org\/abs\/([^<]+)<\/id>/) || [])[1] || "";
-      const pub = (en.match(/<published>([^<]+)<\/published>/) || [])[1] || "";
-      const authors = [];
-      const am = en.match(/<name>([\s\S]*?)<\/name>/g) || [];
-      for (const a of am) authors.push(a.replace(/<\/?name>/g, "").trim());
-      if (t) hits.push({ id: id.trim(), title: t.replace(/\s+/g, " ").trim().slice(0, 200), published: pub.slice(0, 10), authors: authors.slice(0, 6) });
+  // RESEARCH-SCAN-LANES-1: one arXiv query per lane, a lane that fails leaves an error row and the others still run;
+  // arXiv asks for 3 s between calls.
+  for (let i = 0; i < RESEARCH_SCAN_LANES.length; i++) {
+    const lane = RESEARCH_SCAN_LANES[i];
+    if (i > 0) await new Promise((res) => setTimeout(res, 3e3));
+    try {
+      hits = hits.concat(await researchScanLane(lane));
+    } catch (e) {
+      hits.push({ error: e.message, lane: lane.lane });
     }
-  } catch (e) {
-    hits = [{ error: e.message }];
   }
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS research_scan_log (id TEXT PRIMARY KEY, ts TEXT, job TEXT, payload TEXT)").run();
@@ -818,14 +848,14 @@ async function jobResearchScan(env) {
   } catch (e) {
   }
   try {
-    for (const h of hits.filter((x) => !x.error).slice(0, 5)) {
+    for (const h of researchScanProposals(hits)) {
       const hkey = "scan-" + String(h.id || "").slice(0, 80);
       const hh = h32(hkey);
       const dup = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE ip_hash = ?").bind(hh).first();
       if (dup && dup.n > 0) continue;
       await env.AUDIT.prepare(
         "INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES (?, ?, '', 'new', ?, ?)"
-      ).bind("auto-scan", String(h.title || "").slice(0, 300) + " \u2014 arXiv " + String(h.id || "") + ". Auto-candidate from daily research scan; triage for QNFO research fit.", hh, (/* @__PURE__ */ new Date()).toISOString()).run();
+      ).bind("auto-scan", String(h.title || "").slice(0, 300) + " \u2014 arXiv " + String(h.id || "") + ". Auto-candidate from daily research scan (lane " + String(h.lane || "quantum-energy") + "); triage for QNFO research fit.", hh, (/* @__PURE__ */ new Date()).toISOString()).run();
     }
   } catch (e) {
   }
@@ -833,7 +863,7 @@ async function jobResearchScan(env) {
   const real = hits.filter((h) => !h.error);
   if (real.length && env.AI) {
     try {
-      const prompt = "Today's arXiv matches for QNFO research (id | title | authors):\n" + real.map((h) => "- " + h.id + " | " + h.title + " | " + h.authors.join(", ")).join("\n") + '\n\nYou are the QNFO research GTD extractor. Papers are NEVER shown to the user. Extract ONLY genuinely actionable items: (1) outreach candidates \u2014 a paper whose corresponding author should receive a QNFO outreach email about the energy-efficiency benchmark / ultrametric physics (only when the overlap is strong); (2) must-reads \u2014 papers directly relevant to JPCUB/joules-per-solution or ultrametric physics that Rowan should read; (3) dated register lines \u2014 anything with a deadline or action date.\nReply with STRICT JSON only: {"gtd_lines":[{"date":"YYYY-MM-DD","text":"one short action line"}],"outreach":[{"paper_id":"","reason":"one line"}],"must_read":[{"paper_id":"","reason":"one line"}]}. Empty arrays are fine. No prose.';
+      const prompt = "Today's arXiv matches for QNFO research (id | title | authors):\n" + real.map((h) => "- " + h.id + " | " + h.title + " | " + h.authors.join(", ")).join("\n") + '\n\nYou are the QNFO research GTD extractor. Papers are NEVER shown to the user. Extract ONLY genuinely actionable items: (1) outreach candidates \u2014 a paper whose corresponding author should receive a QNFO outreach email about the energy-efficiency benchmark / ultrametric physics (only when the overlap is strong); (2) must-reads \u2014 papers directly relevant to JPCUB/joules-per-solution, ultrametric physics, the epistemics and stability of autonomous AI agents and AI-assisted research (ignorance audits, agentic collapse), or formal verification of mathematics and systems, that Rowan should read; (3) dated register lines \u2014 anything with a deadline or action date.\nReply with STRICT JSON only: {"gtd_lines":[{"date":"YYYY-MM-DD","text":"one short action line"}],"outreach":[{"paper_id":"","reason":"one line"}],"must_read":[{"paper_id":"","reason":"one line"}]}. Empty arrays are fine. No prose.';
       const resp = await env.AI.run(AI_MODEL, { messages: [{ role: "user", content: prompt }], max_tokens: 700 }, { gateway: { id: "default" } });
       const content = resp && (resp.response || resp.result && resp.result.response) || "";
       const m = content.match(/\{[\s\S]*\}/);

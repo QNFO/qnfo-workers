@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, cite the paper it implements and this software."
+title: "agentic-collapse: reference implementation of the Agentic Collapse model"
+version: 0.1.0
+authors:
+  - family-names: Quni-Gudzinas
+    given-names: Rowan Brad
+preferred-citation:
+  type: article
+  title: "AGENTIC COLLAPSE: A Time-Delayed Cybernetic Framework for Epistemic Stability in Autonomous AI Systems"
+  authors:
+    - family-names: Quni-Gudzinas
+      given-names: Rowan Brad
+  doi: 10.5281/zenodo.18133065

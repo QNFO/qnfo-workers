@@ -24,7 +24,9 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "0.5.3-send-retry";')), lines.indexOf("export {"));
   const missing = body.filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every orchestrator line is in the host except its VERSION line", missing.map((l) => l.slice(0, 60)));
-  ok(/^1\.20\.0/.test(mod.__hv) && mod.__mv === "0.5.4-folded", "host 1.20.0, member 0.5.4-folded", [mod.__hv, mod.__mv]);
+  // a minimum, not an exact pin (CLAUDE.md: an exact VERSION pin breaks on the next bump)
+  const hv = String(mod.__hv).split("-")[0].split(".").map(Number);
+  ok((hv[0] > 1 || (hv[0] === 1 && hv[1] >= 20)) && mod.__mv === "0.5.4-folded", "host >= 1.20.0, member 0.5.4-folded", [mod.__hv, mod.__mv]);
   ok((src.match(/var VERSION = "/g) || []).length === 1, "one quoted VERSION constant in the bundle");
 }
 

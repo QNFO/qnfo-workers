@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use these proofs, cite this software."
+title: "ultrametric-lean: machine-checked ultrametric confinement and unique decoding"
+version: 0.1.0
+authors:
+  - family-names: Quni-Gudzinas
+    given-names: Rowan Brad
+references:
+  - type: article
+    title: "The Ultrametric Program: One Structural Object Across Seven Research Domains, and Its Falsifiable Tests"
+    doi: 10.5281/zenodo.22073477
