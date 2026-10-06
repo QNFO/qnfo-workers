@@ -51,6 +51,19 @@ because each one was broken at least once; the linked issue holds the evidence.
   same rule (qnfo-fleet-control 0.4.130 -> 0.5.0 for its next feature). The owner's changelog (fleet.qnfo.org/changelog)
   lists only minor and major releases, so a feature shipped as a patch never reaches the owner.
 
+## Migrations and tests run themselves (MIGRATION-RUNNER-1, SUITE-RUNNER-1, PROBE-TEMPLATES-1)
+- A D1 change to `qnfo-audit` is a file under `migrations/` that opts in with the header lines `-- APPLY-BY: ci`,
+  `-- DB: qnfo-audit` and `-- Rollback: <sql>`. A file that runs DELETE or DROP also names `-- BACKUP: <table>`, either a
+  table that already holds the rows or one the file creates first (`CREATE TABLE <table> AS SELECT ...` ahead of the
+  delete). apply-migrations.yml applies the file when it merges and records it in `migration_runs`. A failure files
+  `MIGRATION-APPLY-FAILED-1`. Do not also apply it by hand; check `migration_runs` for an `ok` row instead. deploy-gate runs
+  `scripts/apply_migrations.py --check` on every changed migration, so a bad header fails the PR.
+- A worker's `*.test.mjs` suites run on every PR that touches the worker (scripts/run-suites.mjs). The full set runs for
+  control-plane, `scripts/`, `.github/` and `migrations/` changes. A new suite needs no deploy-gate line. A suite that
+  pins an exact VERSION breaks on the next bump; assert a minimum instead.
+- A `METRIC-TRIGGER-<id>-...` issue's contract gets its trigger's probe at birth (D1 trigger
+  `contract_probe_templates_v1`). Write a probe by hand only for other families.
+
 ## Cloudflare actions without a token
 - `cf-ops-actions.yml` (workflow_dispatch) runs allowlisted Cloudflare API actions with the repository's token:
   report, delete-worker (marker-guarded), gateway-logs, gateway-cost, ai-neurons, access-probe, r2-get. Extend
