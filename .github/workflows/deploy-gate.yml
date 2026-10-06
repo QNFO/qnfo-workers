@@ -492,6 +492,10 @@ jobs:
       # REACH-IDEA-1 (#2001): ideas.qnfo.org carries a subscribe box that forwards to the qnfo-subscribers double opt-in.
       - name: REACH-IDEA-1 offline suite (idea-hub 1.5.7, #2001)
         run: node --no-warnings idea-hub/subscribe-box.test.mjs
+      # IDEA-DIVERSITY-CAP-1 (#1947, trigger 1238): a generated ACCEPT waits as deferred_diversity while its topic cluster
+      # would exceed half of the 30-day accepts; the cluster table must equal qnfo-cloud-ops IDEA_TOPIC_CLUSTERS.
+      - name: IDEA-DIVERSITY-CAP-1 offline suite (idea-hub 1.5.8, #1947)
+        run: node --no-warnings idea-hub/diversity-cap.test.mjs
       - name: AI-ATTR offline suite (personal-api 4.7.2, #1833)
         run: node --no-warnings personal-api/ai-attr.test.mjs
       - name: TOOL-TRACE-MEMORY-1 offline suite (personal-api 4.7.1, #1805)
