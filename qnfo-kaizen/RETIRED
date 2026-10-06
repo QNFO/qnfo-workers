@@ -1,0 +1,16 @@
+qnfo-kaizen is RETIRED (2026-10-06, WORKER-RETIRE-WAVE-2, agent_issues 1756, owner standing grant OWNER-STANDING-GRANT-1 /
+charter decision rule 9: retire a low-value worker after a dependency check, no idle proof needed).
+
+What it did: a daily "meta-claims" loop (0 2 * * *) and a weekly skill-drift scan (0 10 * * 2). Measured 2026-10-06:
+- The daily loop had no input: it only picks up intents with type='meta', and no live worker writes that type
+  (qnfo-intent-orchestrator's allowed types exclude it; the dashboard writes 'task').
+- Its tables (kaizen_candidates, meta_claims, meta_changes, kaizen_reports) have no reader in any live worker.
+- Binders were probes or shortcuts only: qnfo-ops KAIZEN (/health probe, removed in the same PR), qnfo-fleet-dashboard
+  SVC_QNFO_KAIZEN (an "agent-issues" remediation that POSTed the skill-drift scan, not issue triage; removed).
+- Five analytics_metric_triggers named it as owner (362, 371, 379, 382, 1204); the trigger loop is qnfo-fleet-control's
+  evaluateMetricTriggers, and their owner is re-pointed to qnfo-fleet-control.
+- 0 Workers AI calls in 7 days. It duplicated qnfo-skill-sync's kaizen cycle (also retired).
+
+Tables and rows stay in qnfo-audit. The script is removed with cf-ops-actions delete-worker. Bringing it back is a charter
+net-zero decision recorded in a PR that removes this file and redeploys the code below, never a way to get a deploy through.
+canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file.
