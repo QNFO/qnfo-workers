@@ -1,4 +1,4 @@
-var VERSION = "1.9.0-calendar-fold"; /* 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.9.1-retired-hosts"; /* 1.9.1-retired-hosts RETIRED-HOSTS-1: twelve retired qnfo.org hostnames answer 410 Gone (noindex) instead of 522 via Workers routes on this worker (agent_issues 2010). 1.9.0-calendar-fold CALENDAR-FOLD-2 (2026-10-06, T3.10, agent_issues 2010, pillar cost, OWNER-STANDING-GRANT-1): calendar-api (ICS publish, notes intake, event feedback, owner questions) runs here as the member calendarApiFoldMod on the hourly tick, awaited; its feedback-link key is HMAC-derived from this worker's CF_API_TOKEN by the fold kit (CAL_KEY_SEED), never copied or minted; public /calendar/health, /calendar/e/<id> (GET page, POST answer) and /calendar/events.ics; binders personal-api, qnfo-intent-orchestrator and radar-hub reach it with props.member (FOLD-KIT-1). Was 1.8.1-one-worker-count. */ // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -2352,7 +2352,31 @@ var __fk_calendarApi_default = __foldWrap(worker_default, {
   due: function (ms, cron) { return ("17 * * * *"); }
 });
 // ---- FOLD-KIT-1:calendar-api:END ----
+// ---- RETIRED-HOSTS-1:BEGIN (agent_issues 2010 SEO input (a), 2026-10-06). Twelve qnfo.org hostnames still have proxied DNS
+// records but no worker behind them, so they answered 522 (origin down) to people and crawlers. Removing the records needs
+// a DNS-capable token (owner card cf-dns-redirect-token); until then this worker holds a Workers route for each one
+// (wrangler.toml) and answers 410 Gone with noindex and a link to qnfo.org, which tells search engines the page is gone
+// for good. Every other host passes through unchanged. A later fold wraps this default like any other (FOLD-KIT-1).
+var RETIRED_HOSTS = { "agent-orchestrator.qnfo.org": 1, "fleet-executor.qnfo.org": 1, "fleet-scheduler.qnfo.org": 1, "qnfo-arxiv-radar.qnfo.org": 1, "qnfo-calibration-audit.qnfo.org": 1, "qnfo-citation-watch.qnfo.org": 1, "qnfo-paper-reviser.qnfo.org": 1, "qnfo-research-radar.qnfo.org": 1, "qnfo-secrets-audit.qnfo.org": 1, "qnfo-system-health.qnfo.org": 1, "scorecard.qnfo.org": 1, "analytics.qnfo.org": 1 };
+function retiredHostResponse(host) {
+  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Retired</title></head>'
+    + '<body><p>' + host + ' was an internal QNFO service and has been retired.</p><p><a href="https://qnfo.org/">Go to qnfo.org</a></p></body></html>';
+  return new Response(html, { status: 410, headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex", "Cache-Control": "public, max-age=86400" } });
+}
+function withRetiredHosts(inner) {
+  var out = Object.assign({}, inner, {
+    async fetch(request, env, ctx) {
+      var host = new URL(request.url).hostname;
+      if (RETIRED_HOSTS[host] === 1) return retiredHostResponse(host);
+      return inner.fetch(request, env, ctx);
+    }
+  });
+  ["__foldHost", "__foldMember"].forEach(function (k) { if (inner[k] !== undefined) Object.defineProperty(out, k, { value: inner[k], enumerable: false }); });
+  return out;
+}
+var __retired_hosts_default = withRetiredHosts(__fk_calendarApi_default);
+// ---- RETIRED-HOSTS-1:END ----
 export {
-  __fk_calendarApi_default as default
+  __retired_hosts_default as default
 };
 //# sourceMappingURL=worker.js.map

@@ -468,7 +468,9 @@ jobs:
         run: node --no-warnings qnfo-lifecycle/metric-freshness.test.mjs
       - name: LIFECYCLE-PING-1042-1 strict public fetch flag (qnfo-lifecycle)
         if: ${{ !cancelled() }}
-        run: node --no-warnings qnfo-lifecycle/strict-public-fetch.test.mjs
+        run: |
+          node --no-warnings qnfo-lifecycle/strict-public-fetch.test.mjs
+          node --no-warnings qnfo-lifecycle/retired-hosts.test.mjs
       - name: SECRET-ONLY-LEDGER-1 offline suite (qnfo-deploy-guard)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-deploy-guard/secret-only-ledger.test.mjs
