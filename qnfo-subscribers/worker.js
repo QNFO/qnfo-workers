@@ -2,7 +2,12 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.7-confirm-post-send-log"; // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
+var VERSION = "1.1.8-digest-links-utm"; // 1.1.8 DIGEST-LINKS-UTM-1 (2026-10-06, pillar reach; transformation lever T7.10): every paper link in the
+// weekly digest carries utm_source=digest&utm_medium=email&utm_campaign=<slug> and the confirmation mail's corpus link
+// utm_source=confirm&utm_medium=email&utm_campaign=corpus, so a digest read becomes a measured visit once qnfo-gateway 3.10.0
+// (UTM-CLICK-LEDGER-1, T7.9) counts tagged page loads into reach_signals source utm (channel digest, campaign slug). No
+// per-recipient id: the campaign is the paper, never the reader. Unsubscribe and confirm links stay untagged (API routes).
+// 1.1.7 // 1.1.5 FLEET-CTL-STATIC-1: static fleet link (issue 1778); DIGEST-EXCLUDE-1 (2026-10-02): the digest skips quarantined papers, as papers.qnfo.org does
 // 1.1.7 (2026-10-05, pillar: reach): SUBSCRIBE-CONFIRM-POST-1 (#1904) and SUBSCRIBE-SEND-LOG-1 (#1905).
 // (1) GET /confirm?token=... no longer confirms. Mail link scanners (for example Microsoft Safe Links) fetch every link in a
 //     message, so a confirming GET turned scanner traffic into subscribers nobody opted in. GET returns a page with one
@@ -18,6 +23,12 @@ var VERSION = "1.1.7-confirm-post-send-log"; // 1.1.5 FLEET-CTL-STATIC-1: static
 // The cron "0 16 * * 1" fires on Sunday 16:00 UTC (Cloudflare cron day-of-week 1 = Sunday; subscriber_digest_runs rows
 // 2026-09-13..10-04 are all Sundays), so /health now says Sunday.
 var SITE = "https://qnfo.org";
+// DIGEST-LINKS-UTM-1: a site link tagged for the reach ledger (qnfo-gateway counts utm-tagged HTML loads; the campaign is the
+// paper slug or a fixed word, never a recipient id).
+function utmLink(path, source, campaign) {
+  return SITE + path + "?utm_source=" + encodeURIComponent(source) + "&utm_medium=email&utm_campaign=" + encodeURIComponent(campaign);
+}
+__name(utmLink, "utmLink");
 // FLEET-CTL-STATIC-1 (issue 1778; owner request 1757): the owner's fleet command-line link on the subscribe, confirm and
 // unsubscribe pages, as static HTML scoped to the subscribe surface. Not fleet.qnfo.org/ctl.js: it scopes the link with
 // location.href, and these pages are opened at /api/confirm?token=... and /api/unsubscribe?token=..., so a click would carry
@@ -142,7 +153,7 @@ function confirmText(token) {
     "",
     "If you did not request this, ignore this message - no further email will be sent.",
     "",
-    "Browse the corpus: " + SITE + "/papers",
+    "Browse the corpus: " + utmLink("/papers", "confirm", "corpus"),
     "",
     "\u2014 QNFO"
   ].join("\n");
@@ -160,7 +171,7 @@ function digestText(papers, token) {
     if (p.created_at) meta.push(fmtDate(p.created_at));
     if (doi) meta.push("DOI: " + doi);
     if (meta.length) lines.push("   " + meta.join("  \xB7  "));
-    if (p.slug) lines.push("   " + SITE + "/papers/" + p.slug);
+    if (p.slug) lines.push("   " + utmLink("/papers/" + p.slug, "digest", p.slug));
     lines.push("");
   }
   lines.push("Unsubscribe: " + unsubUrl(token));
