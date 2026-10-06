@@ -12,10 +12,12 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 
 {
   const lines = guest.split("\n");
-  const body = lines.slice(lines.indexOf('var VERSION = "1.2.1-priority-queue";'), lines.length).filter((l) => l.trim() && l.trim() !== "export default {");
+  const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "')), lines.length).filter((l) => l.trim() && l.trim() !== "export default {");
   const missing = body.filter((l) => !src.includes(l.trim()));
   ok(missing.length === 2 && missing.some((l) => l.startsWith("var VERSION = ")) && missing.some((l) => /try \{ return json\(await run\(env, false, wi\.weights\)\); \}/.test(l)), "every scorer line is in the host except its VERSION line, the export keyword and the /preview catch (FOLD-HYGIENE-1)", missing.map((l) => l.slice(0, 60)));
-  ok(/^1\.3\.[1-9]/.test(mod.__hv) && mod.__mv === "1.2.2-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1+, member 1.2.2-folded, one quoted VERSION constant");
+  // Minimums, not exact pins (CLAUDE.md: an exact VERSION pin breaks on the next bump).
+  const verAtLeast = (v, min) => { const a = String(v).split("-")[0].split(".").map(Number), b = min.split(".").map(Number); for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== b[i]) return (a[i] || 0) > b[i]; } return true; };
+  ok(verAtLeast(mod.__hv, "1.3.1") && verAtLeast(mod.__mv, "1.2.2") && (src.match(/var VERSION = "/g) || []).length === 1, "host >= 1.3.1, member >= 1.2.2, one quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 
 // the daily run happens on the 05:17 tick only
@@ -44,7 +46,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const env = { AUDIT: { prepare: () => { const s = { bind: () => s, all: async () => ({ results: rows }), first: async () => null, run: async () => ({}) }; return s; } } };
   const h = await mod.default.fetch(new Request("https://qnfo-observability.q08.workers.dev/scorer/health"), env, {});
   const hj = await h.json();
-  ok(h.status === 200 && hj.worker === "qnfo-autonomy-scorer" && hj.version === "1.2.2-folded", "/scorer/health answers as the member on the public hostname", hj);
+  ok(h.status === 200 && hj.worker === "qnfo-autonomy-scorer" && hj.version === mod.__mv, "/scorer/health answers as the member on the public hostname", hj);
   const sc = await mod.default.fetch(new Request("https://qnfo-observability.q08.workers.dev/scorer/scores"), env, {});
   ok(sc.status === 200 && JSON.stringify(await sc.json()).includes("s1_operations"), "/scorer/scores reads the scores");
   const post = await mod.default.fetch(new Request("https://qnfo-observability.q08.workers.dev/scorer/preview", { method: "POST" }), env, {});

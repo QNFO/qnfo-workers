@@ -39,7 +39,7 @@ CREATE TABLE ask_loop_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NU
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, last_attempt_at TEXT);
 CREATE TABLE cf_changelog_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT, items INTEGER, note TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
-CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merged_by TEXT, merged_at TEXT, merge_state TEXT, green_since TEXT);
+CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merged_by TEXT, merged_at TEXT, merge_state TEXT, green_since TEXT, merge_note TEXT, last_error TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
 CREATE TABLE errata_watch (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE social_channels (channel_id TEXT PRIMARY KEY, service TEXT, name TEXT, connected INTEGER, checked_at TEXT, checked_day TEXT);
@@ -178,8 +178,15 @@ m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "code-task-merge").counted && /^1 code-loop PRs or tasks that needed a person \(by_person 1, by_runner 1\)$/.test(op(m, "code-task-merge").state) && m.index === 1, "a code-loop PR merged outside the runner (merged_by empty) in the last 30 days counts", op(m, "code-task-merge").state);
 db.exec("UPDATE code_tasks SET merged_by = 'gh:rwnq8' WHERE id = 'cm1'");
 ok((await cm()).counted, "a PR merged by a person's GitHub login counts");
-db.exec("UPDATE code_tasks SET status = 'closed', merged_by = NULL WHERE id = 'cm1'");
-ok((await cm()).counted, "a code-loop PR a person closed in the last 30 days counts");
+// WATCHMAKER-BY-PERSON-PRECISION-1 (agent_issues 1726): a closed task counts only when a person or session closed it.
+db.exec("UPDATE code_tasks SET status = 'closed', merged_by = NULL, merge_note = 'stale base: the branch is behind main and the rebase conflicted' WHERE id = 'cm1'");
+ok(!(await cm()).counted, "a task the runner closed itself (stale base) is the loop deciding, not person work");
+db.exec("UPDATE code_tasks SET merge_note = 'required checks failed' WHERE id = 'cm1'");
+ok(!(await cm()).counted, "a task the runner closed on failed checks is not person work");
+db.exec("UPDATE code_tasks SET merge_note = NULL, last_error = 'Closed by session 01ABC: the change landed by PR 715' WHERE id = 'cm1'");
+ok((await cm()).counted, "a code-loop task a session closed in the last 30 days counts");
+db.exec("UPDATE code_tasks SET last_error = NULL, merge_note = 'superseded: the fix is already on main' WHERE id = 'cm1'");
+ok((await cm()).counted, "a code-loop task closed because a person landed the change on main counts");
 db.prepare("UPDATE code_tasks SET status = 'merged', updated_at = ? WHERE id = 'cm1'").run(ago(6 * 24));
 c = await cm();
 ok(!c.counted && !/by_person/.test(c.state), "a person merge from before the runner's first ok tick is not counted", c.state);

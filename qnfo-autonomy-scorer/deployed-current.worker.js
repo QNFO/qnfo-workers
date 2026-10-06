@@ -22,7 +22,7 @@
 // survival_state.sai is set NULL, sai_weighted keeps its last measured value and date, and an alert is written.
 // GET /preview?w_autonomy=0.20&w_self_improv=0.15 recomputes the SAI with what-if weights next to the live ones and
 // writes nothing, so a weight change can be shown to move the SAI without touching the ratified weights.
-var VERSION = "1.2.1-priority-queue";
+var VERSION = "1.3.0-kaizen-gradient"; // 1.3.0 SAI-KAIZEN-GRADIENT-1 (agent_issues 2054): kaizen = 1 / (1 + step x open issues); this folded copy is the parity reference sai.test.mjs reads, and qnfo-observability (the live scorer) carries the same function.
 // PRIORITY-QUEUE-1 (2026-10-03, owner directive "dates aren't important, the order of priority is"): the OODA decide stage
 // no longer counts issues past an SLA date (every issue is now due on arrival and worked in v_issue_queue order). It counts
 // open issues with no next action: no code-task line, no active remediation contract, no triage remediation. Stricter.
@@ -204,7 +204,9 @@ function computeSai(st, bench, cfg, live) {
   var thinking = P.thinking_base + P.thinking_scale * (typeof bench === "number" && bench >= 0 && bench <= 1 ? bench : 0);
   var decLive = ["independent_decision", "ooda_closure", "s3_control", "s5_policy"].map(nd).filter(function (x) { return x != null; });
   var decision = decLive.length ? decLive.reduce(function (a, b) { return a + b; }, 0) / decLive.length / 5 : null;
-  var kaizen = openIssues === 0 ? 1 : openIssues > 0 ? clamp01(1 - P.kaizen_step * openIssues) : 1;
+  // SAI-KAIZEN-GRADIENT-1 (agent_issues 2054): 1 / (1 + step x open) keeps a gradient at every backlog size (the linear
+  // clamp read 0 for any backlog above 20, so closing 30 issues moved nothing); parity with qnfo-fleet-dashboard computeSai.
+  var kaizen = openIssues > 0 ? 1 / (1 + P.kaizen_step * openIssues) : 1;
   var closureRate = typeof LD.closureRate === "number" ? LD.closureRate : 0;
   var healRate = typeof LD.healRate === "number" ? LD.healRate : 0;
   var selfImprov = P.si_kaizen * kaizen + P.si_closure * closureRate + P.si_heal * healRate;

@@ -30,6 +30,15 @@ const A1 = dashSrc.indexOf('__name(computeSai, "computeSai");', A0);
 assert.ok(A0 >= 0 && A1 > A0, "computeSai found in qnfo-fleet-dashboard/worker.js");
 const dashComputeSai = new Function("__name222", dashSrc.slice(A0, A1) + "\nreturn computeSai;")((f) => f);
 
+// LIVE-SCORER-PARITY-1 (2026-10-06): this folded copy is the parity reference, but the live scorer runs inside
+// qnfo-observability (SCORER-FOLD-1). Its computeSai must be the same function text (whitespace aside), or the live
+// SAI could drift from the dashboard's while this suite stays green.
+{
+  const fnText = (src) => { const i = src.indexOf("function computeSai(st, bench, cfg, live) {"); if (i < 0) return null; let d = 0; for (let k = src.indexOf("{", i); k < src.length; k++) { if (src[k] === "{") d++; else if (src[k] === "}") { d--; if (d === 0) return src.slice(i, k + 1).replace(/\s+/g, " ").trim(); } } return null; };
+  const obsSrc = readFileSync(join(here, "..", "qnfo-observability", "worker.js"), "utf8");
+  assert.ok(fnText(obsSrc) && fnText(obsSrc) === fnText(scorerSrc), "qnfo-observability computeSai is the same function as this parity reference");
+}
+
 // Live sai_config on 2026-10-02 (qnfo-audit), weights after goal 58 (OBJECTIVE-REVISION-APPLY-1, 2026-10-01 21:06).
 const PARAMS = { uf_step: 0.15, lh_probe: 0.4, lh_chain: 0.4, lh_norun: 0.2, lh_norun_penalty: 0.5, aut_user: 0.5, aut_loop: 0.5, autonomy_ceiling: 0.7,
   thinking_base: 0.5, thinking_scale: 0.5, kaizen_step: 0.05, si_kaizen: 0.3, si_closure: 0.2, si_heal: 0.5, rel_probe: 0.5, rel_err: 0.3, rel_err_step: 0.25,
