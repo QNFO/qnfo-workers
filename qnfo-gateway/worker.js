@@ -1,4 +1,4 @@
-var VERSION="3.11.0-legal-versions"; /* 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
+var VERSION="3.11.1-render-precision"; /* 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -2344,8 +2344,13 @@ function renderDefectCount(html) {
   const rule = (t.match(/\|\s*:?-{3,}/g) || []).length;
   const odd = (t.replace(/\\\$/g, "").split("$").length - 1) % 2;
   // 3.9.7: identifiers with a multi-letter stem ("noise_sigma", "MODEL_HTS_45", "run_simulation(") are names, not math.
-  const noMath = t.replace(/\$\$[\s\S]*?\$\$/g, " ").replace(/\$[^$\n]+\$/g, " ").replace(/(?<![\w\\])[A-Za-z][A-Za-z0-9]+_\w+/g, " ");
-  const resid = (noMath.match(/[A-Za-z\u0370-\u03ff\)\]][_^][{(]?[A-Za-z0-9+\-]|[\u00b2\u00b3\u00b9\u2070-\u209f]/g) || []).length;
+  // RENDER-HEALTH-PRECISION-1 (3.11.1, agent_issues 2023): four false-positive classes measured on the 68 pages flagged on
+  // 2026-10-06 (25 of the 47 still flagged were not render defects): an escaped \$ inside math shifted the $ pairing, so
+  // drop it before pairing (the odd test already does); URLs carry file names with underscores; a one-letter stem with a
+  // word subscript of 3+ letters ("t_gate", "y_true", "I_syn") is a name, not math ("p_th" still counts); and correct
+  // Unicode sub- and superscripts ("Bi\u2082Sr\u2082", "x\u2080") display as intended, so they are no longer residue.
+  const noMath = t.replace(/\\\$/g, " ").replace(/\bhttps?:\/\/\S+/g, " ").replace(/\$\$[\s\S]*?\$\$/g, " ").replace(/\$[^$\n]+\$/g, " ").replace(/(?<![\w\\])[A-Za-z][A-Za-z0-9]+_\w+/g, " ").replace(/(?<![\w\\])[A-Za-z]_[A-Za-z]{3,}\w*/g, " ");
+  const resid = (noMath.match(/[A-Za-z\u0370-\u03ff\)\]][_^][{(]?[A-Za-z0-9+\-]/g) || []).length;
   return bold + head + rule + odd + (resid >= 3 ? 1 : 0);
 }
 function paperRenderHtml(row) {

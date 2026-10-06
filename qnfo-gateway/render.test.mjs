@@ -98,5 +98,12 @@ h = renderMarkdown("P = C(5,1)²p_Zp₁ = 25.");
 ok(!math(h).some((x) => /_\\mathrm\{[^}]*\}_/.test(x)), "no double subscript reaches the page (pmScriptsOk counts a command's argument)", math(h));
 h = renderMarkdown("Z[ϕ_<] = ∫*{Λ < |k|} Dϕ*> exp(x) and At $\\tau$*: $- \\nabla S(\\tau *) = 0$ here.");
 ok(!math(h).some((x) => /\*\\gt|\\int \*/.test(x)), "a lone * next to a relation or brace stays an emphasis marker", math(h));
+// RENDER-HEALTH-PRECISION-1 (3.11.1, agent_issues 2023): the four false-positive classes measured on 2026-10-06.
+ok(renderDefectCount("<p>Bi\u2082Sr\u2082CaCu\u2082O\u2088\u208a\u03b4 and <em>x</em>\u2080 + <em>v</em>\u2080<em>t</em> and m\u00b2 and n\u00b3.</p>") === 0, "PRECISION-1: correct Unicode sub- and superscripts are not residue");
+ok(renderDefectCount("<p>Inline <span class=\"math\">$C_S = \\$0$</span>M and $a_b$ and $c_d$ and text.</p>") === 0, "PRECISION-1: an escaped dollar inside math does not shift the pairing");
+ok(renderDefectCount("<p>See https://x.org/Intro_to_Boundary_Logic_v2.pdf and https://y.org/a_b_c_d.html for x_y.</p>") === 0, "PRECISION-1: URLs are not residue");
+ok(renderDefectCount("<p>Here y_true, t_gate, d_practical and I_syn are names.</p>") === 0, "PRECISION-1: a one-letter stem with a word subscript is a name");
+ok(renderDefectCount("<p>Bound (p/p_th)^(d/2) and zeta(s) = (1 - p^{-s})^{-1} and x^2.</p>") === 1, "PRECISION-1: real raw math still counts (p_th, ^( and ^{ remain residue)");
+ok(renderDefectCount("<p>A x_1 and y_2 and z^3 left raw.</p>") === 1, "PRECISION-1: short raw subscripts still count");
 
 process.exit(fails ? 1 : 0);
