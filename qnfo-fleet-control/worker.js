@@ -1060,7 +1060,7 @@ var calibratorMod = (function() {
 })();
 var __defProp22 = Object.defineProperty;
 var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.4.130-pr-open-20min"; /* 0.4.130 PR-OPEN-ON-20MIN-TICK-1 (agent_issues 2017, TP-1b2, pillar autonomy): the 20-minute cron also runs codeMergeTick(env, { openOnly: true }), which only opens pull requests for branch_pushed code tasks (no advance, no merge decision, no reconciliation, no day heartbeat) and stands aside at minute 0 where the hourly tick runs; measured 2026-10-06, a pushed codeagent branch waited 40-50 min for its PR on every task (pr_opened_at always hh:00) and 5 h overnight because only the hourly tick opened them, while code-task-publish had pushed the branch within a minute. CHARTER-1.0.9: CHARTER_VERSION 1.0.9 for the charter's TRANSFORMATION-PROGRAM-1 input pointer (PR 664), charter-guard C5 parity, no behaviour change. 0.4.129 MVP-FOLD-AWARE-1 (pillar core, #1756): an MVP component recorded as folded into a host (worker_removals action folded, target host) serves when its host serves, so folding a core worker under the owner standing grant does not file CHARTER-MVP-DOWN-1; the note reads FOLDED:<host>/<host note>. 0.4.128 0.4.128 REMEDIATION-PENDING-PREFIX-1 (pillar autonomy): a probe observation that starts with 'pending' (the 'pending: <reason>' form six live contracts use) is a deferral like a bare 'pending': it neither breaks a hold, reopens a closed issue, counts toward max_attempts nor ends a pass streak; 0.4.127 0.4.127 ATTRIBUTION-COVERAGE-DTD-1 (agent_issues 1997, pillar cost): workers_ai_attribution_coverage_pct is the day-to-date ratio (attributed neurons today / GraphQL neurons since 00:00Z), capped at 100, and is left unchanged while today's GraphQL total is under 5000 neurons; the hourly delta (73.2 at 19:00Z on 2026-10-05 while day-to-date read 100) filed METRIC-FIX-RELAPSED-1 on one bursty hour. 0.4.126 CREDIBILITY-CITATION-DEDUPE-1 (agent_issues 1838, pillar reach): perfCredibility no longer counts external_mentions rows whose source is an OpenAlex/Crossref/DataCite/Semantic Scholar citation feed (qnfo-cloud-ops jobRadar files every OpenAlex citation there too) as a third-party mention; citations count once, through the selected-works growth term, and the detail reports citation_mentions_not_counted. 0.4.125 0.4.125 CHARTER-1.0.8 (owner standing decision 5, 2026-10-05, pillar autonomy): CHARTER_VERSION 1.0.8 for the owner's standing grant OWNER-STANDING-GRANT-1 (charter decision rule 9: retire low-value workers after a dependency check, delete unused databases after a verified backup, switch to cheaper models with fallback and automatic revert, no owner card); charter-guard C5 parity, no behaviour change. 0.4.124 0.4.124 DRIFT-CONFIRM-2 (agent_issues 1993, pillar core): drift_total's terms (ghost, unregistered, unversioned, repo_live) are computed by one pure function; a non-zero first read is re-read once after 20s and the smaller value is written (the 18:00:13Z read of 1 sampled the inputs while the deploy batch, the self-audit and the registry sync were writing them; PR 636 DRIFT-AUDIT-AFTER-DEPLOY-1 re-audits after each deploy, this change stops the sample from being written); a non-zero first read leaves a cloud_ops_events row (kind drift-total-detail) naming the workers behind each term. 0.4.123 REMEDIATION-HOLD-1 (agent_issues 1297, pillar autonomy): a remediation contract that passes no longer stops; it holds, read once a day, and closes only after a 7-day pass streak (RT_HOLD_D), so a closure that breaks again inside the window reopens through REMEDIATION-REOPEN-1 (the 2026-09-28 closures 1283, 1284 and 1287 passed once and broke within hours after their contracts had stopped); a relapse returns the contract to active. 0.4.122 is left to session_013sMN4pr2RGmHezM4Gm6fMk (#1838). 0.4.121 REMEDIATION-REOPEN-1 fix (agent_issues 1297): an observation of 'pending' (the deferral convention, written by this tick and by remediation-consumer) neither reopens a closed issue nor counts toward max_attempts; 0.4.119 would have reopened 1919 and 1920 on their third pending row. 0.4.120 Q08-SELF-TUNE-1 (agent_issues 1760, pillar reach): PERF_LEVERS gains q08-temperature (q08_gate_pass_rate_7d, ops_config q08_compose_temperature 0.4..0.8 step 0.1, direction -1, effect higher, eval 14 days, capped by the q08 review lock); a lever step is rounded to 4 decimals so a 0.1 step never writes 0.5500000000000000. 0.4.119 REMEDIATION-REOPEN-1 (agent_issues 1297, pillar autonomy): remediationContractsTick reads the issue status; a contract on a wontfix issue is marked superseded, and a contract whose probe fails max_attempts times after its issue was closed (or since its last pass) reopens that issue once, with the failure and the prior close_evidence in its description (59 contracts had failed hourly on closed issues with nothing acting on it; INTEGRITY-GUARDS-1: a failing probe on a closed issue is a closure that did not hold); verification rows are never deleted. 0.4.118 (2026-10-05, remediation B2): LAND-BUNDLE-GUARD-1 (issues 1976, 1979): landFix refuses to commit a deployed script that adds esbuild __name helper layers or keeps under half of main's comment lines (the 2026-10-04 qnfo-fleet-dashboard 1.21.4 landing replaced the hand-written source with a wrangler bundle) and files one LAND-BUNDLE-REFUSED-1 issue instead; REPO-LIVE-DRIFT-1 (issue 1879): drift_total adds the fleet self-audit's DRIFT and CONTENT_DRIFT rows (live version or script sha256 differs from main) and counts a missing or 26h-old audit as 1; CF-CHANGELOG-LEADS-1 (issue 1959): a launch of a proposed or not_considered catalog row writes a dated when_to_choose line (max 5 a day) and GET /cf-changelog lists cost, speed and consolidation leads; CLEF-CANDIDATE-1 re-landed (PR 586 closed unmerged): clef_candidate_calls_7d is written hourly; IMPROVEMENT-UNMEASURED-STAMP-1 (issue 1865): the improvement loop stamps last_refreshed with state UNMEASURED while its trend metrics have too little history. 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
+var VERSION = "0.4.132-transformation-loop"; /* 0.4.132 TRANSFORMATION-LOOP-1 (2026-10-06, owner directive 2026-10-06, pillar autonomy; 0.4.132 adds TP-1a TRUSTED-ORIGIN-PARITY-1 (agent_issues 2005: the CM_TRUSTED_SOURCES default carries every pair the orchestrator planner trusts plus the TP- origins, parity-tested in code-merge.test.mjs), the W1 exit counting needs-machine-probe contracts on open issues only (closed ones on their own scoreboard row, document 1.1 section 1.10), and TP-WAVE-EXIT-STALLED-1, filed when an unmet exit metric of the active wave reads the same value in metric_history 14 days apart): the engine docs/TRANSFORMATION-PROGRAM.md section 5 describes, on the hourly tick: transformation_levers (one row per lever, seeded by migrations/2026-10-06-transformation-loop.sql), wave state from the section 4 exit metrics, dispatch of the next eligible code lever as a code-task issue (session-task for refactor, retire, migration, platform and control-plane levers; TP_SESSION_MAX open at once), landing from merged code tasks and closed issues, 14-day stall detection (TP-LEVER-STALLED-1), session fallback (CODE-TASK-NEEDS-SESSION-1), the section 6 scoreboard in transformation_runs, metric transformation_levers_landed_14d, GET /transformation and POST /transformation/tick; no new cron, worker, binding or model call. 0.4.128 REMEDIATION-PENDING-PREFIX-1 (pillar autonomy): a probe observation that starts with 'pending' (the 'pending: <reason>' form six live contracts use) is a deferral like a bare 'pending': it neither breaks a hold, reopens a closed issue, counts toward max_attempts nor ends a pass streak; 0.4.130 PR-OPEN-ON-20MIN-TICK-1 (agent_issues 2017, TP-1b2, pillar autonomy): the 20-minute cron also runs codeMergeTick(env, { openOnly: true }), which only opens pull requests for branch_pushed code tasks (no advance, no merge decision, no reconciliation, no day heartbeat) and stands aside at minute 0 where the hourly tick runs; measured 2026-10-06, a pushed codeagent branch waited 40-50 min for its PR on every task (pr_opened_at always hh:00) and 5 h overnight because only the hourly tick opened them, while code-task-publish had pushed the branch within a minute. CHARTER-1.0.9: CHARTER_VERSION 1.0.9 for the charter's TRANSFORMATION-PROGRAM-1 input pointer (PR 664), charter-guard C5 parity, no behaviour change. 0.4.129 MVP-FOLD-AWARE-1 (pillar core, #1756): an MVP component recorded as folded into a host (worker_removals action folded, target host) serves when its host serves, so folding a core worker under the owner standing grant does not file CHARTER-MVP-DOWN-1; the note reads FOLDED:<host>/<host note>. 0.4.128 0.4.128 REMEDIATION-PENDING-PREFIX-1 (pillar autonomy): a probe observation that starts with 'pending' (the 'pending: <reason>' form six live contracts use) is a deferral like a bare 'pending': it neither breaks a hold, reopens a closed issue, counts toward max_attempts nor ends a pass streak; 0.4.127 0.4.127 ATTRIBUTION-COVERAGE-DTD-1 (agent_issues 1997, pillar cost): workers_ai_attribution_coverage_pct is the day-to-date ratio (attributed neurons today / GraphQL neurons since 00:00Z), capped at 100, and is left unchanged while today's GraphQL total is under 5000 neurons; the hourly delta (73.2 at 19:00Z on 2026-10-05 while day-to-date read 100) filed METRIC-FIX-RELAPSED-1 on one bursty hour. 0.4.126 CREDIBILITY-CITATION-DEDUPE-1 (agent_issues 1838, pillar reach): perfCredibility no longer counts external_mentions rows whose source is an OpenAlex/Crossref/DataCite/Semantic Scholar citation feed (qnfo-cloud-ops jobRadar files every OpenAlex citation there too) as a third-party mention; citations count once, through the selected-works growth term, and the detail reports citation_mentions_not_counted. 0.4.125 0.4.125 CHARTER-1.0.8 (owner standing decision 5, 2026-10-05, pillar autonomy): CHARTER_VERSION 1.0.8 for the owner's standing grant OWNER-STANDING-GRANT-1 (charter decision rule 9: retire low-value workers after a dependency check, delete unused databases after a verified backup, switch to cheaper models with fallback and automatic revert, no owner card); charter-guard C5 parity, no behaviour change. 0.4.124 0.4.124 DRIFT-CONFIRM-2 (agent_issues 1993, pillar core): drift_total's terms (ghost, unregistered, unversioned, repo_live) are computed by one pure function; a non-zero first read is re-read once after 20s and the smaller value is written (the 18:00:13Z read of 1 sampled the inputs while the deploy batch, the self-audit and the registry sync were writing them; PR 636 DRIFT-AUDIT-AFTER-DEPLOY-1 re-audits after each deploy, this change stops the sample from being written); a non-zero first read leaves a cloud_ops_events row (kind drift-total-detail) naming the workers behind each term. 0.4.123 REMEDIATION-HOLD-1 (agent_issues 1297, pillar autonomy): a remediation contract that passes no longer stops; it holds, read once a day, and closes only after a 7-day pass streak (RT_HOLD_D), so a closure that breaks again inside the window reopens through REMEDIATION-REOPEN-1 (the 2026-09-28 closures 1283, 1284 and 1287 passed once and broke within hours after their contracts had stopped); a relapse returns the contract to active. 0.4.122 is left to session_013sMN4pr2RGmHezM4Gm6fMk (#1838). 0.4.121 REMEDIATION-REOPEN-1 fix (agent_issues 1297): an observation of 'pending' (the deferral convention, written by this tick and by remediation-consumer) neither reopens a closed issue nor counts toward max_attempts; 0.4.119 would have reopened 1919 and 1920 on their third pending row. 0.4.120 Q08-SELF-TUNE-1 (agent_issues 1760, pillar reach): PERF_LEVERS gains q08-temperature (q08_gate_pass_rate_7d, ops_config q08_compose_temperature 0.4..0.8 step 0.1, direction -1, effect higher, eval 14 days, capped by the q08 review lock); a lever step is rounded to 4 decimals so a 0.1 step never writes 0.5500000000000000. 0.4.119 REMEDIATION-REOPEN-1 (agent_issues 1297, pillar autonomy): remediationContractsTick reads the issue status; a contract on a wontfix issue is marked superseded, and a contract whose probe fails max_attempts times after its issue was closed (or since its last pass) reopens that issue once, with the failure and the prior close_evidence in its description (59 contracts had failed hourly on closed issues with nothing acting on it; INTEGRITY-GUARDS-1: a failing probe on a closed issue is a closure that did not hold); verification rows are never deleted. 0.4.118 (2026-10-05, remediation B2): LAND-BUNDLE-GUARD-1 (issues 1976, 1979): landFix refuses to commit a deployed script that adds esbuild __name helper layers or keeps under half of main's comment lines (the 2026-10-04 qnfo-fleet-dashboard 1.21.4 landing replaced the hand-written source with a wrangler bundle) and files one LAND-BUNDLE-REFUSED-1 issue instead; REPO-LIVE-DRIFT-1 (issue 1879): drift_total adds the fleet self-audit's DRIFT and CONTENT_DRIFT rows (live version or script sha256 differs from main) and counts a missing or 26h-old audit as 1; CF-CHANGELOG-LEADS-1 (issue 1959): a launch of a proposed or not_considered catalog row writes a dated when_to_choose line (max 5 a day) and GET /cf-changelog lists cost, speed and consolidation leads; CLEF-CANDIDATE-1 re-landed (PR 586 closed unmerged): clef_candidate_calls_7d is written hourly; IMPROVEMENT-UNMEASURED-STAMP-1 (issue 1865): the improvement loop stamps last_refreshed with state UNMEASURED while its trend metrics have too little history. 0.4.117 merge lane (agent_issues 1965, 1960, 1975, 1877, 1928; pillar autonomy): STALE-PR-MERGE-FIRST-1, a session pull request quiet for 2h whose required checks are green and whose mergeable_state is clean is merged by the branch sweeper (squash, pinned to the tested head) instead of being closed unmerged at 24h (PR 586 was closed green); never a draft, a do-not-merge or WIP PR, a .github/ change, a fork or a codeagent-/evolve/ branch; kill switch ops_config stale_pr_merge_enabled. MERGE-RUNNER-REFUSAL-TAXONOMY-1: a merge-runner refusal ends the code task 'failed' and hands it to the fleet (a note on its source issue, or one CODE-MERGE-REFUSED-1 issue), not an owner card. NOCHECKS-CONFLICT-1: no checks on a conflicted PR is a stale base at once; MERGE-NOCHECKS-REOPEN-1: no checks on a clean PR after 3h closes and reopens it once with the fleet token before refusing. CODE-CLOSE-REASON-1: a PR closed outside the runner records who closed it (CYCLE-TIME-1 or someone else). MERGE-RUNNER-VERSION-FORM-1: `var VERSION="x"` without spaces or semicolon is bumpable and revertible. CRON-ONLY-VERIFY-1: a cron-only worker (worker_live_audit CRON_ONLY) is verified by its fleet_heartbeat VERSION, not reverted on http null (ct_02oohvsbf1gbji). 0.4.116 IDEA-BUILDABLE-TRUTH-1: an idea is buildable only when it carries an edit point; 0.4.115 0.4.115 CYCLE-TIME-1 (2026-10-04, issue 1961): branch sweeper graces shortened to 12h closed-PR / 24h orphan / 1 day needs_human, and a stale open pull request (head not a live code task, idle over BH_STALE_PR_H 24h) is archived, commented and closed each tick so the open-PR backlog turns over inside a day. 0.4.114 MERGE-RUNNER-UNSTICK-1 (qa 2026-10-04, agent_issues 1960 PR-LANE-ZERO-TOUCH-1): GitHub computes mergeability lazily and main moves every few minutes (ci(status) commits), so the merge runner's single read per hourly tick returned mergeable=null for a green pull request every time (PRs 564, 550, 551 sat published with all checks green while none merged); it now re-reads up to CM_MERGEABLE_READS times within a tick, and takes candidates round-robin by merge_checked_at so a stuck five no longer fills every tick. 0.4.113 BRANCH-HYGIENE-2: the branch sweeper keeps the branch of a code task the merge runner refused (needs_human) for 7 days after its last update, so the branch a person has to act on is not archived and deleted after the 48h grace; GET /branch-hygiene reports needs_human_days */
 // 0.4.112 CF-CHANGELOG-LOOP-1 (pillar autonomy, RM-CAPABILITY-PRODUCT-LOOP-1): once a day, inside the existing hourly tick (no new worker, cron or model call), the fleet reads Cloudflare's changelog feed, classifies each recent item against cloudflare_capability_catalog and the service registry, files at most 2 deduped issues a day for billing/deprecation changes to products the fleet uses, reopens catalog rows that were rejected when the product launches or goes GA (max 2 a day), adds not_considered rows for unknown products (max 5), and measures itself (cf_changelog_audit_age_h, cf_changelog_open_proposals_14d); GET /cf-changelog, POST /cf-changelog/run.
 // 0.4.111 PRIORITY-QUEUE-1b/1c (issues 1912, 1913; owner directive 2026-10-03): self-repair (evPropose) admits critical
 // issues and takes candidates in master-queue order (v_issue_queue: critical, high, medium, low, then oldest); the status
@@ -3129,7 +3129,12 @@ var CM_DEFAULT_ENABLED = true;
 var CM_RUNNER = "qnfo-fleet-control";
 var CM_PULL_RE = /^https:\/\/github\.com\/QNFO\/qnfo-workers\/pull\/(\d+)$/;
 var CM_DENY = EVOLVE_DENY.concat(["qnfo-code-orchestrator", "qnfo-code-agent"]);
-var CM_TRUSTED_SOURCES = "qnfo-fleet-dashboard:owner-request|OWNER-TASK-,qnfo-fleet-dashboard:owner-request|OWNER-NOTE-,claude-session*,claude-code-session*";
+// TP-1a TRUSTED-ORIGIN-PARITY-1 (0.4.132, agent_issues 2005, docs/TRANSFORMATION-PROGRAM.md T1 lever 1): the default list
+// carries every (source, title-prefix) pair the code orchestrator's planner trusts (PLAN_TRUSTED: METRIC-TRIGGER- and
+// REACH-IDEA- issues from qnfo-fleet-control) plus the transformation loop's TP- issues, so a task the planner builds is never
+// refused by cmProvenance as "not a trusted origin" when ops_config code_merge_trusted_sources is unset. code-merge.test.mjs
+// asserts parity with planTrusted row by row.
+var CM_TRUSTED_SOURCES = "qnfo-fleet-dashboard:owner-request|OWNER-TASK-,qnfo-fleet-dashboard:owner-request|OWNER-NOTE-,claude-session*,claude-code-session*,qnfo-fleet-control|METRIC-TRIGGER-,qnfo-fleet-control|REACH-IDEA-,qnfo-fleet-control|TP-,TRANSFORMATION-PROGRAM-1|TP-";
 var CM_CHECKS_WAIT_H = 3;
 var CM_DEPLOY_WAIT_H = 3;
 var CM_MAX_CANDIDATES = 5;
@@ -6496,6 +6501,331 @@ async function reachIdeationTick(env, force) {
     top: findings.slice(0, 8).map(function(f) { return f.key + " [" + f.score + "]" + (f.buildable ? "" : " (not auto-buildable)"); }) };
 }
 // ---- REACH-IDEATION-1:END ----
+// ---- TRANSFORMATION-LOOP-1:BEGIN (0.4.132, 2026-10-06; pillar autonomy; owner directive 2026-10-06) ----
+// Owner directive 2026-10-06: "audit the systemwide backlog and roadmap for fleet improvements, optimisations and
+// enhancements; not patches and bugfixes but a continuing program of active transformational change, systemwide, fully
+// automatic and 100% autonomous; everything is in scope, including complete refactors, overhauls and teardown/rebuild;
+// continue to increase autonomy scores, measures and metrics." docs/TRANSFORMATION-PROGRAM.md (TRANSFORMATION-PROGRAM-1,
+// on main since 3b8b734) is the audit and the plan: eight transformations, their levers in order, four waves gated by exit
+// metrics, the executor of each lever. Its rows exist (roadmap_implementation RM-TP-1..8, agent_issues TP-* 2004-2019).
+// What did not exist is the engine its section 5 describes: nothing read the wave exit metrics, nothing handed the next
+// lever to a doer when the previous one landed, nothing noticed a lever that had not moved in 14 days, and nothing counted
+// the levers that still need a session. This block is that engine, on the kernel's existing hourly tick (no new worker,
+// cron, binding or model call; it reads D1 and writes D1 rows and agent_issues):
+//   transformation_levers  one row per lever of the document (tp, n, kind, wave, path, anchor, issue_id, status), seeded by
+//                          migrations/2026-10-06-transformation-loop.sql and maintained by this tick. Sources are data: a
+//                          lever row gains a path and an anchor, and the next tick dispatches it; no deploy.
+//   wave state             TP_WAVES holds the document's exit conditions (section 4), read each tick from metric_registry
+//                          and fleet_budget plus two counts (needs-machine-probe contracts, open security issues). The
+//                          active wave is the first whose exit is not met; its levers and every earlier wave's are
+//                          eligible, later waves wait. A wave never waits for a date.
+//   dispatch               an eligible lever of kind 'code' with a path and an anchor, outside the control plane, gets one
+//                          child issue (title TP-<tp>.<n>-<KEY>-1, source qnfo-fleet-control) carrying the code-task and
+//                          code-anchor lines the code orchestrator's intake reads (ISSUE-INTAKE-1); at most TP_DISPATCH_MAX a
+//                          tick. A lever of any other kind, without an anchor, or on a control-plane worker (CM_DENY: the
+//                          merge runner refuses those until T1 lever 8 lands) gets a session-task issue and status
+//                          'session': the queue a session sees is short (TP_SESSION_MAX open at once) and in wave order.
+//                          Levers whose issue the program's author already filed are adopted by issue_id, never duplicated.
+//   landing                a lever lands when its code task merges or its issue closes (wontfix is a stall, not a landing)
+//                          and is verified when the task's merge_state reads verified; a lever the document marks done is
+//                          landed from the seed with its evidence.
+//   session fallback       a dispatched lever whose code tasks all ended failed, needs_human or closed without a merge
+//                          flips to 'session' and files CODE-TASK-NEEDS-SESSION-1 with the last error (the document's T1
+//                          lever 12); qnfo-fleet-dashboard WATCHMAKER_OPS transformation-loop counts those rows, so session
+//                          dependence is measured as it falls.
+//   stall                  a dispatched or session lever older than TP_STALL_DAYS with no landing becomes 'stalled' and one
+//                          deduped TP-LEVER-STALLED-1 issue names it: METRIC-CLOSED-LOOP-1 says replace the lever, not
+//                          repeat it. A landing clears the stall.
+//   scoreboard             the document's section 6 metrics with their W1 and W3 targets, graded each tick, kept in
+//                          transformation_runs and served by GET /transformation (open read); metric
+//                          transformation_levers_landed_14d (registered with its trigger in the migration) says whether the
+//                          program is moving at all.
+// Guards that never move: no cap is raised, no paid model call is made (this loop makes none), no guard or probe is
+// weakened, owner-held levers (kind 'owner') are listed and never dispatched, and every row it files is an ordinary
+// agent_issues row the owner can close: the human stays an override, never a dependency.
+var TP_DOC = "docs/TRANSFORMATION-PROGRAM.md";
+var TP_STALL_DAYS = 14, TP_SESSION_MAX = 3, TP_DISPATCH_MAX = 2, TP_RUN_EVERY_MS = 55 * 60 * 1000;
+var TP_PILLAR = { 1: "autonomy", 2: "core", 3: "core", 4: "cost", 5: "autonomy", 6: "autonomy", 7: "reach", 8: "security", 9: "core" };
+var TP_TITLE = { 1: "Autonomy engine", 2: "One kernel, one dispatcher, heartbeats", 3: "Footprint teardown", 4: "Cost: the fleet runs on <= $40", 5: "Measurement to actuation", 6: "Durable execution", 7: "Reach that survives the review gate", 8: "The trust boundary", 9: "A deploy path that cannot lock itself out" };
+// The merge runner never merges a control-plane worker (CM_DENY, CONTROL-PLANE-MANUAL-1), so a code lever there is a session
+// lever until T1 lever 8 (branch protection, then the control plane opens to green heads) has landed.
+var TP_CONTROL_PLANE = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot", "qnfo-gateway", "qnfo-ai", "qnfo-autonomy-scorer", "qnfo-code-orchestrator", "qnfo-code-agent"];
+var TP_CONTROL_PLANE_LEVER = { tp: 1, n: 8 };
+// Section 4: a wave exits on its metrics, never on a date. Every condition is [metric, op, value].
+var TP_WAVES = [
+  { key: "W0", title: "the engine's walls, first retirements, subscribe boxes, memory-mcp auth, archive and applier deletion", exit: [["code_task_success_rate_30d", ">=", 0.45], ["worker_count", "<=", 38]] },
+  { key: "W1", title: "branch protection and control-plane merging, one probe pass and heartbeats, probe generator, cost lines and prefix cache, one email transport", exit: [["breach_code_task_pct", ">=", 30], ["contracts_needing_probe", "<=", 0], ["worker_count", "<=", 32]] },
+  { key: "W2", title: "folds and retirements, D1 folds and retention, cost levers, durable ops agent, Access", exit: [["worker_count", "<=", 26], ["fleet_ai_run_rate_30d_usd", "<=", 40], ["cron_schedules", "<=", 44]] },
+  { key: "W3", title: "research and code loop on Workflows, multi-file engine, Secrets Store, Tail Worker, research products if the review gate reads MET", exit: [["worker_count", "<=", 24], ["cron_schedules", "<=", 40], ["watchmaker_index", "<=", 0]] }
+];
+// Section 6: [metric, W1 exit target, W3 end-state target, op]. A null target is a direction, not a number.
+var TP_SCOREBOARD = [
+  ["worker_count", 32, 24, "<="], ["cron_schedules", 46, 40, "<="], ["d1_databases", 10, 8, "<="], ["code_task_success_rate_30d", 0.6, 0.6, ">="],
+  ["breach_code_task_pct", 30, 50, ">="], ["contracts_needing_probe", 0, 0, "<="], ["contracts_needing_probe_closed", 71, null, "<="], ["open_agent_issues", 40, 10, "<="], ["metrics_in_breach", 10, 0, "<="],
+  ["fleet_ai_run_rate_30d_usd", 50, 40, "<="], ["workers_ai_cost_30d_usd", 40, 25, "<="], ["watchmaker_index", 2, 0, "<="], ["session_records_30d", null, null, "falling"],
+  ["subscribers_growth_monthly", 5, 10, ">="], ["credibility_events_90d", 1, 2, ">="], ["security_open_issues", null, 0, "<="],
+  // Document 1.1 (section 1.11, T9.4): three autonomy dimensions (autonomy_scores, read as autonomy_<dimension>) and the
+  // dangling-binding census, unmeasured until T9.4 lands.
+  ["autonomy_ooda_observe", 4.5, 5, ">="], ["autonomy_issue_flow", 4, 5, ">="], ["autonomy_sai_weighted", 3.6, 4, ">="], ["dangling_bindings", 0, 0, "<="]
+];
+function tpCmp(v, op, t) {
+  if (v == null || !isFinite(v)) return false;
+  return op === ">=" ? v >= t : op === "<=" ? v <= t : op === ">" ? v > t : op === "<" ? v < t : v === t;
+}
+function tpNum(x) {
+  if (x == null) return null;
+  var s = String(x).trim().replace(/%$/, "");
+  if (!s || /^n\/a/i.test(s)) return null;
+  var n = Number(s);
+  return isFinite(n) ? n : null;
+}
+// Wave state from the metric values: the active wave is the first whose exit is not met. Unmeasured metrics count as unmet.
+function tpWaveState(values) {
+  var waves = TP_WAVES.map(function(w) {
+    var met = [], unmet = [];
+    w.exit.forEach(function(c) {
+      var v = values[c[0]];
+      (tpCmp(v, c[1], c[2]) ? met : unmet).push(c[0] + " " + c[1] + " " + c[2] + " (now " + (v == null ? "unmeasured" : v) + ")");
+    });
+    return { key: w.key, title: w.title, met: met, unmet: unmet, exited: unmet.length === 0 };
+  });
+  var active = 0;
+  while (active < waves.length - 1 && waves[active].exited) active++;
+  return { active: active, active_key: waves[active].key, waves: waves };
+}
+function tpWaveIndex(key) {
+  for (var i = 0; i < TP_WAVES.length; i++) if (TP_WAVES[i].key === key) return i;
+  return TP_WAVES.length - 1;
+}
+// Section 4: "a wave whose exit metric has not moved in 14 days is re-planned". history: {metric: [{day, value}]} from
+// metric_history. An unmet exit metric of the active wave whose value TP_STALL_DAYS ago equals today's is a wave stall; a
+// metric with no row that old (or none at all: cron_schedules and the contract counts have no history) is not judged.
+function tpWaveStall(wave, history, nowMs) {
+  var out = [], w = wave.waves[wave.active];
+  var cutoff = new Date(nowMs - TP_STALL_DAYS * 864e5).toISOString().slice(0, 10);
+  w.unmet.forEach(function(u) {
+    var metric = u.split(" ")[0];
+    var rows = (history[metric] || []).slice().sort(function(a, b) { return a.day < b.day ? -1 : a.day > b.day ? 1 : 0; });
+    if (!rows.length) return;
+    var old = null;
+    rows.forEach(function(r) { if (r.day <= cutoff) old = r; });
+    if (!old) return;
+    var latest = rows[rows.length - 1];
+    if (tpNum(old.value) != null && tpNum(old.value) === tpNum(latest.value)) out.push({ wave: w.key, metric: metric, since: old.day, value: latest.value });
+  });
+  return out;
+}
+function tpScoreboard(values) {
+  return TP_SCOREBOARD.map(function(r) {
+    var v = values[r[0]];
+    return { metric: r[0], value: v == null ? null : v, w1: r[1], w3: r[2], op: r[3], meets_w1: r[1] == null ? null : tpCmp(v, r[3], r[1]), meets_w3: r[2] == null ? null : tpCmp(v, r[3], r[2]) };
+  });
+}
+function tpKey(l) {
+  return "TP-" + l.tp + "." + l.n + "-" + String(l.key || "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "") + "-1";
+}
+function tpIssueTitle(l) {
+  return (tpKey(l) + ": " + String(l.title || "")).slice(0, 180);
+}
+function tpOnControlPlane(path) {
+  var dir = String(path || "").split("/")[0];
+  return TP_CONTROL_PLANE.indexOf(dir) >= 0;
+}
+// The child issue a lever becomes. mode 'code' carries the lines the code orchestrator's intake reads; 'session' carries a
+// session-task line (a session takes it; the watchmaker counts it). The text never carries a code-task line in session mode.
+function tpIssueBody(l, mode, why) {
+  var head = "Charter pillar: " + (l.pillar || TP_PILLAR[l.tp] || "autonomy") + ". Program: " + TP_DOC + " T" + l.tp + " (" + TP_TITLE[l.tp] + ") lever " + l.n + ", wave " + l.wave + " (TRANSFORMATION-LOOP-1, filed by qnfo-fleet-control). " +
+    String(l.detail || l.title || "").trim();
+  var dod = l.dod ? " Definition of done: " + String(l.dod).trim() : "";
+  var tail = why ? " Routing: " + why + "." : "";
+  var lines = mode === "code"
+    ? "\ncode-task: repo=qnfo-workers path=" + l.path + "\ncode-anchor: " + String(l.anchor || "").trim()
+    : "\nsession-task: repo=qnfo-workers path=" + (l.path || "(see the program document)") + (l.anchor ? "\nedit-near: " + String(l.anchor).trim() : "");
+  return (head + dod + tail).slice(0, 3500) + lines;
+}
+// Pure planner. levers: transformation_levers rows; active: active wave index; issues: {id: {status}}; tasks: {issue_id: [rows]};
+// nowMs. Returns the actions the tick applies; it never applies them itself (the test replays it on fixtures).
+function tpPlan(levers, active, issues, tasks, nowMs) {
+  var out = { landed: [], verified: [], fallback: [], dispatch: [], session: [], stalled: [], unstalled: [] };
+  var cp = levers.some(function(l) { return l.tp === TP_CONTROL_PLANE_LEVER.tp && l.n === TP_CONTROL_PLANE_LEVER.n && (l.status === "landed" || l.status === "verified"); });
+  var openSession = levers.filter(function(l) { return l.status === "session"; }).length;
+  var dispatched = 0;
+  var done = function(s) { return s === "landed" || s === "verified" || s === "superseded"; };
+  for (var i = 0; i < levers.length; i++) {
+    var l = levers[i];
+    var iss = l.issue_id ? issues[l.issue_id] : null;
+    var ts = l.issue_id ? (tasks[l.issue_id] || []) : [];
+    var merged = null, verified = null;
+    ts.forEach(function(t) { if (t.status === "merged") { merged = merged || t; if (t.merge_state === "verified") verified = verified || t; } });
+    if (!done(l.status) || (l.status === "landed" && verified)) {
+      if (verified && l.status !== "verified") { out.verified.push({ lever: l, why: "code task " + verified.id + " merged and verified live" + (verified.pr_url ? " (" + verified.pr_url + ")" : "") }); continue; }
+      if (merged && !done(l.status)) { out.landed.push({ lever: l, why: "code task " + merged.id + " merged" + (merged.pr_url ? " (" + merged.pr_url + ")" : "") }); continue; }
+      if (iss && /^(closed|resolved|done)$/i.test(String(iss.status)) && !done(l.status)) { out.landed.push({ lever: l, why: "issue " + l.issue_id + " closed" }); continue; }
+    }
+    if (done(l.status)) continue;
+    if (l.kind === "owner") continue;
+    // A dispatched lever whose every code task ended without a merge needs a session (T1 lever 12). A task whose PR a
+    // reviewer rejected, or that was reverted or superseded, has ended whatever its status column reads.
+    var ended = function(t) { return /^(failed|needs_human|closed)$/.test(String(t.status)) || /^(rejected|reverted|superseded)$/.test(String(t.merge_state || "")); };
+    if (l.status === "dispatched" && ts.length && !merged && ts.every(ended)) {
+      var lastT = ts[ts.length - 1];
+      out.fallback.push({ lever: l, task: lastT, why: "code task " + lastT.id + " ended " + (/^(rejected|reverted|superseded)$/.test(String(lastT.merge_state || "")) ? lastT.merge_state + (lastT.merge_note ? ": " + String(lastT.merge_note).slice(0, 160) : "") : lastT.status + (lastT.last_error ? ": " + String(lastT.last_error).slice(0, 160) : "")) });
+      continue;
+    }
+    if (l.status === "pending" && tpWaveIndex(l.wave) <= active) {
+      var codeOk = l.kind === "code" && l.path && l.anchor && (cp || !tpOnControlPlane(l.path));
+      // A code lever the loop can hand to the code loop never becomes a session lever: over the per-tick cap it waits a tick.
+      if (codeOk) { if (dispatched < TP_DISPATCH_MAX) { out.dispatch.push(l); dispatched++; } continue; }
+      if (openSession < TP_SESSION_MAX) {
+        var why = l.kind === "code" ? (!l.anchor || !l.path ? "a code lever with no anchor yet (add path and anchor to the lever row to hand it to the code loop)" : "control-plane worker: the merge runner refuses it until T1 lever 8 lands") : "a " + l.kind + " lever: not a single-file edit";
+        out.session.push({ lever: l, why: why });
+        openSession++;
+      }
+      continue;
+    }
+    if ((l.status === "dispatched" || l.status === "session") && l.dispatched_at && nowMs - Date.parse(l.dispatched_at) > TP_STALL_DAYS * 864e5) out.stalled.push(l);
+  }
+  return out;
+}
+async function tpSchema(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS transformation_levers (id INTEGER PRIMARY KEY AUTOINCREMENT, tp INTEGER NOT NULL, n INTEGER NOT NULL, key TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, wave TEXT NOT NULL, pillar TEXT, path TEXT, anchor TEXT, detail TEXT, dod TEXT, issue_id INTEGER, code_task_id TEXT, status TEXT NOT NULL DEFAULT 'pending', note TEXT, dispatched_at TEXT, landed_at TEXT, verified_at TEXT, stalled_at TEXT, updated_at TEXT, UNIQUE(tp, n))").run();
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS transformation_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, worker_version TEXT, wave TEXT, levers_json TEXT, scoreboard_json TEXT, actions_json TEXT)").run();
+}
+// The scoreboard inputs: metric_registry values, fleet_budget currents and two counts. Unreadable means null, never 0.
+async function tpValues(env) {
+  var v = {};
+  var names = {};
+  TP_WAVES.forEach(function(w) { w.exit.forEach(function(c) { names[c[0]] = 1; }); });
+  TP_SCOREBOARD.forEach(function(r) { names[r[0]] = 1; });
+  var rows = await charterRows(env, "SELECT metric, last_value FROM metric_registry WHERE metric IN (" + Object.keys(names).map(function(n) { return "'" + n.replace(/'/g, "") + "'"; }).join(",") + ")");
+  rows.forEach(function(r) { v[r.metric] = tpNum(r.last_value); });
+  var fb = await charterRows(env, "SELECT node_class, current FROM fleet_budget WHERE node_class IN ('workers','cron_schedules','d1_databases')");
+  fb.forEach(function(r) {
+    if (r.node_class === "cron_schedules" && v.cron_schedules == null) v.cron_schedules = tpNum(r.current);
+    if (r.node_class === "d1_databases" && v.d1_databases == null) v.d1_databases = tpNum(r.current);
+    if (r.node_class === "workers" && v.worker_count == null) v.worker_count = tpNum(r.current);
+  });
+  // Document 1.1 (section 1.10): the W1 exit counts needs-machine-probe contracts on OPEN issues (and contracts with no issue);
+  // the ones on closed issues are relapse probes, graded on their own scoreboard row.
+  var np = await charterOne(env, "SELECT SUM(CASE WHEN c.issue_id IS NULL OR a.status = 'open' THEN 1 ELSE 0 END) AS open_n, SUM(CASE WHEN c.issue_id IS NOT NULL AND a.status <> 'open' THEN 1 ELSE 0 END) AS closed_n FROM remediation_contracts c LEFT JOIN agent_issues a ON a.id = c.issue_id WHERE c.status = 'needs-machine-probe'");
+  if (np) { v.contracts_needing_probe = Number(np.open_n) || 0; v.contracts_needing_probe_closed = Number(np.closed_n) || 0; }
+  (await charterRows(env, "SELECT dimension, score FROM autonomy_scores WHERE dimension IN ('ooda_observe','issue_flow','sai_weighted')")).forEach(function(r) { v["autonomy_" + r.dimension] = tpNum(r.score); });
+  var si = await charterOne(env, "SELECT COUNT(*) AS n FROM agent_issues WHERE status = 'open' AND (title LIKE 'SEC-%' OR category = 'security')");
+  if (si) v.security_open_issues = Number(si.n) || 0;
+  return v;
+}
+async function tpOpenIssueId(env, title) {
+  var r = await charterOne(env, "SELECT id FROM agent_issues WHERE status = 'open' AND lower(trim(title)) = lower(trim('" + String(title).replace(/'/g, "''") + "')) LIMIT 1");
+  return r ? r.id : null;
+}
+async function tpFileIssue(env, title, body, priority, nowMs) {
+  var have = await tpOpenIssueId(env, title);
+  if (have) return { id: have, existed: true };
+  try {
+    var ins = await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'qnfo-fleet-control', 'continuous-improvement', ?3, 'open', ?4, ?4)").bind(title, body, priority || "high", nowMs).run();
+    return { id: ins && ins.meta ? ins.meta.last_row_id : null, existed: false };
+  } catch (e) {
+    var again = await tpOpenIssueId(env, title);
+    return again ? { id: again, existed: true } : { id: null, error: String(e && e.message || e).slice(0, 120) };
+  }
+}
+async function transformationTick(env, opts) {
+  opts = opts || {};
+  if (!env.AUDIT) return { ok: false, error: "no AUDIT binding" };
+  await tpSchema(env);
+  if (!opts.force) {
+    var last = await charterOne(env, "SELECT ts FROM transformation_runs ORDER BY id DESC LIMIT 1");
+    if (last && Date.now() - Date.parse(String(last.ts)) < TP_RUN_EVERY_MS) return { ok: true, skipped: "ran within the hour", last: last.ts };
+  }
+  var nowMs = Date.now(), nowIso = new Date(nowMs).toISOString(), day = nowIso.slice(0, 10);
+  var values = await tpValues(env);
+  var wave = tpWaveState(values);
+  var levers = await charterRows(env, "SELECT * FROM transformation_levers ORDER BY tp, n");
+  if (!levers.length) return { ok: false, error: "transformation_levers is empty: apply migrations/2026-10-06-transformation-loop.sql", wave: wave.active_key };
+  var ids = levers.map(function(l) { return l.issue_id; }).filter(function(x) { return x; });
+  var issues = {}, tasks = {};
+  if (ids.length) {
+    (await charterRows(env, "SELECT id, status FROM agent_issues WHERE id IN (" + ids.map(Number).join(",") + ")")).forEach(function(r) { issues[r.id] = r; });
+    (await charterRows(env, "SELECT id, status, merge_state, merge_note, pr_url, last_error, goal FROM code_tasks WHERE " + ids.map(function(i) { return "goal LIKE '[issue #" + Number(i) + "]%'"; }).join(" OR ") + " ORDER BY created_at")).forEach(function(t) {
+      var m = /^\[issue #(\d+)\]/.exec(String(t.goal || ""));
+      if (!m) return;
+      (tasks[m[1]] = tasks[m[1]] || []).push(t);
+    });
+  }
+  var plan = tpPlan(levers, wave.active, issues, tasks, nowMs);
+  var hist = {};
+  var unmetNames = wave.waves[wave.active].unmet.map(function(u) { return "'" + u.split(" ")[0].replace(/'/g, "") + "'"; });
+  if (unmetNames.length) (await charterRows(env, "SELECT metric, day, value FROM metric_history WHERE metric IN (" + unmetNames.join(",") + ") AND day >= '" + new Date(nowMs - (TP_STALL_DAYS + 7) * 864e5).toISOString().slice(0, 10) + "' ORDER BY day")).forEach(function(r) { (hist[r.metric] = hist[r.metric] || []).push(r); });
+  var waveStalls = tpWaveStall(wave, hist, nowMs);
+  var applied = { landed: 0, verified: 0, fallback: 0, dispatched: 0, session: 0, stalled: 0, wave_stalled: 0, filed: [] };
+  for (var ws = 0; ws < waveStalls.length; ws++) {
+    var wsx = waveStalls[ws];
+    var wsi = await tpFileIssue(env, "TP-WAVE-EXIT-STALLED-1: " + wsx.wave + " exit metric " + wsx.metric + " unchanged since " + wsx.since, "Charter pillar: autonomy. TRANSFORMATION-LOOP-1 (" + TP_DOC + " section 4): wave " + wsx.wave + " cannot exit while " + wsx.metric + " reads " + wsx.value + ", and metric_history shows the same value on " + wsx.since + " (" + TP_STALL_DAYS + " days with no movement). METRIC-CLOSED-LOOP-1: the levers aimed at this metric are replaced, not repeated: read GET https://qnfo-fleet-control.q08.workers.dev/transformation for the wave's levers and their status, split or re-anchor the ones that stalled, and record on this issue which lever now carries the metric. Closing this issue with that record lets the next tick re-plan; it is filed again only if the metric is still unmoved " + TP_STALL_DAYS + " days later.", "medium", nowMs);
+    applied.wave_stalled++; if (wsi.id && !wsi.existed) applied.filed.push(wsi.id);
+  }
+  var set = function(sql, binds) { var st = env.AUDIT.prepare(sql); return st.bind.apply(st, binds).run().catch(function() {}); };
+  for (var a = 0; a < plan.landed.length; a++) { await set("UPDATE transformation_levers SET status = 'landed', landed_at = ?2, stalled_at = NULL, note = ?3, updated_at = ?2 WHERE id = ?1", [plan.landed[a].lever.id, nowIso, plan.landed[a].why]); applied.landed++; }
+  for (var b = 0; b < plan.verified.length; b++) { await set("UPDATE transformation_levers SET status = 'verified', verified_at = ?2, landed_at = COALESCE(landed_at, ?2), stalled_at = NULL, note = ?3, updated_at = ?2 WHERE id = ?1", [plan.verified[b].lever.id, nowIso, plan.verified[b].why]); applied.verified++; }
+  for (var c = 0; c < plan.fallback.length; c++) {
+    var fl = plan.fallback[c].lever;
+    var ft = await tpFileIssue(env, "CODE-TASK-NEEDS-SESSION-1: " + tpKey(fl) + " " + String(fl.title).slice(0, 100), "Charter pillar: autonomy. TRANSFORMATION-LOOP-1 session fallback (" + TP_DOC + " T1 lever 12): the code loop could not land lever " + tpKey(fl) + " (" + fl.title + "). " + plan.fallback[c].why + ". A session takes it (work claim on issue " + (fl.issue_id || "n/a") + " first); when it lands, close this issue with the PR as evidence. The watchmaker index counts open rows of this kind.\nsession-task: repo=qnfo-workers path=" + (fl.path || "(see the program document)"), "high", nowMs);
+    await set("UPDATE transformation_levers SET status = 'session', note = ?2, dispatched_at = COALESCE(dispatched_at, ?3), updated_at = ?3 WHERE id = ?1", [fl.id, "session fallback: " + plan.fallback[c].why, nowIso]);
+    applied.fallback++; if (ft.id) applied.filed.push(ft.id);
+  }
+  for (var d = 0; d < plan.dispatch.length; d++) {
+    var dl = plan.dispatch[d];
+    var di = await tpFileIssue(env, tpIssueTitle(dl), tpIssueBody(dl, "code"), "high", nowMs);
+    if (!di.id) continue;
+    await set("UPDATE transformation_levers SET status = 'dispatched', issue_id = ?2, dispatched_at = ?3, note = ?4, updated_at = ?3 WHERE id = ?1", [dl.id, di.id, nowIso, "code-task issue " + di.id + (di.existed ? " (existing)" : "")]);
+    applied.dispatched++; if (!di.existed) applied.filed.push(di.id);
+  }
+  for (var s = 0; s < plan.session.length; s++) {
+    var sl = plan.session[s].lever, sid = sl.issue_id;
+    if (!sid) {
+      var si = await tpFileIssue(env, tpIssueTitle(sl), tpIssueBody(sl, "session", plan.session[s].why), sl.wave === "W0" || sl.wave === "W1" ? "high" : "medium", nowMs);
+      sid = si.id; if (sid && !si.existed) applied.filed.push(sid);
+    }
+    await set("UPDATE transformation_levers SET status = 'session', issue_id = COALESCE(?2, issue_id), dispatched_at = COALESCE(dispatched_at, ?3), note = ?4, updated_at = ?3 WHERE id = ?1", [sl.id, sid, nowIso, "needs a session: " + plan.session[s].why]);
+    applied.session++;
+  }
+  for (var t = 0; t < plan.stalled.length; t++) {
+    var st = plan.stalled[t];
+    var sti = await tpFileIssue(env, "TP-LEVER-STALLED-1: " + tpKey(st) + " has not landed in " + TP_STALL_DAYS + " days", "Charter pillar: autonomy. TRANSFORMATION-LOOP-1: lever " + tpKey(st) + " (" + st.title + ", wave " + st.wave + ", status " + st.status + " since " + st.dispatched_at + (st.issue_id ? ", issue " + st.issue_id : "") + ") has not landed in " + TP_STALL_DAYS + " days. METRIC-CLOSED-LOOP-1: replace the lever, not repeat it: split it, give it an anchor the code loop can take, or record on the program issue why it waits. Closing this issue with the replacement as evidence lets the next tick re-plan.", "medium", nowMs);
+    await set("UPDATE transformation_levers SET status = 'stalled', stalled_at = ?2, updated_at = ?2 WHERE id = ?1", [st.id, nowIso]);
+    applied.stalled++; if (sti.id && !sti.existed) applied.filed.push(sti.id);
+  }
+  var counts = {};
+  (await charterRows(env, "SELECT status, COUNT(*) AS n FROM transformation_levers GROUP BY status")).forEach(function(r) { counts[r.status] = Number(r.n) || 0; });
+  var landed14 = await charterOne(env, "SELECT COUNT(*) AS n FROM transformation_levers WHERE COALESCE(verified_at, landed_at) >= '" + new Date(nowMs - 14 * 864e5).toISOString() + "'");
+  var landed14n = landed14 ? Number(landed14.n) || 0 : 0;
+  try {
+    await env.AUDIT.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES ('transformation_levers_landed_14d', 'system', 'leading', 'COUNT(transformation_levers WHERE landed_at or verified_at in the last 14 days): levers of docs/TRANSFORMATION-PROGRAM.md that reached main or closed with evidence (qnfo-fleet-control TRANSFORMATION-LOOP-1, hourly)', 'qnfo-audit.transformation_levers (GET https://qnfo-fleet-control.q08.workers.dev/transformation)', '0 (2026-10-06, before the loop)', '>= 2 every 14 days while any wave is open (the program moves); rising', 'qnfo-fleet-control', 'trigger lt 1 -> METRIC-TRIGGER issue (migrations/2026-10-06-transformation-loop.sql)', 'hourly', '< 2', '< 1', 'MEASURED', 'computed')").run();
+    await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2, state = 'MEASURED' WHERE metric = 'transformation_levers_landed_14d'").bind(String(landed14n), nowIso).run();
+  } catch (e) {}
+  var scoreboard = tpScoreboard(values);
+  var actions = { landed: plan.landed.map(function(x) { return tpKey(x.lever); }), verified: plan.verified.map(function(x) { return tpKey(x.lever); }), fallback: plan.fallback.map(function(x) { return tpKey(x.lever); }), dispatched: plan.dispatch.map(tpKey), session: plan.session.map(function(x) { return tpKey(x.lever); }), stalled: plan.stalled.map(tpKey), wave_stalled: waveStalls.map(function(x) { return x.wave + ":" + x.metric; }), filed: applied.filed };
+  try {
+    await env.AUDIT.prepare("INSERT INTO transformation_runs (ts, worker_version, wave, levers_json, scoreboard_json, actions_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+      .bind(nowIso, VERSION, wave.active_key, JSON.stringify({ counts: counts, landed_14d: landed14n, waves: wave.waves }), JSON.stringify(scoreboard), JSON.stringify(actions)).run();
+    await env.AUDIT.prepare("DELETE FROM transformation_runs WHERE id NOT IN (SELECT id FROM transformation_runs ORDER BY id DESC LIMIT 500)").run();
+  } catch (e) {}
+  try {
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'transformation-tick', ?3, ?4, 'qnfo-fleet-control', 'ok')")
+      .bind("transformation-tick-" + day, nowIso, ("transformation loop: wave " + wave.active_key + ", levers " + JSON.stringify(counts) + ", landed 14d " + landed14n + ", actions " + JSON.stringify({ d: applied.dispatched, s: applied.session, l: applied.landed, v: applied.verified, f: applied.fallback, st: applied.stalled, ws: applied.wave_stalled })).slice(0, 500), JSON.stringify({ last_ok: nowIso, version: VERSION, wave: wave.active_key, counts: counts, landed_14d: landed14n, actions: actions })).run();
+  } catch (e) {}
+  return { ok: true, ts: nowIso, wave: wave.active_key, waves: wave.waves, counts: counts, landed_14d: landed14n, applied: applied, actions: actions, scoreboard: scoreboard };
+}
+async function tpLatest(env) {
+  await tpSchema(env);
+  var run = await charterOne(env, "SELECT ts, worker_version, wave, levers_json, scoreboard_json, actions_json FROM transformation_runs ORDER BY id DESC LIMIT 1");
+  var parse = function(s) { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } };
+  var levers = await charterRows(env, "SELECT tp, n, key, title, kind, wave, pillar, path, status, issue_id, note, dispatched_at, landed_at, verified_at, stalled_at FROM transformation_levers ORDER BY tp, n");
+  var needsSession = await charterRows(env, "SELECT id, title, created_at FROM agent_issues WHERE status = 'open' AND title LIKE 'CODE-TASK-NEEDS-SESSION-1:%' ORDER BY id");
+  return { ok: true, worker_version: VERSION, program: TP_DOC, last_run: run ? { ts: run.ts, worker_version: run.worker_version, wave: run.wave, levers: parse(run.levers_json), scoreboard: parse(run.scoreboard_json), actions: parse(run.actions_json) } : null,
+    waves: TP_WAVES.map(function(w) { return { key: w.key, title: w.title, exit: w.exit }; }), levers: levers, needs_session: needsSession,
+    limits: { stall_days: TP_STALL_DAYS, session_max: TP_SESSION_MAX, dispatch_max_per_tick: TP_DISPATCH_MAX, control_plane: TP_CONTROL_PLANE } };
+}
+// ---- TRANSFORMATION-LOOP-1:END ----
 // ---- PERFORMANCE-LOOP-1:BEGIN (2026-10-02, owner directive of 2026-10-02; pillar autonomy, KPIs in core, cost and reach) ----
 // Owner directive (2026-10-02): "You shall automatically measure and improve internal and external performance and
 // effectiveness metrics systemwide across the fleet and constantly and consistently improve, adapt, and change yourself and
@@ -7019,6 +7349,16 @@ var worker_default2 = {
       var rioc = await charterRows(env, "SELECT issue_id, check_key, surface, metric, buildable, score, value_at_file, filed_at, closed_at, value_at_close, value_7d FROM reach_idea_outcomes ORDER BY issue_id DESC LIMIT 50");
       return json({ ok: true, worker_version: VERSION, last_run: rir, open_ideas: rio, outcomes: rioc, efficacy: ideaEfficacy(rioc), limits: { max_new_per_run: IDEA_MAX_NEW, run_every_hours: IDEA_RUN_EVERY_MS / 3600000, wip_max_buildable: IDEA_WIP_MAX, gap_max_not_buildable: IDEA_GAP_MAX, discover_max: IDEA_DISCOVER_MAX, discover_days: IDEA_DISCOVER_DAYS } });
     }
+    // TRANSFORMATION-LOOP-1: the program's live state (open read) and a forced tick (admin token).
+    if (p === "/transformation" && request.method === "GET") {
+      return json(await tpLatest(env));
+    }
+    if (p === "/transformation/tick" && request.method === "POST") {
+      var tph = request.headers.get("Authorization") || "";
+      var tpt = tph.indexOf("Bearer ") === 0 ? tph.slice(7) : tph;
+      if (!(tpt && ((env.DEPLOY_ADMIN_TOKEN && tpt === env.DEPLOY_ADMIN_TOKEN) || (env.SELFHEAL_TOKEN && tpt === env.SELFHEAL_TOKEN)))) return json({ error: "unauthorized" }, 401);
+      return json(await transformationTick(env, { force: true }));
+    }
     if (p === "/reach-ideas/tick" && request.method === "POST") {
       var riah = request.headers.get("Authorization") || "";
       var riat = riah.indexOf("Bearer ") === 0 ? riah.slice(7) : riah;
@@ -7190,6 +7530,8 @@ var worker_default2 = {
     ctx.waitUntil(remediationContractsTick(env).catch((e) => console.error("remediationContractsTick error:", e && e.message || e)));
     ctx.waitUntil(improvementLoopTick(env).catch((e) => console.error("improvementLoopTick error:", e && e.message || e)));
     ctx.waitUntil(reachIdeationTick(env, false).catch((e) => console.error("reachIdeationTick error:", e && e.message || e)));
+    // TRANSFORMATION-LOOP-1: wave state, lever dispatch, landing, stall and session fallback, hourly.
+    ctx.waitUntil(transformationTick(env).catch((e) => console.error("transformationTick error:", e && e.message || e)));
     // PERFORMANCE-LOOP-1: five KPIs hourly; lever experiments driven by hit triggers once per UTC day after 09:00Z.
     ctx.waitUntil(performanceLoopTick(env).catch((e) => console.error("performanceLoopTick error:", e && e.message || e)));
     return deployDefault.scheduled(event, env, ctx);
