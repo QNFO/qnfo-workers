@@ -1,0 +1,14 @@
+qnfo-email-orchestrator is FOLDED into qnfo-cloud-ops (2026-10-06, EMAIL-ORCH-FOLD-1, agent_issues 1756, owner standing grant
+OWNER-STANDING-GRANT-1 / charter decision rule 9; fleet_budget workers was 38 against a cap of 30).
+
+Its code runs unchanged as the member emailOrchMod inside qnfo-cloud-ops/worker.js (member version 0.5.4-folded), on
+qnfo-cloud-ops' single */10 tick at its old cadence: the reply/SLA step at :00, :20, :30 and :50 (four an hour, like its
+"*/15 * * * *" cron) and the SLA metrics at :00 of every third UTC hour (its "0 */3 * * *"). Its bindings map onto the
+host's: AUDIT_DB -> AUDIT (qnfo-audit), OUTREACH_DB -> OUTREACH (qnfo-outreach), EMAIL (qnfo-email, authenticated by
+props.caller), AI. It keeps its writer name, so email_reply_queue, cadence_runs, fleet_heartbeat and
+capability_audit_snapshot rows (and the dashboard watchmaker check on them) keep working. Its health is at
+https://qnfo-cloud-ops.q08.workers.dev/email-orch/health; its /run/* routes are not exposed.
+
+This directory is kept for reference; the separate script is removed with cf-ops-actions delete-worker once the host is
+verified running the member. canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. Un-folding is a
+charter net-zero decision recorded in a PR that removes this file, never a way to get a deploy through.

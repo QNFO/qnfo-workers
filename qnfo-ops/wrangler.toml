@@ -54,10 +54,8 @@ service = "qnfo-email"
 environment = "production"
 
 
-[[services]]
-binding = "INDEXER"
-service = "qnfo-paper-indexer"
-environment = "production"
+# INDEXER (qnfo-paper-indexer) removed 2026-10-06: folded into qnfo-infra (INDEXER-FOLD-1, #1756); the binding was a /health and
+# /count probe only. The count is at https://qnfo-infra.q08.workers.dev/indexer/count.
 
 # KAIZEN (qnfo-kaizen) removed 2026-10-06: worker retired (WORKER-RETIRE-WAVE-2, #1756); the binding was a /health probe only.
 

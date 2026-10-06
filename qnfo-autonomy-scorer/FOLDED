@@ -1,0 +1,14 @@
+qnfo-autonomy-scorer is FOLDED into qnfo-observability (2026-10-06, SCORER-FOLD-1, agent_issues 1756, owner standing grant
+OWNER-STANDING-GRANT-1 / charter decision rule 9; fleet_budget workers was over the cap of 30).
+
+Its code runs unchanged as the member scorerMod inside qnfo-observability/worker.js (member version 1.2.2-folded), once a
+day on qnfo-observability's hourly "17 * * * *" tick at 05:17 UTC (its old "17 5 * * *"), with the same qnfo-audit binding
+(AUDIT). It keeps WORKER = "qnfo-autonomy-scorer", so autonomy_scores, autonomy_score_history, survival_state.sai,
+fleet_heartbeat and alerts keep their writer and readers (qnfo-fleet-dashboard, qnfo-fleet-control). Its read-only routes
+are at https://qnfo-observability.q08.workers.dev/scorer/health, /scorer/preview and /scorer/scores. It stays in the charter
+MVP: qnfo-fleet-control 0.4.129+ (MVP-FOLD-AWARE-1) judges it by its host.
+
+This directory is kept for reference (sai.test.mjs still locks the SAI formula against the dashboard); edit the member in
+qnfo-observability/worker.js. The separate script is removed with cf-ops-actions delete-worker once the host is verified.
+canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. Un-folding is a charter net-zero decision
+recorded in a PR that removes this file, never a way to get a deploy through.

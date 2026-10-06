@@ -13,6 +13,7 @@ enabled = true
 head_sampling_rate = 1
 
 [triggers]
+# INDEXER-FOLD-1 (#1756): the folded qnfo-paper-indexer member (worker.js indexerMod) runs its two jobs on the 06:30 trigger.
 crons = ["30 6 * * *", "0 18 * * *"]
 
 # v1.2.0 UNIFIED RETRIEVAL ORACLE — D1 bindings (state snapshots + records)
