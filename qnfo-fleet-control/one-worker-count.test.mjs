@@ -8,7 +8,7 @@ import vm from "node:vm";
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
 const block = src.slice(src.indexOf("// ---- ONE-WORKER-COUNT-1:BEGIN"), src.indexOf("// ---- ONE-WORKER-COUNT-1:END"));
-const sandbox = { VERSION: "0.4.138-test", __name: (f) => f };
+const sandbox = { VERSION: "0.4.139-test", __name: (f) => f };
 vm.createContext(sandbox);
 vm.runInContext(block + "\n__export = { workerCountDiff, oneWorkerCount };", sandbox);
 const { workerCountDiff, oneWorkerCount } = sandbox.__export;
@@ -43,7 +43,7 @@ check(wc && wc.args[0] === "2" && wc.args[1] === "2026-10-06T10:00:00Z" && /stat
 check(wd && wd.args[0] === "2" && wd.args[1] === "2026-10-06T10:00:00Z", "worker_count_disagreement is the symmetric difference", wd);
 check(eventArgs && eventArgs[0] === "worker-count-2026-10-06" && /only live b; only registry zombie/.test(eventArgs[2]) && eventArgs[4] === "disagree" && /ON CONFLICT\(id\) DO UPDATE/.test(eventSql), "the day's worker-count event names the odd ones out, status disagree, upserted by id", eventArgs);
 const meta = JSON.parse(eventArgs[3]);
-check(meta.live === 2 && meta.registry === 2 && meta.only_live.join() === "b" && meta.only_registry.join() === "zombie" && meta.v === "0.4.138-test", "the event meta carries both lists and the version", meta);
+check(meta.live === 2 && meta.registry === 2 && meta.only_live.join() === "b" && meta.only_registry.join() === "zombie" && meta.v === "0.4.139-test", "the event meta carries both lists and the version", meta);
 // 3. agreement: status ok and no names in the text
 writes.length = 0;
 const db2 = { prepare(sql) { let args = []; const s = { bind(...a) { args = a; return s; }, async all() { return { results: [{ service: "a", kind: "worker", state: "live" }] }; }, async run() { writes.push({ sql, args }); return { meta: { changes: 1 } }; } }; return s; } };

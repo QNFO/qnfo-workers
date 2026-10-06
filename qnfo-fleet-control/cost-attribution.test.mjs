@@ -12,7 +12,7 @@ const byProv = src.slice(src.indexOf("function aiSpendByProvider(rows) {"), src.
 let fetchCalls = [];
 let graphRows = null;
 const sandbox = {
-  VERSION: "0.4.138-test", __name: (f) => f, AbortSignal, JSON, Math, Object, Number, String, Array, Date,
+  VERSION: "0.4.139-test", __name: (f) => f, AbortSignal, JSON, Math, Object, Number, String, Array, Date,
   fetch: async (url, init) => { fetchCalls.push({ url, body: init && init.body }); return { json: async () => (graphRows === null ? { errors: [{ message: "boom" }] } : { data: { viewer: { accounts: [{ aiGatewayRequestsAdaptiveGroups: graphRows }] } } }) }; }
 };
 vm.createContext(sandbox);
@@ -61,7 +61,7 @@ check(m && m.args[0] === "98.7" && m.args[1] === "2026-10-06T10:00:00Z" && /stat
 const ev = writes.find((w) => /cloud_ops_events/.test(w.sql));
 check(ev && ev.args[0] === "cost-attribution-2026-10-06" && ev.args[4] === "gap" && /ON CONFLICT\(id\) DO UPDATE/.test(ev.sql) && /gateway \$33\.21 paid, ledger \$0\.44, gap 98\.7%/.test(ev.args[2]), "the day's cost-attribution event is upserted with the figures", ev && ev.args);
 const meta = JSON.parse(ev.args[3]);
-check(meta.top_models[0].model === "deepseek/deepseek-flash" && meta.top_models[0].gateway_usd === 19.87 && meta.top_models[2].model === "openai/openai/gpt-5.6" && meta.by_provider.openai.gap_pct === 100 && meta.v === "0.4.138-test", "the meta names the models with the largest cost and the per-provider gap", meta);
+check(meta.top_models[0].model === "deepseek/deepseek-flash" && meta.top_models[0].gateway_usd === 19.87 && meta.top_models[2].model === "openai/openai/gpt-5.6" && meta.by_provider.openai.gap_pct === 100 && meta.v === "0.4.139-test", "the meta names the models with the largest cost and the per-provider gap", meta);
 // 3. an unreadable gateway writes nothing and reports why
 writes.length = 0; fetchCalls = []; graphRows = null;
 let threw = null;
