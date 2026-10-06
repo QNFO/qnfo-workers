@@ -604,5 +604,31 @@ ok(GW && GW.content.startsWith('var VERSION = "3.9.4-r";'), "cmBump accepts the 
   ok(/revert/.test(one("SELECT merge_state FROM code_tasks WHERE id = ?", T3).merge_state), "a heartbeat after the deploy with another VERSION is a real failure and goes the revert way", one("SELECT merge_state, merge_note FROM code_tasks WHERE id = ?", T3));
 }
 
+// ================================================================ N. PR-OPEN-ON-20MIN-TICK-1 (TP-1b2, agent_issues 2017): the open-only tick
+freshDb(); freshGh();
+db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+seedTask({ status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" });
+gh.branches[BRANCH] = "h1";
+seedHead("h1");
+// a merged task mid-deploy and a published candidate with green checks: the open-only tick must touch neither
+db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, pr_url, created_at, updated_at) VALUES ('ct_openonlycand01', 'qnfo-workers', 'qnfo-other/worker.js', '[issue #50] fix b', 'published', 'done', 0, ?, 'codeagent-openonlycand', 'https://github.com/QNFO/qnfo-workers/pull/777', ?, ?)").run(JSON.stringify({ patch: PATCH }), ago(5), ago(4));
+gh.pulls[777] = prJson({ number: 777, head: { ref: "codeagent-openonlycand", sha: "h7", repo: { full_name: "QNFO/qnfo-workers" } } });
+gh.checks.h7 = green("h7", ["gate", "mirror-guard", "comparator", "guard"]);
+const T20 = Date.parse("2026-10-03T12:20:00Z");
+r = J(await W.codeMergeTick(env, { now: T20, openOnly: true }));
+ok(r.open_only === true && r.opened.length === 1 && r.opened[0].action === "open" && gh.newPulls.length === 1 && gh.newPulls[0].head === BRANCH, "open-only tick: the pushed branch is opened as a PR", r.opened);
+ok(r.decided.length === 0 && r.advanced.length === 0 && gh.merges.length === 0, "open-only tick: no merge candidate is decided, nothing is merged or advanced", { d: r.decided, a: r.advanced, m: gh.merges });
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(row.status === "published" && row.pr_opened_by === "qnfo-fleet-control" && row.pr_opened_at === new Date(T20).toISOString(), "open-only tick: the row is published with pr_opened_at at :20", row);
+ok(!one("SELECT 1 AS x FROM cloud_ops_events WHERE id = 'code-merge-tick-2026-10-03'"), "open-only tick: the day's merge-tick heartbeat is not written (the hourly tick owns it)");
+ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.pr-opened'").n === 1, "open-only tick: the open is audited as code-merge.pr-opened");
+// at :00 the open-only tick stands aside for the hourly tick (no double open of one branch)
+seedTask({ id: "ct_openonlysecond", status: "branch_pushed", branch: "codeagent-openonlyseco", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main...codeagent-openonlyseco?expand=1" });
+gh.branches["codeagent-openonlyseco"] = "h1";
+r = J(await W.codeMergeTick(env, { now: Date.parse("2026-10-03T13:00:00Z"), openOnly: true }));
+ok(r.idle === "hourly tick owns minute 0" && gh.newPulls.length === 1, "open-only tick at minute 0 does nothing: the hourly tick opens then", r);
+r = J(await W.codeMergeTick(env, { now: Date.parse("2026-10-03T13:00:00Z") }));
+ok(gh.newPulls.length === 2 && r.opened.length === 1 && r.decided.length >= 1, "the hourly tick still opens and decides", { n: gh.newPulls.length, o: r.opened, d: r.decided.length });
+
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
