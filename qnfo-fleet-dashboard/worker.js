@@ -1057,7 +1057,9 @@ function execTargetFor(category, resource, env) {
     if (r.indexOf("research queue") >= 0) return { safe: true, svc: "SVC_QNFO_RESEARCH_EXEC", progressJob: "qnfo-research-exec", path: "/run", note: "advance research_queue (research-exec /run)" };
     return { safe: false, noAction: true, escalate: true, note: "chain has no safe producer action; verify chain wiring (NEVER-HUMAN-1)" };
   }
-  if (category === "agent-issues") return { safe: true, svc: "SVC_QNFO_KAIZEN", path: "/run/scan", note: "trigger kaizen triage scan" };
+  // qnfo-kaizen was retired 2026-10-06 (WORKER-RETIRE-WAVE-2, #1756) and SVC_QNFO_KAIZEN is no longer bound: agent issues are
+  // worked by the qnfo-fleet-control remediation tick and qnfo-backlog-exec on their own crons, so this lane dispatches nothing.
+  if (category === "agent-issues") return { safe: false, noAction: true, note: "agent issues are worked by the qnfo-fleet-control remediation tick and qnfo-backlog-exec (crons); qnfo-kaizen retired 2026-10-06 (#1756), no dispatch from this lane" };
   if (category === "probe") return { safe: false, noAction: true, note: "probe is re-verified automatically next cycle; no action" };
   if (category === "gateway") return { safe: false, noAction: true, note: "gateway classes self-clear via qnfo-ai-calibration sweep (30m); no human gate" };
   if (category === "model-health") return { safe: false, noAction: true, note: "degraded ids reconciled by ai-health-prober (hourly) + calibration guard; no human gate" };
@@ -6871,7 +6873,8 @@ async function cmdRoutes(request, env, ctx, path, owner) {
 var CON_REPO = "QNFO/qnfo-workers";
 var CON_DBS = { audit: "AUDIT", outreach: "OUTREACH", living: "LIVING", graph: "GRAPH" };
 var CON_PROTECTED = ["fleet_budget", "remediation_verifications", "work_claims", "owner_sessions", "owner_codes", "cmd_log", "console_backups", "owner_docs", "sla_due_at"];
-var CON_SVC = { "qnfo-ai": "SVC_QNFO_AI", "qnfo-ipatent": "SVC_QNFO_IPATENT", "personal-api": "SVC_PERSONAL_API", "qnfo-ops": "SVC_QNFO_OPS", "qnfo-kaizen": "SVC_QNFO_KAIZEN", "qnfo-paper-reviser": "SVC_QNFO_PAPER_REVISER", "qnfo-research-exec": "SVC_QNFO_RESEARCH_EXEC" };
+// qnfo-kaizen dropped 2026-10-06: the worker was retired (WORKER-RETIRE-WAVE-2, #1756) and SVC_QNFO_KAIZEN is no longer bound.
+var CON_SVC = { "qnfo-ai": "SVC_QNFO_AI", "qnfo-ipatent": "SVC_QNFO_IPATENT", "personal-api": "SVC_PERSONAL_API", "qnfo-ops": "SVC_QNFO_OPS", "qnfo-paper-reviser": "SVC_QNFO_PAPER_REVISER", "qnfo-research-exec": "SVC_QNFO_RESEARCH_EXEC" };
 var CON_MAX_ROWS = 200;
 var CON_BACKUP_MAX = 2e3;
 var CON_BACKUP_CHARS = 19e5;
