@@ -16,7 +16,9 @@ delete-worker, which carries its own guard.
 ACTIONS
 -------
   delete-worker NAME     DELETE a script. Refused unless the repo directory NAME carries a RETIRED or
-                         FOLDED marker (the repo's own retirement record) and NAME is not protected.
+                         FOLDED marker (the repo's own retirement record) and NAME is not protected, and refused while
+                         any other live script still has a service binding to NAME (DELETE-AFTER-UNBIND-1, TP-9): the
+                         binders are named; remove their wrangler.toml declarations, then unbind-service each one.
   delete-vectorize-index NAME
                          DELETE a Vectorize index. Refused unless NAME is in VECTORIZE_RETIRED (an explicit allowlist
                          mapping the index to the repo directory of the retired worker that owned it) and that
@@ -148,6 +150,20 @@ def delete_worker(name: str, acct: str, token: str) -> int:
     if st0 == 404:
         emit({"action": "delete-worker", "worker": name, "ok": True, "already_absent": True, "marker": marker})
         return 0
+    # DELETE-AFTER-UNBIND-1 (TP-9 lever 1, agent_issues 2025): deleting a worker that another live script still binds leaves
+    # that binder undeployable (the canonical deploy re-declares every live binding; Cloudflare 10143/10144). PR 657 did
+    # exactly this on 2026-10-06 (qnfo-ops KAIZEN and SKILLSYNC, qnfo-fleet-dashboard SVC_QNFO_KAIZEN; GitHub #660). The
+    # census is fail-closed: an unreadable script list or settings refuses the delete.
+    try:
+        binders = live_service_binders(acct, token, name)
+    except RuntimeError as e:
+        emit({"action": "delete-worker", "worker": name, "ok": False, "refused": "binder census failed: " + str(e)[:200]})
+        return 1
+    if binders:
+        emit({"action": "delete-worker", "worker": name, "ok": False, "binders": binders,
+              "refused": "live service bindings still target the worker: " + ", ".join(binders)
+                         + "; remove them from each binder's wrangler.toml, run unbind-service WORKER:BINDING, then delete"})
+        return 3
     st, j = call("DELETE", f"/accounts/{acct}/workers/scripts/{name}?force=true", token)
     st2, _ = call("GET", f"/accounts/{acct}/workers/scripts/{name}/settings", token)
     ok = bool(j.get("success")) and st2 == 404
@@ -636,6 +652,26 @@ def worker_dir(worker: str, root: str = ".") -> str | None:
         if os.path.isfile(w) and re.search(r'^\s*name\s*=\s*"' + re.escape(worker) + '"', open(w, encoding="utf-8").read(), re.M):
             return d
     return None
+
+
+def live_service_binders(acct: str, token: str, target: str) -> list:
+    """DELETE-AFTER-UNBIND-1: every live script's service bindings that name `target`, as "worker:BINDING". Raises on any
+    unreadable list or settings, so a caller can fail closed."""
+    st, j = call("GET", f"/accounts/{acct}/workers/scripts", token)
+    if st != 200:
+        raise RuntimeError("workers list HTTP " + str(st))
+    hits = []
+    for s in j.get("result") or []:
+        name = s.get("id")
+        if not name or name == target:
+            continue
+        st2, j2 = call("GET", f"/accounts/{acct}/workers/scripts/{name}/settings", token)
+        if st2 != 200:
+            raise RuntimeError("settings HTTP " + str(st2) + " for " + str(name))
+        for b in (j2.get("result") or {}).get("bindings") or []:
+            if b.get("type") == "service" and str(b.get("service") or "") == target:
+                hits.append(name + ":" + str(b.get("name")))
+    return hits
 
 
 def live_binders(acct: str, token: str, db_id: str) -> list:
