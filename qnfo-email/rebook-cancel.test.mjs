@@ -4,7 +4,7 @@
 import fs from "node:fs";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const api = new Function(src.replace(/export default\{/, "const __handler={") +
-  "\nreturn {itinParse,itinWrite,itineraryIngest,itinCancelIntent,VERSION};")();
+  "\nreturn {itinParse,itinWrite,itineraryIngest,itinCancelIntent,itinSentIso,VERSION};")();
 const fail = [];
 const eq = (l, g, w) => { if (JSON.stringify(g) !== JSON.stringify(w)) fail.push(l + ": got " + JSON.stringify(g) + " want " + JSON.stringify(w)); };
 const ok = (l, c) => { if (!c) fail.push(l); };

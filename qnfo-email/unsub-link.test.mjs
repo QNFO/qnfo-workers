@@ -22,7 +22,7 @@ const call = (q, method, envv) => api.handler.fetch(new Request("https://qnfo.or
 const rows = () => db.prepare("SELECT email, reason, source FROM email_suppression ORDER BY email").all();
 
 ok(/sha16\(e \+ ":qnfo-unsub-2026"\)/.test(out) && /qnfo\.org\/email\/unsubscribe\?e=/.test(out), "the link format matches the one qnfo-outreach sends");
-ok(/^2\.5\.4/.test(api.VERSION), "VERSION is 2.5.4", api.VERSION);
+ok(/^2\.5\.\d/.test(api.VERSION), "VERSION is 2.5.x", api.VERSION);
 
 {
   const r = await call("?e=" + encodeURIComponent("Reader@Example.org") + "&t=" + tok("reader@example.org"));
