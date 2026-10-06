@@ -1,12 +1,109 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@42f225a13d88",
- "due": 0,
- "pass": 0,
- "fail": 0,
- "skipped": 0,
- "contracts": [],
+ "verifier": "remediation-consumer@634eaef2c64d",
+ "due": 12,
+ "pass": 6,
+ "fail": 5,
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "issue-2044",
+   "issue_id": 2044,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1907",
+   "issue_id": 1907,
+   "verdict": "pass",
+   "expected": "linked",
+   "observed": "linked",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "EVID-1641-MENTIONS",
+   "issue_id": 1641,
+   "verdict": "fail",
+   "expected": "all-sources-ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "vacuous-probe-result",
+   "expected": "within-cap",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "EVID-1711-REACH",
+   "issue_id": 1711,
+   "verdict": "fail",
+   "expected": "seven-days",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1935",
+   "issue_id": 1935,
+   "verdict": "pass",
+   "expected": "fixed-and-watched",
+   "observed": "fixed-and-watched",
+   "written": true
+  },
+  {
+   "class": "issue-1892",
+   "issue_id": 1892,
+   "verdict": "pass",
+   "expected": "baseline-recorded",
+   "observed": "baseline-recorded",
+   "written": true
+  },
+  {
+   "class": "issue-1890",
+   "issue_id": 1890,
+   "verdict": "pass",
+   "expected": "measured",
+   "observed": "measured",
+   "written": true
+  },
+  {
+   "class": "transformation-loop-1",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "cost-attribution-gap-1",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: not measured yet",
+   "written": true
+  },
+  {
+   "class": "one-worker-count-1",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "pending: not measured yet",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -23,8 +120,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 1884,
- "head": "42f225a13d8830d722f9b861098992b28d52879c",
+ "spent_ms": 30571,
+ "head": "634eaef2c64d30427492343e3d62904e039f9dec",
  "job_status": "success",
- "ts": "2026-10-06T09:54:30Z"
+ "ts": "2026-10-06T10:45:41Z"
 }
