@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-06 12:01:22",
+  "audited_at": "2026-10-06 12:30:47",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -513,7 +513,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.140-crawl-health-q08",
+        "version": "0.5.0-dangling-bindings",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -543,7 +543,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.9.0-calendar-fold",
+        "version": "1.9.1-retired-hosts",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -573,7 +573,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.8.1-learner-channel-arm",
+        "version": "0.8.2-utm-visits",
         "worker": "qnfo-social"
       },
       {
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.140-crawl-health-q08",
+      "before": "0.5.0-dangling-bindings",
       "http": 200,
-      "live": "0.4.140-crawl-health-q08",
+      "live": "0.5.0-dangling-bindings",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1244,9 +1244,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.9.0-calendar-fold",
+      "before": "1.9.1-retired-hosts",
       "http": 200,
-      "live": "1.9.0-calendar-fold",
+      "live": "1.9.1-retired-hosts",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.8.1-learner-channel-arm",
+      "before": "0.8.2-utm-visits",
       "http": 200,
-      "live": "0.8.1-learner-channel-arm",
+      "live": "0.8.2-utm-visits",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
