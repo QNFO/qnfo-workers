@@ -419,7 +419,7 @@ jobs:
       # STRATEGY s4, spaced over the week, no slug twice in 30 days on one channel, bufferPost dedupe, ledger.
       - name: DAILY-DISTRIBUTION-1 offline suite (qnfo-social)
         run: node --no-warnings qnfo-social/daily-distribution.test.mjs
-      # TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.131, pillar autonomy): the program engine's pure half (wave state,
+      # TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132, pillar autonomy): the program engine's pure half (wave state,
       # scoreboard, lever planning, issue text) and one tick over an in-memory D1 seeded from the migration.
       - name: TRANSFORMATION-LOOP-1 offline suite (qnfo-fleet-control)
         run: node --no-warnings qnfo-fleet-control/transformation.test.mjs

@@ -1,5 +1,5 @@
 /**
- * transformation.test.mjs -- offline regression lock for TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.131): the pure
+ * transformation.test.mjs -- offline regression lock for TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132): the pure
  * half (wave state, scoreboard, lever planning, issue text) on fixtures, then transformationTick over an in-memory D1
  * seeded from migrations/2026-10-06-transformation-loop.sql (so the migration's SQL is parsed too).
  * Output MUST contain "0 failed"; deploy-gate greps for that string.
@@ -17,13 +17,13 @@ const a = src.indexOf(BEGIN), b = src.indexOf(END);
 if (a < 0 || b < 0 || b < a) { console.error("FAIL transformation block markers missing"); console.log("1 failed"); process.exit(1); }
 
 // The block reads D1 through charterRows/charterOne (defined elsewhere in the worker); the sandbox carries the same two.
-const sb = { VERSION: "0.4.131-test", console, Date, Math, JSON, Number, String, Object, Array, RegExp, isFinite, __export: null };
+const sb = { VERSION: "0.4.132-test", console, Date, Math, JSON, Number, String, Object, Array, RegExp, isFinite, __export: null };
 vm.createContext(sb);
 vm.runInContext(
   "async function charterRows(env, sql) { try { var r = await env.AUDIT.prepare(sql).all(); return (r && r.results) || []; } catch (e) { return []; } }\n" +
   "async function charterOne(env, sql) { try { return await env.AUDIT.prepare(sql).first(); } catch (e) { return null; } }\n" +
   src.slice(a, b + END.length) +
-  "\n__export = { tpWaveState, tpScoreboard, tpKey, tpIssueTitle, tpIssueBody, tpOnControlPlane, tpPlan, tpNum, transformationTick, tpLatest, TP_WAVES, TP_SCOREBOARD, TP_DISPATCH_MAX, TP_SESSION_MAX, TP_STALL_DAYS, TP_CONTROL_PLANE };", sb);
+  "\n__export = { tpWaveState, tpWaveStall, tpScoreboard, tpKey, tpIssueTitle, tpIssueBody, tpOnControlPlane, tpPlan, tpNum, transformationTick, tpLatest, TP_WAVES, TP_SCOREBOARD, TP_DISPATCH_MAX, TP_SESSION_MAX, TP_STALL_DAYS, TP_CONTROL_PLANE };", sb);
 const T = sb.__export;
 
 let passed = 0, failed = 0;
@@ -43,12 +43,39 @@ eq(w.active_key, "W3", "with every wave exited the last wave stays active (the p
 eq(T.tpNum("12.5%"), 12.5, "a percent string reads as a number");
 eq(T.tpNum("n/a"), null, "n/a reads as unmeasured");
 
+// ---------- parity with the document's section 4 table (the waves live in code; the document is the owner's text) ----------
+const doc = readFileSync(join(here, "..", "docs", "TRANSFORMATION-PROGRAM.md"), "utf8");
+const s4 = doc.slice(doc.indexOf("## 4. Sequencing"), doc.indexOf("## 5."));
+const docWaves = {};
+s4.split("\n").filter((l) => /^\| W\d/.test(l)).forEach((l) => {
+  const cells = l.split("|").map((c) => c.trim()).filter(Boolean);
+  const key = cells[0].split(" ")[0], exit = cells[cells.length - 1], conds = [];
+  const re = /`([a-z][a-z0-9_]+)`\s*(>=|<=|=)?\s*([\d.]+)/g;
+  let m;
+  while ((m = re.exec(exit))) conds.push([m[1], m[2] || "=", Number(m[3])]);
+  docWaves[key] = conds;
+});
+const norm = (c) => c[0] + " " + ((c[1] === "<=" || c[1] === "=") && c[2] === 0 ? "=" : c[1]) + " " + c[2];
+eq(Object.keys(docWaves).join(","), T.TP_WAVES.map((w) => w.key).join(","), "section 4 of the document names the same waves as TP_WAVES");
+T.TP_WAVES.forEach((w) => eq(w.exit.map(norm).sort().join("; "), (docWaves[w.key] || []).map(norm).sort().join("; "), w.key + " exit conditions in code equal the document's"));
+
+// ---------- wave stall: an unmet exit metric of the active wave unchanged for TP_STALL_DAYS ----------
+const NOWS = Date.parse("2026-10-20T12:00:00Z");
+const wv = T.tpWaveState({ code_task_success_rate_30d: 0.5, worker_count: 37, breach_code_task_pct: 12, contracts_needing_probe: 3 });
+eq(wv.active_key, "W1", "fixture: W1 active with three unmet metrics");
+let ws = T.tpWaveStall(wv, { breach_code_task_pct: [{ day: "2026-10-05", value: "12" }, { day: "2026-10-20", value: "12" }], worker_count: [{ day: "2026-10-05", value: "42" }, { day: "2026-10-20", value: "37" }] }, NOWS);
+eq(ws.length === 1 && ws[0].metric === "breach_code_task_pct" && ws[0].since === "2026-10-05" && ws[0].wave === "W1", true, "a metric with the same value 15 days apart is a wave stall; one that moved is not");
+eq(T.tpWaveStall(wv, { breach_code_task_pct: [{ day: "2026-10-10", value: "12" }, { day: "2026-10-20", value: "12" }] }, NOWS).length, 0, "a metric with no row old enough is not judged");
+eq(T.tpWaveStall(wv, {}, NOWS).length, 0, "a metric with no history (cron_schedules, contract counts) is not judged");
+eq(T.tpWaveStall(wv, { breach_code_task_pct: [{ day: "2026-10-06", value: "12" }, { day: "2026-10-20", value: "12" }] }, NOWS).length, 1, "a row exactly TP_STALL_DAYS old counts");
+
 // ---------- scoreboard: section 6 targets; a null target is a direction ----------
 const sc = T.tpScoreboard({ worker_count: 30, session_records_30d: 40, security_open_issues: 2, subscribers_growth_monthly: 0 });
 const row = (m) => sc.find((r) => r.metric === m);
 eq(row("worker_count").meets_w1 === true && row("worker_count").meets_w3 === false, true, "worker_count 30 meets the W1 target (32) and not W3 (24)");
 eq(row("session_records_30d").meets_w1 === null && row("session_records_30d").meets_w3 === null, true, "a direction-only metric has no pass/fail");
 eq(row("security_open_issues").meets_w1 === null && row("security_open_issues").meets_w3 === false, true, "security_open_issues has only a W3 target");
+eq(row("contracts_needing_probe_closed").w1 === 71 && row("contracts_needing_probe_closed").meets_w3 === null, true, "relapse probes on closed issues have a W1 target and no W3 number (document 1.1 section 6)");
 eq(row("cron_schedules").value, null, "an unmeasured metric reads null, never 0");
 eq(sc.length, T.TP_SCOREBOARD.length, "every section 6 metric is graded");
 
@@ -134,7 +161,8 @@ INSERT INTO autonomy_scores (dimension, score, scored_at) VALUES ('ooda_observe'
 INSERT INTO ops_config (key, value) VALUES ('code_merge_trusted_sources', 'qnfo-fleet-control|METRIC-TRIGGER-,session,qnfo-fleet-control|REACH-IDEA-');
 INSERT INTO fleet_budget (node_class, current) VALUES ('workers', 37), ('cron_schedules', 46), ('d1_databases', 10);
 INSERT INTO metric_registry (metric, last_value) VALUES ('code_task_success_rate_30d', '0.5'), ('breach_code_task_pct', '12'), ('watchmaker_index', '2');
-INSERT INTO remediation_contracts (class, status) VALUES ('needs-1', 'needs-machine-probe'), ('needs-2', 'needs-machine-probe');
+INSERT INTO remediation_contracts (class, issue_id, status) VALUES ('needs-1', 2007, 'needs-machine-probe'), ('needs-2', 1678, 'needs-machine-probe'), ('needs-3', NULL, 'needs-machine-probe');
+CREATE TABLE metric_history (metric TEXT, day TEXT, value TEXT, meets INTEGER, target TEXT, ts TEXT);
 INSERT INTO agent_issues (id, title, status, created_at) VALUES (2005, 'TP-1.1', 'open', 1), (2013, 'TP-5.5', 'open', 1), (2017, 'TP-1.2', 'open', 1), (2007, 'x', 'open', 1), (2008, 'x', 'open', 1), (2018, 'x', 'open', 1), (2019, 'x', 'open', 1), (2001, 'x', 'open', 1), (1678, 'x', 'closed', 1), (1677, 'x', 'closed', 1);
 INSERT INTO agent_issues (title, status, created_at) VALUES ('SEC-OPEN-1: x', 'open', 1);
 `);
@@ -175,13 +203,17 @@ const r2 = await T.transformationTick(env, {});
 eq(r2.skipped, "ran within the hour", "a second tick within 55 minutes is skipped");
 // Wave W0 exits when its metrics are met, and the record says so.
 eq(r1.waves[0].exited, true, "W0's exit (success rate >= 0.45, workers <= 38) is met by the fixture");
-eq(r1.waves[1].exited, false, "W1 is not (contracts needing probe = 2)");
+eq(r1.waves[1].exited, false, "W1 is not (breach_code_task_pct 12, worker_count 37, contracts needing probe 2)");
 eq(r1.wave, "W1", "so W1 is the active wave");
+eq(r1.scoreboard.find((r) => r.metric === "contracts_needing_probe").value === 2 && r1.scoreboard.find((r) => r.metric === "contracts_needing_probe_closed").value === 1, true, "needs-machine-probe contracts are counted on open issues (plus issue-less ones) and on closed issues separately");
+eq(r1.applied.wave_stalled, 0, "with no metric history nothing is judged a wave stall");
 
 // Landing: the adopted T1.1 task merges.
 db.exec("INSERT INTO code_tasks (id, goal, status, merge_state, pr_url, created_at) VALUES ('ct_a', '[issue #2005] trusted origin parity', 'merged', 'verified', 'https://github.com/QNFO/qnfo-workers/pull/701', '2026-10-06T08:00:00Z')");
 // Fallback: the adopted T5.5 task fails twice.
 db.exec("INSERT INTO code_tasks (id, goal, status, last_error, created_at) VALUES ('ct_b', '[issue #2013] security metric', 'failed', 'merge-runner: control-plane worker, not merged', '2026-10-06T08:00:00Z'), ('ct_c', '[issue #2013] security metric', 'needs_human', 'anchor occurs 0 times', '2026-10-06T09:00:00Z')");
+// Wave stall: breach_code_task_pct (unmet, W1) reads 12 today and 12 fifteen days ago; worker_count moved.
+db.prepare("INSERT INTO metric_history (metric, day, value) VALUES ('breach_code_task_pct', ?, '12'), ('breach_code_task_pct', ?, '12'), ('worker_count', ?, '42'), ('worker_count', ?, '37')").run(new Date(Date.now() - 15 * 864e5).toISOString().slice(0, 10), new Date().toISOString().slice(0, 10), new Date(Date.now() - 15 * 864e5).toISOString().slice(0, 10), new Date().toISOString().slice(0, 10));
 // Dispatch: a lever row gains a path and an anchor (data, no deploy) outside the control plane.
 db.exec("INSERT INTO transformation_levers (tp, n, key, title, kind, wave, pillar, path, anchor, detail, dod, status) VALUES (7, 9, 'test-lever', 'A test lever on radar-hub', 'code', 'W0', 'reach', 'radar-hub/worker.js', 'var VERSION = \"1.3.1\"', 'bump it', 'done when bumped', 'pending')");
 const r3 = await T.transformationTick(env, { force: true });
@@ -195,9 +227,13 @@ eq(r3.applied.dispatched, 1, "the new anchored lever is dispatched");
 const di = db.prepare("SELECT id, title, description, source FROM agent_issues WHERE title LIKE 'TP-7.9-TEST-LEVER-1:%'").get();
 eq(!!di && di.source === "qnfo-fleet-control" && /\ncode-task: repo=qnfo-workers path=radar-hub\/worker\.js\ncode-anchor: var VERSION = "1\.3\.1"$/.test(di.description), true, "its issue carries the code-task and code-anchor lines the code loop's intake reads");
 eq(db.prepare("SELECT status, issue_id FROM transformation_levers WHERE tp=7 AND n=9").get().issue_id, di.id, "the lever row records its issue");
+eq(r3.applied.wave_stalled === 1 && r3.actions.wave_stalled[0] === "W1:breach_code_task_pct", true, "the unmoved W1 exit metric is a wave stall; the moved one is not");
+const wsIssue = db.prepare("SELECT title, description FROM agent_issues WHERE title LIKE 'TP-WAVE-EXIT-STALLED-1:%'").all();
+eq(wsIssue.length === 1 && /W1 exit metric breach_code_task_pct unchanged since/.test(wsIssue[0].title) && /replaced, not repeated/.test(wsIssue[0].description), true, "TP-WAVE-EXIT-STALLED-1 names the wave, the metric and the date, and says to replace the lever");
 const r4 = await T.transformationTick(env, { force: true });
 eq(r4.applied.dispatched + r4.applied.fallback + r4.applied.verified, 0, "a further tick repeats nothing");
 eq(db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'CODE-TASK-NEEDS-SESSION-1:%'").get().n, 1, "the fallback issue is filed once");
+eq(db.prepare("SELECT COUNT(*) AS n FROM agent_issues WHERE title LIKE 'TP-WAVE-EXIT-STALLED-1:%'").get().n, 1, "the wave-stall issue is filed once");
 // Stall: a session lever dispatched 35 days ago (T1.4, issue 2007).
 db.exec("UPDATE transformation_levers SET dispatched_at = '2026-09-01T00:00:00Z' WHERE tp=1 AND n=4");
 const r5 = await T.transformationTick(env, { force: true });

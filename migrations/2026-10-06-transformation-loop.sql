@@ -1,6 +1,6 @@
 -- TRANSFORMATION-LOOP-1 (2026-10-06, pillar: autonomy; owner directive 2026-10-06: a continuing program of transformational
 -- change, systemwide, fully automatic and 100% autonomous). docs/TRANSFORMATION-PROGRAM.md (TRANSFORMATION-PROGRAM-1) is the
--- audit and the plan; qnfo-fleet-control 0.4.131 is the engine (transformationTick, hourly). This file seeds the engine's
+-- audit and the plan; qnfo-fleet-control 0.4.132 is the engine (transformationTick, hourly). This file seeds the engine's
 -- registers from the document: one transformation_levers row per lever with its kind (code = a single-file edit the code
 -- loop can land; refactor, retire, migration, platform, repo, verify, config; owner = the owner's list, never dispatched),
 -- its wave (section 4), its path and anchor where the edit point is known, and the child issue the program's author
@@ -60,7 +60,7 @@ INSERT OR IGNORE INTO transformation_levers (tp, n, key, title, kind, wave, pill
  (1, 9, 'code-task-lines-on-triggers', 'Every enabled trigger whose lever is a single-file change carries code-task and code-anchor lines (ACT-BRIDGE-1)', 'migration', 'W0', 'autonomy', 'migrations', NULL, 'The 69 triggers without a line are reviewed in analytics_metric_triggers.action by one migration.', 'breach_code_task_pct >= 30', NULL, 'pending', NULL, NULL, NULL),
  (1, 10, 'orphan-suites-into-gate', 'The 19 suites no workflow references join the gate through one suite runner', 'repo', 'W1', 'autonomy', '.github/workflows/deploy-gate.yml', NULL, 'scripts/run-suites.mjs runs every *.test.mjs of the changed workers (T3.8).', 'every *.test.mjs in the repo is run by a workflow on every PR', NULL, 'pending', NULL, NULL, NULL),
  (1, 11, 'multi-file-tasks', 'Multi-file code tasks: the task carries a file list and the agent edits a branch checkout in the container', 'refactor', 'W3', 'autonomy', 'qnfo-code-orchestrator/worker.js', NULL, 'The more-than-one-file refusal becomes more-than-the-task''s-file-list.', 'a code task with two files reaches a merged PR', NULL, 'pending', NULL, NULL, NULL),
- (1, 12, 'session-fallback', 'A task that fails twice files CODE-TASK-NEEDS-SESSION-1 with the failure text; the watchmaker index counts those rows', 'code', 'W0', 'autonomy', 'qnfo-fleet-control/worker.js', NULL, 'TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.131) files the row when a dispatched lever''s code tasks all ended failed, needs_human or closed; qnfo-fleet-dashboard WATCHMAKER_OPS transformation-loop counts the open rows.', 'an open CODE-TASK-NEEDS-SESSION-1 row raises watchmaker_index; none open means no session dependence', NULL, 'pending', 'in PR 662 (session_01CX4ooVZuEie1F9eEtYHx2u); lands when qnfo-fleet-control 0.4.131 is live', NULL, NULL),
+ (1, 12, 'session-fallback', 'A task that fails twice files CODE-TASK-NEEDS-SESSION-1 with the failure text; the watchmaker index counts those rows', 'code', 'W0', 'autonomy', 'qnfo-fleet-control/worker.js', NULL, 'TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132) files the row when a dispatched lever''s code tasks all ended failed, needs_human or closed; qnfo-fleet-dashboard WATCHMAKER_OPS transformation-loop counts the open rows.', 'an open CODE-TASK-NEEDS-SESSION-1 row raises watchmaker_index; none open means no session dependence', NULL, 'pending', 'in PR 662 (session_01CX4ooVZuEie1F9eEtYHx2u); lands when qnfo-fleet-control 0.4.132 is live', NULL, NULL),
  (1, 13, 'noop-proposal-gate', 'The code orchestrator refuses a proposal that changes only string literals or comments and runs one more propose round', 'code', 'W0', 'autonomy', 'qnfo-code-orchestrator/worker.js', NULL, 'Two TP-1 tasks returned a 2-line paraphrase of a string literal plus the VERSION bump and passed the verifier.', 'no merged code-loop PR whose non-VERSION diff touches only string literals or comments over 14 days', 2018, 'landed', 'PR 666 merged 2026-10-06T06:42Z (4b03a30): qnfo-code-orchestrator 0.3.17 NOOP-PROPOSAL-GATE-1, live (/health 0.3.17-noop-gate); issue 2018 closes on its own probe', '2026-10-06T06:41:00Z', '2026-10-06T06:42:49Z');
 
 -- T2 One kernel, one dispatcher, heartbeats (RM-TP-2-ONE-KERNEL, epic 2009)
@@ -164,7 +164,7 @@ WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key =
 -- Closing probe for the loop itself: a run in the last 2 hours. Pending until the first run.
 INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status)
 VALUES ('transformation-loop-1', NULL,
-  'qnfo-fleet-control 0.4.131+ deployed; transformation_levers seeded',
+  'qnfo-fleet-control 0.4.132+ deployed; transformation_levers seeded',
   'observe only: the hourly tick writes transformation_runs and cloud_ops_events transformation-tick-<day>',
   'SELECT ''ok'' AS expected, CASE WHEN (SELECT MAX(ts) FROM transformation_runs) IS NULL THEN ''pending: loop has not run'' WHEN (SELECT MAX(ts) FROM transformation_runs) < strftime(''%Y-%m-%dT%H:%M:%SZ'',''now'',''-2 hours'') THEN ''stale: last run older than 2h'' ELSE ''ok'' END AS observed',
   'd1-query', 3, 'qnfo-fleet-control', 1, 'active')
