@@ -1,7 +1,6 @@
 // RETIRED-HOSTS-1 offline suite (qnfo-lifecycle 1.9.1, agent_issues 2010). The default export answers 410 Gone with
 // noindex on every retired qnfo.org hostname and passes every other host to the folded worker unchanged; the fold
-// properties survive the wrapper; wrangler.toml declares a route for each retired host, keeps lifecycle.qnfo.org/* (a
-// deploy replaces the route set) and keeps workers_dev on. Run: node qnfo-lifecycle/retired-hosts.test.mjs
+// properties survive the wrapper; wrangler.toml declares no routes (attaching them is held for the owner). Run: node qnfo-lifecycle/retired-hosts.test.mjs
 import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
@@ -26,9 +25,8 @@ ok(typeof W.scheduled === "function", "the scheduled handler survives the wrappe
 const r2 = await W.fetch(new Request("https://lifecycle.qnfo.org/calendar/health"), {}, { waitUntil() {} }).catch((e) => ({ status: -1, e: String(e) }));
 passedThrough = r2.status !== 410;
 ok(passedThrough, "lifecycle.qnfo.org is not answered with 410", r2.status);
-const routes = [...toml.matchAll(/pattern = "([^"]+)", zone_name = "qnfo\.org"/g)].map((m) => m[1]);
-ok(routes.indexOf("lifecycle.qnfo.org/*") >= 0, "wrangler.toml keeps the lifecycle.qnfo.org/* route (a deploy replaces the route set)");
-ok(hosts.every((h) => routes.indexOf(h + "/*") >= 0) && routes.length === hosts.length + 1, "wrangler.toml routes exactly lifecycle plus every retired host", routes);
-ok(/^workers_dev = true$/m.test(toml), "workers_dev stays on (calendar public links and pings use workers.dev)");
+// Routing these hostnames to this worker is a DNS/route change held for the owner (card cf-dns-redirect-token); the
+// handler is ready, and no route is declared here, so a deploy can never attach one unreviewed.
+ok(!/^routes\s*=/m.test(toml) && !/^route\s*=/m.test(toml), "wrangler.toml declares no routes");
 console.log(passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);

@@ -7,29 +7,6 @@ compatibility_date = "2026-08-10"
 # Same fix as FLEET-PROBE-1042-1 in qnfo-fleet-control/wrangler.toml.
 compatibility_flags = ["global_fetch_strictly_public"]
 
-# RETIRED-HOSTS-1: explicit, because with routes declared wrangler may otherwise turn off the workers.dev URL that the
-# calendar member's public links (CAL_PUBLIC_BASE) and the q08.workers.dev pings use.
-workers_dev = true
-
-# RETIRED-HOSTS-1 (agent_issues 2010): wrangler deploy replaces this worker's route set with this list, so the existing
-# lifecycle.qnfo.org/* route (created in the dashboard) is listed here too. retired-hosts.test.mjs fails if it is dropped.
-routes = [
-  { pattern = "lifecycle.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "agent-orchestrator.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "fleet-executor.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "fleet-scheduler.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "qnfo-arxiv-radar.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "qnfo-calibration-audit.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "qnfo-citation-watch.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "qnfo-paper-reviser.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "qnfo-research-radar.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "qnfo-secrets-audit.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "qnfo-system-health.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "scorecard.qnfo.org/*", zone_name = "qnfo.org" },
-  { pattern = "analytics.qnfo.org/*", zone_name = "qnfo.org" }
-]
-
-
 [observability]
 enabled = true
 head_sampling_rate = 1
