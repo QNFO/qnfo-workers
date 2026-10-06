@@ -81,6 +81,22 @@ const cols = db.prepare("PRAGMA table_info(project_state)").all().map((c) => c.n
 check(JSON.stringify(cols) === JSON.stringify(["snapshot_id", "project_code", "snapshot_at", "session_id", "current_phase", "phase_progress", "resource_counts", "git_branch", "git_commit", "r2_snapshot_path"]), "repaired: every live column kept, snapshot_id added first");
 check(db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' AND name = 'idx_project_state_code_at'").get().n === 1, "repaired: (project_code, snapshot_at) is still indexed");
 
+// 2b one multi-row INSERT: SQLite keeps 'now' fixed for the whole statement, so millisecond resolution alone cannot
+//    separate these two snapshots (checked by session_01KzS1yjXATqG3KDBSEyNTAs offline, 2026-10-06); only the table's
+//    own key does. Both rows must land and both snapshots must exist with the same snapshot_at.
+db = repaired();
+err = null;
+try { db.exec("INSERT INTO dns_redirects (id, record_type, source, target) VALUES ('m1', 'CNAME', 'm1.qnfo.org', 'ghost-m1.pages.dev'), ('m2', 'CNAME', 'm2.qnfo.org', 'ghost-m2.pages.dev')"); } catch (e) { err = String(e && e.message || e); }
+check(err === null && count(db, "SELECT COUNT(*) AS n FROM dns_redirects WHERE id IN ('m1','m2')") === 2, "repaired: a single two-row INSERT into dns_redirects lands both rows" + (err ? " (" + err + ")" : ""));
+check(count(db, "SELECT COUNT(DISTINCT snapshot_at) AS n FROM project_state WHERE project_code = 'QNFO.INFRA.DNS'") <= 2 && count(db, "SELECT COUNT(*) AS n FROM project_state WHERE project_code = 'QNFO.INFRA.DNS'") === 2, "repaired: two snapshots exist even when they share the statement's instant");
+err = null;
+try { db.exec("INSERT INTO cf_pages_domain_mappings (project_name, pages_subdomain, custom_domain) VALUES ('m', 'm.pages.dev', 'mx.qnfo.org'), ('n', 'n.pages.dev', 'my.qnfo.org')"); } catch (e) { err = String(e && e.message || e); }
+check(err === null && count(db, "SELECT COUNT(*) AS n FROM project_state WHERE project_code = 'QNFO.INFRA.PAGE'") === 2, "repaired: a single two-row INSERT into cf_pages_domain_mappings lands both rows and both snapshots" + (err ? " (" + err + ")" : ""));
+db = live();
+err = null;
+try { db.exec("INSERT INTO dns_redirects (id, record_type, source, target) VALUES ('m1', 'CNAME', 'm1.qnfo.org', 'ghost-m1.pages.dev'), ('m2', 'CNAME', 'm2.qnfo.org', 'ghost-m2.pages.dev')"); } catch (e) { err = String(e && e.message || e); }
+check(/UNIQUE constraint failed/.test(err || "") && count(db, "SELECT COUNT(*) AS n FROM dns_redirects WHERE id IN ('m1','m2')") === 0, "live DDL: the same two-row INSERT rolls back entirely (" + (err || "no error") + ")");
+
 // 3 the guards are not weakened: a registered target and a covered domain write no snapshot; an unknown project still fails the FK
 db = repaired();
 db.exec("INSERT INTO dns_redirects (id, record_type, source, target) VALUES ('ok1', 'CNAME', 'ok.qnfo.org', 'registered.pages.dev'); INSERT INTO dns_redirects (id, record_type, source, target) VALUES ('ok2', 'CNAME', 'alias.qnfo.org', 'preview.registered.pages.dev');");
