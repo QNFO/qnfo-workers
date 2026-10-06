@@ -50,8 +50,13 @@ function setup(opts) {
 }
 const state = (T, key) => T.p.prepare("SELECT * FROM companion_broadcasts WHERE key = ?").get(key);
 
+// ---- (0) the hourly tick on a fresh database creates the cursor table and is idle
+let T = setup({ n: 5 });
+let r0 = await resumeSendRuns(T.env);
+ok(r0.ok && r0.idle === true && T.p.prepare("SELECT count(*) n FROM sqlite_master WHERE name = 'companion_broadcasts'").get().n === 1 && T.sent.length === 0, "a fresh tick creates companion_broadcasts, sends nothing and is idle (" + JSON.stringify(r0) + ")");
+
 // ---- (1) suppressedSet reads in batches and matches case-insensitively
-let T = setup();
+T = setup();
 T.calls = 0;
 const set = await suppressedSet(T.env, T.confirmed);
 ok(T.calls === 2 * Math.ceil(T.confirmed.length / 50), "opt-outs are read two queries per 50 addresses (" + T.calls + " calls for " + T.confirmed.length + ")");
@@ -126,7 +131,7 @@ ok(r.already && T.sent.length === 0, "a second digest on the same day sends noth
 
 // ---- (8) a run whose piece was deleted closes instead of blocking the queue
 T = setup({ n: 30 });
-T.p.exec("CREATE TABLE companion_broadcasts (key TEXT PRIMARY KEY, last_id INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, suppressed INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, origin TEXT, started_at TEXT, updated_at TEXT)");
+await resumeSendRuns(T.env); // creates the table
 T.p.prepare("INSERT INTO companion_broadcasts (key, started_at) VALUES ('gone', '2026-10-01')").run();
 r = await resumeSendRuns(T.env);
 ok(!r.ok && state(T, "gone").done === 1 && T.sent.length === 0, "a missing piece closes its run without mailing (" + JSON.stringify(r) + ")");

@@ -1411,8 +1411,11 @@ async function suppressedSet(env, emails) {
   }
   return set;
 }
-async function sendRunState(env, key, origin) {
+async function ensureSendRuns(env) {
   await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_broadcasts (key TEXT PRIMARY KEY, last_id INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, suppressed INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, origin TEXT, started_at TEXT, updated_at TEXT)").run();
+}
+async function sendRunState(env, key, origin) {
+  await ensureSendRuns(env);
   await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_broadcasts (key, origin, started_at, updated_at) VALUES (?1, ?2, ?3, ?3)").bind(key, origin || null, nowIso()).run();
   return await env.PERSONAL.prepare("SELECT * FROM companion_broadcasts WHERE key = ?1").bind(key).first();
 }
@@ -1455,8 +1458,9 @@ function pieceMail(prow, base, link) {
 }
 // The hourly tick continues the oldest unfinished run (one per tick, so a tick never sends more than SEND_CAP_PER_RUN).
 async function resumeSendRuns(env) {
-  var t;
-  try { t = await env.PERSONAL.prepare("SELECT key, origin FROM companion_broadcasts WHERE done = 0 ORDER BY started_at LIMIT 1").first(); } catch (e) { return { ok: true, idle: "no companion_broadcasts table" }; }
+  // the tick creates the cursor table, so the resume read never meets a missing table and the table's presence shows 1.12.2 runs
+  await ensureSendRuns(env);
+  var t = await env.PERSONAL.prepare("SELECT key, origin FROM companion_broadcasts WHERE done = 0 ORDER BY started_at LIMIT 1").first();
   if (!t) return { ok: true, idle: true };
   var base = "https://reading.q08.org";
   if (String(t.key).indexOf("digest:") === 0) {
