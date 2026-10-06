@@ -1,0 +1,58 @@
+name: apply-migrations
+
+# MIGRATION-RUNNER-1 (transformation lever T5.3, pillar autonomy): a merged migration that opts in applies itself.
+# A file under migrations/ with the header lines "-- APPLY-BY: ci" and "-- DB: qnfo-audit" (plus a "-- Rollback:" line,
+# and "-- BACKUP: <table>" when it deletes or drops) is applied to Cloudflare D1 by scripts/apply_migrations.py when its
+# commit reaches main, and recorded in qnfo-audit.migration_runs. Files without the header are ignored (everything
+# applied by hand before 2026-10-06 stays as it is). A failure records the error, files one MIGRATION-APPLY-FAILED-1
+# issue and turns this run red. The PR gate (deploy-gate) runs the same script with --check.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "migrations/*.sql"
+  workflow_dispatch:
+    inputs:
+      files:
+        description: "Space-separated migration paths to apply (opted-in files only; an applied sha256 is skipped)"
+        required: true
+
+concurrency:
+  group: apply-migrations
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Migration files in this push
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_FILES: ${{ inputs.files }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            printf '%s\n' $INPUT_FILES | grep -E '^migrations/[A-Za-z0-9._-]+\.sql$' > /tmp/mig.txt || true
+          else
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then BEFORE="$AFTER^"; fi
+            git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER" -- 'migrations/*.sql' > /tmp/mig.txt || true
+          fi
+          echo "migration files:"; cat /tmp/mig.txt
+
+      - name: Apply opted-in migrations to Cloudflare D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ ! -s /tmp/mig.txt ]; then echo "no migration file changed"; exit 0; fi
+          python3 scripts/apply_migrations.py --apply --commit "$AFTER" $(cat /tmp/mig.txt)
