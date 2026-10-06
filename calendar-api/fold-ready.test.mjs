@@ -59,6 +59,8 @@ async function feedLink(T, base, auth) {
   const h = await g.text();
   ok(g.status === 200 && h.includes('<form method="post" action="?s=' + sig("tok-A", id) + '">'), "the form posts to ?s=<sig> relative to the page", h.match(/<form[^>]*>/));
   ok(/form-action 'self'/.test(g.headers.get("content-security-policy") || ""), "the page keeps form-action 'self'");
+  const hj = await (await call(T.env, base, "GET", "/health")).json();
+  ok(hj.feedback_links === true && !JSON.stringify(hj).includes("tok-A"), "/health reports feedback_links true and never the key", hj.feedback_links);
 }
 // 2. folded: CAL_KEY_SEED and CAL_PUBLIC_BASE, no CAL_TOKEN
 {
@@ -85,6 +87,7 @@ async function feedLink(T, base, auth) {
   const id = await seed(T, "https://internal");
   const g = await call(T.env, "https://internal", "GET", "/e/" + id + "?s=" + sig("", id));
   ok(g.status === 403, "with no key no link is valid", g.status);
+  ok((await (await call(T.env, "https://internal", "GET", "/health")).json()).feedback_links === false, "/health reports feedback_links false with no key");
   ok(/no feedback key/.test(src) && /env\.CAL_TOKEN \|\| env\.CAL_KEY_SEED/.test(src), "the owner-question producer skips with no key, and the key falls back to the seed only when CAL_TOKEN is absent");
 }
 console.log(pass + " passed, " + fail + " failed");

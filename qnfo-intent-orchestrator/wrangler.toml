@@ -39,7 +39,8 @@ props = { caller = "qnfo-intent-orchestrator" }
 # v1.3.0 - promote accepted event intents into the calendar-api store (plane-aware)
 [[services]]
 binding = "CAL_API"
-service = "calendar-api"
+service = "qnfo-lifecycle"
+props = { caller = "qnfo-intent-orchestrator", member = "calendar-api" }
 environment = "production"
 
 # v1.3.4 - self-registration to the qnfo-ops service registry (cross-service discovery).

@@ -1,0 +1,8 @@
+calendar-api is FOLDED into qnfo-lifecycle (2026-10-06, FOLD-KIT-1, T3.10, agent_issues 2010, owner standing grant OWNER-STANDING-GRANT-1 / charter decision rule 9).
+
+Its code runs unchanged as the member calendarApiFoldMod inside qnfo-lifecycle/worker.js (member version 0.7.5-folded; it was 0.7.5-folded as its own worker).
+GET https://qnfo-lifecycle.q08.workers.dev/calendar/health serves its health; service-binding callers reach it through qnfo-lifecycle with
+props.member = "calendar-api" and a qnfo-* props.caller (or personal-api, radar-hub). Its job runs on qnfo-lifecycle's own trigger; its own crons (17 * * * *) are gone.
+Public routes: GET,POST https://qnfo-lifecycle.q08.workers.dev/calendar/e/*; GET https://qnfo-lifecycle.q08.workers.dev/calendar/events.ics.
+
+Do not redeploy this directory: canonical-deploy skips a FOLDED directory (WORKER-FOLD-SKIP-1).
