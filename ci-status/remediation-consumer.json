@@ -1,42 +1,18 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@563fe35a893e",
- "due": 4,
- "pass": 1,
- "fail": 3,
+ "verifier": "remediation-consumer@ffc0a2efb890",
+ "due": 1,
+ "pass": 0,
+ "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1991",
-   "issue_id": 1991,
+   "class": "issue-2065",
+   "issue_id": 2065,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-2057",
-   "issue_id": 2057,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2075",
-   "issue_id": 2075,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: runtime_verified_share_24h 1.4, probe_cadence never, other-plane rows 24h 0",
-   "written": true
-  },
-  {
-   "class": "issue-2076",
-   "issue_id": 2076,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
    "written": true
   }
  ],
@@ -58,10 +34,9 @@
   "http",
   "runner-https"
  ],
- "https": 1,
  "runtime_verified_share_24h": 1.6,
- "spent_ms": 16750,
- "head": "563fe35a893e169494fac18751ec926e53912d79",
+ "spent_ms": 5681,
+ "head": "ffc0a2efb8903c9cc9d32a955dd170d68455191b",
  "job_status": "success",
- "ts": "2026-10-06T16:38:35Z"
+ "ts": "2026-10-06T16:42:19Z"
 }
