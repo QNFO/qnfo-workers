@@ -42,15 +42,6 @@ export const REGISTRY = {
    "modified_on": "2026-09-08T10:24:30.073334Z"
   },
   {
-   "name": "qnfo-archive",
-   "crons": [
-    "0 4 * * *"
-   ],
-   "purpose": "Archive sweep",
-   "group": "fleet-ops",
-   "modified_on": "2026-07-30T12:05:58.320447Z"
-  },
-  {
    "name": "qnfo-backlog-exec",
    "crons": [
     "10 1 * * *"
@@ -292,12 +283,8 @@ export const REGISTRY = {
    "url": "https://qnfo-ai-search.q08.workers.dev/health"
   },
   {
-   "name": "qnfo-archive",
-   "url": "https://qnfo-archive.q08.workers.dev/health"
-  },
-  {
    "name": "qnfo-backlog-exec",
-   "url": "https://qnfo-backlog-exec.q08.workers.dev/health"
+   "url": "https://qnfo-lifecycle.q08.workers.dev/backlog/health"
   },
   {
    "name": "qnfo-chat-canary",
@@ -373,7 +360,7 @@ export const REGISTRY = {
   },
   {
    "name": "qnfo-paper-reviser",
-   "url": "https://qnfo-paper-reviser.q08.workers.dev/health"
+   "url": "https://qnfo-research-exec.q08.workers.dev/reviser/health"
   },
   {
    "name": "qnfo-pdf",
@@ -441,7 +428,7 @@ export const REGISTRY = {
   },
   {
    "name": "fleet-exec",
-   "url": "https://fleet-exec.q08.workers.dev/health"
+   "url": "https://qnfo-code-orchestrator.q08.workers.dev/fleet-exec/health"
   },
   {
    "name": "qnfo-fleet-control",

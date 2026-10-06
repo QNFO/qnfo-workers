@@ -1,0 +1,16 @@
+qnfo-archive is RETIRED (2026-10-06, ARCHIVE-RETIRE-1, agent_issues 1756, owner standing grant OWNER-STANDING-GRANT-1 /
+charter decision rule 9: retire a low-value worker after a dependency check, no idle proof needed).
+
+What it did, measured 2026-10-06:
+- Its one scheduled job, the 04:00 knowledge-graph seed, POSTed 950 papers in 19 batches to graph-api.qnfo.org/sync
+  without the X-Sync-Token that qnfo-gateway's /sync requires: every batch returned HTTP 401 ("nodesToSync":0 on
+  2026-10-04), so the job wrote nothing.
+- Its queue() consumer has no queue bound to it (no [[queues.consumers]] in its wrangler.toml).
+- /handoff/search and /task/search answer only internal service-binding callers since ARCHIVE-INTERNAL-1, and no live
+  worker calls them; GET / lists 50 papers that papers.qnfo.org (qnfo-gateway) already serves.
+- Binders and callers were probes only: qnfo-ops ARCHIVE (/health in fleet_status and FLEET, removed in the same PR) and
+  qnfo-lifecycle runPing (removed in the same PR). It is not a charter MVP component and owns no metric trigger.
+
+Its D1 tables, R2 objects and Vectorize indexes are untouched. The script is removed with cf-ops-actions delete-worker.
+Bringing it back is a charter net-zero decision recorded in a PR that removes this file and redeploys the code below,
+never a way to get a deploy through. canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file.

@@ -1,0 +1,14 @@
+qnfo-backlog-exec is FOLDED into qnfo-lifecycle (2026-10-06, BACKLOG-FOLD-1, agent_issues 1756, owner standing grant
+OWNER-STANDING-GRANT-1 / charter decision rule 9; fleet_budget workers was 38 against a cap of 30).
+
+Its code runs unchanged as the member backlogMod inside qnfo-lifecycle/worker.js (member version 2.0.6-folded): the
+host's hourly tick runs its sweep at 02:00 UTC (its old "10 1 * * *", delivered at the next full hour as
+CRON-SINGLE-TRIGGER-1 does for the host's own table), with AUDIT mapped onto the host's QNFO_AUDIT. GET /backlog/health on
+the host serves its health. qnfo-ops reaches its drain (https://backlog.internal/run, the ops_issue_run tool) over the
+BACKLOG service binding, now declared to qnfo-lifecycle with props.member = "qnfo-backlog-exec"; the binding is
+re-pointed after this script is deleted (cf-ops-actions unbind-service, then a canonical deploy of qnfo-ops installs the
+declared binding; SERVICE-REPOINT-1).
+
+This directory is kept for reference; the separate script is removed with cf-ops-actions delete-worker once the host is
+verified running the member. canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. Un-folding is
+a charter net-zero decision recorded in a PR that removes this file, never a way to get a deploy through.

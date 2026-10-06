@@ -1,0 +1,14 @@
+qnfo-paper-reviser is FOLDED into qnfo-research-exec (2026-10-06, REVISER-FOLD-1, agent_issues 1756, owner standing grant
+OWNER-STANDING-GRANT-1 / charter decision rule 9; fleet_budget workers was 38 against a cap of 30).
+
+Its code runs unchanged as the member reviserMod inside qnfo-research-exec/worker.js (member version 1.2.8-folded):
+the host's */15 tick runs it at :30 of every fourth UTC hour (its old "37 */4 * * *"), with PAPERS_DB and WATCH_DB mapped
+onto the host's LIVING_PAPER and QNFO_AUDIT and its Workers AI calls attributed to qnfo-paper-reviser. GET
+/reviser/health on the host serves its health. Its /run/* and /debug/* routes answer only a service binding whose props
+name the member (props.member = "qnfo-paper-reviser", props.caller = qnfo-*), which stands in for X-Reviser-Token
+(#1703): qnfo-fleet-dashboard's SVC_QNFO_PAPER_REVISER is declared that way and is re-pointed after this script is
+deleted (cf-ops-actions unbind-service, then a canonical deploy installs the declared binding; SERVICE-REPOINT-1).
+
+This directory is kept for reference; the separate script is removed with cf-ops-actions delete-worker once the host is
+verified running the member. canonical-deploy.yml skips any directory containing a RETIRED or FOLDED file. Un-folding is
+a charter net-zero decision recorded in a PR that removes this file, never a way to get a deploy through.

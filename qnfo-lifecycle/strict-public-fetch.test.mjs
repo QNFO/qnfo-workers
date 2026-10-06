@@ -14,7 +14,7 @@ const fetchesWorkersDev = /\.q08\.workers\.dev/.test(src) && /await fetch\(/.tes
 const flags = (toml.match(/^\s*compatibility_flags\s*=\s*\[([^\]]*)\]/m) || [, ""])[1];
 ok(fetchesWorkersDev, "worker.js still fetches a *.q08.workers.dev URL (otherwise this suite is moot)");
 ok(/"global_fetch_strictly_public"/.test(flags), "wrangler.toml compatibility_flags carries global_fetch_strictly_public");
-ok(/"https:\/\/qnfo-gateway\.q08\.workers\.dev\/health"/.test(src) && /"https:\/\/qnfo-archive\.q08\.workers\.dev\/health"/.test(src), "runPing targets are the two workers.dev URLs that returned 1042");
+ok(/"https:\/\/qnfo-gateway\.q08\.workers\.dev\/health"/.test(src) && !/qnfo-archive\.q08\.workers\.dev/.test(src), "runPing targets the workers.dev URL that returned 1042 (qnfo-gateway; qnfo-archive left it when it was retired, ARCHIVE-RETIRE-1)");
 ok(/r\.base_url \|\| \("https:\/\/" \+ r\.service \+ "\.q08\.workers\.dev"\)/.test(src), "runSync falls back to the workers.dev hostname");
 
 console.log(pass + " passed, " + fail + " failed");

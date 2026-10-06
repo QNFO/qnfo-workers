@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.17-noop-gate"; // 0.3.17 NOOP-PROPOSAL-GATE-1 (agent_issues 2018, TP-1e, pillar autonomy): a JavaScript proposal whose changed lines (VERSION aside) are the same code once string-literal contents and comments are removed, and whose new text is prose, is refused before verify with a reason the next rung reads (cloud_ops_events kind code-task.noop-refused); a second no-op in a row ends the task needs_human instead of a PR. On 2026-10-06 ct_r3k9lrbd7oijxr (#2006) and ct_5fibb664gtvew4 (#2007) each answered a feature goal with a 2-line paraphrase of a string on the anchor line, parsed, verified and reached ready_to_publish; a session review was the only stop. A string whose new value is code-like (a model id, SQL, a URL, a key) still passes. 0.3.16 CODE-DISPATCH-DEDUPE-1 (agent_issues 1876, 1834): a new code task is refused while the same repo file (or its deployed-current mirror) has an unfinished code task or a live session work claim (qnfo-audit.work_claims, the ledger GET /work-locks reads), and the planner skips such an issue before its model call; RETIRED-TARGET-1: a <dir>/worker.js that is not a live worker in service_registry (RETIRED or FOLDED) is refused, because the canonical deploy skips it; VERSION_DECL accepts `VERSION="x"` without spaces and without a semicolon (qnfo-email, qnfo-gateway); 0.3.15 PRIORITY-QUEUE-1: code-task intake takes issues in master-queue order (critical, high, medium, low, then oldest), not creation order (owner directive 2026-10-03; v_issue_queue); 0.3.14 PLAN-DENY-NEGATION-1: the issue planner refuses an issue that asks to raise a cap, rotate a secret or delete, not one whose advice forbids it ("never raise a cap"; agent_issues 1807; 0.3.13 was the rejected code task ct_fd830vzqefw1ti); 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.18-fleet-exec-fold"; // 0.3.18 FLEET-EXEC-FOLD-1 (agent_issues 1756, pillar cost): fleet-exec runs here as a member on the */10 tick (fleetExecMod; AUDIT_DB and AI only), GET /fleet-exec/health; its script is deleted after this is live. 0.3.17 NOOP-PROPOSAL-GATE-1 (agent_issues 2018, TP-1e, pillar autonomy): a JavaScript proposal whose changed lines (VERSION aside) are the same code once string-literal contents and comments are removed, and whose new text is prose, is refused before verify with a reason the next rung reads (cloud_ops_events kind code-task.noop-refused); a second no-op in a row ends the task needs_human instead of a PR. On 2026-10-06 ct_r3k9lrbd7oijxr (#2006) and ct_5fibb664gtvew4 (#2007) each answered a feature goal with a 2-line paraphrase of a string on the anchor line, parsed, verified and reached ready_to_publish; a session review was the only stop. A string whose new value is code-like (a model id, SQL, a URL, a key) still passes. 0.3.16 CODE-DISPATCH-DEDUPE-1 (agent_issues 1876, 1834): a new code task is refused while the same repo file (or its deployed-current mirror) has an unfinished code task or a live session work claim (qnfo-audit.work_claims, the ledger GET /work-locks reads), and the planner skips such an issue before its model call; RETIRED-TARGET-1: a <dir>/worker.js that is not a live worker in service_registry (RETIRED or FOLDED) is refused, because the canonical deploy skips it; VERSION_DECL accepts `VERSION="x"` without spaces and without a semicolon (qnfo-email, qnfo-gateway); 0.3.15 PRIORITY-QUEUE-1: code-task intake takes issues in master-queue order (critical, high, medium, low, then oldest), not creation order (owner directive 2026-10-03; v_issue_queue); 0.3.14 PLAN-DENY-NEGATION-1: the issue planner refuses an issue that asks to raise a cap, rotate a secret or delete, not one whose advice forbids it ("never raise a cap"; agent_issues 1807; 0.3.13 was the rejected code task ct_fd830vzqefw1ti); 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -1143,9 +1143,302 @@ async function handleV1(req, env, url) {
   }
 }
 
+// ---- FLEET-EXEC-FOLD-1:BEGIN (0.3.18, #1756) ----
+// fleet-exec (the D1-defined task engine and fleet_crons dispatcher) runs here as a member: its code below is the
+// fleet-exec/worker.js bundle unchanged except its VERSION line. It gets only AUDIT (this worker's AUDIT_DB) and AI,
+// runs on this worker's */10 tick (the same cadence as its old trigger) and answers GET /fleet-exec/health.
+var FLEET_EXEC_VERSION = "1.0.4-folded";
+var fleetExecMod = (function () {
+var execMod = (function(){
+// fleet-executor v0.3.0 - dynamic task execution engine + codeparse enforcement pilot (P1/P4)
+// Reads fleet_tasks from qnfo-audit D1, executes by type, writes fleet_runs ledger.
+// v0.3.0: every /run completion emits a kind=event envelope validated BEFORE canonical-store write
+// (blocking reject on invalid, QNFO.CODEPARSE.SCOPE.v1 server_enforcement); /run responses are wrapped
+// in the universal envelope (kind=message). Mini-validator mirrors schemas/envelope.json + event.json.
+const VERSION = "fleet-executor/0.3.2";
+
+function json(obj, status) {
+  return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });
+}
+
+function dbFor(def, env) {
+  const name = (def && def.db) || "AUDIT";
+  const b = env[name];
+  if (!b) throw new Error("no D1 binding: " + name);
+  return b;
+}
+
+async function runAI(def, env) {
+  const model = def.model || "@cf/moonshotai/kimi-k2.6";
+  const resp = await env.AI.run(model, {
+    messages: [{ role: "user", content: def.prompt || "ping" }],
+    max_tokens: def.max_tokens || 2048
+  });
+  const text = typeof resp === "string" ? resp : (resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || JSON.stringify(resp));
+  return { type: "ai", model: model, output: String(text).slice(0, 2000) };
+}
+
+async function runSQL(def, env) {
+  const db = dbFor(def, env);
+  const res = await db.prepare(def.sql).all();
+  return { type: "sql", db: def.db || "AUDIT", rows: (res.results || []).length, sample: (res.results || []).slice(0, 3) };
+}
+
+async function runHTTP(def) {
+  const resp = await fetch(def.url, { method: def.method || "GET", headers: def.headers || {} });
+  const text = await resp.text();
+  return { type: "http", status: resp.status, body: text.slice(0, 500) };
+}
+
+async function executeStep(step, env) {
+  if (step.type === "ai") return runAI(step, env);
+  if (step.type === "sql") return runSQL(step, env);
+  if (step.type === "http") return runHTTP(step);
+  throw new Error("unsupported step type: " + step.type);
+}
+
+async function executeTask(task, env) {
+  let def = {};
+  try { def = JSON.parse(task.definition || "{}"); } catch (e) { def = {}; }
+  if (task.type === "workflow") {
+    const steps = def.steps || [];
+    const results = [];
+    for (let i = 0; i < steps.length; i++) {
+      results.push(await executeStep(steps[i], env));
+    }
+    return { type: "workflow", steps_run: results.length, results: results };
+  }
+  if (["ai", "sql", "http"].indexOf(task.type) < 0) {
+    return { type: task.type, skipped: true, reason: "unsupported task type: " + task.type };
+  }
+  def.type = task.type;
+  return executeStep(def, env);
+}
+
+// ---- codeparse mini-validator (deterministic, no network; D2) ----
+function validateEnvelope(art) {
+  const errs = [];
+  if (!art || typeof art !== "object") return ["envelope: not an object"];
+  if (typeof art.schema_version !== "string" || !/^1\.0$/.test(art.schema_version)) errs.push("envelope: schema_version must be '1.0'");
+  if (typeof art.kind !== "string" || art.kind.length < 2 || !/^[a-z0-9-]+$/.test(art.kind)) errs.push("envelope: kind invalid");
+  if (typeof art.id !== "string" || art.id.length < 2) errs.push("envelope: id invalid");
+  if (typeof art.ts !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(art.ts)) errs.push("envelope: ts invalid");
+  const p = art.provenance;
+  if (!p || typeof p !== "object" || typeof p.emitter !== "string" || typeof p.session !== "string" || typeof p.sha256 !== "string") errs.push("envelope: provenance invalid");
+  return errs;
+}
+
+function validateEventPayload(payload) {
+  const errs = [];
+  if (!payload || typeof payload !== "object") return ["event payload: not an object"];
+  if (typeof payload.kind !== "string" || payload.kind.length < 2 || !/^[a-z0-9-]+$/.test(payload.kind)) errs.push("event payload: kind invalid");
+  if (typeof payload.source !== "string" || payload.source.length < 1) errs.push("event payload: source missing");
+  return errs;
+}
+
+async function sha256Hex(str) {
+  const data = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  const arr = Array.from(new Uint8Array(buf));
+  let hex = "";
+  for (let i = 0; i < arr.length; i++) { hex += arr[i].toString(16).padStart(2, "0"); }
+  return hex;
+}
+
+async function emitEvent(env, payload) {
+  const nowIso = new Date().toISOString();
+  const payloadStr = JSON.stringify(payload);
+  const art = {
+    schema_version: "1.0",
+    kind: "event",
+    id: "QNFO.EVT.FLEET-RUN." + Date.now(),
+    ts: nowIso,
+    provenance: { emitter: "fleet-executor", session: "cron-or-manual", sha256: await sha256Hex(payloadStr) },
+    payload: payload
+  };
+  const errs = validateEnvelope(art).concat(validateEventPayload(art.payload));
+  const status = errs.length === 0 ? "accepted" : "rejected";
+  await env.AUDIT.prepare("INSERT INTO codeparse_events (artifact, kind, source, status, err, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+    .bind(status === "accepted" ? JSON.stringify(art) : null, "event", String(payload.source || "").slice(0, 40), status, errs.join("; ").slice(0, 300), nowIso).run();
+  return { status: status, errors: errs };
+}
+
+function wrapMessage(text) {
+  return {
+    schema_version: "1.0",
+    kind: "message",
+    id: "QNFO.MSG." + Date.now(),
+    ts: new Date().toISOString(),
+    provenance: { emitter: "fleet-executor", session: "http", sha256: "" },
+    payload: { role: "assistant", text: text, model: VERSION }
+  };
+}
+
+var execDefault = {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/health") return json({ ok: true, version: VERSION });
+    if (url.pathname === "/run" && request.method === "POST") {
+      let body = {};
+      try { body = await request.json(); } catch (e) { return json({ ok: false, error: "bad json" }, 400); }
+      const taskId = body.task_id;
+      if (!taskId) return json({ ok: false, error: "missing task_id" }, 400);
+      const cronName = body.cron_name || "manual";
+      const task = await env.AUDIT.prepare("SELECT * FROM fleet_tasks WHERE id = ?1 AND enabled = 1").bind(taskId).first();
+      if (!task) return json({ ok: false, error: "task not found or disabled" }, 404);
+      const started = new Date().toISOString();
+      const prior = await env.AUDIT.prepare("SELECT id FROM fleet_runs WHERE task_id = ?1 AND cron_name = ?2 ORDER BY id DESC LIMIT 1").bind(taskId, cronName).first();
+      const runId = prior ? prior.id : null;
+      if (runId) {
+        await env.AUDIT.prepare("UPDATE fleet_runs SET status = 'running', started_at = ?1 WHERE id = ?2").bind(started, runId).run();
+      }
+      try {
+        const result = await executeTask(task, env);
+        const done = new Date().toISOString();
+        const resStr = JSON.stringify(result).slice(0, 4000);
+        if (runId) {
+          await env.AUDIT.prepare("UPDATE fleet_runs SET status = 'ok', finished_at = ?1, result = ?2 WHERE id = ?3").bind(done, resStr, runId).run();
+        } else {
+          await env.AUDIT.prepare("INSERT INTO fleet_runs (task_id, cron_name, status, started_at, finished_at, result) VALUES (?1, ?2, 'ok', ?3, ?4, ?5)").bind(taskId, cronName, started, done, resStr).run();
+        }
+        const evt = await emitEvent(env, {
+          kind: "fleet-run",
+          source: "fleet-executor",
+          note: "ok",
+          data: { task_id: taskId, cron_name: cronName, run_id: runId, steps_run: result.steps_run || null }
+        });
+        return json(wrapMessage("RUN_OK " + resStr + " | codeparse_event=" + evt.status));
+      } catch (err) {
+        const done = new Date().toISOString();
+        const msg = String(err && err.message ? err.message : err).slice(0, 1000);
+        if (runId) {
+          await env.AUDIT.prepare("UPDATE fleet_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3").bind(done, msg, runId).run();
+        } else {
+          await env.AUDIT.prepare("INSERT INTO fleet_runs (task_id, cron_name, status, started_at, finished_at, error) VALUES (?1, ?2, 'failed', ?3, ?4, ?5)").bind(taskId, cronName, started, done, msg).run();
+        }
+        const evt = await emitEvent(env, {
+          kind: "fleet-run",
+          source: "fleet-executor",
+          note: "failed",
+          data: { task_id: taskId, cron_name: cronName, error: msg.slice(0, 200) }
+        });
+        return json(wrapMessage("RUN_FAILED " + msg + " | codeparse_event=" + evt.status), 500);
+      }
+    }
+    return json({ ok: false, error: "not found" }, 404);
+  }
+};
+
+return execDefault;
+})();
+
+// fleet-scheduler v0.1.0 - dynamic cron dispatcher
+// Per-minute tick reads fleet_crons from qnfo-audit D1, dispatches due jobs to fleet-executor.
+var VERSION = FLEET_EXEC_VERSION;
+
+function json(obj, status) {
+  return new Response(JSON.stringify(obj), { status: status || 200, headers: { "content-type": "application/json" } });
+}
+
+function matchField(field, val) {
+  const parts = String(field).split(",");
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i].trim();
+    if (p === "*") return true;
+    if (p.indexOf("*/") === 0) {
+      const n = Number(p.slice(2));
+      if (n > 0 && val % n === 0) return true;
+      continue;
+    }
+    if (p.indexOf("-") > 0) {
+      const ab = p.split("-");
+      if (val >= Number(ab[0]) && val <= Number(ab[1])) return true;
+      continue;
+    }
+    if (Number(p) === val) return true;
+  }
+  return false;
+}
+
+function nextFire(expr, from) {
+  const fields = String(expr).trim().split(/\s+/);
+  if (fields.length !== 5) return null;
+  const cur = new Date(from.getTime());
+  cur.setSeconds(0, 0);
+  cur.setMinutes(cur.getMinutes() + 1);
+  for (let i = 0; i < 366 * 24 * 60; i++) {
+    const m = cur.getUTCMinutes();
+    const h = cur.getUTCHours();
+    const d = cur.getUTCDate();
+    const mo = cur.getUTCMonth() + 1;
+    const dw = cur.getUTCDay();
+    if (matchField(fields[0], m) && matchField(fields[1], h) && matchField(fields[2], d) && matchField(fields[3], mo) && matchField(fields[4], dw)) return cur;
+    cur.setMinutes(cur.getMinutes() + 1);
+  }
+  return null;
+}
+
+async function runTick(env) {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const due = await env.AUDIT.prepare("SELECT * FROM fleet_crons WHERE enabled = 1 AND (next_fire IS NULL OR next_fire <= ?1)").bind(nowIso).all();
+  const fired = [];
+  for (let i = 0; i < due.results.length; i++) {
+    const row = due.results[i];
+    const next = nextFire(row.cron_expr, now);
+    // Defensive: a malformed cron_expr yields nextFire()===null; falling back to null
+    // would re-match "next_fire IS NULL" every tick and fire once per minute forever.
+    const nextIso = next ? next.toISOString() : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    await env.AUDIT.prepare("INSERT INTO fleet_runs (task_id, cron_name, status, started_at) VALUES (?1, ?2, 'queued', ?3)").bind(row.task_id, row.name, nowIso).run();
+    try {
+      const resp = await execMod.fetch(new Request("https://fleet-executor/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ task_id: row.task_id, cron_name: row.name })
+      }), env);
+      fired.push({ name: row.name, task: row.task_id, dispatched: resp.status });
+    } catch (err) {
+      fired.push({ name: row.name, task: row.task_id, dispatch_error: String(err && err.message ? err.message : err).slice(0, 200) });
+    }
+    await env.AUDIT.prepare("UPDATE fleet_crons SET last_fired = ?1, next_fire = ?2, updated_at = ?1 WHERE name = ?3").bind(nowIso, nextIso, row.name).run();
+  }
+  return fired;
+}
+
+var schedDefault = {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async function () {
+      try { await runTick(env); } catch (e) {}
+    })());
+  },
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/health") return json({ ok: true, worker: "fleet-exec", version: VERSION, capabilities: ["cron-dispatch", "fleet-task-execution"], limitations: ["no HTTP trigger: the */10 cron dispatches due fleet_crons jobs; the anonymous /tick route was removed (#1672)", "runs only fleet_tasks rows with enabled = 1"] });
+    // FLEET-EXEC-TICK-UNAUTH-1 (issue #1672): the unauthenticated POST /tick route was
+    // removed. It had zero callers in the repo, and fleet-exec declares no secrets, so it
+    // could not be gated fail-closed without provisioning one. Cron dispatch is unaffected:
+    // scheduled() above calls runTick(env) directly and never used this route. Any future
+    // on-demand trigger belongs on an authenticated control worker, not here.
+    return json({ ok: false, error: "not found" }, 404);
+  }
+};
+
+
+return schedDefault;
+})();
+function fleetExecEnv(env) { return { AUDIT: env.AUDIT_DB, AI: env.AI }; }
+// The member hands its tick to waitUntil; collect and await it so the host's handler lives until the due tasks are done.
+async function runFleetExecMember(event, env) {
+  var pending = [];
+  await fleetExecMod.scheduled(event, fleetExecEnv(env), { waitUntil: function (p) { pending.push(Promise.resolve(p)); }, passThroughOnException: function () {} });
+  await Promise.allSettled(pending);
+}
+// ---- FLEET-EXEC-FOLD-1:END ----
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
+    if (url.pathname === "/fleet-exec/health" && req.method === "GET") return fleetExecMod.fetch(new Request(new URL("/health", url)), fleetExecEnv(env));
     if (url.pathname === "/health") {
       return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["orchestrator", "github-read", "container-exec", "server-side", "task-loop", "model-ladder", "pr-gated", "patch-mode", "issue-planner", "self-repair", "noop-gate"], limitations: ["NOOP-PROPOSAL-GATE-1: a js/mjs proposal that changes only the words inside string literals or comments (prose, not a code-like value) is refused before verify and retried on the next rung; " + NOOP_MAX + " such proposals in a row end the task needs_human","every route except /health needs ORCH_TOKEN", "changes ship only as pull requests: commits to main or master are refused, and in pull mode a workflow opens the PR", "the task loop runs on the */10 cron with a 20-second budget and at most 8 steps per tick", "SELF-REPAIR-1: a task whose " + MAX_ATTEMPTS + " model attempts all fail waits (" + RETRY_BACKOFF_MS.map(function (ms) { return ms / 3600000 + "h"; }).join(", then ") + ") and retries from the first rung, " + RETRY_ROUNDS + " rounds in all; then it is 'failed' and filed once to agent_issues for the fleet, never as an owner card. Policy refusals (path, anchor, no verifier, no-op) still end needs_human", "ISSUE-PLANNER-1 turns at most one open issue per tick (8 a day, at most 3 unfinished tasks in flight) into a code task, only from trusted sources and never for security, governance or outreach issues, secrets, caps or deletions, or a control-plane worker", "CODE-DISPATCH-DEDUPE-1: one change per file at a time; a task on a file with an unfinished code task or a live session work claim (work_claims) is refused and retried later, and a worker.js of a RETIRED or FOLDED worker is refused", "files over 60000 characters need a code-anchor line (patch mode, pull mode only)", "verifies py, json, md and txt; js and mjs only while the platform-enforced Dynamic Workers check is on (see js_verify)"],
         verifiers: VERIFIABLE.concat((await jsVerifyOn(env)) ? ["js", "mjs"] : []), js_verify: env.JS_VERIFY === "dynamic" ? "dynamic" : env.JS_VERIFY === "auto" ? ((await jsVerifyOn(env)) ? "auto-on" : "auto-off") : "off", patch_mode: true, ladder: ladder(env), bindings: { ai: !!env.AI, audit_db: !!env.AUDIT_DB, container: !!env.PY_CONTAINER } });
@@ -1157,8 +1450,10 @@ export default {
   },
   // Cron drives the loop (the 10-minute floor of CRON-RATE-CEILING-1 applies): continuation without a human session.
   async scheduled(event, env, ctx) {
-    if (!env.AUDIT_DB || !env.AI) return;
+    var fleetExecRun = env.AUDIT_DB ? runFleetExecMember(event, env).catch(function () {}) : null;
+    if (!env.AUDIT_DB || !env.AI) { if (fleetExecRun) await fleetExecRun; return; }
     ctx.waitUntil(jsVerifyProbeTick(env).catch(function (e) { return audit(env, "code-task.js-verify-probe-error", String((e && e.message) || e).slice(0, 200), null, "error"); }));
     ctx.waitUntil(tick(env, { budgetMs: 20000, maxSteps: 8 }).catch(function (e) { return audit(env, "code-task.tick-error", String((e && e.message) || e), null, "error"); }));
+    if (fleetExecRun) await fleetExecRun;
   }
 };
