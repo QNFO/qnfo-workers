@@ -28,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.2.5-ai-attribution"; // 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
+var VERSION = "2.2.6-subscribe-box"; // 2.2.6 TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015, pillar reach): ask.qwav.tech carries a subscribe box (type="email" plus a honeypot) that posts cross-origin to the qnfo.org double opt-in (POST https://qnfo.org/api/subscribe, CORS already allows this origin) with source ask.qwav.tech; nobody is subscribed without clicking the confirmation link; no binding, no model call; 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -1322,6 +1322,14 @@ button{font:inherit;color:inherit;cursor:pointer}
 .threads small{display:block;font:400 12.5px var(--sans);color:var(--muted);margin-top:2px}
 
 footer.site{border-top:1px solid var(--rule);padding:22px 0 40px;font-size:13px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap}
+.subbox{border-top:1px solid var(--rule);padding:26px 0 8px}
+.subbox h2{margin:0 0 6px}
+.subbox p{font-size:14px;color:var(--muted);margin:0 0 12px;max-width:62ch}
+.subbox form{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.subbox input[type=email]{flex:1 1 260px;min-width:0;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;font:inherit;background:none;color:inherit}
+.subbox .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.subbox .go{white-space:nowrap}
+.subbox .msg{font-size:13px;color:var(--muted);min-height:1.2em;margin:8px 0 0}
 footer.site a{color:var(--muted)}
 
 @media (max-width: 1100px){
@@ -1428,6 +1436,20 @@ footer.site a{color:var(--muted)}
     <div class="turns" id="turns"></div>
   </section>
 </main>
+
+<div class="wrap">
+  <section class="subbox" id="subscribe" aria-labelledby="sub-h">
+    <h2 id="sub-h">New papers by email</h2>
+    <p>One email when new QNFO research is published. Double opt-in: nothing is sent until you click the link in the confirmation email, and every email has an unsubscribe link.</p>
+    <form id="ask-sub-form" novalidate>
+      <label for="ask-sub-email" style="position:absolute;left:-9999px">Email address</label>
+      <input id="ask-sub-email" name="email" type="email" autocomplete="email" required placeholder="you@example.org">
+      <span class="hp" aria-hidden="true"><label for="ask-sub-hp">Website</label><input id="ask-sub-hp" name="website" type="text" tabindex="-1" autocomplete="off"></span>
+      <button class="go" id="ask-sub-btn" type="submit">Subscribe</button>
+    </form>
+    <p class="msg" id="ask-sub-msg" role="status" aria-live="polite"></p>
+  </section>
+</div>
 
 <div class="wrap">
   <footer class="site">
@@ -1809,6 +1831,7 @@ window.addEventListener("popstate", function(){ if (!new URLSearchParams(locatio
 if (document.readyState === "complete") boot(); else window.addEventListener("load", boot);
 })();
 </script>
+<script>(function(){var f=document.getElementById('ask-sub-form');if(!f)return;var m=document.getElementById('ask-sub-msg'),b=document.getElementById('ask-sub-btn');f.addEventListener('submit',function(e){e.preventDefault();var em=(document.getElementById('ask-sub-email').value||'').trim(),hp=(document.getElementById('ask-sub-hp')||{}).value||'';if(!em||em.indexOf('@')<1||em.lastIndexOf('.')<em.indexOf('@')){m.textContent='Enter a valid email address.';return}b.disabled=true;m.textContent='Subscribing...';fetch('https://qnfo.org/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em,hp:hp,source:'ask.qwav.tech'})}).then(function(r){return r.json().catch(function(){return {}})}).then(function(j){if(j&&j.ok){m.textContent='Check your inbox to confirm the subscription.';f.reset()}else{m.textContent=(j&&j.error)||'The subscription did not go through. Try again.'}}).catch(function(){m.textContent='Network error. Try again.'}).then(function(){b.disabled=false})})})();</script>
 <script src="https://fleet.qnfo.org/ctl.js" defer></script>
 </body>
 </html>
