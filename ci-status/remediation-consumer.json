@@ -1,12 +1,116 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@df5204b5e1fb",
- "due": 5,
- "pass": 2,
- "fail": 3,
- "skipped": 0,
+ "verifier": "remediation-consumer@f008b3ebe700",
+ "due": 18,
+ "pass": 4,
+ "fail": 13,
+ "skipped": 1,
  "contracts": [
+  {
+   "class": "EVID-1641-MENTIONS",
+   "issue_id": 1641,
+   "verdict": "fail",
+   "expected": "all-sources-ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "vacuous-probe-result",
+   "expected": "within-cap",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "EVID-1711-REACH",
+   "issue_id": 1711,
+   "verdict": "fail",
+   "expected": "seven-days",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-1891",
+   "issue_id": 1891,
+   "verdict": "pass",
+   "expected": "clean",
+   "observed": "clean",
+   "written": true
+  },
+  {
+   "class": "issue-1815",
+   "issue_id": 1815,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
+   "written": true
+  },
+  {
+   "class": "issue-2050",
+   "issue_id": 2050,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1875",
+   "issue_id": 1875,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2071",
+   "issue_id": 2071,
+   "verdict": "fail",
+   "expected": "MET",
+   "observed": "OPEN",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "pending: no code task yet",
+   "written": true
+  },
+  {
+   "class": "issue-2066",
+   "issue_id": 2066,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "3",
+   "written": true
+  },
+  {
+   "class": "issue-2070",
+   "issue_id": 2070,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 94 open issues, ceiling 50 (autonomy_scores issue_flow)",
+   "written": true
+  },
+  {
+   "class": "issue-1947",
+   "issue_id": 1947,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
   {
    "class": "TWIN-VISION-TOOLLEAK-1",
    "issue_id": 1805,
@@ -24,27 +128,27 @@
    "written": true
   },
   {
-   "class": "issue-2022",
-   "issue_id": 2022,
+   "class": "issue-1872",
+   "issue_id": 1872,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2040",
-   "issue_id": 2040,
+   "class": "issue-1873",
+   "issue_id": 1873,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2034",
-   "issue_id": 2034,
+   "class": "issue-1824",
+   "issue_id": 1824,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "stalled: 32h since the last q08 piece",
+   "expected": "1",
+   "observed": "0",
    "written": true
   }
  ],
@@ -65,8 +169,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 15049,
- "head": "df5204b5e1fb689d5b092887b0ca3ed63064f632",
+ "spent_ms": 57455,
+ "head": "f008b3ebe7007cb53ec2d5add09318fbd5c1f8b6",
  "job_status": "success",
- "ts": "2026-10-06T15:14:28Z"
+ "ts": "2026-10-06T16:18:55Z"
 }
