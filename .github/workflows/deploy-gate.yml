@@ -263,6 +263,9 @@ jobs:
       - name: HUB-SWR-1 offline suite (qnfo-gateway)
         if: ${{ !cancelled() }}
         run: node qnfo-gateway/hub-swr.test.mjs
+      - name: GOOGLE-IDENTITY-DETECT-1 offline suite (qnfo-fleet-control)
+        if: ${{ !cancelled() }}
+        run: node qnfo-fleet-control/google-identity.test.mjs
       # PROMPT-CACHE-1 (pillar cost, #1795 #1780): every Workers AI wrapper sends a prefix-stable x-session-affinity key and
       # records cached tokens (ai_cache_counters).
       - name: PROMPT-CACHE-1 offline suite (fleet AI wrappers)
