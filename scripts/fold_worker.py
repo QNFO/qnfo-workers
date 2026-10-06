@@ -87,8 +87,9 @@ function __foldWrap(host, m) {
 
 IMPORT_RE = re.compile(r'^import\s+(.+?)\s+from\s+"([^"]+)";\s*$')
 VERSION_RE = re.compile(r'^var VERSION = "([^"]*)";', re.M)
-# The final export block, optionally followed by comment lines (a bundler's sourceMappingURL), which group 2 keeps.
-EXPORT_BLOCK_RE = re.compile(r'\nexport \{\n([\s\S]*?)\n\};((?:\s*//[^\n]*)*)\s*$')
+# The final export block, optionally followed by comment lines (a bundler's sourceMappingURL), which group 2 keeps. Each
+# trailer line starts after its own newline, so one line can never be split between repetitions (no backtracking blow-up).
+EXPORT_BLOCK_RE = re.compile(r'\nexport \{\n([\s\S]*?)\n\};((?:\n[ \t]*//[^\n]*)*)\s*$')
 
 
 def die(msg):
