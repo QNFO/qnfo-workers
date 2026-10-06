@@ -778,6 +778,27 @@ def multipart(fields: dict) -> tuple[bytes, str]:
     return ("".join(parts) + "--" + b + "--\r\n").encode(), "multipart/form-data; boundary=" + b
 
 
+# DO-EXPORTS-PASSTHROUGH-1 (2026-10-06): a settings PATCH on a worker that owns Durable Object classes must declare every
+# provisioned class in `exports` (Cloudflare 100402 "provisioned_class_missing_from_config", seen on qnfo-ops), and GET
+# /settings does not return them. Rebuild them from the account's Durable Object namespaces for this script, with each
+# namespace's own storage (sqlite or legacy-kv). None means the list could not be read, and the caller must not PATCH.
+def do_exports(acct: str, token: str, worker: str) -> dict | None:
+    out: dict = {}
+    page = 1
+    while page <= 20:
+        st, j = call("GET", f"/accounts/{acct}/workers/durable_objects/namespaces?per_page=100&page={page}", token)
+        if st != 200:
+            return None
+        for n in j.get("result") or []:
+            if n.get("script") == worker and n.get("class"):
+                out[n["class"]] = {"type": "durable-object", "storage": "sqlite" if n.get("use_sqlite") else "legacy-kv"}
+        info = j.get("result_info") or {}
+        if page >= int(info.get("total_pages") or 1):
+            return out
+        page += 1
+    return out
+
+
 def unbind_d1(target: str, acct: str, token: str) -> int:
     from secret_lock import secret_lock
     worker, _, binding = target.partition(":")
@@ -817,7 +838,14 @@ def unbind_d1(target: str, acct: str, token: str) -> int:
         emit({"action": "unbind-d1", "worker": worker, "ok": False, "refused": "a fleet_tasks definition names the binding (or the check failed)"})
         return 3
     keep = [{"type": "inherit", "name": b.get("name")} for b in bindings if b.get("name") != binding]
-    body, ctype = multipart({"settings": {"bindings": keep}})
+    exports = do_exports(acct, token, worker)
+    if exports is None:
+        emit({"action": "unbind-d1", "worker": worker, "ok": False, "refused": "Durable Object namespaces could not be read"})
+        return 1
+    settings = {"bindings": keep}
+    if exports:
+        settings["exports"] = exports
+    body, ctype = multipart({"settings": settings})
     with secret_lock(worker, ttl_sec=600, owner="ci/cf-ops-actions/unbind-d1"):
         req = urllib.request.Request(API + f"/accounts/{acct}/workers/scripts/{worker}/settings", data=body, method="PATCH",
                                      headers={"Authorization": "Bearer " + token, "Content-Type": ctype})
@@ -879,7 +907,14 @@ def unbind_service(target: str, acct: str, token: str) -> int:
         return 3
     src = open(os.path.join(d, "worker.js"), encoding="utf-8").read() if os.path.isfile(os.path.join(d, "worker.js")) else ""
     keep = [{"type": "inherit", "name": b.get("name")} for b in bindings if b.get("name") != binding]
-    body, ctype = multipart({"settings": {"bindings": keep}})
+    exports = do_exports(acct, token, worker)
+    if exports is None:
+        emit({"action": "unbind-service", "worker": worker, "ok": False, "refused": "Durable Object namespaces could not be read"})
+        return 1
+    settings = {"bindings": keep}
+    if exports:
+        settings["exports"] = exports
+    body, ctype = multipart({"settings": settings})
     with secret_lock(worker, ttl_sec=600, owner="ci/cf-ops-actions/unbind-service"):
         req = urllib.request.Request(API + f"/accounts/{acct}/workers/scripts/{worker}/settings", data=body, method="PATCH",
                                      headers={"Authorization": "Bearer " + token, "Content-Type": ctype})
@@ -891,7 +926,7 @@ def unbind_service(target: str, acct: str, token: str) -> int:
     st3, j3 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
     after = (j3.get("result") or {}).get("bindings") or []
     ok = bool(pj.get("success")) and not any(b.get("name") == binding for b in after) and len(after) == len(bindings) - 1
-    emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "protected_repair": worker in PROTECTED,
+    emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "protected_repair": worker in PROTECTED, "exports": sorted(exports),
           "code_mentions_binding": bool(re.search(r"\b" + re.escape(binding) + r"\b", src)), "ok": ok, "http": pst,
           "bindings_before": len(bindings), "bindings_after": len(after), "errors": pj.get("errors")})
     return 0 if ok else 1

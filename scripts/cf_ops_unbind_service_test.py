@@ -6,7 +6,8 @@ to deleted workers, and every canonical deploy of them failed with Cloudflare 10
 DANGLING service binding (target absent from the account, target repo directory RETIRED/FOLDED) that the worker's
 wrangler.toml no longer declares; it refuses a binding to a live worker, to an unmarked directory, a non-service binding and
 a binding still declared in wrangler.toml; it is allowed on a protected worker (it only removes a dead reference); it sends
-only {type: inherit} entries under the secret-lock and verifies; a second run is a no-op.
+only {type: inherit} entries plus the worker's Durable Object exports (DO-EXPORTS-PASSTHROUGH-1, else Cloudflare 100402) under
+the secret-lock and verifies, and refuses when the namespaces cannot be read; a second run is a no-op.
 Run: python3 scripts/cf_ops_unbind_service_test.py   (prints "N passed, 0 failed")
 """
 import contextlib
@@ -56,11 +57,16 @@ SETTINGS = {"qnfo-ops": {"bindings": [
     {"type": "service", "name": "NONAME", "service": ""},
     {"type": "d1", "name": "AUDIT", "id": "35e2e573"},
     {"type": "secret_text", "name": "CF_API_TOKEN"}]}}
+NS = {"status": 200, "rows": [{"script": "qnfo-ops", "class": "AgenticOpsExec", "use_sqlite": True},
+                              {"script": "qnfo-ops", "class": "OldKv", "use_sqlite": False},
+                              {"script": "other-worker", "class": "Elsewhere", "use_sqlite": True}]}
 emitted, patched, locks = [], [], []
 C.emit = lambda o: emitted.append(o)
 
 
 def fake_call(method, path, token, body=None, timeout=60):
+    if "/workers/durable_objects/namespaces" in path:
+        return NS["status"], {"success": NS["status"] == 200, "result": NS["rows"], "result_info": {"total_pages": 1}}
     if path.endswith("/settings") and method == "GET":
         w = path.split("/workers/scripts/")[1].split("/")[0]
         if w not in LIVE:
@@ -107,10 +113,14 @@ try:
     ok(C.unbind_service("qnfo-ops:KAIZEN", "a", "t") == 3 and "still declares" in emitted[-1]["refused"] and not patched, "refused while wrangler.toml still declares the binding")
     open(os.path.join(root, "qnfo-ops", "wrangler.toml"), "w").write('name = "qnfo-ops"\n[[services]]\nbinding = "GATEWAY"\nservice = "qnfo-gateway"\n# KAIZEN removed\n')
     ok("qnfo-ops" in C.PROTECTED, "qnfo-ops is a protected worker")
+    NS["status"] = 500
+    ok(C.unbind_service("qnfo-ops:KAIZEN", "a", "t") == 1 and "Durable Object" in emitted[-1]["refused"] and not patched, "unreadable Durable Object namespaces: no PATCH (Cloudflare 100402 would follow)")
+    NS["status"] = 200
     rc = C.unbind_service("qnfo-ops:KAIZEN", "a", "t")
     sent = json.loads(patched[-1]["body"].split("\r\n\r\n", 1)[1].rsplit("\r\n--", 1)[0])
     ok(rc == 0 and emitted[-1]["ok"] and emitted[-1]["protected_repair"] and emitted[-1]["bindings_after"] == 5, "a dangling binding is removed from a protected worker and verified", emitted[-1])
     ok(patched[-1]["method"] == "PATCH" and all(b["type"] == "inherit" for b in sent["bindings"]) and [b["name"] for b in sent["bindings"]] == ["GATEWAY", "UNMARKED", "NONAME", "AUDIT", "CF_API_TOKEN"], "only inherit entries are sent, no values", sent)
+    ok(sent.get("exports") == {"AgenticOpsExec": {"type": "durable-object", "storage": "sqlite"}, "OldKv": {"type": "durable-object", "storage": "legacy-kv"}}, "every Durable Object class the worker owns is declared in exports with its own storage, and no other worker's", sent.get("exports"))
     ok(locks == ["qnfo-ops"], "the mutation ran under the secret-lock for the worker", locks)
     rc2 = C.unbind_service("qnfo-ops:NONAME", "a", "t")
     ok(rc2 == 0 and emitted[-1]["ok"] and emitted[-1]["service"] == "", "a service binding with no target name is dangling and removable", emitted[-1])
