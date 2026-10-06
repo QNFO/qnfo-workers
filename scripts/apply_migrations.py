@@ -6,7 +6,9 @@ WHAT   A migration file opts in with two header lines:
            -- DB: qnfo-audit
        and must carry a rollback line in its header comments ("-- Rollback: ..."). Every DELETE FROM / DROP TABLE /
        DROP INDEX / DROP VIEW statement additionally needs a "-- BACKUP: <table>" line; the named table must exist in the
-       same database and hold at least one row before anything runs (no data is deleted without a backup).
+       same database and hold at least one row before the first destructive statement runs (no data is deleted without a
+       backup). A file may create its own backup ("CREATE TABLE [IF NOT EXISTS] <table> AS SELECT ...") ahead of the first
+       destructive statement; then the check runs right before that statement, otherwise before anything runs.
        --check validates opted-in files (the PR gate). --apply runs them on Cloudflare D1 statement by statement and records
        each run in qnfo-audit.migration_runs (file, sha256, commit, status, statements, error); a file whose sha256 already
        has an ok run is skipped, so a re-run or a hand-applied twin is harmless (migrations here are idempotent by
@@ -105,7 +107,12 @@ def plan(path, text):
         problems.append(str(len(destructive)) + " destructive statement(s) (DELETE/DROP) need a '-- BACKUP: <table>' header line")
     if backup and not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", backup):
         problems.append("BACKUP must name one table")
-    return True, problems, {"db": db, "statements": len(stmts), "destructive": len(destructive), "backup": backup}
+    creates = False
+    if backup and destructive:
+        first = next(i for i, s in enumerate(stmts) if DESTRUCTIVE.match(body(s)))
+        mk = re.compile(r"^\s*CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?\"?" + re.escape(backup) + r"\"?\s+AS\s+SELECT\b", re.I)
+        creates = any(mk.match(body(s)) for s in stmts[:first])
+    return True, problems, {"db": db, "statements": len(stmts), "destructive": len(destructive), "backup": backup, "creates_backup": creates}
 
 
 def d1(acct, token, db_id, sql, params=None):
@@ -132,15 +139,27 @@ def apply_file(path, text, acct, token, commit, emit=print):
     if done:
         emit(json.dumps({"file": path, "already_applied": True, "sha256": sha[:12]}))
         return 0
-    if info["backup"]:
+    def backup_missing():
         n = d1(acct, token, db_id, "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?1", [info["backup"]])
         if not n or int(n[0].get("n") or 0) == 0:
-            return record_failure(path, sha, commit, info, acct, token, db_id, "BACKUP table " + info["backup"] + " does not exist", emit)
+            return "BACKUP table " + info["backup"] + " does not exist"
         rows = d1(acct, token, db_id, 'SELECT COUNT(*) AS n FROM "' + info["backup"] + '"')
         if not rows or int(rows[0].get("n") or 0) == 0:
-            return record_failure(path, sha, commit, info, acct, token, db_id, "BACKUP table " + info["backup"] + " is empty", emit)
+            return "BACKUP table " + info["backup"] + " is empty"
+        return None
+    checked = not info["backup"]
+    if info["backup"] and not info.get("creates_backup"):
+        why = backup_missing()
+        if why:
+            return record_failure(path, sha, commit, info, acct, token, db_id, why, emit)
+        checked = True
     done_n = 0
     for s in statements(text):
+        if not checked and DESTRUCTIVE.match(body(s)):
+            why = backup_missing()
+            if why:
+                return record_failure(path, sha, commit, info, acct, token, db_id, why + " (checked before statement " + str(done_n + 1) + ")", emit, done_n)
+            checked = True
         try:
             d1(acct, token, db_id, body(s))
             done_n += 1

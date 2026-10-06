@@ -23,12 +23,18 @@ const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " 
   // AMH-COVERAGE-ROSTER-1 (host 1.3.2): the member's checkHealthCoverage body is the one function rewritten in the host.
   const cs = body.findIndex((l) => l.includes("async function checkHealthCoverage(")), ce = body.findIndex((l) => l.includes("__name(checkHealthCoverage"));
   const inCov = (l) => { const i = body.indexOf(l); return cs >= 0 && i > cs && i < ce; };
-  const changed = body.filter((l) => l.trim() && !src.includes(l.trim()) && !inCov(l));
+  // AMH-ROSTER-PRUNE-1 (host 1.3.3, lever T5.11): the member's dead per-tick prune in checkFreshness (wrong bind receiver,
+  // never ran) is removed in the host; the folded prober source keeps it, so those lines are the second rewritten region.
+  const fs0 = body.findIndex((l) => l.includes("async function checkFreshness(")), fe = body.findIndex((l) => l.includes("__name(checkFreshness"));
+  const ps = body.findIndex((l, i) => i > fs0 && l.includes("var _roster = []")) - 1, pe = body.findIndex((l, i) => i > ps && l.trim() === "} catch (e) {}");
+  const inPrune = (l) => { const i = body.indexOf(l); return ps > fs0 && pe > ps && pe < fe && i >= ps && i <= pe; };
+  const changed = body.filter((l) => l.trim() && !src.includes(l.trim()) && !inCov(l) && !inPrune(l));
   ok(cs > 0 && ce > cs && changed.length === 3 && changed.some((l) => l.startsWith("var VERSION = ")) && changed.some((l) => l.startsWith("var LIMS = ")) && changed.some((l) => l.startsWith("var SIGNALS = ")), "every prober line is in the host except its VERSION, LIMS and SIGNALS lines (SIGNALS drops the retired kaizen register, FOLD-HYGIENE-1)", changed.map((l) => l.slice(0, 60)));
   ok(/^1\.3\.[1-9]/.test(api.VERSION) && api.PROBER_VERSION === "2.3.15-folded" && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1+, member 2.3.15-folded, legacy member cron */20 kept for dispatch");
   ok(!/"kaizen", "kaizen_candidates"/.test(src), "the prober SIGNALS in the host no longer grade the retired kaizen register (FOLD-HYGIENE-1)");
   ok(src.includes('["version_queue", "version_queue", "created_at", 336, "event"]') && !src.includes('["version_queue", "version_queue", "created_at", 72, "heartbeat"]'), "version_queue is an event register with a 336 h window (#2028)");
   ok((src.match(/var VERSION = "/g) || []).length === 1, "one quoted VERSION constant in the bundle (FM7 parity applies to the host)");
+  ok(fs0 > 0 && fe > fs0 && body.slice(fs0, fe).some((l) => l.includes("_del.bind.apply")) && !src.includes("_del.bind.apply") && !/DELETE FROM ai_model_health/.test(src) && src.includes("AMH-ROSTER-PRUNE-1"), "the host carries no ai_model_health delete: the dead prune is removed, not fixed with raw ids (AMH-ROSTER-PRUNE-1)");
 }
 
 // a recording D1 and AI

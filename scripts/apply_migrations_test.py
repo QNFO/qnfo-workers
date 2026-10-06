@@ -109,6 +109,31 @@ db.commit()
 rc = M.apply_file("migrations/destr.sql", with_bk, "a", "t", "c4", emit)
 ok(rc == 0 and db.execute("SELECT COUNT(*) FROM ops_config WHERE key = 'a'").fetchone()[0] == 0, "with a non-empty backup the destructive file runs", out[-1])
 
+# 5b. A file that creates its own backup ahead of the delete: checked right before the DELETE, not before anything.
+own_bk = """-- own backup
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- BACKUP: bak_test_own
+-- Rollback: INSERT OR IGNORE INTO ops_config SELECT * FROM bak_test_own;
+INSERT OR REPLACE INTO ops_config (key, value) VALUES ('own1', 'x');
+CREATE TABLE IF NOT EXISTS bak_test_own AS SELECT * FROM ops_config;
+DELETE FROM ops_config WHERE key = 'own1';
+"""
+okp, probs, inf = M.plan("migrations/own.sql", own_bk)
+ok(okp and not probs and inf["creates_backup"] is True, "a CREATE TABLE <backup> AS SELECT ahead of the delete is recognised", (probs, inf))
+rc = M.apply_file("migrations/own.sql", own_bk, "a", "t", "c4b", emit)
+ok(rc == 0 and db.execute("SELECT COUNT(*) FROM bak_test_own WHERE key = 'own1'").fetchone()[0] == 1 and db.execute("SELECT COUNT(*) FROM ops_config WHERE key = 'own1'").fetchone()[0] == 0, "the backup is written first, then the delete runs", out[-1])
+late_bk = own_bk.replace("bak_test_own", "bak_test_late").replace("CREATE TABLE IF NOT EXISTS bak_test_late AS SELECT * FROM ops_config;\nDELETE FROM ops_config WHERE key = 'own1';", "DELETE FROM ops_config WHERE key = 'own1';\nCREATE TABLE IF NOT EXISTS bak_test_late AS SELECT * FROM ops_config;")
+okp, probs, inf = M.plan("migrations/late.sql", late_bk)
+ok(inf["creates_backup"] is False, "a backup created after the delete does not count", inf)
+db.execute("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('own1', 'x')")
+db.commit()
+rc = M.apply_file("migrations/late.sql", late_bk, "a", "t", "c4c", emit)
+ok(rc == 1 and "does not exist" in out[-1] and db.execute("SELECT COUNT(*) FROM ops_config WHERE key = 'own1'").fetchone()[0] == 1, "so the file is stopped before any statement and nothing is deleted", out[-1])
+empty_bk = own_bk.replace("bak_test_own", "bak_test_empty").replace("AS SELECT * FROM ops_config;", "AS SELECT * FROM ops_config WHERE 0;")
+rc = M.apply_file("migrations/empty.sql", empty_bk, "a", "t", "c4d", emit)
+ok(rc == 1 and "is empty" in out[-1] and "before statement 3" in out[-1] and db.execute("SELECT COUNT(*) FROM ops_config WHERE key = 'own1'").fetchone()[0] == 1, "an empty self-made backup stops the file right before the delete", out[-1])
+
 # 6. A failing statement is recorded once and filed once.
 failing = GOOD.replace("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('b;c', 'it''s; fine');", "INSERT INTO no_such_table VALUES (1);")
 rc = M.apply_file("migrations/fail.sql", failing, "a", "t", "c5", emit)
