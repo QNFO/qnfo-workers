@@ -1,133 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@f818516e5bff",
- "due": 15,
- "pass": 4,
- "fail": 10,
- "skipped": 1,
- "contracts": [
-  {
-   "class": "issue-1813",
-   "issue_id": 1813,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1959",
-   "issue_id": 1959,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1833",
-   "issue_id": 1833,
-   "verdict": "pass",
-   "expected": "attributed",
-   "observed": "attributed",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
-   "verdict": "vacuous-probe-result",
-   "expected": "connected",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-1800",
-   "issue_id": 1800,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1876",
-   "issue_id": 1876,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: under 7 days since the deploy",
-   "written": true
-  },
-  {
-   "class": "issue-1877",
-   "issue_id": 1877,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: under 3 days since the deploy",
-   "written": true
-  },
-  {
-   "class": "issue-1960",
-   "issue_id": 1960,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: under 7 days of the merge lane",
-   "written": true
-  },
-  {
-   "class": "issue-1965",
-   "issue_id": 1965,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: under 24h of the merge lane",
-   "written": true
-  },
-  {
-   "class": "issue-1942",
-   "issue_id": 1942,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1825",
-   "issue_id": 1825,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
-  },
-  {
-   "class": "issue-1891",
-   "issue_id": 1891,
-   "verdict": "fail",
-   "expected": "clean",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1939",
-   "issue_id": 1939,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1986",
-   "issue_id": 1986,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending",
-   "written": true
-  }
- ],
+ "verifier": "remediation-consumer@79ca10f38497",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
+ "skipped": 0,
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -144,8 +23,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 36911,
- "head": "f818516e5bff048cef263734b03bb82d7a0f93a3",
+ "spent_ms": 1881,
+ "head": "79ca10f384970070f36f9704f5f04d1b95654e92",
  "job_status": "success",
- "ts": "2026-10-06T05:47:29Z"
+ "ts": "2026-10-06T06:17:57Z"
 }
