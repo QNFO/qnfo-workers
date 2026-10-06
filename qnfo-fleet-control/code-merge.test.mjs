@@ -630,5 +630,22 @@ ok(r.idle === "hourly tick owns minute 0" && gh.newPulls.length === 1, "open-onl
 r = J(await W.codeMergeTick(env, { now: Date.parse("2026-10-03T13:00:00Z") }));
 ok(gh.newPulls.length === 2 && r.opened.length === 1 && r.decided.length >= 1, "the hourly tick still opens and decides", { n: gh.newPulls.length, o: r.opened, d: r.decided.length });
 
+// ---------------------------------------------------------------- TP-1a TRUSTED-ORIGIN-PARITY-1 (agent_issues 2005, 0.4.132)
+// The runner's default list (CM_TRUSTED_SOURCES) trusts every (source, title-prefix) pair the orchestrator's planner trusts
+// (PLAN_TRUSTED, sliced from qnfo-code-orchestrator/worker.js), so a task the planner builds is never refused by cmProvenance.
+{
+  const p1 = orch.indexOf("const PLAN_TRUSTED = ["), p2 = orch.indexOf("const _planDbs");
+  ok(p1 > 0 && p2 > p1, "PLAN_TRUSTED and planTrusted are found in the orchestrator");
+  vm.runInContext(orch.slice(p1, p2) + "\n__export.planTrusted = planTrusted; __export.PLAN_TRUSTED = PLAN_TRUSTED;", sandbox, { filename: "plan-trusted" });
+  ok(Array.isArray(W.PLAN_TRUSTED) && W.PLAN_TRUSTED.length >= 6, "the planner's list has its rows", W.PLAN_TRUSTED);
+  W.PLAN_TRUSTED.forEach((r) => {
+    const src = r.prefix ? r.src + "-x" : r.src, title = (r.title || "") + "something";
+    ok(W.planTrusted(src, title) === true && W.cmTrusted(src, title) === true, "planner and runner both trust " + src + " / " + title);
+  });
+  ok(W.planTrusted("qnfo-ops", "X") === false && W.cmTrusted("qnfo-ops", "X") === false, "planner and runner both refuse an unlisted origin");
+  ok(W.cmTrusted("qnfo-fleet-control", "SOMETHING-ELSE-1") === false, "a fleet-control issue outside the trusted prefixes is still refused");
+  ok(W.cmTrusted("qnfo-fleet-control", "TP-1.3-REBASE-1: x") === true && W.cmTrusted("TRANSFORMATION-PROGRAM-1", "TP-9-X: y") === true, "the transformation program's two origins are trusted by default (TRANSFORMATION-LOOP-1)");
+}
+
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
