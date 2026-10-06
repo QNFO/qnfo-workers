@@ -238,20 +238,43 @@ def run_guard():
 
 
 # ---------------------------------------------------------------- D1
+# D1-TRANSIENT-RETRY-1 (GitHub #687): run 37437780436 (2026-10-06 08:48Z) failed the whole job, and the CI watchdog filed
+# #687, because ONE audit row (radar-hub) was answered "HTTP 500 ... code 7500 internal error" while the other 112 wrote; the
+# runs before and after on the same commit passed. A reply the platform marks as transient (HTTP 429 or 5xx, a body saying
+# "internal error", or a transport failure) is retried D1_RETRIES times with backoff before it counts as a write failure.
+# Every statement sent here is an UPSERT or an idempotent purge, so a retry cannot double a row. A SQL error (HTTP 400 with
+# D1's generic code 7500 and SQLITE_ERROR text) is not transient and still fails at once.
+D1_RETRIES = 3
+D1_RETRY_S = (2, 5)
+
+
+def _d1_transient(code, body):
+    return code == 429 or 500 <= int(code or 0) <= 599 or b"internal error" in (body or b"")
+
+
 def d1(sql, params):
     acct, token = env("CF_ACCOUNT_ID"), env("CLOUDFLARE_API_TOKEN")
     url = (f"https://api.cloudflare.com/client/v4/accounts/{acct}"
            f"/d1/database/{AUDIT_DB}/query")
     body = json.dumps({"sql": sql, "params": params}).encode()
-    req = urllib.request.Request(url, data=body, method="POST", headers={
-        "Authorization": "Bearer " + token, "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.load(r)
-    except urllib.error.HTTPError as e:
-        return {"ok": False, "error": f"HTTP {e.code}: {e.read()[:200]!r}"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:200]}
+    res = {"ok": False, "error": "no attempt"}
+    for attempt in range(D1_RETRIES):
+        req = urllib.request.Request(url, data=body, method="POST", headers={
+            "Authorization": "Bearer " + token, "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            text = e.read()[:400]
+            res = {"ok": False, "error": f"HTTP {e.code}: {text[:200]!r}"}
+            if not _d1_transient(e.code, text):
+                return res
+        except Exception as e:
+            res = {"ok": False, "error": str(e)[:200]}
+        if attempt < D1_RETRIES - 1:
+            time.sleep(D1_RETRY_S[min(attempt, len(D1_RETRY_S) - 1)])
+    res["error"] = res["error"] + f" (after {D1_RETRIES} attempts, D1-TRANSIENT-RETRY-1)"
+    return res
 
 
 def d1_changes(res):
