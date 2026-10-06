@@ -20,6 +20,8 @@ CREATE TABLE experiments (id TEXT PRIMARY KEY, name TEXT, hypothesis TEXT, kind 
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT DEFAULT 'open', linked_session TEXT, created_at INTEGER, updated_at INTEGER);
 CREATE TABLE issue_triage (issue_id INTEGER PRIMARY KEY, rc TEXT NOT NULL, triage_state TEXT NOT NULL DEFAULT 'triaged', owner TEXT NOT NULL, sla_due_at TEXT NOT NULL, triaged_at TEXT, remediation TEXT, close_evidence TEXT, reopened_count INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE human_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT NOT NULL, why TEXT, default_in_effect TEXT, action TEXT, url TEXT, sev TEXT, due TEXT, status TEXT DEFAULT 'open', source TEXT, created_at TEXT, updated_at TEXT, resolved_at TEXT, resolution TEXT);
+CREATE TABLE fleet_budget (node_class TEXT PRIMARY KEY, cap REAL, target REAL, current REAL, unit TEXT, updated_at TEXT);
+INSERT INTO fleet_budget (node_class, cap, current) VALUES ('ai_spend:total', 150, 10), ('workers', 30, 44);
 CREATE TABLE ai_spend_ledger (day TEXT NOT NULL, provider TEXT NOT NULL, caller TEXT NOT NULL, model TEXT NOT NULL, calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, usd REAL DEFAULT 0, downgraded INTEGER DEFAULT 0, refused INTEGER DEFAULT 0, PRIMARY KEY (day, provider, caller, model));`);
 function stmt(sql0) {
   const order = [];
@@ -56,7 +58,8 @@ async function gatewayFetch(u) {
   return J({ error: "unexpected " + url }, 404);
 }
 const ideasFetch = async () => new Response(JSON.stringify({ sessions: [{ id: "t-1", title: "Energy per correct answer: what does JPCUB measure in LLM benchmarks?", message_count: 2, updated_at: "2026-10-01T00:00:00Z" }] }), { headers: { "content-type": "application/json" } });
-const AI_SEARCH = { get() { return { async search() { return { chunks: [{ score: 0.7, text: "# JPCUB for LLM Energy\n\nJPCUB is joules per correct answer.", item: { key: "jpcub-llm-energy.md" } }, { score: 0.65, text: "audit row", item: { key: "audit-test-002.md" } }] }; } }; }, async list() { return ["qnfo-corpus"]; } };
+const uploads = [];
+const AI_SEARCH = { get() { return { items: { async upload(key, text, opts) { uploads.push({ key, bytes: text.length, meta: opts && opts.metadata }); return { key }; } }, async search() { return { chunks: [{ score: 0.7, text: "# JPCUB for LLM Energy\n\nJPCUB is joules per correct answer.", item: { key: "jpcub-llm-energy.md" } }, { score: 0.65, text: "audit row", item: { key: "audit-test-002.md" } }] }; } }; }, async list() { return ["qnfo-corpus"]; } };
 const models = [];
 const AI = {
   async run(model, input) {
@@ -131,10 +134,11 @@ sq.exec("UPDATE ask_events SET judge=1, answer='x [1]', context='[1] y'");
 await worker.scheduled({ scheduledTime: Date.UTC(2026, 9, 3, 3, 41) }, env, ctx);
 await Promise.allSettled(waits.splice(0));
 const runs = sq.prepare("SELECT kind, ok, note FROM ask_loop_runs").all();
-ok(runs.length === 8 && runs.every((r) => r.ok === 1), "all eight steps of the daily tick ran: " + runs.map((r) => r.kind + ":" + r.ok).join(","));
+ok(runs.length === 9 && runs.every((r) => r.ok === 1), "all nine steps of the daily tick ran (2.2.8 adds corpus-sync): " + runs.map((r) => r.kind + ":" + r.ok).join(","));
 ok(sq.prepare("SELECT COUNT(*) n FROM metric_registry WHERE owner='qnfo-ai-search'").get().n === 8, "eight ask_* metrics registered with bands");
 ok(sq.prepare("SELECT last_value v FROM metric_registry WHERE metric='ask_grounded_share_7d'").get().v === "0.75", "grounding judge feeds ask_grounded_share_7d");
 ok(sq.prepare("SELECT COUNT(*) n FROM ask_golden").get().n >= 1, "golden set grows from new papers");
+ok(uploads.length === 2 && uploads.every((u) => /\.md$/.test(u.key) && u.meta && u.meta.source === "papers.qnfo.org") && sq.prepare("SELECT COUNT(*) n FROM ask_corpus_sync WHERE status = 'uploaded'").get().n === 2, "with the ai_spend caps clear the corpus feeder uploads the published papers and records them (ASK-CORPUS-FEEDER-1)", uploads);
 ok(sq.prepare("SELECT status FROM experiments WHERE id LIKE 'ASK-TUNE-G-%'").get().status === "running", "a generation A/B is registered in experiments");
 const cfg = JSON.parse(sq.prepare("SELECT value FROM pipeline_flags WHERE key='ask_config'").get().value);
 ok(cfg.challenger && cfg.challenger.change && cfg.champion.model, "challenger armed beside the champion (" + (cfg.challenger && cfg.challenger.change) + ")");

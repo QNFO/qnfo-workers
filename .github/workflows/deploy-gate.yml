@@ -468,6 +468,9 @@ jobs:
       # ASK-LEXICAL-CATALOG-1: retrieve() ranks the published catalog (BM25, no model call) beside the stale vector index.
       - name: ASK-LEXICAL-CATALOG-1 offline suite (qnfo-ai-search 2.2.7)
         run: node --no-warnings qnfo-ai-search/lexical-catalog.test.mjs
+      # ASK-CORPUS-FEEDER-1 + QGEN-COMPLETE-1 (#2029): the vector index is fed again, never while an ai_spend cap is breached.
+      - name: ASK-CORPUS-FEEDER-1 offline suite (qnfo-ai-search 2.2.8)
+        run: node --no-warnings qnfo-ai-search/corpus-feeder.test.mjs
 
       # GROUND-OR-SLOT-1 + GROUND-THIN-FAILFAST-1 (agent_issues 1751): the arXiv OR fallback keeps its query slot, and a
       # grounding too thin to pass gate-refcount stops at ground instead of running the whole pipeline.
