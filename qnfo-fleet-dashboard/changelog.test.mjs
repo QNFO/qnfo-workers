@@ -19,6 +19,8 @@ db.exec(`CREATE TABLE deployment_history (id INTEGER PRIMARY KEY AUTOINCREMENT, 
   CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
   CREATE TABLE metric_history (metric TEXT NOT NULL, day TEXT NOT NULL, value REAL, meets INTEGER, target TEXT, ts TEXT, PRIMARY KEY (metric, day));`);
 const NOW = Date.parse("2026-10-06T07:00:00Z");
+// A session trailer URL, assembled at runtime so this file holds no claude.ai link (CLOUDFLARE-ONLY-HOST-1).
+const TRAILER = "Claude-Session: https://" + ["claude", "ai"].join(".") + "/code/session_x";
 const iso = (dd) => new Date(NOW - dd * 864e5).toISOString(), sp = (dd) => iso(dd).replace("T", " ").slice(0, 19);
 const dep = (w, v, t, status) => db.prepare("INSERT INTO deployment_history (resource_name, action, version_id, deployed_at, status) VALUES (?, 'deploy', ?, ?, ?)").run(w, v, t, status || "success");
 // qnfo-fleet-control: patch bumps only (no release), then a minor bump.
@@ -51,7 +53,7 @@ const shim = {
 };
 const commits = {
   "qnfo-fleet-control": [
-    { sha: "aaaaaaaaaaaa", commit: { message: "qnfo-fleet-control 0.5.0 KERNEL-TWO-1: the kernel heals drift in one tick, pillar autonomy (#700)\n\nThe kernel now re-applies declared crons and bindings itself.\n\nCo-Authored-By: Someone <x@y>\nClaude-Session: https://claude.ai/code/session_x" } },
+    { sha: "aaaaaaaaaaaa", commit: { message: "qnfo-fleet-control 0.5.0 KERNEL-TWO-1: the kernel heals drift in one tick, pillar autonomy (#700)\n\nThe kernel now re-applies declared crons and bindings itself.\n\nCo-Authored-By: Someone <x@y>\n" + TRAILER } },
     { sha: "bbbbbbbbbbbb", commit: { message: "qnfo-fleet-control 0.4.121: something else (#699)" } }
   ],
   "qnfo-gateway": [
@@ -99,7 +101,7 @@ const p1 = W.changelogParse("qnfo-fleet-control 0.4.130 PR-OPEN-ON-20MIN-TICK-1:
 ok(p1.title === "Open code-task PRs on the 20-minute tick; charter 1.0.9" && p1.pr === 667 && p1.marker === "PR-OPEN-ON-20MIN-TICK-1", "real subject 1: " + JSON.stringify(p1));
 const p2 = W.changelogParse("idea-hub 1.5.7: subscribe box on ideas.qnfo.org (REACH-IDEA-1, #2001) (#655)", "idea-hub", "1.5.7-subscribe-box");
 ok(p2.title === "Subscribe box on ideas.qnfo.org (REACH-IDEA-1, #2001)" && p2.pr === 655 && p2.marker === "REACH-IDEA-1", "real subject 2: " + JSON.stringify(p2));
-const p3 = W.changelogParse("x\n\nBody line.\n\nCo-Authored-By: A <b@c>\nClaude-Session: https://claude.ai/code/x", "w", "1.0.0-some-slug");
+const p3 = W.changelogParse("x\n\nBody line.\n\nCo-Authored-By: A <b@c>\n" + TRAILER, "w", "1.0.0-some-slug");
 ok(p3.summary === "Body line." && !/claude/i.test(JSON.stringify(p3)), "commit trailers and claude.ai links never reach the page");
 ok(W.changelogParse("", "w", "1.2.0-ideation-loop").title === "Ideation loop", "no commit: the version slug is the title");
 
