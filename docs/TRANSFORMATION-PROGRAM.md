@@ -395,9 +395,13 @@ retention policy with table families and no snapshot tables older than 30 days.
 9. **(code)** `charter-guard.py` requires `# charter-pillar:` on every live `wrangler.toml` (today 2 of 42), with the
    42 declarations landed in the same PR.
 
-10. **(refactor, W2)** Personal plane in one worker: personal-companion (no binders, no URL callers, hourly) and
-    calendar-api (binders personal-api, qnfo-intent-orchestrator, radar-hub) fold into personal-api; the plane separation
-    is between planes, not inside one.
+10. **(refactor, W2)** calendar-api folds by the kit (lever 14). It serves the qnfo, personal and host calendars from
+    qnfo-audit and is bound by personal-api, qnfo-intent-orchestrator and radar-hub (cron `17 * * * *`). A trial on
+    2026-10-06 folded it into personal-companion (hourly) with a least-privilege member env (its own `CAL_DB`, `ICS_R2`,
+    `VAULT`, `CAL_TOKEN`, never the host's `PERSONAL`): the generated suite and every personal-companion suite passed and
+    the three binders were re-pointed. radar-hub, the other natural host, is refused by the kit until its three top-level
+    VERSION lines become one. personal-companion and personal-api themselves stay separate until the companion-generation
+    Workflow or the PersonalTwinAgent Durable Object can move with its state (the kit refuses both).
 11. **(refactor, W2)** qnfo-intent-orchestrator: its downstream (qnfo-agent-orchestrator) is retired with PR 674 and seven
     promoted candidates wait on a dispatch that fails (epic 2010); fold its intake into idea-hub and route promotions to
     qnfo-research-exec. Four binders (qnfo-ai, qnfo-fleet-control, qnfo-ops, qnfo-tools-mcp), three on the control plane,
@@ -407,9 +411,14 @@ retention policy with table families and no snapshot tables older than 30 days.
     protection moves with it (FOLD-GUARD-PARITY-1 fails CI otherwise).
 13. **(refactor, W2)** qnfo-subscribers into qnfo-email (one list, one transport, one suppression list): its URL callers
     (idea-hub, qnfo-gateway, qnfo-ipatent) re-point to the host route first; qnfo-gateway is control plane, so a session.
-14. **(repo)** Fold kit: `scripts/fold_worker.py <guest> <host>` generalises the three builders of waves 1 to 3 (IIFE wrap,
-    VERSION and export rewrite, env map, tick map, health route, props-member routing, the parity test), so a fold is one
-    command and a review; it is the step that lets T1.11 take folds.
+14. **(repo, built 1.2)** Fold kit: `scripts/fold_worker.py <guest> <host>` replaces the hand-written builders of waves 1
+    to 3. The guest runs unchanged in an IIFE; the host's default export is wrapped (`__foldWrap`), never edited; the member
+    env is least privilege (the guest's bindings, vars and the env names its code reads), where the hand folds passed the
+    whole host env; bindings merge from the parsed tomls; binders and the host's own binding are re-pointed with
+    `props.member`; a parity, routing and schedule suite is generated. It refuses a guest exporting a Durable Object or
+    Workflow class, a fold that hands research code a personal-plane binding or moves personal resources into a research
+    worker (rule 8), and a host with more than one top-level VERSION line. `scripts/fold_worker_selftest.py` (14) runs in
+    deploy-gate. Done when the next production fold is produced by it.
 15. **(code, done 1.2)** Fold-guard parity (SCORER-HOST-DENY-1, FOLD-GUARD-PARITY-1, section 1.12).
 
 T3.2 (MCP 2 -> 1) carries a dependency the repository cannot show: the owner's desktop clients reach qnfo-memory-mcp by URL
