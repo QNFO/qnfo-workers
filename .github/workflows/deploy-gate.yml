@@ -208,6 +208,10 @@ jobs:
       # no-form link on work-with-me), and passes the REACH-IDEATION checks copied from qnfo-fleet-control.
       - name: REACH-LAYER-1 offline suite (qnfo-gateway)
         run: node qnfo-gateway/reach-layer.test.mjs
+      # UTM-CLICK-LEDGER-1 (T7.9): tagged page loads counted by the gateway (no cookie, no IP) reach reach_signals source utm
+      # through the dashboard's ingest.
+      - name: UTM-CLICK-LEDGER-1 offline suite (qnfo-gateway + qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-gateway/utm-click-ledger.test.mjs
       # HUB-SWR-1 (#1910): the qnfo.org home is served from the edge cache and rebuilt in the background.
       - name: HUB-SWR-1 offline suite (qnfo-gateway)
         run: node qnfo-gateway/hub-swr.test.mjs

@@ -1,4 +1,7 @@
-var VERSION="3.9.8-math-residue";
+var VERSION="3.10.0-utm-click-ledger";
+// UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
+// utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
+// no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
 // MATH-RESIDUE-2 (3.9.8, 2026-10-06, pillar reach, agent_issues 2023; guard paper_render_defect_pages 68 > 3): the first
 // 06:00 sweep after MATH-TYPESET-1 counted 68 pages whose text still carried >= 3 untypeset sub/superscript tokens. The guard
 // and its definition are unchanged; the typesetter now reaches more of them. pseudoMath() accepts a ")" or "]" base for ^ and
@@ -3181,7 +3184,7 @@ function renderPrivacyHTML() {
   const sec = function(h, id, inner) { return '<h2 id="' + id + '">' + h + "</h2>" + inner; };
   const body = '<div class="q-wrap"><article class="q-article"><div><header class="q-article-head"><p class="q-eyebrow">Privacy</p><h1 class="q-h1">What the QNFO sites collect</h1><p class="q-meta">Applies to qnfo.org, papers.qnfo.org, legal.qnfo.org, archive.qnfo.org, ideas.qnfo.org, ask.qwav.tech, ipatent.qnfo.org, qwav.org and qwav.tech. Updated 2 October 2026.</p></header><div class="q-prose">' +
     "<p>QNFO is one researcher, Rowan Brad Quni-Gudzinas, who is responsible for these sites and for this notice. Nothing is sold, and nothing is shared for advertising.</p>" +
-    sec("Visit statistics", "statistics", "<p>Pages load Google Analytics 4 (property G-LV7RHRVW6R), which sets cookies and counts visits, pages and referrers. Cloudflare, which hosts the sites, may also add its Web Analytics beacon, which uses no cookies. These figures are used only to see which pages people read.</p>") +
+    sec("Visit statistics", "statistics", "<p>Pages load Google Analytics 4 (property G-LV7RHRVW6R), which sets cookies and counts visits, pages and referrers. Cloudflare, which hosts the sites, may also add its Web Analytics beacon, which uses no cookies. When a link carries campaign tags (utm_source, utm_medium, utm_campaign, as links in our posts and digests do), the site counts that page load by day, page, tag values, country and whether the visitor is an automated preview, with no cookie, network address or browser details. These figures are used only to see which pages people read and which posts brought them.</p>") +
     sec("Email digest", "digest", "<p>If you subscribe, your email address is stored to send the weekly digest. You confirm by email first, and every digest has an unsubscribe link that removes you. Digest emails carry no tracking pixels.</p>") +
     sec("Ask the corpus", "ask", "<p>Questions you ask and the ratings you give are stored with the answer, without your network address, to measure and improve the answers. A question the papers cannot answer may be added, with no identifier, to the research idea queue that decides what to study next.</p>") +
     sec("iPatent", "ipatent", "<p>Your invention text is sent to the drafting model and is not kept unless you tick the box to keep a private copy. A one-way hash of your network address is stored to enforce the daily drafting limit.</p>") +
@@ -3538,6 +3541,57 @@ function reachOgImage() {
   return new Response(bin, { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=86400" } });
 }
 // ---- REACH-LAYER-1:END ----
+// ---- UTM-CLICK-LEDGER-1:BEGIN ----
+// UTM-CLICK-LEDGER-1 (3.10.0, transformation lever T7.9, pillar reach; owner directive 2026-10-06 "do real humans find and visit
+// the pages"): every qnfo.org link the fleet posts or mails carries utm_source/utm_medium/utm_campaign (qnfo-social
+// POST-ID-UTM-1), but RUM drops the query string and nothing read the tags, so no post or digest could be joined to the
+// visits it caused. A GET for an HTML page that carries utm_source is counted once, after the response is built, into the
+// gateway's own D1 (qnfo-graph, binding DB) table utm_clicks: one row per (day, host, path, source, medium, campaign,
+// ua_class, country) with a counter. No cookie, no IP, no user agent string, no per-recipient id; ua_class is bot when the
+// user agent names a crawler or link-preview fetcher. Values are lower-cased, limited to [a-z0-9._-] and 64 characters; an
+// isolate records at most UTM_ISOLATE_CAP clicks so a flood of invented tags cannot grow the table without bound.
+// qnfo-fleet-dashboard's daily reach ingest reads the rows into qnfo-audit.reach_signals (source utm).
+var UTM_BOT_RE = /bot|crawler|spider|preview|facebookexternalhit|slackbot|twitterbot|linkedinbot|mastodon|bluesky|cardyb|headless/i;
+var UTM_ISOLATE_CAP = 5000;
+var utmIsolateCount = 0;
+var utmTableReady = false;
+function utmClean(v) {
+  return String(v || "").toLowerCase().trim().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
+}
+// The row a response earns, or null: GET, a utm_source on the URL, a 200 HTML answer.
+function utmClickRow(request, res, nowMs) {
+  try {
+    if (!request || request.method !== "GET" || !res || res.status !== 200) return null;
+    if (!/text\/html/i.test(res.headers.get("Content-Type") || "")) return null;
+    const u = new URL(request.url);
+    const src = utmClean(u.searchParams.get("utm_source"));
+    if (!src) return null;
+    const cf = request.cf || {};
+    return {
+      day: new Date(nowMs || Date.now()).toISOString().slice(0, 10),
+      host: u.hostname.toLowerCase().slice(0, 64),
+      path: (u.pathname.replace(/\/+$/, "") || "/").slice(0, 200),
+      utm_source: src,
+      utm_medium: utmClean(u.searchParams.get("utm_medium")),
+      utm_campaign: utmClean(u.searchParams.get("utm_campaign")),
+      ua_class: UTM_BOT_RE.test(request.headers.get("User-Agent") || "") ? "bot" : "human",
+      country: typeof cf.country === "string" ? cf.country.slice(0, 2).toUpperCase() : ""
+    };
+  } catch (e) {
+    return null;
+  }
+}
+async function utmRecord(env, row) {
+  if (!row || !env || !env.DB || utmIsolateCount >= UTM_ISOLATE_CAP) return false;
+  utmIsolateCount++;
+  if (!utmTableReady) {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS utm_clicks (day TEXT NOT NULL, host TEXT NOT NULL, path TEXT NOT NULL, utm_source TEXT NOT NULL, utm_medium TEXT NOT NULL DEFAULT '', utm_campaign TEXT NOT NULL DEFAULT '', ua_class TEXT NOT NULL, country TEXT NOT NULL DEFAULT '', n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, host, path, utm_source, utm_medium, utm_campaign, ua_class, country))").run();
+    utmTableReady = true;
+  }
+  await env.DB.prepare("INSERT INTO utm_clicks (day, host, path, utm_source, utm_medium, utm_campaign, ua_class, country, n) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1) ON CONFLICT (day, host, path, utm_source, utm_medium, utm_campaign, ua_class, country) DO UPDATE SET n = n + 1").bind(row.day, row.host, row.path, row.utm_source, row.utm_medium, row.utm_campaign, row.ua_class, row.country).run();
+  return true;
+}
+// ---- UTM-CLICK-LEDGER-1:END ----
 var gateway_worker_default = {
   async fetch(request, env, ctx) {
     // HEAD too: some link-preview crawlers check the image with HEAD before fetching it (REACH-LAYER-1 3.8.7).
@@ -3545,7 +3599,11 @@ var gateway_worker_default = {
       var ogr = reachOgImage();
       return request.method === "HEAD" ? new Response(null, { status: 200, headers: ogr.headers }) : ogr;
     }
-    return withFleetCtl(await withReachLayer(await gateway_worker_default.serve(request, env, ctx), request));
+    const served = await gateway_worker_default.serve(request, env, ctx);
+    // UTM-CLICK-LEDGER-1: count a tagged page load after the answer is built; never delays or changes the response.
+    const utmRow = utmClickRow(request, served);
+    if (utmRow && ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(utmRecord(env, utmRow).catch(function() {}));
+    return withFleetCtl(await withReachLayer(served, request));
   },
   async serve(request, env, ctx) {
     const u = new URL(request.url);
