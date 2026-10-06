@@ -76,7 +76,9 @@ private repositories are counted, never named and never repaired, so they do not
    (`GET /portfolio` lists the last forty) and the next sync measures it; `portfolio_hygiene` is graded in the charter
    under the autonomy pillar (target >= 0.9).
 3. **Archive, do not delete.** A research repository that is dormant for 120+ days and has no WBS code is an archive
-   candidate. The loop proposes; a session archives (reversible); nothing is ever deleted.
+   candidate. The loop proposes; a session archives (reversible), or the loop does when an explicit `portfolio_actions`
+   row asks for it (`action = archive-request`, `status = requested`, written by an issue or a session: REPO-ARCHIVE-1,
+   2026-10-06, because the session GitHub proxy refuses repository settings writes). Nothing is ever deleted.
 4. **Private stays private.** Private repositories are counted in every surface and named in none.
 5. **One identity.** Public text says `QNFO` (the imprint) and names Rowan Brad Quni-Gudzinas as author of record;
    never "Research Foundation", "Collective" or "Program" as an organisation name (STRATEGY-1 section 2.1).

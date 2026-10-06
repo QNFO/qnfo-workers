@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.8.1-learner-channel-arm";
+var VERSION = "0.8.2-utm-visits"; // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -2030,8 +2030,19 @@ function learnerEngagementOf(rows, nPosts) {
   const likes = latest.likes || 0, reposts = latest.reposts || 0, quotes = latest.quotes || 0, replies = latest.replies || 0;
   return { e: likes + reposts + quotes + Math.max(0, replies - self), likes: likes, reposts: reposts, quotes: quotes, replies: replies, self_replies: self, snapshot_day: day };
 }
-async function learnerVisits(env, slug, d0) {
+// UTM-VISITS-1 (0.8.2): the utm_source values a learner channel's posts carry (POST-ID-UTM-1 and BUFFER_UTM_SOURCE).
+var LEARNER_UTM_SOURCES = { bluesky: ['bluesky'], linkedin: ['linkedin'], mastodon: ['mastodon'], x: ['x', 'twitter'] };
+async function learnerVisits(env, slug, d0, channel) {
   if (!slug) return { visits: null, status: 'no papers.qnfo.org link' };
+  // UTM-VISITS-1 (0.8.2, lever T7.9 half 2): a tagged page load counted by qnfo-gateway 3.10.0 (reach_signals source utm,
+  // metric clicks_human, entity campaign = the paper slug, channel = utm_source) is a direct measurement of the visits this
+  // post caused. When the 72h window carries any such row for the post's channel, they are the visits; else the RUM lift below.
+  try {
+    const srcs = (channel && LEARNER_UTM_SOURCES[String(channel)]) || null;
+    const u = await env.DB.prepare("SELECT SUM(CASE WHEN metric = 'clicks_human' THEN value ELSE 0 END) AS h, SUM(CASE WHEN metric = 'clicks_bot' THEN value ELSE 0 END) AS b, COUNT(*) AS n, MAX(date) AS d FROM reach_signals WHERE source = 'utm' AND entity_type = 'campaign' AND entity_id = ?1 AND date >= ?2 AND date <= ?3 AND (?4 IS NULL OR channel IN (?4, ?5))")
+      .bind(String(slug), d0, learnerShiftDay(d0, 2), srcs ? srcs[0] : null, srcs ? (srcs[1] || srcs[0]) : null).first();
+    if (u && Number(u.n) > 0) return { visits: Number(u.h) || 0, window_views: Number(u.h) || 0, bot_clicks: Number(u.b) || 0, status: 'ok', source: 'utm', channel: channel || 'all', last_day: String(u.d) };
+  } catch (e) { /* no utm rows yet (the ledger starts with the first tagged load): the RUM lift below */ }
   // ATTENTION-LOOP-1 (0.8.0): the bot-filtered per-item rows (source cf-rum-human) when the three window days carry them,
   // else the unfiltered rows as before; the source is named in the status.
   const read = async function(source) {
@@ -2175,7 +2186,7 @@ async function learnerCreditPending(env, now, out) {
       await learnerLogEvent(env, 'social-learner-reward-' + p.post_key, 'social-learner-reward', 'no-data', 'qnfo-social learner: ' + p.post_key + ' has no engagement snapshot inside its 72h window; no update', { post_key: p.post_key, arms: arms, detail: detail }, now);
       continue;
     }
-    const vis = await learnerVisits(env, p.link_slug, w.from);
+    const vis = await learnerVisits(env, p.link_slug, w.from, ch);
     const rw = learnerRewardOf(eng, vis.visits);
     const detail = { engagement: eng, visits: vis, x: rw.x, reward: rw.reward, window: [w.from, w.to], chosen_by: p.chosen_by };
     const u = await env.DB.prepare("UPDATE social_learner_posts SET status = 'credited', engagement = ?2, visits = ?3, reward = ?4, reward_detail = ?5, credited_at = ?6 WHERE post_key = ?1 AND status = 'pending'").bind(p.post_key, eng.e, vis.visits, rw.reward, JSON.stringify(detail), iso).run();
@@ -2385,7 +2396,7 @@ export default {
     const p = url.pathname, m = request.method;
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Ops-Key' };
     if (m === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, capabilities: ["bluesky-posting", "linkedin-via-buffer", "dissemination-drain", "engagement-collection", "profile-sync", "buffer-channel-audit", "distribution-learner", "channel-drain", "attention-share"], limitations: ["every route except /health and GET /learner needs the social token", "posting, the dissemination drain, profile sync and the audits run only on its crons (every 2 hours at :30, 06:00 and 07:00)", "LinkedIn is reached only through the Buffer queue, never LinkedIn's API; pipeline_flags.linkedin_mode 'draft' keeps those posts as drafts", "the channel drain posts to LinkedIn, Mastodon and X inside their own weekly caps (3, 2, 2; pipeline_flags.social_channel_caps) spread over the week, never the same slug twice in 30 days on one channel; Bluesky keeps its own cap", "the profile sync never overwrites a bio the owner edited", "the distribution learner only chooses which queued post goes next and in which slot, inside the weekly cap and content gates; ops_config social_learner_enabled=0 turns it off", "ATTENTION-SHARE-1: ops_config attention_channel_share (qnfo-fleet-dashboard scorecard, daily) scales each channel cap down to its attention share, never above the owner cap; a share older than 3 days reads as 1", "LEARNER-CHANNEL-ARM-1: the learner's channel arm only orders the Buffer channels and reports an allocation; it never changes a cap or a share"], handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, capabilities: ["bluesky-posting", "linkedin-via-buffer", "dissemination-drain", "engagement-collection", "profile-sync", "buffer-channel-audit", "distribution-learner", "channel-drain", "attention-share"], limitations: ["every route except /health and GET /learner needs the social token", "posting, the dissemination drain, profile sync and the audits run only on its crons (every 2 hours at :30, 06:00 and 07:00)", "LinkedIn is reached only through the Buffer queue, never LinkedIn's API; pipeline_flags.linkedin_mode 'draft' keeps those posts as drafts", "the channel drain posts to LinkedIn, Mastodon and X inside their own weekly caps (3, 2, 2; pipeline_flags.social_channel_caps) spread over the week, never the same slug twice in 30 days on one channel; Bluesky keeps its own cap", "the profile sync never overwrites a bio the owner edited", "the distribution learner only chooses which queued post goes next and in which slot, inside the weekly cap and content gates; ops_config social_learner_enabled=0 turns it off", "ATTENTION-SHARE-1: ops_config attention_channel_share (qnfo-fleet-dashboard scorecard, daily) scales each channel cap down to its attention share, never above the owner cap; a share older than 3 days reads as 1", "UTM-VISITS-1: a learner post's visits are the gateway's tagged loads for its slug and channel (reach_signals source utm, clicks_human) when its window has any, else the bot-filtered RUM lift", "LEARNER-CHANNEL-ARM-1: the learner's channel arm only orders the Buffer channels and reports an allocation; it never changes a cap or a share"], handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
     // SOCIAL-DISTRIBUTION-LEARNER-1 (OPEN-ACCESS-1): the learner's posterior, next decision and recent rewards, read-only.
     if (p === '/learner' && m === 'GET') {
       let body;
