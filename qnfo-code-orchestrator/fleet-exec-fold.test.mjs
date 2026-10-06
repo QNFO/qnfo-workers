@@ -15,7 +15,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 {
   const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.length === 2 && missing.some((l) => l.startsWith("var VERSION = ")) && missing.some((l) => l.startsWith("export default schedDefault")), "every fleet-exec line is in the host except its VERSION line and its export", missing.map((l) => l.slice(0, 60)));
-  ok(/^0\.3\.18/.test(mod.__hv) && mod.__mv === "1.0.4-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.3.18, member 1.0.4-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok(/^0\.3\.(1[89]|[2-9]\d)/.test(mod.__hv) && mod.__mv === "1.0.4-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.3.18 or later, member 1.0.4-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 
 // a recording D1: fleet_crons has one due row; the executor reads fleet_tasks and writes fleet_runs

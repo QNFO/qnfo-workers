@@ -14,8 +14,8 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const lines = guest.split("\n");
   const body = lines.slice(lines.indexOf('var VERSION = "1.2.1-priority-queue";'), lines.length).filter((l) => l.trim() && l.trim() !== "export default {");
   const missing = body.filter((l) => !src.includes(l.trim()));
-  ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every scorer line is in the host except its VERSION line (and the export keyword)", missing.map((l) => l.slice(0, 60)));
-  ok(/^1\.3\.1/.test(mod.__hv) && mod.__mv === "1.2.2-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1, member 1.2.2-folded, one quoted VERSION constant");
+  ok(missing.length === 2 && missing.some((l) => l.startsWith("var VERSION = ")) && missing.some((l) => /try \{ return json\(await run\(env, false, wi\.weights\)\); \}/.test(l)), "every scorer line is in the host except its VERSION line, the export keyword and the /preview catch (FOLD-HYGIENE-1)", missing.map((l) => l.slice(0, 60)));
+  ok(/^1\.3\.[1-9]/.test(mod.__hv) && mod.__mv === "1.2.2-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1+, member 1.2.2-folded, one quoted VERSION constant");
 }
 
 // the daily run happens on the 05:17 tick only
@@ -49,6 +49,10 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   ok(sc.status === 200 && JSON.stringify(await sc.json()).includes("s1_operations"), "/scorer/scores reads the scores");
   const post = await mod.default.fetch(new Request("https://qnfo-observability.q08.workers.dev/scorer/preview", { method: "POST" }), env, {});
   ok(post.status === 405, "the member stays read-only over HTTP (405 on POST)", post.status);
+  const badEnv = { AUDIT: { prepare: () => { throw new Error("D1 secret detail: SELECT * FROM internal_table"); } } };
+  const pv = await mod.default.fetch(new Request("https://qnfo-observability.q08.workers.dev/scorer/preview"), badEnv, {});
+  const pvt = await pv.text();
+  ok(pv.status === 500 && !/secret detail|internal_table/.test(pvt) && /preview failed/.test(pvt), "a failing public /scorer/preview answers without the exception text (FOLD-HYGIENE-1)", pvt);
   const other = await mod.default.fetch(new Request("https://qnfo-observability.q08.workers.dev/workers/logs"), env, {});
   ok(other.status === 401 || other.status === 403, "the host's own token gate is unchanged for its private routes", other.status);
 }

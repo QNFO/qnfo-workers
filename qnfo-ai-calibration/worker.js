@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var PROBER_CRON = "*/20 * * * *";
 
 // worker.js
-var VERSION = "1.3.1-prober-on-cal-tick"; /* 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
+var VERSION = "1.3.2-freshness-writers"; /* 1.3.2 FOLD-HYGIENE-1 + FRESHNESS-REGISTERS-RETIRED-1 writer side (2026-10-06, agent_issues 1756 and 2028, pillar autonomy): the prober member's freshness SIGNALS no longer grade kaizen_candidates (qnfo-kaizen was retired in PR 657, so the register read stale forever, and the 07:40Z tick re-wrote the row PR 677 had deleted); version_queue is an event register with a 336 h window (the reviser queues a version only when a paper needs one, so idleness is not staleness); amh_coverage grades the probe roster (MODELS), not the 24 external ids registered 2026-09-19 that no probe covers, and names how many it leaves out (AMH-COVERAGE-ROSTER-1). 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -702,7 +702,7 @@ var proberMod = (function() {
   // */20 cron. MODELS was also 15 entries for 10 distinct models, with one entry recording
   // GLM-5.3's probe result against kimi-k2.6.
   var MODELS = [{ "internal": "qwen3.8-27b", "id": "@cf/qwen/qwen3.8-27b", "kind": "text" }, { "internal": "bge-base-en-v1.5", "id": "@cf/baai/bge-base-en-v1.5", "kind": "embed" }, { "internal": "deepseek-v4-pro", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "deepseek-v4-flash-wa", "id": "@cf/deepseek-ai/deepseek-v4-flash-0731", "kind": "text" }, { "internal": "deepseek-v4-pro-wa", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text" }, { "internal": "kimi-k2.6", "id": "@cf/moonshotai/kimi-k2.6", "kind": "text" }, { "internal": "glm-5.3", "id": "@cf/zai-org/glm-5.3", "kind": "text" }, { "internal": "gpt-oss-120b", "id": "@cf/openai/gpt-oss-120b", "kind": "text" }, { "internal": "kimi-k2.7-code", "id": "@cf/moonshotai/kimi-k2.7-code", "kind": "text" }, { "internal": "nemotron-3-120b-a12b", "id": "@cf/nvidia/nemotron-3-120b-a12b", "kind": "text" }, { "internal": "gemma-4-26b-a4b-it", "id": "@cf/google/gemma-4-26b-a4b-it", "kind": "text" }, { "internal": "qwen3-30b-a3b-fp8", "id": "@cf/qwen/qwen3-30b-a3b-fp8", "kind": "text" }, { "internal": "llama-3.3-70b-instruct-fp8-fast", "id": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "kind": "text" }];
-  var SIGNALS = [["cal_loop", "fleet_cal_state", "updated_at", 24, "heartbeat"], ["kaizen", "kaizen_candidates", "created_at", 192, "heartbeat"], ["evolve", "evolve_candidates", "ts", 168, "event"], ["pipeline_status", "pipeline_status", "last_updated", 24, "event"], ["amh_models", "ai_model_health", "updated_at", 26, "heartbeat"], ["heartbeat", "fleet_heartbeat", "ts", 6, "heartbeat"], ["cloud_ops", "cloud_ops_events", "ts", 24, "heartbeat"], ["fleet_runs", "fleet_runs", "started_at", 24, "heartbeat"], ["research_queue", "research_queue", "created_at", 72, "heartbeat"], ["version_queue", "version_queue", "created_at", 72, "heartbeat"], ["paper_revision", "paper_revision_log", "created_at", 96, "heartbeat"], ["agent_issues", "agent_issues", "updated_at", 96, "heartbeat"], ["self_heal", "self_heal_actions", "ts", 48, "event"], ["outreach", "outreach_log", "sent_at", 72, "event"]];
+  var SIGNALS = [["cal_loop", "fleet_cal_state", "updated_at", 24, "heartbeat"], ["evolve", "evolve_candidates", "ts", 168, "event"], ["pipeline_status", "pipeline_status", "last_updated", 24, "event"], ["amh_models", "ai_model_health", "updated_at", 26, "heartbeat"], ["heartbeat", "fleet_heartbeat", "ts", 6, "heartbeat"], ["cloud_ops", "cloud_ops_events", "ts", 24, "heartbeat"], ["fleet_runs", "fleet_runs", "started_at", 24, "heartbeat"], ["research_queue", "research_queue", "created_at", 72, "heartbeat"], ["version_queue", "version_queue", "created_at", 336, "event"], ["paper_revision", "paper_revision_log", "created_at", 96, "heartbeat"], ["agent_issues", "agent_issues", "updated_at", 96, "heartbeat"], ["self_heal", "self_heal_actions", "ts", 48, "event"], ["outreach", "outreach_log", "sent_at", 72, "event"]];
   function json(o, s) {
     return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json" } });
   }
@@ -875,23 +875,32 @@ var proberMod = (function() {
   // This check counts rows instead of taking a maximum.
   async function checkHealthCoverage(env, now) {
     const THRESHOLD_H = 26;
-    let total = 0, stale = 0, neverProbed = 0;
+    let total = 0, stale = 0, neverProbed = 0, outside = 0;
     try {
-      const r = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_model_health").first();
-      total = r ? Number(r.n || 0) : 0;
-      const s = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_model_health WHERE last_probe_ts IS NULL OR last_probe_ts < ?1").bind(now - THRESHOLD_H * 36e5).first();
-      stale = s ? Number(s.n || 0) : 0;
-      const np = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_model_health WHERE last_probe_ts IS NULL").first();
-      neverProbed = np ? Number(np.n || 0) : 0;
+      // AMH-COVERAGE-ROSTER-1 (host 1.3.2, agent_issues 2028): grade the models this prober probes (MODELS, canonical ids, as
+      // runProbe writes them). A roster model with no row counts as never probed; rows outside the roster (24 external ids
+      // registered 2026-09-19, never routed by a fleet worker) are counted and named in max_ts, not graded.
+      const roster = [];
+      for (let i = 0; i < MODELS.length; i++) { const id = canonicalId(MODELS[i].internal || MODELS[i].id); if (roster.indexOf(id) < 0) roster.push(id); }
+      const rows = (await env.QNFO_AUDIT.prepare("SELECT model_id, last_probe_ts FROM ai_model_health").all()).results || [];
+      const seen = {};
+      for (const row of rows) {
+        if (roster.indexOf(row.model_id) < 0) { outside++; continue; }
+        seen[row.model_id] = 1;
+        const ts = row.last_probe_ts == null ? null : Number(row.last_probe_ts);
+        if (ts == null || !isFinite(ts)) { neverProbed++; stale++; } else if (ts < now - THRESHOLD_H * 36e5) stale++;
+      }
+      for (let i = 0; i < roster.length; i++) if (!seen[roster[i]]) { neverProbed++; stale++; }
+      total = roster.length;
     } catch (e) {
       return { signal: "amh_coverage", status: "error" };
     }
     const status = stale > 0 ? "stale" : "fresh";
     try {
-      await env.QNFO_AUDIT.prepare("INSERT INTO freshness_guard (signal, table_name, ts_column, max_ts, age_hours, threshold_hours, status, mode, checked_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?9,?8) ON CONFLICT(signal) DO UPDATE SET table_name=?2, ts_column=?3, max_ts=?4, age_hours=?5, threshold_hours=?6, status=?7, mode=?9, checked_at=?8").bind("amh_coverage", "ai_model_health", "last_probe_ts", stale + "/" + total + " stale (" + neverProbed + " never probed)", null, THRESHOLD_H, status, new Date(now).toISOString(), "heartbeat").run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO freshness_guard (signal, table_name, ts_column, max_ts, age_hours, threshold_hours, status, mode, checked_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?9,?8) ON CONFLICT(signal) DO UPDATE SET table_name=?2, ts_column=?3, max_ts=?4, age_hours=?5, threshold_hours=?6, status=?7, mode=?9, checked_at=?8").bind("amh_coverage", "ai_model_health", "last_probe_ts", stale + "/" + total + " roster models stale (" + neverProbed + " never probed; " + outside + " ids outside the probe roster not graded)", null, THRESHOLD_H, status, new Date(now).toISOString(), "heartbeat").run();
     } catch (e) {
     }
-    return { signal: "amh_coverage", total, stale, neverProbed, threshold_hours: THRESHOLD_H, status };
+    return { signal: "amh_coverage", total, stale, neverProbed, outside_roster: outside, threshold_hours: THRESHOLD_H, status };
   }
   __name(checkHealthCoverage, "checkHealthCoverage");
   // OWNER-CLIENT-PROBE-1 (#1886, 2026-10-04). WHY: the owner's ChatBox/DeepChat endpoints lost

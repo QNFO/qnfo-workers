@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.3.1-scorer-fold"; // 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.3.2-preview-error"; // 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -1000,7 +1000,7 @@ var scorerMod = (function() {
       if (p === "/preview") {
         var wi = parseWhatIf(u.searchParams);
         if (wi.bad.length) return json({ error: "what-if weights must be w_<term>=<0..1> with term one of " + SAI_TERMS.join(", "), refused: wi.bad }, 400);
-        try { return json(await run(env, false, wi.weights)); } catch (e) { return json({ error: String(e && e.message || e) }, 500); }
+        try { return json(await run(env, false, wi.weights)); } catch (e) { console.error("preview failed", String(e && e.message || e)); return json({ error: "preview failed" }, 500); }
       }
       if (p === "/scores") { var r = await env.AUDIT.prepare("SELECT dimension, framework, score, scale, confidence, scored_at, next_score, gap FROM autonomy_scores ORDER BY dimension").all(); return json({ scores: (r && r.results) || [] }); }
       return json({ worker: WORKER, version: VERSION, routes: ["/health", "/preview", "/scores"] }, 404);
