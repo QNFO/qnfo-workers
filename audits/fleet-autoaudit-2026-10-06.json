@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-06 18:05:02",
+  "audited_at": "2026-10-06 19:07:35",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-code-orchestrator"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
