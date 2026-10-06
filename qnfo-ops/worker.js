@@ -29,7 +29,10 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.42-retire-wave-2";
+var VERSION = "2.38.43-dangling-10143";
+// DANGLING-BINDING-10143-1 (2.38.43, 2026-10-06, #1756): DANGLING-BINDING-PRUNE-1 also matches Cloudflare error 10143
+// ("references Worker '' which was not found"), which blocked the qnfo-ops and qnfo-fleet-dashboard deploys after the wave-2
+// deletes. 2.38.42 (WORKER-RETIRE-WAVE-2) never went live because of it; this release carries it.
 // WORKER-RETIRE-WAVE-2 (2.38.42, 2026-10-06, #1756, owner standing grant / charter rule 9): qnfo-kaizen and qnfo-skill-sync are
 // retired, so their /health probe bindings (KAIZEN, SKILLSYNC) leave FLEET, BINDING_KEYS and wrangler.toml; registryRefresh no
 // longer re-adds them to service_registry.
@@ -3135,8 +3138,11 @@ async function cfWorkerDeploy(env, args) {
       let _dead = null;
       const _errs = j && Array.isArray(j.errors) ? j.errors : [];
       for (const _er of _errs) {
-        if (_er && Number(_er.code) === 10144) {
-          const _dm = /Service binding '([^']+)' references environment '[^']*' on Worker '[^']*' which was not found/.exec(String(_er.message || ""));
+        // DANGLING-BINDING-10143-1 (2.38.43): Cloudflare also rejects a binding to a deleted worker as 10143, "Service
+        // binding 'X' references Worker '' which was not found" (2026-10-06, qnfo-ops and qnfo-fleet-dashboard after the
+        // wave-2 deletes). Both codes and both wordings name the dead binding; the same live-only, max-3 rule applies.
+        if (_er && (Number(_er.code) === 10144 || Number(_er.code) === 10143)) {
+          const _dm = /Service binding '([^']+)' references (?:environment '[^']*' on )?Worker '[^']*' which was not found/.exec(String(_er.message || ""));
           if (_dm) { _dead = _dm[1]; break; }
         }
       }
