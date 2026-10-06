@@ -184,7 +184,7 @@ try:
     shutil.rmtree(tmp); tmp = tempfile.mkdtemp(prefix="foldkit-")
     repo(tmp, guest=GUEST.replace('(env.GDB ? "db" : "nodb")', '(env.PERSONAL ? "p" : "nop")'))
     r = run(tmp)
-    ok(r.returncode != 0 and "personal/research separation" in r.stderr, "research code that reads the host's personal binding is refused (rule 8)", r.stderr)
+    ok(r.returncode != 0 and "personal/research separation" in r.stderr, "research code that reads the host's personal binding is refused (PERSONAL-RESEARCH-SEPARATION-1)", r.stderr)
 
     shutil.rmtree(tmp); tmp = tempfile.mkdtemp(prefix="foldkit-")
     repo(tmp, host=HOST.replace('var VERSION = "2.0.0-host"; // host\n', 'var VERSION = "2.0.0-host"; // host\nvar VERSION = "x";\n'))

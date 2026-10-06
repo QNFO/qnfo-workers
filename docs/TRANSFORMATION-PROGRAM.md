@@ -1,6 +1,7 @@
 # Quniverse transformation program (TRANSFORMATION-PROGRAM-1)
 
-Version 1.2 (2026-10-06): 1.0 written from a live read of D1 `qnfo-audit`, the Cloudflare account and this repository;
+Version 1.3 (2026-10-06): 1.3 replaces "Guards that never move" (section 5) after the owner deleted core prompt rule 8
+(RULE-8-RETIRED-1); 1.0 written from a live read of D1 `qnfo-audit`, the Cloudflare account and this repository;
 1.1 adds a second read (section 1.10), where each autonomy-score point is lost (1.11), and T9 (a deploy path that cannot
 lock itself out), each measured 2026-10-06 06:30-07:15Z; 1.2 adds a third read of the engine itself after its first tick
 (section 1.12, 07:40-08:10Z): the program was dispatching work its own merge lane must refuse and counting the refusals
@@ -650,9 +651,11 @@ charter. A wave whose exit metric has not moved in 14 days is re-planned: the le
   grant; the lifecycle tick applies migrations with rollback blocks (T5.3); PERF_LEVERS moves knobs (two levers exist
   today, both on q08; T4.5 adds the model-switch levers); sessions take only (refactor) levers until T1.11 lands, and
   every session writes `session_records`.
-- **Guards that never move.** No cap is raised; no paid model call is added while a cap is breached; no probe or guard is
-  weakened; data with no verified backup is never deleted; owner-voice gates hold; ENSEMBLE-POLICY-1 holds for any new
-  model layer; the human stays an override.
+- **What the engine decides for itself (RULE-8-RETIRED-1, owner directive 2026-10-06; it replaced "Guards that never
+  move").** Spend caps, guard metrics, verification probes and deletions are the fleet's own decisions, each recorded
+  with its reason and a live measurement and changed under core rule 7 (a probe the changer did not write, a revert
+  path). What holds: owner-voice gates, email suppression and opt-out, the outreach consent gate and cadence caps, the
+  personal/research separation, ENSEMBLE-POLICY-1 for any new model layer, and the human as an override.
 - **Re-audit.** `charterTick` (daily) renders this program's scoreboard (section 6) into the charter's live block under a
   `TRANSFORMATION` heading once T5 adds it (one (code) lever on `qnfo-fleet-control/worker.js`); until then
   `GET /charter?facts=1` carries the same metrics. The hand-written sections of this document are re-audited by PR when

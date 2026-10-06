@@ -240,7 +240,7 @@ def toml_bindings(t):
     return out
 
 
-# Personal-plane resources (rule 8, the personal/research separation): the owner's private D1s, vector index and media.
+# Personal-plane resources (PERSONAL-RESEARCH-SEPARATION-1; it outlived the deleted core prompt rule 8 because it protects other people's personal data): the owner's private D1s, vector index and media.
 PERSONAL_RES = {("d1", "personal-life"), ("d1", "qnfo-identity"), ("vectorize", "personal-life"), ("r2", "personal-media")}
 
 
@@ -268,13 +268,13 @@ def member_keys(gt, guest_code):
 
 
 def plane_check(guest, host, gt, ht, keys, env_map):
-    """Rule 8: the member never receives a personal-plane binding its guest did not have, and the host never gains one."""
+    """PERSONAL-RESEARCH-SEPARATION-1: the member never receives a personal-plane binding its guest did not have, and the host never gains one."""
     gp, hp = personal_bindings(gt), personal_bindings(ht)
     gets = {k for k in keys if k in hp and k not in env_map} | {v for k, v in env_map.items() if v in hp}
     if gets and not gp:
-        die("%s would receive the personal-plane binding(s) %s of %s: a fold may not cross the personal/research separation (rule 8)" % (guest, ", ".join(sorted(gets)), host))
+        die("%s would receive the personal-plane binding(s) %s of %s: a fold may not cross the personal/research separation (PERSONAL-RESEARCH-SEPARATION-1)" % (guest, ", ".join(sorted(gets)), host))
     if gp and not hp:
-        die("%s binds personal-plane resources (%s) and %s does not: the fold would move them into a research-plane worker (rule 8)" % (guest, ", ".join(sorted(gp)), host))
+        die("%s binds personal-plane resources (%s) and %s does not: the fold would move them into a research-plane worker (PERSONAL-RESEARCH-SEPARATION-1)" % (guest, ", ".join(sorted(gp)), host))
 
 
 def merge_toml(guest, host, gt_text, ht_text, env_map):

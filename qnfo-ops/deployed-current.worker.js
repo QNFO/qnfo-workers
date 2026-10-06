@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.47-registry-folded"; /* 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
+var VERSION = "2.39.1-cost-soft"; /* 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
 // FOLD-WAVE-2 (2.38.45, 2026-10-06, #1756): qnfo-archive is retired (its 04:00 KG seed got HTTP 401 on every batch), so its
 // ARCHIVE probe binding leaves FLEET, BINDING_KEYS, wrangler.toml and the fleet_status text. BACKLOG now reaches the
 // qnfo-backlog-exec member inside qnfo-lifecycle (props.member); the code calling it is unchanged.
@@ -852,7 +852,7 @@ var OPS_SYSTEM_PROMPT = [
   "12. OPS-SETTINGS-IMMUTABLE-1 (binding systemwide, 2026-09-09): this endpoint uses canonical settings that are IMMUTABLE across every client (DeepChat, ChatBox, SannaBot): context window 1048576, max output 393216, tool-loop soft budget 300s, Workflow step timeout 15 minutes, CPU ceiling 300s. They MUST NEVER be lowered by any agent, session, process, or env override. The ops-settings-guard.py drift gate enforces them every 30 min; long or CPU-heavy work goes through the durable async path (x-ops-async:1 / POST /v1/jobs), never by reducing these ceilings. Report drift; do not change settings.",
   "13. WBS-PLANNING + DEFINITION-OF-DONE (binding, all threads, 2026-09-18): before executing any task needing 2+ tool calls, state a short WBS plan (P0..Pn steps, one goal each) and mark each step done with its tool evidence as you go. At the end of every substantive task, run a DoD audit and state the verdict PASS / PASS-WITH-NOTES / FAIL: (a) VERIFIED - every done claim is backed by a same-turn tool result, never memory or inference; (b) ZERO-DEFERRED - nothing left open without an explicit owner; (c) GUARDS-GREEN - relevant guards/checks exited 0; (d) CLAIM-SHEET - locked claims carry claim/evidence/confidence/status; (e) FAILURE-MODES - at least one concrete way the result could be wrong. A substantive turn that omits the WBS plan or the DoD audit is an incomplete turn.",
   "14. PUBLICATION-PREFLIGHT-GATE-1 (#1118): before promising, scheduling or reporting as pending any publication on a public surface (q08.org pieces, feeds), read the latest result with ops_d1_query db=audit: SELECT ts, status, text FROM cloud_ops_events WHERE kind = 'publication_preflight' ORDER BY ts DESC LIMIT 1 (qnfo-fleet-control runs it hourly: health served by the surface worker, JSON listing not the fallback homepage, real RSS/Atom feed). Promise the publication only if status=ok and ts is under 2h old. Otherwise do not report it as pending work: state the failing check from the row and raise or point to the open PUBLICATION-PREFLIGHT-FAIL agent_issue.",
-  "15. FLEET-CORE-1 (binding, owner directive 2026-10-02): (a) OWN THE FIX - filing an issue is not fixing it. For a defect, name the owning loop and do the work with tools; hand a single-file code change to the code loop by ending the agent_issues description with a line of its own `code-task: repo=qnfo-workers path=<dir>/worker.js`. Close an issue only with a live measurement in issue_triage.close_evidence, never as wontfix to shrink the backlog. (b) MEASURE - the scoreboard is metric_registry judged by v_metric_trigger_state (hit = 1 is a breach; metrics_in_breach target 0). Guard metrics (kind = 'guard') must not worsen: a target gained while a guard worsens is a regression. (c) LEARN-APPLY-VERIFY - one change at a time with a stated prediction; measure after; keep it only if the metric moved, otherwise revert and try a different lever. (d) HARD LIMITS - never raise a budget cap, delete a failing verification row, weaken a guard or probe, or delete data that has no backup; when a step would, stop that step, record the exact blocker in agent_issues, and continue with other work. (e) CLOSEOUT - when asked to close out, report objective, actions with evidence, deviations, failures and fixes, artifacts written, metric deltas, and every open item with its exact blocker."
+  "15. FLEET-CORE-1 (binding, owner directive 2026-10-02): (a) OWN THE FIX - filing an issue is not fixing it. For a defect, name the owning loop and do the work with tools; hand a single-file code change to the code loop by ending the agent_issues description with a line of its own `code-task: repo=qnfo-workers path=<dir>/worker.js`. Close an issue only with a live measurement in issue_triage.close_evidence, never as wontfix to shrink the backlog. (b) MEASURE - the scoreboard is metric_registry judged by v_metric_trigger_state (hit = 1 is a breach; metrics_in_breach target 0). Guard metrics (kind = 'guard') must not worsen: a target gained while a guard worsens is a regression. (c) LEARN-APPLY-VERIFY - one change at a time with a stated prediction; measure after; keep it only if the metric moved, otherwise revert and try a different lever. (d) DECIDE AND RECORD (RULE-8-RETIRED-1, owner directive 2026-10-06: core prompt rule 8 is deleted) - spend caps, guard metrics, verification probes and data deletion are the fleet's own decisions: take them when the evidence supports them and record the reason and the live measurement on the issue; back up and read back before a deletion because it costs nothing; follow rule 7 for any self-change (a probe you did not write, a revert path). Still never: mail an address that opted out, send outreach outside its consent gate and cadence caps, or move personal-plane data into the research plane or onto a public surface. (e) CLOSEOUT - when asked to close out, report objective, actions with evidence, deviations, failures and fixes, artifacts written, metric deltas, and every open item with its exact blocker."
 ].join(String.fromCharCode(10));
 var OPS_TOOLS = [
   { name: "fleet_status", description: "Probe /health of the internal fleet services via service bindings (qnfo-lifecycle, qnfo-email, qnfo-gateway, qnfo-ai, qnfo-ai-search, qnfo-memory-mcp, qnfo-backlog-exec). Returns ok/http/version per service.", parameters: { type: "object", properties: {}, additionalProperties: false } },
@@ -4946,10 +4946,13 @@ function markPublicRead(resp) {
 }
 __name(markPublicRead, "markPublicRead");
 async function handleChatCore(env, body, ua, ctx, pub) {
+  // OPS-COST-SOFT-1 (2.39.1, BUDGET-SOFT-ROUTE-1 + RULE-8-RETIRED-1): the daily ops cost cap no longer answers 429; the
+  // request runs on the free tier (budgetFallback), like the T2 cap below. The request-count cap stays (abuse, not spend).
+  let _costFree = false;
   try {
     {
       const _cg = await costGuard(env);
-      if (_cg.blocked) return json({ error: "ops daily cost cap reached ($" + _cg.cap + "/day, spent $" + _cg.usd + ")" }, 429);
+      if (_cg.blocked) { _costFree = true; ctx.waitUntil(logEscalation(env, "chat", UPSTREAM_MODEL, UPSTREAM_GLM_MODEL, "ops-daily-cost-cap", "ops daily cost cap reached ($" + _cg.usd + " of $" + _cg.cap + "); free tier for this request")); }
     }
     const _today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const _capN = Number(env.OPS_DAILY_CAP);
@@ -4961,9 +4964,9 @@ async function handleChatCore(env, body, ua, ctx, pub) {
   // COST-ROUTING-STACK-1 L7: per-tier daily caps. T2 (paid deepseek) cap OPS_T2_DAILY_CAP (default $2).
   // On breach, paid-first degrades to the free tier (budgetFallback) instead of terminating (BUDGET-CAP-FREE-FALLBACK-1).
   // OPS-PUBLIC-READ-1: public read mode always takes the free tier (budgetFallback), never a paid upstream.
-  let _t2Blocked = !!pub;
+  let _t2Blocked = !!pub || _costFree;
   try {
-    if (env.QNFO_AUDIT && !pub) {
+    if (env.QNFO_AUDIT && !pub && !_costFree) {
       const _t2d = await env.QNFO_AUDIT.prepare("SELECT COALESCE(SUM(spent_usd),0) s FROM model_ladder_daily WHERE tier = 2 AND day = ?1").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 10)).first();
       const _t2cap = Number(env.OPS_T2_DAILY_CAP) > 0 ? Number(env.OPS_T2_DAILY_CAP) : 2;
       _t2Blocked = !!(_t2d && Number(_t2d.s) >= _t2cap);
@@ -4978,7 +4981,7 @@ async function handleChatCore(env, body, ua, ctx, pub) {
   const stream = body && body.stream;
   const rawWanted = pub ? OPS_PUBLIC_MODEL : String(model || "ops-exec");
   const wanted = rawWanted.indexOf("/") >= 0 ? rawWanted.split("/").pop() : rawWanted;
-  const execUpstream = pub ? void 0 : OPS_EXEC_MODELS[wanted];
+  const execUpstream = pub || _costFree ? void 0 : OPS_EXEC_MODELS[wanted];
   const frontierMode = !!execUpstream;
   // UNIVERSAL-OPENAI-MODEL-COMPAT-1 (2026-09-26): the endpoint NEVER rejects a model id. Any
   // unrecognized / foreign id (gpt-4o, gpt-3.5-turbo, claude-*, "", null, provider-qualified)
@@ -6420,7 +6423,9 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
     const body = startRes.body;
     const t0 = startRes.t0;
     const _wanted = String(body.model || "").indexOf("/") >= 0 ? String(body.model).split("/").pop() : String(body.model || "");
-    const execUpstream = OPS_EXEC_MODELS[_wanted];
+    // OPS-COST-SOFT-1: at the daily cost cap the job runs on the free tier (no paid exec upstream, budgetT2Blocked).
+    const _jobCostFree = !!(await costGuard(env)).blocked;
+    const execUpstream = _jobCostFree ? void 0 : OPS_EXEC_MODELS[_wanted];
     const frontierMode = !!execUpstream;
     const sysDate = "\n\nToday is " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + " (UTC). Ground time-relative statements in this date.";
     let work = [];
@@ -6491,7 +6496,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       let resp = null;
       try {
         resp = await step.do("turn-" + turn, { retries: { limit: 2, delay: "20 seconds", backoff: "exponential" }, timeout: "15 minutes" }, async function() {
-          const { resp: r, servedBy: _sb } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto", upstreamModel: execUpstream || void 0 });
+          const { resp: r, servedBy: _sb } = await callDeepSeek(env, work, capNow, withTools ? toolsPayload() : null, { temperature, topP, toolChoice: "auto", upstreamModel: execUpstream || void 0, budgetT2Blocked: _jobCostFree });
           jobServedBy = _sb || jobServedBy;
           return JSON.parse(JSON.stringify(r));
         });
@@ -6540,7 +6545,7 @@ var OpsExecWorkflow = class extends WorkflowEntrypoint {
       if (typeof jobPendingToolCalls !== "undefined" && jobPendingToolCalls.length) content = (String(content || "").trim() + PENDING_TOOLCALLS_NOTE.replace("{n}", String(jobPendingToolCalls.length))).trim();
       if (withTools && finishReason === "length") {
         try {
-          const { resp: r3, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0 });
+          const { resp: r3, servedBy: _sb3 } = await callDeepSeek(env, work, answerCap, null, { temperature, topP, upstreamModel: execUpstream || void 0, budgetT2Blocked: _jobCostFree });
           jobServedBy = _sb3 || jobServedBy;
           addUsage(r3);
           const c3 = r3 && r3.choices && r3.choices[0];
@@ -7106,10 +7111,7 @@ var worker_default = {
     }
     if (path === "/v1/jobs" && method === "POST") {
       if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
-      {
-        const _cg = await costGuard(env);
-        if (_cg.blocked) return json({ error: "ops daily cost cap reached ($" + _cg.cap + "/day, spent $" + _cg.usd + ")" }, 429);
-      }
+      // OPS-COST-SOFT-1: no 429 at the daily cost cap; the job workflow reads the cap and runs on the free tier.
       let jbody = null;
       try {
         jbody = await request.json();
