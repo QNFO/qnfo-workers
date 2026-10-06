@@ -60,7 +60,10 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  # actions: write for the canary's REVERT-REDEPLOY-1 dispatch (scripts/canary_revert.py): a revert commit pushed with
+  # GITHUB_TOKEN starts no workflow run, so the canary runs `gh workflow run canonical-deploy.yml -f workers=...` (and
+  # deploy-qnfo-ops.yml for qnfo-ops) itself, as apply-binding-install-gate-1.yml does for its commit-back.
+  actions: write
 
 concurrency:
   group: canonical-deploy-main
@@ -69,7 +72,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -190,6 +193,33 @@ jobs:
           done < /tmp/targets.txt
           echo "deploy_fail=$fail"
           exit $fail
+
+      # CONTROL-PLANE-CANARY-1 (2026-10-06, CONTROL-PLANE-SELF-MERGE-1, owner directive 2026-10-06): after a push-mode
+      # deploy, poll /health of every control-plane worker in the target set for the pushed VERSION. A version that does
+      # not arrive within the window reverts the push on main (one level, never a revert of a revert, each failed worker
+      # bumped above the bad VERSION with its mirror kept identical) and files CONTROL-PLANE-REVERTED-1 in qnfo-audit.
+      # This is the rollback that lets qnfo-fleet-control merge control-plane session pull requests on its own; it runs
+      # here, on the runner, so a broken control-plane worker cannot stop its own revert. Exit is always 0 and a revert
+      # prints a warning, so ci-watchdog does not file a second issue for it.
+      # REVERT-REDEPLOY-1: the revert is pushed with GITHUB_TOKEN, which starts no workflow run, so the script dispatches
+      # this workflow for the failed workers (it queues behind this run; cancel-in-progress is false). That dispatched run
+      # reaches this step with --no-revert: it verifies that the revert arrived and files CONTROL-PLANE-CANARY-FAILED-1
+      # when it did not, never a second revert (one level). A dry run deploys nothing, so it is not canaried.
+      - name: Canary the control-plane workers and revert a push that did not arrive
+        if: steps.deploy.outcome == 'success' && github.event.inputs.dry_run != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -uo pipefail
+          if [ ! -s /tmp/targets.txt ]; then echo "no targets, no canary"; exit 0; fi
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          MODE=""
+          if [ "${EVENT_NAME}" != "push" ]; then MODE="--no-revert"; echo "dispatched deploy: verify-only canary"; fi
+          python3 scripts/canary_revert.py --targets /tmp/targets.txt --pushed "$GITHUB_SHA" --canary-min 8 --poll-sec 20 $MODE
 
       # STATUS-THROTTLE-1 (ACTIONS-QUOTA-1, 2026-10-02): the file held only head and ts, so it carried no outcome, and
       # it was committed on every run (127 of main's 648 commits in the 24h to 2026-10-02 09Z), each one starting a
