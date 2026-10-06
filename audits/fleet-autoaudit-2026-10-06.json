@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-06 10:48:14",
+  "audited_at": "2026-10-06 11:32:21",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "q08-signal-engine"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -61,6 +68,7 @@
       "agent-orchestrator",
       "ai-health-prober",
       "audit-hub",
+      "calendar-api",
       "companion-hub",
       "errata-hub",
       "errata-orchestrator",
@@ -134,7 +142,7 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 75,
+    "not_deployed_notdrift": 76,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
@@ -147,6 +155,10 @@
       {
         "dir": "audit-hub",
         "worker": "audit-hub"
+      },
+      {
+        "dir": "calendar-api",
+        "worker": "calendar-api"
       },
       {
         "dir": "companion-hub",
@@ -440,36 +452,31 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 29,
+    "sync": 28,
     "sync_workers": [
       {
-        "dir": "calendar-api",
-        "version": "0.7.4-fold-ready",
-        "worker": "calendar-api"
-      },
-      {
         "dir": "idea-hub",
-        "version": "1.5.8-diversity-cap",
+        "version": "1.5.9-robots-sitemap",
         "worker": "idea-hub"
       },
       {
         "dir": "personal-api",
-        "version": "4.8.2-ledger-page-ams-away",
+        "version": "4.8.3-noindex",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.12.0-resilience",
+        "version": "1.12.1-noindex",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.8.9-sitemap-indexable",
+        "version": "0.8.10-stall-metric",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.31.6-prompt-cache",
+        "version": "5.31.7-noindex",
         "worker": "qnfo-ai"
       },
       {
@@ -509,7 +516,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.139-one-count-cost-gap",
+        "version": "0.4.140-crawl-health-q08",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -519,7 +526,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.10.1-discovery",
+        "version": "3.10.2-seo-hygiene",
         "worker": "qnfo-gateway"
       },
       {
@@ -534,12 +541,12 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.10.1-bench-dataset",
+        "version": "3.10.2-seo-guides",
         "worker": "qnfo-ipatent"
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.8.1-one-worker-count",
+        "version": "1.9.0-calendar-fold",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -616,11 +623,11 @@
       "worker": "audits"
     },
     "calendar-api": {
-      "before": "0.7.4-fold-ready",
-      "http": 200,
-      "live": "0.7.4-fold-ready",
-      "match": 1,
-      "note": "SYNC",
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
       "worker": "calendar-api"
     },
     "ci-status": {
@@ -680,9 +687,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.5.8-diversity-cap",
+      "before": "1.5.9-robots-sitemap",
       "http": 200,
-      "live": "1.5.8-diversity-cap",
+      "live": "1.5.9-robots-sitemap",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -792,17 +799,17 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.8.2-ledger-page-ams-away",
+      "before": "4.8.3-noindex",
       "http": 200,
-      "live": "4.8.2-ledger-page-ams-away",
+      "live": "4.8.3-noindex",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.12.0-resilience",
+      "before": "1.12.1-noindex",
       "http": 200,
-      "live": "1.12.0-resilience",
+      "live": "1.12.1-noindex",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -840,9 +847,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.8.9-sitemap-indexable",
+      "before": "0.8.10-stall-metric",
       "http": 200,
-      "live": "0.8.9-sitemap-indexable",
+      "live": "0.8.10-stall-metric",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -872,9 +879,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.31.6-prompt-cache",
+      "before": "5.31.7-noindex",
       "http": 200,
-      "live": "5.31.6-prompt-cache",
+      "live": "5.31.7-noindex",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1136,9 +1143,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.139-one-count-cost-gap",
+      "before": "0.4.140-crawl-health-q08",
       "http": 200,
-      "live": "0.4.139-one-count-cost-gap",
+      "live": "0.4.140-crawl-health-q08",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1168,9 +1175,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.10.1-discovery",
+      "before": "3.10.2-seo-hygiene",
       "http": 200,
-      "live": "3.10.1-discovery",
+      "live": "3.10.2-seo-hygiene",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1224,9 +1231,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.10.1-bench-dataset",
+      "before": "3.10.2-seo-guides",
       "http": 200,
-      "live": "3.10.1-bench-dataset",
+      "live": "3.10.2-seo-guides",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
@@ -1240,9 +1247,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.8.1-one-worker-count",
+      "before": "1.9.0-calendar-fold",
       "http": 200,
-      "live": "1.8.1-one-worker-count",
+      "live": "1.9.0-calendar-fold",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
