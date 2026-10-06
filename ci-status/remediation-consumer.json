@@ -1,12 +1,45 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@60991fcdda51",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@563fe35a893e",
+ "due": 4,
+ "pass": 1,
+ "fail": 3,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-1991",
+   "issue_id": 1991,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2057",
+   "issue_id": 2057,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2075",
+   "issue_id": 2075,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: runtime_verified_share_24h 1.4, probe_cadence never, other-plane rows 24h 0",
+   "written": true
+  },
+  {
+   "class": "issue-2076",
+   "issue_id": 2076,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -22,11 +55,13 @@
   "external-curl",
   "external-http",
   "external-https",
-  "http"
+  "http",
+  "runner-https"
  ],
- "runtime_verified_share_24h": 5.8,
- "spent_ms": 3728,
- "head": "60991fcdda51abf7e824fb917a2cc0c1cb60677b",
+ "https": 1,
+ "runtime_verified_share_24h": 1.6,
+ "spent_ms": 16750,
+ "head": "563fe35a893e169494fac18751ec926e53912d79",
  "job_status": "success",
- "ts": "2026-10-06T16:26:42Z"
+ "ts": "2026-10-06T16:38:35Z"
 }
