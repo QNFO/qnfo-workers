@@ -1020,7 +1020,9 @@ export default {
     } catch (e) { console.error('scheduled failed', String(e && e.message || e)); }
     // SCORER-FOLD-1: the folded qnfo-autonomy-scorer runs once a day, on the 05:17 UTC tick (its old "17 5 * * *").
     if (new Date(Number(controller && controller.scheduledTime) || Date.now()).getUTCHours() === 5) {
-      try { await scorerMod.scheduled(controller, env, ctx); } catch (e) { console.error('scorer member failed', String(e && e.message || e)); }
+      // The scorer hands its run to waitUntil; the host collects and awaits it so the run is not cut at 30 seconds.
+      const pending = [];
+      try { await scorerMod.scheduled(controller, env, { waitUntil: function (p) { pending.push(Promise.resolve(p)); }, passThroughOnException: function () {} }); await Promise.allSettled(pending); } catch (e) { console.error('scorer member failed', String(e && e.message || e)); }
     }
   },
 

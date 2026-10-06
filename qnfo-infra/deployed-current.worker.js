@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.0-indexer-fold"; // 1.3.0 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (crons 0 4 and 5 6, /indexer/* read routes).
+var VERSION = "1.3.0-indexer-fold"; // 1.3.0 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -844,8 +844,17 @@ function indexerEnv(env) {
 }
 var worker_default = {
   async scheduled(event, env, ctx) {
-    // INDEXER-FOLD-1: the folded qnfo-paper-indexer member's two crons.
+    // INDEXER-FOLD-1: the folded qnfo-paper-indexer member's two jobs (its old "0 4" impact collection and "5 6" render
+    // metrics) run on this worker's existing 06:30 trigger, impact first, both after the gateway's 06:00 sweep. No cron is
+    // added: a newly registered trigger was seen not to fire (PROBER-ON-CAL-TICK-1), and the cron count drops by two. A
+    // former member trigger, if one is ever registered, goes straight to the member.
     if (INDEXER_CRONS.indexOf(event.cron) >= 0) return indexerMod.scheduled(event, indexerEnv(env), ctx);
+    if (event.cron === "30 6 * * *") {
+      for (const c of INDEXER_CRONS) {
+        try { await indexerMod.scheduled({ cron: c, scheduledTime: event.scheduledTime, type: "scheduled" }, indexerEnv(env), ctx); }
+        catch (e) { console.error("indexer member " + c + ": " + String(e && e.message || e)); }
+      }
+    }
     // INFRA-CRON-MATCH-1 (2026-10-01): wrangler declares "0 18 * * *" but this matched only "6 18 * * *", so the evening
     // refresh never ran. Both spellings are accepted.
     if (event.cron === "30 6 * * *" || event.cron === "0 18 * * *" || event.cron === "6 18 * * *" || event.cron === "0 * * * *") {

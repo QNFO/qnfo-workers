@@ -1,9 +1,11 @@
-// PROBER-FOLD-1 (qnfo-ai-calibration 1.3.0, agent_issues 1756) offline suite. No network, no production data.
-// Proves: the ai-health-prober code runs unchanged as the member proberMod (only its version constant and its limitation
-// text differ from ai-health-prober/worker.js); the */20 cron runs the prober and not the calibration, the */30 cron runs
-// the calibration and not the prober; the member still writes as "ai-health-prober" with the member version; /prober/health
-// and /prober/freshness are public, /prober/run needs the calibration key and spends nothing without it; /health lists the
-// member and both crons; wrangler.toml declares both crons and the AI binding.
+// PROBER-FOLD-1 (qnfo-ai-calibration 1.3.0) and PROBER-ON-CAL-TICK-1 (1.3.1, agent_issues 1756) offline suite. No network,
+// no production data. Proves: the ai-health-prober code runs unchanged as the member proberMod (only its version constant
+// and its limitation text differ from ai-health-prober/worker.js); the */30 tick runs the calibration AND the prober, and
+// the handler does not resolve before the prober's waitUntil work is done (the */20 trigger declared for it never fired, and
+// waitUntil alone leaves 30 seconds after the handler returns); a legacy */20 event runs the prober only; the member still
+// writes as "ai-health-prober" with the member version; /prober/health and /prober/freshness are public, /prober/run needs
+// the calibration key and spends nothing without it; /health lists the member and the one cron; wrangler.toml declares
+// only */30 and the AI binding.
 // Run: node qnfo-ai-calibration/prober-fold.test.mjs   -> prints "N passed, 0 failed"
 import fs from "node:fs";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
@@ -20,7 +22,7 @@ const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " 
   const body = lines.slice(lines.indexOf('var WORKER = "ai-health-prober";'), lines.indexOf("export {"));
   const changed = body.filter((l) => l.trim() && !src.includes(l.trim()));
   ok(changed.length === 2 && changed.some((l) => l.startsWith("var VERSION = ")) && changed.some((l) => l.startsWith("var LIMS = ")), "every prober line is in the host except its VERSION and LIMS lines", changed.map((l) => l.slice(0, 60)));
-  ok(/^1\.3\.0/.test(api.VERSION) && api.PROBER_VERSION === "2.3.15-folded" && api.PROBER_CRON === "*/20 * * * *", "host 1.3.0, member 2.3.15-folded, member cron */20");
+  ok(/^1\.3\.1/.test(api.VERSION) && api.PROBER_VERSION === "2.3.15-folded" && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1, member 2.3.15-folded, legacy member cron */20 kept for dispatch");
   ok((src.match(/var VERSION = "/g) || []).length === 1, "one quoted VERSION constant in the bundle (FM7 parity applies to the host)");
 }
 
@@ -39,24 +41,26 @@ function mkEnv() {
   return { env, sql, ai };
 }
 globalThis.fetch = async () => new Response("{}", { status: 200 });
+// The handler's own promise is awaited and the host ctx's waitUntil is NOT: the member's work must finish inside the handler.
 const runCron = async (cron) => {
-  const t = mkEnv(); const waits = [];
-  await api.worker_default.scheduled({ cron, scheduledTime: Date.now() }, t.env, { waitUntil: (p) => waits.push(p) });
-  await Promise.all(waits.map((p) => p.catch(() => {})));
+  const t = mkEnv(); t.hostWaits = 0;
+  await api.worker_default.scheduled({ cron, scheduledTime: Date.now() }, t.env, { waitUntil: () => { t.hostWaits++; } });
   return t;
 };
 
 // 2. cron dispatch
 {
-  const t = await runCron("*/20 * * * *");
-  const hb = t.sql.find((x) => /INSERT INTO fleet_heartbeat/.test(x.q));
-  ok(hb && hb.a[0] === "ai-health-prober" && hb.a[1] === "2.3.15-folded", "*/20 runs the prober member: heartbeat as ai-health-prober with the member version", hb && hb.a);
-  ok(!t.sql.some((x) => /ai_calibration_(runs|results)/.test(x.q)), "*/20 does not run the calibration");
+  const t = await runCron("*/30 * * * *");
+  const hb = t.sql.find((x) => /INSERT INTO fleet_heartbeat/.test(x.q) && x.a[0] === "ai-health-prober");
+  ok(t.sql.some((x) => /ai_calibration_(runs|results)/.test(x.q)), "*/30 runs the calibration");
+  ok(hb && hb.a[1] === "2.3.15-folded", "*/30 also runs the prober member: heartbeat as ai-health-prober with the member version", hb && hb.a);
+  ok(t.hostWaits === 0, "the member's waitUntil work is awaited inside the handler, not handed to the host's waitUntil", t.hostWaits);
 }
 {
-  const t = await runCron("*/30 * * * *");
-  ok(t.sql.some((x) => /ai_calibration_(runs|results)/.test(x.q)), "*/30 runs the calibration");
-  ok(!t.sql.some((x) => /INSERT INTO fleet_heartbeat/.test(x.q) && x.a[0] === "ai-health-prober"), "*/30 does not run the prober");
+  const t = await runCron("*/20 * * * *");
+  const hb = t.sql.find((x) => /INSERT INTO fleet_heartbeat/.test(x.q));
+  ok(hb && hb.a[0] === "ai-health-prober", "a legacy */20 event runs the prober member", hb && hb.a);
+  ok(!t.sql.some((x) => /ai_calibration_(runs|results)/.test(x.q)), "a legacy */20 event does not run the calibration (no extra model calls)");
 }
 
 // 3. routes
@@ -74,11 +78,11 @@ const get = (path, headers, envv) => api.worker_default.fetch(new Request("https
   ok(run2.status === 200, "/prober/run with the calibration key runs", run2.status);
   ok((await get("/prober/other")).status === 404, "other /prober paths are 404");
   const h = await (await get("/health")).json();
-  ok(h.version === api.VERSION && h.members && h.members["ai-health-prober"] === "2.3.15-folded" && h.crons.includes("*/20 * * * *") && h.crons.includes("*/30 * * * *"), "/health lists the member and both crons", h);
+  ok(h.version === api.VERSION && h.members && h.members["ai-health-prober"] === "2.3.15-folded" && JSON.stringify(h.crons) === JSON.stringify(["*/30 * * * *"]), "/health lists the member and the one cron", h);
 }
 
 // 4. wrangler
-ok(/crons = \["\*\/30 \* \* \* \*", "\*\/20 \* \* \* \*"\]/.test(toml) && /\n\[ai\]\nbinding = "AI"/.test(toml), "wrangler.toml declares both crons and the AI binding");
+ok(/\ncrons = \["\*\/30 \* \* \* \*"\]\n/.test(toml) && /\n\[ai\]\nbinding = "AI"/.test(toml), "wrangler.toml declares only the */30 cron (the */20 is dropped) and the AI binding");
 ok(fs.existsSync(new URL("../ai-health-prober/FOLDED", import.meta.url)), "ai-health-prober carries a FOLDED marker");
 
 console.log(pass + " passed, " + fail + " failed");

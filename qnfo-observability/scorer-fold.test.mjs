@@ -29,6 +29,12 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   ok(ran === 0, "no scorer run at 04:17, 06:17 or 17:17", ran);
   await tick(5);
   ok(ran === 1, "one scorer run at 05:17 UTC", ran);
+  // The scorer hands its run to waitUntil; the host must await it, not leave it 30 seconds after the handler returns.
+  let done = false, memberCtxIsHost = null;
+  const hostCtx = { waitUntil() {} };
+  mod.__member.scheduled = async (ev, en, c) => { memberCtxIsHost = c === hostCtx; c.waitUntil(new Promise((r) => setTimeout(() => { done = true; r(); }, 60))); };
+  await mod.default.scheduled({ cron: "17 * * * *", scheduledTime: Date.UTC(2026, 9, 6, 5, 17, 0) }, env, hostCtx);
+  ok(done && memberCtxIsHost === false, "the member gets a collecting ctx and the host awaits its waitUntil work before the handler resolves", [done, memberCtxIsHost]);
   mod.__member.scheduled = real;
 }
 

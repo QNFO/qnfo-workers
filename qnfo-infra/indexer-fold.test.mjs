@@ -1,8 +1,9 @@
 // INDEXER-FOLD-1 (qnfo-infra 1.3.0, agent_issues 1756) offline suite. No network, synthetic data.
-// Proves: the qnfo-paper-indexer code runs unchanged as the member indexerMod (only its version constant differs); its two
-// crons ("0 4 * * *", "5 6 * * *") reach the member with LIVING_PAPER and QNFO_AUDIT mapped onto the host's LIVING and AUDIT,
-// and the host's own crons do not; only its read routes are served at /indexer/* (the token-guarded /purge, /index, /webhook
-// and /run are not reachable); wrangler.toml declares all four crons.
+// Proves: the qnfo-paper-indexer code runs unchanged as the member indexerMod (only its version constant differs); the
+// host's existing 06:30 trigger runs the member's two jobs ("0 4" impact, then "5 6" render metrics) with LIVING_PAPER and
+// QNFO_AUDIT mapped onto the host's LIVING and AUDIT, the 18:00 trigger does not, and a former member trigger goes straight
+// to the member; only its read routes are served at /indexer/* (the token-guarded /purge, /index, /webhook and /run are not
+// reachable); wrangler.toml adds no cron (a newly registered trigger was seen not to fire, PROBER-ON-CAL-TICK-1).
 // Run: node qnfo-infra/indexer-fold.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync, existsSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
@@ -26,16 +27,13 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const real = mod.__member.scheduled;
   mod.__member.scheduled = async (ev, env) => { seen.push({ cron: ev.cron, living: env.LIVING_PAPER === env.LIVING && !!env.LIVING, audit: env.QNFO_AUDIT === env.AUDIT && !!env.AUDIT }); };
   const env = { LIVING: { tag: "living" }, AUDIT: { tag: "audit", prepare: () => { const s = { bind: () => s, run: async () => ({}), first: async () => null, all: async () => ({ results: [] }) }; return s; } } };
-  await mod.default.scheduled({ cron: "0 4 * * *" }, env, {});
-  await mod.default.scheduled({ cron: "5 6 * * *" }, env, {});
-  ok(seen.length === 2 && seen.every((s) => s.living && s.audit) && seen.map((s) => s.cron).join() === "0 4 * * *,5 6 * * *", "both indexer crons reach the member with LIVING_PAPER and QNFO_AUDIT mapped", seen);
-  mod.__member.scheduled = real;
-  let hostRan = 0;
-  const env2 = { AUDIT: { prepare: () => { hostRan++; const s = { bind: () => s, run: async () => ({}), first: async () => null, all: async () => ({ results: [] }) }; return s; } } };
+  try { await mod.default.scheduled({ cron: "30 6 * * *", scheduledTime: Date.UTC(2026, 9, 7, 6, 30) }, env, {}); } catch (e) {}
+  ok(seen.length === 2 && seen.every((s) => s.living && s.audit) && seen.map((s) => s.cron).join() === "0 4 * * *,5 6 * * *", "the 06:30 trigger runs both indexer jobs, impact first, with LIVING_PAPER and QNFO_AUDIT mapped", seen);
   const before = seen.length;
-  mod.__member.scheduled = async () => { seen.push("member"); };
-  try { await mod.default.scheduled({ cron: "30 6 * * *" }, env2, {}); } catch (e) {}
-  ok(seen.length === before, "the host's own 06:30 cron does not run the member");
+  try { await mod.default.scheduled({ cron: "0 18 * * *" }, env, {}); } catch (e) {}
+  ok(seen.length === before, "the 18:00 trigger does not run the member");
+  await mod.default.scheduled({ cron: "5 6 * * *" }, env, {});
+  ok(seen.length === before + 1 && seen[seen.length - 1].cron === "5 6 * * *", "a former member trigger goes straight to the member");
   mod.__member.scheduled = real;
 }
 
@@ -54,7 +52,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   }
   ok((await get("/indexer/count", "POST")).status === 404, "only GET reaches the member");
 }
-ok(/crons = \["30 6 \* \* \*", "0 18 \* \* \*", "0 4 \* \* \*", "5 6 \* \* \*"\]/.test(toml), "wrangler.toml declares the host's and the member's crons");
+ok(/\ncrons = \["30 6 \* \* \*", "0 18 \* \* \*"\]\n/.test(toml), "wrangler.toml keeps the host's two crons and adds none for the member");
 ok(existsSync(new URL("../qnfo-paper-indexer/FOLDED", import.meta.url)), "qnfo-paper-indexer carries a FOLDED marker");
 
 console.log(pass + " passed, " + fail + " failed");
