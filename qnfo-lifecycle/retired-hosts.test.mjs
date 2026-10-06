@@ -27,8 +27,8 @@ const r2 = await W.fetch(new Request("https://lifecycle.qnfo.org/calendar/health
 passedThrough = r2.status !== 410;
 ok(passedThrough, "lifecycle.qnfo.org is not answered with 410", r2.status);
 const routes = [...toml.matchAll(/pattern = "([^"]+)", zone_name = "qnfo\.org"/g)].map((m) => m[1]);
-ok(routes.includes("lifecycle.qnfo.org/*"), "wrangler.toml keeps the lifecycle.qnfo.org/* route (a deploy replaces the route set)");
-ok(hosts.every((h) => routes.includes(h + "/*")) && routes.length === hosts.length + 1, "wrangler.toml routes exactly lifecycle plus every retired host", routes);
+ok(routes.indexOf("lifecycle.qnfo.org/*") >= 0, "wrangler.toml keeps the lifecycle.qnfo.org/* route (a deploy replaces the route set)");
+ok(hosts.every((h) => routes.indexOf(h + "/*") >= 0) && routes.length === hosts.length + 1, "wrangler.toml routes exactly lifecycle plus every retired host", routes);
 ok(/^workers_dev = true$/m.test(toml), "workers_dev stays on (calendar public links and pings use workers.dev)");
 console.log(passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);
