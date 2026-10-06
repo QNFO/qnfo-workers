@@ -1,12 +1,109 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@be67b530d239",
- "due": 0,
- "pass": 0,
- "fail": 0,
- "skipped": 0,
- "contracts": [],
+ "verifier": "remediation-consumer@c2a68576c858",
+ "due": 12,
+ "pass": 5,
+ "fail": 6,
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-1907",
+   "issue_id": 1907,
+   "verdict": "pass",
+   "expected": "linked",
+   "observed": "linked",
+   "written": true
+  },
+  {
+   "class": "issue-2025",
+   "issue_id": 2025,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "pending: 30-day window from 2026-10-06T06:30Z still open",
+   "written": true
+  },
+  {
+   "class": "issue-2026",
+   "issue_id": 2026,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2027",
+   "issue_id": 2027,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "EVID-1641-MENTIONS",
+   "issue_id": 1641,
+   "verdict": "fail",
+   "expected": "all-sources-ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "vacuous-probe-result",
+   "expected": "within-cap",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "EVID-1711-REACH",
+   "issue_id": 1711,
+   "verdict": "fail",
+   "expected": "seven-days",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1935",
+   "issue_id": 1935,
+   "verdict": "pass",
+   "expected": "fixed-and-watched",
+   "observed": "fixed-and-watched",
+   "written": true
+  },
+  {
+   "class": "issue-1892",
+   "issue_id": 1892,
+   "verdict": "pass",
+   "expected": "baseline-recorded",
+   "observed": "baseline-recorded",
+   "written": true
+  },
+  {
+   "class": "issue-1890",
+   "issue_id": 1890,
+   "verdict": "pass",
+   "expected": "measured",
+   "observed": "measured",
+   "written": true
+  },
+  {
+   "class": "attention-loop-1",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no scorecard yet",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -23,8 +120,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 1603,
- "head": "be67b530d239470dc226c4ec12641b7f39f3dba3",
+ "spent_ms": 30372,
+ "head": "c2a68576c8584d8b372f5b50f16e3f0981ca71fa",
  "job_status": "success",
- "ts": "2026-10-06T07:23:02Z"
+ "ts": "2026-10-06T08:17:54Z"
 }
