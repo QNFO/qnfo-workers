@@ -64,6 +64,16 @@ because each one was broken at least once; the linked issue holds the evidence.
 - A `METRIC-TRIGGER-<id>-...` issue's contract gets its trigger's probe at birth (D1 trigger
   `contract_probe_templates_v1`). Write a probe by hand only for other families.
 
+## Where probes run (PROBE-SYSTEMWIDE-1)
+- A contract's `verify_transport` says where its probe runs:
+  - `d1-query` reads qnfo-audit (qnfo-fleet-control's hourly tick and scripts/remediation_consumer.py);
+  - `d1-query@portfolio-state` and `external-https` (hosts outside the fleet) run in qnfo-fleet-control;
+  - `runner-https` GETs a fleet host from the GitHub runner, outside the Cloudflare account, because a Worker's request to its own account's hosts is the issue-1190 artifact;
+  - `d1-query@<db>` reads any other account D1 by name (the consumer). qnfo-identity and qnfo-outreach are refused, because the run log is public.
+- An issue about live behaviour names what closes it on a line of its own: `runtime-probe: {"url": "https://...", "status": 200, "contains": "<marker>"}`. D1 triggers make that line the issue's runner-https contract (PROBE-BIRTH-RUNTIME-1). Never choose a URL and marker that already pass while the defect exists. The runners' write-keyword guard scans string literals too, so a probe's failure text must not contain words like "update ".
+- ORPHAN-GUARD-BIRTH-1 (migrations/2026-10-06-orphan-birth-contracts.sql) writes the `issue-<id>` contract row at birth, so a session or loop that gives an issue its probe uses UPDATE on class `issue-<id>` (PROBE-BIRTH-RUNTIME-1 does; an INSERT OR IGNORE of that class is silently ignored). An issue filed by a live worker carries a 48-hour probe that reads `pending` while the filing loop owns it and `stale` after.
+- qnfo-cloud-ops dispatches the consumer when it has been idle for 60 minutes (PROBE-CADENCE-1), so runtime probes do not depend on pushes to main.
+
 ## Cloudflare actions without a token
 - `cf-ops-actions.yml` (workflow_dispatch) runs allowlisted Cloudflare API actions with the repository's token:
   report, delete-worker (marker-guarded), gateway-logs, gateway-cost, ai-neurons, access-probe, r2-get. Extend
@@ -129,9 +139,24 @@ because each one was broken at least once; the linked issue holds the evidence.
   - delete an unused D1 database after a verified backup (cf-ops-actions d1-backup, unbind-d1, delete-d1; D1-FOLD-1).
   - switch a worker to a cheaper model with no A/B test, when it keeps a per-request fallback to the previous model and an
     automatic revert on errors or empty replies (personal-api TWIN-FLASH-1 is the pattern), recorded on its issue.
-- Unchanged: caps are never raised, credentials are not minted or rotated, guards and probes are not weakened, data with no
-  verified backup is never deleted, and governance changes (this file, the charter) land by PR. A breached `fleet_budget`
-  AI spend cap steers model choice and never stops work (BUDGET-SOFT-ROUTE-1 below).
+- merge its own control-plane change (CONTROL-PLANE-SELF-MERGE-1, qnfo-fleet-control 0.7.0, PR 737; owner directive 2026-10-06
+  "more flexibility and more autonomy ... proceed with all changes"): the stale-PR lane merges a green, quiet session pull request
+  that changes a CM_DENY worker when `ops_config control_plane_self_merge` is `on`, the worker has a versioned `/health`
+  (`CP_CANARY_WORKERS`) and the PR carries `worker.js` with its mirror. canonical-deploy.yml then canaries `/health` for the new
+  VERSION and, when it does not arrive, reverts the push on main (`scripts/canary_revert.py`, one level, never a revert of a
+  revert), dispatches the deploy of the revert and files `CONTROL-PLANE-REVERTED-1`. The canary proves the VERSION arrived, not
+  that the worker works: LOOP-WATCH-1 and the metric triggers are the next line. `off` restores CONTROL-PLANE-MANUAL-1 without a
+  deploy. Workflows under `.github/` never auto-merge, and the code loop neither plans nor merges control-plane workers until
+  CODE-LOOP-CONTROL-PLANE-1 (lever T1.23) has its evidence: five lane merges of control-plane session PRs with no canary revert.
+- RULE-8-RETIRED-1 (owner directive 2026-10-06, verbatim: "'Rule 8' is now deleted entirely. The system needs more flexibility
+  and more autonomy to decide for itself and make it's own choices ad hoc. Proceed with all changes."; PR 736 retired it from the
+  qnfo-ops prompt, the trigger texts and the policy documents): caps, guards, probes and deletions are the fleet's own decisions,
+  made through the canonical path and recorded with the measurement that justified them: a cap change is a `fleet_budget`
+  migration with its note, a guard or probe change a migration with its rollback line, a deletion a migration that names its
+  `BACKUP` table (MIGRATION-RUNNER-1 above). Still in force, because they are not autonomy limits: the shared-secrets rules (no
+  key minted, rotated or committed outside the secret lock), outreach suppression and opt-out handling, the personal/research
+  separation, and governance changes (this file, the charter) land by PR. A breached `fleet_budget` AI spend cap steers model
+  choice and never stops work (BUDGET-SOFT-ROUTE-1 below).
 
 ## AI spend budgets steer, never stop (BUDGET-SOFT-ROUTE-1)
 - Owner directive 2026-10-06: "AI spend budget should never stop any process, pipeline, or workflow, only limit/suggest
@@ -143,7 +168,8 @@ because each one was broken at least once; the linked issue holds the evidence.
   fewer items per tick instead of none. Never a refusal, a deferral queue, an HTTP 429 on spend, or a skipped run. The qnfo-ai
   router downgrades every caller at a cap (5.32.0); idea-hub scores lean (1.6.0); qnfo-ai-search answers, indexes and
   generates questions lean (2.3.0); qnfo-ops falls back to free models.
-- Caps are still measured, reported and never raised, and a breach still files its metric issue; the lever is a cheaper
+- Caps are still measured and reported, and a breach still files its metric issue; a cap changes only by a recorded
+  `fleet_budget` migration (RULE-8-RETIRED-1 above), never by a silent edit; the lever at a breach is a cheaper
   model or a smaller batch, never a stop. Limits that protect an open endpoint from abuse (per-address rate limits) and
   publishing or outreach cadence caps are not spend budgets and stay.
 
