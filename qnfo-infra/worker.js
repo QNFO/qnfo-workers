@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.1-indexer-fold"; // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.3.2-codeagent"; // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -570,6 +570,9 @@ var indexerMod = (function() {
       (buf) => Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("")
     );
   }
+  const CLAIM_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+  const CLAIM_STATUSES = new Set(["conjecture", "measured", "proved", "stated"]);
+
   function sanitize(s) {
     return s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uD800-\uDFFF]/g, "").trim().substring(0, 800);
   }
@@ -748,6 +751,74 @@ var indexerMod = (function() {
     return { success: true, dry_run: !!dryRun, records: targets.length, vectors_deleted: vectorsDeleted, detail };
   }
 
+  function deriveStatus(abstract, body) {
+    const tb = ((abstract || "") + " " + (body || "")).toLowerCase();
+    if (/\b(proved?|proof|proven|theorem)\b/.test(tb)) return "proved";
+    if (/\b(measured|observed|empirical|experimental|observation|validated)\b/.test(tb)) return "measured";
+    if (/\b(conjecture|conjectural)\b/.test(tb)) return "conjecture";
+    return "stated";
+  }
+
+  async function extractClaimLines(env, slug, abstract, body) {
+    const prompt =
+      `Read the following living paper and return ONLY a JSON object with keys claim_line, test_line, status_line.\n\n` +
+      `Slug: ${slug}\n` +
+      `Abstract:\n${sanitize(abstract || "").substring(0, 3000)}\n\n` +
+      `Body excerpt:\n${sanitize(body || "").substring(0, 10000)}\n\n` +
+      `Instructions:\n` +
+      `- claim_line: the single main claim of the paper, as one sentence.\n` +
+      `- test_line: the falsifiable test, experiment, or observation that would validate or refute it, as one sentence; use only what the text says.\n` +
+      `- status_line: choose exactly one of conjecture, measured, proved, or stated. Use conjecture/measured/proved only when the text says so.\n` +
+      `Return only the JSON object.`;
+    const result = await env.AI.run(CLAIM_MODEL, { prompt }, { gateway: { id: "default" } });
+    const raw = String(result?.response || result?.text || "");
+    const m = raw.match(/\{[\s\S]*?\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    const claim = sanitize(parsed.claim_line || parsed.claim || "").replace(/^claim:\s*/i, "");
+    const test = sanitize(parsed.test_line || parsed.test || "").replace(/^test:\s*/i, "");
+    let status = String(parsed.status_line || parsed.status || "stated").toLowerCase();
+    status = CLAIM_STATUSES.has(status) ? status : "stated";
+    return { claim, test, status: deriveStatus(abstract, body) || status };
+  }
+
+  async function checkAbstractSupportsClaim(env, abstract, claim) {
+    const prompt =
+      `Answer only YES or NO.\n\n` +
+      `Abstract:\n${sanitize(abstract || "").substring(0, 4000)}\n\n` +
+      `Claim: ${claim}\n\n` +
+      `Is the claim directly stated or strongly implied by the abstract?`;
+    const result = await env.AI.run(CLAIM_MODEL, { prompt }, { gateway: { id: "default" } });
+    const ans = String(result?.response || result?.text || "").toLowerCase();
+    return ans.includes("yes") && !ans.includes("no");
+  }
+
+  async function handleClaimLines(env, limit = 10) {
+    const rows = await env.LIVING_PAPER.prepare(
+      "SELECT slug, abstract, body_md FROM papers WHERE " + CORPUS_WHERE +
+      " AND (claim_line IS NULL OR claim_line = '' OR test_line IS NULL OR test_line = '' OR status_line IS NULL OR status_line = '')" +
+      " ORDER BY updated_at DESC LIMIT ?1"
+    ).bind(limit).all();
+    let filled = 0, skipped = 0, errors = 0;
+    for (const row of rows.results || []) {
+      try {
+        if (!row.body_md) { skipped++; continue; }
+        const extracted = await extractClaimLines(env, row.slug, row.abstract, row.body_md);
+        if (!extracted || !extracted.claim) { skipped++; continue; }
+        const supported = await checkAbstractSupportsClaim(env, row.abstract, extracted.claim);
+        if (!supported) { skipped++; continue; }
+        await env.LIVING_PAPER.prepare(
+          "UPDATE papers SET claim_line = ?1, test_line = ?2, status_line = ?3 WHERE slug = ?4"
+        ).bind(extracted.claim, extracted.test, extracted.status, row.slug).run();
+        filled++;
+      } catch (e) {
+        console.error("[qnfo-paper-indexer] claim-line error", row.slug, e.message);
+        errors++;
+      }
+    }
+    return { filled, skipped, errors };
+  }
+
   function json(obj, status = 200) {
     return new Response(JSON.stringify(obj), {
       status,
@@ -760,7 +831,7 @@ var indexerMod = (function() {
       const url = new URL(request.url);
       const path = url.pathname;
       const slug = url.searchParams.get("slug");
-      if (path === "/webhook" || path === "/index" || path === "/purge") {
+      if (path === "/webhook" || path === "/index" || path === "/purge" || path === "/claims") {
         const token = request.headers.get("X-Index-Token") || (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
         if (token !== env.INDEX_TOKEN) return json({ error: "unauthorized" }, 401);
       }
@@ -788,6 +859,10 @@ var indexerMod = (function() {
           case "/stats": {
             const rows = await env.QNFO_AUDIT.prepare("SELECT doi, score, updated_at FROM impact_scores ORDER BY score DESC LIMIT 20").all();
             return json({ top: rows.results });
+          }
+          case "/claims": {
+            const r = await handleClaimLines(env, Math.min(parseInt(url.searchParams.get("limit") || "10", 10), 100));
+            return json({ ...r, worker: "qnfo-paper-indexer", version: VERSION });
           }
           default: return json({ error: "not found" }, 404);
         }
@@ -822,6 +897,12 @@ var indexerMod = (function() {
           } catch (e) { console.error("[qnfo-paper-indexer] browser math sample error:", e.message); }
           const p = await handlePurge(env, false);
           console.log("[qnfo-paper-indexer] scheduled purge:", JSON.stringify({ records: p.records, vectors_deleted: p.vectors_deleted }));
+          // PAPER-CLAIM-LINES-1 (2026-10-05): fill missing claim/test/status lines from abstract/body using Workers AI,
+          // sanity-checked against the abstract. Runs in the same daily cron window.
+          try {
+            const cl = await handleClaimLines(env, 10);
+            console.log("[qnfo-paper-indexer] claim lines:", JSON.stringify(cl));
+          } catch (e) { console.error("[qnfo-paper-indexer] claim lines error:", e.message); }
           // #1188 PAPER-INDEXER-CRON-WINDOW-STARVATION-1 (2026-09-27): the window used to be
           // hardcoded offset=0&limit=300 against a 444-paper canonical corpus, so 144 papers
           // could never be re-indexed. Rotate the window by UTC day so the whole corpus is
