@@ -144,9 +144,19 @@ const xPosted = new Date(Date.now() - 3 * 864e5 - 4 * 36e5);   // after LEARNER_
 db.prepare("INSERT INTO social_media_posts (id, platform, post_id, buffer_id, project_id, published_at, status) VALUES ('x9', 'buffer-twitter', 'bx9', 'bx9', 'liked-one', ?, 'published')").run(xPosted.toISOString().replace("T", " ").slice(0, 19));
 const xDay = new Date(xPosted.getTime() + 864e5).toISOString().slice(0, 10);
 db.prepare("INSERT OR IGNORE INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES (?, 'buffer', 'x', 'post', 'bx9', 'reactions', 3, 'human'), (?, 'buffer', 'x', 'post', 'bx9', 'comments', 1, 'human'), (?, 'buffer', 'x', 'post', 'bx9', 'impressions', 240, 'human')").run(xDay, xDay, xDay);
+// UTM-VISITS-1 (0.8.2): the gateway counted 7 human and 3 bot tagged loads of liked-one from X inside the window
+db.prepare("INSERT OR IGNORE INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES (?, 'utm', 'x', 'campaign', 'liked-one', 'clicks_human', 7, 'human'), (?, 'utm', 'x', 'campaign', 'liked-one', 'clicks_bot', 3, 'bot')").run(xDay, xDay);
+const xD0 = xPosted.toISOString().slice(0, 10);
+const vu = await mod.learnerVisits(env, "liked-one", xD0, "x");
+ok(vu.visits === 7 && vu.source === "utm" && vu.bot_clicks === 3 && vu.status === "ok" && vu.channel === "x", "UTM-VISITS-1: tagged loads for the post's channel inside its window are its visits (bots apart)", vu);
+const vb = await mod.learnerVisits(env, "liked-one", xD0, "bluesky");
+ok(vb.source !== "utm", "a channel with no tagged load inside the window falls back to the RUM lift: " + JSON.stringify(vb));
+ok((await mod.learnerVisits(env, "liked-one", xD0)).visits === 7, "without a channel every channel's tagged loads count");
 const credit2 = await mod.learnerDailyCredit(env, Date.now());
 const xRow = db.prepare("SELECT status, engagement, reward, reward_detail FROM social_learner_posts WHERE post_key = 'channel:x9'").get();
 ok(credit2.credited === 1 && xRow && xRow.status === "credited" && xRow.engagement === 4 && xRow.reward > 0.8, "the X channel post is credited from its Buffer metrics (3 reactions + 1 comment): " + JSON.stringify(xRow));
+const xVis = xRow && JSON.parse(xRow.reward_detail).visits;
+ok(xVis && xVis.visits === 7 && xVis.source === "utm" && xVis.channel === "x" && xVis.bot_clicks === 3, "the credited X post's visits are its tagged loads (source utm, channel x, bots apart)", xVis);
 ok(xRow && xRow.reward_detail && (/"channel":"x"/.test(xRow.reward_detail) || /"impressions":240/.test(xRow.reward_detail) || /buffer/.test(xRow.reward_detail)), "the credit detail names the channel's metrics: " + (xRow && xRow.reward_detail));
 const post = await mod.learnerPosterior(env);
 ok(post.channel && post.channel.x.n === 1 && post.channel.bluesky.n === 1 && post.channel.linkedin.n === 0 && post.channel.x.a > 1.8, "the posterior carries a channel dimension credited per channel: " + JSON.stringify(post.channel));
