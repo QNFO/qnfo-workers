@@ -109,6 +109,8 @@ ok(/^posted:/.test(String(d.channels.mastodon)) && /^posted:/.test(String(d.chan
 
 // ---------- the learner credits closed windows daily ----------
 await env.DB.prepare("CREATE TABLE IF NOT EXISTS social_learner_posts (post_key TEXT PRIMARY KEY, slug TEXT, bsky_uri TEXT, link_slug TEXT, topic TEXT, format TEXT, slot TEXT, n_posts INTEGER, posted_at TEXT, chosen_by TEXT, decision TEXT, status TEXT, engagement REAL, visits REAL, reward REAL, reward_detail TEXT, credited_at TEXT, created_at TEXT)").run();
+// the threads the channel posts name carry a selected DOI, so their channel posts are arms (topic energy)
+db.prepare("UPDATE social_threads SET doi = '10.5281/zenodo.21637028' WHERE id IN (203, 204)").run();
 const posted = new Date(Date.now() - 5 * 864e5);
 const d0 = posted.toISOString().slice(0, 10);
 db.prepare("INSERT INTO social_learner_posts (post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by, status, created_at) VALUES ('thread:203', 'liked-one', 'at://did:plc:q/app.bsky.feed.post/l1', 'liked-one', 'energy', 'single', 'us-morning', 1, ?, 'learner', 'pending', ?)").run(posted.toISOString(), posted.toISOString());
@@ -119,7 +121,7 @@ db.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, no
 const shift = (n) => new Date(posted.getTime() + n * 864e5).toISOString().slice(0, 10);
 for (let k = -7; k <= 2; k++) { db.prepare("INSERT OR IGNORE INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES (?, 'cf-rum-human', 'web', 'site', '(all)', 'pageviews', 100, 'human')").run(shift(k)); db.prepare("INSERT OR IGNORE INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES (?, 'cf-rum-human', 'web', 'paper', 'liked-one', 'pageviews', ?, 'human')").run(shift(k), k >= 0 ? 10 : 2); }
 const credit = await mod.learnerDailyCredit(env, Date.now());
-ok(credit.credited === 1 && credit.waiting === 1 && credit.pending === 1, "the post whose 72h window closed is credited; the one posted an hour ago waits: " + JSON.stringify({ c: credit.credited, w: credit.waiting, p: credit.pending }));
+ok(credit.credited === 1 && credit.waiting === 4 && credit.pending === 4, "the post whose 72h window closed is credited; the one posted an hour ago, the day-old LinkedIn channel post and the drain's two Buffer posts above wait: " + JSON.stringify({ c: credit.credited, w: credit.waiting, p: credit.pending }));
 const row = db.prepare("SELECT status, engagement, visits, reward, reward_detail FROM social_learner_posts WHERE post_key = 'thread:203'").get();
 ok(row.status === "credited" && row.engagement === 4 && row.visits === 24 && row.reward > 0.9, "credited with 4 engagements and 24 extra human views (30 in the window minus 3 x 2 baseline): " + JSON.stringify(row));
 ok(/"source":"cf-rum-human"/.test(row.reward_detail), "the visit figure names the bot-filtered source");
@@ -131,6 +133,29 @@ const vis = await mod.learnerVisits(env, "nowhere", "2025-01-01");
 ok(vis.visits === null && /not ingested/.test(vis.status) && vis.source === "cf-rum", "with no human rows for the window the unfiltered rows are tried and the status says which source");
 const visH = await mod.learnerVisits(env, "nowhere", d0);
 ok(visH.visits === 0 && visH.status === "ok" && visH.source === "cf-rum-human", "a slug with human site rows but no loads reads 0 visits from the bot-filtered source (a measured zero, not a missing day)");
+
+
+// ---------- LEARNER-CHANNEL-ARM-1: Buffer channel posts teach a channel arm ----------
+const chRow = db.prepare("SELECT post_key, channel, buffer_id, topic, format, slot, status, chosen_by FROM social_learner_posts WHERE post_key = 'channel:c1'").get();
+ok(chRow && chRow.channel === "linkedin" && chRow.buffer_id === "bb" && chRow.status === "pending" && chRow.chosen_by === "channel-drain" && chRow.format === "single", "a LinkedIn channel post becomes a learner row with the channel, the Buffer id and the thread's arms: " + JSON.stringify(chRow));
+ok(db.prepare("SELECT COALESCE(channel, 'bluesky') AS ch FROM social_learner_posts WHERE post_key = 'thread:203'").get().ch === "bluesky", "rows without a channel (written before 0.8.1) read as Bluesky rows");
+// an X post five days ago with Buffer metrics inside its window: credited from the buffer rows
+const xPosted = new Date(Date.now() - 3 * 864e5 - 4 * 36e5);   // after LEARNER_EPOCH_SQL, window closed 4h ago
+db.prepare("INSERT INTO social_media_posts (id, platform, post_id, buffer_id, project_id, published_at, status) VALUES ('x9', 'buffer-twitter', 'bx9', 'bx9', 'liked-one', ?, 'published')").run(xPosted.toISOString().replace("T", " ").slice(0, 19));
+const xDay = new Date(xPosted.getTime() + 864e5).toISOString().slice(0, 10);
+db.prepare("INSERT OR IGNORE INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES (?, 'buffer', 'x', 'post', 'bx9', 'reactions', 3, 'human'), (?, 'buffer', 'x', 'post', 'bx9', 'comments', 1, 'human'), (?, 'buffer', 'x', 'post', 'bx9', 'impressions', 240, 'human')").run(xDay, xDay, xDay);
+const credit2 = await mod.learnerDailyCredit(env, Date.now());
+const xRow = db.prepare("SELECT status, engagement, reward, reward_detail FROM social_learner_posts WHERE post_key = 'channel:x9'").get();
+ok(credit2.credited === 1 && xRow && xRow.status === "credited" && xRow.engagement === 4 && xRow.reward > 0.8, "the X channel post is credited from its Buffer metrics (3 reactions + 1 comment): " + JSON.stringify(xRow));
+ok(xRow && xRow.reward_detail && (/"channel":"x"/.test(xRow.reward_detail) || /"impressions":240/.test(xRow.reward_detail) || /buffer/.test(xRow.reward_detail)), "the credit detail names the channel's metrics: " + (xRow && xRow.reward_detail));
+const post = await mod.learnerPosterior(env);
+ok(post.channel && post.channel.x.n === 1 && post.channel.bluesky.n === 1 && post.channel.linkedin.n === 0 && post.channel.x.a > 1.8, "the posterior carries a channel dimension credited per channel: " + JSON.stringify(post.channel));
+const ord = await mod.learnerChannelOrder(env, () => 0.5);
+ok(ord.via === "learner" && ord.order.length === 3 && ord.order.slice().sort().join() === "linkedin,mastodon,twitter" && typeof ord.draws.twitter === "number", "the channel order is a permutation of the drain channels with one draw each: " + JSON.stringify(ord));
+db.prepare("INSERT OR REPLACE INTO ops_config (key, value) VALUES ('social_learner_enabled', '0')").run();
+const ordOff = await mod.learnerChannelOrder(env);
+ok(ordOff.via === "learner-off" && ordOff.order.join() === "linkedin,mastodon,twitter", "with the learner off the drain keeps its fixed order");
+db.prepare("DELETE FROM ops_config WHERE key = 'social_learner_enabled'").run();
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
