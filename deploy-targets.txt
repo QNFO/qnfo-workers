@@ -9,5 +9,5 @@
 # wrangler.toml [triggers] crons INERT (#1337). Re-deploying through /ops/deploy clears
 # both classes at the root: it writes the ledger row, takes the lock, and applies schedules.
 #
-fleet-exec fleet-exec/worker.js
+# fleet-exec removed 2026-10-06: folded into qnfo-code-orchestrator (FLEET-EXEC-FOLD-1, #1756).
 qnfo-social qnfo-social/worker.js

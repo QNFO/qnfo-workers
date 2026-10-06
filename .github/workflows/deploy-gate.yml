@@ -187,6 +187,12 @@ jobs:
       # confidence and the reviser run id) plus an internal-open errata_queue row; nothing is queued or shown to readers.
       - name: REVISER-FLAGGED-DEADEND-1 offline suite (qnfo-paper-reviser)
         run: node --no-warnings qnfo-paper-reviser/flagged-errata.test.mjs
+      # REVISER-FOLD-1 (#1756): qnfo-paper-reviser runs as a member of qnfo-research-exec (cadence, bindings, props routing).
+      - name: REVISER-FOLD-1 offline suite (qnfo-research-exec 0.9.64)
+        run: node --no-warnings qnfo-research-exec/reviser-fold.test.mjs
+      # BACKLOG-FOLD-1 (#1756): qnfo-backlog-exec runs as a member of qnfo-lifecycle; qnfo-archive is retired.
+      - name: BACKLOG-FOLD-1 offline suite (qnfo-lifecycle 1.8.0)
+        run: node --no-warnings qnfo-lifecycle/backlog-fold.test.mjs
       # MATH-DELIM-1 / TABLE-SEP-1: paper renderer regressions from the 2026-10-02 full-corpus sweep (qnfo-gateway).
       - name: Paper renderer suite (qnfo-gateway)
         run: node qnfo-gateway/render.test.mjs
@@ -229,6 +235,9 @@ jobs:
       # back to the next rung; two in a row end needs_human; a code-like string change (model id, SQL) still passes.
       - name: NOOP-PROPOSAL-GATE-1 offline suite (qnfo-code-orchestrator)
         run: node --no-warnings qnfo-code-orchestrator/noop-gate.test.mjs
+      # FLEET-EXEC-FOLD-1 (#1756): fleet-exec runs as a member of qnfo-code-orchestrator on its */10 tick.
+      - name: FLEET-EXEC-FOLD-1 offline suite (qnfo-code-orchestrator 0.3.18)
+        run: node --no-warnings qnfo-code-orchestrator/fleet-exec-fold.test.mjs
       # QDS-1: qds.css served; HTML 404s for browsers and JSON for API clients; the privacy notice; archive and QWAV hosts;
       # each paper's JSON-LD names its own licence (LICENSE-ONE-1).
       - name: QDS-1 gateway pages offline suite (qnfo-gateway)
