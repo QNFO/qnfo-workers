@@ -37,6 +37,15 @@ DATABASES = {"qnfo-audit": "35e2e573-92f3-46ac-83c6-22f6429fc5e5"}
 # MIGRATION-APPLY-FAILED-1, issue 2046). --check catches it in the PR; use instr(col, 'text') = 0 / > 0 instead.
 LIKE_MAX_BYTES = 50
 LIKE_LITERAL = re.compile(r"\b(?:LIKE|GLOB)\s+'((?:[^']|'')*)'", re.I)
+# metric_registry.refresh_cadence is guarded on D1 by the BEFORE INSERT/UPDATE triggers metric_registry_cadence_canonical_*
+# (METRIC-CADENCE-CANONICAL-1), which abort the statement at apply time (MIGRATION-APPLY-FAILED-1, issue 2063: "hourly (D1
+# triggers ...)"). --check evaluates the triggers' own WHEN expression in SQLite on every literal cadence a migration writes,
+# so the PR fails instead of the merge. Keep this expression equal to the trigger (read from sqlite_master on 2026-10-06).
+CADENCE_REJECT_SQL = ("SELECT ?1 IS NOT NULL AND trim(?1) <> '' AND (instr(trim(?1),' ') > 0 OR NOT ("
+                      "lower(trim(?1)) IN ('hourly','daily','weekly','monthly') OR trim(?1) GLOB '*/[0-9]*' "
+                      "OR trim(?1) GLOB '[0-9]*m' OR trim(?1) GLOB '[0-9]*h'))")
+METRIC_INSERT = re.compile(r"^\s*(?:INSERT|REPLACE)\s+(?:OR\s+\w+\s+)?INTO\s+\"?metric_registry\"?\s*\(", re.I)
+METRIC_UPDATE_CADENCE = re.compile(r"^\s*UPDATE\s+\"?metric_registry\"?\s+SET\b.*?\brefresh_cadence\s*=\s*'((?:[^']|'')*)'", re.I | re.S)
 DESTRUCTIVE = re.compile(r"^\s*(DELETE\s+FROM|DROP\s+(TABLE|INDEX|VIEW|TRIGGER))\b", re.I)
 LEDGER_DDL = ("CREATE TABLE IF NOT EXISTS migration_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL, "
               "sha256 TEXT NOT NULL, commit_sha TEXT, db TEXT, status TEXT NOT NULL, statements INTEGER, error TEXT, "
@@ -88,6 +97,132 @@ def statements(text):
     return out
 
 
+def _close(s, i):
+    """Index of the parenthesis that closes the one at s[i], skipping string literals ('' is an escaped quote)."""
+    depth, q, j = 0, False, i
+    while j < len(s):
+        c = s[j]
+        if q:
+            if c == "'":
+                if j + 1 < len(s) and s[j + 1] == "'":
+                    j += 2
+                    continue
+                q = False
+        elif c == "'":
+            q = True
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return j
+        j += 1
+    return -1
+
+
+def _split_top(s):
+    """Split on commas that are outside parentheses and string literals."""
+    out, depth, q, cur, j = [], 0, False, "", 0
+    while j < len(s):
+        c = s[j]
+        if q:
+            cur += c
+            if c == "'":
+                if j + 1 < len(s) and s[j + 1] == "'":
+                    cur += "'"
+                    j += 1
+                else:
+                    q = False
+        elif c == "'":
+            q, cur = True, cur + c
+        elif c == "(":
+            depth, cur = depth + 1, cur + c
+        elif c == ")":
+            depth, cur = depth - 1, cur + c
+        elif c == "," and depth == 0:
+            out.append(cur.strip())
+            cur = ""
+        else:
+            cur += c
+        j += 1
+    if cur.strip():
+        out.append(cur.strip())
+    return out
+
+
+def metric_cadences(sql):
+    """The literal refresh_cadence values a statement writes to metric_registry (INSERT ... VALUES, INSERT ... SELECT,
+    UPDATE ... SET). An expression rather than a single string literal is not judged here."""
+    vals = []
+    m = METRIC_INSERT.match(sql)
+    if m:
+        cstart = m.end() - 1
+        cend = _close(sql, cstart)
+        if cend < 0:
+            return vals
+        cols = [c.strip().strip('"').lower() for c in _split_top(sql[cstart + 1:cend])]
+        if "refresh_cadence" not in cols:
+            return vals
+        k = cols.index("refresh_cadence")
+        rest = sql[cend + 1:].lstrip()
+        rows = []
+        if re.match(r"VALUES\b", rest, re.I):
+            j = 6
+            while True:
+                while j < len(rest) and rest[j] in " \t\r\n":
+                    j += 1
+                if j >= len(rest) or rest[j] != "(":
+                    break
+                e = _close(rest, j)
+                if e < 0:
+                    break
+                rows.append(_split_top(rest[j + 1:e]))
+                j = e + 1
+                while j < len(rest) and rest[j] in " \t\r\n":
+                    j += 1
+                if j < len(rest) and rest[j] == ",":
+                    j += 1
+                    continue
+                break
+        elif re.match(r"SELECT\b", rest, re.I):
+            body_, depth, q, j = rest[6:], 0, False, 0
+            while j < len(body_):
+                c = body_[j]
+                if q:
+                    if c == "'" and not (j + 1 < len(body_) and body_[j + 1] == "'"):
+                        q = False
+                    elif c == "'":
+                        j += 1
+                elif c == "'":
+                    q = True
+                elif c == "(":
+                    depth += 1
+                elif c == ")":
+                    depth -= 1
+                elif depth == 0 and re.match(r"\s(FROM|WHERE|UNION|ON\s+CONFLICT)\b", body_[j:], re.I):
+                    break
+                j += 1
+            rows.append(_split_top(body_[:j]))
+        for r in rows:
+            v = r[k].strip() if k < len(r) else ""
+            lm = re.match(r"^'((?:[^']|'')*)'$", v, re.S)
+            if lm:
+                vals.append(lm.group(1).replace("''", "'"))
+    u = METRIC_UPDATE_CADENCE.match(sql)
+    if u:
+        vals.append(u.group(1).replace("''", "'"))
+    return vals
+
+
+def cadence_rejected(value):
+    """True when the D1 triggers metric_registry_cadence_canonical_* would abort on this refresh_cadence."""
+    con = sqlite3.connect(":memory:")
+    try:
+        return bool(con.execute(CADENCE_REJECT_SQL, (value,)).fetchone()[0])
+    finally:
+        con.close()
+
+
 def plan(path, text):
     """Validate one file. Returns (opted_in, problems, info)."""
     lines = header(text)
@@ -111,6 +246,11 @@ def plan(path, text):
             if len(lit.encode("utf-8")) > LIKE_MAX_BYTES:
                 problems.append("LIKE/GLOB pattern of " + str(len(lit.encode("utf-8"))) + " bytes (D1 rejects over "
                                 + str(LIKE_MAX_BYTES) + "; use instr()): '" + lit[:60] + "'")
+    for s in stmts:
+        for cad in metric_cadences(body(s)):
+            if cadence_rejected(cad):
+                problems.append("metric_registry refresh_cadence '" + cad[:60] + "' is not a canonical token (D1 trigger "
+                                "METRIC-CADENCE-CANONICAL-1 aborts it: use */N, */Nh, Nm, Nh or hourly|daily|weekly|monthly)")
     destructive = [s for s in stmts if DESTRUCTIVE.match(body(s))]
     backup = header_value(lines, "BACKUP")
     if destructive and not backup:

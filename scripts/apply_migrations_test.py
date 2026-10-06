@@ -156,6 +156,31 @@ ok(okp and any("LIKE/GLOB pattern of 54 bytes" in p for p in probs), "a 54-byte 
 short_like = long_like.replace("'%code-task: repo=qnfo-workers path=idea-hub/worker.js%'", "'%TRIGGER-CODE-TASK-LINES-1%'")
 okp, probs, inf = M.plan("migrations/short.sql", short_like)
 ok(okp and not probs, "a short LIKE pattern and instr() pass", probs)
+# 5d. METRIC-CADENCE-CHECK-1 (issue 2063): the D1 triggers metric_registry_cadence_canonical_* abort a refresh_cadence that
+# is not a canonical token; --check runs the triggers' own expression on every literal cadence a file writes.
+for c, rej in [("hourly", False), ("Daily", False), ("2h", False), ("30m", False), ("*/15", False), ("*/3h", False), ("", False),
+               ("hourly (D1 triggers metric_orphan_issues_au/ai)", True), ("every hour", True), ("0 * * * *", True), ("fortnightly", True)]:
+    ok(M.cadence_rejected(c) is rej, "cadence %r is %s like the D1 trigger" % (c, "refused" if rej else "accepted"))
+for sql, want in [
+        ("INSERT INTO metric_registry (metric, refresh_cadence) VALUES ('a', 'hourly'), ('b', 'every (2) hours'), ('c', 'it''s 2h');", ["hourly", "every (2) hours", "it's 2h"]),
+        ("INSERT OR IGNORE INTO metric_registry (metric, formula, refresh_cadence) SELECT 'm', 'f(x, y)', 'daily (x)' WHERE NOT EXISTS (SELECT 1 FROM t);", ["daily (x)"]),
+        ("INSERT INTO metric_registry (metric, refresh_cadence) SELECT 'm', 'weekly' FROM t;", ["weekly"]),
+        ("UPDATE metric_registry SET last_value = '1', refresh_cadence = '0 * * * *' WHERE metric = 'x';", ["0 * * * *"]),
+        ("INSERT INTO metric_registry (metric, refresh_cadence) VALUES ('a', lower('HOURLY'));", []),
+        ("INSERT INTO other (metric, refresh_cadence) VALUES ('a', 'bad one');", []),
+        ("INSERT INTO metric_registry (metric, last_value) VALUES ('a', 'x y');", [])]:
+    ok(M.metric_cadences(M.body(sql)) == want, "the cadences a statement writes are found: " + sql[:60], M.metric_cadences(M.body(sql)))
+bad_cad = """-- cadence
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DELETE FROM metric_registry WHERE metric = 'm';
+INSERT OR IGNORE INTO metric_registry (metric, layer, kind, refresh_cadence, state) VALUES
+ ('m', 'operational', 'guard', 'hourly (D1 triggers metric_orphan_issues_au/ai on the open_agent_issues refresh)', 'MEASURED');
+"""
+okp, probs, inf = M.plan("migrations/cad.sql", bad_cad)
+ok(okp and any("METRIC-CADENCE-CANONICAL-1" in p for p in probs), "the 2063 cadence is a --check problem", probs)
+okp, probs, inf = M.plan("migrations/cad.sql", bad_cad.replace("'hourly (D1 triggers metric_orphan_issues_au/ai on the open_agent_issues refresh)'", "'hourly'"))
+ok(okp and not probs, "the canonical 'hourly' passes", probs)
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf):
     rc = M.main(["--check"] + sorted(glob.glob(os.path.join(HERE, "..", "migrations", "*.sql"))))
