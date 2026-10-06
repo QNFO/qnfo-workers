@@ -21,8 +21,9 @@ const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " 
   const lines = prober.split("\n");
   const body = lines.slice(lines.indexOf('var WORKER = "ai-health-prober";'), lines.indexOf("export {"));
   const changed = body.filter((l) => l.trim() && !src.includes(l.trim()));
-  ok(changed.length === 2 && changed.some((l) => l.startsWith("var VERSION = ")) && changed.some((l) => l.startsWith("var LIMS = ")), "every prober line is in the host except its VERSION and LIMS lines", changed.map((l) => l.slice(0, 60)));
-  ok(/^1\.3\.1/.test(api.VERSION) && api.PROBER_VERSION === "2.3.15-folded" && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1, member 2.3.15-folded, legacy member cron */20 kept for dispatch");
+  ok(changed.length === 3 && changed.some((l) => l.startsWith("var VERSION = ")) && changed.some((l) => l.startsWith("var LIMS = ")) && changed.some((l) => l.startsWith("var SIGNALS = ")), "every prober line is in the host except its VERSION, LIMS and SIGNALS lines (SIGNALS drops the retired kaizen register, FOLD-HYGIENE-1)", changed.map((l) => l.slice(0, 60)));
+  ok(/^1\.3\.[1-9]/.test(api.VERSION) && api.PROBER_VERSION === "2.3.15-folded" && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1+, member 2.3.15-folded, legacy member cron */20 kept for dispatch");
+  ok(!/"kaizen", "kaizen_candidates"/.test(src), "the prober SIGNALS in the host no longer grade the retired kaizen register (FOLD-HYGIENE-1)");
   ok((src.match(/var VERSION = "/g) || []).length === 1, "one quoted VERSION constant in the bundle (FM7 parity applies to the host)");
 }
 
