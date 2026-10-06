@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var PROBER_CRON = "*/20 * * * *";
 
 // worker.js
-var VERSION = "1.3.0-prober-fold"; /* 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
+var VERSION = "1.3.1-prober-on-cal-tick"; /* 1.3.1 PROBER-ON-CAL-TICK-1 (2026-10-06, #1756): the every-20-minutes trigger registered for the member never fired (no prober run at 06:40 or 07:00 while the every-30-minutes calibration ran), so the member now runs on the every-30-minutes tick next to the calibration, the host awaits its waitUntil work, and the every-20-minutes trigger is dropped (one cron fewer). 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -681,7 +681,7 @@ var proberMod = (function() {
   var WORKER = "ai-health-prober";
   var VERSION = PROBER_VERSION; // member version (PROBER-FOLD-1); was 2.3.14-text-writers-probed as its own worker; // 2.3.14 PROBER-MODELS-1 (pillar: reach): probes the 4 text models the writing loops depend on and nobody watched (nemotron-3-120b = q08 primary writer; gemma-4-26b-a4b, qwen3-30b-a3b, llama-3.3-70b = q08 panel judges / ask writers); healthy models are probed every 9h instead of 6h so the unique-id calls per day do not rise (9 ids x 4 = 36 before, 13 ids x 2.67 = 34.7 after; fleet_budget ai_spend caps are breached, so no net model calls). Shared ids were already probed once per tick (byId), so the repeated deepseek-v4-pro-0813 row costs no extra call;
   var CAPS = ["model-health-probe", "freshness-check", "health-coverage"];
-  var LIMS = ["runs every 20 minutes inside qnfo-ai-calibration (PROBER-FOLD-1); read routes /prober/health and /prober/freshness, /prober/run needs the calibration key", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron"];
+  var LIMS = ["runs every 30 minutes inside qnfo-ai-calibration, on its calibration tick (PROBER-FOLD-1, PROBER-ON-CAL-TICK-1); read routes /prober/health and /prober/freshness, /prober/run needs the calibration key", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron"];
   // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
   // MODELS[0] still carried a QUALIFIED internal key ("@cf/qwen/qwen3.8-27b"), i.e. this
   // prober itself kept writing one row in the `@cf/` namespace it was supposed to abandon.
@@ -997,8 +997,8 @@ var worker_default = {
       pu.pathname = sub;
       return proberMod.fetch(new Request(pu.toString(), request), env, ctx);
     }
-    if (path === "/health") return json({ ok: true, worker: "qnfo-ai-calibration", version: VERSION, bindings: { qnfo_audit: !!env.QNFO_AUDIT, ai: !!env.AI }, crons: ["*/30 * * * *", PROBER_CRON], members: { "ai-health-prober": PROBER_VERSION }, capabilities: ["model-calibration", "drift-detection", "model-health"], limitations: ["calibrates on the */30 cron; POST /run and GET /results require the router key", "fails closed when the key is not configured"] });
-    if (path === "/manifest") return json({ service: "qnfo-ai-calibration", kind: "worker", version: VERSION, purpose: "autonomous periodic stress-testing/calibration of QNFO AI endpoints (self-auditing, self-correcting, self-improving)", capabilities: ["endpoint-stress-sweeps", "catalog-truth-audit", "vision-tools-stream-routing-boundary-probes", "health-table-publishing", "ticket-lifecycle-self-heal", "config-driven-thresholds"], routes: ["/health", "/manifest", "/run", "/results", "/"], crons: ["*/30 * * * *", PROBER_CRON] });
+    if (path === "/health") return json({ ok: true, worker: "qnfo-ai-calibration", version: VERSION, bindings: { qnfo_audit: !!env.QNFO_AUDIT, ai: !!env.AI }, crons: ["*/30 * * * *"], members: { "ai-health-prober": PROBER_VERSION }, capabilities: ["model-calibration", "drift-detection", "model-health"], limitations: ["calibrates on the */30 cron; POST /run and GET /results require the router key", "fails closed when the key is not configured"] });
+    if (path === "/manifest") return json({ service: "qnfo-ai-calibration", kind: "worker", version: VERSION, purpose: "autonomous periodic stress-testing/calibration of QNFO AI endpoints (self-auditing, self-correcting, self-improving)", capabilities: ["endpoint-stress-sweeps", "catalog-truth-audit", "vision-tools-stream-routing-boundary-probes", "health-table-publishing", "ticket-lifecycle-self-heal", "config-driven-thresholds"], routes: ["/health", "/manifest", "/run", "/results", "/"], crons: ["*/30 * * * *"] });
     if (path === "/run" && request.method === "POST") {
       if (!await authorized(request, env)) return json({ error: "unauthorized" }, 401);
       var digest = await calibration(env, "manual");
@@ -1016,8 +1016,17 @@ var worker_default = {
     return json({ error: "not found" }, 404);
   },
   async scheduled(controller, env, ctx) {
-    if (controller && controller.cron === PROBER_CRON) return proberMod.scheduled(controller, env, ctx);
-    await calibration(env, "cron");
+    // PROBER-ON-CAL-TICK-1 (1.3.1): the prober member runs on the calibration tick, concurrently with the calibration. Its
+    // own scheduled() hands its work to waitUntil, which would leave it the 30-second window after this handler returns;
+    // the host collects those promises and awaits them, so the invocation lives until the probe is done (15-minute limit).
+    // A legacy PROBER_CRON event (the trigger is no longer declared) runs the member only.
+    var pending = [];
+    var member = (async function () {
+      await proberMod.scheduled(controller, env, { waitUntil: function (p) { pending.push(Promise.resolve(p)); }, passThroughOnException: function () {} });
+      await Promise.allSettled(pending);
+    })();
+    if (controller && controller.cron === PROBER_CRON) { await member; return; }
+    await Promise.allSettled([member, calibration(env, "cron")]);
   }
 };
 export {

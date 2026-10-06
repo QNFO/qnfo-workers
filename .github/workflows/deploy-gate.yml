@@ -191,6 +191,12 @@ jobs:
       # confidence and the reviser run id) plus an internal-open errata_queue row; nothing is queued or shown to readers.
       - name: REVISER-FLAGGED-DEADEND-1 offline suite (qnfo-paper-reviser)
         run: node --no-warnings qnfo-paper-reviser/flagged-errata.test.mjs
+      # REVISER-FOLD-1 (#1756): qnfo-paper-reviser runs as a member of qnfo-research-exec (cadence, bindings, props routing).
+      - name: REVISER-FOLD-1 offline suite (qnfo-research-exec 0.9.64)
+        run: node --no-warnings qnfo-research-exec/reviser-fold.test.mjs
+      # BACKLOG-FOLD-1 (#1756): qnfo-backlog-exec runs as a member of qnfo-lifecycle; qnfo-archive is retired.
+      - name: BACKLOG-FOLD-1 offline suite (qnfo-lifecycle 1.8.0)
+        run: node --no-warnings qnfo-lifecycle/backlog-fold.test.mjs
       # MATH-DELIM-1 / TABLE-SEP-1: paper renderer regressions from the 2026-10-02 full-corpus sweep (qnfo-gateway).
       - name: Paper renderer suite (qnfo-gateway)
         run: node qnfo-gateway/render.test.mjs
@@ -233,6 +239,9 @@ jobs:
       # back to the next rung; two in a row end needs_human; a code-like string change (model id, SQL) still passes.
       - name: NOOP-PROPOSAL-GATE-1 offline suite (qnfo-code-orchestrator)
         run: node --no-warnings qnfo-code-orchestrator/noop-gate.test.mjs
+      # FLEET-EXEC-FOLD-1 (#1756): fleet-exec runs as a member of qnfo-code-orchestrator on its */10 tick.
+      - name: FLEET-EXEC-FOLD-1 offline suite (qnfo-code-orchestrator 0.3.18)
+        run: node --no-warnings qnfo-code-orchestrator/fleet-exec-fold.test.mjs
       # QDS-1: qds.css served; HTML 404s for browsers and JSON for API clients; the privacy notice; archive and QWAV hosts;
       # each paper's JSON-LD names its own licence (LICENSE-ONE-1).
       - name: QDS-1 gateway pages offline suite (qnfo-gateway)
@@ -391,6 +400,14 @@ jobs:
       # suite drives the real scheduled handler (tick, lookback, legacy trigger, ZENODO-CATCHUP-1).
       - name: CRON-SINGLE-TRIGGER-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/single-trigger.test.mjs
+      # EMAIL-ORCH-FOLD-1 (#1756): qnfo-email-orchestrator runs as a member of qnfo-cloud-ops on the single tick.
+      - name: EMAIL-ORCH-FOLD-1 offline suite (qnfo-cloud-ops 1.20.0)
+        run: node --no-warnings qnfo-cloud-ops/email-orch-fold.test.mjs
+      # SCORER-FOLD-1 and INDEXER-FOLD-1 (#1756): qnfo-autonomy-scorer runs in qnfo-observability, qnfo-paper-indexer in qnfo-infra.
+      - name: SCORER-FOLD-1 offline suite (qnfo-observability 1.3.0)
+        run: node --no-warnings qnfo-observability/scorer-fold.test.mjs
+      - name: INDEXER-FOLD-1 offline suite (qnfo-infra 1.3.0)
+        run: node --no-warnings qnfo-infra/indexer-fold.test.mjs
       - name: ZENODO-CATCHUP-1 and tick handler offline suite (qnfo-cloud-ops)
         run: node --no-warnings qnfo-cloud-ops/zenodo-catchup.test.mjs
       # SIGNAL-INTAKE-1 (qnfo-cloud-ops 1.19.1): the research scan admits error-correction papers only with an energy
@@ -407,6 +424,22 @@ jobs:
         run: node qnfo-containers-pilot/command-exit.test.mjs
       - name: Job market, mention radar ledger and events cron offline suite (radar-hub)
         run: node radar-hub/radar-hub.test.mjs
+      # SIGNAL-INTAKE-SOURCES-1 (radar-hub 1.3.0, #1947, pillar research): the D1-driven interdisciplinary feed intake into
+      # idea_proposals (RSS/RDF/Atom/arXiv parsing, lexicon scoring, per-run and per-family caps, URL dedupe, ledger, metric).
+      - name: SIGNAL-INTAKE-SOURCES-1 offline suite (radar-hub)
+        run: node --no-warnings radar-hub/signal-intake.test.mjs
+      # DAILY-DISTRIBUTION-1 (qnfo-social 0.7.37, pillar reach): per-channel weekly caps for LinkedIn, Mastodon and X inside
+      # STRATEGY s4, spaced over the week, no slug twice in 30 days on one channel, bufferPost dedupe, ledger.
+      - name: DAILY-DISTRIBUTION-1 offline suite (qnfo-social)
+        run: node --no-warnings qnfo-social/daily-distribution.test.mjs
+      # TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132, pillar autonomy): the program engine's pure half (wave state,
+      # scoreboard, lever planning, issue text) and one tick over an in-memory D1 seeded from the migration.
+      - name: TRANSFORMATION-LOOP-1 offline suite (qnfo-fleet-control)
+        run: node --no-warnings qnfo-fleet-control/transformation.test.mjs
+      # HUMAN-AUDIENCE-1 (qnfo-fleet-dashboard 1.22.3, pillar reach): external_referred_pageviews_7d and
+      # continuation_pageviews_7d from one bot-filtered RUM read; registry, ledger, series; WATCHMAKER_OPS entries.
+      - name: HUMAN-AUDIENCE-1 offline suite (qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-fleet-dashboard/human-audience.test.mjs
       # CRON-SINGLE-TRIGGER-1 (#1785): radar-hub, errata-hub, qnfo-lifecycle and personal-companion hold one hourly trigger
       # and a CRON_TABLE; every fire of each former trigger list is delivered once, in the hour it fired.
       - name: CRON-SINGLE-TRIGGER-1 hourly tick offline suite (four workers)
@@ -452,6 +485,9 @@ jobs:
       # TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015): ask.qwav.tech subscribe box posts to the qnfo.org double opt-in.
       - name: TP-7.1 subscribe-box offline suite (qnfo-ai-search 2.2.6)
         run: node --no-warnings qnfo-ai-search/subscribe-box.test.mjs
+      # ASK-LEXICAL-CATALOG-1: retrieve() ranks the published catalog (BM25, no model call) beside the stale vector index.
+      - name: ASK-LEXICAL-CATALOG-1 offline suite (qnfo-ai-search 2.2.7)
+        run: node --no-warnings qnfo-ai-search/lexical-catalog.test.mjs
 
       # GROUND-OR-SLOT-1 + GROUND-THIN-FAILFAST-1 (agent_issues 1751): the arXiv OR fallback keeps its query slot, and a
       # grounding too thin to pass gate-refcount stops at ground instead of running the whole pipeline.
@@ -488,6 +524,10 @@ jobs:
       # REACH-IDEA-1 (#2001): ideas.qnfo.org carries a subscribe box that forwards to the qnfo-subscribers double opt-in.
       - name: REACH-IDEA-1 offline suite (idea-hub 1.5.7, #2001)
         run: node --no-warnings idea-hub/subscribe-box.test.mjs
+      # IDEA-DIVERSITY-CAP-1 (#1947, trigger 1238): a generated ACCEPT waits as deferred_diversity while its topic cluster
+      # would exceed half of the 30-day accepts; the cluster table must equal qnfo-cloud-ops IDEA_TOPIC_CLUSTERS.
+      - name: IDEA-DIVERSITY-CAP-1 offline suite (idea-hub 1.5.8, #1947)
+        run: node --no-warnings idea-hub/diversity-cap.test.mjs
       - name: AI-ATTR offline suite (personal-api 4.7.2, #1833)
         run: node --no-warnings personal-api/ai-attr.test.mjs
       - name: TOOL-TRACE-MEMORY-1 offline suite (personal-api 4.7.1, #1805)
@@ -503,6 +543,9 @@ jobs:
       # DANGLING-SERVICE-UNBIND-1 + DANGLING-BINDING-10143-1 (#1756): a binding to a deleted worker never blocks a deploy.
       - name: DANGLING-SERVICE-UNBIND-1 offline suite (cf_ops_actions unbind-service)
         run: python3 scripts/cf_ops_unbind_service_test.py
+      # DELETE-AFTER-UNBIND-1 (TP-9 lever 1, #2025): delete-worker refuses while any live service binding targets the worker.
+      - name: DELETE-AFTER-UNBIND-1 offline suite (cf_ops_actions delete-worker)
+        run: python3 scripts/cf_ops_delete_worker_test.py
       - name: DANGLING-BINDING-10143-1 offline check (qnfo-ops 2.38.43)
         run: node --no-warnings qnfo-ops/dangling-10143.test.mjs
       - name: BROWSER-SAMPLE-1 offline suite (qnfo-gateway, #1890)

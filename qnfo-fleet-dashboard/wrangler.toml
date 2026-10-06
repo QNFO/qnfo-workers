@@ -78,8 +78,13 @@ environment = "production"
 
 [[services]]
 binding = "SVC_QNFO_PAPER_REVISER"
-service = "qnfo-paper-reviser"
+# REVISER-FOLD-1 (#1756): qnfo-paper-reviser runs as a member of qnfo-research-exec; props.member routes this binding to
+# the member (its /run/* and /debug/* routes, authenticated by props in place of X-Reviser-Token). The live binding to the
+# old script is removed after that script is deleted (cf-ops-actions unbind-service, SERVICE-REPOINT-1); the next
+# canonical deploy installs this one.
+service = "qnfo-research-exec"
 environment = "production"
+props = { caller = "qnfo-fleet-dashboard", member = "qnfo-paper-reviser" }
 
 
 [[services]]

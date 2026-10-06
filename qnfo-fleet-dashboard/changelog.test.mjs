@@ -1,4 +1,4 @@
-// FLEET-CHANGELOG-1 offline suite (qnfo-fleet-dashboard 1.23.0): the Changelog tab's release detection from the deploy
+// FLEET-CHANGELOG-1 offline suite (qnfo-fleet-dashboard 1.24.0): the Changelog tab's release detection from the deploy
 // ledger, its commit-message description, the cron sync into fleet_changelog (idempotent, heartbeat), the public/owner
 // views (personal-plane redaction) and the page, against node:sqlite.
 // Run: node --no-warnings qnfo-fleet-dashboard/changelog.test.mjs   -> prints "N passed, 0 failed"
@@ -76,7 +76,7 @@ const ghCall = async (env, method, path) => {
   return { ok: true, status: 200, json: commits[w] || [] };
 };
 const ctx = vm.createContext({ Date, Math, Number, String, JSON, Object, Array, RegExp, Promise, isFinite, encodeURIComponent, decodeURIComponent, ghCall,
-  VERSION: "1.23.0-changelog", NAME: "qnfo-fleet-dashboard", ACCOUNT: "acct", CON_REPO: "QNFO/qnfo-workers",
+  VERSION: "1.24.0-changelog", NAME: "qnfo-fleet-dashboard", ACCOUNT: "acct", CON_REPO: "QNFO/qnfo-workers",
   fleetHead: (t) => "<!DOCTYPE html><title>" + t + "</title><body>", fleetTop: (cur) => '<nav><a href="/changelog"' + (cur === "changelog" ? ' aria-current="page"' : "") + ">Changelog</a></nav>", FLEET_SHELL_JS: "" });
 const W = vm.runInContext(src.slice(f, g + 2) + "\n" + src.slice(d, e) + "\n" + src.slice(a, b) + "\n;({ changelogPatches, changelogDetect, changelogPickCommit, changelogParse, changelogTick, changelogView, changelogHtml, CHANGELOG_LEDGER_SQL });", ctx, { filename: "qnfo-fleet-dashboard#FLEET-CHANGELOG-1" });
 

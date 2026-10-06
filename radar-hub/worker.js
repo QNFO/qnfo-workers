@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.2.4"; // 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.3.1"; // 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -330,7 +330,8 @@ async function run(env) {
   const nowIso = scannedAt.slice(0, 10);
   const horizon = new Date(now.getTime() + 365 * 864e5).toISOString().slice(0, 10);
   try {
-    const rs = await env.RADAR_DB.prepare("SELECT name, url, kind, cadence, category FROM radar_sources WHERE enabled=1 AND (cadence='daily' OR (cadence='weekly' AND CAST(strftime('%w','now') AS INTEGER)=1)) ORDER BY cadence DESC").all();
+    // SIGNAL-INTAKE-SOURCES-1: kind 'signal' rows are feeds for the intake module, not venue pages to scan for events.
+    const rs = await env.RADAR_DB.prepare("SELECT name, url, kind, cadence, category FROM radar_sources WHERE enabled=1 AND COALESCE(kind,'') <> 'signal' AND (cadence='daily' OR (cadence='weekly' AND CAST(strftime('%w','now') AS INTEGER)=1)) ORDER BY cadence DESC").all();
     if (rs.results && rs.results.length) SOURCES = rs.results.map((r) => ({ name: r.name, url: r.url, kind: r.kind || "event", domains: [r.category || "X"], delivery: "hybrid", cost: 0 }));
   } catch (e) {}
   const results = await Promise.allSettled(SOURCES.map((s) => scanVenue(s)));
@@ -1874,8 +1875,265 @@ var mentionMod = (function(){
 })();
 // MENTION-RADAR-1 end
 
+// SIGNAL-INTAKE-SOURCES-1 (radar-hub 1.3.0, 2026-10-06, agent_issues 1947 SIGNAL-INTAKE-1; pillar: research).
+// Owner directive 2026-10-06: the Quniverse must consider broader interdisciplinary signals, not only arXiv papers about
+// quantum computing (QNFO) and Hacker News / GitHub (q08). Measured before this change in qnfo-audit (30 days): every
+// `signals` row came from artifact_reentry (520), q08 (104) or reading (49); every accepted idea_proposals row came from
+// auto-scan (the qnfo-cloud-ops arXiv query), auto-reentry or auto-miner; idea_topic_concentration_30d read 0.596.
+// This module is a D1-driven feed intake. radar_sources rows with kind 'signal' (RSS 2.0, RSS 1.0 / RDF, Atom and the
+// arXiv API) are fetched once a day; every item is scored, with no model call, against the owner's interest lexicon
+// (STRATEGY 2.3 pillars plus the published corpus: foundations of physics, information and ontology, complexity and
+// self-organisation, thermodynamics of computation, epistemics and metascience, autonomous research systems, number
+// theory, origins of life and mind, invention); the best few, spread across source families, become idea_proposals rows
+// (name 'intake:<family>', ip_hash 'intake:<url hash>') that idea-hub triages like every other producer. Bounded: at most
+// SIGNAL_INTAKE_MAX_PER_RUN rows a run (ops_config signal_intake_max_per_run) and MAX_PER_FAMILY per family; every item is
+// recorded once by URL in signal_intake_seen; ops_config signal_intake_enabled='0' stops it. It runs in the existing
+// 08:30Z daily slot (CRON_TABLE unchanged, no new cron) and adds no model call (none may be added while a fleet_budget cap
+// is breached; triage defers scoring under a breach anyway). Ledger: one cloud_ops_events row per UTC day
+// (signal-intake-<day>, kind signal-intake, job radar-hub). Metric signal_source_families_7d: distinct families with an
+// accepted item in 7 days (registered with its trigger in migrations/2026-10-06-signal-intake-sources.sql). Sources are
+// data: INSERT a radar_sources row (kind 'signal', category = family, cadence 'daily', enabled 1) and the next run reads
+// it; the events radar skips kind 'signal' rows (they are feeds, not venue pages).
+var intakeMod = (function(){
+  var VERSION = "1.0.0";
+  var MAX_PER_RUN_DEFAULT = 8, MAX_PER_FAMILY = 2, MAX_ITEMS_PER_SOURCE = 60, FETCH_MS = 12000, MAX_AGE_DAYS = 14;
+  var UA = "Mozilla/5.0 (compatible; QNFO radar-hub signal-intake/" + VERSION + "; +https://qnfo.org)";
+  // Two tiers of lexicon. A STRONG term names an interest the owner has published on or STRATEGY 2.3 leads with; a WEAK
+  // term is a field word that alone says little. An item is kept with at least one strong term and a score of 3 or more
+  // (strong 2, weak 1), so "model", "theory" and "information" in a journal abstract never pass by themselves.
+  var STRONG = ["ultrametric", "p-adic", "non-archimedean", "adelic", "landauer", "thermodynamics of computation", "thermodynamic cost",
+    "energy per computation", "joules per", "energy cost of comput", "energy efficiency of comput", "reversible comput", "self-reference",
+    "self-referential", "strange loop", "laws of form", "distinction", "ontolog", "epistem", "ignorance", "metascience", "reproducib",
+    "replication crisis", "open science", "ai for science", "autonomous research", "self-improving", "foundations of physics",
+    "interpretation of quantum", "it from bit", "origin of life", "abiogenesis", "biogenesis", "free energy principle", "active inference",
+    "algorithmic information", "kolmogorov", "computational irreducib", "cellular automat", "category theory", "emergence", "emergent",
+    "self-organi", "self-organis", "criticality", "phase transition", "nonequilibrium", "non-equilibrium", "dissipative", "scale-free",
+    "scale invarian", "fractal", "number theor", "prime number", "riemann", "zeta function", "information-theoretic", "information theory",
+    "entropy production", "maximum entropy", "measurement problem", "observer", "consciousness", "theory of mind", "collective intelligence",
+    "cooperation", "network science", "complex system", "complexity science", "patent", "invention", "inventor", "data center energy",
+    "datacenter energy", "energy of ai", "compute energy", "carbon footprint of", "agentic", "autonomous agent", "multi-agent",
+    "scientific discovery", "hypothesis generation", "peer review", "research integrity", "falsifi", "bayesian", "causal inference",
+    "counterfactual", "quantum thermodynamic", "error correction", "zitterbewegung", "geometrogenesis", "holograph", "spacetime emergen"];
+  var WEAK = ["quantum", "thermodynamic", "entropy", "information", "complex", "network", "model", "theory", "philosoph", "mathematic",
+    "evolution", "cognition", "brain", "language model", "llm", "energy", "computation", "computing", "knowledge", "science policy",
+    "funding", "university", "physics", "biology", "economics", "logic", "simulation", "measurement", "benchmark", "open source"];
+  var SKIP_TITLE = /^(correction|author correction|publisher correction|erratum|corrigendum|retraction|retracted|editorial|table of contents)\b/i;
+  function tagText(block, name) {
+    var m = block.match(new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/" + name + ">", "i"));
+    return m ? m[1] : "";
+  }
+  function decode(s) {
+    return String(s || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ")
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&#x27;/g, "'").replace(/&nbsp;/g, " ")
+      .replace(/&#(\d+);/g, function(m, n) { var c = Number(n); return c > 31 && c < 1114112 ? String.fromCodePoint(c) : " "; })
+      .replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+  }
+  function itemLink(block) {
+    // Atom: <link href=".." rel="alternate"/> (rel may be absent); arXiv API also carries <id>http://arxiv.org/abs/..</id>;
+    // RSS 2.0: <link>url</link>; RSS 1.0 / RDF: <item rdf:about="url"> and <link>url</link>.
+    var tags = block.match(/<link\b[^>]*>/gi) || [];
+    var alt = null, any = null;
+    for (var i = 0; i < tags.length; i++) {
+      var h = tags[i].match(/\bhref="([^"]+)"/i);
+      if (!h) continue;
+      var rel = (tags[i].match(/\brel="([^"]+)"/i) || [])[1];
+      if (!rel || rel === "alternate") { alt = alt || h[1]; }
+      any = any || h[1];
+    }
+    var txt = decode(tagText(block, "link"));
+    var about = (block.match(/^<(?:item|entry)\b[^>]*\brdf:about="([^"]+)"/i) || [])[1];
+    var id = decode(tagText(block, "id"));
+    var pick = alt || (/^https?:\/\//i.test(txt) ? txt : null) || about || any || (/^https?:\/\//i.test(id) ? id : null) || "";
+    return String(pick).trim();
+  }
+  function parseFeed(xml) {
+    var s = String(xml || "");
+    var blocks = s.match(/<entry\b[\s\S]*?<\/entry>/gi) || s.match(/<item\b[\s\S]*?<\/item>/gi) || [];
+    var out = [];
+    for (var i = 0; i < blocks.length && out.length < MAX_ITEMS_PER_SOURCE; i++) {
+      var b = blocks[i];
+      var title = decode(tagText(b, "title")).slice(0, 240);
+      var link = itemLink(b);
+      if (!title || !/^https?:\/\//i.test(link)) continue;
+      var summary = decode(tagText(b, "summary") || tagText(b, "description") || tagText(b, "content:encoded") || tagText(b, "content")).slice(0, 1200);
+      var pub = decode(tagText(b, "published") || tagText(b, "updated") || tagText(b, "pubDate") || tagText(b, "dc:date"));
+      out.push({ title: title, link: link, summary: summary, published: pub });
+    }
+    return out;
+  }
+  function score(item) {
+    var text = (item.title + " " + item.summary).toLowerCase();
+    var strong = [], weak = 0;
+    for (var i = 0; i < STRONG.length; i++) if (text.indexOf(STRONG[i]) >= 0) strong.push(STRONG[i]);
+    for (var j = 0; j < WEAK.length; j++) if (text.indexOf(WEAK[j]) >= 0) weak++;
+    return { score: strong.length * 2 + weak, strong: strong, weak: weak };
+  }
+  function tooOld(pub, now) {
+    if (!pub) return false;
+    var t = Date.parse(pub);
+    return isFinite(t) && (now.getTime() - t) > MAX_AGE_DAYS * 864e5;
+  }
+  async function sha16(s) {
+    var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
+    return Array.from(new Uint8Array(buf)).slice(0, 8).map(function(b) { return b.toString(16).padStart(2, "0"); }).join("");
+  }
+  // Pure selection: top MAX_PER_FAMILY per family by score, then round-robin across families (alphabetical) up to max.
+  function selectAcross(candidates, max) {
+    var byFam = {};
+    for (var i = 0; i < candidates.length; i++) {
+      var c = candidates[i];
+      (byFam[c.family] = byFam[c.family] || []).push(c);
+    }
+    var fams = Object.keys(byFam).sort();
+    for (var f = 0; f < fams.length; f++) byFam[fams[f]].sort(function(a, b) { return b.score - a.score; });
+    var picked = [];
+    for (var round = 0; round < MAX_PER_FAMILY && picked.length < max; round++) {
+      for (var k = 0; k < fams.length && picked.length < max; k++) {
+        var row = byFam[fams[k]][round];
+        if (row) picked.push(row);
+      }
+    }
+    return picked;
+  }
+  async function ensureSchema(db) {
+    await db.prepare("CREATE TABLE IF NOT EXISTS signal_intake_seen (url TEXT PRIMARY KEY, family TEXT, source TEXT, title TEXT, score REAL, accepted INTEGER DEFAULT 0, proposal_id INTEGER, seen_at TEXT DEFAULT (datetime('now')))").run();
+  }
+  async function readConfig(db) {
+    var max = MAX_PER_RUN_DEFAULT, enabled = true;
+    try {
+      var rows = (await db.prepare("SELECT key, value FROM ops_config WHERE key IN ('signal_intake_max_per_run','signal_intake_enabled')").all()).results || [];
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].key === "signal_intake_max_per_run") { var n = parseInt(String(rows[i].value), 10); if (isFinite(n) && n >= 0 && n <= 40) max = n; }
+        if (rows[i].key === "signal_intake_enabled" && String(rows[i].value).trim() === "0") enabled = false;
+      }
+    } catch (e) {}
+    return { max: max, enabled: enabled };
+  }
+  async function fetchSource(f, src) {
+    var ctl = typeof AbortController === "function" ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function() { ctl.abort(); }, FETCH_MS) : null;
+    try {
+      var r = await f(src.url, { headers: { "User-Agent": UA, "Accept": "application/atom+xml, application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5" }, signal: ctl ? ctl.signal : undefined, cf: { cacheTtl: 1800 } });
+      if (!r.ok) return { error: "http " + r.status, items: [] };
+      var txt = await r.text();
+      var items = parseFeed(txt);
+      return items.length ? { items: items } : { error: "no items parsed (" + txt.length + " bytes)", items: [] };
+    } catch (e) {
+      // The detail goes to the worker log; the run result (served by POST /intake/run) carries a fixed class only
+      // (CodeQL js/stack-trace-exposure).
+      console.log("signal-intake fetch " + src.url + ": " + String((e && e.message) || e).slice(0, 160));
+      return { error: e && e.name === "AbortError" ? "timeout" : "fetch failed", items: [] };
+    } finally { if (timer) clearTimeout(timer); }
+  }
+  async function run(env, opts) {
+    opts = opts || {};
+    var f = opts.fetch || ((u, i) => fetch(u, i));
+    var now = opts.now || new Date(), today = now.toISOString().slice(0, 10), iso = now.toISOString();
+    var db = env.AUDIT || env.RADAR_DB || env.AUDIT_DB;
+    if (!db) return { status: "error", error: "no AUDIT binding" };
+    var out = { status: "ok", date: today, version: VERSION, sources: {}, fetched: 0, items: 0, candidates: 0, inserted: 0, dupes: 0, families: {}, picked: [] };
+    await ensureSchema(db);
+    var cfg = await readConfig(db);
+    if (!cfg.enabled) { out.status = "skipped"; out.reason = "ops_config signal_intake_enabled=0"; await ledger(db, today, iso, out); return out; }
+    var srcs = [];
+    try { srcs = (await db.prepare("SELECT name, url, category FROM radar_sources WHERE enabled=1 AND kind='signal' ORDER BY category, name").all()).results || []; }
+    catch (e) { console.log("signal-intake radar_sources read: " + String((e && e.message) || e).slice(0, 160)); out.status = "error"; out.error = "radar_sources unreadable"; await ledger(db, today, iso, out); return out; }
+    if (!srcs.length) { out.status = "error"; out.error = "no radar_sources rows with kind='signal'"; await ledger(db, today, iso, out); return out; }
+    var candidates = [];
+    for (var b = 0; b < srcs.length; b += 6) {
+      var batch = srcs.slice(b, b + 6);
+      var results = await Promise.all(batch.map(function(s) { return fetchSource(f, s); }));
+      for (var i = 0; i < batch.length; i++) {
+        var s = batch[i], r = results[i], fam = String(s.category || "other");
+        if (r.error) { out.sources[s.name] = "error:" + r.error; continue; }
+        out.fetched++;
+        out.sources[s.name] = "ok:" + r.items.length;
+        for (var k = 0; k < r.items.length; k++) {
+          var it = r.items[k];
+          out.items++;
+          if (SKIP_TITLE.test(it.title) || it.title.length < 20 || tooOld(it.published, now)) continue;
+          var sc = score(it);
+          if (!sc.strong.length || sc.score < 3) continue;
+          candidates.push({ family: fam, source: s.name, title: it.title, link: it.link, summary: it.summary, published: it.published, score: sc.score, strong: sc.strong.slice(0, 5) });
+        }
+      }
+    }
+    // Items already seen (by URL) are not candidates again; the ledger row they got on first sight stays.
+    var fresh = [];
+    for (var c = 0; c < candidates.length; c++) {
+      var seen = await db.prepare("SELECT 1 AS x FROM signal_intake_seen WHERE url=?1").bind(candidates[c].link).first().catch(function() { return null; });
+      if (seen) { out.dupes++; continue; }
+      fresh.push(candidates[c]);
+    }
+    out.candidates = fresh.length;
+    var picked = selectAcross(fresh, cfg.max);
+    var pickedUrls = {};
+    for (var p = 0; p < picked.length; p++) {
+      var it2 = picked[p];
+      pickedUrls[it2.link] = 1;
+      var text = it2.title + ". " + (it2.summary ? it2.summary.slice(0, 600) + (it2.summary.length > 600 ? "..." : "") + " " : "") +
+        "Source: " + it2.link + " (" + it2.family + ", " + it2.source + "). Why it fits: " + it2.strong.join(", ") + ".";
+      var h = "intake:" + await sha16(it2.link);
+      try {
+        var dup = await db.prepare("SELECT id FROM idea_proposals WHERE ip_hash=?1 LIMIT 1").bind(h).first();
+        var pid = dup ? dup.id : null;
+        if (!dup) {
+          var ins = await db.prepare("INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES (?1, ?2, ?3, 'new', ?4, ?5)").bind("intake:" + it2.family, text.slice(0, 3000), it2.link.slice(0, 500), h, iso).run();
+          pid = ins && ins.meta ? ins.meta.last_row_id : null;
+          out.inserted++;
+          out.families[it2.family] = (out.families[it2.family] || 0) + 1;
+        } else out.dupes++;
+        await db.prepare("INSERT OR IGNORE INTO signal_intake_seen (url, family, source, title, score, accepted, proposal_id, seen_at) VALUES (?1,?2,?3,?4,?5,1,?6,?7)").bind(it2.link, it2.family, it2.source, it2.title.slice(0, 240), it2.score, pid, iso).run();
+        out.picked.push({ family: it2.family, score: it2.score, title: it2.title.slice(0, 100), url: it2.link });
+      } catch (e) { console.log("signal-intake insert " + it2.link + ": " + String((e && e.message) || e).slice(0, 160)); out.sources[it2.source] += " insert-error"; }
+    }
+    // Every other fresh candidate is recorded as seen-but-not-taken, so the next run does not re-score it.
+    for (var q = 0; q < fresh.length; q++) {
+      if (pickedUrls[fresh[q].link]) continue;
+      try { await db.prepare("INSERT OR IGNORE INTO signal_intake_seen (url, family, source, title, score, accepted, seen_at) VALUES (?1,?2,?3,?4,?5,0,?6)").bind(fresh[q].link, fresh[q].family, fresh[q].source, fresh[q].title.slice(0, 240), fresh[q].score, iso).run(); } catch (e) {}
+    }
+    var errs = Object.keys(out.sources).filter(function(k) { return out.sources[k].indexOf("error:") === 0; }).length;
+    if (!out.fetched) out.status = "error"; else if (errs) out.status = "degraded";
+    try {
+      var fm = await db.prepare("SELECT COUNT(DISTINCT family) AS n FROM signal_intake_seen WHERE accepted=1 AND seen_at >= datetime('now','-7 days')").first();
+      out.families_7d = Number(fm && fm.n) || 0;
+      await db.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES ('signal_source_families_7d', 'fleet', 'leading', 'COUNT(DISTINCT family) FROM signal_intake_seen WHERE accepted=1 AND seen_at >= now-7d: interdisciplinary source families (radar_sources kind signal) that produced an accepted idea_proposals row in the last 7 days (radar-hub SIGNAL-INTAKE-SOURCES-1, daily 08:30Z, no model call)', 'qnfo-audit.signal_intake_seen (radar-hub intake run ledger cloud_ops_events signal-intake-<day>)', '0 (2026-10-06: every signal came from arXiv quantum, artifact re-entry, q08 or reading)', '>= 5 distinct families a week (SIGNAL-INTAKE-1, owner directive 2026-10-04 and 2026-10-06)', 'radar-hub', 'trigger: fewer than 3 families -> METRIC-TRIGGER issue (migrations/2026-10-06-signal-intake-sources.sql)', 'daily', '< 5', '< 3', 'MEASURED', 'computed')").run();
+      await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='signal_source_families_7d'").bind(String(out.families_7d), iso).run();
+    } catch (e) { console.log("signal-intake metric write: " + String((e && e.message) || e).slice(0, 160)); out.metric_error = "metric write failed"; }
+    await ledger(db, today, iso, out);
+    return out;
+  }
+  async function ledger(db, today, iso, out) {
+    try {
+      var meta = Object.assign({}, out, { picked: (out.picked || []).slice(0, 12) });
+      await db.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?, ?, 'signal-intake', ?, ?, 'radar-hub', ?)").bind("signal-intake-" + today, iso, ("signal intake " + out.status + ": " + out.inserted + " proposals from " + Object.keys(out.families || {}).length + " families, " + out.fetched + " sources read" + (out.error ? " " + out.error : "")).slice(0, 500), JSON.stringify(meta).slice(0, 6000), out.status).run();
+      out.recorded = true;
+    } catch (e) { out.recorded = false; }
+  }
+  async function last(env) {
+    var db = env.AUDIT || env.RADAR_DB || env.AUDIT_DB;
+    var row = await db.prepare("SELECT ts, status, meta FROM cloud_ops_events WHERE id >= 'signal-intake-' AND id < 'signal-intake.' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; });
+    var srcs = (await db.prepare("SELECT name, url, category, enabled FROM radar_sources WHERE kind='signal' ORDER BY category, name").all().catch(function() { return { results: [] }; })).results || [];
+    var fam = await db.prepare("SELECT COUNT(DISTINCT family) AS n FROM signal_intake_seen WHERE accepted=1 AND seen_at >= datetime('now','-7 days')").first().catch(function() { return null; });
+    var meta = null; try { meta = row && row.meta ? JSON.parse(row.meta) : null; } catch (e) {}
+    return { last_run: row ? { ts: row.ts, status: row.status, meta: meta } : null, families_7d: Number(fam && fam.n) || 0, sources: srcs };
+  }
+  async function fetchHandler(request, env) {
+    var p = new URL(request.url).pathname;
+    var J = function(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json" } }); };
+    if (p === "/run") {
+      if (request.method !== "POST") return J({ error: "POST /intake/run" }, 405);
+      return J(await run(env));
+    }
+    if (p === "/" || p === "") return J(await last(env));
+    return J({ error: "not found" }, 404);
+  }
+  return { run: run, last: last, fetch: fetchHandler, parseFeed: parseFeed, score: score, selectAcross: selectAcross, STRONG: STRONG, WEAK: WEAK, VERSION: VERSION };
+})();
+// SIGNAL-INTAKE-SOURCES-1 end
+
 const JobMarketWatchWorkflow = jmwMod.JobMarketWatchWorkflow;
-export { JobMarketWatchWorkflow };
+export { JobMarketWatchWorkflow, intakeMod };
 
 // ===== MERGED RADAR HUB v2 (2026-09-11: + job-market-watch + personal-events-radar) =====
 // HUB-VERSION-SCOPE-1 (2026-09-23): the hub's own VERSION is declared at MODULE scope (top of
@@ -1930,7 +2188,7 @@ async function cronTickDispatch(event, one) {
 export default {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: VERSION, radars: 7, capabilities: ["mention-radar", "events-radar", "arxiv-radar", "research-radar", "citation-radar", "jobs-radar", "personal-radar"], limitations: ["each radar runs on its own cron; only the arXiv radar can be forced (POST /arxiv/run, one run per 10 minutes)", "arXiv classification is keyword-based, with no model call", "the arXiv radar reads the 20 newest matching submissions per run"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "radar-hub", version: VERSION, radars: 8, capabilities: ["mention-radar", "events-radar", "arxiv-radar", "research-radar", "citation-radar", "jobs-radar", "personal-radar", "signal-intake"], limitations: ["each radar runs on its own cron; only the arXiv radar can be forced (POST /arxiv/run, one run per 10 minutes)", "arXiv classification is keyword-based, with no model call", "the arXiv radar reads the 20 newest matching submissions per run", "the signal intake reads radar_sources rows of kind 'signal' once a day (08:30Z), scores items by lexicon with no model call, and writes at most ops_config signal_intake_max_per_run (default 8) idea_proposals rows a run; POST /intake/run needs the radar token"] }), { headers: { "content-type": "application/json" } });
     // HUB-AUTH-1 (2026-10-01): every member route can run a scan, write the personal calendar or
     // return the personal report, so all of them need Bearer RADAR_TOKEN. Fails closed when unset.
     // Crons do not pass through fetch and are unaffected.
@@ -1948,6 +2206,7 @@ export default {
     if (p === "/jobs" || p.startsWith("/jobs/")) return jmwMod.default.fetch(sub("/jobs"), env, ctx);
     if (p === "/personal" || p.startsWith("/personal/")) return perMod.default.fetch(sub("/personal"), env, ctx);
     if (p === "/mentions" || p.startsWith("/mentions/")) return mentionMod.fetch(sub("/mentions"), env, ctx);
+    if (p === "/intake" || p.startsWith("/intake/")) return intakeMod.fetch(sub("/intake"), env, ctx);
     if (p === "/arxiv/health") return arxivMod.fetch(sub("/arxiv"), env, ctx);
     if (p === "/arxiv/last") {
       const row = env.AUDIT ? await env.AUDIT.prepare("SELECT ts, payload FROM research_scan_log WHERE job='arxiv-radar' ORDER BY ts DESC LIMIT 1").first().catch(function() { return null; }) : null;
@@ -1970,9 +2229,11 @@ export default {
     if (c === "0 5 * * 2" || c === "0 5 * * 1") return eventsMod.default.scheduled(event, env, ctx);
     // MENTION-RADAR-1: the daily 08:30Z slot also runs the external-mention discovery; each job is isolated.
     if (c === "30 8 * * *") {
+      // SIGNAL-INTAKE-SOURCES-1: the interdisciplinary feed intake shares this daily slot (no new cron); isolated like the others.
       await Promise.allSettled([
         arxivMod.scheduled(event, env, ctx),
-        mentionMod.run(env).then((o) => console.log("mention-radar", JSON.stringify(o)), (e) => console.error("mention-radar", String((e && e.message) || e)))
+        mentionMod.run(env).then((o) => console.log("mention-radar", JSON.stringify(o)), (e) => console.error("mention-radar", String((e && e.message) || e))),
+        intakeMod.run(env).then((o) => console.log("signal-intake", JSON.stringify(o).slice(0, 1500)), (e) => console.error("signal-intake", String((e && e.message) || e)))
       ]);
       return;
     }

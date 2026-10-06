@@ -54,10 +54,8 @@ service = "qnfo-email"
 environment = "production"
 
 
-[[services]]
-binding = "INDEXER"
-service = "qnfo-paper-indexer"
-environment = "production"
+# INDEXER (qnfo-paper-indexer) removed 2026-10-06: folded into qnfo-infra (INDEXER-FOLD-1, #1756); the binding was a /health and
+# /count probe only. The count is at https://qnfo-infra.q08.workers.dev/indexer/count.
 
 # KAIZEN (qnfo-kaizen) removed 2026-10-06: worker retired (WORKER-RETIRE-WAVE-2, #1756); the binding was a /health probe only.
 
@@ -66,10 +64,7 @@ binding = "GATEWAY"
 service = "qnfo-gateway"
 environment = "production"
 
-[[services]]
-binding = "ARCHIVE"
-service = "qnfo-archive"
-environment = "production"
+# ARCHIVE (qnfo-archive) removed 2026-10-06: worker retired (ARCHIVE-RETIRE-1, #1756); the binding was a /health probe only.
 
 [[services]]
 binding = "AI"
@@ -95,8 +90,13 @@ environment = "production"
 # Backlog executor drain (ops_issue_run tool)
 [[services]]
 binding = "BACKLOG"
-service = "qnfo-backlog-exec"
+# BACKLOG-FOLD-1 (#1756): qnfo-backlog-exec runs as a member of qnfo-lifecycle; props.member routes this binding to the
+# member, so https://backlog.internal/run (ops_issue_run) and the /health probe reach it unchanged. The live binding to the
+# old script is removed after that script is deleted (cf-ops-actions unbind-service, SERVICE-REPOINT-1); the next canonical
+# deploy installs this one.
+service = "qnfo-lifecycle"
 environment = "production"
+props = { caller = "qnfo-ops", member = "qnfo-backlog-exec" }
 
 # Secrets (set via wrangler secret put / API; never in git):
 #   OPS_ROUTER_AUTH_KEY  - Bearer auth for /v1/chat/completions (mirror ~/.env)

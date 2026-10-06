@@ -16,7 +16,9 @@ delete-worker, which carries its own guard.
 ACTIONS
 -------
   delete-worker NAME     DELETE a script. Refused unless the repo directory NAME carries a RETIRED or
-                         FOLDED marker (the repo's own retirement record) and NAME is not protected.
+                         FOLDED marker (the repo's own retirement record) and NAME is not protected, and refused while
+                         any other live script still has a service binding to NAME (DELETE-AFTER-UNBIND-1, TP-9): the
+                         binders are named; remove their wrangler.toml declarations, then unbind-service each one.
   delete-vectorize-index NAME
                          DELETE a Vectorize index. Refused unless NAME is in VECTORIZE_RETIRED (an explicit allowlist
                          mapping the index to the repo directory of the retired worker that owned it) and that
@@ -148,6 +150,20 @@ def delete_worker(name: str, acct: str, token: str) -> int:
     if st0 == 404:
         emit({"action": "delete-worker", "worker": name, "ok": True, "already_absent": True, "marker": marker})
         return 0
+    # DELETE-AFTER-UNBIND-1 (TP-9 lever 1, agent_issues 2025): deleting a worker that another live script still binds leaves
+    # that binder undeployable (the canonical deploy re-declares every live binding; Cloudflare 10143/10144). PR 657 did
+    # exactly this on 2026-10-06 (qnfo-ops KAIZEN and SKILLSYNC, qnfo-fleet-dashboard SVC_QNFO_KAIZEN; GitHub #660). The
+    # census is fail-closed: an unreadable script list or settings refuses the delete.
+    try:
+        binders = live_service_binders(acct, token, name)
+    except RuntimeError as e:
+        emit({"action": "delete-worker", "worker": name, "ok": False, "refused": "binder census failed: " + str(e)[:200]})
+        return 1
+    if binders:
+        emit({"action": "delete-worker", "worker": name, "ok": False, "binders": binders,
+              "refused": "live service bindings still target the worker: " + ", ".join(binders)
+                         + "; remove them from each binder's wrangler.toml, run unbind-service WORKER:BINDING, then delete"})
+        return 3
     st, j = call("DELETE", f"/accounts/{acct}/workers/scripts/{name}?force=true", token)
     st2, _ = call("GET", f"/accounts/{acct}/workers/scripts/{name}/settings", token)
     ok = bool(j.get("success")) and st2 == 404
@@ -638,6 +654,26 @@ def worker_dir(worker: str, root: str = ".") -> str | None:
     return None
 
 
+def live_service_binders(acct: str, token: str, target: str) -> list:
+    """DELETE-AFTER-UNBIND-1: every live script's service bindings that name `target`, as "worker:BINDING". Raises on any
+    unreadable list or settings, so a caller can fail closed."""
+    st, j = call("GET", f"/accounts/{acct}/workers/scripts", token)
+    if st != 200:
+        raise RuntimeError("workers list HTTP " + str(st))
+    hits = []
+    for s in j.get("result") or []:
+        name = s.get("id")
+        if not name or name == target:
+            continue
+        st2, j2 = call("GET", f"/accounts/{acct}/workers/scripts/{name}/settings", token)
+        if st2 != 200:
+            raise RuntimeError("settings HTTP " + str(st2) + " for " + str(name))
+        for b in (j2.get("result") or {}).get("bindings") or []:
+            if b.get("type") == "service" and str(b.get("service") or "") == target:
+                hits.append(name + ":" + str(b.get("name")))
+    return hits
+
+
 def live_binders(acct: str, token: str, db_id: str) -> list:
     st, j = call("GET", f"/accounts/{acct}/workers/scripts", token)
     if st != 200:
@@ -870,6 +906,17 @@ def unbind_d1(target: str, acct: str, token: str) -> int:
 # wrangler.toml no longer declares the binding (so the next deploy cannot re-add it). A protected worker is allowed,
 # because this only removes a reference that already cannot work. Every other binding is sent as {type: inherit}, under
 # the secret-lock lease (#1701), and the result is verified.
+def declared_service(wt: str, binding: str):
+    """The service a wrangler.toml [[services]] block declares for `binding`; None when no block declares it."""
+    for block in re.split(r"(?m)^\s*\[", wt):
+        if not block.startswith("[services]]"):
+            continue
+        if re.search(r'(?m)^\s*binding\s*=\s*"' + re.escape(binding) + r'"', block):
+            m = re.search(r'(?m)^\s*service\s*=\s*"([^"]*)"', block)
+            return m.group(1).strip() if m else ""
+    return None
+
+
 def unbind_service(target: str, acct: str, token: str) -> int:
     from secret_lock import secret_lock
     worker, _, binding = target.partition(":")
@@ -889,22 +936,37 @@ def unbind_service(target: str, acct: str, token: str) -> int:
         emit({"action": "unbind-service", "worker": worker, "binding": binding, "ok": False, "refused": "not a service binding"})
         return 3
     svc = str(hit.get("service") or "").strip()
+    target_live = False
     if svc:
         s2, _ = call("GET", f"/accounts/{acct}/workers/scripts/{svc}/settings", token)
-        if s2 != 404:
-            emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target worker still exists (settings HTTP " + str(s2) + ")"})
+        marked = os.path.isdir(svc) and any(os.path.isfile(os.path.join(svc, m)) for m in ("RETIRED", "FOLDED"))
+        # UNBIND-BEFORE-DELETE-1 (#1756): delete-worker refuses while a live binder targets the worker (DELETE-AFTER-UNBIND-1),
+        # so a target that is still deployed may be unbound when its repo directory is RETIRED or FOLDED (it is on its way
+        # out); an unmarked live target is still refused.
+        if s2 != 404 and not marked:
+            emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target worker still exists (settings HTTP " + str(s2) + ") and its repo directory has no RETIRED/FOLDED marker"})
             return 3
-        if os.path.isdir(svc) and not any(os.path.isfile(os.path.join(svc, m)) for m in ("RETIRED", "FOLDED")):
+        if s2 == 404 and os.path.isdir(svc) and not marked:
             emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target's repo directory has no RETIRED/FOLDED marker"})
             return 3
+        target_live = s2 != 404
     d = worker_dir(worker)
     wt = open(os.path.join(d, "wrangler.toml"), encoding="utf-8").read() if d else None
     if wt is None:
         emit({"action": "unbind-service", "worker": worker, "ok": False, "refused": "no repo directory/wrangler.toml for the worker"})
         return 3
-    if re.search(r'(?m)^\s*binding\s*=\s*"' + re.escape(binding) + r'"', wt):
-        emit({"action": "unbind-service", "worker": worker, "binding": binding, "ok": False, "refused": d + "/wrangler.toml still declares the binding"})
-        return 3
+    declared = declared_service(wt, binding)
+    repoint = None
+    if declared is not None:
+        # SERVICE-REPOINT-1 (#1756): a fold may keep the binding NAME and declare it to the host that now runs the member.
+        # The canonical deploy keeps a live binding by (type, name) and only refreshes its props, so the dangling one must
+        # go before the declared one can install. Refuse while the declaration still names the dead target, a RETIRED or
+        # FOLDED directory, or a worker with no repo directory.
+        if (not declared or declared == svc or not os.path.isdir(declared)
+                or any(os.path.isfile(os.path.join(declared, m)) for m in ("RETIRED", "FOLDED"))):
+            emit({"action": "unbind-service", "worker": worker, "binding": binding, "ok": False, "refused": d + "/wrangler.toml still declares the binding" + (" to " + declared if declared else "")})
+            return 3
+        repoint = declared
     src = open(os.path.join(d, "worker.js"), encoding="utf-8").read() if os.path.isfile(os.path.join(d, "worker.js")) else ""
     keep = [{"type": "inherit", "name": b.get("name")} for b in bindings if b.get("name") != binding]
     exports = do_exports(acct, token, worker)
@@ -926,7 +988,9 @@ def unbind_service(target: str, acct: str, token: str) -> int:
     st3, j3 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
     after = (j3.get("result") or {}).get("bindings") or []
     ok = bool(pj.get("success")) and not any(b.get("name") == binding for b in after) and len(after) == len(bindings) - 1
-    emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "protected_repair": worker in PROTECTED, "exports": sorted(exports),
+    emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "target_still_deployed": target_live, "repoint_to": repoint,
+          "next_step": ("a canonical deploy of " + worker + " installs the declared " + binding + " -> " + repoint) if repoint and ok else None,
+          "protected_repair": worker in PROTECTED, "exports": sorted(exports),
           "code_mentions_binding": bool(re.search(r"\b" + re.escape(binding) + r"\b", src)), "ok": ok, "http": pst,
           "bindings_before": len(bindings), "bindings_after": len(after), "errors": pj.get("errors")})
     return 0 if ok else 1
