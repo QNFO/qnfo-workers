@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.12.1-budget-soft"; // 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.12.2-codeagent"; // 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -391,6 +391,28 @@ __name2(searchDisclosures, "searchDisclosures");
 __name22(searchDisclosures, "searchDisclosures");
 __name222(searchDisclosures, "searchDisclosures");
 async function draftDisclosure(env, { title, technicalField, description, ragContext, mechanism }) {
+  const result = await env.AI.run(AI_DRAFT_MODEL, { text: prompt });
+  // Metering the AI call
+  try {
+    const usage = result.usage || {};
+    await env.DB.prepare(
+      "INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons) VALUES (strftime('%Y-%m-%d', 'now'), 'qnfo-ipatent', 'draft', ?, 1, 0, ?, ?, ?, ?, ?) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls = calls + 1, in_chars = in_chars + ?, ms = ms + ?, in_tok = in_tok + ?, out_tok = out_tok + ?, neurons = neurons + ?"
+    ).bind(
+      AI_DRAFT_MODEL,
+      prompt.length,
+      Date.now() - t0,
+      usage.prompt_tokens || 0,
+      usage.completion_tokens || 0,
+      usage.total_tokens || 0,
+      usage.prompt_tokens || 0,
+      Date.now() - t0,
+      usage.prompt_tokens || 0,
+      usage.completion_tokens || 0,
+      usage.total_tokens || 0
+    ).run();
+  } catch (error) {
+    console.error("Failed to meter AI call:", error);
+  }
   const ragText = ragContext.length > 0 ? ragContext.map(
     (r, i) => `EXAMPLE ${i + 1}: "${r.title}" [field: ${r.technical_field || "n/a"}] \u2014 ${(r.disclosure_text || "").slice(0, 500)}`
   ).join("\n\n") : "No similar disclosures found in the database.";
