@@ -1,12 +1,165 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@0f6941bbe04a",
- "due": 0,
- "pass": 0,
- "fail": 0,
- "skipped": 0,
- "contracts": [],
+ "verifier": "remediation-consumer@0bedb8657bea",
+ "due": 19,
+ "pass": 11,
+ "fail": 7,
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "EVID-1641-MENTIONS",
+   "issue_id": 1641,
+   "verdict": "fail",
+   "expected": "all-sources-ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "vacuous-probe-result",
+   "expected": "within-cap",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "EVID-1711-REACH",
+   "issue_id": 1711,
+   "verdict": "fail",
+   "expected": "seven-days",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-1815",
+   "issue_id": 1815,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
+   "written": true
+  },
+  {
+   "class": "issue-2071",
+   "issue_id": 2071,
+   "verdict": "fail",
+   "expected": "MET",
+   "observed": "OPEN",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "pending: no code task yet",
+   "written": true
+  },
+  {
+   "class": "issue-2084",
+   "issue_id": 2084,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-ask-hung",
+   "issue_id": 1839,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,9 +183,10 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 4.6,
- "spent_ms": 3152,
- "head": "0f6941bbe04acd8d89de11afae25ce3610b5ed9c",
+ "https": 8,
+ "runtime_verified_share_24h": 5.7,
+ "spent_ms": 54015,
+ "head": "0bedb8657beafaa0dad45763545e41d1b74b979b",
  "job_status": "success",
- "ts": "2026-10-06T19:09:48Z"
+ "ts": "2026-10-06T20:23:13Z"
 }
