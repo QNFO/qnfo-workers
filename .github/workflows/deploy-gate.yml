@@ -225,6 +225,10 @@ jobs:
       # a duplicate SEARCH, two no-block replies) through to a patch that git-applies, and runs the dashboard's own owner-card query.
       - name: SELF-REPAIR-1 offline suite (qnfo-code-orchestrator)
         run: node --no-warnings qnfo-code-orchestrator/self-repair.test.mjs
+      # NOOP-PROPOSAL-GATE-1 (#2018): a proposal that only rewords a string literal or a comment is refused before verify and fed
+      # back to the next rung; two in a row end needs_human; a code-like string change (model id, SQL) still passes.
+      - name: NOOP-PROPOSAL-GATE-1 offline suite (qnfo-code-orchestrator)
+        run: node --no-warnings qnfo-code-orchestrator/noop-gate.test.mjs
       # QDS-1: qds.css served; HTML 404s for browsers and JSON for API clients; the privacy notice; archive and QWAV hosts;
       # each paper's JSON-LD names its own licence (LICENSE-ONE-1).
       - name: QDS-1 gateway pages offline suite (qnfo-gateway)
