@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-06 16:49:54",
+  "audited_at": "2026-10-06 17:34:19",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -513,7 +513,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.7.0-control-plane-self-merge",
+        "version": "0.7.1-charter-rule-10",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.7.0-control-plane-self-merge",
+      "before": "0.7.1-charter-rule-10",
       "http": 200,
-      "live": "0.7.0-control-plane-self-merge",
+      "live": "0.7.1-charter-rule-10",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
