@@ -13,8 +13,10 @@ the first step of every session.
 
 Where this charter and another document disagree: terminal objectives live in D1 `objectives` and win over everything;
 `docs/STRATEGY.md` (STRATEGY-1) wins on identity, audiences, channels, outreach, signals, KPIs and portfolio; this
-charter wins on the system itself (architecture, MVP, footprint, roadmap order, decision rules). `docs/BUSINESS-PLAN.md`
-and `docs/QUNIVERSE-BACKLOG.md` are inputs to it, not peers.
+charter wins on the system itself (architecture, MVP, footprint, roadmap order, decision rules). `docs/BUSINESS-PLAN.md`,
+`docs/QUNIVERSE-BACKLOG.md` and `docs/TRANSFORMATION-PROGRAM.md` (TRANSFORMATION-PROGRAM-1, 2026-10-06: the systemwide
+audit and improvement program, source of the `RM-TP-*` roadmap rows and the `TP-*` epics in `agent_issues`) are inputs to
+it, not peers.
 
 ---
 
