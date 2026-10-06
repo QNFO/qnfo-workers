@@ -259,12 +259,21 @@ const scenario = () => ({
   eq(dec(prj(49, "x", "h", { title: "HOLD-LIST-1: holdout set" }), W2(), green("h", ALL)).merge, true, "pure: the word hold inside a title tag does not block");
   eq(JSON.stringify(dec(prj(50, "x", "h"), [{ filename: "docs/a.md" }], green("h", ["gate", "mirror-guard", "comparator"]))).indexOf('"merge":true') >= 0, true, "pure: a docs PR needs gate, mirror-guard and comparator only");
   eq(dec(prj(51, "x", "h"), [{ filename: "docs/QUNIVERSE-CHARTER.md" }], green("h", ALL)).why.indexOf("charter never ran") >= 0, true, "pure: a charter PR also needs charter-guard");
-  // CONTROL-PLANE-MANUAL-1: owner decision (a) (human_actions 21): a control-plane or code-loop worker never auto-merges.
+  // CONTROL-PLANE-SELF-MERGE-1 (0.7.0, owner directive 2026-10-06) replaces CONTROL-PLANE-MANUAL-1: a control-plane worker
+  // merges when ops_config control_plane_self_merge is on (the default), it has a /health canary and the PR carries
+  // worker.js with its mirror, because canonical-deploy.yml reverts a push whose VERSION never reaches /health.
   for (const [n, w] of [[52, "qnfo-fleet-control"], [53, "qnfo-ops"], [54, "qnfo-deploy-guard"], [55, "qnfo-code-orchestrator"], [56, "qnfo-ai"]]) {
     const d = dec(prj(n, "x", "h"), [{ filename: w + "/worker.js" }, { filename: w + "/deployed-current.worker.js" }], green("h", ALL.concat(["charter", "test"])));
-    eq(d.merge === false && /control-plane or code-loop worker/.test(d.why), true, "pure: a green " + w + " PR is never auto-merged (owner decision (a))");
+    eq(d.merge === true && (d.control_plane || []).join() === w, true, "pure: a green " + w + " PR with its mirror merges and names the worker for the canary");
   }
-  eq(dec(prj(57, "x", "h"), [{ filename: "docs/a.md" }, { filename: "qnfo-ops/README.md" }], green("h", ["gate", "mirror-guard", "comparator"])).merge, false, "pure: any file under a control-plane worker dir blocks the auto-merge");
+  const cpOff = W.bhMergeDecide(prj(58, "x", "h"), [{ filename: "qnfo-ops/worker.js" }, { filename: "qnfo-ops/deployed-current.worker.js" }], green("h", ALL), { state: "pending", total_count: 0 }, { controlPlane: false });
+  eq(cpOff.merge === false && /control_plane_self_merge is off/.test(cpOff.why), true, "pure: ops_config control_plane_self_merge off restores CONTROL-PLANE-MANUAL-1");
+  const noMirror = dec(prj(59, "x", "h"), [{ filename: "qnfo-ops/worker.js" }], green("h", ALL));
+  eq(noMirror.merge === false && /without deployed-current\.worker\.js/.test(noMirror.why), true, "pure: worker.js without its mirror is not merged (the canary reverts the pair)");
+  const noCanary = dec(prj(60, "x", "h"), [{ filename: "qnfo-containers-pilot/worker.js" }, { filename: "qnfo-containers-pilot/deployed-current.worker.js" }], green("h", ALL));
+  eq(noCanary.merge === false && /no \/health canary/.test(noCanary.why), true, "pure: a control-plane worker without a /health canary is never merged");
+  const docsOnly = dec(prj(57, "x", "h"), [{ filename: "docs/a.md" }, { filename: "qnfo-ops/README.md" }], green("h", ["gate", "mirror-guard", "comparator"]));
+  eq(docsOnly.merge === true && (docsOnly.control_plane || []).length === 0, true, "pure: a non-deployable file under a control-plane worker dir is not a control-plane change");
 }
 { // kill switch and dry run: no merge
   const R = { full_name: "QNFO/qnfo-workers" };
