@@ -1,0 +1,132 @@
+// IDEA-DIVERSITY-CAP-1 (idea-hub 1.5.8, #1947, trigger 1238 idea_topic_concentration_30d) offline suite. Runs the worker's
+// own triageProposals in a vm against an in-memory SQLite D1 and a counting Workers AI stub, and the metric's own
+// classifier (qnfo-cloud-ops IDEA_TOPIC_CLUSTERS + ideaTopicConcentration, sliced from that file) on the same rows.
+// Proves: the cluster table is identical to the metric's; a generated ACCEPT whose cluster would exceed half of the 30-day
+// accepts waits as deferred_diversity with its score kept, is not queued for research and is not counted by the metric;
+// owner and intake:* rows are never held; other clusters still pass; below DIVERSITY_MIN_N nothing is held; held rows are
+// released best score first, with no model call, only when the share allows and no ai_spend cap is breached, with the hold
+// note stripped; a held row that left the 30-day window becomes a terminal HOLD and is never released; the run publishes
+// the held count and the share, and that share equals the metric's reading of the same rows.
+// Run: node --no-warnings idea-hub/diversity-cap.test.mjs   -> prints "N passed, 0 failed"
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { DatabaseSync } from "node:sqlite";
+const here = dirname(fileURLToPath(import.meta.url));
+let pass = 0, fail = 0;
+const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d))); } };
+
+// 1. Parity with the metric's classifier (qnfo-cloud-ops jobIdeaTopicMetric).
+const hubSrc = readFileSync(join(here, "worker.js"), "utf8");
+const opsSrc = readFileSync(join(here, "..", "qnfo-cloud-ops", "worker.js"), "utf8");
+const table = (src) => { const a = src.indexOf("var IDEA_TOPIC_CLUSTERS = ["), b = src.indexOf("\n];", a); return a < 0 || b < a ? null : src.slice(a, b + 3).replace(/\s+/g, " "); };
+ok(table(hubSrc) !== null && table(hubSrc) === table(opsSrc), "IDEA_TOPIC_CLUSTERS in idea-hub is identical to qnfo-cloud-ops (the metric's classifier)", [table(hubSrc), table(opsSrc)]);
+const oa = opsSrc.indexOf("var IDEA_TOPIC_CLUSTERS = ["), ob = opsSrc.indexOf("async function jobIdeaTopicMetric", oa);
+const metric = {};
+vm.runInNewContext(opsSrc.slice(oa, ob) + "\nm.ideaTopicConcentration = ideaTopicConcentration;", { m: metric, __name: () => {} });
+ok(typeof metric.ideaTopicConcentration === "function", "the metric's ideaTopicConcentration loads from qnfo-cloud-ops");
+
+// 2. Harness.
+const src = hubSrc.replace(/export default\s*\{/, "var __default = {");
+const sb = { console: { log: () => {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
+vm.createContext(sb);
+vm.runInContext(src + "\n__x = { triageProposals, ideaTopicCluster, DIVERSITY_MAX_SHARE, DIVERSITY_MIN_N };", sb);
+const api = sb.__x;
+const db = new DatabaseSync(":memory:");
+db.exec(`CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT, decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);
+CREATE TABLE fleet_budget (node_class TEXT PRIMARY KEY, cap REAL, target REAL, current REAL, unit TEXT, updated_at TEXT);
+CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
+CREATE TABLE fleet_heartbeat (worker TEXT PRIMARY KEY, version TEXT, ts TEXT, ok INTEGER);
+CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, idea TEXT, summary TEXT, score REAL, decision TEXT, status TEXT, created_at TEXT, UNIQUE(source, source_id));`);
+const d1 = { prepare(sql) { let a = []; const q = sql.replace(/\?(\d+)/g, "?"); const st = { bind(...x) { a = x; return st; }, async all() { return { results: db.prepare(q).all(...a) }; }, async first() { return db.prepare(q).get(...a) ?? null; }, async run() { const r = db.prepare(q).run(...a); return { meta: { changes: Number(r.changes) } }; } }; return st; } };
+const calls = [];
+let card = { novelty: 0.9, technical_merit: 0.9, impact_potential: 0.8, exposure_potential: 0.8, feasibility: 0.9, risk: 0.1, rationale: "solid", hook: "h" };
+const AI = { async run(model) { calls.push(model); return { response: JSON.stringify(card) }; } };
+const env = { QNFO_AUDIT: d1, AI };
+db.prepare("INSERT INTO fleet_budget (node_class, cap, current) VALUES ('ai_spend:total', 150, 10)").run();
+const ago = (days) => new Date(Date.now() - days * 86400e3).toISOString();
+const add = (name, idea, at, contact) => Number(db.prepare("INSERT INTO idea_proposals (name, idea, contact, status, created_at) VALUES (?, ?, ?, 'new', ?)").run(name, idea, contact || "", at).lastInsertRowid);
+const accepted = (name, idea, at) => db.prepare("INSERT INTO idea_proposals (name, idea, contact, status, created_at, decision, score, rationale, triaged_at) VALUES (?, ?, '', 'triaged_accepted', ?, 'ACCEPT', 0.8, 'seed', ?)").run(name, idea, at, at);
+const row = (id) => db.prepare("SELECT * FROM idea_proposals WHERE id = ?").get(id);
+const queued = (id) => db.prepare("SELECT COUNT(*) n FROM research_queue WHERE source = 'proposal' AND source_id = ?").get(String(id)).n;
+const metricNow = () => metric.ideaTopicConcentration(db.prepare("SELECT name, idea, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND replace(substr(created_at, 1, 19), 'T', ' ') >= datetime('now', '-30 day')").all());
+
+// 3. Below DIVERSITY_MIN_N accepts nothing is held, even a lopsided mix.
+for (let i = 0; i < 5; i++) accepted("auto-scan", "Surface code decoder variant " + i + " for quantum memories", ago(3));
+let q1 = add("auto-scan", "Biased-noise quantum error correction thresholds", ago(0.1));
+let out = await api.triageProposals(env);
+ok(row(q1).status === "triaged_accepted" && queued(q1) === 1 && out.diversity_held === 0, "with fewer than DIVERSITY_MIN_N accepts in the window a quantum ACCEPT passes", out);
+
+// 4. 7 quantum of 12 (plus the one above = 7 of 12): the next generated quantum ACCEPT is held, score kept, not queued.
+accepted("auto-reentry", "Why ultrametric trees encode hierarchy", ago(4));
+accepted("auto-reentry", "p-adic analysis of scaling ratios", ago(5));
+accepted("think-loop", "Landauer limits for ratio-based operations", ago(6));
+accepted("auto-miner", "Graph colouring bounds for sparse expanders", ago(7));
+accepted("auto-scan", "Topological qubit braiding statistics", ago(8));
+accepted("auto-reentry", "Entropy production in open systems", ago(9));
+let m0 = metricNow();
+ok(m0.accepted_30d === 12 && m0.by_cluster.quantum === 7, "seeded window: 7 quantum of 12 accepts", m0);
+const held1 = add("auto-scan", "Concatenated quantum codes under leakage", ago(0.05));
+calls.length = 0;
+out = await api.triageProposals(env);
+let r = row(held1);
+ok(calls.length >= 2, "the held row was scored by the models (the hold comes after the ACCEPT score)", calls.length);
+ok(r.status === "deferred_diversity" && r.decision === "DEFER-DIVERSITY" && r.score > 0.7 && queued(held1) === 0, "a generated quantum ACCEPT that would make quantum 8 of 13 waits as deferred_diversity, score kept, not queued", r);
+ok(/^\[diversity hold [^\]]*quantum would be 62% of 30-day accepts, cap 50%\] solid$/.test(r.rationale), "the hold note says why and keeps the model rationale", r.rationale);
+ok(out.diversity_held === 1 && out.diversity && out.diversity.top === "quantum" && out.diversity.share === m0.share, "the run reports the hold and the same share the metric reads", out);
+ok(metricNow().accepted_30d === 12, "the held row is not counted by the metric");
+
+// 5. Exempt: an owner idea and an intake:* row in the same cluster are accepted; a non-quantum generated idea passes.
+const own = add("owner-chat", "Owner note: quantum Zeno bounds on cryogenic logic", ago(0.04), "owner");
+const intake = add("intake:physics-feeds", "Qubit thermometry in biology labs", ago(0.03));
+const ultra = add("auto-scan", "Bruhat-Tits buildings as indexing structures", ago(0.02));
+out = await api.triageProposals(env);
+ok(row(own).status === "triaged_accepted" && queued(own) === 1, "an owner-authored quantum idea is never held", row(own).status);
+ok(row(intake).status === "triaged_accepted" && queued(intake) === 1, "an intake:<family> row is never held", row(intake).status);
+ok(row(ultra).status === "triaged_accepted" && queued(ultra) === 1, "a generated ultrametric ACCEPT passes while quantum is capped", row(ultra).status);
+ok(row(held1).status === "deferred_diversity" && out.diversity_released === 0, "the held quantum row stays held: quantum is 9 of 15 and one more would be 10 of 16", out);
+
+// 6. A HOLD decision is untouched by the cap.
+card = Object.assign({}, card, { novelty: 0.1, technical_merit: 0.1 });
+const low = add("auto-scan", "Yet another quantum decoder heuristic", ago(0.01));
+out = await api.triageProposals(env);
+ok(row(low).status === "triaged_hold" && row(low).decision === "HOLD", "a low-scoring proposal is a plain HOLD, not a diversity hold", row(low));
+card = Object.assign({}, card, { novelty: 0.9, technical_merit: 0.9 });
+
+// 7. A second held row with a lower score; then enough non-quantum accepts that exactly one quantum release fits.
+const held2 = add("auto-scan", "Qubit recycling in distillation factories", ago(0.009));
+card = Object.assign({}, card, { novelty: 0.75, technical_merit: 0.75 });
+out = await api.triageProposals(env);
+card = Object.assign({}, card, { novelty: 0.9, technical_merit: 0.9 });
+ok(row(held2).status === "deferred_diversity" && row(held2).score < row(held1).score, "a second, lower-scored quantum ACCEPT is held too", [row(held1).score, row(held2).score]);
+// quantum 9 of 15 now; 4 non-quantum accepts make it 9 of 19, so one more quantum is 10 of 20 = 0.5 (allowed) and a second is 11 of 21 (blocked).
+for (let i = 0; i < 4; i++) accepted("auto-reentry", "Adelic product formula variant " + i, ago(2));
+db.prepare("UPDATE fleet_budget SET current = 999 WHERE node_class = 'ai_spend:total'").run();
+calls.length = 0;
+out = await api.triageProposals(env);
+ok(row(held1).status === "deferred_diversity" && out.diversity_released === 0 && calls.length === 0, "while an ai_spend cap is breached nothing is released and no model is called", out);
+db.prepare("UPDATE fleet_budget SET current = 10 WHERE node_class = 'ai_spend:total'").run();
+calls.length = 0;
+out = await api.triageProposals(env);
+r = row(held1);
+ok(out.diversity_released === 1 && r.status === "triaged_accepted" && r.decision === "ACCEPT" && queued(held1) === 1, "caps clear and the share allows one: the best-scored held row is released and queued", { out, r });
+ok(r.rationale === "solid" && calls.length === 0, "the release makes no model call and strips the hold note", { rationale: r.rationale, calls: calls.length });
+ok(row(held2).status === "deferred_diversity" && queued(held2) === 0, "the lower-scored held row stays held: a second release would exceed the cap", row(held2).status);
+const m1 = metricNow();
+ok(m1.by_cluster.quantum === 10 && m1.accepted_30d === 20 && m1.share === 0.5 && out.diversity.share === m1.share, "after the release the metric reads 10 of 20 = 0.5, the same share the run publishes", { m1, d: out.diversity });
+
+// 8. A held row that leaves the 30-day window is a terminal HOLD, never released.
+db.prepare("UPDATE idea_proposals SET created_at = ? WHERE id = ?").run(ago(31), held2);
+for (let i = 0; i < 6; i++) accepted("auto-reentry", "Non-archimedean metric learning " + i, ago(1));
+out = await api.triageProposals(env);
+r = row(held2);
+ok(r.status === "triaged_hold" && r.decision === "HOLD" && /^\[diversity hold expired/.test(r.rationale) && queued(held2) === 0 && out.diversity_expired === 1, "a held row older than the window becomes a terminal HOLD, even when the share would now allow it", { r, out });
+
+// 9. Published state.
+const ev = JSON.parse(db.prepare("SELECT meta FROM cloud_ops_events WHERE id = 'idea-triage-budget'").get().meta);
+ok(ev.diversity_held_total === 0 && ev.diversity && typeof ev.diversity.share === "number" && "diversity_released_run" in ev, "the run publishes held count and share in cloud_ops_events idea-triage-budget", ev);
+ok(db.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status = 'deferred_diversity'").get().n === 0, "no row is left in deferred_diversity");
+
+console.log(pass + " passed, " + fail + " failed");
+process.exit(fail ? 1 : 0);

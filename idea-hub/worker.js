@@ -1,3 +1,7 @@
+// idea-hub v1.5.8-diversity-cap-20261006: IDEA-DIVERSITY-CAP-1 (#1947, trigger 1238 idea_topic_concentration_30d > 0.50:
+//   a generated proposal scored ACCEPT whose topic cluster would push that cluster above half of the 30-day accepts waits as
+//   deferred_diversity with its score kept; held rows are released best score first with no model call once the share
+//   allows and no ai_spend cap is breached, and become a terminal HOLD when they leave the 30-day window).
 // idea-hub v1.5.6-reentry-drain-20261005: REENTRY-DRAIN-1 (#1654 SIGNALS-TRIAGE-GAP-1: status='new' artifact_reentry signals
 //   had no terminal state; weight-0 ones are expired after REENTRY_NOQ_TTL_H with one last re-check, weight>0 ones after
 //   REENTRY_TTL_DAYS, no emission while the boundary row is not permitted; no model call, no new cron).
@@ -85,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.5.7-subscribe-box"; // 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.5.8-diversity-cap"; // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -322,6 +326,73 @@ async function scoreIdea(env, desire) {
 var NOISE_RE = [/^call (the )?[a-z_]+( tool)?(\s|$)/i, /(email_check|express_intent|intents_list|social_compose|search_research|search_papers tool)/i, /output the (complete )?raw json/i, /^reply with the single word/i, /^give this conversation a name/i, /^max \d+ chars/i, /based on the chat history/i, /rotation verification/i, /redirect probe/i, /auto-express block/i, /wrapped in/i, /^ok$/i];
 function isNoise(t) { t = String(t || ""); return NOISE_RE.some(function (re) { return re.test(t); }); }
 function isQuestion(t) { t = String(t || "").trim(); return t.length < 160 && /\?\s*$/.test(t) && /^(what|who|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have|quick|one line|one sentence|in one sentence|probe)/i.test(t); }
+// IDEA-DIVERSITY-CAP-1 (1.5.8, #1947, pillar research). metric_registry idea_topic_concentration_30d (trigger 1238: > 0.50)
+// is the share of ACCEPTed idea_proposals in the last 30 days that fall in the largest keyword cluster, recomputed daily
+// by qnfo-cloud-ops jobIdeaTopicMetric. It read 0.596 (31 of 52 "quantum") on 2026-10-06, and with no new accepts the
+// window alone would raise it (0.794 by 10-15, 1.0 by 11-02: the older accepts are the diverse ones). After a scoring
+// model answers ACCEPT for a generated proposal, triage classifies it with the same clusters over the same text (name,
+// idea, rationale) and, while (cluster + 1) / (n + 1) > DIVERSITY_MAX_SHARE with n >= DIVERSITY_MIN_N accepts in the
+// window, holds it as status 'deferred_diversity' (decision DEFER-DIVERSITY, score kept, never sent to research_queue
+// and not counted by the metric). Held rows are released best score first, with no model call, when the share allows
+// and no ai_spend cap is breached (a release adds research work, which spends). A held row whose created_at leaves the
+// 30-day window becomes a terminal HOLD instead, so a release can never land outside the window the metric reads.
+// Owner-authored rows (name owner-* or rowan-*, contact 'owner') and intake:<family> rows (radar-hub
+// SIGNAL-INTAKE-SOURCES-1) are never held; they still count in the mix. The cluster table must stay identical to
+// qnfo-cloud-ops IDEA_TOPIC_CLUSTERS; idea-hub/diversity-cap.test.mjs fails when they differ.
+var IDEA_TOPIC_CLUSTERS = [
+  ["quantum", /quantum|qubit|error[- ]correct|qec/i],
+  ["ultrametric", /ultrametric|p-adic|padic|bruhat|adelic|non-archimedean|\bzbw\b/i],
+  ["energy", /energy|thermodynam|landauer|joule|entropy/i],
+  ["ai-epistemics", /\bllms?\b|language model|\bagents?\b|epistem|ignorance|\bai\b|machine learning/i]
+];
+var DIVERSITY_MAX_SHARE = 0.5, DIVERSITY_MIN_N = 10, DIVERSITY_RELEASE_SCAN = 50;
+var DIVERSITY_WINDOW_SQL = "replace(substr(created_at, 1, 19), 'T', ' ') >= datetime('now', '-30 day')";
+var DIVERSITY_NOTE_RE = /^\[diversity hold [^\]]*\] ?/;
+function ideaTopicCluster(text) {
+  for (var i = 0; i < IDEA_TOPIC_CLUSTERS.length; i++) if (IDEA_TOPIC_CLUSTERS[i][1].test(String(text || ""))) return IDEA_TOPIC_CLUSTERS[i][0];
+  return "other";
+}
+function proposalCluster(name, idea, rationale) { return ideaTopicCluster([name, idea, rationale].filter(Boolean).join(" ")); }
+function diversityExempt(row) {
+  var name = String(row && row.name || "");
+  return /owner|rowan/i.test(name) || /^intake:/i.test(name) || String(row && row.contact || "") === "owner";
+}
+async function acceptedMix(env) {
+  var rs = (await env.QNFO_AUDIT.prepare("SELECT name, idea, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND " + DIVERSITY_WINDOW_SQL).all()).results || [];
+  var mix = { n: rs.length, by: {} };
+  rs.forEach(function (r) { var k = proposalCluster(r.name, r.idea, r.rationale); mix.by[k] = (mix.by[k] || 0) + 1; });
+  return mix;
+}
+// True when one more accept in `cluster` would put that cluster above the cap (only once DIVERSITY_MIN_N accepts exist).
+function diversityBlocks(mix, cluster) {
+  return mix.n >= DIVERSITY_MIN_N && ((mix.by[cluster] || 0) + 1) / (mix.n + 1) > DIVERSITY_MAX_SHARE;
+}
+function mixShare(mix) {
+  var top = null;
+  Object.keys(mix.by).forEach(function (k) { if (top === null || mix.by[k] > mix.by[top]) top = k; });
+  return { n: mix.n, top: top, share: mix.n ? Math.round(1000 * mix.by[top] / mix.n) / 1000 : null, by_cluster: mix.by };
+}
+async function enqueueAccepted(env, id, idea, score, now) {
+  await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,?5,'queued',?6)").bind(crypto.randomUUID(), String(id), String(idea || "").slice(0, 3000), score, "ACCEPT", now).run();
+}
+// Expire held rows that left the window (terminal HOLD, score kept); then, unless a cap is breached, release the best
+// held rows the current mix allows, up to TRIAGE_BATCH a run. No model call either way.
+async function diversityRelease(env, mix, breached, out) {
+  var now = new Date().toISOString();
+  var ex = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET status = 'triaged_hold', decision = 'HOLD', triaged_at = ?1, rationale = substr('[diversity hold expired: left the 30-day window] ' || COALESCE(rationale, ''), 1, 2000) WHERE status = 'deferred_diversity' AND NOT COALESCE(" + DIVERSITY_WINDOW_SQL + ", 0)").bind(now).run();
+  out.diversity_expired = Number(ex && ex.meta && ex.meta.changes) || 0;
+  if (breached) return;
+  var held = (await env.QNFO_AUDIT.prepare("SELECT id, name, idea, rationale, score FROM idea_proposals WHERE status = 'deferred_diversity' AND " + DIVERSITY_WINDOW_SQL + " ORDER BY score DESC, created_at ASC LIMIT ?1").bind(DIVERSITY_RELEASE_SCAN).all()).results || [];
+  for (var i = 0; i < held.length && out.diversity_released < TRIAGE_BATCH; i++) {
+    var h = held[i], rationale = String(h.rationale || "").replace(DIVERSITY_NOTE_RE, ""), k = proposalCluster(h.name, h.idea, rationale);
+    if (diversityBlocks(mix, k)) continue;
+    var up = await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision = 'ACCEPT', status = 'triaged_accepted', rationale = ?1, triaged_at = ?2 WHERE id = ?3 AND status = 'deferred_diversity'").bind(rationale, now, h.id).run();
+    if (!(Number(up && up.meta && up.meta.changes) > 0)) continue;
+    await enqueueAccepted(env, h.id, h.idea, h.score, now);
+    mix.n++; mix.by[k] = (mix.by[k] || 0) + 1;
+    out.diversity_released++; out.accepted++;
+  }
+}
 // IDEA-TRIAGE-BREACH-DEFER-1 (#1878, pillar cost): while a fleet_budget ai_spend cap is breached, triage makes no model
 // call. The zero-cost noise and chat-question rules still run; a proposal that needs scoring is set to status
 // 'deferred_budget' (never dropped or closed, human ideas included). Once no cap is breached, deferred rows go back to
@@ -329,7 +400,7 @@ function isQuestion(t) { t = String(t || "").trim(); return t.length < 160 && /\
 // the breached caps to cloud_ops_events id 'idea-triage-budget'; /health reports the count. Producers count deferred
 // rows in their backpressure, so the backlog cannot grow without bound during a breach.
 async function triageProposals(env) {
-  var out = { triaged: 0, accepted: 0, errors: 0, deferred: 0, released: 0 };
+  var out = { triaged: 0, accepted: 0, errors: 0, deferred: 0, released: 0, diversity_held: 0, diversity_released: 0, diversity_expired: 0 };
   var budget = await aiBudgetBreach(env);
   out.budget_breached = budget.breached;
   if (!budget.breached) {
@@ -338,7 +409,11 @@ async function triageProposals(env) {
       out.released = Number(rel && rel.meta && rel.meta.changes) || 0;
     } catch (e) { out.errors++; }
   }
-  var rows = (await env.QNFO_AUDIT.prepare("SELECT id, idea, name FROM idea_proposals WHERE status='new' ORDER BY created_at ASC LIMIT ?1").bind(TRIAGE_BATCH).all()).results || [];
+  var rows = (await env.QNFO_AUDIT.prepare("SELECT id, idea, name, contact FROM idea_proposals WHERE status='new' ORDER BY created_at ASC LIMIT ?1").bind(TRIAGE_BATCH).all()).results || [];
+  // IDEA-DIVERSITY-CAP-1: the 30-day accepted mix, read once and kept current as this run accepts. Unreadable: no cap
+  // this run (null), and the error is counted.
+  var mix = null;
+  try { mix = await acceptedMix(env); } catch (e) { out.errors++; }
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i], now = new Date().toISOString();
     try {
@@ -355,20 +430,33 @@ async function triageProposals(env) {
       }
       var s = await scoreIdea(env, row.idea);
       if (s.error) { out.errors++; continue; }
+      var cluster = s.decision === "ACCEPT" ? proposalCluster(row.name, row.idea, s.rationale) : null;
+      if (cluster && mix && !diversityExempt(row) && diversityBlocks(mix, cluster)) {
+        var pct = Math.round(100 * ((mix.by[cluster] || 0) + 1) / (mix.n + 1));
+        await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision='DEFER-DIVERSITY', score=?, rationale=?, triaged_at=?, status='deferred_diversity' WHERE id=?").bind(s.score, "[diversity hold " + now.slice(0, 16) + "Z: " + cluster + " would be " + pct + "% of 30-day accepts, cap " + Math.round(100 * DIVERSITY_MAX_SHARE) + "%] " + (s.rationale || ""), now, row.id).run();
+        out.triaged++; out.diversity_held++; continue;
+      }
       await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision=?, score=?, rationale=?, triaged_at=?, status=? WHERE id=?").bind(s.decision, s.score, s.rationale || "", now, s.decision === "ACCEPT" ? "triaged_accepted" : "triaged_hold", row.id).run();
       out.triaged++;
       if (s.decision === "ACCEPT") {
-        await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO research_queue (id, source, source_id, idea, summary, score, decision, status, created_at) VALUES (?1,'proposal',?2,?3,'',?4,?5,'queued',?6)").bind(crypto.randomUUID(), String(row.id), String(row.idea || "").slice(0, 3000), s.score, s.decision, now).run();
+        await enqueueAccepted(env, row.id, row.idea, s.score, now);
         out.accepted++;
+        if (mix) { mix.n++; mix.by[cluster] = (mix.by[cluster] || 0) + 1; }
       }
     } catch (e) { out.errors++; }
+  }
+  if (mix) {
+    try { await diversityRelease(env, mix, budget.breached, out); } catch (e) { out.errors++; }
+    out.diversity = mixShare(mix);
   }
   try {
     var dc = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();
     out.deferred_total = Number(dc && dc.n) || 0;
+    var dd = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_diversity'").first();
+    out.diversity_held_total = Number(dd && dd.n) || 0;
     var at = new Date().toISOString();
     await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('idea-triage-budget', ?1, 'idea-triage-budget', ?2, ?3, 'idea-hub', ?4)")
-      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, no model call; " + out.deferred + " deferred this run, " : "caps clear; " + out.released + " released, ") + out.deferred_total + " waiting as deferred_budget", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged }), budget.breached ? "deferred" : "ok").run();
+      .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, no model call; " + out.deferred + " deferred this run, " : "caps clear; " + out.released + " released, ") + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null }), budget.breached ? "deferred" : "ok").run();
   } catch (e) {}
   console.log("IDEA-TRIAGE-BREACH-DEFER-1 " + JSON.stringify(out));
   try { await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('idea-hub', ?1, ?2, ?3) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind(VERSION, new Date().toISOString(), out.errors ? 0 : 1).run(); } catch (e) {}
@@ -834,4 +922,4 @@ async function subscribeProxy(req) {
     return json({ ok: false, error: "Sign-up is unavailable right now. Please try again shortly." }, 502);
   } finally { clearTimeout(timer); }
 }
-export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/api/subscribe'&&req.method==='POST')return await subscribeProxy(req);if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}let td=-1;try{const r=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();td=Number(r&&r.n)||0}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,triage_deferred_budget:td,public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated; POST /api/subscribe forwards an address to the qnfo-subscribers double opt-in (source ideas.qnfo.org; nobody is subscribed without clicking the confirmation link)", "ideation runs on the hourly :23 cron", "while a fleet_budget ai_spend cap is breached, triage makes no model call: proposals that need scoring wait as status deferred_budget (count in triage_deferred_budget) and are scored once the caps clear"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
+export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/api/subscribe'&&req.method==='POST')return await subscribeProxy(req);if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}let td=-1,tdd=-1;try{const r=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();td=Number(r&&r.n)||0;const r2=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_diversity'").first();tdd=Number(r2&&r2.n)||0}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,triage_deferred_budget:td,triage_deferred_diversity:tdd,diversity_cap:{max_share:DIVERSITY_MAX_SHARE,min_n:DIVERSITY_MIN_N},public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated; POST /api/subscribe forwards an address to the qnfo-subscribers double opt-in (source ideas.qnfo.org; nobody is subscribed without clicking the confirmation link)", "ideation runs on the hourly :23 cron", "while a fleet_budget ai_spend cap is breached, triage makes no model call: proposals that need scoring wait as status deferred_budget (count in triage_deferred_budget) and are scored once the caps clear", "a generated proposal scored ACCEPT waits as deferred_diversity (count in triage_deferred_diversity) while its topic cluster would exceed half of the 30-day accepts; owner and intake:* rows are never held"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
