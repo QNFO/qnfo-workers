@@ -6,6 +6,7 @@
 // reachable; fleet-exec carries a FOLDED marker.
 // Run: node qnfo-code-orchestrator/fleet-exec-fold.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync, existsSync } from "node:fs";
+const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; }; // semver minimum, so a minor bump keeps passing
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const guest = readFileSync(new URL("../fleet-exec/worker.js", import.meta.url), "utf8");
 const mod = await import("data:text/javascript;base64," + Buffer.from(src + "\nexport { fleetExecMod as __member, FLEET_EXEC_VERSION as __mv, VERSION as __hv };\n").toString("base64"));
@@ -15,7 +16,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 {
   const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.length === 2 && missing.some((l) => l.startsWith("var VERSION = ")) && missing.some((l) => l.startsWith("export default schedDefault")), "every fleet-exec line is in the host except its VERSION line and its export", missing.map((l) => l.slice(0, 60)));
-  ok(/^0\.3\.(1[89]|[2-9]\d)/.test(mod.__hv) && mod.__mv === "1.0.4-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.3.18 or later, member 1.0.4-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok(atLeast(mod.__hv, "0.3.18") && mod.__mv === "1.0.4-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.3.18 or later, member 1.0.4-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 
 // a recording D1: fleet_crons has one due row; the executor reads fleet_tasks and writes fleet_runs

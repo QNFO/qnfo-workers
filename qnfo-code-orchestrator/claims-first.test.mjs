@@ -5,6 +5,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
+const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; }; // semver minimum, so a minor bump keeps passing
 const here = path.dirname(fileURLToPath(import.meta.url));
 const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
 let pass = 0, fail = 0;
@@ -130,7 +131,7 @@ ok(releases().length === 1 && releases()[0].body.outcome === "abandoned" && rele
 
 // 10. /health names the behaviour
 const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
-ok(/^0\.3\.(2[1-9]|[3-9]\d)/.test(h.version) && (h.limitations || []).some((l) => /CLAIMS-FIRST-1/.test(l)), "health names CLAIMS-FIRST-1 and the version is 0.3.21+", { v: h.version });
+ok(atLeast(h.version, "0.3.21") && (h.limitations || []).some((l) => /CLAIMS-FIRST-1/.test(l)), "health names CLAIMS-FIRST-1 and the version is 0.3.21+", { v: h.version });
 
 console.log(`claims-first: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

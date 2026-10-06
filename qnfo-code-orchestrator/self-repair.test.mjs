@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
+const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; }; // semver minimum, so a minor bump keeps passing
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
@@ -203,7 +204,7 @@ function fileIssue(env) {
 {
   const { env } = envWith([]);
   const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
-  ok(/^0\.3\.\d+-/.test(h.version) && h.capabilities.includes("self-repair") && h.limitations.some((l) => /SELF-REPAIR-1/.test(l) && /1h, then 6h/.test(l) && /3 rounds/.test(l)), "D1 /health names the self-repair capability and its limits", { v: h.version, l: h.limitations.filter((l) => /SELF-REPAIR/.test(l)) });
+  ok(atLeast(h.version, "0.3.0") && /^\d+\.\d+\.\d+-/.test(h.version) && h.capabilities.includes("self-repair") && h.limitations.some((l) => /SELF-REPAIR-1/.test(l) && /1h, then 6h/.test(l) && /3 rounds/.test(l)), "D1 /health names the self-repair capability and its limits", { v: h.version, l: h.limitations.filter((l) => /SELF-REPAIR/.test(l)) });
 }
 
 console.log("self-repair: " + pass + " passed, " + fail + " failed");
