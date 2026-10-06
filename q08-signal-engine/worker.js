@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.8.7-prompt-cache"; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.8.8-sitemap-indexable"; // 0.8.8 Q08-SITEMAP-INDEXABLE-1: canonical home loc, no feed in the sitemap, www -> apex 301; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1467,11 +1467,26 @@ function cleanNote(v) {
 // Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
 export const __quality = { gate: gate, overusedPrecedents: overusedPrecedents, parseReaderVerdict: parseReaderVerdict, buildPrompt: buildPrompt, ownerDirectives: ownerDirectives, readerTest: readerTest, pickPanel: pickPanel, familyOf: familyOf, aggregatePanel: aggregatePanel, panelRead: panelRead, effectiveVotes: effectiveVotes, PANEL_POOL: PANEL_POOL, ensembleReport: ensembleReport, saveReaderTests: saveReaderTests, runLevels: runLevels, panelUnavailableShare: panelUnavailableShare, ensureReaderTable: ensureReaderTable, OWNER_VERDICT_WEIGHT: OWNER_VERDICT_WEIGHT, REGISTER_EXEMPLAR: REGISTER_EXEMPLAR };
 
+function q08SitemapXml(rows) {
+  var esc = function (x) { return String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+  var day = function (x) { var d = String(x || "").slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ""; };
+  var newest = rows.length ? day(rows[0].published_at) : "";
+  var urls = rows.map(function (r) {
+    var d = day(r.published_at);
+    return "<url><loc>" + esc(ORIGIN + "/p/" + encodeURIComponent(r.slug)) + "</loc>" + (d ? "<lastmod>" + d + "</lastmod>" : "") + "</url>";
+  }).join("");
+  return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>' + ORIGIN + '/</loc>' + (newest ? "<lastmod>" + newest + "</lastmod>" : "") + "</url>" + urls + "</urlset>";
+}
 export default {
   async fetch(req, env, ctx) {
     env = __aiAttrEnv(env, "q08-signal-engine", "AI", "AUDIT");
     var url  = new URL(req.url);
     var path = url.pathname.replace(/\/+$/, "") || "/";
+    // Q08-SITEMAP-INDEXABLE-1 (2026-10-06): www.q08.org answered 200 with a full duplicate of every page; pages now move
+    // permanently to the canonical host so Google indexes one URL per piece (API routes are left alone).
+    if (url.hostname === "www.q08.org" && (req.method === "GET" || req.method === "HEAD") && path.indexOf("/api/") !== 0) {
+      return new Response(null, { status: 301, headers: { "Location": ORIGIN + url.pathname + url.search, "Cache-Control": "public, max-age=86400" } });
+    }
 
     if (path === "/api/ensemble") {
       return json(Object.assign({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso() }, await ensembleReport(env)));
@@ -1614,11 +1629,11 @@ export default {
     }
 
     if (path === "/sitemap.xml") {
+      // Q08-SITEMAP-INDEXABLE-1: the home <loc> matches its canonical (trailing slash) and carries the newest piece's date;
+      // the RSS feed is not a page and is no longer listed; a piece without a valid date gets no <lastmod>.
       var srows = await env.DB.prepare("SELECT slug, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 5000").all();
-      var surls = (srows.results || []).map(function (r) {
-        return "<url><loc>" + ORIGIN + "/p/" + encodeURIComponent(r.slug) + "</loc><lastmod>" + String(r.published_at || "").slice(0, 10) + "</lastmod></url>";
-      }).join("");
-      var sxml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + '<url><loc>' + ORIGIN + '</loc></url><url><loc>' + ORIGIN + '/feed.xml</loc></url>' + surls + '</urlset>';
+      var sitemapXml = q08SitemapXml(srows.results || []);
+      var sxml = sitemapXml;
       return new Response(sxml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=1800" } });
     }
 
