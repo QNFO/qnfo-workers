@@ -23,5 +23,12 @@ let b = await run([{ data: '"v=spf1 include:_spf.mx.cloudflare.net ~all"' }]);
 ok(b.r.verified === 0 && !b.writes.some((w) => /human_actions/.test(w.sql)) && b.writes.some((w) => /gsc_verified/.test(w.sql) && w.a[0] === 0), "no TXT: metric 0, card untouched");
 let c = await run([], 502);
 ok(!c.r.ok && c.writes.length === 0, "DNS failure changes nothing");
+// SEARCH-REFERRALS-1: only search engines count; google is a subset.
+{
+  const a2 = src.indexOf("var SEARCH_REFERRERS"), b2 = src.indexOf("async function searchReferralsTick");
+  const c2 = vm.createContext({ String, Number }); vm.runInContext(src.slice(a2, b2) + "\nthis.t = searchReferralTotals;", c2);
+  const r = c2.t([{ entity_id: "www.google.com", pv: 44 }, { entity_id: "scholar.google.com", pv: 1 }, { entity_id: "bing.com", pv: 6 }, { entity_id: "www.bing.com", pv: 5 }, { entity_id: "duckduckgo.com", pv: 2 }, { entity_id: "qnfo.org", pv: 152 }, { entity_id: "(direct)", pv: 1477 }, { entity_id: "www.linkedin.com", pv: 14 }, { entity_id: "notgoogle.com.evil", pv: 9 }]);
+  ok(r.all === 58 && r.google === 45, "search referrals: google 45 (incl. Scholar), all engines 58, own hosts/direct/social/lookalikes excluded", r);
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
