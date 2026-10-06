@@ -118,4 +118,9 @@ ok(math(h).includes("$e^{ie\\lambda /\\hbar c}$"), "MATH-RESIDUE-3: Latin h-bar 
 h = renderMarkdown("Setting *c* = 1, *ħ* = 1, and *k*e = 1 here.");
 ok(!math(h).some((x) => /hbar/.test(x)), "MATH-RESIDUE-3: Latin h-bar never anchors a run on its own (emphasis pairing stays intact)", math(h));
 
+h = renderMarkdown("The gap is r_e/ℓ_P = 2.81 and Λ = ρ_c/(E_P/ℓ_P³) here.");
+ok(math(h).some((x) => x.includes("r_{e}/\\ell _{P}")) && math(h).some((x) => x.includes("\\ell _{P}^{3}")), "MATH-RESIDUE-3: script-l is a subscript base and converts to \\ell", math(h));
+h = renderMarkdown("Using F = *ħc*/ℓP² and more.");
+ok(/<em>ħc<\/em>/.test(h) && !math(h).some((x) => /\*/.test(x)), "MATH-RESIDUE-3: emphasis opened before a word and closed inside it stays emphasis", h);
+
 process.exit(fails ? 1 : 0);
