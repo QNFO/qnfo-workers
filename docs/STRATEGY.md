@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.9, 2026-10-05 (1.9: the owner's standing grant OWNER-STANDING-GRANT-1 to retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 5 and 9; 1.8: iPatent promoted to the QNFO flagship tool on owner direction, sections 2.1, 2.4a, 3, 5 and 7, and the social cadence counted from the 2026-10-01 reset; 1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5; 1.6: funder replies watched by the fleet, applications use the qnfo.org address, section 5; 1.7: the fleet measures and improves its own effectiveness: the distribution and outreach learners, the reward they can actually measure, and inbound mail answered within 72h, section 6.4). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.10, 2026-10-06 (1.10: research code as a reach channel and the research line widened to AI, systems and formal mathematics, CODE-REACH-1, `docs/CODE-REACH-PROGRAM.md`, sections 2.3 and 7; 1.9: the owner's standing grant OWNER-STANDING-GRANT-1 to retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 5 and 9; 1.8: iPatent promoted to the QNFO flagship tool on owner direction, sections 2.1, 2.4a, 3, 5 and 7, and the social cadence counted from the 2026-10-01 reset; 1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5; 1.6: funder replies watched by the fleet, applications use the qnfo.org address, section 5; 1.7: the fleet measures and improves its own effectiveness: the distribution and outreach learners, the reward they can actually measure, and inbound mail answered within 72h, section 6.4). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -72,6 +72,14 @@ application numbers, "clearance-eligible", unlinked media features, shifting pub
 4. **Ultrametric programme (theory)**: stays published and indexed, but is **not** used in outreach or headlines until a
    falsifiable test result exists. Speculative unification claims led with in public cost credibility with physicists.
 
+**Breadth and code (CODE-REACH-1, 1.10, owner direction 2026-10-06).** The research line is not quantum-only: AI agents and
+their epistemics, AI research about AI research (metascience of AI-assisted science), systems, and mathematics with formal
+verification are in scope. Measured 2026-10-06, AI and epistemics papers draw 83 human views each against 45 for quantum
+(`zenodo_stats`). Every pillar ships code where a claim can be run or proved: paper companions that reproduce or test a
+numbered claim, standalone tools, and Lean 4 formalizations, each tested in CI and carrying claim, test and status
+(`docs/CODE-REACH-PROGRAM.md`, `research-code/`). A companion that finds its paper wrong goes to the errata path the same
+day (first case: `AGENTIC-COLLAPSE-REPRO-1`).
+
 ### 2.4 Selected works (the only papers outreach and headlines lead with)
 | # | Work | DOI | Why it leads |
 |---|---|---|---|
@@ -97,7 +105,7 @@ the funding strategy's own "volume trap" warning applies.
 
 ### 2.5 Visual and editorial
 - Design system: QDS-1, `qnfo-web-unified/README.md` (one stylesheet at qnfo.org/qds.css; Newsreader + Familjen Grotesk; accent by brand: QNFO teal, QWAV indigo, q08 rust; light and dark). Owner decision 2026-10-02, superseding the 2026-08-31 paper-and-ink system.
-- Licence (LICENSE-ONE-1, decided 2026-10-02 at the owner's request): every QNFO paper is released under QNFO-ULA v2.0 (https://legal.qnfo.org/: CC BY-NC-SA 4.0 plus the QNFO supplemental terms). Zenodo deposits declare `cc-by-nc-sa-4.0` and carry a LICENSE file naming `LicenseRef-QNFO-ULA-2.0`; a paper's JSON-LD names its own recorded licence. Versions already released under CC BY 4.0 (48 rows on 2026-10-02) keep that grant, which cannot be withdrawn.
+- Licence (LICENSE-ONE-1, decided 2026-10-02 at the owner's request): every QNFO paper is released under QNFO-ULA v2.0 (https://legal.qnfo.org/: CC BY-NC-SA 4.0 plus the QNFO supplemental terms). Zenodo deposits declare `cc-by-nc-sa-4.0` and carry a LICENSE file naming `LicenseRef-QNFO-ULA-2.0`; a paper's JSON-LD names its own recorded licence. Code: QNFO-ULA v2.1 adds Software Terms (section 12) because Creative Commons licences are not written for software; same tenets, source-available, never called open source (`docs/license/`, posted on `QNFO/license` by the owner). Versions already released under CC BY 4.0 (48 rows on 2026-10-02) keep that grant, which cannot be withdrawn.
 - Every public page: title, description, canonical, viewport, OpenGraph + Twitter card, JSON-LD (Person with ORCID `sameAs`
   on profile pages, ScholarlyArticle with author ORCID on paper pages), GA4 and the Cloudflare beacon, subscribe CTA.
 - No internal jargon on public pages (worker counts, guard names, ticket tags).
@@ -331,6 +339,7 @@ Baselines are set from the first full week of ingested data; targets are in sect
 |---|---|---|
 | JPCUB energy standard | **invest**: lead pillar, arXiv package, open measurement call, leaderboard page | most credible, most relevant |
 | Epistemics (ignorance audit) | **invest** | distinctive method, AI-for-science audience |
+| Research code libraries (companions, standalone tools, Lean formalizations) | **invest** (CODE-REACH-1): three staged and tested (agentic-collapse, ignorance-audit, ultrametric-lean); public repositories wait on the owner card `code-repos-create`; licence QNFO-ULA v2.1 Software Terms, source-available, any use that generates money needs a separate agreement (owner decisions 2026-10-06; `docs/license/`) | QNFO had no code surface (0 of 575 records with code, 3 stars across 35 public repositories); code reaches developer and AI-for-science audiences papers do not |
 | Fleet lessons (autonomous ops) | **invest** as the practice story | timely, honest, shareable |
 | Ultrametric programme | **maintain**, no outreach until a test result | credibility |
 | q08 | **reposition**: off the owner's channels now; review 2026-10-31 on bot-filtered human reads; retire if under 50 human reads/week | cost with no reputational return through personal channels |

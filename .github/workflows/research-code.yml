@@ -1,0 +1,56 @@
+name: research-code
+
+# CODE-REACH-1 (2026-10-06, pillars research and reach; docs/CODE-REACH-PROGRAM.md).
+#
+# research-code/<name>/ holds QNFO research libraries (paper companions and standalone tools) staged here until each one
+# has its own public repository. This gate runs every library's own tests on every pull request and push that touches
+# it, so nothing untested is ever copied out:
+#   * Python libraries: install the package, run its unittest suite, run its CLI once;
+#   * Lean libraries: lake build, then fail if any theorem depends on sorryAx.
+# No cron (SCHEDULE-EVENT-NEVER-FIRES-1). No unquoted colon in a step name (WORKFLOW-YAML-LINT-1).
+
+on:
+  pull_request:
+    paths:
+      - 'research-code/**'
+      - '.github/workflows/research-code.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research-code/**'
+      - '.github/workflows/research-code.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lib: [agentic-collapse, ignorance-audit]
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: install and test
+        working-directory: research-code/${{ matrix.lib }}
+        run: |
+          pip install .
+          python -m unittest discover -s tests -v
+          ${{ matrix.lib }} --version
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: research-code/ultrametric-lean
+      - name: no sorry
+        working-directory: research-code/ultrametric-lean
+        run: |
+          lake env lean AxiomCheck.lean | tee axioms.txt
+          ! grep -q sorryAx axioms.txt

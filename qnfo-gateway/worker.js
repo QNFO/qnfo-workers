@@ -1,4 +1,4 @@
-var VERSION="3.10.2-seo-hygiene";
+var VERSION="3.11.0-legal-versions"; /* 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -526,13 +526,13 @@ function qdsFooter(brand) {
     return '<footer class="q-foot"><div class="q-wrap"><div class="q-foot-grid"><div><a class="q-brand" href="https://qwav.org/">' + QDS_MARK.qwav + 'QWAV</a><p style="margin-top:12px;max-width:36ch">A pre-commercial computing platform concept, benchmarked in joules per correct answer. Research by Rowan Brad Quni-Gudzinas, published by QNFO.</p></div>' +
       '<div><h2>Platform</h2><ul><li><a href="#jpcub">JPCUB benchmark</a></li><li><a href="#stack">Architecture</a></li><li><a href="#landscape">Landscape</a></li><li><a href="#research">Research</a></li></ul></div>' +
       '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://doi.org/10.5281/zenodo.21637028">JPCUB P0 protocol</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li></ul></div>' +
-      '<div><h2>Legal</h2><ul><li><a href="https://legal.qnfo.org/">License (QNFO-ULA v2.0)</a></li><li><a href="https://qnfo.org/about">About the author</a></li></ul></div></div>' +
+      '<div><h2>Legal</h2><ul><li><a href="https://legal.qnfo.org/">License (QNFO-ULA)</a></li><li><a href="https://qnfo.org/about">About the author</a></li></ul></div></div>' +
       '<div class="q-foot-base"><span>\u00a9 2025\u20132026 Rowan Brad Quni-Gudzinas</span><span>Research content under QNFO-ULA v2.0. No commercial product exists yet.</span></div></div></footer>';
   }
   return '<footer class="q-foot"><div class="q-wrap"><div class="q-foot-grid"><div><a class="q-brand" href="https://qnfo.org/">' + QDS_MARK.qnfo + 'QNFO</a><p style="margin-top:12px;max-width:38ch">The independent research imprint of Rowan Brad Quni-Gudzinas. Every work carries a DOI, and corrections ship as new versions.</p></div>' +
     '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://qnfo.org/#selected-works">Selected works</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://ideas.qnfo.org/">Ideas</a></li><li><a href="https://archive.qnfo.org/">Archive</a></li><li><a href="https://ipatent.qnfo.org/">Provisional drafting tool</a></li></ul></div>' +
     '<div><h2>Author</h2><ul><li><a href="https://qnfo.org/about">About</a></li><li><a href="https://qnfo.org/work-with-me">Work with me</a></li><li><a href="https://orcid.org/' + OWNER_ORCID + '">ORCID ' + OWNER_ORCID + '</a></li><li><a href="https://qnfo.org/work-with-me#contact">Contact</a></li></ul></div>' +
-    '<div><h2>Follow</h2><ul><li><a href="https://qnfo.org/#subscribe">New papers by email</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li><li><a href="https://legal.qnfo.org/">License (QNFO-ULA v2.0)</a></li><li><a href="https://legal.qnfo.org/privacy">Privacy</a></li></ul></div></div>' +
+    '<div><h2>Follow</h2><ul><li><a href="https://qnfo.org/#subscribe">New papers by email</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li><li><a href="https://legal.qnfo.org/">License (QNFO-ULA)</a></li><li><a href="https://legal.qnfo.org/privacy">Privacy</a></li></ul></div></div>' +
     '<div class="q-foot-base"><span>\u00a9 2025\u20132026 QNFO \u00b7 Rowan Brad Quni-Gudzinas</span><span>Prepared with an AI-assisted research pipeline; the author is responsible for the content.</span></div></div></footer>';
 }
 function qdsPage(o, body) {
@@ -2568,19 +2568,65 @@ __name2222222(health, "health");
 __name22222222(health, "health");
 __name222222222(health, "health");
 __name2222222222(health, "health");
+// LEGAL-VERSIONS-1 (3.11.0, 2026-10-06, pillar research): QNFO-ULA v2.1 adds Software Terms (section 12), because
+// Creative Commons licenses are not written for software. QNFO/license is the canonical source of the text; a version is
+// posted when its Markdown file is on that repository's default branch. legal.qnfo.org serves the newest posted
+// version at /, each version at /v<x.y>, and plain text at /plain and /v<x.y>/plain. A version is read from R2
+// (legal/ula-v<x.y>.md) and, when absent there, once from QNFO/license on GitHub and kept in R2; a version that is not
+// posted is remembered as missing for an hour, so an unposted v2.1 costs one GitHub read an hour, not one a request.
+// Until v2.1 is on QNFO/license, every path serves v2.0 exactly as before.
+var ULA_VERSIONS = ["2.1", "2.0"];
+var ulaMissUntil = {};
+function legalRedirectPath(p) {
+  const m = /\/v?(\d+\.\d+)$/.exec(p);
+  return m && ULA_VERSIONS.indexOf(m[1]) >= 0 ? "/v" + m[1] : "/";
+}
+async function ulaText(env, ver) {
+  const key = "legal/ula-v" + ver + ".md";
+  const o = await env.QNFO_BUCKET.get(key);
+  if (o) return o.text();
+  if ((ulaMissUntil[ver] || 0) > Date.now()) return null;
+  try {
+    const r = await fetch("https://raw.githubusercontent.com/QNFO/license/HEAD/QNFO-ULA-v" + ver + ".md", { headers: { "User-Agent": "qnfo-gateway/" + VERSION } });
+    const t = r.status === 200 ? await r.text() : "";
+    if (t.length > 2000 && t.indexOf("QNFO Unified License Agreement") >= 0 && t.indexOf("Version " + ver) >= 0) {
+      await env.QNFO_BUCKET.put(key, t, { httpMetadata: { contentType: "text/markdown; charset=utf-8" } });
+      return t;
+    }
+  } catch (e) {
+  }
+  ulaMissUntil[ver] = Date.now() + 3600 * 1000;
+  return null;
+}
+async function ulaLatest(env) {
+  for (const v of ULA_VERSIONS) {
+    const t = await ulaText(env, v);
+    if (t) return { ver: v, text: t };
+  }
+  return { ver: "2.0", text: "# QNFO Unified License Agreement v2.0\n\nFull text at https://legal.qnfo.org" };
+}
 async function handleLegal(path, env) {
   // SEO-HYGIENE-1 (2026-10-06): legal.qnfo.org answered every path with the license page, so /robots.txt and /sitemap.xml
   // were HTML and every typo was a soft 404. Known paths serve the license; robots and sitemap are real; the rest is 404.
   if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\nSitemap: https://legal.qnfo.org/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
   if (path === "/sitemap.xml") return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://legal.qnfo.org/</loc></url><url><loc>https://legal.qnfo.org/privacy</loc></url></urlset>', { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
-  if (["/", "/index.html", "/legal", "/license", "/plain", "/text"].indexOf(path) < 0) return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": "noindex" } });
+  const vm = /^\/v(\d+\.\d+)(\/plain)?$/.exec(path);
+  if (!vm && ["/", "/index.html", "/legal", "/license", "/plain", "/text"].indexOf(path) < 0) return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": "noindex" } });
+  if (vm && ULA_VERSIONS.indexOf(vm[1]) < 0) return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": "noindex" } });
   try {
-    const text = await env.QNFO_BUCKET.get("legal/ula-v2.0.md").then((o) => o ? o.text() : "# QNFO Unified License Agreement v2.0\n\nFull text at https://legal.qnfo.org");
-    const isPlain = path === "/plain" || path === "/text";
-    if (isPlain) return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+    let doc;
+    if (vm) {
+      const t = await ulaText(env, vm[1]);
+      if (!t) return new Response("QNFO-ULA v" + vm[1] + " is not posted. The current version is at https://legal.qnfo.org/", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": "noindex" } });
+      doc = { ver: vm[1], text: t };
+    } else doc = await ulaLatest(env);
+    const ver = doc.ver, text = doc.text;
+    const isPlain = path === "/plain" || path === "/text" || !!(vm && vm[2]);
+    if (isPlain) return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
     let md = fixMojibake(text).replace(/^\s*#\s+[^\n]*\n+/, "");
-    const body = '<div class="q-wrap"><article class="q-article"><div><header class="q-article-head"><p class="q-eyebrow">License</p><h1 class="q-h1">QNFO Unified License Agreement, version 2.0</h1><p class="q-meta">The license for all QNFO research, data, code and sites. <a href="/plain">Plain text</a></p></header><div class="q-prose">' + renderMarkdown(md) + '</div></div><aside class="q-article-aside" aria-label="Contents"><section class="q-toc-wrap"><h2>Contents</h2><ol class="q-toc" data-q-toc=".q-prose"></ol></section></aside></article></div>';
-    return new Response(qdsPage({ title: "QNFO Unified License Agreement v2.0 (QNFO-ULA)", description: "The QNFO Unified License Agreement v2.0: open science with commercial protections, for all QNFO research, data, code and sites.", canonical: "https://legal.qnfo.org/", math: false, active: "" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+    const others = ULA_VERSIONS.filter((v) => v !== ver).map((v) => '<a href="/v' + v + '">v' + v + "</a>").join(", ");
+    const body = '<div class="q-wrap"><article class="q-article"><div><header class="q-article-head"><p class="q-eyebrow">License</p><h1 class="q-h1">QNFO Unified License Agreement, version ' + ver + '</h1><p class="q-meta">The license for all QNFO research, data, code and sites. <a href="' + (vm ? "/v" + ver + "/plain" : "/plain") + '">Plain text</a>' + (others ? " \u00b7 Other versions: " + others : "") + '</p></header><div class="q-prose">' + renderMarkdown(md) + '</div></div><aside class="q-article-aside" aria-label="Contents"><section class="q-toc-wrap"><h2>Contents</h2><ol class="q-toc" data-q-toc=".q-prose"></ol></section></aside></article></div>';
+    return new Response(qdsPage({ title: "QNFO Unified License Agreement v" + ver + " (QNFO-ULA)", description: "The QNFO Unified License Agreement v" + ver + ": open science with commercial protections, for all QNFO research, data, code and sites.", canonical: "https://legal.qnfo.org/" + (vm ? "v" + ver : ""), math: false, active: "" }, body), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   } catch (e) {
     return json({ error: e.message }, 500);
   }
@@ -3090,7 +3136,7 @@ async function handleArchive(env) {
     { t: "RSS feed", d: "New papers as they are published.", h: "https://papers.qnfo.org/rss.xml" },
     { t: "Sitemap", d: "Every paper page, for crawlers and archivists.", h: "https://papers.qnfo.org/sitemap.xml" },
     { t: "Machine-readable index", d: "llms.txt: the corpus described for language-model agents.", h: "https://papers.qnfo.org/llms.txt" },
-    { t: "License", d: "QNFO Unified License Agreement v2.0.", h: "https://legal.qnfo.org/" }
+    { t: "License", d: "QNFO Unified License Agreement (QNFO-ULA).", h: "https://legal.qnfo.org/" }
   ].map(function(c) { return '<a class="q-link-card" href="' + c.h + '"><h3>' + c.t + "</h3><p>" + c.d + "</p></a>"; }).join("") + "</div>";
   const latestHtml = latest.length ? '<ul class="q-list q-compact" style="max-width:860px">' + latest.map(function(p) {
     return '<li class="q-item"><a class="q-item-title" href="https://papers.qnfo.org/papers/' + escAttr(p.slug) + '">' + titleHTML(p.title) + '</a><div class="q-item-meta"><time>' + esc(String(p.created_at || "").slice(0, 10)) + "</time>" + (p.doi ? '<a href="https://doi.org/' + escAttr(p.doi) + '">doi:' + esc(p.doi) + "</a>" : "") + "</div></li>";
@@ -3650,11 +3696,16 @@ var gateway_worker_default = {
         if (p === "/" || p === "/index.html") return handleArchive(env);
         return new Response(null, { status: 301, headers: { Location: "https://archive.qnfo.org/" } });
       }
-      if (p === "/legal" || p.indexOf("/legal/") === 0 || p === "/license" || p === "/privacy") return new Response(null, { status: 301, headers: { Location: "https://legal.qnfo.org" + (p === "/privacy" ? "/privacy" : "/") } });
+      if (p === "/legal" || p.indexOf("/legal/") === 0 || p === "/license" || p === "/privacy") return new Response(null, { status: 301, headers: { Location: "https://legal.qnfo.org" + (p === "/privacy" ? "/privacy" : legalRedirectPath(p)) } });
       if (p === "/" || p === "/index.html") return renderQwavHTML(host);
       return new Response(null, { status: 301, headers: { Location: "https://" + host + "/" } });
     }
     if (p === "/privacy" && (host === "legal.qnfo.org" || host === "qnfo.org" || host === "www.qnfo.org" || host === "papers.qnfo.org")) return renderPrivacyHTML();
+    // LEGAL-URL-1 (3.11.0): https://qnfo.org/legal/license is the address the license names for itself (every SPDX header,
+    // the attribution statement, section 10.3 "effective upon posting"), and it answered a JSON 404; only the QWAV hosts
+    // redirected. Now qnfo.org and www.qnfo.org send /legal, /legal/license (and a version below it) and /license to
+    // legal.qnfo.org.
+    if ((host === "qnfo.org" || host === "www.qnfo.org") && (p === "/legal" || p.indexOf("/legal/") === 0 || p === "/license")) return new Response(null, { status: 301, headers: { Location: "https://legal.qnfo.org" + legalRedirectPath(p) } });
     if (host === "legal.qnfo.org") return handleLegal(p, env);
     if (host === "papers.qnfo.org" || host === "qnfo-publications.pages.dev") {
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);

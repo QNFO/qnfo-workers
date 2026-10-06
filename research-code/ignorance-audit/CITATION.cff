@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, cite the method it implements and this software."
+title: "ignorance-audit: the Universal Ignorance Audit as a library"
+version: 0.1.0
+authors:
+  - family-names: Quni-Gudzinas
+    given-names: Rowan Brad
+preferred-citation:
+  type: article
+  title: "The Universal Ignorance Audit: A Fifteen-Question Method for Systematic Inquiry into the Structure of Not-Knowing"
+  authors:
+    - family-names: Quni-Gudzinas
+      given-names: Rowan Brad
+  doi: 10.5281/zenodo.21901984

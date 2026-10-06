@@ -1,0 +1,10 @@
+{
+  "title": "ignorance-audit: the Universal Ignorance Audit as a library",
+  "upload_type": "software",
+  "creators": [{"name": "Quni-Gudzinas, Rowan Brad"}],
+  "related_identifiers": [
+    {"identifier": "10.5281/zenodo.21901984", "relation": "isSupplementTo", "scheme": "doi"},
+    {"identifier": "10.5281/zenodo.22026592", "relation": "isSupplementTo", "scheme": "doi"}
+  ],
+  "keywords": ["epistemics", "ignorance", "AI-assisted research", "metascience"]
+}
