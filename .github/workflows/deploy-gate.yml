@@ -697,6 +697,11 @@ jobs:
       - name: CALLER-PROPS-1 offline suite (calendar-api 0.7.1, #1987)
         if: ${{ !cancelled() }}
         run: node --no-warnings calendar-api/caller-props.test.mjs
+      # FOLD-READY-1 (calendar-api 0.7.4, CALENDAR-FOLD-2): links unchanged with CAL_TOKEN; with only CAL_KEY_SEED (the fold kit's
+      # host-derived value) they are signed with the seed under CAL_PUBLIC_BASE; the form posts relative to its page.
+      - name: FOLD-READY-1 offline suite (calendar-api)
+        if: ${{ !cancelled() }}
+        run: node --no-warnings calendar-api/fold-ready.test.mjs
       - name: IDEA-TRIAGE-BUDGET-1 offline suite (idea-hub 1.5.5, #1878)
         if: ${{ !cancelled() }}
         run: node --no-warnings idea-hub/triage-budget.test.mjs

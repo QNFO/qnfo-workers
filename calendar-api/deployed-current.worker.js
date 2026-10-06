@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.7.3-oq-trip-window"; // 0.7.3 OQ-TRIP-WINDOW-1 (#1951, pillar personal): queueOwnerQuestions decides local vs away from the calendar's own trip windows (domain travel / trip- uid / travel-sync-key rows outside the Amsterdam area, end exclusive) and an explicit Amsterdam-area list instead of a foreign-country regex; GET /feedback gains after_id (ascending, bounded, next_after_id) so a consumer can drain more than 500 rows without skipping any (CAL-FEEDBACK-PAGE-1). // 0.7.2 CAL-CANCELLED-ICS-1 (#1881 gap D, pillar personal): a calendar row with status='cancelled' (a trip cancelled by qnfo-email) is published in the personal feed as STATUS:CANCELLED with its uid, summary and dates only, so Outlook removes the copy it holds; host and qnfo feeds still omit it.
+var VERSION = "0.7.4-fold-ready"; // 0.7.4 FOLD-READY-1 (CALENDAR-FOLD-2, agent_issues 2010, T3.10, pillar cost): nothing changes while this runs as its own worker. The feedback-link HMAC key is env.CAL_TOKEN, or env.CAL_KEY_SEED when CAL_TOKEN is absent (the fold kit derives it from a host secret the member never sees: a secret cannot be copied between workers and minting a new one is outside the standing grant); links use env.CAL_PUBLIC_BASE when set (the host route after the fold); the feedback form posts to "?s=<sig>" relative to its own page, so it works under a host prefix. // 0.7.3 OQ-TRIP-WINDOW-1 (#1951, pillar personal): queueOwnerQuestions decides local vs away from the calendar's own trip windows (domain travel / trip- uid / travel-sync-key rows outside the Amsterdam area, end exclusive) and an explicit Amsterdam-area list instead of a foreign-country regex; GET /feedback gains after_id (ascending, bounded, next_after_id) so a consumer can drain more than 500 rows without skipping any (CAL-FEEDBACK-PAGE-1). // 0.7.2 CAL-CANCELLED-ICS-1 (#1881 gap D, pillar personal): a calendar row with status='cancelled' (a trip cancelled by qnfo-email) is published in the personal feed as STATUS:CANCELLED with its uid, summary and dates only, so Outlook removes the copy it holds; host and qnfo feeds still omit it.
 // 0.7.1 0.7.1 CAL-CALLER-PROPS-1: a service-binding caller named by ctx.props.caller is authorized like a CAL_TOKEN bearer (radar-hub has no CAL_TOKEN secret, so the personal radar posted nothing after 2026-09-23).
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
@@ -423,15 +423,24 @@ function hexOf(buf, n) {
   return Array.from(new Uint8Array(buf).slice(0, n)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
 }
 __name(hexOf, "hexOf");
+// FOLD-READY-1 (0.7.4): the key is CAL_TOKEN while this is its own worker, else CAL_KEY_SEED (a host-derived value in the fold).
+function fbSecret(env) {
+  return env.CAL_TOKEN || env.CAL_KEY_SEED || "";
+}
+__name(fbSecret, "fbSecret");
+function fbBase(env) {
+  return String(env.CAL_PUBLIC_BASE || PUBLIC_BASE).replace(/\/+$/, "");
+}
+__name(fbBase, "fbBase");
 async function fbSig(env, id) {
-  if (!env.CAL_TOKEN) return null;
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("calendar-feedback|" + env.CAL_TOKEN), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  if (!fbSecret(env)) return null;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("calendar-feedback|" + fbSecret(env)), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return hexOf(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode("fb|" + id)), 12);
 }
 __name(fbSig, "fbSig");
 async function fbLink(env, id) {
   const s = await fbSig(env, id);
-  return s ? PUBLIC_BASE + "/e/" + id + "?s=" + s : null;
+  return s ? fbBase(env) + "/e/" + id + "?s=" + s : null;
 }
 __name(fbLink, "fbLink");
 function htmlEsc(s) {
@@ -448,7 +457,8 @@ function fbEventHtml(row, sig, message) {
   const when = String(row.dtstart || "").replace("T", " ").slice(0, 16);
   let h = "<h1>" + htmlEsc(row.title) + '</h1><p class="meta">' + htmlEsc(when) + (row.location ? " &middot; " + htmlEsc(row.location) : "") + " &middot; now: " + htmlEsc(row.status) + "</p>";
   if (message) h += "<p><strong>" + htmlEsc(message) + "</strong></p>";
-  h += '<form method="post" action="/e/' + row.id + "?s=" + sig + '">';
+  // FOLD-READY-1: relative to the page itself, so the form posts back to /e/<id> here and to <prefix>/e/<id> on a host
+  h += '<form method="post" action="?s=' + sig + '">';
   h += '<fieldset><button class="main" name="a" value="keep">Interested, keep it</button></fieldset>';
   h += '<fieldset><legend>If you went (both fields optional)</legend><label>Who did you talk to?<input type="text" name="met" maxlength="80" autocomplete="off"></label><label>One line to remember<input type="text" name="note" maxlength="200" autocomplete="off"></label><button name="a" value="went">I went</button></fieldset>';
   h += "<fieldset><legend>Not for me. Why? (optional)</legend>";
@@ -591,7 +601,7 @@ async function queueOwnerQuestions(env) {
   var out = { after_event: 0, triage: 0, skipped: null };
   await env.CAL_DB.prepare(OQ_DDL).run();
   var probe = await fbLink(env, 0);
-  if (!probe) { out.skipped = "no CAL_TOKEN"; return out; }
+  if (!probe) { out.skipped = "no feedback key (CAL_TOKEN or CAL_KEY_SEED)"; return out; }
   var now = Date.now();
   var srcIn = FB_SOURCES.map(function () { return "?"; }).join(",");
   // (a) after-event

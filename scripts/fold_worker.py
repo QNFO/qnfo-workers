@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""FOLD-KIT-1 (docs/TRANSFORMATION-PROGRAM.md T3 lever 14, pillar autonomy): fold one worker into another in one command.
+"""FOLD-KIT-1/2 (docs/TRANSFORMATION-PROGRAM.md T3 lever 14, pillar autonomy): fold one worker into another in one command.
+
+FOLD-KIT-2 (2026-10-06, CALENDAR-FOLD-2): --public-route "METHODS /path[*]" (method, query and body kept, no binding props),
+--callers for binders not named qnfo-*, --env-derive (an HMAC of a host secret, so a guest secret that cannot be copied is
+replaced without exposing the host secret to the member) and --env-const; a host with an older runtime is refused.
 
 Fold waves 1 to 3 (2026-10-06, PRs 668, 672, 674) moved nine workers into hosts by hand-written builders, each editing the
 host's own fetch and scheduled handlers. This kit does the same job without touching the host's handlers:
@@ -36,16 +40,42 @@ import tomllib
 
 RUNTIME_BEGIN = "// ---- FOLD-KIT-1:RUNTIME:BEGIN ----"
 RUNTIME = RUNTIME_BEGIN + """
-// FOLD-KIT-1 (scripts/fold_worker.py): wraps a host's default export with one folded member. A service-binding call whose
-// props name the member (props.member, with a qnfo-* caller) and GET <prefix>/health (plus the member's declared public
-// paths) reach the member with its mapped env; everything else reaches the host unchanged. On every host tick the member's
-// job for that tick (m.due) runs as a table entry with a collecting ctx and is awaited next to the host's own work.
+// FOLD-KIT-2 (scripts/fold_worker.py): wraps a host's default export with one folded member. A service-binding call whose
+// props name the member (props.member, with a qnfo-* caller or one of m.callers), GET <prefix>/health, the member's public
+// GET paths and its public routes (m.publicRoutes: methods, exact path or prefix, body kept) reach the member with its
+// mapped env; everything else reaches the host unchanged. A public request reaches the member without binding props. The
+// member env is least privilege: its own names, m.consts, and m.derive values (HMAC-SHA256 of a host secret over
+// "fold-kit|<member>|<name>", so the member never sees the host secret itself). On every host tick the member's job for that
+// tick (m.due) runs as a table entry with a collecting ctx and is awaited next to the host's own work.
 function __foldWrap(host, m) {
+  var derived = null;
+  async function memberEnv(env) {
+    var e = m.env(env), dk = Object.keys(m.derive || {});
+    if (m.consts) Object.assign(e, m.consts);
+    if (dk.length) {
+      if (!derived) {
+        var d = {};
+        for (var i = 0; i < dk.length; i++) {
+          var src = env[m.derive[dk[i]]];
+          if (typeof src !== "string" || !src) continue;
+          var key = await crypto.subtle.importKey("raw", new TextEncoder().encode(src), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+          var sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode("fold-kit|" + m.name + "|" + dk[i])));
+          d[dk[i]] = Array.from(sig).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+        }
+        derived = d;
+      }
+      Object.assign(e, derived);
+    }
+    return e;
+  }
+  function publicCtx(ctx) {
+    return { props: {}, waitUntil: function (x) { if (ctx && ctx.waitUntil) ctx.waitUntil(x); }, passThroughOnException: function () {} };
+  }
   var wrapped = Object.assign({}, host, {
     async fetch(request, env, ctx) {
-      var p = ctx && ctx.props;
-      if (p && p.member === m.name && /^qnfo-[a-z0-9-]{1,60}$/.test(String(p.caller || ""))) {
-        var req = request, menv = m.env(env);
+      var p = ctx && ctx.props, c = String(p && p.caller || "");
+      if (p && p.member === m.name && (/^qnfo-[a-z0-9-]{1,60}$/.test(c) || (m.callers || []).indexOf(c) >= 0)) {
+        var req = request, menv = await memberEnv(env);
         if (m.tokenHeader) {
           var nonce = crypto.randomUUID(), hh = new Headers(request.headers);
           hh.set(m.tokenHeader, m.tokenScheme === "bearer" ? "Bearer " + nonce : nonce);
@@ -54,11 +84,20 @@ function __foldWrap(host, m) {
         }
         return m.mod.fetch(req, menv, ctx);
       }
+      var u = new URL(request.url);
       if (request.method === "GET") {
-        var u = new URL(request.url);
-        if (u.pathname === m.prefix + "/health") return m.mod.fetch(new Request(new URL("/health", request.url)), m.env(env), ctx);
+        if (u.pathname === m.prefix + "/health") return m.mod.fetch(new Request(new URL("/health", request.url)), await memberEnv(env), publicCtx(ctx));
         for (var i = 0; i < m.publicPaths.length; i++) {
-          if (u.pathname === m.prefix + m.publicPaths[i]) return m.mod.fetch(new Request(new URL(m.publicPaths[i] + u.search, request.url)), m.env(env), ctx);
+          if (u.pathname === m.prefix + m.publicPaths[i]) return m.mod.fetch(new Request(new URL(m.publicPaths[i] + u.search, request.url)), await memberEnv(env), publicCtx(ctx));
+        }
+      }
+      var rs = m.publicRoutes || [];
+      for (var j = 0; j < rs.length; j++) {
+        var r = rs[j], full = m.prefix + r.path;
+        var hit = r.prefix ? u.pathname.indexOf(full) === 0 && u.pathname.length > full.length : u.pathname === full;
+        if (hit && r.methods.indexOf(request.method) >= 0) {
+          var body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
+          return m.mod.fetch(new Request(new URL(u.pathname.slice(m.prefix.length) + u.search, request.url), { method: request.method, headers: request.headers, body: body }), await memberEnv(env), publicCtx(ctx));
         }
       }
       return host.fetch ? host.fetch(request, env, ctx) : new Response("not found", { status: 404 });
@@ -68,8 +107,8 @@ function __foldWrap(host, m) {
       try { job = m.due(at, event && event.cron); } catch (e) { job = null; }
       var run = null;
       if (job && m.mod.scheduled) {
-        var pending = [];
-        run = Promise.resolve(m.mod.scheduled({ cron: job, scheduledTime: at, type: "scheduled", tickEntry: true }, m.env(env), { waitUntil: function (x) { pending.push(Promise.resolve(x)); }, passThroughOnException: function () {} }))
+        var pending = [], menv2 = await memberEnv(env);
+        run = Promise.resolve(m.mod.scheduled({ cron: job, scheduledTime: at, type: "scheduled", tickEntry: true }, menv2, { waitUntil: function (x) { pending.push(Promise.resolve(x)); }, passThroughOnException: function () {} }))
           .then(function () { return Promise.allSettled(pending); })
           .catch(function (e) { console.error(m.name + " member: " + String(e && e.message || e)); });
       }
@@ -330,8 +369,9 @@ TEST_TEMPLATE = r'''// FOLD-KIT-1 suite for __GUEST__ folded into __HOST__ (gene
 // Proves: every __GUEST__ line runs unchanged in the host except its imports, its VERSION line, its export and a bundler's
 // sourceMappingURL trailer; one top-level quoted
 // VERSION constant; GET __PREFIX__/health answers as the member; a service binding whose props name the member with a
-// qnfo-* caller reaches it, any other caller or path reaches the host; on a host tick the member's due job runs with the
-// mapped env as a table entry and is awaited, next to the host's own scheduled work.
+// qnfo-* caller (or a named one) reaches it, any other caller or path reaches the host; public routes keep their method,
+// query and body and carry no binding props; derived env values are HMACs of a host secret the member never sees; on a host
+// tick the member's due job runs with the mapped env as a table entry and is awaited, next to the host's own scheduled work.
 // Run: node --no-warnings __HOST__/__GUEST__-fold.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
@@ -351,7 +391,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 const W = mod.__wrapped, M = mod.__member, H = W.__foldHost;
 const calls = [];
 const real = { mf: M.fetch, ms: M.scheduled, hf: H.fetch, hs: H.scheduled };
-M.fetch = async (req, env, ctx) => { calls.push({ who: "member", path: new URL(req.url).pathname, env }); return new Response("m"); };
+M.fetch = async (req, env, ctx) => { calls.push({ who: "member", path: new URL(req.url).pathname, search: new URL(req.url).search, env, method: req.method, body: req.method === "GET" || req.method === "HEAD" ? null : await req.text(), props: ctx && ctx.props }); return new Response("m"); };
 H.fetch = async (req) => { calls.push({ who: "host", path: new URL(req.url).pathname }); return new Response("h"); };
 const env = __ENVOBJ__;
 {
@@ -369,6 +409,10 @@ const env = __ENVOBJ__;
   calls.length = 0;
   await W.fetch(new Request("https://__HOST__.example/any/route"), env, {});
   ok(calls.length === 1 && calls[0].who === "host", "a public request outside the member's prefix reaches the host", calls);
+  calls.length = 0;
+  await W.fetch(new Request("https://__HOST__.example__PREFIX__/health"), env, { props: { caller: "qnfo-ops" } });
+  ok(calls[0] && calls[0].who === "member" && !(calls[0].props && calls[0].props.caller), "a public request reaches the member without binding props", calls);
+__EXTRA__
 }
 {
   let memberDone = false, hostRan = false; const seen = [];
@@ -400,6 +444,10 @@ def main():
     ap.add_argument("--test-due-cron", required=True, help="the cron string --due returns at --test-due-at")
     ap.add_argument("--host-cron", required=True, help="the host trigger the member rides (for the generated test)")
     ap.add_argument("--token", default="", help="HEADER:ENVVAR[:bearer]: the guest's inbound token gate the props stand in for")
+    ap.add_argument("--public-route", action="append", default=[], help='"METHODS PATH": e.g. "GET,POST /e/*" (a trailing * matches a prefix); body and query kept, no binding props')
+    ap.add_argument("--callers", default="", help="comma-separated binder names besides qnfo-* that may reach the member through props.caller")
+    ap.add_argument("--env-derive", default="{}", help='JSON {"MEMBER_NAME": "HOST_SECRET"}: the member gets HMAC-SHA256(host secret, "fold-kit|<guest>|MEMBER_NAME") as hex, never the secret')
+    ap.add_argument("--env-const", default="{}", help='JSON {"MEMBER_NAME": "value"}: constants in the member env (e.g. its public base URL on the host)')
     ap.add_argument("--why", required=True, help="tracking reference for the FOLDED marker")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
@@ -413,6 +461,24 @@ def main():
             if os.path.exists(os.path.join(root, d, mk)):
                 die(d + " already carries a " + mk + " marker")
     env_map = json.loads(a.env_map)
+    env_derive = json.loads(a.env_derive)
+    env_const = json.loads(a.env_const)
+    callers = [c.strip() for c in a.callers.split(",") if c.strip()]
+    for c in callers:
+        if not re.match(r"^[a-z][a-z0-9-]{1,60}$", c):
+            die("--callers entry %r is not a worker name" % c)
+    routes = []
+    for spec in a.public_route:
+        mm = re.match(r"^\s*([A-Z,]+)\s+(/[A-Za-z0-9._/-]*?)(\*?)\s*$", spec)
+        if not mm:
+            die("--public-route %r is not \"METHODS /path[*]\"" % spec)
+        methods = [x for x in mm.group(1).split(",") if x]
+        if any(x not in ("GET", "HEAD", "POST", "PUT", "DELETE", "PATCH") for x in methods):
+            die("--public-route %r names an unknown method" % spec)
+        routes.append({"path": mm.group(2), "prefix": bool(mm.group(3)), "methods": methods})
+    for k in list(env_derive) + list(env_const):
+        if not re.match(r"^[A-Z][A-Z0-9_]{1,40}$", k):
+            die("member env name %r is not UPPER_CASE" % k)
     gi = ident(g)
     member_var = gi + "FoldMod"
     mv_const = re.sub(r"[^A-Za-z0-9_]", "_", re.sub(r"([a-z])([A-Z])", r"\1_\2", gi)).upper() + "_FOLD_VERSION"
@@ -457,7 +523,9 @@ def main():
     block.append("// ---- FOLD-KIT-1:%s:BEGIN (%s) ----" % (g, a.why))
     block.append("// %s runs here as a member: its code below is the %s bundle unchanged except its imports (aliased host imports)," % (g, g))
     block.append("// its VERSION line and its export. Public: GET %s/health%s. Every other route answers only a service binding" % (a.prefix, (" and " + ", ".join(a.prefix + p for p in public)) if public else ""))
-    block.append("// whose props name the member (props.member = \"%s\", props.caller = qnfo-*). Its job runs on this worker's own tick." % g)
+    block.append("// whose props name the member (props.member = \"%s\", props.caller = qnfo-*%s). Its job runs on this worker's own tick." % (g, (" or " + ", ".join(callers)) if callers else ""))
+    if routes:
+        block.append("// Public routes: %s." % "; ".join(",".join(r["methods"]) + " " + a.prefix + r["path"] + ("*" if r["prefix"] else "") for r in routes))
     block.append("var %s = %s;" % (mv_const, json.dumps(a.member_version)))
     block.append("var %s = (function () {" % member_var)
     block.extend(aliases)
@@ -465,8 +533,12 @@ def main():
     block.append("})();")
     if RUNTIME_BEGIN not in hsrc:
         block.append(RUNTIME.rstrip("\n"))
+    elif RUNTIME.rstrip("\n") not in hsrc:
+        die(h + " carries an older FOLD-KIT runtime; refresh it to this kit's runtime before adding a member")
     block.append("var %s = __foldWrap(%s, {" % (wrapped_var, host_default))
     block.append("  name: %s, mod: %s, prefix: %s, publicPaths: %s," % (json.dumps(g), member_var, json.dumps(a.prefix), json.dumps(public)))
+    block.append("  publicRoutes: %s, callers: %s," % (json.dumps(routes), json.dumps(callers)))
+    block.append("  consts: %s, derive: %s," % (json.dumps(env_const), json.dumps(env_derive)))
     block.append("  tokenHeader: %s, tokenEnv: %s, tokenScheme: %s," % (json.dumps(tok[0]) if tok else "null", json.dumps(tok[1]) if len(tok) > 1 else "null", json.dumps(tok[2]) if len(tok) > 2 else "null"))
     block.append("  // Least privilege: the member gets its own bindings, vars and the env names its code reads, never the whole host env.")
     block.append("  keys: %s," % json.dumps(keys))
@@ -486,20 +558,45 @@ def main():
         new_toml = self_bound
         toml_notes.append("self-binding: the host's own binding to %s now targets %s with props.member" % (g, h))
 
-    env_obj = "{ " + ", ".join('%s: { tag: "%s" }' % (v, v) for v in sorted(set(env_map.values()) | {"__HOST_ONLY__"})) + " }"
+    env_obj = "{ " + ", ".join(['%s: { tag: "%s" }' % (v, v) for v in sorted(set(env_map.values()) | {"__HOST_ONLY__"})] + ['%s: "secret-%s"' % (v, v) for v in sorted(set(env_derive.values()))]) + " }"
+    extra = []
+    for c in callers:
+        extra.append('  calls.length = 0;\n  await W.fetch(new Request("https://internal/x"), env, { props: { caller: %s, member: "%s" } });\n  ok(calls.length === 1 && calls[0].who === "member", "the named caller %s reaches the member", calls);' % (json.dumps(c), g, c))
+    for r in routes:
+        path = a.prefix + r["path"] + ("7" if r["prefix"] else "")
+        meth = r["methods"][0]
+        bodyjs = ', body: "a=keep"' if meth not in ("GET", "HEAD") else ""
+        extra.append('  calls.length = 0;\n  await W.fetch(new Request("https://%s.example%s?s=1", { method: "%s"%s }), env, { props: { caller: "qnfo-ops", member: "other" } });\n'
+                     '  ok(calls.length === 1 && calls[0].who === "member" && calls[0].path === %s && calls[0].search === "?s=1" && calls[0].method === "%s" && (calls[0].body === null || calls[0].body === "a=keep") && !(calls[0].props && calls[0].props.caller), "%s %s reaches the member with its query, body and no binding props", calls);'
+                     % (h, path, meth, bodyjs, json.dumps(path[len(a.prefix):]), meth, meth, path))
+        other = [x for x in ("DELETE", "PUT", "PATCH") if x not in r["methods"]][0]
+        extra.append('  calls.length = 0;\n  await W.fetch(new Request("https://%s.example%s", { method: "%s", body: "x" }), env, {});\n  ok(calls.length === 1 && calls[0].who === "host", "%s %s is not a member route", calls);' % (h, path, other, other, path))
+        if r["prefix"]:
+            extra.append('  calls.length = 0;\n  await W.fetch(new Request("https://%s.example%s"), env, {});\n  ok(calls.length === 1 && calls[0].who === "host", "the bare prefix %s is not a member route", calls);' % (h, a.prefix + r["path"], a.prefix + r["path"]))
+    for k, v in env_derive.items():
+        extra.append('  calls.length = 0;\n  await W.fetch(new Request("https://internal/x"), env, { props: { caller: "qnfo-ops", member: "%s" } });\n'
+                     '  ok(calls[0] && /^[0-9a-f]{64}$/.test(calls[0].env.%s || "") && calls[0].env.%s !== env.%s && !Object.values(calls[0].env).includes(env.%s), "%s is derived from %s and the member never sees %s", calls[0] && calls[0].env.%s);'
+                     % (g, k, k, v, v, k, v, v, k))
+        extra.append('  { const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.%s), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]); const x = Buffer.from(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode("fold-kit|%s|%s"))).toString("hex"); ok(calls[0] && calls[0].env.%s === x, "%s is HMAC-SHA256(%s, fold-kit|%s|%s), stable across isolates"); }'
+                     % (v, g, k, k, k, v, g, k))
+    for k, v in env_const.items():
+        extra.append('  ok(calls[0] && calls[0].env.%s === %s, "the member env carries %s");' % (k, json.dumps(v), k) if env_derive else
+                     '  calls.length = 0;\n  await W.fetch(new Request("https://internal/x"), env, { props: { caller: "qnfo-ops", member: "%s" } });\n  ok(calls[0] && calls[0].env.%s === %s, "the member env carries %s");' % (g, k, json.dumps(v), k))
     env_assert = " ".join('ok(calls[0] && calls[0].env.%s === env.%s, "the member gets %s as %s");' % (k, v, v, k) for k, v in env_map.items())
     test = (TEST_TEMPLATE.replace("__GUEST__", g).replace("__HOST__", h).replace("__PREFIX__", a.prefix)
             .replace("__MEMBER__", member_var).replace("__WRAPPED__", wrapped_var).replace("__MVCONST__", mv_const)
             .replace("__HVJSON__", json.dumps(a.host_version)).replace("__MVJSON__", json.dumps(a.member_version))
             .replace("__HV__", a.host_version).replace("__MV__", a.member_version).replace("__ENVOBJ__", env_obj)
             .replace("__ENVASSERT__", env_assert).replace("__DUEAT__", a.test_due_at).replace("__DUECRON__", json.dumps(a.test_due_cron))
-            .replace("__HOSTCRON__", json.dumps(a.host_cron)))
+            .replace("__HOSTCRON__", json.dumps(a.host_cron)).replace("__EXTRA__", "\n".join(extra)))
     marker = ("%s is FOLDED into %s (%s, FOLD-KIT-1, %s, owner standing grant OWNER-STANDING-GRANT-1 / charter decision rule 9).\n\n"
               "Its code runs unchanged as the member %s inside %s/worker.js (member version %s; it was %s as its own worker).\n"
               "GET https://%s.q08.workers.dev%s/health serves its health; service-binding callers reach it through %s with\n"
-              "props.member = \"%s\" and a qnfo-* props.caller. Its job runs on %s's own trigger; its own crons (%s) are gone.\n\n"
+              "props.member = \"%s\" and a qnfo-* props.caller%s. Its job runs on %s's own trigger; its own crons (%s) are gone.\n%s\n"
               "Do not redeploy this directory: canonical-deploy skips a FOLDED directory (WORKER-FOLD-SKIP-1).\n"
-              % (g, h, datetime.date.today().isoformat(), a.why, member_var, h, a.member_version, old_gv, h, a.prefix, h, g, h, ", ".join(dropped_crons) or "none"))
+              % (g, h, datetime.date.today().isoformat(), a.why, member_var, h, a.member_version, old_gv, h, a.prefix, h, g,
+                 (" (or " + ", ".join(callers) + ")") if callers else "", h, ", ".join(dropped_crons) or "none",
+                 ("Public routes: " + "; ".join(",".join(r["methods"]) + " https://" + h + ".q08.workers.dev" + a.prefix + r["path"] + ("*" if r["prefix"] else "") for r in routes) + ".\n") if routes else ""))
 
     binders = repoint_binders(root, g, h, not a.dry_run)
     if not a.dry_run:
