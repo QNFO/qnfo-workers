@@ -11,7 +11,7 @@ const block = src.slice(src.indexOf("// ---- DANGLING-BINDINGS-1:BEGIN"), src.in
 const calls = [];
 const api = {};
 const sandbox = {
-  VERSION: "0.4.141-test", ACCOUNT: "acct0", __name: (f) => f, AbortSignal, JSON, Math, Object, Number, String, Array, Date, Promise, encodeURIComponent,
+  VERSION: "0.4.142-test", ACCOUNT: "acct0", __name: (f) => f, AbortSignal, JSON, Math, Object, Number, String, Array, Date, Promise, encodeURIComponent,
   fetch: async (url) => { calls.push(url); const p = String(url).replace("https://api.cloudflare.com/client/v4/accounts/acct0", ""); if (api[p] === "throw") throw new Error("ECONNRESET"); return { json: async () => (api[p] === undefined ? { success: false, errors: [{ code: 10000, message: "unknown" }] } : api[p]) }; }
 };
 vm.createContext(sandbox);
@@ -55,7 +55,7 @@ check(m && m.args[0] === "1" && m.args[1] === "2026-10-07T03:00:00Z" && /state='
 const ev = writes.find((w) => /cloud_ops_events/.test(w.sql));
 check(ev && ev.args[0] === "dangling-bindings-2026-10-07" && ev.args[4] === "dangling" && /w1\.KV -> kv gone-kv/.test(ev.args[2]) && /unreadable lists: vectorize/.test(ev.args[2]) && /ON CONFLICT\(id\) DO UPDATE/.test(ev.sql), "the day's event names the binding, the unreadable list, upserted by id", ev && ev.args);
 const meta = JSON.parse(ev.args[3]);
-check(meta.count === 1 && meta.dangling[0].script === "w1" && meta.settings_unreadable[0] === "w2" && meta.v === "0.4.141-test", "the meta carries the names and the version", meta);
+check(meta.count === 1 && meta.dangling[0].script === "w1" && meta.settings_unreadable[0] === "w2" && meta.v === "0.4.142-test", "the meta carries the names and the version", meta);
 // 3. no token, or no scripts list: skipped, nothing written
 writes.length = 0;
 check((await danglingBindingsCensus({ AUDIT: db }, "2026-10-07T03:00:00Z")).skipped === "no CF_DEPLOY_TOKEN" && writes.length === 0, "without a token the census is skipped");

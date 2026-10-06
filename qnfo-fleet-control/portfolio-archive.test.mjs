@@ -1,4 +1,4 @@
-// PORTFOLIO-ARCHIVE-1 (qnfo-fleet-control 0.4.141, REPO-ARCHIVE-1 agent_issues 2045): pfHygieneApply executes explicit
+// PORTFOLIO-ARCHIVE-1 (qnfo-fleet-control 0.4.142, REPO-ARCHIVE-1 agent_issues 2045): pfHygieneApply executes explicit
 // portfolio_actions archive-request rows (PATCH archived=true, reversible, at most PF_ARCHIVE_MAX per sync, never a delete),
 // records an archive row and settles the request row. Run: node qnfo-fleet-control/portfolio-archive.test.mjs
 import { readFileSync } from "node:fs";
