@@ -1,4 +1,4 @@
-var VERSION="3.10.1-discovery";
+var VERSION="3.10.2-seo-hygiene";
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -2569,6 +2569,11 @@ __name22222222(health, "health");
 __name222222222(health, "health");
 __name2222222222(health, "health");
 async function handleLegal(path, env) {
+  // SEO-HYGIENE-1 (2026-10-06): legal.qnfo.org answered every path with the license page, so /robots.txt and /sitemap.xml
+  // were HTML and every typo was a soft 404. Known paths serve the license; robots and sitemap are real; the rest is 404.
+  if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\nSitemap: https://legal.qnfo.org/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+  if (path === "/sitemap.xml") return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://legal.qnfo.org/</loc></url><url><loc>https://legal.qnfo.org/privacy</loc></url></urlset>', { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+  if (["/", "/index.html", "/legal", "/license", "/plain", "/text"].indexOf(path) < 0) return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": "noindex" } });
   try {
     const text = await env.QNFO_BUCKET.get("legal/ula-v2.0.md").then((o) => o ? o.text() : "# QNFO Unified License Agreement v2.0\n\nFull text at https://legal.qnfo.org");
     const isPlain = path === "/plain" || path === "/text";
@@ -3686,6 +3691,11 @@ var gateway_worker_default = {
       } catch (e) {
         return json({ error: e.message }, 500);
       }
+    }
+    // SEO-HYGIENE-1: www.qnfo.org served a full 200 duplicate of every page; pages now 301 to the canonical host
+    // (API and form posts are left alone so nothing a browser sends is lost).
+    if (host === "www.qnfo.org" && (method === "GET" || method === "HEAD") && p.indexOf("/api/") !== 0) {
+      return new Response(null, { status: 301, headers: { Location: "https://qnfo.org" + u.pathname + u.search, "Cache-Control": "public, max-age=86400" } });
     }
     if (host === "qnfo.org" || host === "www.qnfo.org") {
       if (p === "/health") return health();

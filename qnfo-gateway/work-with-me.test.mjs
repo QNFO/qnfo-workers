@@ -36,7 +36,7 @@ const visible = (html) => decode(html.replace(/<script\b[^>]*>[\s\S]*?<\/script[
 const page = await get("https://qnfo.org/work-with-me");
 const html = page.text, text = visible(html);
 ok(page.status === 200 && /text\/html/.test(page.headers.get("Content-Type") || ""), "GET qnfo.org/work-with-me serves HTML", page.status);
-ok((await get("https://qnfo.org/work-with-me/")).status === 200 && (await get("https://www.qnfo.org/work-with-me")).status === 200, "the trailing slash and www host serve the page");
+{ const wwm = await get("https://www.qnfo.org/work-with-me"); ok((await get("https://qnfo.org/work-with-me/")).status === 200 && wwm.status === 301 && wwm.headers.get("Location") === "https://qnfo.org/work-with-me", "the trailing slash serves the page; www 301s to the canonical host (SEO-HYGIENE-1)", wwm.status); }
 
 // 1. Claims we never make. identity-guard's own patterns first (read from the guard, so the lists cannot drift).
 const guard = readFileSync(join(root, "scripts", "identity-guard.py"), "utf8");
