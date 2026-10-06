@@ -84,6 +84,7 @@ SELECT class, issue_id, precondition, action, verify_probe, verify_transport,
        next_due_at, max_items, attempts, last_verdict
 FROM remediation_contracts
 WHERE (status = 'active' OR (status = 'holding' AND verify_transport = 'runner-https'))
+  AND verify_transport NOT IN ('external-https', 'd1-query@portfolio-state')
   AND (next_due_at IS NULL OR datetime(next_due_at) <= datetime('now'))
 ORDER BY COALESCE(next_due_at, ts)
 LIMIT ?
@@ -91,7 +92,9 @@ LIMIT ?
 
 # PROBE-TRANSPORT-MONOCULTURE-1: the runtime transport this file executes itself (see the docstring, rules 6-9).
 HTTPS_TRANSPORT = "runner-https"
-HTTPS_HOSTS = ("qnfo.org", "q08.org", "q08.workers.dev")
+# PROBE-PLANES-1: qwav.tech (ask.qwav.tech) and qwav.org are fleet hosts in fleet-control RT_FLEET_HOSTS as well, and a
+# Worker may not probe them (issue 1190), so only this runner can.
+HTTPS_HOSTS = ("qnfo.org", "q08.org", "q08.workers.dev", "qwav.tech", "qwav.org")
 HTTPS_READ_CAP = 512 * 1024
 HTTPS_TIMEOUT_S = 20
 RT_HOLD_D = 7
@@ -142,10 +145,48 @@ def d1(sql, params=None):
 # leave the plane; this repository is public, so a plane probe must never select content. fleet-control's hourly tick
 # runs transport 'd1-query' only, so plane contracts are executed here alone.
 PLANE_DBS = {"d1-query@personal-life": "e8d6c61a-10b7-4086-b81e-9e6e85afa407"}
+# PROBE-PLANES-1 (2026-10-06, agent_issues 2075, owner question "why do fleet probes only run as SQL against qnfo-audit"):
+# a contract may name any D1 database of the account by name, d1-query@<name>, resolved through the Cloudflare API at run
+# time (one list call per run). Before this, a d1-query@<name> other than personal-life fell through to qnfo-audit and ran
+# the probe against the wrong database. Refused planes hold other people's data (owner documents, outreach contacts): a
+# probe there could copy a row into this public repository's run log, so their contracts are skipped, never run.
+# d1-query@portfolio-state and external-https are qnfo-fleet-control's (its hourly tick runs them on Cloudflare), so the
+# due query above leaves them alone instead of stamping them unexecutable.
+PLANE_REFUSED = ("qnfo-identity", "qnfo-outreach")
+FLEET_CONTROL_TRANSPORTS = ("external-https", "d1-query@portfolio-state")
+_PLANE_IDS = {}
+
+
+def plane_db_id(transport, lister=None):
+    """d1-query@<name> -> (database id, None) or (None, reason). lister() returns the account's [{name, uuid}] list."""
+    t = str(transport or "")
+    if t in PLANE_DBS:
+        return PLANE_DBS[t], None
+    if not t.startswith("d1-query@"):
+        return None, "not-a-plane"
+    name = t.split("@", 1)[1].strip()
+    if not name or name == DB_NAME:
+        return None, "plane-is-the-default-db"
+    if name in PLANE_REFUSED:
+        return None, "plane-refused"
+    if name not in _PLANE_IDS:
+        listed = (lister or _list_dbs)()
+        for d in listed or []:
+            _PLANE_IDS[d.get("name")] = d.get("uuid") or d.get("id")
+    pid = _PLANE_IDS.get(name)
+    return (pid, None) if pid else (None, "plane-not-found")
+
+
+def _list_dbs():
+    r = _req("GET", "%s/accounts/%s/d1/database?per_page=100" % (CF_API, ACCOUNT))
+    return r.get("result") or []
 
 
 def d1_plane(transport, sql):
-    url = "%s/accounts/%s/d1/database/%s/query" % (CF_API, ACCOUNT, PLANE_DBS[transport])
+    pid, why = plane_db_id(transport)
+    if not pid:
+        raise RuntimeError("plane %s: %s" % (transport, why))
+    url = "%s/accounts/%s/d1/database/%s/query" % (CF_API, ACCOUNT, pid)
     r = _req("POST", url, {"sql": sql, "params": []})
     if not r.get("success"):
         raise RuntimeError("d1 plane error: %s" % json.dumps(r.get("errors")))
@@ -392,12 +433,34 @@ def _selftest():
         if got != want:
             print(json.dumps({"ok": False, "probe": sql, "got": got, "why": why}))
             return 1
+    # PROBE-PLANES-1: any account D1 by name, refused planes never run, fleet-control's transports never selected.
+    fake = lambda: [{"name": "living-paper", "uuid": "lp-1"}, {"name": "qnfo-identity", "uuid": "id-1"}, {"name": "qnfo-outreach", "uuid": "or-1"}]
+    _PLANE_IDS.clear()
+    planes = [
+        ("d1-query@personal-life", ("e8d6c61a-10b7-4086-b81e-9e6e85afa407", None)),
+        ("d1-query@living-paper", ("lp-1", None)),
+        ("d1-query@qnfo-identity", (None, "plane-refused")),
+        ("d1-query@qnfo-outreach", (None, "plane-refused")),
+        ("d1-query@no-such-db", (None, "plane-not-found")),
+        ("d1-query@" + DB_NAME, (None, "plane-is-the-default-db")),
+        ("d1-query", (None, "not-a-plane")),
+    ]
+    for t, want in planes:
+        got = plane_db_id(t, lister=fake)
+        if got != want:
+            print(json.dumps({"ok": False, "plane": t, "got": got, "want": want}))
+            return 1
+    _PLANE_IDS.clear()
+    if not all(("'%s'" % t) in CONTRACT_SQL for t in FLEET_CONTROL_TRANSPORTS) or "NOT IN" not in CONTRACT_SQL:
+        print(json.dumps({"ok": False, "why": "the due query must leave fleet-control's transports alone"}))
+        return 1
     # PROBE-TRANSPORT-MONOCULTURE-1: the runner-https parser, allowlist and judge, offline.
     hosts = [
         ("https://qnfo.org/health", True), ("https://fleet.qnfo.org/", True), ("https://q08.org/", True),
         ("https://x.q08.workers.dev/health", True), ("http://qnfo.org/", False), ("https://evilqnfo.org/", False),
         ("https://qnfo.org.evil.com/", False), ("https://user:pw@qnfo.org/", False), ("ftp://qnfo.org/", False),
         ("https://example.com/", False), ("", False),
+        ("https://ask.qwav.tech/api/ask", True), ("https://qwav.org/", True), ("https://qwav.tech.evil.com/", False),
     ]
     for url, want in hosts:
         if host_allowed(url) != want:
@@ -472,7 +535,16 @@ def consume_d1(c, rec, out, trusted):
         out["skipped"] += 1
         return
     transport = c.get("verify_transport")
-    rows = d1_plane(transport, c["verify_probe"]) if transport in PLANE_DBS else d1(c["verify_probe"])
+    if str(transport or "").startswith("d1-query@"):
+        pid, why = plane_db_id(transport)
+        if not pid:
+            rec["verdict"] = why
+            rec["reason"] = "%s is not run here (%s)" % (transport, why)
+            out["skipped"] += 1
+            return
+        rows = d1_plane(transport, c["verify_probe"])
+    else:
+        rows = d1(c["verify_probe"])
     exp, obs = extract_pair(rows)
     passed, verdict = classify(exp, obs)
     rec["expected"] = exp
