@@ -16,12 +16,12 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 
 [[services]]
 binding = "CAL_API"
-service = "calendar-api"
+service = "qnfo-lifecycle"
 environment = "production"
 # CAL-CALLER-PROPS-1 (2026-10-05): radar-hub holds no CAL_TOKEN secret, so calendar-api refused every personal-radar call
 # (0 posted after 2026-09-23). calendar-api 0.7.1+ authorizes this binding by its props; the canonical deploy installs them
 # (qnfo-ops BINDING-PROPS-APPLY-1). No key copy.
-props = { caller = "radar-hub" }
+props = { caller = "radar-hub", member = "calendar-api" }
 
 [[services]]
 binding = "EMAIL"

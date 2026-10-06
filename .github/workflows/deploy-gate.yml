@@ -590,8 +590,9 @@ jobs:
       - name: INTAKE-PROVENANCE-1 and CODE-TASK-REINTAKE-1 offline suite (qnfo-code-orchestrator)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-code-orchestrator/reintake.test.mjs
-      # FOLD-KIT-1 (scripts/fold_worker.py, T3 lever 14): a synthetic fold, its generated suite under node, and the kit's
-      # refusals (class-exporting guest, plane-crossing fold, multi-VERSION host).
+      # FOLD-KIT-1/2 (scripts/fold_worker.py, T3 lever 14): a synthetic fold, its generated suite under node, public routes,
+      # named callers, derived and constant member env, and the kit's refusals (class-exporting guest, plane-crossing fold,
+      # multi-VERSION host, an older runtime, malformed options).
       - name: FOLD-KIT-1 self-test (scripts/fold_worker.py)
         if: ${{ !cancelled() }}
         run: python3 scripts/fold_worker_selftest.py
@@ -708,6 +709,14 @@ jobs:
       - name: FOLD-READY-1 offline suite (calendar-api)
         if: ${{ !cancelled() }}
         run: node --no-warnings calendar-api/fold-ready.test.mjs
+      # CALENDAR-FOLD-2 (qnfo-lifecycle 1.9.0): the kit's generated suite for the calendar-api member, and the real folded
+      # bundle against an in-memory D1 (derived feedback key, host-route links, public /calendar/e/<id> GET and POST, callers).
+      - name: CALENDAR-FOLD-2 generated suite (qnfo-lifecycle)
+        if: ${{ !cancelled() }}
+        run: node --no-warnings qnfo-lifecycle/calendar-api-fold.test.mjs
+      - name: CALENDAR-FOLD-2 live-bundle suite (qnfo-lifecycle)
+        if: ${{ !cancelled() }}
+        run: node --no-warnings qnfo-lifecycle/calendar-fold-live.test.mjs
       - name: IDEA-TRIAGE-BUDGET-1 offline suite (idea-hub 1.5.5, #1878)
         if: ${{ !cancelled() }}
         run: node --no-warnings idea-hub/triage-budget.test.mjs

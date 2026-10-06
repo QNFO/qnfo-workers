@@ -96,8 +96,10 @@ VECTORIZE_RETIRED = {"qnfo-calibration": "qnfo-fleet-calibrator"}
 PROTECTED = {
     "qnfo-ops", "qnfo-ai", "qnfo-fleet-control", "qnfo-deploy-guard", "qnfo-email", "personal-api",
     "personal-companion", "qnfo-cloud-ops", "qnfo-fleet-dashboard", "qnfo-research-exec",
-    "qnfo-intent-orchestrator", "qnfo-infra", "qnfo-observability", "calendar-api",
+    "qnfo-intent-orchestrator", "qnfo-infra", "qnfo-observability",
 }
+# CALENDAR-FOLD-2 (2026-10-06): calendar-api left PROTECTED when it was FOLDED into qnfo-lifecycle (its code runs there as a
+# member); delete-worker still requires its FOLDED marker.
 
 
 def env(name: str) -> str:

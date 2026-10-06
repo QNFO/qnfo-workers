@@ -49,7 +49,8 @@ bucket_name = "personal-media"
 
 [[services]]
 binding = "CAL_API"
-service = "calendar-api"
+service = "qnfo-lifecycle"
+props = { caller = "personal-api", member = "calendar-api" }
 environment = "production"
 
 # Secrets (wrangler secret put): API_KEY, CAL_TOKEN, CF_TOKEN, INFRA_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (v4.3.0), optional OWNER_GOOGLE_EMAIL

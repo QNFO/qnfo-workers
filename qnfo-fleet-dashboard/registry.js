@@ -248,7 +248,7 @@ export const REGISTRY = {
  "health_probes": [
   {
    "name": "calendar-api",
-   "url": "https://calendar-api.q08.workers.dev/health"
+   "url": "https://qnfo-lifecycle.q08.workers.dev/calendar/health"
   },
   {
    "name": "obsidian-writer",

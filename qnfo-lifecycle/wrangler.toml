@@ -57,3 +57,12 @@ database_id = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"
 crons = ["0 * * * *"]
 
 # Secrets (wrangler secret put): CF_API_TOKEN
+
+# FOLD-KIT-1: bindings calendar-api brought with it (folded into this worker).
+[[r2_buckets]]
+binding = "ICS_R2"
+bucket_name = "qnfo-assets"
+
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "obsidian-vault"
