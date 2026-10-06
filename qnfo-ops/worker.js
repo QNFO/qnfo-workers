@@ -29,7 +29,10 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.38.41-ds-402-breaker";
+var VERSION = "2.38.42-retire-wave-2";
+// WORKER-RETIRE-WAVE-2 (2.38.42, 2026-10-06, #1756, owner standing grant / charter rule 9): qnfo-kaizen and qnfo-skill-sync are
+// retired, so their /health probe bindings (KAIZEN, SKILLSYNC) leave FLEET, BINDING_KEYS and wrangler.toml; registryRefresh no
+// longer re-adds them to service_registry.
 // ---- UTF8-DEPLOY-1:BEGIN (2.38.36, 2026-10-02, pillar core) ----
 // The GitHub contents API returns base64 of the file's UTF-8 bytes. atob() alone gives one character per BYTE
 // (Latin-1), and fetch() then encodes that string as UTF-8 again, so every non-ASCII character in a worker was
@@ -844,7 +847,7 @@ var OPS_SYSTEM_PROMPT = [
   "15. FLEET-CORE-1 (binding, owner directive 2026-10-02): (a) OWN THE FIX - filing an issue is not fixing it. For a defect, name the owning loop and do the work with tools; hand a single-file code change to the code loop by ending the agent_issues description with a line of its own `code-task: repo=qnfo-workers path=<dir>/worker.js`. Close an issue only with a live measurement in issue_triage.close_evidence, never as wontfix to shrink the backlog. (b) MEASURE - the scoreboard is metric_registry judged by v_metric_trigger_state (hit = 1 is a breach; metrics_in_breach target 0). Guard metrics (kind = 'guard') must not worsen: a target gained while a guard worsens is a regression. (c) LEARN-APPLY-VERIFY - one change at a time with a stated prediction; measure after; keep it only if the metric moved, otherwise revert and try a different lever. (d) HARD LIMITS - never raise a budget cap, delete a failing verification row, weaken a guard or probe, or delete data that has no backup; when a step would, stop that step, record the exact blocker in agent_issues, and continue with other work. (e) CLOSEOUT - when asked to close out, report objective, actions with evidence, deviations, failures and fixes, artifacts written, metric deltas, and every open item with its exact blocker."
 ].join(String.fromCharCode(10));
 var OPS_TOOLS = [
-  { name: "fleet_status", description: "Probe /health of the internal fleet services via service bindings (qnfo-lifecycle, qnfo-email, qnfo-email-orchestrator, qnfo-paper-indexer, qnfo-kaizen, qnfo-gateway, qnfo-archive, qnfo-ai, qnfo-ai-search, qnfo-memory-mcp, qnfo-skill-sync, qnfo-backlog-exec). Returns ok/http/version per service.", parameters: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "fleet_status", description: "Probe /health of the internal fleet services via service bindings (qnfo-lifecycle, qnfo-email, qnfo-email-orchestrator, qnfo-paper-indexer, qnfo-gateway, qnfo-archive, qnfo-ai, qnfo-ai-search, qnfo-memory-mcp, qnfo-backlog-exec). Returns ok/http/version per service.", parameters: { type: "object", properties: {}, additionalProperties: false } },
   { name: "ops_issues_list", description: "List agent issues from qnfo-audit agent_issues (the ops backlog). Default: open issues, newest first.", parameters: { type: "object", properties: { status: { type: "string", enum: ["open", "closed", "all"], description: "issue status filter (default open)" }, priority: { type: "string", enum: ["high", "medium", "low"], description: "optional priority filter" }, limit: { type: "number", description: "max rows 1-50 (default 20)" } }, additionalProperties: false } },
   { name: "ops_issue_run", description: "Trigger the qnfo-backlog-exec drain on open agent_issues (safe by design: it only auto-closes health-availability rows whose re-probe PASSes; failures are escalated to alerts). confirm must be true to execute; otherwise returns the plan.", parameters: { type: "object", properties: { confirm: { type: "boolean", description: "must be true to trigger the drain" } }, additionalProperties: false } },
   { name: "ops_d1_query", description: "SCHEMA-FIRST (mandatory, issue #1530): before writing SQL, discover exact table and column names via ops_d1_query on db=audit - SELECT tbl,col,cols FROM d1_schema_index WHERE db=<target> [AND tbl=<table>]. NEVER guess column names; guessed schemas are the top tool-failure class (819 failures/24h). d1_schema_index.refreshed_at gives freshness. READ-ONLY SQL (SELECT/WITH) across the bound D1 databases. db selects the target: audit (default) | living | graph | portfolio | outreach | cms | ipatent | personal. Aggregates exempt from LIMIT; plain selects need LIMIT. Returns up to 100 rows.", parameters: { type: "object", properties: { db: { type: "string", enum: ["audit", "living", "graph", "portfolio", "outreach", "cms", "ipatent", "personal"], description: "target database (default audit)" }, sql: { type: "string", description: "read-only SQL (SELECT/WITH)" } }, required: ["sql"], additionalProperties: false } },
@@ -1102,13 +1105,11 @@ var FLEET = [
   { name: "qnfo-lifecycle", binding: "LIFECYCLE" },
   { name: "qnfo-email", binding: "EMAIL", auth: true },
   { name: "qnfo-paper-indexer", binding: "INDEXER", countPath: "/count" },
-  { name: "qnfo-kaizen", binding: "KAIZEN" },
   { name: "qnfo-gateway", binding: "GATEWAY" },
   { name: "qnfo-archive", binding: "ARCHIVE" },
   { name: "qnfo-ai", binding: "AI" },
   { name: "qnfo-ai-search", binding: "AISEARCH" },
   { name: "qnfo-memory-mcp", binding: "MEMORY" },
-  { name: "qnfo-skill-sync", binding: "SKILLSYNC" },
   { name: "qnfo-backlog-exec", binding: "BACKLOG" }
 ];
 var CF_ACCOUNT_ID = "edb167b78c9fb901ea5bca3ce58ccc4b";
@@ -5536,7 +5537,7 @@ __name222(handleChat, "handleChat");
 __name2222(handleChat, "handleChat");
 __name22222(handleChat, "handleChat");
 __name222222(handleChat, "handleChat");
-var BINDING_KEYS = ["LIFECYCLE", "EMAIL", "ORCH", "INDEXER", "KAIZEN", "GATEWAY", "ARCHIVE", "AI", "AISEARCH", "MEMORY", "SKILLSYNC", "BACKLOG"];
+var BINDING_KEYS = ["LIFECYCLE", "EMAIL", "ORCH", "INDEXER", "GATEWAY", "ARCHIVE", "AI", "AISEARCH", "MEMORY", "BACKLOG"];
 async function regAuthOk(header, env) {
   const a = await authOk(header, env);
   if (a) return true;

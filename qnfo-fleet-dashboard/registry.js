@@ -164,16 +164,6 @@ export const REGISTRY = {
    "modified_on": "2026-09-05T20:47:40.888348Z"
   },
   {
-   "name": "qnfo-kaizen",
-   "crons": [
-    "0 10 * * 1",
-    "0 2 * * *"
-   ],
-   "purpose": "Kaizen watchtower + meta loop",
-   "group": "fleet-ops",
-   "modified_on": "2026-09-08T13:56:25.25014Z"
-  },
-  {
    "name": "qnfo-lifecycle",
    "crons": [
     "0 * * * *",
@@ -198,15 +188,6 @@ export const REGISTRY = {
    "purpose": "Ops AI gateway health loop",
    "group": "fleet-ai",
    "modified_on": "2026-09-09T15:45:22.800385Z"
-  },
-  {
-   "name": "qnfo-outreach",
-   "crons": [
-    "0 11 * * 1-5"
-   ],
-   "purpose": "Outreach campaign engine",
-   "group": "engagement",
-   "modified_on": "2026-09-02T22:32:56.771754Z"
   },
   {
    "name": "qnfo-paper-explainer",
@@ -243,15 +224,6 @@ export const REGISTRY = {
    "purpose": "Research version_queue drain",
    "group": "research-publish",
    "modified_on": "2026-09-09T07:59:38.174179Z"
-  },
-  {
-   "name": "qnfo-skill-sync",
-   "crons": [
-    "0 3 * * *"
-   ],
-   "purpose": "Skill sync",
-   "group": "fleet-ops",
-   "modified_on": "2026-09-03T13:39:39.932797Z"
   },
   {
    "name": "qnfo-social",
@@ -376,10 +348,6 @@ export const REGISTRY = {
    "url": "https://qnfo-ipatent.q08.workers.dev/health"
   },
   {
-   "name": "qnfo-kaizen",
-   "url": "https://qnfo-kaizen.q08.workers.dev/health"
-  },
-  {
    "name": "qnfo-lifecycle",
    "url": "https://qnfo-lifecycle.q08.workers.dev/health"
   },
@@ -394,10 +362,6 @@ export const REGISTRY = {
   {
    "name": "qnfo-ops",
    "url": "https://qnfo-ops.q08.workers.dev/health"
-  },
-  {
-   "name": "qnfo-outreach",
-   "url": "https://qnfo-outreach.q08.workers.dev/health"
   },
   {
    "name": "qnfo-paper-explainer",
@@ -430,10 +394,6 @@ export const REGISTRY = {
   {
    "name": "qnfo-research-supervisor",
    "url": "https://qnfo-research-supervisor.q08.workers.dev/health"
-  },
-  {
-   "name": "qnfo-skill-sync",
-   "url": "https://qnfo-skill-sync.q08.workers.dev/health"
   },
   {
    "name": "qnfo-social",
@@ -605,7 +565,6 @@ export const REGISTRY = {
    "name": "engagement",
    "label": "Engagement (outreach + social)",
    "stages": [
-    "qnfo-outreach",
     "qnfo-social"
    ],
    "checks": [
@@ -633,7 +592,6 @@ export const REGISTRY = {
    "name": "governance",
    "label": "Governance (register -> kaizen disposition)",
    "stages": [
-    "qnfo-kaizen",
     "qnfo-cloud-ops"
    ],
    "checks": [

@@ -1,0 +1,15 @@
+qnfo-outreach is RETIRED (2026-10-06, WORKER-RETIRE-WAVE-2, agent_issues 1756, owner standing grant OWNER-STANDING-GRANT-1 /
+charter decision rule 9).
+
+What it did: the older of two cold-email engines under one shared 8/day cap (weekday 11:00 cron). Measured 2026-10-06:
+- All 14 of its contacts were already contacted; agent_issues 1916 records that it "is not the lever". Researcher outreach
+  is qnfo-cloud-ops jobOutreach, which sends the full 8/day from outreach_queue and keeps reading this engine's history.
+- No worker binds it or calls its URL; its public POST /rfc/:slug/comment has no link anywhere.
+- Its unsubscribe footer (https://qnfo.org/email/unsubscribe?...) is served by qnfo-email since 2.5.4 (UNSUB-LINK-1, PR 656),
+  so opt-out links in mail it already sent keep working after this retirement.
+
+The qnfo-outreach D1 database stays: qnfo-cloud-ops, qnfo-email-orchestrator, qnfo-ops, the dashboard and others read it,
+and its pipeline_state.external_sends_enabled is the fleet-wide outreach kill switch. The script is removed with
+cf-ops-actions delete-worker. Bringing it back is a charter net-zero decision recorded in a PR that removes this file and
+redeploys the code below, never a way to get a deploy through. canonical-deploy.yml skips any directory containing a
+RETIRED or FOLDED file.
