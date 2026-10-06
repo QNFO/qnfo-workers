@@ -540,6 +540,23 @@ events by 2026-12-31 (STRATEGY-1 s9).
 5. **(owner-held, recorded)** arXiv endorsement for works 1, 2, 4; ORCID; these stay on the owner list and are never
    on the critical path.
 
+6. **(code, done)** Ask finds papers the vector index lacks: BM25 over the published catalog inside `retrieve()`, no model
+   call (qnfo-ai-search 2.2.7, PR 675, #2029). The AI Search instance had no feeder since 2026-08-11 and 0 of 22 golden
+   papers were indexed; live-replay golden MRR went 0.231 -> 0.955, inflated because the questions are written from
+   abstracts.
+7. **(code, done)** The Ask vector index is fed again: an hourly budget-gated upload of published papers it lacks (ledger
+   `ask_corpus_sync`), and golden questions must be complete (qnfo-ai-search 2.2.8, PR 676, #2029).
+8. **(code, control plane)** Paper pages typeset the plain-text math the render guard counts (MATH-RESIDUE-2, qnfo-gateway
+   3.9.8, #2023), with a committed full-corpus KaTeX check (`scripts/math-corpus-check.mjs`); offline 68 -> 48 defect
+   pages, 0 KaTeX failures.
+9. **(code, control plane)** UTM click ledger: the public pages record bot-filtered loads that carry `utm_source` /
+   `utm_campaign` (RUM carries no query string), so a post or a digest joins to the visits it caused.
+   `qnfo-gateway/worker.js`.
+10. **(code)** Subscriber digest links carry `utm_source=digest&utm_medium=email&utm_campaign=<slug>`, so a digest joins to
+   the reads it caused. `qnfo-subscribers/worker.js`.
+
+Levers 6 to 10 were added on 2026-10-06 by the sessions that built them (the rows came first; this list follows them).
+
 **Executor.** code tasks; qnfo-social and qnfo-subscribers loops.
 **Probe.** `subscribers_growth_monthly` >= 10; `credibility_events_90d` >= 2; the review gate reads MET.
 

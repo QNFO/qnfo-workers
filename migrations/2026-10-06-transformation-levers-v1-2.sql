@@ -15,7 +15,8 @@
 -- Rollback: DELETE FROM transformation_levers WHERE (tp = 1 AND n IN (14, 15, 16, 17, 18)) OR (tp = 3 AND n IN (10, 11, 12,
 -- 13, 14, 15)) OR (tp = 5 AND n = 10); UPDATE transformation_levers SET status = 'pending', note = NULL WHERE tp = 1 AND n = 8
 -- AND key = 'branch-protection-control-plane'; the detail and note texts updated below are additive (their old text is the
--- prefix kept by the || concatenation).
+-- prefix kept by the || concatenation); the two path corrections at the end revert to fleet-exec/worker.js and
+-- qnfo-paper-indexer/worker.js.
 
 UPDATE transformation_levers
    SET status = 'superseded',
@@ -82,3 +83,11 @@ UPDATE transformation_levers
    SET detail = COALESCE(detail || ' ', '') || '1.2: the owner''s desktop clients reach qnfo-memory-mcp by URL (owner_client_keys, 3 rows), a dependent the repository cannot show: re-point them or keep the hostname as a route of the host.',
        updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
  WHERE tp = 3 AND n = 2 AND key = 'mcp-two-to-one' AND COALESCE(detail, '') NOT LIKE '%owner_client_keys%';
+
+-- Lever paths that name a FOLDED directory point at its host (a fold moves the code; the canonical deploy skips the
+-- guest directory, and the code orchestrator refuses a worker that is not live, RETIRED-TARGET-1): fleet-exec is a member
+-- of qnfo-code-orchestrator (FLEET-EXEC-FOLD-1), qnfo-paper-indexer of qnfo-infra (INDEXER-FOLD-1).
+UPDATE transformation_levers SET path = 'qnfo-code-orchestrator/worker.js', updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+ WHERE tp = 2 AND n = 5 AND key = 'fleet-exec-single-dispatcher' AND path = 'fleet-exec/worker.js';
+UPDATE transformation_levers SET path = 'qnfo-infra/worker.js', updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+ WHERE tp = 7 AND n = 2 AND key = 'scholar-pdf-coverage' AND path = 'qnfo-paper-indexer/worker.js';

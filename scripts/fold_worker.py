@@ -518,6 +518,7 @@ def main():
             "cf-ops-actions delete-worker %s (DELETE-AFTER-UNBIND-1 refuses while a live binder remains)" % g,
             "write worker_removals (action folded, target %s) and worker_output_contracts" % h,
             "remove %s from deploy-targets.txt, fleet-control PROBE_WORKERS and the dashboard registry if listed" % g,
+            "UPDATE transformation_levers SET path = '%s/worker.js' WHERE path = '%s/worker.js' (levers follow the code)" % (h, g),
         ],
     }, indent=1))
 
