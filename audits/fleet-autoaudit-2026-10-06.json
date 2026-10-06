@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-06 17:34:19",
+  "audited_at": "2026-10-06 18:05:02",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-code-orchestrator"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -493,7 +500,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.23-intake-depends",
+        "version": "0.4.0-window-locator-preflight",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -518,7 +525,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.26.2-budget-soft",
+        "version": "1.26.3-codeagent",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1028,9 +1035,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.23-intake-depends",
+      "before": "0.4.0-window-locator-preflight",
       "http": 200,
-      "live": "0.3.23-intake-depends",
+      "live": "0.4.0-window-locator-preflight",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1148,9 +1155,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.26.2-budget-soft",
+      "before": "1.26.3-codeagent",
       "http": 200,
-      "live": "1.26.2-budget-soft",
+      "live": "1.26.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
