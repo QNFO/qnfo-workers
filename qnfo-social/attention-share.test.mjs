@@ -22,10 +22,12 @@ CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEX
 CREATE TABLE alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, source TEXT, level TEXT, message TEXT);
 CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));
 CREATE TABLE social_engagements (id INTEGER PRIMARY KEY AUTOINCREMENT, platform TEXT, post_id TEXT, metric TEXT, value REAL, note TEXT, collected_at TEXT, created_at TEXT DEFAULT (datetime('now')), UNIQUE(platform, post_id, metric, collected_at));
+-- thread 203 sits one hour inside the gate's 7-day window (ATTENTION-SHARE-FLAKE-1, GitHub 733): at exactly -7 days it fell
+-- out whenever a second ticked between this insert and the gate's datetime('now','-7 days'), and posted_7d read 2.
 INSERT INTO social_threads (id, slug, title, posts, status, flags, notes, posted_at, post_uri) VALUES
   (201, 'quiet-one', 'Quiet', '["Quiet paper https://papers.qnfo.org/papers/quiet-one/"]', 'posted', NULL, NULL, datetime('now','-3 days'), 'at://did:plc:q/app.bsky.feed.post/q1'),
   (202, 'noticed-one', 'Noticed', '["Noticed paper https://papers.qnfo.org/papers/noticed-one/"]', 'posted', NULL, NULL, datetime('now','-5 days'), '{"bluesky":"at://did:plc:q/app.bsky.feed.post/n1","mastodon":"buffer:zz"}'),
-  (203, 'liked-one', 'Liked', '["Liked paper https://papers.qnfo.org/papers/liked-one/"]', 'posted', NULL, NULL, datetime('now','-7 days'), 'at://did:plc:q/app.bsky.feed.post/l1'),
+  (203, 'liked-one', 'Liked', '["Liked paper https://papers.qnfo.org/papers/liked-one/"]', 'posted', NULL, NULL, datetime('now','-6 days','-23 hours'), 'at://did:plc:q/app.bsky.feed.post/l1'),
   (204, 'launch', 'Launch', '["Launch https://papers.qnfo.org/papers/launch/"]', 'queued', 'selected', 'selected: launch queue', NULL, NULL);
 INSERT INTO reach_signals (date, source, channel, entity_type, entity_id, metric, value, quality) VALUES
   (date('now','-2 days'), 'cf-rum-human', 'web', 'paper', 'noticed-one', 'external_pageviews', 12, 'human'),
