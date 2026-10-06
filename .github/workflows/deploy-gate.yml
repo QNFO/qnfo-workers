@@ -573,6 +573,10 @@ jobs:
       - name: MERGE-SCOPE-INTAKE-1 and ANCHOR-REPAIR-1 offline suite (qnfo-code-orchestrator)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-code-orchestrator/scope-intake.test.mjs
+      # INTAKE-PROVENANCE-1 + CODE-TASK-REINTAKE-1 (qnfo-code-orchestrator 0.3.20, #2021): untrusted origins are session tasks
+      # before any model call (default list = fleet-control CM_TRUSTED_SOURCES); ended tasks are retried after a cooldown.
+      - name: INTAKE-PROVENANCE-1 and CODE-TASK-REINTAKE-1 offline suite (qnfo-code-orchestrator)
+        run: node --no-warnings qnfo-code-orchestrator/reintake.test.mjs
       # FOLD-KIT-1 (scripts/fold_worker.py, T3 lever 14): a synthetic fold, its generated suite under node, and the kit's
       # refusals (class-exporting guest, plane-crossing fold, multi-VERSION host).
       - name: FOLD-KIT-1 self-test (scripts/fold_worker.py)
