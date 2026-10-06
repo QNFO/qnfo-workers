@@ -19,7 +19,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const exportAt = lines.findIndex((l) => l === "export {" || l === "export default {");
   const missing = lines.filter((l, i) => l.trim() && !src.includes(l.trim()) && !l.startsWith("import ") && !l.startsWith("//# sourceMappingURL") && !/^var VERSION = "/.test(l) && !(exportAt >= 0 && i >= exportAt && (l === "export {" || /^\s+\w+ as default$/.test(l) || l === "};" || l === "export default {")));
   ok(missing.length === 0, "every calendar-api line is in the host except its imports, VERSION line and export", missing.map((l) => l.slice(0, 80)));
-  ok((src.match(/^var VERSION = "/gm) || []).length === 1 && mod.__hv === "1.9.0-calendar-fold" && mod.__mv === "0.7.5-folded", "host 1.9.0-calendar-fold, member 0.7.5-folded, one top-level quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok((src.match(/^var VERSION = "/gm) || []).length === 1 && /^1\.(9|[1-9]\d)\.\d+-/.test(mod.__hv) && mod.__mv === "0.7.5-folded", "host 1.9.x or later (was pinned to 1.9.0-calendar-fold; RETIRED-HOSTS-1 bumps it), member 0.7.5-folded, one top-level quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 const W = mod.__wrapped, M = mod.__member, H = W.__foldHost;
 const calls = [];
