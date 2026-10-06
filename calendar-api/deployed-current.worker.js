@@ -2,7 +2,8 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.7.1-caller-props"; // 0.7.1 CAL-CALLER-PROPS-1: a service-binding caller named by ctx.props.caller is authorized like a CAL_TOKEN bearer (radar-hub has no CAL_TOKEN secret, so the personal radar posted nothing after 2026-09-23).
+var VERSION = "0.7.2-cancelled-ics"; // 0.7.2 CAL-CANCELLED-ICS-1 (#1881 gap D, pillar personal): a calendar row with status='cancelled' (a trip cancelled by qnfo-email) is published in the personal feed as STATUS:CANCELLED with its uid, summary and dates only, so Outlook removes the copy it holds; host and qnfo feeds still omit it.
+// 0.7.1 0.7.1 CAL-CALLER-PROPS-1: a service-binding caller named by ctx.props.caller is authorized like a CAL_TOKEN bearer (radar-hub has no CAL_TOKEN secret, so the personal radar posted nothing after 2026-09-23).
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
 // recreated as a separate worker. Its EXECUTE leg already wrote this worker's `calendar` table, and both share the
@@ -342,7 +343,7 @@ async function getIcsToken(env, plane) {
 }
 __name(getIcsToken, "getIcsToken");
 async function buildICS(env, plane, fromIso) {
-  const rows = await runQuery(env, "SELECT * FROM calendar WHERE plane=? AND status!='cancelled' AND dtstart>=? ORDER BY dtstart LIMIT 500", [plane, fromIso]);
+  const rows = await runQuery(env, "SELECT * FROM calendar WHERE plane=? AND (status!='cancelled' OR plane='personal') AND dtstart>=? ORDER BY dtstart LIMIT 500", [plane, fromIso]);
   const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//QNFO//calendar-api//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
   L.push("X-WR-CALNAME:" + (plane === "qnfo" ? "QNFO Research Calendar" : plane === "host" ? "Open House Availability" : "Personal Calendar"));
   for (const e of rows) {
@@ -352,6 +353,14 @@ async function buildICS(env, plane, fromIso) {
       let d1 = hostDay(e.dtend);
       if (!d1 || d1 <= d0) d1 = hostNextDay(d0);
       L.push("BEGIN:VEVENT", "UID:" + uidFor("host", e.id), "DTSTAMP:" + fmtDate(e.created || (/* @__PURE__ */ new Date()).toISOString(), 0), "DTSTART;VALUE=DATE:" + d0.replace(/-/g, ""), "DTEND;VALUE=DATE:" + d1.replace(/-/g, ""), "SUMMARY:" + HOST_TITLE, "TRANSP:TRANSPARENT", "END:VEVENT");
+      continue;
+    }
+    if (e.status === "cancelled" && FB_SOURCES.indexOf(e.source) >= 0) continue; // a dismissed radar suggestion was never accepted: it just drops out
+    if (e.status === "cancelled") {
+      // CAL-CANCELLED-ICS-1: tombstone only; no description, location, feedback link or url.
+      L.push("BEGIN:VEVENT", "UID:" + (e.uid || uidFor(e.plane, e.id)), "DTSTAMP:" + fmtDate(e.created || (/* @__PURE__ */ new Date()).toISOString(), 0), "DTSTART" + (e.all_day ? ";VALUE=DATE:" : ":") + fmtDate(e.dtstart, e.all_day));
+      if (e.dtend) L.push("DTEND" + (e.all_day ? ";VALUE=DATE:" : ":") + fmtDate(e.dtend, e.all_day));
+      L.push("SUMMARY:" + escICal(e.title), "STATUS:CANCELLED", "SEQUENCE:1", "END:VEVENT");
       continue;
     }
     L.push("BEGIN:VEVENT");
