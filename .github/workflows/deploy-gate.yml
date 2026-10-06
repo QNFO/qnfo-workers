@@ -450,6 +450,7 @@ jobs:
         run: node --no-warnings qnfo-research-exec/math-latex.test.mjs
       # ZENODO-READ-ONLINE-1 (qnfo-research-exec 0.9.61, #1907): kind='related' rows add the papers.qnfo.org page as an
       # isVariantFormOf related identifier to the latest version of a record, idempotently; the probe closes the issue.
+      # RELATED-LEGACY-FIELDS-1 (0.9.63): the drain fills legacy upload_type / publication_type from resource_type before the PUT.
       - name: ZENODO-READ-ONLINE-1 offline suite (qnfo-research-exec)
         run: node --no-warnings qnfo-research-exec/zenodo-related.test.mjs
       # AI-STAGE-ATTRIBUTION-1: research-exec Workers AI counters carry the pipeline stage; the AI call itself is unchanged.

@@ -6,7 +6,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { applyRelatedLink, drainRelatedLinks, seedRelatedLinks, verifyRelatedBackfill } from "./worker.js";
+import { applyRelatedLink, drainRelatedLinks, legacyUploadFields, seedRelatedLinks, verifyRelatedBackfill } from "./worker.js";
 
 const db = new DatabaseSync(":memory:");
 db.exec(readFileSync(new URL("../migrations/2026-10-01-zenodo-version-requests.sql", import.meta.url), "utf8"));
@@ -37,6 +37,19 @@ assert.equal(a.changed, true, "the same URL under another relation is not the li
 assert.match(applyRelatedLink({}, { related_link: { slug: "../evil" } }).error, /slug/);
 assert.match(applyRelatedLink({}, {}).error, /slug/);
 
+// 1b RELATED-LEGACY-FIELDS-1: an InvenioRDM resource_type without the legacy fields gets upload_type / publication_type.
+let lf = legacyUploadFields({ title: "T", resource_type: { title: "Preprint", type: "publication", subtype: "preprint" } });
+assert.equal(lf.upload_type, "publication");
+assert.equal(lf.publication_type, "preprint");
+assert.equal(lf.title, "T", "other fields are kept");
+assert.deepEqual(lf.resource_type, { title: "Preprint", type: "publication", subtype: "preprint" }, "resource_type stays (the API ignores it on the legacy PUT)");
+lf = legacyUploadFields({ upload_type: "publication", publication_type: "article", resource_type: { type: "publication", subtype: "preprint" } });
+assert.equal(lf.publication_type, "article", "existing legacy fields win");
+assert.deepEqual(legacyUploadFields({ title: "plain" }), { title: "plain" }, "no resource_type: unchanged");
+assert.equal(legacyUploadFields({ resource_type: { type: "image", subtype: "figure" } }).image_type, "figure");
+assert.equal(legacyUploadFields({ resource_type: { type: "dataset" } }).upload_type, "dataset");
+assert.deepEqual(legacyUploadFields(null), {}, "null metadata is tolerated");
+
 // 2 the drain against a fake Zenodo: three rows.
 //   row 1: record 100 is its own latest, has no link -> edit, PUT with the link appended, publish -> published.
 //   row 2: record 200's latest version is 201, which already lists the link -> unchanged on 201, no edit call.
@@ -44,7 +57,8 @@ assert.match(applyRelatedLink({}, {}).error, /slug/);
 db.exec("INSERT INTO zenodo_version_requests (record_id, files_json, metadata_json, kind, requested_by) VALUES (100, '[]', '{\"related_link\":{\"slug\":\"some-paper\"}}', 'related', 'test'), (200, '[]', '{\"related_link\":{\"slug\":\"other-paper\"}}', 'related', 'test'), (300, '[]', '{\"related_link\":{\"slug\":\"third-paper\"}}', 'related', 'test')");
 let calls = [];
 const ok = (body, status = 200) => new Response(typeof body === "string" ? body : JSON.stringify(body), { status });
-const meta100 = { title: "A", creators: [{ name: "X" }], related_identifiers: [{ identifier: "arXiv:2501.00001", relation: "isSupplementTo", scheme: "arxiv" }] };
+// record 100 is the 22025544 case: InvenioRDM resource_type, no legacy upload_type; the PUT must carry the legacy fields.
+const meta100 = { title: "A", creators: [{ name: "X" }], resource_type: { title: "Preprint", type: "publication", subtype: "preprint" }, related_identifiers: [{ identifier: "arXiv:2501.00001", relation: "isSupplementTo", scheme: "arxiv" }] };
 const meta201 = { title: "B", related_identifiers: [{ identifier: "https://papers.qnfo.org/papers/other-paper/", relation: "isVariantFormOf", resource_type: "publication-preprint", scheme: "url" }] };
 const meta300 = { title: "C" };
 let putBody = null;
@@ -76,6 +90,8 @@ assert.equal(get(1).result_record_id, 100);
 assert.equal(putBody.metadata.related_identifiers.length, 2, "PUT keeps the existing identifier and appends the link");
 assert.deepEqual(putBody.metadata.related_identifiers[1], { identifier: LINK, relation: "isVariantFormOf", resource_type: "publication-preprint" });
 assert.equal(putBody.metadata.title, "A", "the rest of the metadata is sent back unchanged");
+assert.equal(putBody.metadata.upload_type, "publication", "the legacy upload_type is filled from resource_type before the PUT");
+assert.equal(putBody.metadata.publication_type, "preprint", "the legacy publication_type is filled from resource_type.subtype");
 assert.equal(get(2).status, "unchanged");
 assert.equal(get(2).result_record_id, 201, "the edit targets the latest version of the concept");
 assert.ok(!calls.some((c) => c.includes("/depositions/201/actions/edit")), "no edit on a record that already lists the link");
