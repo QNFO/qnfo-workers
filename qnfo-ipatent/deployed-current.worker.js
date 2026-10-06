@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.10.2-seo-guides"; /* 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.11.0-mechanism-first"; /* 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -390,7 +390,7 @@ __name(searchDisclosures, "searchDisclosures");
 __name2(searchDisclosures, "searchDisclosures");
 __name22(searchDisclosures, "searchDisclosures");
 __name222(searchDisclosures, "searchDisclosures");
-async function draftDisclosure(env, { title, technicalField, description, ragContext }) {
+async function draftDisclosure(env, { title, technicalField, description, ragContext, mechanism }) {
   const ragText = ragContext.length > 0 ? ragContext.map(
     (r, i) => `EXAMPLE ${i + 1}: "${r.title}" [field: ${r.technical_field || "n/a"}] \u2014 ${(r.disclosure_text || "").slice(0, 500)}`
   ).join("\n\n") : "No similar disclosures found in the database.";
@@ -399,7 +399,7 @@ async function draftDisclosure(env, { title, technicalField, description, ragCon
 ## INVENTOR'S DESCRIPTION
 Title: ${title}
 Technical Field: ${technicalField || "Not specified"}
-Description: ${description}
+Description: ${description}${mechanismBlock(mechanism)}
 
 ## EXAMPLE DISCLOSURES (for style reference only \u2014 do NOT copy content)
 ${ragText}
@@ -443,7 +443,10 @@ IMPORTANT:
 - Write ORIGINAL content based ONLY on the inventor's description \u2014 do NOT copy from the examples.
 - Use formal patent language appropriate for USPTO filings.
 - Be specific and concrete \u2014 avoid vague generalities.
-- The claims are the most important section \u2014 make them detailed and defensible.`;
+- The claims are the most important section \u2014 make them detailed and defensible.
+- Claim the engineered means (the structure or steps) that produces the effect, never a law of nature, a mathematical relation or the result itself.
+- Every functional phrase in a claim names the structure that performs it.
+- Claim a range only as wide as the description teaches how to achieve; otherwise list the gap under SUPPORT GAPS.`;
   let lastError = null;
   let text = "";
   const attempts = [];
@@ -618,6 +621,112 @@ __name(generateHtmlDocument, "generateHtmlDocument");
 __name2(generateHtmlDocument, "generateHtmlDocument");
 __name22(generateHtmlDocument, "generateHtmlDocument");
 __name222(generateHtmlDocument, "generateHtmlDocument");
+// ---- MECHANISM-FIRST-1:BEGIN (agent_issues 2053; owner principle 2026-10-06: a defensible patent is engineerable physics -
+// what it is, what it does, how it works, and the distinction that makes the difference). POST /api/mechanism reads the
+// inventor's description into a mechanism card the inventor corrects before drafting; POST /api/draft with that card
+// derives the claims from it (independent claim = the distinction plus the minimum structure across the operating window;
+// dependents narrow inside the window). The card records only what the inventor wrote: a field the description does not
+// support is NOT STATED and becomes a hole for the inventor to fill, never an invented mechanism.
+var MECH_FIELDS = [
+  ["what_it_is", "What it is", "the structure: the parts or steps and how they connect"],
+  ["what_it_does", "What it does", "the technical effect, measurable, with units or a comparison to the known approach"],
+  ["how_it_works", "How it works", "the causal principle (physical, chemical or information-theoretic) that makes the structure produce the effect; for software, which resource (time, memory, bandwidth, energy, error rate) changes and why"],
+  ["distinction", "The distinction that makes the difference", "the one feature without which the effect disappears"],
+  ["nearest_known", "Nearest known approach", "the closest existing approach the inventor names, and how it differs"],
+  ["window_holds", "Operating window", "the parameter ranges over which the mechanism still works"],
+  ["window_breaks", "Where it breaks", "where the mechanism stops working, and why"]
+];
+var MECH_NOT_STATED = "NOT STATED";
+var MECH_FIELD_MAX = 700;
+var MECH_ATTEMPT_MS = 30000;
+function mechanismPrompt(title, technicalField, description) {
+  return "Read the inventor's description and fill a mechanism card as JSON. Use ONLY what the description states or "
+    + "directly implies. If the description does not state a field, write exactly \"" + MECH_NOT_STATED + "\" for it - "
+    + "never invent a mechanism, a number, a range or a prior-art reference. Keep each value under 80 words, plain text.\n\n"
+    + "Fields:\n" + MECH_FIELDS.map(function (f) { return "- " + f[0] + ": " + f[2]; }).join("\n")
+    + "\n\nOutput only one JSON object with exactly these keys, no prose, no code fence.\n\n"
+    + "Title: " + title + "\nTechnical field: " + (technicalField || "Not specified") + "\nDescription: " + description;
+}
+function normalizeMechanism(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  var out = {}, any = false;
+  for (var i = 0; i < MECH_FIELDS.length; i++) {
+    var k = MECH_FIELDS[i][0], v = raw[k];
+    v = v == null ? "" : String(typeof v === "object" ? JSON.stringify(v) : v).replace(/\s+/g, " ").trim().slice(0, MECH_FIELD_MAX);
+    if (!v || /^(not stated|n\/?a|none|unknown|unspecified|-)\.?$/i.test(v)) v = MECH_NOT_STATED;
+    if (v !== MECH_NOT_STATED) any = true;
+    out[k] = v;
+  }
+  return any ? out : null;
+}
+function parseMechanism(text) {
+  var t = String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/```(?:json)?/gi, "");
+  var a = t.indexOf("{"), b = t.lastIndexOf("}");
+  if (a < 0 || b <= a) return null;
+  try { return normalizeMechanism(JSON.parse(t.slice(a, b + 1))); } catch (e) { return null; }
+}
+// Holes the inventor should fill before filing. Deterministic: a field NOT STATED, an effect with no number, unit or
+// comparison, and a mechanism that only names a result ("it works better") are holes.
+var MECH_MEASURABLE = /\d|percent|%|\b(?:faster|slower|lower|higher|less|more|fewer|reduc\w*|increas\w*|lighter|cheaper|stronger|smaller|larger)\b/i;
+function mechanismHoles(card) {
+  var holes = [];
+  if (!card) return [{ field: "all", why: "no mechanism card: describe what the invention is, what it does and how it works" }];
+  for (var i = 0; i < MECH_FIELDS.length; i++) {
+    var f = MECH_FIELDS[i];
+    if (card[f[0]] === MECH_NOT_STATED) holes.push({ field: f[0], why: f[1] + " is not stated: " + f[2] + "." });
+  }
+  if (card.what_it_does !== MECH_NOT_STATED && !MECH_MEASURABLE.test(card.what_it_does)) holes.push({ field: "what_it_does", why: "The effect is not measurable as written: give a number, a unit or a comparison with the known approach." });
+  if (card.how_it_works !== MECH_NOT_STATED && card.how_it_works.split(/\s+/).length < 8) holes.push({ field: "how_it_works", why: "The mechanism is too short to teach a skilled person how the structure produces the effect." });
+  return holes;
+}
+function mechanismBlock(card) {
+  if (!card) return "";
+  var lines = MECH_FIELDS.map(function (f) { return "- " + f[1] + ": " + card[f[0]]; }).join("\n");
+  return "\n\n## MECHANISM CARD (confirmed by the inventor; fields marked " + MECH_NOT_STATED + " are open)\n" + lines
+    + "\n\n## CLAIM DERIVATION FROM THE MECHANISM CARD\n"
+    + "- Claim 1 recites the distinction that makes the difference plus only the minimum structure needed for it to produce the stated effect, and covers the whole operating window, not one preferred value.\n"
+    + "- Dependent claims narrow inside the window: preferred sub-ranges, materials, alternative embodiments, and the nearest-known-approach contrast where it adds a limitation.\n"
+    + "- The detailed description explains how it works (the causal principle) and teaches at least one way to achieve the effect at each end of the claimed window; if it cannot, list that under SUPPORT GAPS instead of claiming the full window.\n"
+    + "- A field marked " + MECH_NOT_STATED + " is not filled in by you: list it under SUPPORT GAPS.";
+}
+async function handleMechanism(request, env, ctx) {
+  if (request.method !== "POST") return json({ error: "POST required" }, 405);
+  var body;
+  try { body = await request.json(); } catch (e) { return json({ error: "Invalid JSON body" }, 400); }
+  var title = sanitize(body && body.title, 300), technicalField = sanitize(body && body.technical_field, 300), description = sanitize(body && body.description, MAX_DESCRIPTION_LEN);
+  if (!title || !description || description.length < 50) return json({ error: "title and description (min 50 chars) are required" }, 400);
+  var ua = request.headers.get("User-Agent") || "";
+  if (!ua || PV_BOT.test(ua)) return json({ error: "Mechanism cards are for people drafting an invention; automated clients are not served." }, 403);
+  var ip = await hashIp(request.headers.get("CF-Connecting-IP") || "unknown");
+  var rateLimit = await checkRateLimit(env, ip);
+  if (!rateLimit.allowed) return json({ error: "Rate limit exceeded. Please try again later.", rate_limit: rateLimit }, 429);
+  try {
+    var day = await env.IPATENT_DB.prepare("SELECT COALESCE(SUM(n), 0) AS n FROM usage_counts WHERE day = date('now') AND kind = 'mechanism'").first();
+    if (day && Number(day.n) >= DAILY_DRAFT_CAP) return json({ error: "iPatent has reached its daily limit for mechanism cards. Please try again later." }, 429);
+  } catch (e) {}
+  await countUsage(env, "mechanism", title + " " + technicalField + " " + description.slice(0, 1e3), ua);
+  var prompt = mechanismPrompt(title, technicalField, description), attempts = [], card = null, t0 = Date.now();
+  for (var i = 0; i < AI_DRAFT_MODELS.length && !card; i++) {
+    var model = AI_DRAFT_MODELS[i], left = DRAFT_BUDGET_MS - (Date.now() - t0);
+    if (left < DRAFT_MIN_ATTEMPT_MS) { attempts.push({ model: model, outcome: "skipped: budget spent" }); continue; }
+    var ta = Date.now(), timer = null;
+    try {
+      var opts = { messages: [{ role: "system", content: "You extract facts from an inventor's description into JSON. You never add facts the inventor did not state." }, { role: "user", content: prompt }], max_tokens: 1800, temperature: 0.1 };
+      if (DRAFT_EFFORT[model]) opts.reasoning_effort = DRAFT_EFFORT[model];
+      var deadline = new Promise(function (_, rej) { timer = setTimeout(function () { rej(new Error("deadline")); }, Math.min(MECH_ATTEMPT_MS, left)); });
+      var result;
+      try { result = await Promise.race([env.AI.run(model, opts), deadline]); } finally { clearTimeout(timer); }
+      var text = typeof result === "string" ? result : (result && (result.response || (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content))) || "";
+      card = parseMechanism(text);
+      attempts.push({ model: model, ms: Date.now() - ta, outcome: card ? "ok" : "unparseable" });
+    } catch (err) {
+      attempts.push({ model: model, ms: Date.now() - ta, outcome: "error: " + String(err && err.message || err).slice(0, 120) });
+    }
+  }
+  if (!card) return json({ error: "Could not read a mechanism from the description. Add what the invention is, what it does and how it works, then try again.", attempts: attempts }, 503);
+  return json({ mechanism: card, holes: mechanismHoles(card), fields: MECH_FIELDS.map(function (f) { return { key: f[0], label: f[1], asks: f[2] }; }), attempts: attempts, rate_limit: rateLimit });
+}
+// ---- MECHANISM-FIRST-1:END
 async function handleDraft(request, env, ctx) {
   if (request.method !== "POST") return json({ error: "POST required" }, 405);
   let body;
@@ -632,6 +741,7 @@ async function handleDraft(request, env, ctx) {
   const inventorName = sanitize(body.inventor_name, 200);
   const inventorEmail = sanitize(body.inventor_email, 200);
   const keepCopy = body.save === true;
+  const mechanism = normalizeMechanism(body.mechanism);
   if (!title || !description || description.length < 50) {
     return json({ error: "title and description (min 50 chars) are required" }, 400);
   }
@@ -651,7 +761,7 @@ async function handleDraft(request, env, ctx) {
   const priorArt = topRag && Number(topRag.score) >= 0.8 ? { flag: true, top_title: topRag.title, top_score: Math.round(Number(topRag.score) * 100) / 100, section: topRag.section || "", message: "Very close to an existing corpus filing - refine the distinguishing features before filing." } : null;
   let sections;
   try {
-    sections = await draftDisclosure(env, { title, technicalField, description, ragContext });
+    sections = await draftDisclosure(env, { title, technicalField, description, ragContext, mechanism });
   } catch (err) {
     return json({ error: "AI drafting failed: " + err.message, attempts: err.attempts || [] }, 503);
   }
@@ -714,6 +824,8 @@ async function handleDraft(request, env, ctx) {
     prior_art: priorArt,
     paragraphs: paragraphs.map((p) => ({ n: p.n, key: p.key, text: p.text })),
     support_map: supportMapData,
+    mechanism: mechanism,
+    mechanism_holes: mechanism ? mechanismHoles(mechanism) : [],
     attempts: sections.__attempts || [],
     saved: keepCopy,
     private_link: keepCopy ? CANONICAL_ORIGIN + "/d/" + submissionId : null,
@@ -2204,6 +2316,7 @@ var qnfo_ipatent_default = {
         return new Response(row.document_html, { headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store" } });
       }
       if (path === "/api/draft" && request.method === "POST") return handleDraft(request, env, ctx);
+      if (path === "/api/mechanism" && request.method === "POST") return handleMechanism(request, env, ctx);
       if (path === "/api/search" && request.method === "GET") {
         ctx?.waitUntil?.(countUsage(env, "search", url.searchParams.get("q") || url.searchParams.get("query") || "", request.headers.get("User-Agent") || ""));
         return handleSearch(env, url);
