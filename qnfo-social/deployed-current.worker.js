@@ -15,7 +15,13 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.7.37-daily-distribution";
+var VERSION = "0.8.0-attention-share";
+// 0.8.0 (2026-10-06, ATTENTION-SHARE-1, pillar reach; owner directive 2026-10-06 07:44Z): the actuation half of qnfo-fleet-dashboard
+// ATTENTION-LOOP-1. ops_config attention_channel_share (per-channel share of the owner cap, written daily by the dashboard's
+// scorecard from human attention per item) scales the Buffer channel caps and the Bluesky cap (never above them; a stale
+// share reads as 1); the channel drain orders posted rows noticed-first (bot-filtered external loads of the paper plus the
+// post's Bluesky engagement); the distribution learner credits closed 72h windows daily (learnerDailyCredit) instead of
+// only in the weekly update, and reads the bot-filtered per-item rows for visits when present.
 // 0.7.37 (2026-10-06, DAILY-DISTRIBUTION-1, pillar: reach; owner directive 2026-10-06 "persistent, routine, daily" outreach):
 // LinkedIn, Mastodon and X (connected in Buffer) posted only as the cross-post of a Bluesky post, so the Bluesky cap (2 a
 // week) was every channel's cap and nothing went out on 5 of 7 days. Each Buffer channel now has its own weekly cap inside
@@ -944,6 +950,59 @@ async function channelCaps(env) {
   } catch (e) {}
   return caps;
 }
+// ---------- ATTENTION-SHARE-1 (0.8.0, 2026-10-06, pillar reach; the actuation half of qnfo-fleet-dashboard ATTENTION-LOOP-1) ----------
+// Owner directive 2026-10-06 07:44Z: do more of what gets noticed; promote better or stop what is not. The dashboard's daily
+// scorecard grades every channel's human attention per item and writes ops_config attention_channel_share, a share in
+// [0, 1] per channel (bluesky, linkedin, mastodon, x). Here the share multiplies the owner's weekly cap (STRATEGY s4 and
+// pipeline_flags.social_channel_caps for the Buffer channels, SOCIAL_WEEKLY_CAP for Bluesky): share 1 is the cap, 0.5 half
+// of it, 0.25 one post a week at most (the re-test week), 0 holds every post (STOP). A share never raises a cap. A share
+// row older than 3 days (the scorecard stopped) reads as 1 for every channel, so a dead loop can never silence a channel.
+var ATTENTION_SHARE_STALE_MS = 3 * 864e5;
+async function attentionShares(env) {
+  const out = { bluesky: 1, linkedin: 1, mastodon: 1, twitter: 1, day: null, source: 'default' };
+  try {
+    const r = await env.DB.prepare("SELECT value, updated_at FROM ops_config WHERE key='attention_channel_share'").first();
+    const o = r && r.value ? JSON.parse(String(r.value)) : null;
+    if (!o || typeof o !== 'object') return out;
+    const ts = String(r.updated_at || '').trim();
+    const age = ts ? Date.now() - Date.parse(/[zZ]$|[+-]\d\d:\d\d$/.test(ts) ? ts : ts.replace(' ', 'T') + 'Z') : NaN;
+    if (!(age <= ATTENTION_SHARE_STALE_MS)) { out.source = 'stale-default'; out.stale_day = o.day || null; return out; }
+    for (const k of ['bluesky', 'linkedin', 'mastodon']) { const v = Number(o[k]); if (Number.isFinite(v)) out[k] = Math.max(0, Math.min(1, v)); }
+    const x = Number(o.x); if (Number.isFinite(x)) out.twitter = Math.max(0, Math.min(1, x));
+    out.day = o.day || null; out.source = 'ops_config';
+  } catch (e) {}
+  return out;
+}
+// Pure: the effective weekly cap. A positive share keeps at least one slot (a re-test needs one post), share 0 is 0.
+function shareCap(cap, share) {
+  const c = Number(cap) || 0, s = Number.isFinite(Number(share)) ? Math.max(0, Math.min(1, Number(share))) : 1;
+  if (c <= 0 || s <= 0) return 0;
+  return Math.max(1, Math.floor(c * s));
+}
+// Pure-ish: posted rows go noticed-first (the paper's bot-filtered external loads over 28 days plus the Bluesky engagement
+// of the thread's own post, from reach_signals); queued selected rows keep their place ahead. A failed read keeps the
+// incoming order.
+async function attentionOrder(env, rows) {
+  const posted = rows.filter(function(r) { return r.status === 'posted'; }), queued = rows.filter(function(r) { return r.status !== 'posted'; });
+  if (posted.length < 2) return rows;
+  try {
+    const slugs = {}, uris = {};
+    for (const r of posted) { const s = learnerLinkSlug(r.posts); if (s) slugs[s] = 1; const u = blueskyUriOf(r.post_uri); if (u) uris[u] = 1; }
+    const sl = Object.keys(slugs), ur = Object.keys(uris), ext = {}, eng = {};
+    if (sl.length) {
+      const q = await env.DB.prepare("SELECT entity_id, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type = 'paper' AND metric = 'external_pageviews' AND date >= date('now', '-28 days') AND entity_id IN (" + sl.map(function() { return '?'; }).join(',') + ") GROUP BY entity_id").bind(...sl).all();
+      for (const x of (q && q.results) || []) ext[x.entity_id] = Number(x.v) || 0;
+    }
+    if (ur.length) {
+      const q = await env.DB.prepare("SELECT entity_id, metric, MAX(value) AS v FROM reach_signals WHERE source = 'bluesky' AND entity_type = 'post' AND metric IN ('likes', 'reposts', 'quotes') AND entity_id IN (" + ur.map(function() { return '?'; }).join(',') + ") GROUP BY entity_id, metric").bind(...ur).all();
+      for (const x of (q && q.results) || []) eng[x.entity_id] = (eng[x.entity_id] || 0) + (Number(x.v) || 0);
+    }
+    const of = function(r) { const s = learnerLinkSlug(r.posts), u = blueskyUriOf(r.post_uri); return (s ? ext[s] || 0 : 0) + (u ? eng[u] || 0 : 0); };
+    const scored = posted.map(function(r, i) { return { r: r, i: i, a: of(r) }; }).sort(function(a, b) { return b.a - a.a || a.i - b.i; });
+    for (const x of scored) x.r.attention = x.a;
+    return queued.concat(scored.map(function(x) { return x.r; }));
+  } catch (e) { return rows; }
+}
 async function capEpoch(env) {
   try { const ef = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_cap_epoch'").first(); if (ef && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(ef.value || '').trim())) return String(ef.value).trim(); } catch (e) {}
   return '0';
@@ -995,8 +1054,10 @@ function channelText(channel, posts, link, title) {
 // Candidate rows for a channel: queued selected rows oldest first, then rows posted since the cadence epoch newest first;
 // q08 essays and anything the channel carried in CHANNEL_REPEAT_DAYS are skipped (the caller applies the content gates).
 async function pickChannelRow(env, channel, epoch) {
-  const rows = (await env.DB.prepare("SELECT id, slug, title, posts, status, doi, notes, flags, posted_at FROM social_threads WHERE (status='queued' AND (COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%')) OR (status='posted' AND posted_at >= ?1 AND posted_at >= datetime('now','-60 days')) ORDER BY CASE WHEN status='queued' THEN 0 ELSE 1 END, CASE WHEN status='queued' THEN id ELSE 0 END ASC, posted_at DESC LIMIT 24").bind(epoch === '0' ? '2026-10-01 00:00:00' : epoch).all()).results || [];
-  for (const row of rows) {
+  const rows = (await env.DB.prepare("SELECT id, slug, title, posts, status, doi, notes, flags, posted_at, post_uri FROM social_threads WHERE (status='queued' AND (COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%')) OR (status='posted' AND posted_at >= ?1 AND posted_at >= datetime('now','-60 days')) ORDER BY CASE WHEN status='queued' THEN 0 ELSE 1 END, CASE WHEN status='queued' THEN id ELSE 0 END ASC, posted_at DESC LIMIT 24").bind(epoch === '0' ? '2026-10-01 00:00:00' : epoch).all()).results || [];
+  // ATTENTION-SHARE-1: noticed items first among the posted rows.
+  const ordered = await attentionOrder(env, rows);
+  for (const row of ordered) {
     if (!row.slug || /^q08-/.test(String(row.slug))) continue;
     if (await channelCarried(env, channel, row.slug)) continue;
     return row;
@@ -1015,11 +1076,13 @@ async function drainChannels(env, opts) {
   } catch (e) { return { skipped: 'gate-error', channels: {} }; }
   const caps = await channelCaps(env);
   const epoch = await capEpoch(env);
-  out.caps = caps;
+  const shares = await attentionShares(env);
+  out.caps = caps; out.shares = shares;
   let bc = null, liMode = null;
   for (const channel of CHANNEL_ORDER) {
-    const cap = caps[channel];
-    if (!cap) { out.channels[channel] = 'held:cap-0'; continue; }
+    // ATTENTION-SHARE-1: the owner's cap times the channel's attention share (never above the cap).
+    const cap = shareCap(caps[channel], shares[channel]);
+    if (!cap) { out.channels[channel] = caps[channel] && shares[channel] === 0 ? 'held:attention-stop' : 'held:cap-0'; continue; }
     let w;
     try { w = await channelWindow(env, channel, epoch); } catch (e) { out.channels[channel] = 'held:gate-error'; continue; }
     if (w.n >= cap) { out.channels[channel] = 'held:weekly-cap(' + w.n + '/' + cap + ')'; continue; }
@@ -1163,7 +1226,10 @@ function weeklyCap(env) {
 }
 async function socialGate(env, who) {
   await ensureSocialSchema(env);
-  const cap = weeklyCap(env);
+  // ATTENTION-SHARE-1 (0.8.0): the attention share scales the Bluesky cap, never above it; share 0 holds every post.
+  const shares = await attentionShares(env);
+  const cap = shareCap(weeklyCap(env), shares.bluesky);
+  if (shares.bluesky === 0) { console.log('ATTENTION-SHARE-1 ' + who + ': bluesky share 0 (scorecard ' + (shares.day || 'n/a') + '), holding every post'); return { allowed: 0, reason: 'attention-stop', cap: 0, share: 0 }; }
   try {
     const f = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_paused'").first();
     if (f && String(f.value).trim() === '1') {
@@ -1942,21 +2008,29 @@ function learnerEngagementOf(rows, nPosts) {
 }
 async function learnerVisits(env, slug, d0) {
   if (!slug) return { visits: null, status: 'no papers.qnfo.org link' };
-  try {
-    const r = await env.DB.prepare("SELECT date, MAX(CASE WHEN entity_type = 'site' THEN 1 ELSE 0 END) AS rd, SUM(CASE WHEN entity_type = 'paper' THEN value ELSE 0 END) AS v FROM reach_signals WHERE source = 'cf-rum' AND metric = 'pageviews' AND date >= ?2 AND date <= ?3 AND ((entity_type = 'site' AND entity_id = '(all)') OR (entity_type = 'paper' AND entity_id = ?1)) GROUP BY date").bind(String(slug), learnerShiftDay(d0, -7), learnerShiftDay(d0, 2)).all();
+  // ATTENTION-LOOP-1 (0.8.0): the bot-filtered per-item rows (source cf-rum-human) when the three window days carry them,
+  // else the unfiltered rows as before; the source is named in the status.
+  const read = async function(source) {
+    const r = await env.DB.prepare("SELECT date, MAX(CASE WHEN entity_type = 'site' THEN 1 ELSE 0 END) AS rd, SUM(CASE WHEN entity_type = 'paper' THEN value ELSE 0 END) AS v FROM reach_signals WHERE source = ?4 AND metric = 'pageviews' AND date >= ?2 AND date <= ?3 AND ((entity_type = 'site' AND entity_id = '(all)') OR (entity_type = 'paper' AND entity_id = ?1)) GROUP BY date").bind(String(slug), learnerShiftDay(d0, -7), learnerShiftDay(d0, 2), source).all();
     const by = {};
     for (const x of (r && r.results) || []) by[x.date] = { read: Number(x.rd) === 1, v: Number(x.v) || 0 };
+    return by;
+  };
+  try {
+    let source = 'cf-rum-human', by = await read(source);
+    const windowRead = function(m) { for (let k = 0; k < 3; k++) { const d = m[learnerShiftDay(d0, k)]; if (!d || !d.read) return false; } return true; };
+    if (!windowRead(by)) { source = 'cf-rum'; by = await read(source); }
     let win = 0;
     for (let k = 0; k < 3; k++) {
       const d = by[learnerShiftDay(d0, k)];
-      if (!d || !d.read) return { visits: null, status: 'RUM day ' + learnerShiftDay(d0, k) + ' not ingested' };
+      if (!d || !d.read) return { visits: null, status: 'RUM day ' + learnerShiftDay(d0, k) + ' not ingested', source: source };
       win += d.v;
     }
     let bs = 0, bn = 0;
     for (let k = 1; k <= 7; k++) { const d = by[learnerShiftDay(d0, -k)]; if (d && d.read) { bs += d.v; bn++; } }
-    if (bn < 3) return { visits: null, status: 'baseline has ' + bn + ' ingested days (needs 3)', window_views: win };
+    if (bn < 3) return { visits: null, status: 'baseline has ' + bn + ' ingested days (needs 3)', window_views: win, source: source };
     const base = bs / bn;
-    return { visits: Math.max(0, Math.round((win - 3 * base) * 100) / 100), window_views: win, baseline_daily: Math.round(base * 100) / 100, baseline_days: bn, status: 'ok' };
+    return { visits: Math.max(0, Math.round((win - 3 * base) * 100) / 100), window_views: win, baseline_daily: Math.round(base * 100) / 100, baseline_days: bn, status: 'ok', source: source };
   } catch (e) {
     return { visits: null, status: 'reach_signals unreadable: ' + String(e && e.message || e).slice(0, 100) };
   }
@@ -1995,6 +2069,19 @@ async function learnerWeeklyUpdate(env, nowMs) {
   const before = await learnerCount(env);
   await learnerDiscover(env, now);
   const out = { version: VERSION, epoch: LEARNER_EPOCH_SQL, discovered: (await learnerCount(env)) - before, credited: 0, no_data: 0, waiting: 0, rewards: [] };
+  await learnerCreditPending(env, now, out);
+  const post = await learnerPosterior(env);
+  const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM social_learner_posts WHERE status = 'pending'").first();
+  out.pending = Number((left && left.n) || 0);
+  out.rewards = out.rewards.slice(0, 10);
+  out.posterior = learnerPosteriorSummary(post);
+  out.next_week_allocation = learnerPBest(post, LEARNER_PBEST_DRAWS, learnerRng);
+  return out;
+}
+// ATTENTION-LOOP-1 (0.8.0): the credit step on its own, so it runs daily (learnerDailyCredit) as well as inside the weekly
+// update. A post is credited once (UPDATE ... WHERE status = 'pending'), whichever tick reaches it first.
+async function learnerCreditPending(env, now, out) {
+  const iso = new Date(now).toISOString();
   const pend = await env.DB.prepare("SELECT post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by FROM social_learner_posts WHERE status = 'pending' ORDER BY posted_at ASC LIMIT 60").all();
   for (const p of (pend && pend.results) || []) {
     const t0 = learnerParseTs(p.posted_at);
@@ -2024,12 +2111,24 @@ async function learnerWeeklyUpdate(env, nowMs) {
       'qnfo-social learner: ' + p.post_key + ' (' + p.topic + ', ' + p.format + ', ' + (p.slot || 'no slot') + ') e=' + eng.e + ' v=' + vis.visits + ' reward ' + rw.reward,
       { post_key: p.post_key, arms: arms, update: { alpha_plus: rw.reward, beta_plus: lr4(1 - rw.reward) }, detail: detail }, now);
   }
-  const post = await learnerPosterior(env);
+  return out;
+}
+// Daily, 07:00Z after the engagement collector: file new posts and credit every pending post whose 72h window closed, so the
+// posterior that chooses tomorrow's post carries this week's rewards (the weekly update alone credited 7+ days late; on
+// 2026-10-06 the two learner rows of 10-02 and 10-03 still read pending). Records social-learner-credit-<day>.
+async function learnerDailyCredit(env, nowMs) {
+  const now = nowMs || Date.now();
+  const lrn = await learnerEnabled(env);
+  if (!lrn.on) return { disabled: true, reason: lrn.reason };
+  await ensureLearnerSchema(env);
+  const before = await learnerCount(env);
+  await learnerDiscover(env, now);
+  const out = { version: VERSION, discovered: (await learnerCount(env)) - before, credited: 0, no_data: 0, waiting: 0, rewards: [] };
+  await learnerCreditPending(env, now, out);
   const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM social_learner_posts WHERE status = 'pending'").first();
   out.pending = Number((left && left.n) || 0);
   out.rewards = out.rewards.slice(0, 10);
-  out.posterior = learnerPosteriorSummary(post);
-  out.next_week_allocation = learnerPBest(post, LEARNER_PBEST_DRAWS, learnerRng);
+  await recordSocialRun(env, 'learner-credit', 'ok', out, now);
   return out;
 }
 // Mondays, or any later day once the last completed update is 7+ days old. Records social-learner-update-<day>.
@@ -2178,6 +2277,8 @@ export default {
       // switched off), then the learner's weekly update (Mondays, or catch-up), which records its own ledger row.
       try { eo.rate_30d = await learnerEngagementRate(env); } catch (e) { eo.rate_30d = { error: String(e && e.message || e).slice(0, 160) }; }
       await recordSocialRun(env, 'engagement', engagementRunStatus(eo), eo);
+      // ATTENTION-LOOP-1 (0.8.0): credit closed windows every day, then the weekly allocation when due.
+      try { await learnerDailyCredit(env); } catch (e) { console.log('ATTENTION-LOOP-1 daily credit threw: ' + String(e && e.message || e).slice(0, 200)); }
       try { await learnerWeeklyTick(env); } catch (e) { console.log('SOCIAL-DISTRIBUTION-LEARNER-1 weekly tick threw: ' + String(e && e.message || e).slice(0, 200)); }
       return;
     }
@@ -2209,7 +2310,7 @@ export default {
     const p = url.pathname, m = request.method;
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Ops-Key' };
     if (m === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, capabilities: ["bluesky-posting", "linkedin-via-buffer", "dissemination-drain", "engagement-collection", "profile-sync", "buffer-channel-audit", "distribution-learner", "channel-drain"], limitations: ["every route except /health and GET /learner needs the social token", "posting, the dissemination drain, profile sync and the audits run only on its crons (every 2 hours at :30, 06:00 and 07:00)", "LinkedIn is reached only through the Buffer queue, never LinkedIn's API; pipeline_flags.linkedin_mode 'draft' keeps those posts as drafts", "the channel drain posts to LinkedIn, Mastodon and X inside their own weekly caps (3, 2, 2; pipeline_flags.social_channel_caps) spread over the week, never the same slug twice in 30 days on one channel; Bluesky keeps its own cap", "the profile sync never overwrites a bio the owner edited", "the distribution learner only chooses which queued post goes next and in which slot, inside the weekly cap and content gates; ops_config social_learner_enabled=0 turns it off"], handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    if (p === '/health') return new Response(JSON.stringify({ ok: true, worker: 'qnfo-social', version: VERSION, capabilities: ["bluesky-posting", "linkedin-via-buffer", "dissemination-drain", "engagement-collection", "profile-sync", "buffer-channel-audit", "distribution-learner", "channel-drain", "attention-share"], limitations: ["every route except /health and GET /learner needs the social token", "posting, the dissemination drain, profile sync and the audits run only on its crons (every 2 hours at :30, 06:00 and 07:00)", "LinkedIn is reached only through the Buffer queue, never LinkedIn's API; pipeline_flags.linkedin_mode 'draft' keeps those posts as drafts", "the channel drain posts to LinkedIn, Mastodon and X inside their own weekly caps (3, 2, 2; pipeline_flags.social_channel_caps) spread over the week, never the same slug twice in 30 days on one channel; Bluesky keeps its own cap", "the profile sync never overwrites a bio the owner edited", "the distribution learner only chooses which queued post goes next and in which slot, inside the weekly cap and content gates; ops_config social_learner_enabled=0 turns it off", "ATTENTION-SHARE-1: ops_config attention_channel_share (qnfo-fleet-dashboard scorecard, daily) scales each channel cap down to its attention share, never above the owner cap; a share older than 3 days reads as 1"], handle: env.BSKY_HANDLE }), { headers: { 'Content-Type': 'application/json', ...cors } });
     // SOCIAL-DISTRIBUTION-LEARNER-1 (OPEN-ACCESS-1): the learner's posterior, next decision and recent rewards, read-only.
     if (p === '/learner' && m === 'GET') {
       let body;
@@ -2413,5 +2514,5 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
 export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
-  learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick,
+  learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder,
   learnerEngagementRate, learnerReport, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF };
