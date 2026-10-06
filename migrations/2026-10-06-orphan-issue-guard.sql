@@ -17,6 +17,9 @@
 -- (5) a live work_claims row on the issue (a session is on it now); (6) an open human_actions card with source issue:<id>,
 -- only for a decision or credential the owner alone holds. A needs-machine-probe placeholder contract is not a next action.
 -- Idempotent: CREATE IF NOT EXISTS, INSERT OR IGNORE, guarded INSERT, guarded UPDATE.
+-- Re-applied 2026-10-06 (MIGRATION-APPLY-FAILED-1, agent_issues 2063, migration_runs on commit d65e2003): statement 2 was
+-- refused by the D1 trigger METRIC-CADENCE-CANONICAL-1 because refresh_cadence carried a parenthesised note; it is the
+-- canonical token hourly now and the trigger names moved into source_of_truth. Statement 1 (the view) had applied.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DROP TRIGGER IF EXISTS metric_orphan_issues_au; DROP TRIGGER IF EXISTS metric_orphan_issues_ai; DROP VIEW IF EXISTS v_issues_no_next_action; DELETE FROM metric_registry WHERE metric = 'issues_without_next_action'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'issues_without_next_action'; DELETE FROM remediation_contracts WHERE class = 'orphan-issue-guard-1';
@@ -39,12 +42,12 @@ WHERE a.status = 'open'
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('issues_without_next_action', 'operational', 'guard',
   'count(v_issues_no_next_action): open agent_issues with none of: a remediation_contracts row with status active or holding, a code-task line, a session-task line, an unfinished code_tasks row naming [issue #id], a live work_claims row on the issue, an open human_actions card with source issue:<id>. A needs-machine-probe placeholder is not a next action.',
-  'qnfo-audit.v_issues_no_next_action (ORPHAN-ISSUE-GUARD-1, migrations/2026-10-06-orphan-issue-guard.sql)',
+  'qnfo-audit.v_issues_no_next_action (ORPHAN-ISSUE-GUARD-1, migrations/2026-10-06-orphan-issue-guard.sql), refreshed by the D1 triggers metric_orphan_issues_au and metric_orphan_issues_ai on every open_agent_issues write',
   '11 of 75 open issues at 2026-10-06T10:55Z, before the same-hour fixes',
   '0 at every refresh',
   'qnfo-fleet-control',
   'trigger gt 0 -> one METRIC-TRIGGER issue listing the lever per orphan (migrations/2026-10-06-orphan-issue-guard.sql)',
-  'hourly (D1 triggers metric_orphan_issues_au/ai on the open_agent_issues refresh)', '> 0', '> 5',
+  'hourly', '> 0', '> 5',
   CAST((SELECT COUNT(*) FROM v_issues_no_next_action) AS TEXT), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'MEASURED', 'computed');
 
 CREATE TRIGGER IF NOT EXISTS metric_orphan_issues_au AFTER UPDATE ON metric_registry
