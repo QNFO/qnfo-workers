@@ -734,6 +734,10 @@ jobs:
           if [ "$EVENT" = "pull_request" ]; then BASE="origin/$BASE_REF"; else BASE="HEAD^"; fi
           files=$(git diff --name-only --diff-filter=AM "$BASE" HEAD -- 'migrations/*.sql' 2>/dev/null || true)
           if [ -n "$files" ]; then python3 scripts/apply_migrations.py --check $files; else echo "no migration changed"; fi
+      # PROBE-TEMPLATES-1 (T5.2): a METRIC-TRIGGER issue's contract is born with its trigger's probe (D1 trigger
+      # contract_probe_templates_v1); the suite replays the migration on a replica of the production schema.
+      - name: PROBE-TEMPLATES-1 offline suite (migrations/2026-10-06-probe-templates.sql)
+        run: python3 scripts/probe_templates_test.py
       - name: DANGLING-BINDING-10143-1 offline check (qnfo-ops 2.38.43)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-ops/dangling-10143.test.mjs
