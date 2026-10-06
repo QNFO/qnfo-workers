@@ -722,6 +722,18 @@ jobs:
       - name: DELETE-AFTER-UNBIND-1 offline suite (cf_ops_actions delete-worker)
         if: ${{ !cancelled() }}
         run: python3 scripts/cf_ops_delete_worker_test.py
+      # MIGRATION-RUNNER-1 (T5.3): a migration that opts in with "-- APPLY-BY: ci" is applied by apply-migrations.yml when
+      # it merges; here every added or changed migration must pass the same header checks (DB, Rollback, BACKUP for a
+      # DELETE or DROP, complete statements) without touching D1.
+      - name: MIGRATION-RUNNER-1 offline suite and header check (scripts/apply_migrations.py)
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          python3 scripts/apply_migrations_test.py
+          if [ "$EVENT" = "pull_request" ]; then BASE="origin/$BASE_REF"; else BASE="HEAD^"; fi
+          files=$(git diff --name-only --diff-filter=AM "$BASE" HEAD -- 'migrations/*.sql' 2>/dev/null || true)
+          if [ -n "$files" ]; then python3 scripts/apply_migrations.py --check $files; else echo "no migration changed"; fi
       - name: DANGLING-BINDING-10143-1 offline check (qnfo-ops 2.38.43)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-ops/dangling-10143.test.mjs
