@@ -123,7 +123,7 @@ ok(bo.ok === true && bo.taste.active === false, "a malformed feedback table fail
 
 const h = await (await W.fetch(new Request("https://radar-hub.example/health"), {}, {})).json();
 const atLeast = (v, min) => { const a = String(v).split(/[.-]/).map(Number), b = min.split(".").map(Number); for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0); } return true; }; // SUITE-RUNNER-1: the feature shipped in 1.2.4; later versions keep it
-ok(atLeast(h.version, "1.2.4") && new RegExp('var VERSION = "' + String(h.version).replace(/[.]/g, "\\.") + '"').test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "hub /health reports its own VERSION, 1.2.4 or later");
+ok(atLeast(h.version, "1.2.4") && h.version === (/var VERSION = "([^"]+)"/.exec(readFileSync(new URL("./worker.js", import.meta.url), "utf8")) || [])[1], "hub /health reports its own VERSION, 1.2.4 or later");
 // RADAR-TASTE-SHRINK-1 (#1952): prior shrinkage, early floor, and the half-a-day safety valve
 {
   const prior = (x) => x.sym.taste.prior;

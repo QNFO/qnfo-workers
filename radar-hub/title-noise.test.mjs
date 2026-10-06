@@ -133,6 +133,6 @@ console.log("live Stedelijk posted: " + (st ? st.title : "none (not cleared by r
 
 const h = await (await W.fetch(new Request("https://radar-hub.example/health"), {}, {})).json();
 const atLeast = (v, min) => { const a = String(v).split(/[.-]/).map(Number), b = min.split(".").map(Number); for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0); } return true; }; // SUITE-RUNNER-1: the feature shipped in 1.2.4; later versions keep it
-ok(atLeast(h.version, "1.2.4") && new RegExp('var VERSION = "' + String(h.version).replace(/[.]/g, "\\.") + '"').test(readFileSync(new URL("./worker.js", import.meta.url), "utf8")), "hub /health reports its own VERSION, 1.2.4 or later");
+ok(atLeast(h.version, "1.2.4") && h.version === (/var VERSION = "([^"]+)"/.exec(readFileSync(new URL("./worker.js", import.meta.url), "utf8")) || [])[1], "hub /health reports its own VERSION, 1.2.4 or later");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
