@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "0.7.2-cancelled-ics"; // 0.7.2 CAL-CANCELLED-ICS-1 (#1881 gap D, pillar personal): a calendar row with status='cancelled' (a trip cancelled by qnfo-email) is published in the personal feed as STATUS:CANCELLED with its uid, summary and dates only, so Outlook removes the copy it holds; host and qnfo feeds still omit it.
+var VERSION = "0.7.3-oq-trip-window"; // 0.7.3 OQ-TRIP-WINDOW-1 (#1951, pillar personal): queueOwnerQuestions decides local vs away from the calendar's own trip windows (domain travel / trip- uid / travel-sync-key rows outside the Amsterdam area, end exclusive) and an explicit Amsterdam-area list instead of a foreign-country regex; GET /feedback gains after_id (ascending, bounded, next_after_id) so a consumer can drain more than 500 rows without skipping any (CAL-FEEDBACK-PAGE-1). // 0.7.2 CAL-CANCELLED-ICS-1 (#1881 gap D, pillar personal): a calendar row with status='cancelled' (a trip cancelled by qnfo-email) is published in the personal feed as STATUS:CANCELLED with its uid, summary and dates only, so Outlook removes the copy it holds; host and qnfo feeds still omit it.
 // 0.7.1 0.7.1 CAL-CALLER-PROPS-1: a service-binding caller named by ctx.props.caller is authorized like a CAL_TOKEN bearer (radar-hub has no CAL_TOKEN secret, so the personal radar posted nothing after 2026-09-23).
 // NOTES-INTAKE-FOLD-1 (2026-10-01, issue 1639): notes-intake (0.1.5, the server-side Obsidian vault pipeline) disappeared
 // unrecorded around 2026-09-25 - last notes_intake_runs row 2026-09-25T10:30Z - and is folded in here instead of being
@@ -488,10 +488,45 @@ __name(fbHandle, "fbHandle");
 //   after-event  ref=<calendar id>  a confirmed timed suggestion whose end passed 1-6h ago: "Did you go to X?" + signed link
 //   triage       ref=<ISO week>     on Sundays (Amsterdam), up to 5 tentative personal-radar suggestions within 14 days
 // Only FB_SOURCES rows qualify (their signed page refuses every other source); manual rows, trip- uids, all-day or
-// date-only rows and places outside Amsterdam are skipped. No model call.
+// date-only rows, rows inside a trip window and places outside the Amsterdam area are skipped (OQ-TRIP-WINDOW-1 below). No model call.
 var OQ_DDL = "CREATE TABLE IF NOT EXISTS owner_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))";
 var OQ_DEFAULT_LEN_MS = 2 * 36e5;
-var OQ_OUTSIDE_RE = /\b(poland|polska|krak[oó]w|wroc[łl]aw|warsaw|warszawa|gda[nń]sk|germany|berlin|london|paris|brussels|belgium|rotterdam|utrecht|den haag|the hague|haarlem|leiden|eindhoven|groningen|italy|tuscany|castiglioncello|spain|france|uk)\b/i;
+// OQ-TRIP-WINDOW-1 (0.7.3): "is this event local?" is decided from the calendar itself, not from a list of foreign places.
+//  1. Trip windows: confirmed personal rows with domain 'travel', a 'trip-' uid or a travel-sync-key note, whose location is
+//     not in the Amsterdam area (a hotel, flight or "Away:" banner). Window = [start date, end date), end exclusive, so the
+//     return day is local again; rows without a later end date open no window; overlapping rows merge.
+//  2. An event inside a trip window is not asked about (he is away; Amsterdam-located ones included).
+//  3. Outside a window, a location is local only when it matches OQ_AMS_AREA_RE (Amsterdam and its neighbouring municipalities,
+//     Dutch and English spellings, postcodes 1000-1109, 1111-1115, 1180-1188, and well-known venues). A location that names
+//     somewhere else is skipped; an empty location is asked about (the radar often omits it).
+var OQ_AMS_AREA_RE = /amsterdam|a'dam|\bamstelveen\b|\bdiemen\b|\bduivendrecht\b|\bouderkerk\b|\bzuidoost\b|\bnieuw-west\b|\bbimhuis\b|\bconcertgebouw\b|\bparadiso\b|\bmelkweg\b|\bmuziekgebouw\b|\bzaal 100\b|\brijksmuseum\b|\bstedelijk\b|\bvan gogh museum\b|\bopenluchttheater\b|\bOBA\b/i;
+var OQ_AMS_POSTCODE_RE = /\b(?:10\d\d|110\d|111[1-5]|118[0-8])\s?[A-Z]{2}\b/;
+function oqIsAmsterdamArea(loc) {
+  return OQ_AMS_AREA_RE.test(String(loc || "")) || OQ_AMS_POSTCODE_RE.test(String(loc || ""));
+}
+__name(oqIsAmsterdamArea, "oqIsAmsterdamArea");
+async function oqTripWindows(env) {
+  var rows = await runQuery(env, "SELECT location, dtstart, dtend FROM calendar WHERE plane='personal' AND status!='cancelled' AND (domain='travel' OR uid LIKE 'trip-%' OR description LIKE '%travel-sync-key%')", []);
+  var w = [];
+  for (var r of rows) {
+    if (oqIsAmsterdamArea(r.location)) continue;
+    var a = String(r.dtstart || "").slice(0, 10), b = String(r.dtend || "").slice(0, 10);
+    if (!/^\d{4}-\d\d-\d\d$/.test(a) || !/^\d{4}-\d\d-\d\d$/.test(b) || b <= a) continue;
+    w.push([a, b]);
+  }
+  w.sort(function (x, y) { return x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0; });
+  var out = [];
+  for (var x of w) {
+    if (out.length && x[0] <= out[out.length - 1][1]) { if (x[1] > out[out.length - 1][1]) out[out.length - 1][1] = x[1]; } else out.push(x);
+  }
+  return out;
+}
+__name(oqTripWindows, "oqTripWindows");
+function oqInWindow(windows, dateStr) {
+  for (var w of windows) if (dateStr >= w[0] && dateStr < w[1]) return true;
+  return false;
+}
+__name(oqInWindow, "oqInWindow");
 var AMS_FMT = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Amsterdam", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", weekday: "short" });
 function amsParts(ms) {
   var o = {};
@@ -561,11 +596,13 @@ async function queueOwnerQuestions(env) {
   var srcIn = FB_SOURCES.map(function () { return "?"; }).join(",");
   // (a) after-event
   var rows = await runQuery(env, "SELECT id, uid, title, dtstart, dtend, all_day, location, source FROM calendar WHERE plane='personal' AND status='confirmed' AND all_day=0 AND source IN (" + srcIn + ") AND dtstart>=? AND dtstart<=?", FB_SOURCES.concat([new Date(now - 3 * 864e5).toISOString().slice(0, 10), new Date(now + 864e5).toISOString().slice(0, 10)]));
+  var tripWin = await oqTripWindows(env);
   for (var r of rows) {
     if (r.source === "manual" || String(r.uid || "").indexOf("trip-") === 0 || (r.uid || "").indexOf("-trip-") >= 0) continue;
-    if (r.location && OQ_OUTSIDE_RE.test(r.location) && !/amsterdam/i.test(r.location)) continue;
     var st = oqParseWhen(r.dtstart);
     if (st == null) continue;
+    if (oqInWindow(tripWin, amsDateStr(st))) continue;
+    if (String(r.location || "").trim() && !oqIsAmsterdamArea(r.location)) continue;
     var en = oqParseWhen(r.dtend);
     if (en == null || en <= st) en = st + OQ_DEFAULT_LEN_MS;
     if (en > now - 36e5 || en < now - 6 * 36e5) continue;
@@ -654,6 +691,15 @@ var worker_default = {
     if (path === "/feedback" && method === "GET") {
       const lim = Math.min(500, Math.max(1, parseInt(url.searchParams.get("limit") || "200", 10) || 200));
       const since = url.searchParams.get("since") || "1970-01-01";
+      // CAL-FEEDBACK-PAGE-1: with after_id the page is the next `lim` rows by id, ascending, so a consumer that follows
+      // next_after_id while more=true sees every row exactly once. Without it the old newest-first page is unchanged.
+      if (url.searchParams.has("after_id")) {
+        const after = Math.max(0, parseInt(url.searchParams.get("after_id") || "0", 10) || 0);
+        const page = await runQuery(env, "SELECT * FROM calendar_feedback WHERE id>? AND ts>=? ORDER BY id ASC LIMIT ?", [after, since, lim + 1]);
+        const more = page.length > lim;
+        const rows = page.slice(0, lim);
+        return json({ ok: true, count: rows.length, order: "asc", more, next_after_id: rows.length ? rows[rows.length - 1].id : after, feedback: rows });
+      }
       const rows = await runQuery(env, "SELECT * FROM calendar_feedback WHERE ts>=? ORDER BY id DESC LIMIT ?", [since, lim]);
       return json({ ok: true, count: rows.length, feedback: rows });
     }
