@@ -936,14 +936,20 @@ def unbind_service(target: str, acct: str, token: str) -> int:
         emit({"action": "unbind-service", "worker": worker, "binding": binding, "ok": False, "refused": "not a service binding"})
         return 3
     svc = str(hit.get("service") or "").strip()
+    target_live = False
     if svc:
         s2, _ = call("GET", f"/accounts/{acct}/workers/scripts/{svc}/settings", token)
-        if s2 != 404:
-            emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target worker still exists (settings HTTP " + str(s2) + ")"})
+        marked = os.path.isdir(svc) and any(os.path.isfile(os.path.join(svc, m)) for m in ("RETIRED", "FOLDED"))
+        # UNBIND-BEFORE-DELETE-1 (#1756): delete-worker refuses while a live binder targets the worker (DELETE-AFTER-UNBIND-1),
+        # so a target that is still deployed may be unbound when its repo directory is RETIRED or FOLDED (it is on its way
+        # out); an unmarked live target is still refused.
+        if s2 != 404 and not marked:
+            emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target worker still exists (settings HTTP " + str(s2) + ") and its repo directory has no RETIRED/FOLDED marker"})
             return 3
-        if os.path.isdir(svc) and not any(os.path.isfile(os.path.join(svc, m)) for m in ("RETIRED", "FOLDED")):
+        if s2 == 404 and os.path.isdir(svc) and not marked:
             emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "ok": False, "refused": "the target's repo directory has no RETIRED/FOLDED marker"})
             return 3
+        target_live = s2 != 404
     d = worker_dir(worker)
     wt = open(os.path.join(d, "wrangler.toml"), encoding="utf-8").read() if d else None
     if wt is None:
@@ -982,7 +988,7 @@ def unbind_service(target: str, acct: str, token: str) -> int:
     st3, j3 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/settings", token)
     after = (j3.get("result") or {}).get("bindings") or []
     ok = bool(pj.get("success")) and not any(b.get("name") == binding for b in after) and len(after) == len(bindings) - 1
-    emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "repoint_to": repoint,
+    emit({"action": "unbind-service", "worker": worker, "binding": binding, "service": svc, "target_still_deployed": target_live, "repoint_to": repoint,
           "next_step": ("a canonical deploy of " + worker + " installs the declared " + binding + " -> " + repoint) if repoint and ok else None,
           "protected_repair": worker in PROTECTED, "exports": sorted(exports),
           "code_mentions_binding": bool(re.search(r"\b" + re.escape(binding) + r"\b", src)), "ok": ok, "http": pst,
