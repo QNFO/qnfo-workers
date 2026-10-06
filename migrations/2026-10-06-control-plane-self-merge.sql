@@ -14,12 +14,12 @@
 
 INSERT INTO ops_config (key, value, note, updated_at)
 SELECT 'control_plane_self_merge', 'on',
-  'CONTROL-PLANE-SELF-MERGE-1 (owner directive 2026-10-06): the stale-PR lane merges a green, quiet session pull request that changes a control-plane worker; canonical-deploy.yml canaries /health and reverts a push that does not arrive. off restores CONTROL-PLANE-MANUAL-1.',
+  'CONTROL-PLANE-SELF-MERGE-1 (owner directive 2026-10-06): the stale-PR lane merges a green, quiet session pull request that changes a control-plane worker; canonical-deploy.yml canaries /health and reverts a push that does not arrive, then dispatches the deploy of the revert (REVERT-REDEPLOY-1). The canary proves that the VERSION arrived, not that the worker works: a change that keeps /health up but breaks a cron step or the lane is for LOOP-WATCH-1 and the metric triggers. off restores CONTROL-PLANE-MANUAL-1.',
   datetime('now')
 WHERE NOT EXISTS (SELECT 1 FROM ops_config WHERE key = 'control_plane_self_merge');
 
 INSERT INTO human_responses (key, kind, note, until, ts, issue_id, credential)
 SELECT 'ha:control-plane-automerge-scope', 'note',
-  'SUPERSEDED 2026-10-06 by the owner directive of 2026-10-06 (more flexibility and autonomy, proceed with all changes). Decision (a) of 2026-10-02 held because nothing could revert a bad control-plane deploy; CONTROL-PLANE-SELF-MERGE-1 adds that revert (canonical-deploy.yml canary, scripts/canary_revert.py, one level, never a revert of a revert), so control-plane session pull requests merge on their own. Workflows under .github/ still never auto-merge; the code loop still neither plans nor merges control-plane workers.',
+  'SUPERSEDED 2026-10-06. This row is a session reading of the owner directive of 2026-10-06 (verbatim: "The system needs more flexibility and more autonomy to decide for itself and make its own choices ad hoc. Proceed with all changes."), not a decision the owner wrote on this card; the owner reverses it by setting ops_config control_plane_self_merge to off. Decision (a) of 2026-10-02 held because nothing could revert a bad control-plane deploy; CONTROL-PLANE-SELF-MERGE-1 adds that revert (canonical-deploy.yml canary, scripts/canary_revert.py, one level, never a revert of a revert, redeploy dispatched), so control-plane session pull requests merge on their own. Workflows under .github/ still never auto-merge; the code loop still neither plans nor merges control-plane workers.',
   NULL, datetime('now'), 1847, 'owner-directive-2026-10-06'
 WHERE NOT EXISTS (SELECT 1 FROM human_responses WHERE key = 'ha:control-plane-automerge-scope' AND credential = 'owner-directive-2026-10-06');
