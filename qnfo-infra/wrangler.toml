@@ -13,7 +13,8 @@ enabled = true
 head_sampling_rate = 1
 
 [triggers]
-crons = ["30 6 * * *", "0 18 * * *"]
+# INDEXER-FOLD-1 (#1756): "0 4 * * *" and "5 6 * * *" run the folded qnfo-paper-indexer member (worker.js indexerMod).
+crons = ["30 6 * * *", "0 18 * * *", "0 4 * * *", "5 6 * * *"]
 
 # v1.2.0 UNIFIED RETRIEVAL ORACLE — D1 bindings (state snapshots + records)
 [[d1_databases]]

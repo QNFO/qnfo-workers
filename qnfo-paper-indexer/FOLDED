@@ -1,0 +1,16 @@
+qnfo-paper-indexer is FOLDED into qnfo-infra (2026-10-06, INDEXER-FOLD-1, agent_issues 1756, owner standing grant
+OWNER-STANDING-GRANT-1 / charter decision rule 9; fleet_budget workers was over the cap of 30).
+
+Its code runs unchanged as the member indexerMod inside qnfo-infra/worker.js (member version 3.0.13-folded) on its own two
+crons, now declared by qnfo-infra: "0 4 * * *" (citation impact) and "5 6 * * *" (render health, purge, index window). Its
+bindings map onto qnfo-infra's: LIVING_PAPER -> LIVING (living-paper), QNFO_AUDIT -> AUDIT (qnfo-audit), PAPER_VZ
+(qwav-research-v2) and AI unchanged. It keeps its own names, so index_state, impact_scores, citation_stats, the vector index
+and its metric_registry rows keep their writer and readers. Its read routes are at
+https://qnfo-infra.q08.workers.dev/indexer/health, /indexer/count, /indexer/stats and /indexer/cron/debug; the token-guarded
+/webhook, /index, /purge and /run are not exposed. It stays in the charter MVP: qnfo-fleet-control 0.4.129+
+(MVP-FOLD-AWARE-1) judges it by its host.
+
+This directory is kept for reference; edit the member in qnfo-infra/worker.js. The separate script is removed with
+cf-ops-actions delete-worker once the host is verified. canonical-deploy.yml skips any directory containing a RETIRED or
+FOLDED file. Un-folding is a charter net-zero decision recorded in a PR that removes this file, never a way to get a deploy
+through.

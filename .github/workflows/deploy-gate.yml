@@ -387,6 +387,14 @@ jobs:
       # suite drives the real scheduled handler (tick, lookback, legacy trigger, ZENODO-CATCHUP-1).
       - name: CRON-SINGLE-TRIGGER-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/single-trigger.test.mjs
+      # EMAIL-ORCH-FOLD-1 (#1756): qnfo-email-orchestrator runs as a member of qnfo-cloud-ops on the single tick.
+      - name: EMAIL-ORCH-FOLD-1 offline suite (qnfo-cloud-ops 1.20.0)
+        run: node --no-warnings qnfo-cloud-ops/email-orch-fold.test.mjs
+      # SCORER-FOLD-1 and INDEXER-FOLD-1 (#1756): qnfo-autonomy-scorer runs in qnfo-observability, qnfo-paper-indexer in qnfo-infra.
+      - name: SCORER-FOLD-1 offline suite (qnfo-observability 1.3.0)
+        run: node --no-warnings qnfo-observability/scorer-fold.test.mjs
+      - name: INDEXER-FOLD-1 offline suite (qnfo-infra 1.3.0)
+        run: node --no-warnings qnfo-infra/indexer-fold.test.mjs
       - name: ZENODO-CATCHUP-1 and tick handler offline suite (qnfo-cloud-ops)
         run: node --no-warnings qnfo-cloud-ops/zenodo-catchup.test.mjs
       # SIGNAL-INTAKE-1 (qnfo-cloud-ops 1.19.1): the research scan admits error-correction papers only with an energy
