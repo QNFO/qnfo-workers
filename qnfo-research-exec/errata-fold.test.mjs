@@ -18,7 +18,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.length === 4 && missing.filter((l) => l.startsWith("import { Buffer as Buffer")).length === 2 && missing.some((l) => l.startsWith("var VERSION = ")) && missing.some((l) => l === "export default {"),
     "every errata-hub line is in the host except its two node:buffer imports, its VERSION line and its export", missing.map((l) => l.slice(0, 60)));
-  ok(/^0\.9\.65/.test(mod.__hv) && mod.__mv === "1.4.2-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.9.65, member 1.4.2-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok(/^0\.9\.(6[5-9]|[7-9]\d|\d{3,})/.test(mod.__hv) && mod.__mv === "1.4.2-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.9.65 or later, member 1.4.2-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
   ok(/^import \{ Buffer as __ErrataBuffer \} from "node:buffer";\n/.test(src), "the host imports node:buffer once for the member");
 }
 

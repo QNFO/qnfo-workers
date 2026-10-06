@@ -211,6 +211,10 @@ jobs:
       # HUB-SWR-1 (#1910): the qnfo.org home is served from the edge cache and rebuilt in the background.
       - name: HUB-SWR-1 offline suite (qnfo-gateway)
         run: node qnfo-gateway/hub-swr.test.mjs
+      # PROMPT-CACHE-1 (pillar cost, #1795 #1780): every Workers AI wrapper sends a prefix-stable x-session-affinity key and
+      # records cached tokens (ai_cache_counters).
+      - name: PROMPT-CACHE-1 offline suite (fleet AI wrappers)
+        run: node scripts/prompt-cache.test.mjs
       # idea-hub 1.5.4: share card + iPatent link (#1919 #1920) and the stale-while-revalidate home.
       - name: IDEAS reach + SWR offline suite (idea-hub)
         run: node idea-hub/reach-swr.test.mjs
