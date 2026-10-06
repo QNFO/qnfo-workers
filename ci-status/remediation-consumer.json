@@ -1,11 +1,11 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@455b0c4332bb",
- "due": 34,
- "pass": 16,
- "fail": 17,
- "skipped": 1,
+ "verifier": "remediation-consumer@df5204b5e1fb",
+ "due": 5,
+ "pass": 2,
+ "fail": 3,
+ "skipped": 0,
  "contracts": [
   {
    "class": "TWIN-VISION-TOOLLEAK-1",
@@ -13,222 +13,6 @@
    "verdict": "pass",
    "expected": "fixed",
    "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "issue-1962",
-   "issue_id": 1962,
-   "verdict": "pass",
-   "expected": "fresh",
-   "observed": "fresh",
-   "written": true
-  },
-  {
-   "class": "issue-1981",
-   "issue_id": 1981,
-   "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
-   "written": true
-  },
-  {
-   "class": "issue-1982",
-   "issue_id": 1982,
-   "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
-   "written": true
-  },
-  {
-   "class": "issue-1983",
-   "issue_id": 1983,
-   "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
-   "written": true
-  },
-  {
-   "class": "issue-1621",
-   "issue_id": 1621,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1622",
-   "issue_id": 1622,
-   "verdict": "pass",
-   "expected": "dropped",
-   "observed": "dropped",
-   "written": true
-  },
-  {
-   "class": "issue-1623",
-   "issue_id": 1623,
-   "verdict": "fail",
-   "expected": "classified",
-   "observed": "unclassified",
-   "written": true
-  },
-  {
-   "class": "issue-1624",
-   "issue_id": 1624,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1637",
-   "issue_id": 1637,
-   "verdict": "pass",
-   "expected": "handled",
-   "observed": "handled",
-   "written": true
-  },
-  {
-   "class": "issue-1648",
-   "issue_id": 1648,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1651",
-   "issue_id": 1651,
-   "verdict": "pass",
-   "expected": "tracked",
-   "observed": "tracked",
-   "written": true
-  },
-  {
-   "class": "issue-1810",
-   "issue_id": 1810,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1919",
-   "issue_id": 1919,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1920",
-   "issue_id": 1920,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1726",
-   "issue_id": 1726,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "issue-1780",
-   "issue_id": 1780,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "EVID-1683-SPEND",
-   "issue_id": 1683,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
-  },
-  {
-   "class": "issue-1802",
-   "issue_id": 1802,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "EVID-GATE-A2-PUBLISHV2",
-   "issue_id": null,
-   "verdict": "vacuous-probe-result",
-   "expected": "assert-ok",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-1796",
-   "issue_id": 1796,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "issue-1902",
-   "issue_id": 1902,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1916",
-   "issue_id": 1916,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1955",
-   "issue_id": 1955,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1905",
-   "issue_id": 1905,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1760",
-   "issue_id": 1760,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1889",
-   "issue_id": 1889,
-   "verdict": "fail",
-   "expected": "disjoint",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1895",
-   "issue_id": 1895,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "children-open",
    "written": true
   },
   {
@@ -240,43 +24,27 @@
    "written": true
   },
   {
-   "class": "issue-2021",
-   "issue_id": 2021,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2031",
-   "issue_id": 2031,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1825",
-   "issue_id": 1825,
+   "class": "issue-2022",
+   "issue_id": 2022,
    "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1891",
-   "issue_id": 1891,
+   "class": "issue-2040",
+   "issue_id": 2040,
    "verdict": "fail",
-   "expected": "clean",
-   "observed": "pending",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "issue-1986",
-   "issue_id": 1986,
-   "verdict": "pass",
+   "class": "issue-2034",
+   "issue_id": 2034,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "stalled: 32h since the last q08 piece",
    "written": true
   }
  ],
@@ -297,8 +65,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 105943,
- "head": "455b0c4332bbe0d01bd1f31fb59555b71fb15b84",
+ "spent_ms": 15049,
+ "head": "df5204b5e1fb689d5b092887b0ca3ed63064f632",
  "job_status": "success",
- "ts": "2026-10-06T13:11:52Z"
+ "ts": "2026-10-06T15:14:28Z"
 }
