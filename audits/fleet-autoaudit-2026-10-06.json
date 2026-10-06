@@ -1,32 +1,8 @@
 {
-  "audited_at": "2026-10-06 09:26:12",
+  "audited_at": "2026-10-06 09:56:18",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [
-        "calendar-api",
-        "personal-api",
-        "qnfo-email"
-      ],
-      "waited_for": [
-        "calendar-api",
-        "personal-api",
-        "qnfo-email"
-      ]
-    },
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-research-exec"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "calendar-api",
-        "personal-api",
-        "qnfo-code-orchestrator",
-        "qnfo-email"
-      ]
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -34,26 +10,10 @@
     "content_drift": [],
     "cron_only": [],
     "cron_only_count": 0,
-    "drift": [
-      {
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.3.19-verify-parse-shape",
-        "repo": "0.3.20-intake-provenance",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
+    "drift": [],
     "live_err": [],
-    "multi_version": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-code-orchestrator/deployed-current.worker.js",
-        "declarations": "0.3.20-intake-provenance,fleet-executor/0.3.2",
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.3.19-verify-parse-shape",
-        "repo": "0.3.20-intake-provenance",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
-    "multi_version_count": 1,
+    "multi_version": [],
+    "multi_version_count": 0,
     "name_resolution": true,
     "no_health_route": [],
     "no_live_version": [],
@@ -480,16 +440,26 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 25,
+    "sync": 29,
     "sync_workers": [
+      {
+        "dir": "calendar-api",
+        "version": "0.7.3-oq-trip-window",
+        "worker": "calendar-api"
+      },
       {
         "dir": "idea-hub",
         "version": "1.5.8-diversity-cap",
         "worker": "idea-hub"
       },
       {
+        "dir": "personal-api",
+        "version": "4.8.2-ledger-page-ams-away",
+        "worker": "personal-api"
+      },
+      {
         "dir": "personal-companion",
-        "version": "1.11.0-brief-claim",
+        "version": "1.12.0-resilience",
         "worker": "personal-companion"
       },
       {
@@ -518,6 +488,11 @@
         "worker": "qnfo-cloud-ops"
       },
       {
+        "dir": "qnfo-code-orchestrator",
+        "version": "0.3.20-intake-provenance",
+        "worker": "qnfo-code-orchestrator"
+      },
+      {
         "dir": "qnfo-containers-pilot",
         "version": "1.0.11-command-exit-honest",
         "worker": "qnfo-containers-pilot"
@@ -528,8 +503,13 @@
         "worker": "qnfo-deploy-guard"
       },
       {
+        "dir": "qnfo-email",
+        "version": "2.5.6-itin-audit",
+        "worker": "qnfo-email"
+      },
+      {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.134-w0-leading-exit",
+        "version": "0.4.137-search-referrals",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -539,7 +519,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.10.0-utm-click-ledger",
+        "version": "3.10.1-discovery",
         "worker": "qnfo-gateway"
       },
       {
@@ -584,7 +564,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.67-zenodo-creator-clean",
+        "version": "0.9.68-latex-escape",
         "worker": "qnfo-research-exec"
       },
       {
@@ -604,20 +584,8 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.3.1",
+        "version": "1.3.2",
         "worker": "radar-hub"
-      },
-      {
-        "version": "2.5.6-itin-audit",
-        "worker": "qnfo-email"
-      },
-      {
-        "version": "0.7.3-oq-trip-window",
-        "worker": "calendar-api"
-      },
-      {
-        "version": "4.8.2-ledger-page-ams-away",
-        "worker": "personal-api"
       }
     ]
   },
@@ -832,9 +800,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.11.0-brief-claim",
+      "before": "1.12.0-resilience",
       "http": 200,
-      "live": "1.11.0-brief-claim",
+      "live": "1.12.0-resilience",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1058,9 +1026,9 @@
     "qnfo-code-orchestrator": {
       "before": "0.3.20-intake-provenance",
       "http": 200,
-      "live": "0.3.19-verify-parse-shape",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "0.3.20-intake-provenance",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
@@ -1168,9 +1136,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.134-w0-leading-exit",
+      "before": "0.4.137-search-referrals",
       "http": 200,
-      "live": "0.4.134-w0-leading-exit",
+      "live": "0.4.137-search-referrals",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1200,9 +1168,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.10.0-utm-click-ledger",
+      "before": "3.10.1-discovery",
       "http": 200,
-      "live": "3.10.0-utm-click-ledger",
+      "live": "3.10.1-discovery",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1384,9 +1352,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.67-zenodo-creator-clean",
+      "before": "0.9.68-latex-escape",
       "http": 200,
-      "live": "0.9.67-zenodo-creator-clean",
+      "live": "0.9.68-latex-escape",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1496,9 +1464,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.3.1",
+      "before": "1.3.2",
       "http": 200,
-      "live": "1.3.1",
+      "live": "1.3.2",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
