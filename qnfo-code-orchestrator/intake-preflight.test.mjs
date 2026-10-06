@@ -1,9 +1,11 @@
 // CODE-TASK-PREFLIGHT-1 (qnfo-code-orchestrator 0.4.0, agent_issues 2067) offline suite. In-memory D1, fetch stubbed.
-// Proves: intake refuses, before a code_tasks row or a model call, a task whose file is over the loop's cap, whose code-anchor
-// does not occur exactly once after ANCHOR-REPAIR-1, whose file is over MAX_FILE_CHARS without an anchor, or whose issue key
-// shipped in fleet_changelog within 72h (no file read then); the refused issue keeps its target as a session-task line with a
+// Proves: intake refuses, before a code_tasks row or a model call, a task whose file is over MAX_LARGE_FILE_CHARS or whose issue
+// key shipped in fleet_changelog within 72h (no file read then); the refused issue keeps its target as a session-task line with a
 // dated reason and one audit row; a repairable anchor is repaired at intake and the task carries the repaired anchor; an
 // unreadable file is let through (fail open); a control-plane path keeps lever 15's routing and is not preflighted.
+// Since LARGE-FILE-WINDOW-1 and ANCHOR-LOCATOR-1 landed in the same 0.4.0, a file over 900k chars, an anchor that occurs 0 or 2+
+// times and a large file with no anchor are NOT dead on arrival: the read step edits from the window and makes one locator pick,
+// so intake lets them through and builds the task.
 // Run: node --no-warnings qnfo-code-orchestrator/intake-preflight.test.mjs   -> prints "N passed, 0 failed"
 import fs from "node:fs";
 import os from "node:os";
@@ -11,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ipf-"));
-fs.writeFileSync(path.join(tmp, "w.mjs"), fs.readFileSync(path.join(here, "worker.js"), "utf8") + "\nexport { intakeIssues as __intake, issueKey as __key, preflightDecide as __decide, MAX_PATCH_FILE_CHARS as __cap, MAX_FILE_CHARS as __small };\n");
+fs.writeFileSync(path.join(tmp, "w.mjs"), fs.readFileSync(path.join(here, "worker.js"), "utf8") + "\nexport { intakeIssues as __intake, issueKey as __key, preflightDecide as __decide, MAX_PATCH_FILE_CHARS as __cap, MAX_FILE_CHARS as __small, MAX_LARGE_FILE_CHARS as __large };\n");
 let files = {}, fetched = [];
 globalThis.fetch = async (u) => {
   const url = String(u);
@@ -21,7 +23,7 @@ globalThis.fetch = async (u) => {
   if (p && Object.prototype.hasOwnProperty.call(files, p)) return files[p] === 503 ? new Response("unavailable", { status: 503 }) : new Response(files[p], { status: 200 });
   return new Response("nf", { status: 404 });
 };
-const { __intake, __key, __decide, __cap, __small } = await import(pathToFileURL(path.join(tmp, "w.mjs")).href);
+const { __intake, __key, __decide, __cap, __small, __large } = await import(pathToFileURL(path.join(tmp, "w.mjs")).href);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 
@@ -31,13 +33,14 @@ ok(__key("METRIC-TRIGGER-378-CODE-TASK-SUCCESS-RATE-30D: gap") === null && __key
 const big = "x".repeat(__small + 10);
 ok(/shipped as qnfo-x 1\.2\.0/.test((__decide(null, null, { key: "K-1", where: "qnfo-x 1.2.0" }) || {}).refuse || ""), "a shipped key refuses");
 ok(__decide({ ok: false, status: 503 }, "a", null) === null && __decide(null, "a", null) === null, "an unreadable file is let through");
-ok(/over the loop's/.test((__decide({ ok: true, content: "y", truncated: true, size: __cap + 5 }, null, null) || {}).refuse || ""), "a file over the cap refuses");
+ok(/over the loop's/.test((__decide({ ok: true, content: "y", truncated: true, size: __large + 5 }, null, null) || {}).refuse || ""), "a file over MAX_LARGE_FILE_CHARS refuses");
+ok(__large > __cap && __decide({ ok: true, content: "aa ANCHOR bb", truncated: false, size: __cap + 5 }, "ANCHOR", null) === null, "a file over 900k but under the window cap passes (LARGE-FILE-WINDOW-1)");
 ok(__decide({ ok: true, content: "aa ANCHOR bb" }, "ANCHOR", null) === null, "an anchor that occurs once passes");
-ok(/occurs 2 times/.test((__decide({ ok: true, content: "ANCHOR ANCHOR" }, "ANCHOR", null) || {}).refuse || ""), "an anchor that occurs twice refuses");
-ok(/occurs 0 times/.test((__decide({ ok: true, content: "nothing here" }, "ANCHOR", null) || {}).refuse || ""), "an anchor that occurs nowhere and cannot be repaired refuses");
+ok(__decide({ ok: true, content: "ANCHOR ANCHOR" }, "ANCHOR", null) === null, "an anchor that occurs twice is left to the read step's locator (ANCHOR-LOCATOR-1)");
+ok(__decide({ ok: true, content: "nothing here" }, "ANCHOR", null) === null, "an anchor that occurs nowhere and cannot be repaired is left to the locator");
 const rep = __decide({ ok: true, content: "a\n  if (x) {\n      return y;\n  }\nz" }, "if (x) { return y; }", null);
 ok(rep && !rep.refuse && rep.anchor && rep.repaired === "whitespace", "a re-wrapped anchor is repaired, not refused", rep);
-ok(/no code-anchor/.test((__decide({ ok: true, content: big }, null, null) || {}).refuse || ""), "a file over MAX_FILE_CHARS with no anchor refuses");
+ok(__decide({ ok: true, content: big }, null, null) === null, "a file over MAX_FILE_CHARS with no anchor is left to the locator");
 ok(__decide({ ok: true, content: "small file" }, null, null) === null, "a small file with no anchor passes");
 
 // Intake, end to end, on an in-memory D1.
@@ -76,9 +79,9 @@ const auditText = (audits) => audits.map((x) => x.map(String).join(" | ")).join(
   const issues = [{ id: 3001, title: "STALE-ANCHOR-1: x", source: "claude-session:t", description: "Fix.\ncode-task: repo=qnfo-workers path=qnfo-infra/worker.js\ncode-anchor: this text is not in the file anywhere" }];
   const { env, inserted, audits } = mkEnv(issues);
   await __intake(env, 2);
-  ok(inserted.length === 0, "an anchor that occurs nowhere builds no code task", inserted);
-  ok(/session-task: repo=qnfo-workers path=qnfo-infra\/worker\.js/.test(issues[0].description) && /CODE-TASK-PREFLIGHT-1 .*occurs 0 times/.test(issues[0].description), "its line becomes a session-task line with the dated reason", issues[0].description);
-  ok(/code-task\.intake-preflight/.test(auditText(audits)) && /refused/.test(auditText(audits)), "one preflight audit row records the refusal", auditText(audits));
+  ok(inserted.length === 1 && JSON.parse(inserted[0].ctx).anchor === "this text is not in the file anywhere", "an anchor that occurs nowhere still builds the task (the read step's locator gets one pick)", inserted);
+  ok(/code-task: repo=qnfo-workers path=qnfo-infra\/worker\.js/.test(issues[0].description), "the issue keeps its code-task line", issues[0].description);
+  ok(!/code-task\.intake-preflight/.test(auditText(audits)), "no preflight refusal is audited", auditText(audits));
 }
 {
   files = { "qnfo-infra/worker.js": "small" }; fetched = [];
@@ -116,7 +119,7 @@ const auditText = (audits) => audits.map((x) => x.map(String).join(" | ")).join(
   const issues = [{ id: 3006, title: "NOANCHOR-1: x", source: "claude-session:t", description: "Fix.\ncode-task: repo=qnfo-workers path=qnfo-cloud-ops/worker.js" }];
   const { env, inserted } = mkEnv(issues);
   await __intake(env, 2);
-  ok(inserted.length === 0 && /no code-anchor/.test(issues[0].description), "a large file with no anchor builds no task and asks for an anchor", issues[0].description);
+  ok(inserted.length === 1 && /code-task: repo=/.test(issues[0].description), "a large file with no anchor still builds the task (the locator picks the anchor at read time)", issues[0].description);
 }
 {
   files = {}; fetched = [];
