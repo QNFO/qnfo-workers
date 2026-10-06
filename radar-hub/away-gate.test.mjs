@@ -102,7 +102,8 @@ ok(T.posted.length === 5, "a past trip gates nothing");
 
 // hub health still tracks the hub version
 const h1 = await (await W.fetch(new Request("https://radar-hub.example/health"), {}, {})).json();
-ok(h1.version === (/var VERSION = "([^"]+)"/.exec(src) || [])[1] && h1.version === "1.2.4", "hub /health reports 1.2.4");
+const atLeast = (v, min) => { const a = String(v).split(/[.-]/).map(Number), b = min.split(".").map(Number); for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0); } return true; }; // SUITE-RUNNER-1: the feature shipped in 1.2.4; later versions keep it
+ok(h1.version === (/var VERSION = "([^"]+)"/.exec(src) || [])[1] && atLeast(h1.version, "1.2.4"), "hub /health reports its own VERSION, 1.2.4 or later");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

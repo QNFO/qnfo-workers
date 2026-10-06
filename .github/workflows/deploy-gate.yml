@@ -110,6 +110,17 @@ jobs:
         with:
           node-version: "22"
 
+      # SUITE-RUNNER-1 (transformation levers T1.10 + T5.4): every suite of each changed worker runs here, and the full
+      # set runs when a control-plane worker or a shared path (scripts, .github, migrations) changes and on push to main.
+      # No suite depends on being hand-wired below (19 were not, and three had been failing on main unnoticed).
+      - name: SUITE-RUNNER-1 changed-worker suites (full set for control-plane and shared changes)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node scripts/run-suites.mjs --changed-file /tmp/changed.txt --jobs 4 --timeout 180
+          else
+            node scripts/run-suites.mjs --all --jobs 4 --timeout 180
+          fi
+
       - name: OWNER-EDIT-1 and IDENTITY-STORE-1 offline suite (qnfo-fleet-dashboard)
         run: node qnfo-fleet-dashboard/owner-edit.test.mjs
 
