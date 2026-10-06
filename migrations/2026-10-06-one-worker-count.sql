@@ -1,7 +1,7 @@
 -- ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10). Measured 2026-10-06 08:35Z: fleet_budget.workers
 -- read 31 (qnfo-fleet-control budgetAudit, the live Cloudflare scripts census), metric_registry.worker_count read 32
 -- (qnfo-lifecycle runMetricFreshness: COUNT(*) of service_registry whatever the row's state) and the transformation tick of
--- 08:01Z judged wave W1 on the registry figure. One census from now on: qnfo-fleet-control 0.4.137 writes worker_count from
+-- 08:01Z judged wave W1 on the registry figure. One census from now on: qnfo-fleet-control 0.4.138 writes worker_count from
 -- the same live scripts list it writes fleet_budget.workers from, in the same tick, and worker_count_disagreement (guard,
 -- INTEGRITY-GUARDS-1) counts the names present in only one of the two lists (live scripts vs service_registry rows with
 -- state live), naming them in cloud_ops_events worker-count-<day>. qnfo-lifecycle stops writing worker_count (code task on
@@ -35,7 +35,7 @@ WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key =
 
 INSERT OR IGNORE INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, max_attempts, escalate_to, expected_cadence_h, status)
 VALUES ('one-worker-count-1', NULL,
-  'qnfo-fleet-control 0.4.137+ deployed (budgetAudit writes worker_count and worker_count_disagreement)',
+  'qnfo-fleet-control 0.4.138+ deployed (budgetAudit writes worker_count and worker_count_disagreement)',
   'observe only: the hourly budgetAudit writes metric_registry.worker_count from the live scripts census and worker_count_disagreement from its comparison with service_registry',
   'SELECT ''0'' AS expected, CASE WHEN (SELECT last_refreshed FROM metric_registry WHERE metric = ''worker_count_disagreement'') IS NULL THEN ''pending: not measured yet'' WHEN (SELECT last_refreshed FROM metric_registry WHERE metric = ''worker_count_disagreement'') < strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now'', ''-3 hours'') THEN ''stale: last write older than 3h'' ELSE (SELECT trim(last_value) FROM metric_registry WHERE metric = ''worker_count_disagreement'') END AS observed',
   'd1-query', 3, 'qnfo-fleet-control', 24, 'active');

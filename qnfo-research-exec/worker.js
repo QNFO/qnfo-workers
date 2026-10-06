@@ -13,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.67-zenodo-creator-clean"; // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.68-latex-escape"; // 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -726,7 +726,7 @@ function mdToLatex(md) {
       }
       if (key.indexOf("changelog") === 0 || key.indexOf("verification") === 0) {
         inRefs = inAbs = false;
-        O.push("\\section*{" + esc(blk.text) + "}");
+        O.push("\\section*{" + escHeading(blk.text) + "}");
         continue;
       }
       inRefs = inAbs = false;
@@ -735,7 +735,7 @@ function mdToLatex(md) {
       if (blk.lvl === 1) cmd = "\\section*{";
       else if (blk.lvl === 3) cmd = "\\subsection{";
       else if (blk.lvl === 4) cmd = "\\subsubsection{";
-      O.push(cmd + esc(st) + "}");
+      O.push(cmd + escHeading(st) + "}");
       continue;
     }
     if (blk.type === "table") {
@@ -776,7 +776,7 @@ function mdToLatex(md) {
   var dt2 = fm.date || "";
   var mm = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   var dm2 = String(dt2).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  var dateNice = dm2 ? mm[parseInt(dm2[2], 10)] + " " + parseInt(dm2[3], 10) + ", " + dm2[1] : dt2;
+  var dateNice = dm2 ? mm[parseInt(dm2[2], 10)] + " " + parseInt(dm2[3], 10) + ", " + dm2[1] : esc(dt2);
   var author = fm.author || "QNFO";
   var doi = fm.doi || "";
   var ver = fm.version || "";
@@ -792,7 +792,7 @@ function mdToLatex(md) {
   P.push("\\usepackage[colorlinks=true,urlcolor=blue]{hyperref}");
   P.push("\\usepackage{microtype}");
   P.push("\\setlength{\\emergencystretch}{2em}");
-  P.push("\\title{" + esc(fm.title || "Untitled") + "}");
+  P.push("\\title{" + escHeading(fm.title || "Untitled") + "}");
   P.push("\\author{" + esc(author) + (doi ? "\\thanks{\\href{https://doi.org/" + esc(doi) + "}{doi:" + esc(doi) + "}" + (ver ? " (version " + esc(ver) + ")" : "") + "}" : "") + "}");
   P.push("\\date{" + dateNice + "}");
   var out = [];
@@ -813,14 +813,64 @@ __name2(mdToLatex, "mdToLatex");
 __name22(mdToLatex, "mdToLatex");
 __name222(mdToLatex, "mdToLatex");
 __name2222(mdToLatex, "mdToLatex");
+// LATEX-ESCAPE-BACKSLASH-1 (0.9.68, #2032): one pass over every LaTeX special, backslash included. A chained replace would
+// escape the braces its own earlier replacements inserted, and the old chain never escaped backslash at all.
+var LATEX_TEXT_ESC = { "\\": "\\textbackslash{}", "~": "\\textasciitilde{}", "^": "\\textasciicircum{}" };
 function esc(s) {
-  return String(s).replace(/([&%$#_{}])/g, "\\$1").replace(/~/g, "\\textasciitilde{}").replace(/\^/g, "\\textasciicircum{}");
+  return String(s).replace(/[\\&%$#_{}~^]/g, function(c) {
+    return LATEX_TEXT_ESC[c] || "\\" + c;
+  });
+}
+// LaTeX math from the writers (MATH-LATEX-2) is compiled by texlive.net, so a span passes through as math only when it holds no
+// file, shell, definition or catcode primitive, no ^^ hex escape, no % comment, no @ and no control character, its braces
+// balance, and every environment is a math one. A span that fails is escaped as text: it still compiles, it just reads as typed.
+var LATEX_MATH_DENY = /\\(?:input|include|includeonly|InputIfFileExists|IfFileExists|openin|openout|read|readline|write|immediate|special|catcode|uccode|lccode|mathcode|delcode|sfcode|def|edef|gdef|xdef|let|futurelet|global|newcommand|renewcommand|providecommand|DeclareRobustCommand|DeclareMathOperator|newenvironment|renewenvironment|csname|endcsname|expandafter|noexpand|usepackage|RequirePackage|documentclass|makeatletter|makeatother|verbatiminput|lstinputlisting|includegraphics|href|url|newread|newwrite|closein|closeout|jobname|write18|directlua|luaexec|luadirect|scantokens|detokenize|endinput|afterassignment|everymath|everydisplay|everypar|output|shipout|pdfprimitive|pdffilesize|pdffiledump|pdfmdfivesum|pdfelapsedtime|pdfstrcmp|ShellEscape|loop|repeat)(?![A-Za-z])/;
+var LATEX_UNI_MATH = { "×": "\\times", "≈": "\\approx", "≥": "\\geq", "≤": "\\leq", "−": "-", "≠": "\\neq", "±": "\\pm", "∓": "\\mp", "→": "\\rightarrow", "←": "\\leftarrow", "↔": "\\leftrightarrow", "⇒": "\\Rightarrow", "⇔": "\\Leftrightarrow", "∞": "\\infty", "∼": "\\sim", "≃": "\\simeq", "≡": "\\equiv", "∝": "\\propto", "∑": "\\sum", "∏": "\\prod", "∫": "\\int", "∂": "\\partial", "∇": "\\nabla", "∈": "\\in", "∉": "\\notin", "⊂": "\\subset", "⊆": "\\subseteq", "∪": "\\cup", "∩": "\\cap", "∀": "\\forall", "∃": "\\exists", "⟨": "\\langle", "⟩": "\\rangle", "⊗": "\\otimes", "⊕": "\\oplus", "†": "\\dagger", "·": "\\cdot", "√": "\\surd", "ℏ": "\\hbar", "≫": "\\gg", "≪": "\\ll", "≲": "\\lesssim", "≳": "\\gtrsim", "∘": "\\circ", "⊥": "\\perp", "∥": "\\parallel", "≅": "\\cong", "∅": "\\emptyset", "⊃": "\\supset", "⊇": "\\supseteq", "∧": "\\wedge", "∨": "\\vee", "¬": "\\neg", "⋅": "\\cdot", "∗": "\\ast", "↦": "\\mapsto", "⇐": "\\Leftarrow", "↑": "\\uparrow", "↓": "\\downarrow", "′": "\\prime", "ϕ": "\\varphi", "ϵ": "\\varepsilon", "ϑ": "\\vartheta", "ℓ": "\\ell", "⌈": "\\lceil", "⌉": "\\rceil", "⌊": "\\lfloor", "⌋": "\\rfloor", "α": "\\alpha", "β": "\\beta", "γ": "\\gamma", "δ": "\\delta", "ε": "\\epsilon", "ζ": "\\zeta", "η": "\\eta", "θ": "\\theta", "κ": "\\kappa", "λ": "\\lambda", "μ": "\\mu", "ν": "\\nu", "ξ": "\\xi", "π": "\\pi", "ρ": "\\rho", "σ": "\\sigma", "τ": "\\tau", "φ": "\\phi", "χ": "\\chi", "ψ": "\\psi", "ω": "\\omega", "Γ": "\\Gamma", "Δ": "\\Delta", "Θ": "\\Theta", "Λ": "\\Lambda", "Π": "\\Pi", "Σ": "\\Sigma", "Φ": "\\Phi", "Ψ": "\\Psi", "Ω": "\\Omega" };
+var LATEX_UNI_MATH_RE = new RegExp("[" + Object.keys(LATEX_UNI_MATH).join("") + "]", "g");
+var LATEX_SUPSUB = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁺": "+", "⁻": "-", "₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8", "₉": "9", "₊": "+", "₋": "-" };
+var LATEX_MATH_ENVS = /^(?:matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|smallmatrix|cases|aligned|alignedat|gathered|split|array|subarray)$/;
+function latexMathSafe(b) {
+  b = String(b || "");
+  // a % after an even number of backslashes (none, or a \\ line break) starts a comment; \% is a percent sign and stays
+  if (!b.trim() || /\^\^|(?:^|[^\\])(?:\\\\)*%|@|[\x00-\x08\x0b-\x1f\x7f]/.test(b) || LATEX_MATH_DENY.test(b)) return false;
+  var envs = b.match(/\\(?:begin|end)\s*\{[^}]*\}/g) || [];
+  for (var e = 0; e < envs.length; e++) if (!LATEX_MATH_ENVS.test(envs[e].replace(/^\\(?:begin|end)\s*\{\s*|\s*\}$/g, ""))) return false;
+  var depth = 0;
+  for (var i = 0; i < b.length; i++) {
+    var c = b.charAt(i);
+    if (c === "\\") { i++; continue; }
+    if (c === "{") depth++;
+    else if (c === "}" && --depth < 0) return false;
+  }
+  return depth === 0;
 }
 __name(esc, "esc");
 __name2(esc, "esc");
 __name22(esc, "esc");
 __name222(esc, "esc");
 __name2222(esc, "esc");
+// LATEX-ESCAPE-BACKSLASH-1 (0.9.68): a heading or the title keeps the writers' safe inline math and escapes the rest, with the
+// Unicode math symbols and sub/superscript digits converted as in inl() (no links or emphasis inside a moving argument).
+function escHeading(s) {
+  s = String(s);
+  var out = [], last = 0, re = /\$(?=\S)([^$\n]{1,300}?)(?<=\S)\$(?!\d)/g, m;
+  var txt = function(t) {
+    return esc(t).replace(LATEX_UNI_MATH_RE, function(c) {
+      return "$" + LATEX_UNI_MATH[c] + "$";
+    }).replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, function(t2) {
+      return "\\textsuperscript{" + t2.replace(/./g, function(c) { return LATEX_SUPSUB[c]; }) + "}";
+    }).replace(/[₀₁₂₃₄₅₆₇₈₉₊₋]+/g, function(t2) {
+      return "\\textsubscript{" + t2.replace(/./g, function(c) { return LATEX_SUPSUB[c]; }) + "}";
+    });
+  };
+  while ((m = re.exec(s))) {
+    if (!latexMathSafe(m[1])) continue;
+    out.push(txt(s.slice(last, m.index)), "$" + m[1] + "$");
+    last = re.lastIndex;
+  }
+  out.push(txt(s.slice(last)));
+  return out.join("").replace(/(?<!\\)\$\$/g, " ");
+}
 function inl(s) {
   var str = String(s);
   var math = [];
@@ -851,6 +901,15 @@ function inl(s) {
   __name22(rs, "rs");
   __name222(rs, "rs");
   __name2222(rs, "rs");
+  // LATEX-ESCAPE-BACKSLASH-1 (0.9.68): the writers' LaTeX math is lifted out before any conversion touches it; a span
+  // latexMathSafe refuses stays in the text and is escaped. An inline span opens on a non-space and closes on a non-space
+  // not followed by a digit, so "$5 and $10" is text.
+  str = str.replace(/\$\$([^$]{1,600}?)\$\$|\$(?=\S)([^$\n]{1,300}?)(?<=\S)\$(?!\d)/g, function(m, d, s1) {
+    var body = d != null ? d : s1;
+    if (!latexMathSafe(body)) return m;
+    math.push(d != null ? "\\[" + body.trim() + "\\]" : "$" + body + "$");
+    return pm();
+  });
   str = str.replace(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+)\s*\^\s*(\d+)/g, function(m, a, b, c) {
     math.push("$" + a + "\\times " + b + "^{" + c + "}$");
     return pm();
@@ -868,35 +927,57 @@ function inl(s) {
     return pm();
   });
   str = str.replace(/((?:\([^()\n]{1,28}\)|[A-Za-z0-9)]+))\^([A-Za-z0-9()\-+./]{1,16})/g, function(m, a, b) {
+    if (/[\\{}$%#&~]/.test(a)) return m;
     math.push("$" + rs(a).replace(/\$([^$]*)\$/g, "$1") + "^{" + b + "}$");
     return pm();
   });
+  // LATEX-ESCAPE-BACKSLASH-1 (0.9.68): Unicode math symbols, Greek letters and sub/superscript digits become math or
+  // \textsuperscript / \textsubscript through the placeholders, before bold, italic and link text is lifted out (an "≈"
+  // inside *...* stopped pdflatex: "Unicode character ≈ (U+2248) not set up"), and never before the escape pass, which turned
+  // the old inserts into "\$\times\$" and "\textsuperscript\{2\}".
+  str = str.replace(LATEX_UNI_MATH_RE, function(c) {
+    math.push("$" + LATEX_UNI_MATH[c] + "$");
+    return pm();
+  });
+  str = str.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, function(t) {
+    cmd.push("\\textsuperscript{" + t.replace(/./g, function(c) { return LATEX_SUPSUB[c]; }) + "}");
+    return pc();
+  });
+  str = str.replace(/[₀₁₂₃₄₅₆₇₈₉₊₋]+/g, function(t) {
+    cmd.push("\\textsubscript{" + t.replace(/./g, function(c) { return LATEX_SUPSUB[c]; }) + "}");
+    return pc();
+  });
   str = str.replace(/\*\*([^*]+)\*\*/g, function(m, x) {
-    cmd.push("\\textbf{" + x + "}");
+    cmd.push("\\textbf{" + esc(x) + "}");
     return pc();
   });
   str = str.replace(/(^|[^*])\*([^*\n]+)\*/g, function(m, p, x) {
-    cmd.push("\\emph{" + x + "}");
+    cmd.push("\\emph{" + esc(x) + "}");
     return p + pc();
   });
-  str = str.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, function(m, t, u) {
-    cmd.push("\\href{" + u + "}{" + t + "}");
+  str = str.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s\\{}]+)\)/g, function(m, t, u) {
+    cmd.push("\\href{" + u + "}{" + esc(t) + "}");
     return pc();
   });
-  str = str.replace(/(^|[^\\])(https?:\/\/[^\s<>]+)/g, function(m, p, u) {
+  str = str.replace(/(^|[^\\])(https?:\/\/[^\s<>\\{}]+)/g, function(m, p, u) {
     cmd.push("\\url{" + u + "}");
     return p + pc();
   });
-  str = str.replace(/×/g, " $\\times$ ").replace(/≈/g, " $\\approx$ ").replace(/≥/g, " $\\geq$ ").replace(/≤/g, " $\\leq$ ").replace(/−/g, " $-$ ");
-  str = str.replace(/²/g, "\\textsuperscript{2}").replace(/³/g, "\\textsuperscript{3}");
   str = str.replace(/’/g, "'").replace(/‘/g, "'").replace(/“/g, '"').replace(/”/g, '"').replace(/—/g, "---").replace(/–/g, "--");
-  str = str.replace(/([&%$#_{}])/g, "\\$1").replace(/~/g, "\\textasciitilde{}");
-  str = str.replace(/\x02(\d+)\x03/g, function(m, k) {
-    return cmd[Number(k)];
-  });
-  str = str.replace(/\x00(\d+)\x01/g, function(m, k) {
-    return math[Number(k)];
-  });
+  str = esc(str);
+  // a placeholder can sit inside another (a superscript inside **bold**, a symbol inside a link label), and one replace pass
+  // does not rescan what it inserts, so both restores repeat until none is left (0.9.68)
+  for (var rp = 0; rp < 6 && /[\x00\x02]\d+[\x01\x03]/.test(str); rp++) {
+    str = str.replace(/\x02(\d+)\x03/g, function(m, k) {
+      return cmd[Number(k)];
+    });
+    str = str.replace(/\x00(\d+)\x01/g, function(m, k) {
+      return math[Number(k)];
+    });
+  }
+  // two inline spans that touch ("$\alpha$$\beta$") would open display math; they become one span. Display math is
+  // always \[...\] here and text dollars are \$, so an unescaped $$ can only be such a seam.
+  str = str.replace(/(?<!\\)\$\$/g, " ");
   for (var pass = 0; pass < 8; pass++) {
     var nxt = str.replace(/\$([^$\n]{1,90})\$\s*([=+\-/(]|\s)\s*\$([^$\n]{1,90})\$/g, function(m, a, sep, b) {
       return "$" + a + " " + sep + " " + b + "$";

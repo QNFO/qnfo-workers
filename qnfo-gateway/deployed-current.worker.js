@@ -1,4 +1,4 @@
-var VERSION="3.10.0-utm-click-ledger";
+var VERSION="3.10.1-discovery";
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -2281,7 +2281,8 @@ async function collectPaperUrls(env, recentDays) {
   return [base + "/", base + "/papers"].concat(res.results.map((r) => base + "/papers/" + encodeURIComponent(r.slug)));
 }
 __name(collectPaperUrls, "collectPaperUrls");
-async function indexNowSubmit(urls) {
+async function indexNowSubmit(urls, host) {
+  host = host || "papers.qnfo.org";
   const out = [];
   const CHUNK = 100;
   // R1/FM2 (2026-09-26): api.indexnow.org answers 429 to the Cloudflare EGRESS IP even for a few
@@ -2295,7 +2296,7 @@ async function indexNowSubmit(urls) {
   const _EPS = ["https://yandex.com/indexnow", "https://api.indexnow.org/indexnow", "https://www.bing.com/indexnow", "https://search.seznam.cz/indexnow", "https://searchadvisor.naver.com/indexnow"];
   for (let i = 0; i < urls.length; i += CHUNK) {
     const chunk = urls.slice(i, i + CHUNK);
-    const body = JSON.stringify({ host: "papers.qnfo.org", key: INDEXNOW_KEY, keyLocation: "https://papers.qnfo.org/" + INDEXNOW_KEY + ".txt", urlList: chunk });
+    const body = JSON.stringify({ host: host, key: INDEXNOW_KEY, keyLocation: "https://" + host + "/" + INDEXNOW_KEY + ".txt", urlList: chunk });
     let hit = null, last = null;
     for (let e = 0; e < _EPS.length && !hit; e++) {
       for (let attempt = 0; attempt < 2 && !hit; attempt++) {
@@ -2315,6 +2316,15 @@ async function indexNowSubmit(urls) {
   return out;
 }
 __name(indexNowSubmit, "indexNowSubmit");
+var QNFO_CORE_URLS = ["https://qnfo.org/", "https://qnfo.org/work-with-me", "https://qnfo.org/about", "https://qnfo.org/papers"];
+async function indexNowLog(env, host, results) {
+  try {
+    await env.LIVING_PAPER.prepare("CREATE TABLE IF NOT EXISTS indexnow_log (ts TEXT DEFAULT (datetime('now')), host TEXT, urls INTEGER, accepted INTEGER, detail TEXT)").run();
+    const urls = (results || []).reduce(function(a, r) { return a + (r.chunk || 0); }, 0);
+    const acc = (results || []).filter(function(r) { return r.status && r.status < 400; }).reduce(function(a, r) { return a + (r.chunk || 0); }, 0);
+    await env.LIVING_PAPER.prepare("INSERT INTO indexnow_log (host, urls, accepted, detail) VALUES (?1, ?2, ?3, ?4)").bind(host, urls, acc, JSON.stringify(results || []).slice(0, 1000)).run();
+  } catch (e) {}
+}
 async function handleIndexNow(env, full) {
   const urls = await collectPaperUrls(env, full ? null : 7);
   const res = await indexNowSubmit(urls);
@@ -3690,7 +3700,8 @@ var gateway_worker_default = {
       if (p.startsWith("/papers/") && p.split("/").length >= 3) return handlePaperDetail(request, env, p);
       if (p === "/papers" || p.startsWith("/papers?")) return handlePapers(request, env);
       if (p === "/sitemap.xml") return handleSitemap(env, host);
-      if (p === "/robots.txt") return handlePapersRobots();
+      if (p === "/robots.txt") return new Response("User-agent: *\nAllow: /\nSitemap: https://qnfo.org/sitemap.xml\nSitemap: https://papers.qnfo.org/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // DISCOVERY-1: qnfo.org lists its own sitemap
+      if (p === "/" + INDEXNOW_KEY + ".txt") return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } }); // DISCOVERY-1: IndexNow key on qnfo.org too
       if (p === "/llms.txt") return handleLlmsTxt(env);
       if (p === "/rss.xml" || p === "/feed.xml") return handleRss(env);
       if (method === "GET" && p === "/stats") return handleStats(env);
@@ -3732,7 +3743,14 @@ var gateway_worker_default = {
   },
   async scheduled(event, env, ctx) {
     try {
-      await indexNowSubmit(await collectPaperUrls(env, 7));
+      // DISCOVERY-1 (2026-10-06): every submission is logged (living-paper indexnow_log) so search reach is measurable,
+      // and on Mondays the qnfo.org core pages are submitted on their own host (key file now served there too).
+      const pr = await indexNowSubmit(await collectPaperUrls(env, 7), "papers.qnfo.org");
+      await indexNowLog(env, "papers.qnfo.org", pr);
+      if (new Date().getUTCDay() === 1) {
+        const qr = await indexNowSubmit(QNFO_CORE_URLS, "qnfo.org");
+        await indexNowLog(env, "qnfo.org", qr);
+      }
     } catch (e) {
     }
     await askRatePrune(env);

@@ -266,6 +266,9 @@ jobs:
       - name: GOOGLE-IDENTITY-DETECT-1 offline suite (qnfo-fleet-control)
         if: ${{ !cancelled() }}
         run: node qnfo-fleet-control/google-identity.test.mjs
+      - name: DISCOVERY-1 offline suite (qnfo-gateway)
+        if: ${{ !cancelled() }}
+        run: node qnfo-gateway/discovery.test.mjs
       # PROMPT-CACHE-1 (pillar cost, #1795 #1780): every Workers AI wrapper sends a prefix-stable x-session-affinity key and
       # records cached tokens (ai_cache_counters).
       - name: PROMPT-CACHE-1 offline suite (fleet AI wrappers)
@@ -576,6 +579,11 @@ jobs:
       - name: MERGE-SCOPE-INTAKE-1 and ANCHOR-REPAIR-1 offline suite (qnfo-code-orchestrator)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-code-orchestrator/scope-intake.test.mjs
+      # INTAKE-PROVENANCE-1 and CODE-TASK-REINTAKE-1 (qnfo-code-orchestrator 0.3.20, #2021): an untrusted source gets no code task;
+      # an ended task's issue is retried after a cooldown, at most 3 tasks; an unreadable history builds nothing.
+      - name: INTAKE-PROVENANCE-1 and CODE-TASK-REINTAKE-1 offline suite (qnfo-code-orchestrator)
+        if: ${{ !cancelled() }}
+        run: node --no-warnings qnfo-code-orchestrator/reintake.test.mjs
       # FOLD-KIT-1 (scripts/fold_worker.py, T3 lever 14): a synthetic fold, its generated suite under node, and the kit's
       # refusals (class-exporting guest, plane-crossing fold, multi-VERSION host).
       - name: FOLD-KIT-1 self-test (scripts/fold_worker.py)
@@ -666,6 +674,11 @@ jobs:
       - name: MATH-LATEX-2 offline suite (qnfo-research-exec)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-research-exec/math-latex.test.mjs
+      # LATEX-ESCAPE-BACKSLASH-1 (qnfo-research-exec 0.9.68, #2032): \input{...} in any field reaches the .tex as text; the writers'
+      # safe LaTeX math passes through; Unicode math symbols compile.
+      - name: LATEX-ESCAPE-BACKSLASH-1 offline suite (qnfo-research-exec)
+        if: ${{ !cancelled() }}
+        run: node --no-warnings qnfo-research-exec/latex-escape.test.mjs
       # ZENODO-READ-ONLINE-1 (qnfo-research-exec 0.9.61, #1907): kind='related' rows add the papers.qnfo.org page as an
       # isVariantFormOf related identifier to the latest version of a record, idempotently; the probe closes the issue.
       # RELATED-LEGACY-FIELDS-1 (0.9.63): the drain fills legacy upload_type / publication_type from resource_type before the PUT.
@@ -684,6 +697,11 @@ jobs:
       - name: CALLER-PROPS-1 offline suite (calendar-api 0.7.1, #1987)
         if: ${{ !cancelled() }}
         run: node --no-warnings calendar-api/caller-props.test.mjs
+      # FOLD-READY-1 (calendar-api 0.7.4, CALENDAR-FOLD-2): links unchanged with CAL_TOKEN; with only CAL_KEY_SEED (the fold kit's
+      # host-derived value) they are signed with the seed under CAL_PUBLIC_BASE; the form posts relative to its page.
+      - name: FOLD-READY-1 offline suite (calendar-api)
+        if: ${{ !cancelled() }}
+        run: node --no-warnings calendar-api/fold-ready.test.mjs
       - name: IDEA-TRIAGE-BUDGET-1 offline suite (idea-hub 1.5.5, #1878)
         if: ${{ !cancelled() }}
         run: node --no-warnings idea-hub/triage-budget.test.mjs

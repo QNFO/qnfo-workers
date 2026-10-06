@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """FOLD-KIT-1 self-test (scripts/fold_worker.py). No network; a synthetic two-worker repository in a temp directory.
 
-Proves: a guest with a cloudflare: import, a sourceMappingURL trailer and a token-free props gate folds into a host; the
+Proves (FOLD-KIT-2): public routes with methods and prefixes, named non-qnfo callers, a derived member key (an HMAC of a host
+secret the member never sees) and a constant fold and pass the generated suite; a host with an older runtime and malformed
+options are refused. Proves (FOLD-KIT-1): a guest with a cloudflare: import, a sourceMappingURL trailer and a token-free props gate folds into a host; the
 host's other named exports survive; the guest's missing binding is appended, its cron dropped, its binder re-pointed with
 props.member, and its host's own binding to it becomes a self-binding; the generated suite passes under node; and the kit
 refuses a guest that exports a Durable Object class, a fold that would hand a personal-plane binding to research code, and
@@ -148,6 +150,31 @@ try:
     t = subprocess.run(["node", "--no-warnings", os.path.join(tmp, "h-one", "g-one-fold.test.mjs")], capture_output=True, text=True)
     ok(t.returncode == 0 and " 0 failed" in t.stdout, "the generated suite passes", t.stdout + t.stderr)
     ok('"PERSONAL"' not in hsrc.split("keys: ")[1].split("\n")[0], "the member's env keys leave out the host's personal-plane binding")
+
+    # FOLD-KIT-2: public routes with methods, a named non-qnfo caller, a derived env value and a constant.
+    shutil.rmtree(tmp); tmp = tempfile.mkdtemp(prefix="foldkit-")
+    repo(tmp, guest=GUEST.replace('(env.GDB ? "db" : "nodb")', '(env.GDB ? "db" : "nodb") + (env.GKEY ? "k" : "") + (env.GBASE || "")'),
+         ht=HT + '\n[[services]]\nbinding = "OTHERSVC"\nservice = "x-one"\n')
+    r = run(tmp, ["--public-route", "GET,POST /e/*", "--public-route", "GET /events.ics", "--callers", "b-two,personal-api",
+                  "--env-derive", '{"GKEY":"HSECRET"}', "--env-const", '{"GBASE":"https://h-one.q08.workers.dev/g"}'])
+    ok(r.returncode == 0, "the kit folds with public routes, named callers, a derived key and a constant", r.stderr or r.stdout)
+    h2 = open(os.path.join(tmp, "h-one", "worker.js")).read()
+    ok('publicRoutes: [{"path": "/e/", "prefix": true, "methods": ["GET", "POST"]}, {"path": "/events.ics", "prefix": false, "methods": ["GET"]}], callers: ["b-two", "personal-api"],' in h2
+       and 'derive: {"GKEY": "HSECRET"}' in h2 and '"GBASE": "https://h-one.q08.workers.dev/g"' in h2, "the member table carries routes, callers, derive and consts", h2[-1500:])
+    marker = open(os.path.join(tmp, "g-one", "FOLDED")).read()
+    ok("(or b-two, personal-api)" in marker and "GET,POST https://h-one.q08.workers.dev/g/e/*" in marker and "is FOLDED into h-one" in marker, "the FOLDED marker names the callers and public routes", marker)
+    t = subprocess.run(["node", "--no-warnings", os.path.join(tmp, "h-one", "g-one-fold.test.mjs")], capture_output=True, text=True)
+    ok(t.returncode == 0 and " 0 failed" in t.stdout and int(t.stdout.split(" passed")[0].split()[-1]) >= 19, "the generated suite covers and passes the new routes, caller, derive and const checks", t.stdout + t.stderr)
+    # a host that already carries an older runtime is refused (a second member would get the old wrapper)
+    shutil.rmtree(tmp); tmp = tempfile.mkdtemp(prefix="foldkit-")
+    repo(tmp, host=HOST.replace("class HostDO", "// ---- FOLD-KIT-1:RUNTIME:BEGIN ----\nfunction __foldWrap(host, m) { return host; }\n// ---- FOLD-KIT-1:RUNTIME:END ----\nclass HostDO"))
+    r = run(tmp)
+    ok(r.returncode != 0 and "older FOLD-KIT runtime" in r.stderr, "a host with an older kit runtime is refused", r.stderr)
+    for bad in (["--public-route", "FETCH /x"], ["--public-route", "GET x"], ["--callers", "Bad_Name"], ["--env-derive", '{"lower":"X"}']):
+        shutil.rmtree(tmp); tmp = tempfile.mkdtemp(prefix="foldkit-")
+        repo(tmp)
+        r = run(tmp, bad)
+        ok(r.returncode != 0, "a malformed option is refused: " + " ".join(bad), r.stdout[-200:])
 
     shutil.rmtree(tmp); tmp = tempfile.mkdtemp(prefix="foldkit-")
     repo(tmp, guest=GUEST.replace("export {\n  worker_default as default\n};", "class GDO {}\nexport {\n  GDO,\n  worker_default as default\n};"))

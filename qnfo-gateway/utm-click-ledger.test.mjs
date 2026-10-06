@@ -19,7 +19,7 @@ const shim = (db) => {
 
 // ---- gateway half ----
 const block = cut(gsrc, "// ---- UTM-CLICK-LEDGER-1:BEGIN ----", "// ---- UTM-CLICK-LEDGER-1:END ----");
-ok(/var VERSION="3\.10\.0-/.test(gsrc), "qnfo-gateway VERSION is 3.10.x (a new capability raises the minor version)");
+ok(/var VERSION="3\.(1[0-9]|[2-9]\d)\.\d+-/.test(gsrc), "qnfo-gateway VERSION is 3.10.x (a new capability raises the minor version)");
 ok(gsrc.includes("const utmRow = utmClickRow(request, served);") && gsrc.includes("return withFleetCtl(await withReachLayer(served, request));"), "the fetch handler records after serve() and still returns the reach-layered, fleet-ctl answer");
 ok([...block].every((c) => c.charCodeAt(0) < 128), "block source is ASCII");
 const G = vm.runInContext(block + ";({ utmClickRow, utmRecord, utmClean, get count() { return utmIsolateCount; } })", vm.createContext({ URL, Date, String, Number }));
