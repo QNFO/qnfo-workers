@@ -85,4 +85,18 @@ ok(!/\\_|\\\|/.test(h.replace(/\$[^$]*\$/g, "")) && math(h).includes("${\\tilde{
 h = renderMarkdown("$$\n\\begin{CD} A @>f>> B \\end{CD}\n$$\n\n\\[\n$x = 1$\n\\]");
 ok(/@&gt;f&gt;&gt;/.test(h) && !/\\gt/.test(h) && /\$\$\s*x = 1\s*\$\$/.test(h), "amsCD arrows survive and nested delimiters inside display math are dropped", h);
 
+// MATH-RESIDUE-2 (gateway 3.9.8, #2023): shapes the 2026-10-06 sweep counted as residue on 68 pages.
+h = renderMarkdown("Success after N attempts is 1 − (1−p)^N; Rates (31/3)^4 and 3p_Z hold, against pi^2/6.");
+ok(math(h).includes("$1 - (1-p)^{N}$") && math(h).includes("$(31/3)^{4}$") && math(h).includes("$3p_{Z}$") && math(h).includes("$\\pi ^{2}/6$") && renderDefectCount(h) === 0, "a parenthesised base, a numeric coefficient and pi^ are typeset", math(h));
+h = renderMarkdown("entropy = −0.1·log₂(0.1) and H = (ℏω_q/2)σ_z here.");
+ok(math(h).includes("$-0.1\\cdot \\log_{2}(0.1)$") && math(h).includes("$H = (\\hbar \\omega _{q}/2)\\sigma _{z}$"), "a function with a Unicode script and hbar are typeset", math(h));
+h = renderMarkdown("QuiX's Si₃N₄ platform, Ca₉(PO₄)₆ crystals, a SiN film, the Type III₁ factor and Z₂.");
+ok(math(h).includes("$\\mathrm{Si}_{3}\\mathrm{N}_{4}$") && math(h).includes("$\\mathrm{Ca}_{9}(\\mathrm{P}\\mathrm{O}_{4})_{6}$") && math(h).includes("$Z_{2}$") && !math(h).some((x) => /SiN/.test(x)), "formula tokens are typeset upright; a word with no subscript is not", math(h));
+h = renderMarkdown("the Clifford algebra {γ_i, γ_j} = 2δ_ij, i.e., latency × (depth × t_g) = 10 here.");
+ok(math(h).includes("$\\gamma _{i}, \\gamma _{j}$") && math(h).includes("$2\\delta _{ij}$") && math(h).some((x) => /t_\{g\}/.test(x)), "a run with unbalanced brackets is split and its parts typeset", math(h));
+h = renderMarkdown("P = C(5,1)²p_Zp₁ = 25.");
+ok(!math(h).some((x) => /_\\mathrm\{[^}]*\}_/.test(x)), "no double subscript reaches the page (pmScriptsOk counts a command's argument)", math(h));
+h = renderMarkdown("Z[ϕ_<] = ∫*{Λ < |k|} Dϕ*> exp(x) and At $\\tau$*: $- \\nabla S(\\tau *) = 0$ here.");
+ok(!math(h).some((x) => /\*\\gt|\\int \*/.test(x)), "a lone * next to a relation or brace stays an emphasis marker", math(h));
+
 process.exit(fails ? 1 : 0);

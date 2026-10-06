@@ -1,4 +1,14 @@
-var VERSION="3.9.7-math-typeset";
+var VERSION="3.9.8-math-residue";
+// MATH-RESIDUE-2 (3.9.8, 2026-10-06, pillar reach, agent_issues 2023; guard paper_render_defect_pages 68 > 3): the first
+// 06:00 sweep after MATH-TYPESET-1 counted 68 pages whose text still carried >= 3 untypeset sub/superscript tokens. The guard
+// and its definition are unchanged; the typesetter now reaches more of them. pseudoMath() accepts a ")" or "]" base for ^ and
+// _ ("(1-p)^N"), a numeric coefficient ("3p_Z", "2d^2"), a function with a script ("log_2(0.1)"), "pi^", formula tokens
+// set upright ("Si3N4", "Ca9(PO4)6", "AdS3"), hbar, and a single-letter subscript followed by a Greek letter; a run that
+// fails validation is split at words whose brackets do not balance and retried, then word by word; a lone "*" next to a
+// relation or brace stays an emphasis marker; pmScriptsOk counts a command's brace argument (no double subscript slips
+// through). Corpus check (scripts/math-corpus-check.mjs, 469 pages): defect pages 68 -> 48, residue tokens 1,727 -> 1,009,
+// typeset runs 10,792 -> 11,632, KaTeX parse failures 0 -> 0, prose words lost 0. The 48 left are mostly source damage
+// (PDF-extraction text such as "x \u2080 + v \u2080 t"); new papers are the generator's to fix (MATH-LATEX-2, #1891).
 // MATH-DELIM-1 (3.8.2, 2026-10-02, pillar reach): a full-corpus sweep of the 450 paper pages found three renderer root
 // causes. (1) Two adjacent inline formulas ("$\\mathbb{R}$$^3$") formed "$$", which opened display math and swallowed
 // the rest of the paper (raw tables, headings and bold in 32 papers). (2) Currency was paired as math ("$1,032 ...
@@ -737,7 +747,7 @@ __name2222(cleanPunct, "cleanPunct");
 // MATH-TYPESET-1 prototype: plain-text pseudo-math -> TeX spans, conservative.
 // pseudoMath(line, save) returns the line with each detected run replaced by save(tex).
 var PM_GREEK = {"\u03b1":"\\alpha","\u03b2":"\\beta","\u03b3":"\\gamma","\u03b4":"\\delta","\u03b5":"\\varepsilon","\u03f5":"\\epsilon","\u03b6":"\\zeta","\u03b7":"\\eta","\u03b8":"\\theta","\u03d1":"\\vartheta","\u03b9":"\\iota","\u03ba":"\\kappa","\u03bb":"\\lambda","\u03bc":"\\mu","\u00b5":"\\mu","\u03bd":"\\nu","\u03be":"\\xi","\u03c0":"\\pi","\u03d6":"\\varpi","\u03c1":"\\rho","\u03f1":"\\varrho","\u03c3":"\\sigma","\u03c2":"\\varsigma","\u03c4":"\\tau","\u03c5":"\\upsilon","\u03c6":"\\varphi","\u03d5":"\\phi","\u03c7":"\\chi","\u03c8":"\\psi","\u03c9":"\\omega","\u0393":"\\Gamma","\u0394":"\\Delta","\u0398":"\\Theta","\u039b":"\\Lambda","\u039e":"\\Xi","\u03a0":"\\Pi","\u03a3":"\\Sigma","\u03a5":"\\Upsilon","\u03a6":"\\Phi","\u03a8":"\\Psi","\u03a9":"\\Omega","\u0391":"A","\u0392":"B","\u0395":"E","\u0396":"Z","\u0397":"H","\u0399":"I","\u039a":"K","\u039c":"M","\u039d":"N","\u039f":"O","\u03a1":"P","\u03a4":"T","\u03a7":"X"};
-var PM_SYM = {"\u00d7":"\\times ","\u00b7":"\\cdot ","\u22c5":"\\cdot ","\u2212":"-","\u2013":"-","\u2264":"\\leq ","\u2265":"\\geq ","\u2248":"\\approx ","\u2260":"\\neq ","\u226a":"\\ll ","\u226b":"\\gg ","\u2208":"\\in ","\u2209":"\\notin ","\u2295":"\\oplus ","\u2297":"\\otimes ","\u2192":"\\to ","\u2190":"\\leftarrow ","\u2194":"\\leftrightarrow ","\u21d2":"\\Rightarrow ","\u21d4":"\\Leftrightarrow ","\u221e":"\\infty ","\u2202":"\\partial ","\u2207":"\\nabla ","\u2211":"\\sum ","\u220f":"\\prod ","\u211a":"\\mathbb{Q}","\u211d":"\\mathbb{R}","\u2124":"\\mathbb{Z}","\u2102":"\\mathbb{C}","\u2115":"\\mathbb{N}","\u27e8":"\\langle ","\u27e9":"\\rangle ","\u2016":"\\Vert ","\u223c":"\\sim ","\u2261":"\\equiv ","\u00b1":"\\pm ","\u2213":"\\mp ","\u221d":"\\propto ","\u2200":"\\forall ","\u2203":"\\exists ","\u2227":"\\wedge ","\u2228":"\\vee ","\u00ac":"\\neg ","\u2282":"\\subset ","\u2286":"\\subseteq ","\u2283":"\\supset ","\u222a":"\\cup ","\u2229":"\\cap ","\u2205":"\\emptyset ","\u2218":"\\circ ","\u22a5":"\\perp ","\u2245":"\\cong ","\u2243":"\\simeq ","\u2032":"'","\u02b9":"'","\u02bc":"'","\u2026":"\\ldots ","\u2020":"\\dagger ","\u00b0":"^{\\circ}","\u2223":"\\mid ","\u2308":"\\lceil ","\u2309":"\\rceil ","\u230a":"\\lfloor ","\u230b":"\\rfloor ","\u2272":"\\lesssim ","\u2273":"\\gtrsim "};
+var PM_SYM = {"\u00d7":"\\times ","\u00b7":"\\cdot ","\u22c5":"\\cdot ","\u2212":"-","\u2013":"-","\u2264":"\\leq ","\u2265":"\\geq ","\u2248":"\\approx ","\u2260":"\\neq ","\u226a":"\\ll ","\u226b":"\\gg ","\u2208":"\\in ","\u2209":"\\notin ","\u2295":"\\oplus ","\u2297":"\\otimes ","\u2192":"\\to ","\u2190":"\\leftarrow ","\u2194":"\\leftrightarrow ","\u21d2":"\\Rightarrow ","\u21d4":"\\Leftrightarrow ","\u221e":"\\infty ","\u2202":"\\partial ","\u2207":"\\nabla ","\u2211":"\\sum ","\u220f":"\\prod ","\u211a":"\\mathbb{Q}","\u211d":"\\mathbb{R}","\u2124":"\\mathbb{Z}","\u2102":"\\mathbb{C}","\u2115":"\\mathbb{N}","\u27e8":"\\langle ","\u27e9":"\\rangle ","\u2016":"\\Vert ","\u223c":"\\sim ","\u2261":"\\equiv ","\u00b1":"\\pm ","\u2213":"\\mp ","\u221d":"\\propto ","\u2200":"\\forall ","\u2203":"\\exists ","\u2227":"\\wedge ","\u2228":"\\vee ","\u00ac":"\\neg ","\u2282":"\\subset ","\u2286":"\\subseteq ","\u2283":"\\supset ","\u222a":"\\cup ","\u2229":"\\cap ","\u2205":"\\emptyset ","\u2218":"\\circ ","\u22a5":"\\perp ","\u2245":"\\cong ","\u2243":"\\simeq ","\u2032":"'","\u02b9":"'","\u02bc":"'","\u2026":"\\ldots ","\u2020":"\\dagger ","\u00b0":"^{\\circ}","\u2223":"\\mid ","\u2308":"\\lceil ","\u2309":"\\rceil ","\u230a":"\\lfloor ","\u230b":"\\rfloor ","\u2272":"\\lesssim ","\u2273":"\\gtrsim ","\u210f":"\\hbar "};
 var PM_SUPM = {"\u2070":"0","\u00b9":"1","\u00b2":"2","\u00b3":"3","\u2074":"4","\u2075":"5","\u2076":"6","\u2077":"7","\u2078":"8","\u2079":"9","\u207a":"+","\u207b":"-","\u207c":"=","\u207d":"(","\u207e":")","\u207f":"n","\u2071":"i","\u1d43":"a","\u1d47":"b","\u1d9c":"c","\u1d48":"d","\u1d49":"e","\u1da0":"f","\u1d4d":"g","\u02b0":"h","\u02b2":"j","\u1d4f":"k","\u02e1":"l","\u1d50":"m","\u1d52":"o","\u1d56":"p","\u02b3":"r","\u02e2":"s","\u1d57":"t","\u1d58":"u","\u1d5b":"v","\u02b7":"w","\u02e3":"x","\u02b8":"y","\u1dbb":"z"};
 var PM_SUBM = {"\u2080":"0","\u2081":"1","\u2082":"2","\u2083":"3","\u2084":"4","\u2085":"5","\u2086":"6","\u2087":"7","\u2088":"8","\u2089":"9","\u208a":"+","\u208b":"-","\u208c":"=","\u208d":"(","\u208e":")","\u2090":"a","\u2091":"e","\u2092":"o","\u2093":"x","\u2095":"h","\u2096":"k","\u2097":"l","\u2098":"m","\u2099":"n","\u209a":"p","\u209b":"s","\u209c":"t","\u1d62":"i","\u2c7c":"j","\u1d63":"r","\u1d64":"u","\u1d65":"v"};
 var PM_SUPC = Object.keys(PM_SUPM).join(""), PM_SUBC = Object.keys(PM_SUBM).join("");
@@ -750,11 +760,18 @@ var PM_SYM_CLASS = "[" + Object.keys(PM_SYM).filter(function (k) { return !/^[\u
 var PM_OPS = new Set(["=", "\u2248", "\u2260", "\u2264", "\u2265", "<", ">", "\u226a", "\u226b", "+", "\u2212", "\u00d7", "\u00b7", "\u22c5", "\u2295", "\u2297", "\u2208", "\u2209", "\u2192", "\u2190", "\u2194", "\u21d2", "\u21d4", "\u223c", "\u2261", "\u00b1", "/", "*", "\u2218", "\u221d", "\u2282", "\u2286", "\u222a", "\u2229", "\u2243", "\u2245", "\u2272", "\u2273", "-", "\u2013", "|", "\u2223"]);
 var PM_EQ_OPS = new Set(["=", "\u2248", "\u2260", "\u2264", "\u2265", "<", ">", "\u226a", "\u226b", "\u2208", "\u2261", "\u223c"]);
 var PM_SUBBASE = "(?:\ud835[\udd38-\udd6b]|[A-Za-z\u0391-\u03a9\u03b1-\u03c9\u2115\u211a\u211d\u2124\u2102\u220f\u2211\\)\\]])";
-var PM_RE_SUB = new RegExp("(?<![A-Za-z0-9_\\\\])" + PM_SUBBASE + "\\\\?_(?:\\{[^{}]{1,40}\\}|[A-Za-z0-9\u03b1-\u03c9\u0391-\u03a9]{1,8}(?![A-Za-z0-9_\u03b1-\u03c9]))");
+var PM_RE_SUB = new RegExp("(?:(?<![A-Za-z0-9_\\\\])" + PM_SUBBASE + "|[\\)\\]])\\\\?_(?:\\{[^{}]{1,40}\\}|[A-Za-z0-9\u03b1-\u03c9\u0391-\u03a9]{1,8}(?![A-Za-z0-9_\u03b1-\u03c9])|[A-Za-z0-9](?=[\u0391-\u03a9\u03b1-\u03c9]))");
 var PM_RE_PIPE_SUB = /\|[^|\s]{1,12}\|_[A-Za-z0-9]{1,4}/;
-var PM_RE_CARET = /(?<![A-Za-z0-9_\\])[A-Za-z0-9\u0391-\u03a9\u03b1-\u03c9\)\]]\^(?:\{[^{}\s]{1,40}\}|\([^()\s]{1,30}\)|[A-Za-z0-9\u03b1-\u03c9\-\u2212]{1,6}(?![A-Za-z0-9_]))/;
+var PM_RE_CARET = /(?:(?<![A-Za-z0-9_\\])[A-Za-z0-9\u0391-\u03a9\u03b1-\u03c9]|[\)\]])\^(?:\{[^{}\s]{1,40}\}|\([^()\s]{1,30}\)|[A-Za-z0-9\u03b1-\u03c9\-\u2212]{1,6}(?![A-Za-z0-9_]))/;
 var PM_RE_UNI = new RegExp("(?<![a-z][A-Za-z\\u0370-\\u03ff]|[A-Za-z\\u0370-\\u03ff][a-z])(?<=[A-Za-z0-9\\u0370-\\u03ff\\)\\]" + PM_SUPC + PM_SUBC + "])[" + PM_SUPC + PM_SUBC + "]");
 var PM_RE_GREEK = new RegExp(PM_GREEK_CLASS);
+// MATH-RESIDUE-2 (3.9.8, #2023): shapes the 2026-10-06 06:00 sweep still counted as residue on 68 pages.
+var PM_RE_COEF = /^[+\u2212-]?\d+(?:\.\d+)?[A-Za-z\u0391-\u03a9\u03b1-\u03c9](?:\\?_|\^)/;              // 3p_Z, 2d^2
+var PM_RE_FUNC_SCRIPT = new RegExp("(?<![A-Za-z])(?:" + PM_FUNCS + ")[" + PM_SUBC + PM_SUPC + "]+");  // log\u2082(0.1)
+var PM_RE_PI = /(?<![A-Za-z0-9_\\])pi\^/;                                                          // pi^2/6
+var PM_CHEM = "(?:[A-Z][a-z]?[" + PM_SUBC + "]*|\\((?:[A-Z][a-z]?[" + PM_SUBC + "]*)+\\)[" + PM_SUBC + "]*)+";
+var PM_RE_CHEM = new RegExp("^" + PM_CHEM + "$");                                                      // Si\u2083N\u2084, Ca\u2089(PO\u2084)\u2086, AdS\u2083
+function pmIsChem(c) { return PM_RE_CHEM.test(c) && new RegExp("[" + PM_SUBC + "]").test(c) && /[A-Z][a-z]|[A-Z][^A-Z]*[A-Z]/.test(c); }
 var PM_RE_SYM = new RegExp(PM_SYM_CLASS + "|\u221a");
 
 function pmBalanced(s) {
@@ -779,10 +796,12 @@ function pmStripPunct(w) {
   }
   // a leading paren that never closes inside the core stays out
   while (w[0] === "(" && !pmBalanced(w)) { lead += "("; w = w.slice(1); }
+  // MATH-RESIDUE-2: a leading "(" that does close inside the word is part of it ("(1\u2212p)^N", "(31/3)^4")
+  while (lead.length && lead[lead.length - 1] === "(" && !pmBalanced(w) && pmBalanced("(" + w)) { w = "(" + w; lead = lead.slice(0, -1); }
   return { lead: lead, core: w, trail: trail };
 }
 function pmIsStrong(c) {
-  return new RegExp("^(?:" + PM_UNITS + ")[" + PM_SUPC + "]+$").test(c) || PM_RE_SUB.test(c) || PM_RE_PIPE_SUB.test(c) || PM_RE_CARET.test(c) || PM_RE_UNI.test(c) || PM_RE_GREEK.test(c) || PM_RE_SYM.test(c) || /\u221a/.test(c);
+  return PM_RE_COEF.test(c) || PM_RE_FUNC_SCRIPT.test(c) || PM_RE_PI.test(c) || new RegExp("^(?:" + PM_UNITS + ")[" + PM_SUPC + "]+$").test(c) || PM_RE_SUB.test(c) || PM_RE_PIPE_SUB.test(c) || PM_RE_CARET.test(c) || PM_RE_UNI.test(c) || PM_RE_GREEK.test(c) || PM_RE_SYM.test(c) || /\u221a/.test(c);
 }
 function pmAtomish(c) {
   if (!/^[()\[\]A-Za-z0-9.,+\-\u2212\u00b7\u00d7\u22c5*\/]{1,30}$/.test(c)) return false;
@@ -818,8 +837,12 @@ function pmClassify(core) {
   if (/:\/\/|^www\.|@|^10\.\d{4,}\//.test(core)) return "break";
   if (/-[a-z]{2,}-/.test(core)) return "break";                       // 3.9.7: prose compound ("Q-vs-R", "kappa-to-error")
   if (/\*\*|\*[^*\s]+\*/.test(core)) return "break";                  // 3.9.7: markdown emphasis inside the word ("A(*v*)") stays markdown
+  // MATH-RESIDUE-2: a lone "*" after a non-operand ("\u222b*{") or before a relation or brace ("D\u03d5*>") is an emphasis marker,
+  // not math; "\u03c4*" (tau-star) and "a*b" stay math.
+  if (core.length > 1 && /(?:^|[^A-Za-z0-9\u0370-\u03ff)\]*])\*(?!\*)|\*[<>{=]/.test(core)) return "break";
   if (PM_OPS.has(core)) return "op";
   if (pmGreekWord(core)) return "break";
+  if (pmIsChem(core)) return "strong";                                // MATH-RESIDUE-2: a formula is not a word
   if (pmIsStrong(core)) {
     if (pmWordLike(core)) return "break";
     // multi-letter plain prefix words (snake_case) must not be strong: base must be a single token char
@@ -832,6 +855,9 @@ function pmClassify(core) {
 function pmToTex(s) {
   s = s.replace(/\\([_*#])/g, "$1");
   s = s.replace(/\\/g, "\\backslash ");
+  // MATH-RESIDUE-2: element groups of a formula token are upright (\mathrm{Si}_{3}\mathrm{N}_{4}); pi before ^ is \pi.
+  s = s.replace(new RegExp("(?<![A-Za-z\\\\_^])" + PM_CHEM + "(?![A-Za-z])", "g"), function (m) { return pmIsChem(m) ? m.replace(/[A-Z][a-z]?/g, function (e) { return "\\mathrm{" + e + "}"; }) : m; });
+  s = s.replace(/(?<![A-Za-z\\])pi(?=\^)/g, "\\pi ");
   s = s.replace(/(.)\u0303/gu, "\\tilde{$1}").replace(/(.)\u0304/gu, "\\bar{$1}").replace(/(.)\u0302/gu, "\\hat{$1}").replace(/(.)\u0307/gu, "\\dot{$1}");
   // sqrt
   var out = "";
@@ -856,7 +882,7 @@ function pmToTex(s) {
   s = s.replace(new RegExp("[" + PM_SUBC + "]+", "g"), function (m) { return "_{" + m.split("").map(function (c) { return PM_SUBM[c]; }).join("") + "}"; });
   // bare _sub and ^sup: braces, \mathrm for multi-letter words (recursive for nested subscripts)
   function scripts(x) {
-    return x.replace(/_\{([^{}]+)\}|_([A-Za-z0-9\u03b1-\u03c9\u0391-\u03a9]+)/g, function (m, a, b) {
+    return x.replace(/_\{([^{}]+)\}|_([A-Za-z0-9]+(?![\u03b1-\u03c9\u0391-\u03a9])|[A-Za-z0-9](?=[\u03b1-\u03c9\u0391-\u03a9])|[\u03b1-\u03c9\u0391-\u03a9][A-Za-z0-9\u03b1-\u03c9\u0391-\u03a9]*)/g, function (m, a, b) {
       var t = a != null ? scripts(a) : b;
       if (a == null && /^[A-Za-z]{2,}$/.test(t) && !/^[a-z]{2}$/.test(t)) t = "\\mathrm{" + t + "}";
       else if (a != null && /^[A-Za-z]{3,}$/.test(t)) t = "\\mathrm{" + t + "}";
@@ -914,7 +940,21 @@ function pseudoMath(text, save, stats) {
   }
   var res = parts.slice();
   var n = 0;
-  function emit(a, b) {
+  // MATH-RESIDUE-2 (3.9.8): a run that fails validation is no longer all-or-nothing. It is split at words whose own
+  // brackets do not balance ("{\u03b3_i," "t_g)") and each part is tried again; failing that, each strong word is tried alone.
+  // Every emitted part passes the same checks as a whole run, so nothing new reaches KaTeX unchecked.
+  function splitEmit(a, b, depth) {
+    var start = a, segs = [];
+    for (var k = a; k <= b; k++) {
+      var w = words[k], whole = w.sp.lead + w.sp.core + w.sp.trail;
+      if (/[(){}\[\]]/.test(w.sp.lead + w.sp.trail) && !pmBalanced(whole)) { if (start <= k - 1) segs.push([start, k - 1]); segs.push([k, k]); start = k + 1; }
+    }
+    if (start <= b) segs.push([start, b]);
+    if (segs.length > 1) { segs.forEach(function (sg) { emit(sg[0], sg[1], depth + 1); }); return; }
+    for (var j = a; j <= b; j++) if (words[j].kind === "strong") emit(j, j, depth + 1);
+  }
+  function emit(a, b, depth) {
+    depth = depth || 0;
     // a..b inclusive indices into words
     while (a <= b && words[a].kind === "op" && !/^[+\u2212-]$/.test(words[a].sp.core) ) a++;
     while (b >= a && words[b].kind === "op") b--;
@@ -943,13 +983,14 @@ function pseudoMath(text, save, stats) {
       raw.push((q === a ? "" : ww.sp.lead) + ww.sp.core + (q === b ? "" : ww.sp.trail));
     }
     var src = raw.join(" ");
+    var retry = function () { if (depth < 3 && b > a) splitEmit(a, b, depth); };
     if (/\$/.test(src)) return;
     var tailx = words[b].sp.trail;
     while (!pmBalanced(src) && /^[)\]}]/.test(tailx)) { src += tailx[0]; tailx = tailx.slice(1); }
-    if (!pmBalanced(src)) return;
+    if (!pmBalanced(src)) return retry();
     var tex;
-    try { tex = pmToTex(src); } catch (e) { return; }
-    if (!tex || /[^\x00-\x7f]/.test(tex) || /\\/.test(src.replace(/\\([_*#])/g, "$1")) || !pmScriptsOk(tex) || /[\u0000-\u0008]/.test(tex) || !pmBalanced(tex) || /\\[^a-zA-Z,;:!%#&{} ]|[\u0300-\u036f]/.test(tex.replace(/\\(?=[A-Za-z,;:!%#&{}\\ ])/g, ""))) return;
+    try { tex = pmToTex(src); } catch (e) { return retry(); }
+    if (!tex || /[^\x00-\x7f]/.test(tex) || /\\/.test(src.replace(/\\([_*#])/g, "$1")) || !pmScriptsOk(tex) || /[\u0000-\u0008]/.test(tex) || !pmBalanced(tex) || /\\[^a-zA-Z,;:!%#&{} ]|[\u0300-\u036f]/.test(tex.replace(/\\(?=[A-Za-z,;:!%#&{}\\ ])/g, ""))) return retry();
     var token = save(tex, src);
     // replace in res: first word gets lead + token + ... last word's trail kept
     var fw = words[a], lw = words[b];
@@ -977,7 +1018,8 @@ function pmScriptsOk(tex) {
   function skipArg(j) {
     while (tex[j] === " ") j++;
     if (tex[j] === "{") { var d = 0; for (; j < n; j++) { if (tex[j] === "{") d++; else if (tex[j] === "}") { d--; if (d === 0) return j + 1; } } return n; }
-    if (tex[j] === "\\") { j++; while (j < n && /[A-Za-z]/.test(tex[j])) j++; return j; }
+    // MATH-RESIDUE-2: a command's brace argument belongs to it ("_\\mathrm{Zp}_{1}" is a double subscript).
+    if (tex[j] === "\\") { j++; while (j < n && /[A-Za-z]/.test(tex[j])) j++; if (tex[j] === "{") { var e = 0; for (; j < n; j++) { if (tex[j] === "{") e++; else if (tex[j] === "}") { e--; if (e === 0) return j + 1; } } return n; } return j; }
     return j + 1;
   }
   while (i < n) {
