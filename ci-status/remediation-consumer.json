@@ -1,66 +1,122 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3fc514bbe1d6",
- "due": 7,
- "pass": 0,
- "fail": 7,
+ "verifier": "remediation-consumer@92b700717588",
+ "due": 14,
+ "pass": 10,
+ "fail": 4,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1793",
-   "issue_id": 1793,
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2083",
+   "issue_id": 2083,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-lifecycle-metric-freshness, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-1683",
+   "issue_id": 1683,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-1794",
-   "issue_id": 1794,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1795",
-   "issue_id": 1795,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1798",
-   "issue_id": 1798,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1834",
-   "issue_id": 1834,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1838",
-   "issue_id": 1838,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2062",
-   "issue_id": 2062,
+   "class": "issue-1711",
+   "issue_id": 1711,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1836",
+   "issue_id": 1836,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
    "written": true
   }
  ],
@@ -87,9 +143,10 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 3.4,
- "spent_ms": 25825,
- "head": "3fc514bbe1d6e07818531b97eed1ae4f644c5832",
+ "https": 8,
+ "runtime_verified_share_24h": 4.6,
+ "spent_ms": 40628,
+ "head": "92b700717588b8a39016ed5616b5d0e4983cfa6e",
  "job_status": "success",
- "ts": "2026-10-06T18:07:34Z"
+ "ts": "2026-10-06T19:05:00Z"
 }
