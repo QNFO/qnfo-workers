@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.11.0-brief-claim"; // 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.12.0-resilience"; // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -1387,14 +1387,25 @@ async function feedXml(env, u) {
 __name(feedXml, "feedXml");
 __name2(feedXml, "feedXml");
 __name22(feedXml, "feedXml");
+// PERSONAL-RESILIENCE-1: confirmed subscribers, paged by id (the old single LIMIT 500 silently dropped everyone after the 500th).
+async function confirmedSubscribers(env) {
+  var all = [], last = 0;
+  for (var page = 0; page < 40; page++) {
+    var q = await env.PERSONAL.prepare("SELECT id, email, token FROM companion_subscribers WHERE status = 'confirmed' AND id > ?1 ORDER BY id LIMIT 500").bind(last).all();
+    var rows = (q && q.results) || [];
+    for (var i = 0; i < rows.length; i++) all.push(rows[i]);
+    if (rows.length < 500) break;
+    last = rows[rows.length - 1].id;
+  }
+  return all;
+}
 async function broadcast(env, slug, origin) {
   if (!env.EMAIL) return { ok: false, error: "no email binding" };
   try {
     var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(slug).all();
     var prow = (pr.results || [])[0];
     if (!prow) return { ok: false, error: "no piece" };
-    var q = await env.PERSONAL.prepare("SELECT email, token FROM companion_subscribers WHERE status = 'confirmed' LIMIT 500").all();
-    var subs = q.results || [];
+    var subs = await confirmedSubscribers(env);
     var base = subBase(env, origin);
     var link = base + "/p/" + slug;
     var sent = 0, failed = 0;
@@ -1420,8 +1431,7 @@ async function sendDigest(env) {
     var pr = await env.PERSONAL.prepare("SELECT slug, title, form FROM companion_pieces WHERE day = ? ORDER BY id ASC").bind(day).all();
     var rows = pr.results || [];
     if (!rows.length) return { ok: true, skipped: "no pieces today", pieces: 0 };
-    var q = await env.PERSONAL.prepare("SELECT email, token FROM companion_subscribers WHERE status = 'confirmed' LIMIT 500").all();
-    var subs = q.results || [];
+    var subs = await confirmedSubscribers(env);
     var base = "https://reading.q08.org";
     var list = rows.map(function(r) {
       return "- " + r.title + " \u2014 " + base + "/p/" + r.slug;
@@ -1670,7 +1680,7 @@ var worker_default = {
         last = (r2.results || [])[0] || null;
       } catch (e) {
       }
-      return json({ ok: true, version: VERSION, capabilities: ["companion-writing", "morning-brief", "subscriber-feed", "feedback", "owner-prompts"], limitations: ["every route except /health needs the companion key (?k=)", "writes at most 5 pieces a day, only at the generation hours (UTC) listed here", "the writer is DeepSeek via the personal plane's own key (BYOK), outside the qnfo AI router", "the morning brief goes only to the owner's address"], pieces: n, last, rhythm: RHYTHM, writer: WRITER_MODEL, writer_essay: WRITER_MODEL_ESSAY, topics: TOPICS.length, gen_hours_utc: GEN_HOURS_UTC, max_per_day: MAX_PIECES_PER_DAY, models: MODELS });
+      return json({ ok: true, version: VERSION, capabilities: ["companion-writing", "morning-brief", "subscriber-feed", "feedback", "owner-prompts"], limitations: ["every route except /health needs the companion key (?k=)", "writes at most 5 pieces a day, only at the generation hours (UTC) listed here", "the writer is DeepSeek via the personal plane's own key (BYOK), outside the qnfo AI router", "the morning brief goes only to the owner's address", "the morning brief and owner questions bypass email_suppression by design; the owner stops them with one row: UPDATE calendar_meta SET v='0' WHERE k='owner_notice_enabled' (qnfo-audit; INSERT it if absent; 0/off/false/no stops, anything else or no row means on)", "an unsent brief claim older than 90 minutes is retried hourly between 08:00 and 12:00 Amsterdam; an owner question whose worker died mid-send is retried after 6 hours, so a very rare duplicate is possible"], pieces: n, last, rhythm: RHYTHM, writer: WRITER_MODEL, writer_essay: WRITER_MODEL_ESSAY, topics: TOPICS.length, gen_hours_utc: GEN_HOURS_UTC, max_per_day: MAX_PIECES_PER_DAY, models: MODELS });
     }
     if (!authorized(request, env)) {
       return json({ error: { message: "unauthorized: append ?k=KEY" } }, 401);
@@ -2164,8 +2174,45 @@ function promptQuietHour(ms) {
 // MORNING-BRIEF-OWNER-NOTICE-1: one shared owner-notice sender. Goes to the owner's own address only (the recipient is a
 // constant, never a parameter), never reads or writes email_suppression, so the 2026-09-22 digest opt-out keeps silencing
 // essay mail while the owner's own transactional mail (morning brief, owner questions) arrives.
+// PERSONAL-RESILIENCE-1: shared helpers.
+// Owner kill switch: qnfo-audit.calendar_meta (k, v) row owner_notice_enabled. 0/off/false/no/disabled stops the morning brief and
+// owner questions; a missing row, any other value or an unreadable table means on (default on).
+async function ownerNoticeEnabled(env) {
+  try {
+    if (!env.AUDIT) return true;
+    var r = await env.AUDIT.prepare("SELECT v FROM calendar_meta WHERE k = 'owner_notice_enabled'").first();
+    if (!r || r.v == null) return true;
+    return ["0", "off", "false", "no", "disabled"].indexOf(String(r.v).trim().toLowerCase()) < 0;
+  } catch (e) { return true; }
+}
+// Guarded ALTER: add a column only when PRAGMA table_info does not list it; a concurrent duplicate-column error is not a failure.
+async function ensureColumns(db, table, cols) {
+  var info = await db.prepare("PRAGMA table_info(" + table + ")").all();
+  var have = {}; ((info && info.results) || []).forEach(function (c) { have[c.name] = 1; });
+  for (var name in cols) {
+    if (have[name]) continue;
+    try { await db.prepare("ALTER TABLE " + table + " ADD COLUMN " + name + " " + cols[name]).run(); }
+    catch (e) { if (!/duplicate column/i.test(String(e && e.message || e))) throw e; }
+  }
+}
+// The UTC instant of 00:00 Europe/Amsterdam on the Amsterdam day of ms (winter UTC+1, summer UTC+2).
+function amsMidnightUtcMs(ms) {
+  var day = amsDayKey(new Date(ms));
+  var base = new Date(day + "T00:00:00Z").getTime();
+  for (var off = 2; off >= 1; off--) {
+    var t = base - off * 36e5;
+    if (amsDayKey(new Date(t)) === day && amsDayKey(new Date(t - 6e4)) !== day) return t;
+  }
+  return base - 2 * 36e5;
+}
+function sqlStamp(ms) { return new Date(ms).toISOString().replace("T", " ").slice(0, 19); }
+var PROMPT_CLAIM_STALE_MS = 6 * 36e5;
+var BRIEF_RETRY_AFTER_MS = 90 * 6e4;
 async function sendOwnerNotice(env, subject, text) {
   if (!env.SEND_EMAIL && !env.EMAIL) return { ok: false, error: "no mail binding" };
+  if (!(await ownerNoticeEnabled(env))) return { ok: false, disabled: true, error: "owner notices disabled (calendar_meta owner_notice_enabled)" };
+  subject = String(subject == null ? "" : subject).replace(/[\r\n]+/g, " ").slice(0, 200);
+  text = String(text == null ? "" : text).slice(0, 20000);
   try {
     if (env.SEND_EMAIL) {
       await env.SEND_EMAIL.send({ to: PROMPT_OWNER, from: "rowan.quni@qnfo.org", subject: subject, text: text });
@@ -2187,23 +2234,34 @@ async function deliverOwnerPrompts(env, nowMs) {
   if (!env.SEND_EMAIL && !env.EMAIL) { out.skipped = "no mail binding"; return out; }
   nowMs = nowMs || Date.now();
   try {
+    if (!(await ownerNoticeEnabled(env))) { out.skipped = "owner notices disabled"; return out; }
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS owner_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ref TEXT, subject TEXT NOT NULL, body TEXT NOT NULL, priority INTEGER DEFAULT 5, not_before TEXT, created_at TEXT DEFAULT (datetime('now')), sent_at TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, UNIQUE(kind, ref))").run();
+    await ensureColumns(env.AUDIT, "owner_questions", { claimed_at: "TEXT", flagged_at: "TEXT" });
     if (promptQuietHour(nowMs)) { out.skipped = "quiet hours"; return out; }
-    var nowStr = new Date(nowMs).toISOString().replace("T", " ").slice(0, 19);
-    var day = amsDayKey(new Date(nowMs));
-    var startUtc = new Date(day + "T00:00:00Z").getTime() - 2 * 36e5;
-    var cnt = await env.AUDIT.prepare("SELECT count(*) n FROM owner_questions WHERE sent_at >= ?1").bind(new Date(startUtc).toISOString().replace("T", " ").slice(0, 19)).first();
+    var nowStr = sqlStamp(nowMs);
+    var cnt = await env.AUDIT.prepare("SELECT count(*) n FROM owner_questions WHERE sent_at >= ?1").bind(sqlStamp(amsMidnightUtcMs(nowMs))).first();
     if (cnt && cnt.n >= PROMPT_DAILY_CAP) { out.skipped = "daily cap"; return out; }
-    var row = await env.AUDIT.prepare("SELECT id, subject, body FROM owner_questions WHERE sent_at IS NULL AND attempts < ?1 AND (not_before IS NULL OR not_before <= ?2) ORDER BY priority, id LIMIT 1").bind(PROMPT_MAX_ATTEMPTS, nowStr).first();
+    var staleStr = sqlStamp(nowMs - PROMPT_CLAIM_STALE_MS);
+    var row = await env.AUDIT.prepare("SELECT id, subject, body FROM owner_questions WHERE sent_at IS NULL AND attempts < ?1 AND (not_before IS NULL OR not_before <= ?2) AND (claimed_at IS NULL OR claimed_at <= ?3) ORDER BY priority, id LIMIT 1").bind(PROMPT_MAX_ATTEMPTS, nowStr, staleStr).first();
     if (!row) { out.skipped = "queue empty"; return out; }
-    var nr = await sendOwnerNotice(env, row.subject, row.body);
-    var err = nr.ok ? null : nr.error;
-    if (err) {
-      await env.AUDIT.prepare("UPDATE owner_questions SET attempts = attempts + 1, last_error = ?2 WHERE id = ?1").bind(row.id, err).run();
+    // PERSONAL-RESILIENCE-1: claim the row (attempt counted) BEFORE the mail leaves, so a worker death or a failed sent_at write
+    // cannot make the next tick mail the same question again. A failed send releases the claim; a claim whose worker died is
+    // retried only after PROMPT_CLAIM_STALE_MS.
+    var claim = await env.AUDIT.prepare("UPDATE owner_questions SET claimed_at = ?2, attempts = attempts + 1 WHERE id = ?1 AND sent_at IS NULL AND (claimed_at IS NULL OR claimed_at <= ?3)").bind(row.id, nowStr, staleStr).run();
+    if (!claim || !claim.meta || !claim.meta.changes) { out.skipped = "claimed elsewhere"; return out; }
+    var nr;
+    try { nr = await sendOwnerNotice(env, row.subject, row.body); } catch (eSend) { nr = { ok: false, error: String(eSend && eSend.message || eSend).slice(0, 240) }; }
+    if (!nr || !nr.ok) {
+      var err = (nr && nr.error) || "send failed";
+      await env.AUDIT.prepare("UPDATE owner_questions SET claimed_at = NULL, last_error = ?2 WHERE id = ?1").bind(row.id, err).run();
       out.error = err;
     } else {
-      await env.AUDIT.prepare("UPDATE owner_questions SET sent_at = ?2, attempts = attempts + 1, last_error = NULL WHERE id = ?1").bind(row.id, nowStr).run();
       out.sent = 1;
+      var marked = false;
+      for (var t = 0; t < 2 && !marked; t++) {
+        try { await env.AUDIT.prepare("UPDATE owner_questions SET sent_at = ?2, last_error = NULL WHERE id = ?1").bind(row.id, nowStr).run(); marked = true; } catch (eMark) { out.error = "sent but sent_at not recorded: " + String(eMark && eMark.message || eMark).slice(0, 160); }
+      }
+      if (marked) out.error = null;
     }
   } catch (e) { out.error = String(e && e.message || e).slice(0, 240); }
   return out;
@@ -2227,7 +2285,7 @@ async function queueLedgerFollowUp(env, nowMs) {
   try {
     await env.AUDIT.prepare(OWNER_QUESTIONS_DDL).run();
     var day = amsDayKey(new Date(nowMs));
-    var startUtc = new Date(new Date(day + "T00:00:00Z").getTime() - 2 * 36e5).toISOString().replace("T", " ").slice(0, 19);
+    var startUtc = sqlStamp(amsMidnightUtcMs(nowMs));
     var cnt = await env.AUDIT.prepare("SELECT count(*) n FROM owner_questions WHERE kind = 'follow-up' AND created_at >= ?1").bind(startUtc).first();
     if (cnt && cnt.n >= 1) { out.skipped = "daily cap"; return out; }
     var due = await env.PERSONAL.prepare("SELECT id, name, met_where, days_since FROM v_ledger_due LIMIT 10").all();
@@ -2277,27 +2335,44 @@ async function flagUndeliverableQuestions(env) {
   var out = { filed: 0 };
   try {
     if (!env.AUDIT) return out;
-    var rows = await env.AUDIT.prepare("SELECT id, subject, attempts, last_error FROM owner_questions WHERE attempts >= ?1 AND sent_at IS NULL ORDER BY id LIMIT 10").bind(PROMPT_MAX_ATTEMPTS).all();
+    await ensureColumns(env.AUDIT, "owner_questions", { claimed_at: "TEXT", flagged_at: "TEXT" });
+    var rows = await env.AUDIT.prepare("SELECT id, subject, attempts, last_error FROM owner_questions WHERE attempts >= ?1 AND sent_at IS NULL AND flagged_at IS NULL ORDER BY id LIMIT 10").bind(PROMPT_MAX_ATTEMPTS).all();
     var list = (rows && rows.results) || [];
     for (var i = 0; i < list.length; i++) {
       var q = list[i], title = "OWNER-QUESTION-UNDELIVERABLE-1: " + q.subject;
       var open = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' LIMIT 1").bind(title).first();
-      if (open) continue;
       var now = Date.now();
+      // flagged once per row (flagged_at), so closing the issue while the row is still stuck does not refile it
+      if (open) { await env.AUDIT.prepare("UPDATE owner_questions SET flagged_at = ?2 WHERE id = ?1").bind(q.id, sqlStamp(now)).run(); continue; }
       var desc = "owner_questions id " + q.id + " has " + q.attempts + " failed delivery attempts and was never sent. last_error: " + String(q.last_error || "none").slice(0, 200) + ". Charter pillar: personal. Fix the send path (sendOwnerNotice / SEND_EMAIL), then reset attempts to 0 so the hourly tick resends it.";
       await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) VALUES (?1, ?2, 'personal-companion', 'personal', 'medium', 'open', ?3, ?3)").bind(title, desc, now).run();
+      await env.AUDIT.prepare("UPDATE owner_questions SET flagged_at = ?2 WHERE id = ?1").bind(q.id, sqlStamp(now)).run();
       out.filed++;
     }
   } catch (e) { out.error = String(e && e.message || e).slice(0, 240); }
   return out;
 }
 __name(flagUndeliverableQuestions, "flagUndeliverableQuestions");
-async function sendMorningBrief(env) {
+async function sendMorningBrief(env, nowMs) {
   try {
+    nowMs = nowMs || Date.now();
+    if (!(await ownerNoticeEnabled(env))) return { ok: true, skipped: "owner notices disabled" };
     await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_morning_brief (date TEXT PRIMARY KEY, sent_at TEXT NOT NULL)").run();
-    var day = amsDayKey(/* @__PURE__ */ new Date());
-    var already = await env.PERSONAL.prepare("SELECT date FROM companion_morning_brief WHERE date = ?").bind(day).first();
-    if (already) return { ok: true, skipped: "already sent" };
+    // PERSONAL-RESILIENCE-1: claimed_at + sent. A row from before this column exists reads sent=1 (the column default).
+    await ensureColumns(env.PERSONAL, "companion_morning_brief", { claimed_at: "TEXT", sent: "INTEGER DEFAULT 1" });
+    var day = amsDayKey(new Date(nowMs));
+    var already = await env.PERSONAL.prepare("SELECT date, sent, claimed_at, sent_at FROM companion_morning_brief WHERE date = ?").bind(day).first();
+    var retryFrom = null;
+    if (already) {
+      if (already.sent !== 0) return { ok: true, skipped: "already sent" };
+      // an unsent claim: the worker died (or the release failed) between claim and send; retry once it is 90 min old,
+      // only inside 08:00-12:00 Amsterdam
+      var cl = Date.parse(already.claimed_at || already.sent_at);
+      if (!(nowMs - cl >= BRIEF_RETRY_AFTER_MS)) return { ok: true, skipped: "claim in flight" };
+      var hr = Number(amsParts(new Date(nowMs)).hour);
+      if (!(hr >= 8 && hr < 12)) return { ok: true, skipped: "retry window closed" };
+      retryFrom = already.claimed_at || already.sent_at;
+    }
     var br = await env.PERSONAL.prepare("SELECT payload FROM daily_briefs WHERE date = ?").bind(day).first();
     if (!br || !br.payload) return { ok: true, skipped: "no brief yet" };
     var b = null;
@@ -2361,12 +2436,19 @@ async function sendMorningBrief(env) {
     var body = L.join(NL);
     // MORNING-BRIEF-CLAIM-1: claim the day before sending so two overlapping ticks cannot both mail it; a failed send
     // releases the claim so the next hourly tick retries.
-    var claim = await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_morning_brief (date, sent_at) VALUES (?, ?)").bind(day, (/* @__PURE__ */ new Date()).toISOString()).run();
+    var stamp = new Date(nowMs).toISOString();
+    var claim = retryFrom
+      ? await env.PERSONAL.prepare("UPDATE companion_morning_brief SET claimed_at = ?2, sent_at = ?2 WHERE date = ?1 AND sent = 0 AND COALESCE(claimed_at, sent_at) = ?3").bind(day, stamp, retryFrom).run()
+      : await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_morning_brief (date, sent_at, claimed_at, sent) VALUES (?, ?, ?, 0)").bind(day, stamp, stamp).run();
     if (!claim || !claim.meta || !claim.meta.changes) return { ok: true, skipped: "already sent" };
     var r;
     try { r = await sendOwnerNotice(env, "Morning - " + day, body); } catch (eSend) { r = { ok: false, error: String(eSend && eSend.message || eSend) }; }
     if (!r || !r.ok) {
-      try { await env.PERSONAL.prepare("DELETE FROM companion_morning_brief WHERE date = ?").bind(day).run(); } catch (eRel) { console.error("morning-brief claim release:", String(eRel && eRel.message || eRel)); }
+      try { await env.PERSONAL.prepare("DELETE FROM companion_morning_brief WHERE date = ? AND sent = 0").bind(day).run(); } catch (eRel) { console.error("morning-brief claim release:", String(eRel && eRel.message || eRel)); }
+    } else {
+      for (var mt = 0; mt < 2; mt++) {
+        try { await env.PERSONAL.prepare("UPDATE companion_morning_brief SET sent = 1 WHERE date = ?").bind(day).run(); break; } catch (eMk) { console.error("morning-brief sent mark:", String(eMk && eMk.message || eMk)); }
+      }
     }
     return r;
   } catch (e) {
@@ -2460,6 +2542,8 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
 export {
   GenerationFlow,
   deliverOwnerPrompts,
+  broadcast,
+  confirmedSubscribers,
   sendOwnerNotice,
   sendMorningBrief,
   flagUndeliverableQuestions,
