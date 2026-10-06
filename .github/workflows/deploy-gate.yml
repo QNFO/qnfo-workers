@@ -436,6 +436,13 @@ jobs:
       # scoreboard, lever planning, issue text) and one tick over an in-memory D1 seeded from the migration.
       - name: TRANSFORMATION-LOOP-1 offline suite (qnfo-fleet-control)
         run: node --no-warnings qnfo-fleet-control/transformation.test.mjs
+      # ATTENTION-LOOP-1 (qnfo-fleet-dashboard 1.24.0, pillar reach; owner directive 2026-10-06): the per-item human ledger
+      # builder, the verdict rules, the share map, the efficacy grading and one scorecard day over an in-memory D1.
+      - name: ATTENTION-LOOP-1 offline suite (qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-fleet-dashboard/attention.test.mjs
+      # ATTENTION-SHARE-1 (qnfo-social 0.8.0): shares scale the caps down and never up, noticed-first ordering, daily credit.
+      - name: ATTENTION-SHARE-1 offline suite (qnfo-social)
+        run: node --no-warnings qnfo-social/attention-share.test.mjs
       # HUMAN-AUDIENCE-1 (qnfo-fleet-dashboard 1.22.3, pillar reach): external_referred_pageviews_7d and
       # continuation_pageviews_7d from one bot-filtered RUM read; registry, ledger, series; WATCHMAKER_OPS entries.
       - name: HUMAN-AUDIENCE-1 offline suite (qnfo-fleet-dashboard)
@@ -488,6 +495,9 @@ jobs:
       # ASK-LEXICAL-CATALOG-1: retrieve() ranks the published catalog (BM25, no model call) beside the stale vector index.
       - name: ASK-LEXICAL-CATALOG-1 offline suite (qnfo-ai-search 2.2.7)
         run: node --no-warnings qnfo-ai-search/lexical-catalog.test.mjs
+      # ASK-CORPUS-FEEDER-1 + QGEN-COMPLETE-1 (#2029): the vector index is fed again, never while an ai_spend cap is breached.
+      - name: ASK-CORPUS-FEEDER-1 offline suite (qnfo-ai-search 2.2.8)
+        run: node --no-warnings qnfo-ai-search/corpus-feeder.test.mjs
 
       # GROUND-OR-SLOT-1 + GROUND-THIN-FAILFAST-1 (agent_issues 1751): the arXiv OR fallback keeps its query slot, and a
       # grounding too thin to pass gate-refcount stops at ground instead of running the whole pipeline.

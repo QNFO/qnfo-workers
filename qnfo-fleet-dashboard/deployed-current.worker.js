@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.24.0-changelog"; /* 1.24.0 FLEET-CHANGELOG-1 (owner request 2026-10-06, pillar autonomy): a Changelog tab (/changelog, JSON /api/changelog, open to everyone) of what the fleet ships for itself: each worker version whose major or minor number is above every earlier one, and each worker Cloudflare created after 2026-09-29, from the canonical deploy ledger deployment_history; described from the commit on main that set the version (no model call), tagged with charter pillar and the public hostnames it serves, filterable (autonomy, public-facing, new workers, major, pillar); patch fixes are counted, not listed; an autonomy trend strip reads metric_history (watchmaker_index, metrics_in_breach, code_task_success_rate_30d, session_execution_ratio_30d); personal-plane releases in full only for the signed-in owner; synced in the existing 15-minute cron into qnfo-audit.fleet_changelog, heartbeat changelog-tick in WATCHMAKER_OPS. 1.23.2 (2026-10-06): the transformation-loop watchmaker entry names qnfo-fleet-control 0.4.132 (TP-1a parity, open-issue contract count, wave-exit stall); 1.23.1 (2026-10-06, pillar autonomy): WATCHMAKER_OPS measures TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132: the transformation program engine, hourly; counted when its tick is stalled or an open CODE-TASK-NEEDS-SESSION-1 row names a lever only a session can land, so session dependence is measured as it falls). 1.22.4 (2026-10-06): the agent-issues remediation lane no longer dispatches to the retired qnfo-kaizen (WORKER-RETIRE-WAVE-2, #1756; noAction with a note) and qnfo-kaizen leaves CON_SVC; 1.22.3 HUMAN-AUDIENCE-1 (2026-10-06, pillar reach; owner directive 2026-10-06 "do real humans find and visit the pages, and keep reading"): two hourly metrics from one bot-filtered RUM read over 7 days, external_referred_pageviews_7d (page loads on the public hosts whose referrer is outside every fleet domain; direct loads excluded, that is where renders, probes and the owner land) and continuation_pageviews_7d (page loads whose referrer is another public page: the reader clicked on), both with falsifiable triggers; breakdown in cloud_ops_events human-audience-<day>, series in reach_signals cf-rum-human; WATCHMAKER_OPS measures the qnfo-social per-channel drain (DAILY-DISTRIBUTION-1) and the radar-hub signal intake (SIGNAL-INTAKE-SOURCES-1). 1.22.2 TEXT-QUALITY-LOOP-1 (agent_issues 1895, pillar reach): GET /api/generators lists the 12 text generators from D1 qnfo-audit.text_generator_inventory with writer family, non-model gate, cross-family read and outcome metric, and each one's latest run from a fixed query in GENERATOR_RUNS; open to everyone, no new cron, no model call. 1.22.1 FLEET-CONSOLE-REDOS-1: dispatch inputs are parsed one anchored k=v token at a time (linear, max 10), so crafted input can no longer backtrack exponentially (CodeQL js/redos alerts 331/332 on PR 623); 1.22.0 FLEET-CONSOLE-1 (owner request 2026-10-05: full control, input and remediation from the dashboard, every detail and decision without leaving it): the command line gains issue <id> (row, triage, contracts, verifications, claims, code task), backlog, info <queue item> (a Details button on every queue card), tasks, locks, prs, pr <n>, runs (open reads); logs <worker>, sql [db] <select>, prio/owner/comment/codetask/reopen (owner session); close/wontfix with evidence, sql! writes backed up to console_backups first, worker calls, workflow dispatch, deploy via canonical-deploy.yml, merge and close PRs (owner + fresh code, confirm button); the loop token cannot run console actions; auto-run owner actions are logged in cmd_log; 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.25.0-changelog"; /* 1.25.0 FLEET-CHANGELOG-1 (owner request 2026-10-06, pillar autonomy): a Changelog tab (/changelog, JSON /api/changelog, open to everyone) of what the fleet ships for itself: each worker version whose major or minor number is above every earlier one, and each worker Cloudflare created after 2026-09-29, from the canonical deploy ledger deployment_history; described from the commit on main that set the version (no model call), tagged with charter pillar and the public hostnames it serves, filterable (autonomy, public-facing, new workers, major, pillar); patch fixes are counted, not listed; an autonomy trend strip reads metric_history (watchmaker_index, metrics_in_breach, code_task_success_rate_30d, session_execution_ratio_30d); personal-plane releases in full only for the signed-in owner; synced in the existing 15-minute cron into qnfo-audit.fleet_changelog, heartbeat changelog-tick in WATCHMAKER_OPS. 1.24.1 (2026-10-06): WATCHMAKER_OPS ask-corpus-sync for qnfo-ai-search 2.2.8 ASK-CORPUS-FEEDER-1 (agent_issues 2029, carried for session 01KzS1 and PR 676); 1.24.1 is above PR 671's 1.24.0 (VERSION-AHEAD-1). 1.24.0 ATTENTION-LOOP-1 (2026-10-06, pillar reach; owner directive 2026-10-06 07:44Z: granular human attention per outreach channel and item, audit automatically, do more of what gets noticed, promote better or stop what is not): the reach ingest writes bot-filtered per-item rows (source cf-rum-human: pageviews per page, paper and referrer host; external_pageviews and continuation_pageviews per page) and the Buffer per-post metrics qnfo-cloud-ops collects (source buffer, per channel post); a daily scorecard after the ingest (attention_scorecard: items, human engagements, attention per item, referred visits, impressions per channel over 7 and 28 days; pages and papers noticed from outside; subscribers by source) with a verdict per social channel (INSUFFICIENT, STOP, PROMOTE, IMPROVE, KEEP, RETEST after 28 days) and a share in [0, 1] written to ops_config attention_channel_share, which qnfo-social multiplies into the owner caps and uses to order content by attention; every change is an attention_decisions row with evidence, a prediction and a 7-day verification that grades attention_decision_efficacy_30d; metrics attention_events_7d, attention_per_post_7d, pages_noticed_7d, attention_channels_stopped; GET /api/attention; WATCHMAKER_OPS attention-scorecard; no new cron, binding or model call. 1.23.2 (2026-10-06): the transformation-loop watchmaker entry names qnfo-fleet-control 0.4.132 (TP-1a parity, open-issue contract count, wave-exit stall); 1.23.1 (2026-10-06, pillar autonomy): WATCHMAKER_OPS measures TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132: the transformation program engine, hourly; counted when its tick is stalled or an open CODE-TASK-NEEDS-SESSION-1 row names a lever only a session can land, so session dependence is measured as it falls). 1.22.4 (2026-10-06): the agent-issues remediation lane no longer dispatches to the retired qnfo-kaizen (WORKER-RETIRE-WAVE-2, #1756; noAction with a note) and qnfo-kaizen leaves CON_SVC; 1.22.3 HUMAN-AUDIENCE-1 (2026-10-06, pillar reach; owner directive 2026-10-06 "do real humans find and visit the pages, and keep reading"): two hourly metrics from one bot-filtered RUM read over 7 days, external_referred_pageviews_7d (page loads on the public hosts whose referrer is outside every fleet domain; direct loads excluded, that is where renders, probes and the owner land) and continuation_pageviews_7d (page loads whose referrer is another public page: the reader clicked on), both with falsifiable triggers; breakdown in cloud_ops_events human-audience-<day>, series in reach_signals cf-rum-human; WATCHMAKER_OPS measures the qnfo-social per-channel drain (DAILY-DISTRIBUTION-1) and the radar-hub signal intake (SIGNAL-INTAKE-SOURCES-1). 1.22.2 TEXT-QUALITY-LOOP-1 (agent_issues 1895, pillar reach): GET /api/generators lists the 12 text generators from D1 qnfo-audit.text_generator_inventory with writer family, non-model gate, cross-family read and outcome metric, and each one's latest run from a fixed query in GENERATOR_RUNS; open to everyone, no new cron, no model call. 1.22.1 FLEET-CONSOLE-REDOS-1: dispatch inputs are parsed one anchored k=v token at a time (linear, max 10), so crafted input can no longer backtrack exponentially (CodeQL js/redos alerts 331/332 on PR 623); 1.22.0 FLEET-CONSOLE-1 (owner request 2026-10-05: full control, input and remediation from the dashboard, every detail and decision without leaving it): the command line gains issue <id> (row, triage, contracts, verifications, claims, code task), backlog, info <queue item> (a Details button on every queue card), tasks, locks, prs, pr <n>, runs (open reads); logs <worker>, sql [db] <select>, prio/owner/comment/codetask/reopen (owner session); close/wontfix with evidence, sql! writes backed up to console_backups first, worker calls, workflow dispatch, deploy via canonical-deploy.yml, merge and close PRs (owner + fresh code, confirm button); the loop token cannot run console actions; auto-run owner actions are logged in cmd_log; 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2201,6 +2201,10 @@ async function handleRequest(request, env, ctx) {
   if (path === "/api/reach") {
     return json(await reachScorecardData(env));
   }
+  // ATTENTION-LOOP-1 (OPEN-ACCESS-1): the per-channel attention scorecard, verdicts, shares and decisions, read-only.
+  if (path === "/api/attention") {
+    try { return json(await attentionLatest(env)); } catch (e) { return json({ ok: false, error: "attention scorecard unreadable" }, 503); }
+  }
   if (path === "/api/reach/ingest" && request.method === "POST") {
     const tok = request.headers.get("x-loop-token") || "";
     if (!env.LOOP_TOKEN || tok !== env.LOOP_TOKEN) return json({ error: "unauthorized" }, 401);
@@ -2256,7 +2260,7 @@ async function handleRequest(request, env, ctx) {
   // re-measures (throttled to one run / 2 min) and republishes to the ops/fleet feeds.
   // OWNER-MORNING-1: what changed since a time (the page passes the owner's last visit, kept in the browser).
   if (path === "/api/changes" && request.method === "GET") return json(await changesSince(env, url.searchParams.get("since")));
-  // FLEET-CHANGELOG-1 (1.24.0): the Changelog tab and its JSON, open to everyone; personal-plane details only for the owner.
+  // FLEET-CHANGELOG-1 (1.25.0): the Changelog tab and its JSON, open to everyone; personal-plane details only for the owner.
   if ((path === "/changelog" || path === "/changelog/" || path === "/api/changelog") && request.method === "GET") {
     const holder = !!(owner.authed || owner.loop);
     let v;
@@ -2599,7 +2603,7 @@ var worker_default = {
       // cloud_ops_events row identity-weekly-<day>.
       ctx.waitUntil(within(identityWeeklyRun(env).catch(function() {
       })));
-      // FLEET-CHANGELOG-1 (1.24.0): new releases from the deploy ledger into fleet_changelog, described from their commits.
+      // FLEET-CHANGELOG-1 (1.25.0): new releases from the deploy ledger into fleet_changelog, described from their commits.
       ctx.waitUntil(within(changelogTick(env).catch(function() {
       })));
       try {
@@ -2985,7 +2989,7 @@ function reachCapRows(map, cap, mk) {
 }
 // One 'site' "(all)" row carries the day's measured total (0 included), so a read day with no traffic is told apart
 // from a day that was never read (no row).
-function reachRumPageRows(groups, day) {
+function reachRumPageRows(groups, day, source, quality) {
   const papers = /* @__PURE__ */ new Map(), pages = /* @__PURE__ */ new Map();
   let total = 0;
   for (const g of groups || []) {
@@ -2999,14 +3003,14 @@ function reachRumPageRows(groups, day) {
   }
   const mk = function(type) {
     return function(id, v) {
-      return reachRow(day, "cf-rum", "web", type, id, "pageviews", v, "unknown");
+      return reachRow(day, source || "cf-rum", "web", type, id, "pageviews", v, quality || "unknown");
     };
   };
   const rows = [mk("site")("(all)", total)];
   for (const e of papers) rows.push(mk("paper")(e[0], e[1]));
   return rows.concat(reachCapRows(pages, REACH_PAGE_ROW_CAP, mk("page")));
 }
-function reachRumReferrerRows(groups, day) {
+function reachRumReferrerRows(groups, day, source, quality) {
   const refs = /* @__PURE__ */ new Map();
   for (const g of groups || []) {
     const n = Number(g && g.count) || 0;
@@ -3015,8 +3019,32 @@ function reachRumReferrerRows(groups, day) {
     refs.set(h, (refs.get(h) || 0) + n);
   }
   return reachCapRows(refs, REACH_REFERRER_ROW_CAP, function(id, v) {
-    return reachRow(day, "cf-rum", "web", "referrer", id, "pageviews", v, "unknown");
+    return reachRow(day, source || "cf-rum", "web", "referrer", id, "pageviews", v, quality || "unknown");
   });
+}
+// ATTENTION-LOOP-1: a page's bot-filtered loads whose referrer is outside every fleet domain (external_pageviews) and whose
+// referrer is another public page (continuation_pageviews): per item, what HUMAN-AUDIENCE-1 reports as site totals.
+function atRumExternalRows(groups, day) {
+  const ext = /* @__PURE__ */ new Map(), cont = /* @__PURE__ */ new Map(), types = {};
+  for (const g of groups || []) {
+    const n = Number(g && g.count) || 0;
+    if (n <= 0) continue;
+    const d = g.dimensions || {};
+    const host = String(d.requestHost || "").trim().toLowerCase();
+    if (HA_PUBLIC_HOSTS.indexOf(host) < 0) continue;
+    const ref = String(d.refererHost || "").trim().toLowerCase();
+    if (!ref) continue;
+    const c = reachClassifyPath(host, d.requestPath);
+    types[c.entity_id] = c.entity_type;
+    if (!HA_FLEET_HOST_RE.test(ref)) ext.set(c.entity_id, (ext.get(c.entity_id) || 0) + n);
+    else if (HA_PUBLIC_HOSTS.indexOf(ref) >= 0) cont.set(c.entity_id, (cont.get(c.entity_id) || 0) + n);
+  }
+  const mk = function(metric) {
+    return function(id, v) {
+      return reachRow(day, "cf-rum-human", "web", types[id] || "page", id, metric, v, "human");
+    };
+  };
+  return reachCapRows(ext, REACH_PAGE_ROW_CAP, mk("external_pageviews")).concat(reachCapRows(cont, REACH_PAGE_ROW_CAP, mk("continuation_pageviews")));
 }
 // extraFilter (optional) goes inside the filter object, e.g. "bot: 0", the Web Analytics "Exclude bots" filter.
 function reachRumQuery(dims, geq, leq, extraFilter) {
@@ -3306,9 +3334,15 @@ async function ingestReachSignals(env, opts) {
   const geq = day + "T00:00:00Z", leq = day + "T23:59:59Z", next = reachShiftDay(day, 1);
   // a. RUM pageviews by page, then by referrer. A rejected dimension is logged and that query skipped (no retry loop
   // over guessed names).
-  const rumQ = [["cf-rum:pages", "requestHost requestPath", reachRumPageRows], ["cf-rum:referrers", "refererHost", reachRumReferrerRows]];
+  // ATTENTION-LOOP-1 (1.24.0): the same two reads with the Exclude-bots filter (bot: 0) as source cf-rum-human (quality
+  // human), plus pages by referrer so a page's loads from outside the fleet are its own rows: the per-item human attention
+  // the scorecard grades. The unfiltered rows stay (older readers, and a lower bound when the filter is unavailable).
+  const rumQ = [["cf-rum:pages", "requestHost requestPath", reachRumPageRows, null], ["cf-rum:referrers", "refererHost", reachRumReferrerRows, null],
+    ["cf-rum-human:pages", "requestHost requestPath", function(g, d) { return reachRumPageRows(g, d, "cf-rum-human", "human"); }, "bot: 0"],
+    ["cf-rum-human:referrers", "refererHost", function(g, d) { return reachRumReferrerRows(g, d, "cf-rum-human", "human"); }, "bot: 0"],
+    ["cf-rum-human:external", "requestHost requestPath refererHost", atRumExternalRows, "bot: 0"]];
   for (const q of rumQ) {
-    const r = await reachGf(env, reachRumQuery(q[1], geq, leq));
+    const r = await reachGf(env, reachRumQuery(q[1], geq, leq, q[3] || undefined));
     const groups = r.err ? null : reachRumGroups(r.data);
     if (!groups) {
       const why = r.err || "rumPageloadEventsAdaptiveGroups missing from response";
@@ -3348,6 +3382,19 @@ async function ingestReachSignals(env, opts) {
     } else out.skipped.push("bluesky: no social_engagements rows collected on " + day);
   } catch (e) {
     out.skipped.push("bluesky: " + reachErr(e));
+  }
+  // d2. ATTENTION-LOOP-1: the Buffer per-post metrics qnfo-cloud-ops jobEngagement snapshots daily (platform 'buffer', post_id
+  // = Buffer post id, metric = Buffer's label), joined to the channel the drain recorded (social_media_posts.buffer_id), as
+  // source 'buffer' rows per channel post with Buffer's normalized names.
+  try {
+    const bf = await d1all(env.AUDIT, "SELECT e.post_id, e.metric, MAX(e.value) AS value, p.platform FROM social_engagements e JOIN social_media_posts p ON p.buffer_id = e.post_id WHERE e.platform = 'buffer' AND substr(e.collected_at, 1, 10) = ? AND e.metric <> 'auth_status' AND e.value IS NOT NULL GROUP BY e.post_id, e.metric, p.platform", [day]);
+    if (bf.length) {
+      await put("buffer", bf.map(function(r) {
+        return reachRow(day, "buffer", atBufferChannel(r.platform), "post", r.post_id, atBufferMetric(r.metric), r.value, "human");
+      }));
+    } else out.notes.push("buffer: no per-post metrics collected on " + day + " (none expected until a channel post is 24h old)");
+  } catch (e) {
+    out.skipped.push("buffer: " + reachErr(e));
   }
   // e. Confirmed subscribers: a count as of now, so it is written only for the live previous-day run (a backfill of an
   // older day cannot reconstruct it).
@@ -3411,6 +3458,367 @@ async function ingestReachSignals(env, opts) {
   await record(out.skipped.length ? "partial" : "ok", "reach ingest " + day + ": " + (summary || "nothing written") + (out.skipped.length ? "; skipped " + out.skipped.length : ""));
   return out;
 }
+// ---- ATTENTION-LOOP-1:BEGIN (1.24.0, 2026-10-06; pillar reach; owner directive 2026-10-06 07:44Z) ----
+// Owner directive: "track granular impressions/eyeballs (humans, not bots/crawlers/AI) from outreach channels (web page/site
+// visits, individual email outreach, social media posts) and audit to do more of what gets noticed; if something isn't
+// getting noticed it either needs to be promoted more/better or stop doing it and shift attention to higher-impact
+// signals; track all metrics in signal and feedback loops."
+// Measured 2026-10-06 before this block: 88 Bluesky posts in 14 days drew 10 likes and 0 referred visits (bsky.app is absent
+// from the referrer rows: the app strips the Referer, so only engagement counts can see a Bluesky reader); LinkedIn, with no
+// post since the August Buffer failures, referred 15 human loads in 14 days; the per-item page rows in reach_signals were
+// unfiltered (quality unknown); the Buffer per-post metrics qnfo-cloud-ops collects were read by nothing; the social learner
+// credited no reward (its first weekly update is due 2026-10-13); email outreach measured replies per send (the outreach
+// learner stops a segment at 50 sends under 1%); subscribers.source was written and never read.
+// What this block does, once a day after the reach ingest (ATTENTION-SCORECARD-1; no new cron, worker, binding or model
+// call):
+//   ledger      the ingest now writes bot-filtered per-item rows (source cf-rum-human: pageviews per page and paper,
+//               pageviews per referrer host, external_pageviews and continuation_pageviews per page) and the Buffer per-post
+//               metrics per channel (source buffer). Email attention is the outreach learner's reply outcomes per send.
+//   scorecard   per channel (bluesky, linkedin, mastodon, x, email) over 7 and 28 days: items sent, human attention
+//               (engagements: likes, reposts, quotes, replies from others, reactions, comments, shares; replies for email),
+//               attention per item, referred human visits (referrer hosts mapped to the channel), impressions where the
+//               network reports them. Web: the pages and papers noticed from outside the fleet (external human loads), top
+//               items; subscribers by source. Rows in attention_scorecard; GET /api/attention is the open read.
+//   verdict     per social channel from the 28-day numbers (atVerdict, pure): INSUFFICIENT under AT_MIN_ITEMS items (keep
+//               exploring); STOP at AT_STOP_ITEMS+ items with attention per item under AT_STOP_PER_ITEM and no referred
+//               visit (stop and shift); PROMOTE at AT_PROMOTE_PER_ITEM+ per item (do more, up to the owner's cap); IMPROVE
+//               under AT_IMPROVE_PER_ITEM (promote better: the social learner's arms and attention-first content ordering);
+//               KEEP otherwise. A stopped channel is re-tested after AT_RETEST_DAYS with a quarter share for a week, so a
+//               stop is never final on stale evidence. ops_config attention_thresholds (JSON) overrides the numbers.
+//   actuation   ops_config attention_channel_share {bluesky, linkedin, mastodon, x} in [0, 1]: qnfo-social multiplies each
+//               channel's owner cap by its share (DAILY-DISTRIBUTION-1 drain and the Bluesky cadence gate) and orders content
+//               by attention (noticed items first). A share never exceeds 1: the owner's caps (STRATEGY s4) are the ceiling.
+//   decisions   every verdict or share change is one attention_decisions row with the evidence, a prediction and a
+//               verify_at 7 days later; the efficacy pass compares attention per item before and after (improved/flat/worse)
+//               and grades attention_decision_efficacy_30d, so a rule that does not move attention is replaced, not repeated
+//               (METRIC-CLOSED-LOOP-1).
+//   metrics     attention_events_7d, attention_per_post_7d, pages_noticed_7d, attention_channels_stopped,
+//               attention_decision_efficacy_30d (registered with triggers in migrations/2026-10-06-attention-loop.sql);
+//               ledger cloud_ops_events attention-scorecard-<day> (WATCHMAKER_OPS attention-scorecard).
+// Not done, on purpose: no open-tracking pixel and no per-recipient link tracking in cold email (plain-text mail with no
+// links is the fleet's deliverability and privacy stance; replies are the signal); Bluesky impressions do not exist in its
+// API; per-post click attribution needs a server-side UTM ledger on the public hosts (transformation lever T7.6, filed for
+// the code loop: qnfo-gateway serves the pages and RUM carries no query string).
+var AT_SOCIAL = ["bluesky", "linkedin", "mastodon", "x"];
+var AT_CHANNELS = AT_SOCIAL.concat(["email"]);
+var AT_SHORT = 7, AT_LONG = 28, AT_RETEST_DAYS = 28, AT_RETEST_SHARE = 0.25, AT_VERIFY_DAYS = 7;
+var AT_DEFAULT_THRESHOLDS = { min_items: 5, stop_items: 10, stop_per_item: 0.1, improve_per_item: 0.5, promote_per_item: 1 };
+var AT_SHARE = { PROMOTE: 1, KEEP: 1, IMPROVE: 0.5, STOP: 0, RETEST: AT_RETEST_SHARE, INSUFFICIENT: 1 };
+var AT_REFERRER = [["bluesky", /^(www\.)?bsky\.app$/], ["linkedin", /linkedin\.(com|android)$/], ["linkedin", /^lnkd\.in$/], ["x", /^t\.co$/], ["x", /^(www\.|mobile\.)?(x|twitter)\.com$/],
+  ["mastodon", /mastodon|mstdn|fosstodon\.org$|mathstodon\.xyz$|scholar\.social$|hachyderm\.io$|infosec\.exchange$|sciences\.social$|fediscience\.org$/]];
+var AT_BUFFER_METRIC = { reactions: "reactions", likes: "reactions", like: "reactions", favorites: "reactions", comments: "comments", replies: "comments", reposts: "reposts", retweets: "reposts", reblogs: "reposts", shares: "shares", impressions: "impressions", reach: "reach", views: "views", clicks: "clicks", "link clicks": "clicks", engagements: "engagements", quotes: "quotes" };
+var AT_ENGAGEMENT_METRICS = { likes: 1, reposts: 1, quotes: 1, replies: 1, reactions: 1, comments: 1, shares: 1, clicks: 1 };
+var AT_DDL = [
+  "CREATE TABLE IF NOT EXISTS attention_scorecard (day TEXT NOT NULL, window_days INTEGER NOT NULL, channel TEXT NOT NULL, items INTEGER, attention REAL, per_item REAL, visits REAL, impressions REAL, verdict TEXT, share REAL, reason TEXT, retest_at TEXT, extra TEXT, created_at TEXT, PRIMARY KEY (day, window_days, channel))",
+  "CREATE TABLE IF NOT EXISTS attention_decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, channel TEXT NOT NULL, from_verdict TEXT, to_verdict TEXT, from_share REAL, to_share REAL, reason TEXT, evidence TEXT, prediction TEXT, verify_at TEXT, outcome TEXT, outcome_detail TEXT, verified_at TEXT, created_at TEXT)"
+];
+function atBufferChannel(platform) {
+  const s = String(platform || "").replace(/^buffer-/, "").toLowerCase();
+  return s === "twitter" ? "x" : s || "buffer";
+}
+function atBufferMetric(name) {
+  const k = String(name || "").trim().toLowerCase();
+  return AT_BUFFER_METRIC[k] || k.replace(/[^a-z0-9]+/g, "_") || "metric";
+}
+function atReferrerChannel(host) {
+  const h = String(host || "").trim().toLowerCase();
+  for (const r of AT_REFERRER) if (r[1].test(h)) return r[0];
+  return null;
+}
+function atShiftDay(day, n) {
+  return new Date(Date.parse(day + "T00:00:00Z") + n * DAY_MS).toISOString().slice(0, 10);
+}
+function atRound(x) {
+  return Math.round((Number(x) || 0) * 1000) / 1000;
+}
+function atThresholds(raw) {
+  const t = Object.assign({}, AT_DEFAULT_THRESHOLDS);
+  let o = null;
+  try { o = raw ? JSON.parse(String(raw)) : null; } catch (e) { o = null; }
+  if (o && typeof o === "object") for (const k of Object.keys(AT_DEFAULT_THRESHOLDS)) { const v = Number(o[k]); if (isFinite(v) && v >= 0) t[k] = v; }
+  return t;
+}
+// Pure: the verdict for one social channel. stats: {items, attention, visits} over the long window and {items7, attention7}
+// over the short one; prev: the channel's previous scorecard row ({verdict, retest_at}) or null; nowIso for the re-test clock.
+// Returns {verdict, share, reason, retest_at, per_item}.
+function atVerdict(stats, prev, th, nowIso) {
+  th = th || AT_DEFAULT_THRESHOLDS;
+  const items = Number(stats.items) || 0, att = Number(stats.attention) || 0, visits = Number(stats.visits) || 0;
+  const per = items > 0 ? att / items : 0;
+  const out = function(verdict, reason, retest) { return { verdict, share: AT_SHARE[verdict], reason, retest_at: retest || null, per_item: atRound(per) }; };
+  const pv = prev && prev.verdict;
+  if (pv === "STOP") {
+    if (prev.retest_at && nowIso >= prev.retest_at) return out("RETEST", "stopped " + AT_RETEST_DAYS + " days ago; one week at a quarter share to re-test on fresh evidence", atShiftDay(nowIso.slice(0, 10), AT_SHORT) + "T00:00:00Z");
+    return out("STOP", "still stopped (re-test " + String(prev.retest_at || "unscheduled").slice(0, 10) + ")", prev.retest_at || null);
+  }
+  if (pv === "RETEST") {
+    if (prev.retest_at && nowIso < prev.retest_at) return out("RETEST", "re-test week in progress until " + String(prev.retest_at).slice(0, 10), prev.retest_at);
+    if ((Number(stats.attention7) || 0) > 0 || (Number(stats.visits7) || 0) > 0) return out("IMPROVE", "the re-test drew attention (" + (Number(stats.attention7) || 0) + " engagements, " + (Number(stats.visits7) || 0) + " visits in 7 days): back at half share", null);
+    return out("STOP", "the re-test week drew no engagement and no visit: stopped again", atShiftDay(nowIso.slice(0, 10), AT_RETEST_DAYS) + "T00:00:00Z");
+  }
+  if (items < th.min_items) return out("INSUFFICIENT", items + " items in " + AT_LONG + " days (needs " + th.min_items + " to judge): full share, keep exploring", null);
+  if (items >= th.stop_items && per < th.stop_per_item && visits <= 0) return out("STOP", items + " items drew " + att + " engagements (" + atRound(per) + " per item, under " + th.stop_per_item + ") and no referred visit in " + AT_LONG + " days: stop and shift; re-test in " + AT_RETEST_DAYS + " days", atShiftDay(nowIso.slice(0, 10), AT_RETEST_DAYS) + "T00:00:00Z");
+  if (per >= th.promote_per_item) return out("PROMOTE", atRound(per) + " engagements per item over " + items + " items (" + th.promote_per_item + "+): do more, up to the owner's cap", null);
+  if (per < th.improve_per_item) return out("IMPROVE", atRound(per) + " engagements per item over " + items + " items (under " + th.improve_per_item + "): half share, better content first (the learner's arms, attention-first ordering)", null);
+  return out("KEEP", atRound(per) + " engagements per item over " + items + " items: keep the cadence", null);
+}
+// Pure: the share map qnfo-social reads. Every social channel is present; a verdict missing (unmeasured) keeps share 1.
+function atShares(verdicts) {
+  const o = {};
+  for (const c of AT_SOCIAL) o[c] = verdicts[c] && isFinite(verdicts[c].share) ? verdicts[c].share : 1;
+  return o;
+}
+// Pure: the efficacy of a decision: attention per item in the 7 days after against the 7 days before (the scorecard's
+// 7-day rows on the decision day and on the verify day). improved when it rose by 20%+ or from 0 to anything, worse when
+// it fell by 20%+, flat otherwise; unmeasured when a row is missing.
+function atEfficacy(beforeRow, afterRow) {
+  if (!beforeRow || !afterRow) return { outcome: "unmeasured", detail: "a 7-day scorecard row is missing" };
+  const b = Number(beforeRow.per_item) || 0, a = Number(afterRow.per_item) || 0;
+  if (b === 0 && a > 0) return { outcome: "improved", detail: "per item 0 -> " + atRound(a) };
+  if (a >= b * 1.2 && a > b) return { outcome: "improved", detail: "per item " + atRound(b) + " -> " + atRound(a) };
+  if (a <= b * 0.8 && a < b) return { outcome: "worse", detail: "per item " + atRound(b) + " -> " + atRound(a) };
+  return { outcome: "flat", detail: "per item " + atRound(b) + " -> " + atRound(a) };
+}
+// The Bluesky engagement of a thread's root post from the reach ledger: likes + reposts + quotes + replies beyond the
+// thread's own continuation posts (a 3-post thread carries 2 of its own replies).
+function atBlueskyAttention(metrics, nPosts) {
+  const m = metrics || {};
+  const own = Math.max(0, (Number(nPosts) || 1) - 1);
+  return (Number(m.likes) || 0) + (Number(m.reposts) || 0) + (Number(m.quotes) || 0) + Math.max(0, (Number(m.replies) || 0) - own);
+}
+function atBlueskyUri(postUri) {
+  const s = String(postUri || "").trim();
+  if (s.indexOf("at://") === 0) return s;
+  try { const o = JSON.parse(s); if (o && typeof o === "object") { if (typeof o.bluesky === "string" && o.bluesky.indexOf("at://") === 0) return o.bluesky; for (const k of Object.keys(o)) if (typeof o[k] === "string" && o[k].indexOf("at://") === 0) return o[k]; } } catch (e) {}
+  return null;
+}
+function atThreadPosts(postsJson) {
+  try { const a = JSON.parse(postsJson); return Array.isArray(a) ? a.length : 1; } catch (e) { return 1; }
+}
+// Per-channel stats over [from, to] (UTC days, inclusive). Reads only D1; a source that cannot be read leaves its figure
+// null and a note, never a fabricated zero.
+async function atChannelStats(env, from, to) {
+  const A = env.AUDIT, notes = [];
+  const fromTs = from + " 00:00:00", toTs = to + " 23:59:59";
+  const stats = {};
+  for (const c of AT_CHANNELS) stats[c] = { items: 0, attention: 0, visits: 0, impressions: 0, positives: 0, noticed_items: 0, top: [] };
+  // Bluesky: threads and dissemination posts with an at:// uri in the window; engagement from reach_signals source bluesky.
+  try {
+    const th = await d1all(A, "SELECT id, slug, title, posts, post_uri, posted_at FROM social_threads WHERE status = 'posted' AND post_uri IS NOT NULL AND post_uri <> '' AND posted_at >= ? AND posted_at <= ?", [fromTs, toTs]);
+    const items = [];
+    for (const r of th) { const uri = atBlueskyUri(r.post_uri); if (uri) items.push({ key: "thread:" + r.id, slug: r.slug, title: r.title, uri, n: atThreadPosts(r.posts) }); }
+    try {
+      const ds = await d1all(A, "SELECT id, paper_slug, paper_title, post_id, posted_at FROM dissemination_tracker WHERE action = 'posted' AND channel = 'bluesky' AND post_id LIKE 'at://%' AND posted_at >= ? AND posted_at <= ?", [fromTs, toTs]);
+      for (const r of ds) if (!items.some(function(i) { return i.uri === r.post_id; })) items.push({ key: "dissem:" + r.id, slug: r.paper_slug, title: r.paper_title, uri: r.post_id, n: 1 });
+    } catch (e) { notes.push("bluesky dissemination: " + reachErr(e)); }
+    const eng = {};
+    if (items.length) {
+      const uris = items.map(function(i) { return i.uri; });
+      for (let i = 0; i < uris.length; i += 40) {
+        const chunk = uris.slice(i, i + 40);
+        const rows = await d1all(A, "SELECT entity_id, metric, MAX(value) AS v FROM reach_signals WHERE source = 'bluesky' AND entity_type = 'post' AND date >= ? AND entity_id IN (" + chunk.map(function() { return "?"; }).join(",") + ") GROUP BY entity_id, metric", [from].concat(chunk));
+        for (const r of rows) (eng[r.entity_id] = eng[r.entity_id] || {})[r.metric] = Number(r.v) || 0;
+      }
+    }
+    const s = stats.bluesky;
+    s.items = items.length;
+    for (const it of items) { const a = atBlueskyAttention(eng[it.uri], it.n); it.attention = a; s.attention += a; if (a > 0) s.noticed_items++; }
+    s.top = items.filter(function(i) { return i.attention > 0; }).sort(function(a, b) { return b.attention - a.attention; }).slice(0, 5).map(function(i) { return { item: i.slug || i.key, attention: i.attention }; });
+  } catch (e) { notes.push("bluesky: " + reachErr(e)); stats.bluesky.items = null; }
+  // Buffer channels: posts the drain recorded; metrics from the buffer rows the ingest wrote.
+  try {
+    const posts = await d1all(A, "SELECT id, platform, buffer_id, project_id, published_at, status FROM social_media_posts WHERE platform LIKE 'buffer-%' AND status NOT IN ('failed', 'error') AND buffer_id IS NOT NULL AND published_at >= ? AND published_at <= ?", [fromTs, toTs]);
+    const met = {};
+    if (posts.length) {
+      const ids = posts.map(function(p) { return p.buffer_id; });
+      for (let i = 0; i < ids.length; i += 40) {
+        const chunk = ids.slice(i, i + 40);
+        const rows = await d1all(A, "SELECT entity_id, metric, MAX(value) AS v FROM reach_signals WHERE source = 'buffer' AND entity_type = 'post' AND date >= ? AND entity_id IN (" + chunk.map(function() { return "?"; }).join(",") + ") GROUP BY entity_id, metric", [from].concat(chunk));
+        for (const r of rows) (met[r.entity_id] = met[r.entity_id] || {})[r.metric] = Number(r.v) || 0;
+      }
+    }
+    for (const p of posts) {
+      const ch = atBufferChannel(p.platform);
+      if (!stats[ch]) continue;
+      const m = met[p.buffer_id] || {};
+      let a = 0;
+      for (const k of Object.keys(m)) if (AT_ENGAGEMENT_METRICS[k]) a += m[k];
+      const imp = Number(m.impressions || m.views || m.reach || 0) || 0;
+      stats[ch].items++; stats[ch].attention += a; stats[ch].impressions += imp; if (a > 0) stats[ch].noticed_items++;
+      if (a > 0) stats[ch].top.push({ item: p.project_id || p.buffer_id, attention: a });
+    }
+    for (const ch of ["linkedin", "mastodon", "x"]) stats[ch].top = stats[ch].top.sort(function(a, b) { return b.attention - a.attention; }).slice(0, 5);
+    const unmetered = posts.filter(function(p) { return !met[p.buffer_id] && Date.parse(String(p.published_at).replace(" ", "T") + "Z") < Date.parse(to + "T00:00:00Z") - DAY_MS; }).length;
+    if (unmetered) notes.push("buffer: " + unmetered + " channel post(s) older than 24h with no Buffer metric row (qnfo-cloud-ops jobEngagement reads 20 sent posts per channel daily)");
+  } catch (e) { notes.push("buffer: " + reachErr(e)); for (const ch of ["linkedin", "mastodon", "x"]) stats[ch].items = null; }
+  // Referred human visits per channel (bot-filtered referrer rows; the unfiltered rows as a labelled fallback).
+  let visitsSource = "cf-rum-human";
+  try {
+    let refs = await d1all(A, "SELECT entity_id, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type = 'referrer' AND metric = 'pageviews' AND date >= ? AND date <= ? GROUP BY entity_id", [from, to]);
+    if (!refs.length) { refs = await d1all(A, "SELECT entity_id, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum' AND entity_type = 'referrer' AND metric = 'pageviews' AND date >= ? AND date <= ? GROUP BY entity_id", [from, to]); visitsSource = "cf-rum (unfiltered: no human rows yet)"; }
+    for (const r of refs) { const ch = atReferrerChannel(r.entity_id); if (ch && stats[ch]) stats[ch].visits += Number(r.v) || 0; }
+  } catch (e) { notes.push("referrers: " + reachErr(e)); }
+  // Email outreach: sends and reply outcomes per send (OUTREACH-LEARNER-1).
+  try {
+    const em = await d1all(A, "SELECT COUNT(*) AS n, SUM(CASE WHEN outcome IN ('positive', 'negative', 'optout') THEN 1 ELSE 0 END) AS replied, SUM(CASE WHEN outcome = 'positive' THEN 1 ELSE 0 END) AS positives FROM outreach_learner_sends WHERE sent_at >= ? AND sent_at <= ?", [from + "T00:00:00Z", to + "T23:59:59Z"]);
+    const e0 = em[0] || {};
+    stats.email.items = Number(e0.n) || 0; stats.email.attention = Number(e0.replied) || 0; stats.email.positives = Number(e0.positives) || 0; stats.email.noticed_items = stats.email.attention;
+    try {
+      const arms = await d1all(A, "SELECT segment, sends, positives, stopped FROM outreach_learner_arms ORDER BY sends DESC");
+      stats.email.top = arms.slice(0, 6).map(function(a) { return { item: a.segment, attention: Number(a.positives) || 0, sends: Number(a.sends) || 0, stopped: Number(a.stopped) || 0 }; });
+      stats.email.stopped_segments = arms.filter(function(a) { return Number(a.stopped) === 1; }).length;
+    } catch (e) { notes.push("outreach arms: " + reachErr(e)); }
+  } catch (e) { notes.push("email: " + reachErr(e)); stats.email.items = null; }
+  for (const c of AT_CHANNELS) { const s = stats[c]; s.per_item = s.items ? atRound(s.attention / s.items) : 0; s.attention = atRound(s.attention); s.visits = atRound(s.visits); }
+  return { stats, notes, visitsSource };
+}
+// Web and subscriber attention over [from, to]: pages and papers noticed from outside the fleet, the busiest human pages,
+// subscribers by source.
+async function atWebStats(env, from, to) {
+  const A = env.AUDIT, out = { noticed_pages: null, noticed_papers: null, top_external: [], top_human: [], subscribers_by_source: [], notes: [] };
+  try {
+    const ext = await d1all(A, "SELECT entity_type, entity_id, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum-human' AND metric = 'external_pageviews' AND entity_id <> '(other)' AND date >= ? AND date <= ? GROUP BY entity_type, entity_id ORDER BY v DESC", [from, to]);
+    if (ext.length) {
+      out.noticed_pages = ext.filter(function(r) { return r.entity_type === "page" && Number(r.v) > 0; }).length;
+      out.noticed_papers = ext.filter(function(r) { return r.entity_type === "paper" && Number(r.v) > 0; }).length;
+      out.top_external = ext.slice(0, 10).map(function(r) { return { type: r.entity_type, item: r.entity_id, external_pageviews: Number(r.v) || 0 }; });
+    } else out.notes.push("no external_pageviews rows for " + from + ".." + to + " (the per-item human rows begin with the first ingest after 1.24.0)");
+  } catch (e) { out.notes.push("external: " + reachErr(e)); }
+  try {
+    const hp = await d1all(A, "SELECT entity_type, entity_id, SUM(value) AS v FROM reach_signals WHERE source = 'cf-rum-human' AND metric = 'pageviews' AND entity_type IN ('paper', 'page') AND entity_id <> '(other)' AND date >= ? AND date <= ? GROUP BY entity_type, entity_id ORDER BY v DESC LIMIT 10", [from, to]);
+    out.top_human = hp.map(function(r) { return { type: r.entity_type, item: r.entity_id, pageviews: Number(r.v) || 0 }; });
+  } catch (e) { out.notes.push("human pages: " + reachErr(e)); }
+  try {
+    const sb = await d1all(A, "SELECT COALESCE(source, '(none)') AS source, COUNT(*) AS n, SUM(CASE WHEN status = 'subscribed' THEN 1 ELSE 0 END) AS confirmed FROM subscribers WHERE created_at >= ? AND created_at <= ? GROUP BY source ORDER BY n DESC LIMIT 12", [from + " 00:00:00", to + " 23:59:59"]);
+    out.subscribers_by_source = sb.map(function(r) { return { source: r.source, signups: Number(r.n) || 0, confirmed: Number(r.confirmed) || 0 }; });
+  } catch (e) { out.notes.push("subscribers: " + reachErr(e)); }
+  return out;
+}
+async function atLatestVerdicts(env, beforeDay) {
+  const out = {};
+  try {
+    const rows = await d1all(env.AUDIT, "SELECT channel, verdict, share, retest_at, day FROM attention_scorecard WHERE window_days = ? AND day < ? AND verdict IS NOT NULL ORDER BY day DESC", [AT_LONG, beforeDay]);
+    for (const r of rows) if (!out[r.channel]) out[r.channel] = r;
+  } catch (e) {}
+  return out;
+}
+// The daily pass: scorecard rows for both windows, verdicts and shares, decisions, efficacy, metrics, ledger. day = the
+// last complete UTC day (the ingest day); once per day unless opts.force.
+async function attentionScorecard(env, opts) {
+  opts = opts || {};
+  const nowMs = opts.nowMs || Date.now(), nowIso = new Date(nowMs).toISOString();
+  const day = opts.day || reachYesterday(nowMs);
+  const evId = "attention-scorecard-" + day;
+  if (!opts.force) {
+    try {
+      const prev = await d1all(env.AUDIT, "SELECT status FROM cloud_ops_events WHERE id = ?", [evId]);
+      if (prev.length && prev[0].status === "ok") return { throttled: day };
+    } catch (e) {}
+  }
+  for (const s of AT_DDL) await env.AUDIT.prepare(s).run();
+  const out = { day, version: VERSION, channels: {}, web: null, decisions: [], efficacy: null, notes: [] };
+  let thRaw = null;
+  try { const t = await d1all(env.AUDIT, "SELECT value FROM ops_config WHERE key = 'attention_thresholds'"); thRaw = t.length ? t[0].value : null; } catch (e) {}
+  const th = atThresholds(thRaw);
+  const longFrom = atShiftDay(day, -(AT_LONG - 1)), shortFrom = atShiftDay(day, -(AT_SHORT - 1));
+  const L = await atChannelStats(env, longFrom, day), S = await atChannelStats(env, shortFrom, day);
+  out.notes = out.notes.concat(L.notes.map(function(n) { return "28d " + n; }));
+  out.visits_source = L.visitsSource;
+  const prevV = await atLatestVerdicts(env, day);
+  const verdicts = {};
+  for (const c of AT_SOCIAL) {
+    const ls = L.stats[c], ss = S.stats[c];
+    if (ls.items == null) { verdicts[c] = null; continue; }
+    verdicts[c] = atVerdict({ items: ls.items, attention: ls.attention, visits: ls.visits, items7: ss.items, attention7: ss.attention, visits7: ss.visits }, prevV[c] || null, th, nowIso);
+  }
+  const es = L.stats.email;
+  const emailVerdict = es.items == null ? null : (es.items < th.min_items ? { verdict: "INSUFFICIENT", reason: es.items + " sends in 28 days" } : { verdict: es.positives > 0 ? "KEEP" : (es.attention > 0 ? "IMPROVE" : "STOP-CANDIDATE"), reason: es.items + " sends, " + es.attention + " replies, " + es.positives + " positive; the outreach learner's own stop rule (50 sends under 1%) governs, " + (es.stopped_segments || 0) + " segment(s) stopped" });
+  const shares = atShares(verdicts);
+  // scorecard rows
+  const stmts = [];
+  const rowFor = function(win, c, s, v) {
+    return env.AUDIT.prepare("INSERT OR REPLACE INTO attention_scorecard (day, window_days, channel, items, attention, per_item, visits, impressions, verdict, share, reason, retest_at, extra, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)")
+      .bind(day, win, c, s.items, s.attention, s.per_item, s.visits, s.impressions, v ? v.verdict : null, v && isFinite(v.share) ? v.share : null, v ? v.reason : null, v ? v.retest_at || null : null, JSON.stringify({ noticed_items: s.noticed_items, positives: s.positives, top: s.top, stopped_segments: s.stopped_segments }), nowIso);
+  };
+  for (const c of AT_SOCIAL) { stmts.push(rowFor(AT_LONG, c, L.stats[c], verdicts[c])); stmts.push(rowFor(AT_SHORT, c, S.stats[c], null)); }
+  stmts.push(rowFor(AT_LONG, "email", es, emailVerdict)); stmts.push(rowFor(AT_SHORT, "email", S.stats.email, null));
+  const web = await atWebStats(env, shortFrom, day);
+  out.web = web;
+  stmts.push(env.AUDIT.prepare("INSERT OR REPLACE INTO attention_scorecard (day, window_days, channel, items, attention, per_item, visits, impressions, verdict, share, reason, retest_at, extra, created_at) VALUES (?1, ?2, 'web', ?3, ?4, NULL, NULL, NULL, NULL, NULL, ?5, NULL, ?6, ?7)")
+    .bind(day, AT_SHORT, web.noticed_pages == null ? null : (web.noticed_pages + (web.noticed_papers || 0)), web.top_external.reduce(function(a, r) { return a + r.external_pageviews; }, 0), web.notes.join("; ") || null, JSON.stringify({ noticed_pages: web.noticed_pages, noticed_papers: web.noticed_papers, top_external: web.top_external, top_human: web.top_human, subscribers_by_source: web.subscribers_by_source }), nowIso));
+  for (let i = 0; i < stmts.length; i += 50) await env.AUDIT.batch(stmts.slice(i, i + 50));
+  // decisions: a verdict or share change per channel
+  for (const c of AT_SOCIAL) {
+    const v = verdicts[c];
+    if (!v) continue;
+    const p = prevV[c] || null;
+    const changed = !p || p.verdict !== v.verdict || Number(p.share) !== Number(v.share);
+    if (!changed) continue;
+    const ev = { window: [longFrom, day], stats: L.stats[c], stats_7d: S.stats[c], thresholds: th, visits_source: L.visitsSource };
+    const pred = v.verdict === "STOP" ? "attention per item on the other channels rises as the share moves; no human reader is lost (none was measured)" : v.verdict === "PROMOTE" ? "more items at the same attention per item, up to the owner's cap" : v.verdict === "IMPROVE" ? "attention per item rises within 7 days as better items go first" : v.verdict === "RETEST" ? "a week of posts shows whether the channel has an audience now" : "attention per item holds";
+    try {
+      const ins = await env.AUDIT.prepare("INSERT INTO attention_decisions (day, channel, from_verdict, to_verdict, from_share, to_share, reason, evidence, prediction, verify_at, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)")
+        .bind(day, c, p ? p.verdict : null, v.verdict, p ? Number(p.share) : null, v.share, v.reason, JSON.stringify(ev).slice(0, 4e3), pred, atShiftDay(day, AT_VERIFY_DAYS), nowIso).run();
+      out.decisions.push({ id: ins && ins.meta ? ins.meta.last_row_id : null, channel: c, from: p ? p.verdict : null, to: v.verdict, share: v.share });
+    } catch (e) { out.notes.push("decision " + c + ": " + reachErr(e)); }
+  }
+  // shares for qnfo-social
+  try {
+    await env.AUDIT.prepare("INSERT INTO ops_config (key, value, note, updated_at) VALUES ('attention_channel_share', ?1, 'ATTENTION-LOOP-1: per-channel share of the owner cap, written daily by qnfo-fleet-dashboard attentionScorecard; read by qnfo-social', ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value, note = excluded.note, updated_at = excluded.updated_at")
+      .bind(JSON.stringify(Object.assign({}, shares, { day, verdicts: Object.keys(verdicts).reduce(function(a, k) { a[k] = verdicts[k] ? verdicts[k].verdict : null; return a; }, {}) })), nowIso).run();
+  } catch (e) { out.notes.push("shares: " + reachErr(e)); }
+  // efficacy of decisions due for verification
+  try {
+    const due = await d1all(env.AUDIT, "SELECT id, day, channel, to_verdict FROM attention_decisions WHERE outcome IS NULL AND verify_at <= ? ORDER BY id LIMIT 20", [day]);
+    let graded = 0;
+    for (const d of due) {
+      const before = await d1all(env.AUDIT, "SELECT per_item FROM attention_scorecard WHERE day = ? AND window_days = ? AND channel = ?", [d.day, AT_SHORT, d.channel]);
+      const after = await d1all(env.AUDIT, "SELECT per_item FROM attention_scorecard WHERE day = ? AND window_days = ? AND channel = ?", [day, AT_SHORT, d.channel]);
+      const e = atEfficacy(before[0], after[0]);
+      await env.AUDIT.prepare("UPDATE attention_decisions SET outcome = ?2, outcome_detail = ?3, verified_at = ?4 WHERE id = ?1").bind(d.id, e.outcome, e.detail, nowIso).run();
+      graded++;
+    }
+    const eff = await d1all(env.AUDIT, "SELECT SUM(CASE WHEN outcome = 'improved' THEN 1 ELSE 0 END) AS good, SUM(CASE WHEN outcome IN ('improved', 'flat', 'worse') THEN 1 ELSE 0 END) AS judged FROM attention_decisions WHERE verified_at >= ? AND to_verdict <> 'INSUFFICIENT'", [atShiftDay(day, -30) + "T00:00:00Z"]);
+    out.efficacy = { graded_now: graded, improved: Number(eff[0] && eff[0].good) || 0, judged: Number(eff[0] && eff[0].judged) || 0 };
+  } catch (e) { out.notes.push("efficacy: " + reachErr(e)); }
+  // metrics
+  const social7 = AT_SOCIAL.reduce(function(a, c) { const s = S.stats[c]; return { items: a.items + (Number(s.items) || 0), att: a.att + (Number(s.attention) || 0), vis: a.vis + (Number(s.visits) || 0) }; }, { items: 0, att: 0, vis: 0 });
+  const events7 = social7.att + social7.vis + (Number(S.stats.email.attention) || 0) + web.top_external.reduce(function(a, r) { return a + r.external_pageviews; }, 0);
+  const stopped = AT_SOCIAL.filter(function(c) { return verdicts[c] && verdicts[c].verdict === "STOP"; }).length;
+  const metricVals = {
+    attention_events_7d: String(atRound(events7)),
+    attention_per_post_7d: social7.items ? String(atRound(social7.att / social7.items)) : "n/a: no social post in the last 7 days",
+    pages_noticed_7d: web.noticed_pages == null ? "n/a: no per-item human rows yet" : String((web.noticed_pages || 0) + (web.noticed_papers || 0)),
+    attention_channels_stopped: String(stopped),
+    attention_decision_efficacy_30d: out.efficacy && out.efficacy.judged ? String(atRound(out.efficacy.improved / out.efficacy.judged)) : "n/a: no decision verified yet"
+  };
+  try {
+    const ms = [];
+    for (const k of Object.keys(metricVals)) ms.push(env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1").bind(k, metricVals[k], nowIso));
+    await env.AUDIT.batch(ms);
+  } catch (e) { out.notes.push("metrics: " + reachErr(e)); }
+  for (const c of AT_CHANNELS) out.channels[c] = { d28: L.stats[c], d7: S.stats[c], verdict: c === "email" ? emailVerdict : verdicts[c] };
+  out.shares = shares; out.metrics = metricVals;
+  const text = ("attention " + day + ": " + AT_SOCIAL.map(function(c) { const v = verdicts[c]; return c + " " + (v ? v.verdict + "@" + v.share : "unmeasured") + " (" + (L.stats[c].items == null ? "?" : L.stats[c].items) + " items, " + L.stats[c].attention + " eng, " + L.stats[c].visits + " visits/28d)"; }).join("; ") + "; email " + (emailVerdict ? emailVerdict.verdict : "unmeasured") + "; pages noticed 7d " + metricVals.pages_noticed_7d + "; decisions " + out.decisions.length).slice(0, 500);
+  try {
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'attention-scorecard', ?3, ?4, ?5, ?6)")
+      .bind(evId, nowIso, text, JSON.stringify({ last_ok: nowIso, version: VERSION, shares, verdicts: Object.keys(verdicts).reduce(function(a, k) { a[k] = verdicts[k] ? verdicts[k].verdict : null; return a; }, {}), metrics: metricVals, decisions: out.decisions, notes: out.notes }).slice(0, 4e3), NAME, out.notes.some(function(n) { return /: (no such|unreadable|write )/.test(n); }) ? "partial" : "ok").run();
+  } catch (e) {}
+  return out;
+}
+async function attentionLatest(env) {
+  for (const s of AT_DDL) await env.AUDIT.prepare(s).run();
+  const last = await d1all(env.AUDIT, "SELECT MAX(day) AS day FROM attention_scorecard");
+  const day = last[0] && last[0].day;
+  const rows = day ? await d1all(env.AUDIT, "SELECT day, window_days, channel, items, attention, per_item, visits, impressions, verdict, share, reason, retest_at, extra FROM attention_scorecard WHERE day = ? ORDER BY channel, window_days", [day]) : [];
+  const decisions = await d1all(env.AUDIT, "SELECT id, day, channel, from_verdict, to_verdict, from_share, to_share, reason, prediction, verify_at, outcome, outcome_detail FROM attention_decisions ORDER BY id DESC LIMIT 30");
+  let shares = null;
+  try { const s = await d1all(env.AUDIT, "SELECT value, updated_at FROM ops_config WHERE key = 'attention_channel_share'"); shares = s.length ? { value: JSON.parse(s[0].value), updated_at: s[0].updated_at } : null; } catch (e) {}
+  const parse = function(s) { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } };
+  return { ok: true, version: VERSION, day: day || null, rules: { windows_days: [AT_SHORT, AT_LONG], thresholds: AT_DEFAULT_THRESHOLDS, shares_by_verdict: AT_SHARE, retest_days: AT_RETEST_DAYS, verify_days: AT_VERIFY_DAYS, note: "shares multiply the owner's caps (STRATEGY s4) in qnfo-social and never exceed 1; ops_config attention_thresholds overrides the thresholds" },
+    scorecard: rows.map(function(r) { return Object.assign({}, r, { extra: parse(r.extra) }); }), decisions, shares };
+}
+// ---- ATTENTION-LOOP-1:END ----
 // REACH-INGEST-BACKFILL-1 (#1711): a day the cron never ingested (2026-10-04: every tick hung until REFRESH-INFLIGHT-1) is
 // picked up by a later tick: once yesterday's run is settled, the most recent day of the previous REACH_BACKFILL_DAYS with
 // no reach-ingest-<day> row at all is ingested through the same path as the manual POST /api/reach/ingest?day=, one day
@@ -3420,6 +3828,9 @@ async function reachIngestTick(env, opts) {
   opts = opts || {};
   const live = await ingestReachSignals(env, opts.nowMs ? { nowMs: opts.nowMs } : {});
   if (!live || live.not_yet || live.in_progress || live.error) return { live };
+  // ATTENTION-LOOP-1: the daily scorecard follows the day's ingest (its own ledger row keeps it to once a day).
+  let attention = null;
+  try { attention = await attentionScorecard(env, opts.nowMs ? { nowMs: opts.nowMs } : {}); } catch (e) { attention = { error: reachErr(e) }; }
   const yesterday = reachYesterday(opts.nowMs || Date.now());
   const days = [];
   for (let i = 1; i <= REACH_BACKFILL_DAYS; i++) days.push(reachShiftDay(yesterday, -i));
@@ -3438,9 +3849,9 @@ async function reachIngestTick(env, opts) {
   const missing = days.find(function(d) {
     return !seen[d];
   });
-  if (!missing) return { live, backfill: null };
+  if (!missing) return { live, attention, backfill: null };
   const b = await ingestReachSignals(env, Object.assign({ day: missing }, opts.nowMs ? { nowMs: opts.nowMs } : {}));
-  return { live, backfill: { day: missing, written: b && b.written, skipped: b && b.skipped } };
+  return { live, attention, backfill: { day: missing, written: b && b.written, skipped: b && b.skipped } };
 }
 // Q08-REVIEW-2026-10-31 (agent_issues 1716, docs/STRATEGY.md s7; charter pillar: cost). q08-signal-engine writes an AI
 // essay every 2 hours, and published_pieces.reads counts every GET, bots included, so it cannot decide q08's future. The
@@ -4067,7 +4478,7 @@ async function generatorInventory(env, nowMs) {
 // watchmaker_runs row, metric_registry 'watchmaker_index', and GET /api/watchmaker.
 var WATCHMAKER_AFTER_UTC_HOUR = 7;
 var WATCHMAKER_OPS = [
-  // FLEET-CHANGELOG-1 (1.24.0): the Changelog tab's sync, heartbeat changelog-tick-<UTC hour> from every */15 tick.
+  // FLEET-CHANGELOG-1 (1.25.0): the Changelog tab's sync, heartbeat changelog-tick-<UTC hour> from every */15 tick.
   { key: "changelog-sync", what: "Fleet changelog: releases from the deploy ledger, described from their commits (FLEET-CHANGELOG-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 2, first_due: "2026-10-07T00:00:00Z", sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'changelog-tick-' AND id < 'changelog-tick.' AND status = 'ok'" },
   { key: "portfolio-daily", what: "Portfolio daily run: owner-voice guard, scorecard, run log", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'portfolio-daily-' AND id < 'portfolio-daily.' AND status = 'ok'", replaces: "claude.ai Routine 'QNFO portfolio management'" },
   { key: "identity-weekly", what: "Identity weekly review (IDENTITY-WEEKLY-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 168, first_due: "2026-10-05T06:00:00Z", sql: "SELECT MAX(created_at) AS last FROM portfolio_runs WHERE kind = 'identity-weekly'", replaces: "claude.ai Routines 'Identity and brand weekly review', 'Weekly identity and opportunity check'" },
@@ -4150,6 +4561,8 @@ var WATCHMAKER_OPS = [
   // and dispatches code fixes once a day in the 03:41 tick. Each step writes an ask_loop_runs row.
   { key: "ask-loop-measure", what: "ask.qwav.tech metrics measured into metric_registry (ASK-LOOP-1, qnfo-ai-search hourly)", runner: "cron:qnfo-ai-search", cadence_h: 1, first_due: "2026-10-03T00:00:00Z", sql: "SELECT MAX(ts) AS last FROM ask_loop_runs WHERE kind = 'measure' AND ok = 1" },
   { key: "ask-loop-daily", what: "ask.qwav.tech daily eval, grounding judge, tuning and fix dispatch (ASK-LOOP-1, ASK-TUNE-1, ASK-FIX-1)", runner: "cron:qnfo-ai-search", cadence_h: 24, first_due: "2026-10-04T06:00:00Z", sql: "SELECT MAX(ts) AS last FROM ask_loop_runs WHERE kind = 'fix' AND ok = 1" },
+  // ASK-CORPUS-FEEDER-1 (qnfo-ai-search 2.2.8, agent_issues 2029; carried for session 01KzS1, PR 676): the hourly corpus-sync leg of the ASK-LOOP cron.
+  { key: "ask-corpus-sync", what: "Ask corpus feeder: published papers missing from the AI Search index are uploaded, none while an ai_spend cap is breached (ASK-CORPUS-FEEDER-1, qnfo-ai-search hourly, agent_issues 2029)", runner: "cron:qnfo-ai-search", cadence_h: 2, first_due: "2026-10-06T14:00:00Z", sql: "SELECT MAX(ts) AS last FROM ask_loop_runs WHERE kind = 'corpus-sync' AND ok = 1" },
   // PERFORMANCE-LOOP-1 (1.17.4): qnfo-fleet-control 0.4.91 changes the fleet itself. Its experiment evaluator runs once a UTC
   // day after 09:00Z on the hourly cron and writes one perf_runs row per day even when nothing starts or ends (a run that
   // cannot read its inputs writes none, so a broken evaluator goes stale here). Its five KPIs are refreshed every hour; an
@@ -4195,6 +4608,8 @@ var WATCHMAKER_OPS = [
   { key: "linkedin-draft-approval", what: "Approving each LinkedIn draft in Buffer (LinkedIn API Terms 3.1; STRATEGY gate 7)", runner: "owner-by-policy" },
   // DAILY-DISTRIBUTION-1 (qnfo-social 0.7.37): the per-channel drain to LinkedIn, Mastodon and X inside their own weekly caps.
   { key: "social-channels", what: "Per-channel distribution to LinkedIn, Mastodon and X inside their own STRATEGY s4 weekly caps, spread over the week (DAILY-DISTRIBUTION-1, qnfo-social, every 2h; a run held by a cap or spacing still counts as run)", runner: "cron:qnfo-social", cadence_h: 2, first_due: "2026-10-08T00:00:00Z", sql: "SELECT MAX(json_extract(meta, '$.last_ok')) AS last FROM cloud_ops_events WHERE id >= 'social-channels-' AND id < 'social-channels.'" },
+  // ATTENTION-LOOP-1 (1.24.0): the daily attention scorecard, verdicts and shares; counted when it is stalled or a decision is 10+ days past its verify date with no outcome.
+  { key: "attention-scorecard", what: "Human attention per outreach channel and item, verdicts (promote, keep, improve, stop, re-test) and channel shares for qnfo-social; decisions verified after 7 days (ATTENTION-LOOP-1, qnfo-fleet-dashboard, daily after the reach ingest)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, first_due: "2026-10-08T04:00:00Z", sql: "SELECT MAX(json_extract(meta, '$.last_ok')) AS last FROM cloud_ops_events WHERE id >= 'attention-scorecard-' AND id < 'attention-scorecard.'", stuck_hours: [240], stuck_sql: "SELECT COUNT(*) AS stuck FROM attention_decisions WHERE outcome IS NULL AND verify_at < substr(?1, 1, 10)", stuck_note: "attention decisions 10+ days past their verify date with no outcome" },
   // TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132): the program engine; counted when its hourly tick is stalled or a lever waits on a session.
   { key: "transformation-loop", what: "Transformation program engine: wave state, lever dispatch to the code loop, stall and session fallback (TRANSFORMATION-LOOP-1, qnfo-fleet-control, hourly); an open CODE-TASK-NEEDS-SESSION-1 row is a lever only a session can land", runner: "cron:qnfo-fleet-control", cadence_h: 1, first_due: "2026-10-07T12:00:00Z", sql: "SELECT MAX(json_extract(meta, '$.last_ok')) AS last FROM cloud_ops_events WHERE id >= 'transformation-tick-' AND id < 'transformation-tick.'", stuck_hours: [24], stuck_sql: "SELECT COUNT(*) AS stuck FROM agent_issues WHERE status = 'open' AND title LIKE 'CODE-TASK-NEEDS-SESSION-1:%' AND created_at < CAST(strftime('%s', ?1) AS INTEGER) * 1000", stuck_note: "levers the code loop could not land, open more than 24h; a session takes them in wave order" },
   // SIGNAL-INTAKE-SOURCES-1 (radar-hub 1.3.0): the interdisciplinary feed intake into idea_proposals.
@@ -5460,7 +5875,7 @@ function fleetTop(current, live, holder) {
 }
 // ---- FLEET-UI-2:END ----
 // ---- FLEET-CHANGELOG-1:BEGIN ----
-// FLEET-CHANGELOG-1 (1.24.0, pillar autonomy; owner request 2026-10-06: "a changelog on the fleet dashboard as a new tab, to
+// FLEET-CHANGELOG-1 (1.25.0, pillar autonomy; owner request 2026-10-06: "a changelog on the fleet dashboard as a new tab, to
 // know what new features and functionality the system releases for itself ... major new features, not minor fixes ... keep
 // track of what the fleet is doing for itself and how it is improving its own autonomy").
 // Source of truth is the canonical deploy ledger qnfo-audit.deployment_history: the first successful deploy of each

@@ -28,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.2.7-lexical-catalog"; // 2.2.7 ASK-LEXICAL-CATALOG-1 (pillar research): retrieve() also ranks the published catalog (titles and abstracts from papers.qnfo.org, BM25, no model call) because the AI Search vector index has had no feeder since 2026-08-11 and held 0 of the 22 golden papers; catalog metadata replaces per-source detail fetches where it has an abstract; 2.2.6 TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015, pillar reach): ask.qwav.tech carries a subscribe box (type="email" plus a honeypot) that posts cross-origin to the qnfo.org double opt-in (POST https://qnfo.org/api/subscribe, CORS already allows this origin) with source ask.qwav.tech; nobody is subscribed without clicking the confirmation link; no binding, no model call; 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
+var VERSION = "2.2.8-corpus-feeder"; // 2.2.8 ASK-CORPUS-FEEDER-1 (#2029, pillar research): an hourly loop leg uploads published papers the vector index lacks (ledger ask_corpus_sync; no upload while an ai_spend cap is breached); QGEN-COMPLETE-1: a golden question must be a complete question (ends with "?", not cut at max_tokens), at most QGEN_MAX_CALLS model calls a run and none while an ai_spend cap is breached, and evals use complete questions only; 2.2.7 ASK-LEXICAL-CATALOG-1 (pillar research): retrieve() also ranks the published catalog (titles and abstracts from papers.qnfo.org, BM25, no model call) because the AI Search vector index has had no feeder since 2026-08-11 and held 0 of the 22 golden papers; catalog metadata replaces per-source detail fetches where it has an abstract; 2.2.6 TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015, pillar reach): ask.qwav.tech carries a subscribe box (type="email" plus a honeypot) that posts cross-origin to the qnfo.org double opt-in (POST https://qnfo.org/api/subscribe, CORS already allows this origin) with source ask.qwav.tech; nobody is subscribed without clicking the confirmation link; no binding, no model call; 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -473,7 +473,7 @@ function buildCatalogIndex(papers) {
     t.forEach(function (w) { tf.set(w, (tf.get(w) || 0) + 2); });
     a.forEach(function (w) { tf.set(w, (tf.get(w) || 0) + 1); });
     var len = 2 * t.length + a.length;
-    docs.push({ slug: p.slug, title: String(p.title || ""), abstract: String(p.abstract || ""), doi: p.doi || null, tf: tf, len: len });
+    docs.push({ slug: p.slug, title: String(p.title || ""), abstract: String(p.abstract || ""), doi: p.doi || null, version: p.version || null, created_at: p.created_at || null, tf: tf, len: len });
     total += len;
     tf.forEach(function (_, w) { df.set(w, (df.get(w) || 0) + 1); });
   });
@@ -514,6 +514,59 @@ function catalogIndex(env) {
     _catalog.loading = loadCatalog(env).then(function (idx) { if (idx && idx.n) { _catalog.idx = idx; _catalog.at = Date.now(); } return _catalog.idx; }).catch(function () { return _catalog.idx; }).finally(function () { _catalog.loading = null; });
   }
   return _catalog.idx ? Promise.resolve(_catalog.idx) : (_catalog.loading || Promise.resolve(null));
+}
+// ASK-CORPUS-FEEDER-1 (2.2.8, agent_issues 2029, pillar research). The AI Search instance qnfo-corpus has source null and was
+// filled once, by hand, through POST /ingest; nothing called it after 2026-08-11, so no paper published since could be found
+// by vector search (0 of 22 golden papers on 2026-10-06). Each hourly tick of the loop now uploads up to CORPUS_SYNC_PER_RUN
+// published papers that the ledger ask_corpus_sync does not hold at their current version, newest first, as <slug>.md (the
+// key scheme the index already uses), and records each upload or error. Indexing embeds the text with a paid Workers AI
+// model, so nothing is uploaded while any fleet_budget ai_spend cap is breached (an unreadable budget counts as breached);
+// the tick still runs and says why it skipped, which is what WATCHMAKER_OPS ask-corpus-sync reads. A failed upload is
+// retried after CORPUS_RETRY_H. The ledger table is created by ensureAskSchema and by migrations/2026-10-06-ask-corpus-sync.sql.
+var CORPUS_SYNC_PER_RUN = 6, CORPUS_DOC_MAX = 120000, CORPUS_RETRY_H = 24;
+async function aiSpendBreach(env) {
+  try {
+    var rs = (await db(env).prepare("SELECT node_class, cap, current FROM fleet_budget WHERE node_class LIKE 'ai_spend:%'").all()).results || [];
+    var caps = rs.filter(function (r) { return Number(r.current) > Number(r.cap); }).map(function (r) { return r.node_class + " " + r.current + "/" + r.cap; });
+    return { breached: caps.length > 0, caps: caps };
+  } catch (e) { return { breached: true, caps: ["fleet_budget unreadable"] }; }
+}
+function corpusDoc(p) {
+  var body = String(p.body_md || "").replace(/^---[\s\S]*?---\s*/, "");
+  var head = "# " + String(p.title || p.slug) + "\n\n" + (p.abstract ? "## Abstract\n\n" + String(p.abstract) + "\n\n" : "");
+  return (head + body).slice(0, CORPUS_DOC_MAX);
+}
+async function corpusSync(env) {
+  var budget = await aiSpendBreach(env);
+  if (budget.breached) return { skipped: "ai_spend caps breached: no upload (indexing calls a paid embedding model)", caps: budget.caps };
+  if (!env.AI_SEARCH) return { skipped: "AI_SEARCH binding absent" };
+  var cat = await catalogIndex(env);
+  if (!cat || !cat.n) return { skipped: "catalog unreadable" };
+  var d = db(env), now = new Date(), retryBefore = new Date(now.getTime() - CORPUS_RETRY_H * 3600e3).toISOString();
+  var led = new Map((((await d.prepare("SELECT slug, source_version, status, ingested_at FROM ask_corpus_sync").all()).results) || []).map(function (r) { return [r.slug, r]; }));
+  var due = cat.docs.filter(function (doc) {
+    var r = led.get(doc.slug);
+    if (!r) return true;
+    if (r.status === "error") return String(r.ingested_at) < retryBefore;
+    return String(r.source_version || "") !== String(doc.version || "");
+  }).sort(function (a, b) { return String(b.created_at || "").localeCompare(String(a.created_at || "")); });
+  var out = { due: due.length, uploaded: 0, errors: 0, slugs: [] };
+  for (var i = 0; i < due.length && i < CORPUS_SYNC_PER_RUN; i++) {
+    var doc = due[i], at = new Date().toISOString();
+    try {
+      var p = await up(env, "GATEWAY", UP.papers, "/papers/" + encodeURIComponent(doc.slug), null, 15000);
+      if (!p || !p.slug) throw new Error("detail unreadable");
+      var text = corpusDoc(p);
+      await env.AI_SEARCH.get(DEFAULT_INSTANCE).items.upload(doc.slug + ".md", text, { metadata: { slug: doc.slug, doi: p.doi || "", version: String(p.version || ""), source: "papers.qnfo.org" } });
+      await d.prepare("INSERT OR REPLACE INTO ask_corpus_sync (slug, ingested_at, bytes, source_version, status, error) VALUES (?1, ?2, ?3, ?4, 'uploaded', NULL)").bind(doc.slug, at, text.length, String(p.version || doc.version || "")).run();
+      out.uploaded++; out.slugs.push(doc.slug);
+    } catch (e) {
+      out.errors++;
+      try { await d.prepare("INSERT OR REPLACE INTO ask_corpus_sync (slug, ingested_at, bytes, source_version, status, error) VALUES (?1, ?2, 0, ?3, 'error', ?4)").bind(doc.slug, at, String(doc.version || ""), String((e && e.message) || e).slice(0, 300)).run(); } catch (e2) {}
+    }
+  }
+  out.remaining = Math.max(0, out.due - out.uploaded);
+  return out;
 }
 async function corpusSearch(env, query, limit) {
   try {
@@ -754,6 +807,7 @@ async function ensureAskSchema(env) {
     d.prepare("CREATE TABLE IF NOT EXISTS ask_feedback (event_id TEXT PRIMARY KEY, ts TEXT NOT NULL, helpful INTEGER NOT NULL)"),
     d.prepare("CREATE TABLE IF NOT EXISTS ask_rate (k TEXT PRIMARY KEY, n INTEGER NOT NULL, ts TEXT NOT NULL)"),
     d.prepare("CREATE TABLE IF NOT EXISTS ask_golden (slug TEXT PRIMARY KEY, question TEXT NOT NULL, title TEXT, added_at TEXT NOT NULL)"),
+    d.prepare("CREATE TABLE IF NOT EXISTS ask_corpus_sync (slug TEXT PRIMARY KEY, ingested_at TEXT NOT NULL, bytes INTEGER, source_version TEXT, status TEXT NOT NULL DEFAULT 'uploaded', error TEXT)"),
     d.prepare("CREATE TABLE IF NOT EXISTS ask_evals (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, kind TEXT NOT NULL, cfg TEXT, n INTEGER, score REAL, detail TEXT)"),
     d.prepare("CREATE TABLE IF NOT EXISTS ask_loop_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, version TEXT, kind TEXT NOT NULL, ok INTEGER NOT NULL, note TEXT)"),
   ]);
@@ -935,6 +989,7 @@ async function loopTick(env, now) {
   await ensureAskSchema(env);
   var out = [];
   out.push(await loopRun(env, "measure", function () { return measure(env); }));
+  out.push(await loopRun(env, "corpus-sync", function () { return corpusSync(env); }));
   if (now.getUTCHours() === 3) {
     out.push(await loopRun(env, "golden", function () { return refreshGolden(env); }));
     out.push(await loopRun(env, "judge", function () { return judge(env, 16); }));
@@ -983,29 +1038,40 @@ async function measure(env) {
 function round(x, k) { var p = Math.pow(10, k || 4); return Math.round(x * p) / p; }
 
 // ---- EVALUATE: golden set (questions written from abstracts; expected answer = that paper)
+// QGEN-COMPLETE-1 (2.2.8, #2029): on 2026-10-06 9 of the 22 golden questions were fragments ("How can networks of"):
+// QGEN_MODEL reasons before it answers and was cut at max_tokens, and the last line of what came back was kept. A
+// question is kept only when it ends with "?" and the model did not stop at the token limit; a run makes at most
+// QGEN_MAX_CALLS model calls (rejections do not buy more calls) and none while an ai_spend cap is breached; the retrieval
+// eval reads complete questions only (GOLDEN_COMPLETE_SQL), so the old fragments stay in the table but are not scored.
+var QGEN_MAX_CALLS = 5;
+var GOLDEN_COMPLETE_SQL = "rtrim(question) LIKE '%?'";
+function completeQuestion(q, finish) { return String(finish || "") !== "length" && /\?\s*$/.test(String(q || "")) && String(q).length >= 15 && String(q).length <= 300; }
 async function refreshGolden(env) {
   var d = db(env);
-  var have = await d.prepare("SELECT COUNT(*) n FROM ask_golden").first();
+  var have = await d.prepare("SELECT COUNT(*) n FROM ask_golden WHERE " + GOLDEN_COMPLETE_SQL).first();
+  var budget = await aiSpendBreach(env);
+  if (budget.breached) return { have: have && have.n, added: [], skipped: "ai_spend caps breached: no question generation", caps: budget.caps };
   var p = await up(env, "GATEWAY", UP.papers, "/papers?format=json&limit=40", null, 15000);
-  var added = [];
+  var added = [], calls = 0, rejected = 0;
   if (!p || !env.AI) return { have: have && have.n, added: added };
   var cand = (p.papers || []).filter(function (x) { return x.slug && x.abstract && String(x.abstract).length > 200; });
-  for (var i = 0; i < cand.length && added.length < 5; i++) {
+  for (var i = 0; i < cand.length && added.length < 5 && calls < QGEN_MAX_CALLS; i++) {
     var x = cand[i];
     var ex = await d.prepare("SELECT slug FROM ask_golden WHERE slug=?1").bind(x.slug).first();
     if (ex) continue;
     var msg = [{ role: "system", content: "Write ONE question a researcher could ask that this paper answers. Do not quote the title or use its distinctive title words; paraphrase the subject. Output only the question." }, { role: "user", content: "Title: " + x.title + "\nAbstract: " + String(x.abstract).slice(0, 1500) }];
     try {
+      calls++;
       var r = await env.AI.run(QGEN_MODEL, { messages: msg, max_tokens: 400, temperature: 0.4 });
       var q = stripThink(String((r && (r.response || (r.choices && r.choices[0] && r.choices[0].message && r.choices[0].message.content))) || "")).trim().split("\n").filter(Boolean).pop() || "";
       recordSpend(env, null, QGEN_MODEL, 500, 60, "golden");
       q = q.replace(/^["'\s-]+|["'\s]+$/g, "");
-      if (q.length < 15 || q.length > 300) continue;
+      if (!completeQuestion(q, r && r.choices && r.choices[0] && r.choices[0].finish_reason)) { rejected++; continue; }
       await d.prepare("INSERT OR IGNORE INTO ask_golden (slug, question, title, added_at) VALUES (?1, ?2, ?3, ?4)").bind(x.slug, q, x.title, new Date().toISOString()).run();
       added.push(x.slug);
     } catch (e) {}
   }
-  return { have: (Number(have && have.n) || 0) + added.length, added: added };
+  return { have: (Number(have && have.n) || 0) + added.length, added: added, calls: calls, rejected: rejected };
 }
 // The papers the glossary names as defining a term (ASK-RETRIEVAL-DEFINITIONS-1): their golden questions are in every
 // retrieval eval and their ranks are recorded (detail.defs: slug -> 1-based rank, 0 when not retrieved).
@@ -1030,7 +1096,7 @@ async function retrievalScore(env, cfg, golden) {
 async function tuneRetrieval(env) {
   var d = db(env);
   var conf = await loadConfig(env);
-  var gold = (await d.prepare("SELECT slug, question FROM ask_golden ORDER BY CASE WHEN slug IN (SELECT value FROM json_each(?1)) THEN 0 ELSE 1 END, RANDOM() LIMIT 16").bind(JSON.stringify(definedSlugs())).all()).results || [];
+  var gold = (await d.prepare("SELECT slug, question FROM ask_golden WHERE " + GOLDEN_COMPLETE_SQL + " ORDER BY CASE WHEN slug IN (SELECT value FROM json_each(?1)) THEN 0 ELSE 1 END, RANDOM() LIMIT 16").bind(JSON.stringify(definedSlugs())).all()).results || [];
   if (gold.length < 8) return { skipped: "golden set has " + gold.length + " questions (needs 8)" };
   var champ = conf.champion;
   var base = await retrievalScore(env, champ, gold);
