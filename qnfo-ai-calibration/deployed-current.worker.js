@@ -1,8 +1,9 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+var PROBER_CRON = "*/20 * * * *";
 
 // worker.js
-var VERSION = "1.2.9-gw-402-unfunded"; /* 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
+var VERSION = "1.3.0-prober-fold"; /* 1.3.0 PROBER-FOLD-1 (2026-10-06, pillar core, #1756): ai-health-prober runs here as a member (proberMod, the every-20-minutes cron, /prober/health and /prober/freshness, /prober/run behind the calibration key); the separate ai-health-prober worker is retired by fold. 1.2.9 GW-402-UNFUNDED-1 (2026-10-05, pillar: cost; agent_issues #1992, root cause shared with #1986): a provider's HTTP 402 ("Insufficient Balance", DeepSeek, owner decision 2026-10-05: do not top up) is an unfunded account, not a degraded model. The sweep classed it "other", set ai_model_health deepseek/deepseek-v4-flash degraded on every window with >= 2 such calls (15 at 16:00Z), and qnfo-fleet-control refiled MODEL-DEGRADED (#1992, #1256, #1099 ...). Now status 402 or an insufficient-balance/payment-required body is error_class "unfunded": recorded in ai_gateway_failures, never a [gw-fail] issue, never a degraded health row, and ignored (like rate-capacity) by the 24h reconcile that clears a degraded row, so the row recovers on the next sweep. The spend-side fix (stop paying for the failed first round trip) is #1986 in qnfo-ops. */
 var DEEPSEEK = "https://api.deepseek.com/v1";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var CATALOG = "https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT;
@@ -670,12 +671,334 @@ async function calibration(env, trigger) {
   return { run_id: runId, trigger, duration_ms: Date.now() - t0, total: results.length, pass, fail, drifts: driftCount, failing_models: Object.keys(failing), drift_models: Object.keys(driftByModel), results };
 }
 __name(calibration, "calibration");
+// ---- PROBER-FOLD-1 (2026-10-06, agent_issues 1756, owner standing grant / charter rule 9) ----
+// ai-health-prober runs here as a member instead of as its own worker (fleet_budget workers was 42 against a cap of 30).
+// The member code is the prober's worker.js 2.3.14 unchanged except for its version constant and its limitation text; it keeps
+// WORKER = "ai-health-prober", so ai_model_health, freshness_guard, fleet_heartbeat and capability_audit_snapshot rows keep
+// their writer name. The host dispatches the */20 cron to it and exposes its read routes under /prober/.
+var PROBER_VERSION = "2.3.15-folded";
+var proberMod = (function() {
+  var WORKER = "ai-health-prober";
+  var VERSION = PROBER_VERSION; // member version (PROBER-FOLD-1); was 2.3.14-text-writers-probed as its own worker; // 2.3.14 PROBER-MODELS-1 (pillar: reach): probes the 4 text models the writing loops depend on and nobody watched (nemotron-3-120b = q08 primary writer; gemma-4-26b-a4b, qwen3-30b-a3b, llama-3.3-70b = q08 panel judges / ask writers); healthy models are probed every 9h instead of 6h so the unique-id calls per day do not rise (9 ids x 4 = 36 before, 13 ids x 2.67 = 34.7 after; fleet_budget ai_spend caps are breached, so no net model calls). Shared ids were already probed once per tick (byId), so the repeated deepseek-v4-pro-0813 row costs no extra call;
+  var CAPS = ["model-health-probe", "freshness-check", "health-coverage"];
+  var LIMS = ["runs every 20 minutes inside qnfo-ai-calibration (PROBER-FOLD-1); read routes /prober/health and /prober/freshness, /prober/run needs the calibration key", "a healthy model is re-probed every 6 hours; degraded or failing models every 2 hours", "liveness is published to fleet_heartbeat and this capability row from the cron"];
+  // v2.3.3 AMH-NAMESPACE-2 (2026-09-13): the ID-NAMESPACE-1 fix was INCOMPLETE.
+  // MODELS[0] still carried a QUALIFIED internal key ("@cf/qwen/qwen3.8-27b"), i.e. this
+  // prober itself kept writing one row in the `@cf/` namespace it was supposed to abandon.
+  // Live evidence 2026-09-13T06:30Z (qnfo-audit D1, 24 rows in ai_model_health): 5 rows carry
+  // a `@cf/` prefix, ALL status=degraded / consecutive_failures=0, four with last_probe_ts
+  // NULL; the fifth (@cf/qwen/qwen3.8-27b) carries a FRESH last_probe_ts (1789280141458,
+  // 2026-09-13T06:15:41Z) because v2.3.1 probes it under that key. Two writers therefore race
+  // on that row: this prober writes ok, then qnfo-ai-calibration GW-DEGRADE-1/2 rewrites
+  // degraded -> the row can never clear and MODEL-DEGRADED is refiled every */20 cron.
+  // The v2.3.2 reconcile guard required `last_probe_ts IS NULL`, which exempted exactly the
+  // raced row. Fixes here: (a) canonicalise every written model_id to the short internal form;
+  // (b) reconcile `@cf/` rows that carry zero failure evidence regardless of last_probe_ts.
+  // v2.3.2 ID-NAMESPACE-1 (2026-09-13): the health table carries TWO id namespaces.
+  // This prober writes only the `internal` key. qnfo-ai-calibration GW-DEGRADE-1/2 writes
+  // gateway-failure health under the full CF id when its internalId() reverse map cannot
+  // resolve it, so 4 models got phantom `@cf/...` rows (status degraded, last_probe_ts NULL,
+  // consecutive_failures 0) that no prober can ever clear -> MODEL-DEGRADED refiled every
+  // */20 cron. MODELS was also 15 entries for 10 distinct models, with one entry recording
+  // GLM-5.3's probe result against kimi-k2.6.
+  var MODELS = [{ "internal": "qwen3.8-27b", "id": "@cf/qwen/qwen3.8-27b", "kind": "text" }, { "internal": "bge-base-en-v1.5", "id": "@cf/baai/bge-base-en-v1.5", "kind": "embed" }, { "internal": "deepseek-v4-pro", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "deepseek-v4-flash-wa", "id": "@cf/deepseek-ai/deepseek-v4-flash-0731", "kind": "text" }, { "internal": "deepseek-v4-pro-wa", "id": "@cf/deepseek-ai/deepseek-v4-pro-0813", "kind": "text" }, { "internal": "glm-5.3-flash", "id": "@cf/zai-org/glm-5.3-flash", "kind": "text" }, { "internal": "kimi-k2.6", "id": "@cf/moonshotai/kimi-k2.6", "kind": "text" }, { "internal": "glm-5.3", "id": "@cf/zai-org/glm-5.3", "kind": "text" }, { "internal": "gpt-oss-120b", "id": "@cf/openai/gpt-oss-120b", "kind": "text" }, { "internal": "kimi-k2.7-code", "id": "@cf/moonshotai/kimi-k2.7-code", "kind": "text" }, { "internal": "nemotron-3-120b-a12b", "id": "@cf/nvidia/nemotron-3-120b-a12b", "kind": "text" }, { "internal": "gemma-4-26b-a4b-it", "id": "@cf/google/gemma-4-26b-a4b-it", "kind": "text" }, { "internal": "qwen3-30b-a3b-fp8", "id": "@cf/qwen/qwen3-30b-a3b-fp8", "kind": "text" }, { "internal": "llama-3.3-70b-instruct-fp8-fast", "id": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "kind": "text" }];
+  var SIGNALS = [["cal_loop", "fleet_cal_state", "updated_at", 24, "heartbeat"], ["kaizen", "kaizen_candidates", "created_at", 192, "heartbeat"], ["evolve", "evolve_candidates", "ts", 168, "event"], ["pipeline_status", "pipeline_status", "last_updated", 24, "event"], ["amh_models", "ai_model_health", "updated_at", 26, "heartbeat"], ["heartbeat", "fleet_heartbeat", "ts", 6, "heartbeat"], ["cloud_ops", "cloud_ops_events", "ts", 24, "heartbeat"], ["fleet_runs", "fleet_runs", "started_at", 24, "heartbeat"], ["research_queue", "research_queue", "created_at", 72, "heartbeat"], ["version_queue", "version_queue", "created_at", 72, "heartbeat"], ["paper_revision", "paper_revision_log", "created_at", 96, "heartbeat"], ["agent_issues", "agent_issues", "updated_at", 96, "heartbeat"], ["self_heal", "self_heal_actions", "ts", 48, "event"], ["outreach", "outreach_log", "sent_at", 72, "event"]];
+  function json(o, s) {
+    return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json" } });
+  }
+  __name(json, "json");
+  // v2.3.3 AMH-NAMESPACE-2: single choke point for the write key. No caller may persist a
+  // qualified `@cf/...` id into ai_model_health.
+  function canonicalId(m) {
+    if (m == null) return null;
+    var s = String(m);
+    if (s.indexOf("@cf/") === 0) return s.split("/").pop();
+    return s;
+  }
+  __name(canonicalId, "canonicalId");
+  async function probeOne(env, m) {
+    const bodies = m.kind === "embed" ? [{ text: ["ping"] }] : [{ prompt: "ping", max_tokens: 1 }, { messages: [{ role: "user", content: "ping" }], max_tokens: 1 }];
+    let lastErr = null;
+    for (let i = 0; i < bodies.length; i++) {
+      try {
+        const t0 = Date.now();
+        await env.AI.run(m.id, bodies[i]);
+        return { ok: true, ms: Date.now() - t0 };
+      } catch (e) {
+        lastErr = String(e && e.message || e).slice(0, 120);
+      }
+    }
+    return { ok: false, err: lastErr };
+  }
+  __name(probeOne, "probeOne");
+  function toMs(m) {
+    if (m == null) return null;
+    if (typeof m === "number") return m > 1e12 ? m : m * 1e3;
+    var s = String(m).trim();
+    if (/^[0-9]+$/.test(s)) {
+      var n = Number(s);
+      return n > 1e12 ? n : n * 1e3;
+    }
+    var iso = s.replace(" ", "T");
+    if (!/[Zz]|[+-][0-9][0-9]/.test(iso)) iso = iso + "Z";
+    var t = Date.parse(iso);
+    return isNaN(t) ? null : t;
+  }
+  __name(toMs, "toMs");
+  // v2.3.2 AMH-RECONCILE-1: clear `degraded` rows that carry no probe evidence at all, and
+  // report how many rows this prober's write-key set cannot reach (coverage gap).
+  // v2.3.3 AMH-NAMESPACE-2: also clear `@cf/`-prefixed rows with zero failure evidence even
+  // when a stale writer stamped a last_probe_ts (a qualified key is non-evidence by design).
+  async function reconcileHealth(env, probedIds, now) {
+    const out = { reconciled: 0, namespaceCleared: 0, uncovered: 0 };
+    if (!env.QNFO_AUDIT) return out;
+    try {
+      const r = await env.QNFO_AUDIT.prepare("UPDATE ai_model_health SET status='ok', updated_at=?1 WHERE status='degraded' AND last_probe_ts IS NULL AND COALESCE(consecutive_failures,0)=0").bind(new Date(now).toISOString()).run();
+      out.reconciled = r && r.meta && typeof r.meta.changes === "number" ? r.meta.changes : 0;
+    } catch (e) {
+    }
+    try {
+      const r2 = await env.QNFO_AUDIT.prepare("UPDATE ai_model_health SET status='ok', updated_at=?1 WHERE model_id LIKE '@cf/%' AND status='degraded' AND COALESCE(consecutive_failures,0)=0").bind(new Date(now).toISOString()).run();
+      out.namespaceCleared = r2 && r2.meta && typeof r2.meta.changes === "number" ? r2.meta.changes : 0;
+      out.reconciled += out.namespaceCleared;
+    } catch (e) {
+    }
+    try {
+      const rows = await env.QNFO_AUDIT.prepare("SELECT model_id FROM ai_model_health").all();
+      const set = {};
+      for (let i = 0; i < probedIds.length; i++) set[probedIds[i]] = 1;
+      const all = rows && rows.results || [];
+      for (let i = 0; i < all.length; i++) {
+        if (!set[all[i].model_id]) out.uncovered++;
+      }
+    } catch (e) {
+    }
+    return out;
+  }
+  __name(reconcileHealth, "reconcileHealth");
+  // PROBE-COST-TIER-1 (2026-10-01, issue 1682): every */20 run pinged all 10 entries (720 runs/day,
+  // reasoning models included; probe traffic measured at ~16% of Workers AI neurons). The coverage
+  // gate only needs a probe within 26 h, so a model whose last probe was OK is now re-probed at most
+  // every PROBE_OK_INTERVAL_MS; a degraded/failing/unknown model is still probed every run so recovery
+  // is detected at the same 20-min resolution. Entries sharing an @cf id (deepseek-v4-pro and
+  // deepseek-v4-pro-wa) are probed once per run and the result written to both keys. ?force=1 on /run
+  // probes everything.
+  // PROBE-COST-TIER-2 (2026-10-01, issue 1682): OK interval 2h -> 6h (coverage gate is 26h; degraded/failing/unknown still probed every 20-min run).
+  var PROBE_OK_INTERVAL_MS = 9 * 36e5;
+  async function runProbe(env, force) {
+    const now = Date.now();
+    const results = [];
+    const probedIds = [];
+    const prior = {};
+    if (env.QNFO_AUDIT && !force) {
+      try {
+        const rows = await env.QNFO_AUDIT.prepare("SELECT model_id, status, last_probe_ts FROM ai_model_health").all();
+        for (const row of rows && rows.results || []) prior[row.model_id] = row;
+      } catch (e) {
+      }
+    }
+    const byId = {};
+    let skipped = 0;
+    for (let i = 0; i < MODELS.length; i++) {
+      const m = MODELS[i];
+      const mid = canonicalId(m.internal || m.id);
+      probedIds.push(mid);
+      const pr = prior[mid];
+      const lastMs = pr ? toMs(pr.last_probe_ts) : null;
+      if (!force && pr && pr.status === "ok" && lastMs != null && now - lastMs < PROBE_OK_INTERVAL_MS) {
+        skipped++;
+        continue;
+      }
+      const r = byId[m.id] || (byId[m.id] = await probeOne(env, m));
+      results.push({ model: mid, ok: r.ok, ms: r.ms || null });
+      if (env.QNFO_AUDIT) {
+        try {
+          if (r.ok) {
+            await env.QNFO_AUDIT.prepare("INSERT INTO ai_model_health (model_id, status, last_probe_ts, last_latency_ms, consecutive_failures, updated_at) VALUES (?1, ?5, ?2, ?3, 0, ?4) ON CONFLICT(model_id) DO UPDATE SET status=?5, last_probe_ts=?2, last_latency_ms=?3, consecutive_failures=0, updated_at=?4").bind(mid, now, r.ms || null, new Date(now).toISOString(), "ok").run();
+          } else {
+            await env.QNFO_AUDIT.prepare("INSERT INTO ai_model_health (model_id, status, last_probe_ts, last_latency_ms, consecutive_failures, updated_at) VALUES (?1, ?5, ?2, ?3, 1, ?4) ON CONFLICT(model_id) DO UPDATE SET status=CASE WHEN consecutive_failures >= 2 THEN ?6 ELSE ?5 END, last_probe_ts=?2, last_latency_ms=?3, consecutive_failures=COALESCE(consecutive_failures,0)+1, updated_at=?4").bind(mid, now, null, new Date(now).toISOString(), "degraded", "failing").run();
+          }
+        } catch (e) {
+        }
+      }
+    }
+    let up = 0;
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].ok) up++;
+    }
+    const extra = await reconcileHealth(env, probedIds, now);
+    return { probed: results.length, skipped_recent_ok: skipped, calls: Object.keys(byId).length, up, down: results.length - up, reconciled: extra.reconciled, namespaceCleared: extra.namespaceCleared, uncovered: extra.uncovered };
+  }
+  __name(runProbe, "runProbe");
+  async function checkFreshness(env) {
+    const now = Date.now();
+    try {
+      var _roster = [];
+      for (var _i = 0; _i < MODELS.length; _i++) { var _m = MODELS[_i].internal || MODELS[_i].id; if (_roster.indexOf(_m) < 0) _roster.push(_m); }
+      if (_roster.length) {
+        var _ph = _roster.map(function () { return "?"; }).join(",");
+        var _del = env.QNFO_AUDIT.prepare("DELETE FROM ai_model_health WHERE model_id NOT IN (" + _ph + ")");
+        await _del.bind.apply(_del.bind, [null].concat(_roster)).run();
+      }
+    } catch (e) {}
+    const out = [];
+    for (let i = 0; i < SIGNALS.length; i++) {
+      const s = SIGNALS[i];
+      const mode = s[4] || "heartbeat";
+      let maxTs = null, ageH = null, status = "unknown";
+      try {
+        const row = await env.QNFO_AUDIT.prepare("SELECT MAX(" + s[2] + ") AS m FROM " + s[1]).first();
+        maxTs = row ? row.m : null;
+        const ms = toMs(maxTs);
+        if (ms != null) {
+          ageH = Math.round((now - ms) / 36e4) / 10;
+          if (ageH > s[3]) status = mode === "event" ? "idle" : "stale";
+          else status = "fresh";
+        } else {
+          status = "no-data";
+        }
+      } catch (e) {
+        status = "error";
+      }
+      out.push({ name: s[0], table: s[1], ts: s[2], mode, max_ts: maxTs == null ? null : String(maxTs), age_hours: ageH, threshold_hours: s[3], status });
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO freshness_guard (signal, table_name, ts_column, max_ts, age_hours, threshold_hours, status, mode, checked_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?9,?8) ON CONFLICT(signal) DO UPDATE SET table_name=?2, ts_column=?3, max_ts=?4, age_hours=?5, threshold_hours=?6, status=?7, mode=?9, checked_at=?8").bind(s[0], s[1], s[2], maxTs == null ? null : String(maxTs), ageH, s[3], status, new Date(now).toISOString(), mode).run();
+      } catch (e) {
+      }
+    }
+    return out;
+  }
+  __name(checkFreshness, "checkFreshness");
+  // v2.3.2 AMH-COVERAGE-1: the SIGNALS loop above uses MAX(ts_column), so a single freshly
+  // written row masks every stale row in the table. Measured 2026-09-13: 'amh_models'
+  // reported fresh/age 0h while 12 of 24 rows were stale (8 at 37.6-37.9h) or never probed.
+  // This check counts rows instead of taking a maximum.
+  async function checkHealthCoverage(env, now) {
+    const THRESHOLD_H = 26;
+    let total = 0, stale = 0, neverProbed = 0;
+    try {
+      const r = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_model_health").first();
+      total = r ? Number(r.n || 0) : 0;
+      const s = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_model_health WHERE last_probe_ts IS NULL OR last_probe_ts < ?1").bind(now - THRESHOLD_H * 36e5).first();
+      stale = s ? Number(s.n || 0) : 0;
+      const np = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM ai_model_health WHERE last_probe_ts IS NULL").first();
+      neverProbed = np ? Number(np.n || 0) : 0;
+    } catch (e) {
+      return { signal: "amh_coverage", status: "error" };
+    }
+    const status = stale > 0 ? "stale" : "fresh";
+    try {
+      await env.QNFO_AUDIT.prepare("INSERT INTO freshness_guard (signal, table_name, ts_column, max_ts, age_hours, threshold_hours, status, mode, checked_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?9,?8) ON CONFLICT(signal) DO UPDATE SET table_name=?2, ts_column=?3, max_ts=?4, age_hours=?5, threshold_hours=?6, status=?7, mode=?9, checked_at=?8").bind("amh_coverage", "ai_model_health", "last_probe_ts", stale + "/" + total + " stale (" + neverProbed + " never probed)", null, THRESHOLD_H, status, new Date(now).toISOString(), "heartbeat").run();
+    } catch (e) {
+    }
+    return { signal: "amh_coverage", total, stale, neverProbed, threshold_hours: THRESHOLD_H, status };
+  }
+  __name(checkHealthCoverage, "checkHealthCoverage");
+  // OWNER-CLIENT-PROBE-1 (#1886, 2026-10-04). WHY: the owner's ChatBox/DeepChat endpoints lost
+  // access when the 2026-10-01 credential rotation (#1676/#1701) skipped client consumers, and nothing
+  // monitored the client path. The credential-holding 1-token probe is scripts/issue_owner_client_keys.py
+  // (the owner-client-keys workflow): it keeps the owner client key private and writes one row per host
+  // into owner_client_probes (HTTP status + public-read flag, never the key). This cron reads that ledger
+  // and fails CLOSED: a STALE ledger (the producer stopped) or any host with ok=0 (401 / unexpected
+  // public-read) raises a self_heal_actions breach within one cron. No new worker, cron or binding: it
+  // reuses the existing QNFO_AUDIT binding and the freshness_guard pattern.
+  async function checkOwnerClientKeys(env, now) {
+    const THRESHOLD_H = 26;
+    const out = { signal: "owner_client_keys", status: "error" };
+    try {
+      const r = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(ok),0) AS ok, MAX(checked_at) AS mx FROM owner_client_probes").first();
+      const n = r ? Number(r.n || 0) : 0;
+      const ok = r ? Number(r.ok || 0) : 0;
+      const mx = r && r.mx ? String(r.mx) : null;
+      const ageH = mx ? Math.round(((now - Date.parse(mx)) / 36e5) * 10) / 10 : 999;
+      const fresh = n >= 3 && ageH <= THRESHOLD_H;
+      const allOk = n >= 3 && ok === n;
+      out.hosts = n; out.ok = ok; out.age_hours = ageH; out.threshold_hours = THRESHOLD_H;
+      out.status = fresh && allOk ? "fresh" : "stale";
+      try {
+        await env.QNFO_AUDIT.prepare("INSERT INTO freshness_guard (signal, table_name, ts_column, max_ts, age_hours, threshold_hours, status, mode, checked_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?9,?8) ON CONFLICT(signal) DO UPDATE SET table_name=?2, ts_column=?3, max_ts=?4, age_hours=?5, threshold_hours=?6, status=?7, mode=?9, checked_at=?8").bind("owner_client_keys", "owner_client_probes", "checked_at", n + " rows, " + ok + " ok", ageH, THRESHOLD_H, out.status, new Date(now).toISOString(), "heartbeat").run();
+      } catch (e) {
+      }
+      if (out.status !== "fresh") {
+        try {
+          const open = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM self_heal_actions WHERE kind='owner-client-key' AND status='open'").first();
+          if (!open || Number(open.n || 0) === 0) {
+            await env.QNFO_AUDIT.prepare("INSERT INTO self_heal_actions (kind, ref, action, ts, status, claim, confidence) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind("owner-client-key", "issue-1886", "owner-client key probe stale or failing", new Date(now).toISOString(), "open", JSON.stringify(out), 0.9).run();
+          }
+        } catch (e) {
+        }
+      }
+    } catch (e) {
+    }
+    return out;
+  }
+  __name(checkOwnerClientKeys, "checkOwnerClientKeys");
+  // CAPABILITY-SELF-REPORT-1 (2026-10-01, #1735): this worker has no public route (CRON_ONLY, #1402), so the deploy-guard
+  // capability snapshot cannot probe its /health. Each cron run upserts its own capability_audit_snapshot row instead.
+  async function capSelfReport(db, name) {
+    if (!db) return;
+    try {
+      await db.prepare("INSERT INTO capability_audit_snapshot (service, version, capabilities, limitations, ts) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(service) DO UPDATE SET version=excluded.version, capabilities=excluded.capabilities, limitations=excluded.limitations, ts=excluded.ts").bind(name, VERSION, JSON.stringify(CAPS), JSON.stringify(LIMS), new Date().toISOString()).run();
+    } catch (e) {
+    }
+  }
+  var worker_default = {
+    async fetch(request, env, ctx) {
+      const u = new URL(request.url);
+      if (u.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: CAPS, limitations: LIMS, models: MODELS.length, signals: SIGNALS.length });
+      if (u.pathname === "/run") {
+        const p = await runProbe(env, u.searchParams.get("force") === "1");
+        const f = await checkFreshness(env);
+        const coverage = await checkHealthCoverage(env, Date.now());
+        const ownerClients = await checkOwnerClientKeys(env, Date.now());
+        let st = 0, idle = 0;
+        for (let i = 0; i < f.length; i++) {
+          if (f[i].status === "stale") st++;
+          if (f[i].status === "idle") idle++;
+        }
+        return json({ ok: true, version: VERSION, probe: p, coverage, owner_clients: ownerClients, freshness: f, stale_count: st, idle_count: idle });
+      }
+      if (u.pathname === "/freshness") return json(await checkFreshness(env));
+      return json({ ok: false, error: "not found" }, 404);
+    },
+    async scheduled(event, env, ctx) {
+      ctx.waitUntil((async function() {
+        var ok = 1;
+        try {
+          await runProbe(env);
+          await checkFreshness(env);
+          await checkHealthCoverage(env, Date.now());
+          await checkOwnerClientKeys(env, Date.now());
+        } catch (e) {
+          ok = 0;
+        }
+        await capSelfReport(env.QNFO_AUDIT, WORKER);
+        /* CRON-ONLY-HEARTBEAT-1 (2026-09-30): this worker has no workers.dev route (CRON_ONLY class, #1402), so no
+           HTTP census can ever see it; the fleet read it as permanently down/unknown. Each cron run now upserts
+           fleet_heartbeat, which qnfo-fleet-control /state reads as this worker's liveness. */
+        try {
+          await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind(WORKER, VERSION, new Date().toISOString(), ok).run();
+        } catch (e) {
+        }
+      })());
+    }
+  };
+  return worker_default;
+})();
 var worker_default = {
   async fetch(request, env, ctx) {
     var url = new URL(request.url);
     var path = url.pathname;
-    if (path === "/health") return json({ ok: true, worker: "qnfo-ai-calibration", version: VERSION, bindings: { qnfo_audit: !!env.QNFO_AUDIT }, crons: ["*/30 * * * *"], capabilities: ["model-calibration", "drift-detection", "model-health"], limitations: ["calibrates on the */30 cron; POST /run and GET /results require the router key", "fails closed when the key is not configured"] });
-    if (path === "/manifest") return json({ service: "qnfo-ai-calibration", kind: "worker", version: VERSION, purpose: "autonomous periodic stress-testing/calibration of QNFO AI endpoints (self-auditing, self-correcting, self-improving)", capabilities: ["endpoint-stress-sweeps", "catalog-truth-audit", "vision-tools-stream-routing-boundary-probes", "health-table-publishing", "ticket-lifecycle-self-heal", "config-driven-thresholds"], routes: ["/health", "/manifest", "/run", "/results", "/"], crons: ["*/30 * * * *"] });
+    if (path === "/prober" || path.indexOf("/prober/") === 0) {
+      var sub = path.slice(7) || "/health";
+      if (sub === "/run" && !await authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      if (sub !== "/health" && sub !== "/freshness" && sub !== "/run") return json({ error: "not found" }, 404);
+      var pu = new URL(request.url);
+      pu.pathname = sub;
+      return proberMod.fetch(new Request(pu.toString(), request), env, ctx);
+    }
+    if (path === "/health") return json({ ok: true, worker: "qnfo-ai-calibration", version: VERSION, bindings: { qnfo_audit: !!env.QNFO_AUDIT, ai: !!env.AI }, crons: ["*/30 * * * *", PROBER_CRON], members: { "ai-health-prober": PROBER_VERSION }, capabilities: ["model-calibration", "drift-detection", "model-health"], limitations: ["calibrates on the */30 cron; POST /run and GET /results require the router key", "fails closed when the key is not configured"] });
+    if (path === "/manifest") return json({ service: "qnfo-ai-calibration", kind: "worker", version: VERSION, purpose: "autonomous periodic stress-testing/calibration of QNFO AI endpoints (self-auditing, self-correcting, self-improving)", capabilities: ["endpoint-stress-sweeps", "catalog-truth-audit", "vision-tools-stream-routing-boundary-probes", "health-table-publishing", "ticket-lifecycle-self-heal", "config-driven-thresholds"], routes: ["/health", "/manifest", "/run", "/results", "/"], crons: ["*/30 * * * *", PROBER_CRON] });
     if (path === "/run" && request.method === "POST") {
       if (!await authorized(request, env)) return json({ error: "unauthorized" }, 401);
       var digest = await calibration(env, "manual");
@@ -693,6 +1016,7 @@ var worker_default = {
     return json({ error: "not found" }, 404);
   },
   async scheduled(controller, env, ctx) {
+    if (controller && controller.cron === PROBER_CRON) return proberMod.scheduled(controller, env, ctx);
     await calibration(env, "cron");
   }
 };
