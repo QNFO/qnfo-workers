@@ -29,8 +29,10 @@ function makeD1() {
 
 // the deploy-guard stub: acquire (409 while a session holds the key and no token renews it), release, or down
 const guard = { calls: [], held: null, down: false, tokens: 0 };
-const GUARD = "https://qnfo-deploy-guard.q08.workers.dev";
-globalThis.fetch = async (u, init) => {
+const GUARD = "https://qnfo-deploy-guard";
+// raw reads fail: a step ends in a read error, which is not this suite's subject; the guard is reached only over the binding
+globalThis.fetch = async () => new Response("nf", { status: 404 });
+const guardFetch = async (u, init) => {
   const url = String(u);
   if (url.startsWith(GUARD + "/work-lock/")) {
     if (guard.down) throw new Error("ECONNRESET");
@@ -43,11 +45,11 @@ globalThis.fetch = async (u, init) => {
     }
     if (url.endsWith("/release")) return new Response(JSON.stringify({ released: true, key: body.key }), { status: 200 });
   }
-  return new Response("nf", { status: 404 }); // raw reads fail: a step ends in a read error, which is not this suite's subject
+  return new Response("nf", { status: 404 });
 };
 let aiCalls = 0;
 const env = { ORCH_TOKEN: "t0ken", AUDIT_DB: makeD1(), PR_PUBLISH_MODE: "pull", JS_VERIFY: "dynamic", AI: { run: async () => { aiCalls++; return { response: "" }; } },
-  LOADER: { load: () => ({ getEntrypoint: () => ({ fetch: async () => new Response("ok") }) }) } };
+  LOADER: { load: () => ({ getEntrypoint: () => ({ fetch: async () => new Response("ok") }) }) }, DEPLOY_GUARD: { fetch: guardFetch } };
 const hdr = { authorization: "Bearer t0ken", "content-type": "application/json" };
 const tick = async (o) => (await worker.fetch(new Request("https://x/v1/tick", { method: "POST", headers: hdr, body: JSON.stringify(Object.assign({ maxSteps: 1, budgetMs: 25000, plan: false, intake: false }, o || {})) }), env)).json();
 const addTask = async (goal) => (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-worker/worker.js", goal }) }), env)).json();
@@ -116,7 +118,17 @@ guard.calls.length = 0;
 t = await tick();
 ok(releases().length === 1 && releases()[0].body.outcome === "abandoned" && releases()[0].body.token === "tokX" && !("pr" in releases()[0].body), "a failed task releases as abandoned, without a PR", releases());
 
-// 9. /health names the behaviour
+// 9. no DEPLOY_GUARD binding: claims are skipped and counted, nothing reaches the network
+{
+  const envNo = Object.assign({}, env, { DEPLOY_GUARD: undefined });
+  let guardCalls = 0; const f0 = globalThis.fetch; globalThis.fetch = async (...a) => { if (/deploy-guard|work-lock/.test(String(a[0]))) guardCalls++; return f0(...a); };
+  const c9 = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-worker/other.js", goal: "no binding" }) }), envNo)).json();
+  const t9 = await (await worker.fetch(new Request("https://x/v1/tick", { method: "POST", headers: hdr, body: JSON.stringify({ maxSteps: 0, plan: false, intake: false }) }), envNo)).json();
+  ok(c9.ok && !ctxOf(c9.id).claim && t9.claims && t9.claims.errors >= 1 && t9.claims.taken === 0 && guardCalls === 0, "without the binding no claim is taken, the sweep counts it, and no guard call leaves the worker", { c9, claims: t9.claims, guardCalls });
+  globalThis.fetch = f0;
+}
+
+// 10. /health names the behaviour
 const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
 ok(/^0\.3\.(2[1-9]|[3-9]\d)/.test(h.version) && (h.limitations || []).some((l) => /CLAIMS-FIRST-1/.test(l)), "health names CLAIMS-FIRST-1 and the version is 0.3.21+", { v: h.version });
 

@@ -219,7 +219,6 @@ async function save(env, id, f) {
 // outcome once the task ends. A session's acquire then reads 409 with the task as holder, and a task whose file a session
 // holds waits (lease CLAIM_WAIT_MS, event code-task.claim-held) instead of building against a file about to change. The
 // guard unreachable is counted, never fatal: the ledger read in pathBusy is still the dedupe at intake.
-const CLAIM_GUARD_URL = "https://qnfo-deploy-guard.q08.workers.dev";
 const CLAIM_OWNER = "qnfo-code-orchestrator";
 const CLAIM_TTL_S = 7200;                        // the guard's maximum
 const CLAIM_RENEW_BEFORE_MS = 45 * 60 * 1000;    // renewed when under 45 minutes remain (the tick is every 10 minutes)
@@ -227,7 +226,10 @@ const CLAIM_SWEEP_MAX = 12;
 async function guardPost(env, path, body) {
   const init = { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": WORKER + "/" + VERSION }, body: JSON.stringify(body) };
   try {
-    const r = env.DEPLOY_GUARD && typeof env.DEPLOY_GUARD.fetch === "function" ? await env.DEPLOY_GUARD.fetch("https://qnfo-deploy-guard" + path, init) : await fetch(CLAIM_GUARD_URL + path, init);
+    // The guard is reached only over the DEPLOY_GUARD service binding (wrangler.toml [[services]], installed by the canonical
+    // deploy, the binding qnfo-ops uses); without it every claim is skipped and counted, and nothing leaves the worker.
+    if (!(env.DEPLOY_GUARD && typeof env.DEPLOY_GUARD.fetch === "function")) return { status: 0, j: null, error: "no DEPLOY_GUARD binding" };
+    const r = await env.DEPLOY_GUARD.fetch("https://qnfo-deploy-guard" + path, init);
     const j = await r.json().catch(function () { return null; });
     return { status: r.status, j: j };
   } catch (e) { return { status: 0, j: null, error: String((e && e.message) || e).slice(0, 120) }; }
