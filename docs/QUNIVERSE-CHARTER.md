@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.10, written 2026-10-01 (1.0.10, 2026-10-06: AI spend caps steer model choice and never stop work, BUDGET-SOFT-ROUTE-1, section 8; 1.0.9, 2026-10-06: `docs/TRANSFORMATION-PROGRAM.md` (TRANSFORMATION-PROGRAM-1) is an input to this charter, the source of the `RM-TP-*` roadmap rows and the `TP-*` epics; 1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1; 1.0.8, 2026-10-05: the owner's standing grant OWNER-STANDING-GRANT-1, which lets the fleet retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 2, 7 and 8). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.11, written 2026-10-01 (1.0.11, 2026-10-06: core prompt rule 8 is deleted on the owner's directive (RULE-8-RETIRED-1): spend caps, guard metrics, verification probes and data deletion are the fleet's own decisions, recorded with the reason and a live measurement, while the protections for people outside the fleet stay, section 8 rules 4, 9 and 10; 1.0.10, 2026-10-06: AI spend caps steer model choice and never stop work, BUDGET-SOFT-ROUTE-1, section 8; 1.0.9, 2026-10-06: `docs/TRANSFORMATION-PROGRAM.md` (TRANSFORMATION-PROGRAM-1) is an input to this charter, the source of the `RM-TP-*` roadmap rows and the `TP-*` epics; 1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1; 1.0.8, 2026-10-05: the owner's standing grant OWNER-STANDING-GRANT-1, which lets the fleet retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 2, 7 and 8). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -319,9 +319,9 @@ disposition, the DO agents decision, qnfo-agent-ws. None of these blocks anythin
 **Owner-only actions, the complete list:** connect LinkedIn (and optionally Mastodon, Threads, X) in Buffer once;
 approve each LinkedIn draft with one tap; grant GA4 Viewer and Search Console access to the service account; ask one
 established arXiv author for an endorsement; add the selected works to ORCID; paste the bio into LinkedIn; rotate the
-identity-bound Cloudflare token; ratify or reject the seven proposed objective revisions; change any spend cap; confirm
-by email any deletion of data that has no verified backup. Everything else is the fleet's, including what the standing
-grant (rule 9) covers.
+identity-bound Cloudflare token; ratify or reject the seven proposed objective revisions. Everything else is the
+fleet's, including what the standing grant (rule 9) covers and, since RULE-8-RETIRED-1, its own spend caps and any
+deletion (rule 10).
 
 ## 8. Decision rules: how the charter is baked into development
 
@@ -337,10 +337,10 @@ close-evidence trigger) and stated here for the rest.
 3. **Measure before you claim.** A change that affects a graded metric is reported with the metric's value before and
    after. "Deployed" is never evidence; a live probe is. An issue closes only with `close_evidence`.
 4. **Automatic safe default.** No critical-path step waits for a human. Tier 1 decisions (reversible, bounded, inside
-   limits) are taken and recorded; tier 2 (credentials, spend, external publication as the owner, deleting data that
-   has no verified backup) park with the default stated; the "never" list (raise a cap, mint or rotate a live
-   credential, delete data that has no verified backup, disable a guard, bypass the canonical deploy, post or mail as
-   the owner outside the STRATEGY-1 gates) is refused.
+   limits) are taken and recorded; tier 2 (credentials, external publication as the owner) park with the default
+   stated; the "never" list (mint or rotate a live credential, bypass the canonical deploy, post or mail as the owner
+   outside the STRATEGY-1 gates, mail an address that opted out, move personal-plane data into the research plane or a
+   public surface) is refused. Spend caps, guards, probes and deletions left this list on 2026-10-06 (rule 10).
 5. **Prefer the cheapest correct path.** Deterministic before cached before cheap model before cascade before ensemble;
    paid paths only with a verifier; one cost policy per path.
 6. **Reach inside the gates.** Every outgoing item passes the owner-voice gates (fact check, identity lexicon, encoding,
@@ -363,10 +363,25 @@ close-evidence trigger) and stated here for the rest.
      (D1-FOLD-1: cf-ops-actions d1-backup, unbind-d1, delete-d1).
    - a model switch needs no A/B test when it keeps a per-request fallback to the previous model and an automatic
      revert on errors or empty replies (TWIN-FLASH-1 is the pattern).
-   Each act is recorded on its issue with the live measurement. Unchanged: caps stay owner-held and are never raised,
-   credentials are not minted or rotated, guards and verification probes are not weakened, and data with no verified
-   backup is never deleted (core prompt rule 8). A breached AI spend cap steers work to the cheapest capable model and
-   never stops it (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06).
+   Each act is recorded on its issue with the live measurement. Credentials are not minted or rotated. A breached AI
+   spend cap steers work to the cheapest capable model and never stops it (BUDGET-SOFT-ROUTE-1, owner directive
+   2026-10-06); the cap itself is now the fleet's to set (rule 10).
+10. **Decide, then record (RULE-8-RETIRED-1).** Owner directive 2026-10-06: "'Rule 8' is now deleted entirely. The
+   system needs more flexibility and more autonomy to decide for itself and make its own choices ad hoc." Core prompt
+   rule 8 (hard limits) no longer binds. The fleet decides for itself, ad hoc:
+   - **spend:** it sets and changes its own `fleet_budget` caps, and may add a worker, cron or model call while a cap is
+     breached; each change of a cap names the reason and the measured spend on its issue, and spend stays measured
+     and reported (`unified_cost_usd_30d`, the AI spend rows);
+   - **guards and probes:** it may change, replace or retire a guard metric or a verification probe when the evidence
+     says the old one measures the wrong thing; the change states that evidence and still follows core rule 7
+     (versioned, backed up, canonical deploy, a probe the changer did not write, reverted when it breaks something);
+   - **data:** it may delete data it judges dead; the tooling still takes and reads back a backup first because that
+     costs nothing (D1-FOLD-1), and a deletion without one is recorded as such.
+   Kept, because they protect people outside the fleet and the law requires most of them, and changed only by an
+   owner decision on fleet.qnfo.org: email suppression and opt-out handling (`email_suppression`,
+   CONTACT-LEDGER-IMMUTABLE-1), the outreach consent gate and outreach cadence caps (OUTREACH-CONSENT-1), and the
+   personal/research separation (personal data includes other people's mail, calendar entries and contacts, and the
+   fleet's research plane is open access).
 
 ## 9. How this charter maintains itself (CHARTER-LOOP-1)
 

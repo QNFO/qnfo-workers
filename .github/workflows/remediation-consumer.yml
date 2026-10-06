@@ -46,6 +46,10 @@ on:
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
+  # PROBE-CADENCE-1 (2026-10-06): qnfo-cloud-ops sends this event from its 10-minute Cloudflare tick when the last run
+  # here is older than 60 minutes, so runtime probes keep running while main is quiet (no push, no workflow_run).
+  repository_dispatch:
+    types: [remediation-tick]
 
 permissions:
   contents: write

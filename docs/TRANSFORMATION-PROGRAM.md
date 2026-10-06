@@ -1,6 +1,7 @@
 # Quniverse transformation program (TRANSFORMATION-PROGRAM-1)
 
-Version 1.3 (2026-10-06): 1.3 replaces "Guards that never move" (section 5) after the owner deleted core prompt rule 8
+Version 1.3.1 (2026-10-06): 1.3.1 marks lever 18 done (CONTROL-PLANE-SELF-MERGE-1, PR 737) and names
+PERSONAL-RESEARCH-SEPARATION-1 in the fold-kit line; 1.3 replaces "Guards that never move" (section 5) after the owner deleted core prompt rule 8
 (RULE-8-RETIRED-1); 1.0 written from a live read of D1 `qnfo-audit`, the Cloudflare account and this repository;
 1.1 adds a second read (section 1.10), where each autonomy-score point is lost (1.11), and T9 (a deploy path that cannot
 lock itself out), each measured 2026-10-06 06:30-07:15Z; 1.2 adds a third read of the engine itself after its first tick
@@ -323,8 +324,11 @@ evidence. A session is called only when a task fails twice. `code_task_success_r
     the changed worker; after a passing live test the two workers leave CM_DENY, PLAN_DENY_WORKERS and TP_CONTROL_PLANE in
     one change (FOLD-GUARD-PARITY-1 keeps the three lists equal). qnfo-gateway carries the public site and the reach
     pillar's surface (`paper_render_defect_pages` 68 is its breach), so this lever opens the reach work to the code loop.
-18. **(owner-held)** The verifier workers (qnfo-fleet-control, qnfo-deploy-guard, qnfo-ops, the code loop) stay manual
-    (human_actions 21, option (a), rule 8). Listed so the plan never routes around it; the owner reopens it with a card.
+18. **(done 1.3, CONTROL-PLANE-SELF-MERGE-1)** The verifier workers (qnfo-fleet-control, qnfo-deploy-guard, qnfo-ops, the
+    code loop) were manual under human_actions 21, option (a), rule 8. Since 2026-10-06 (owner directive, rule 8 deleted;
+    qnfo-fleet-control 0.7.0, PR 737) the stale-PR lane merges a green, quiet session pull request to a control-plane
+    worker with a /health canary, and canonical-deploy.yml reverts and redeploys a push whose VERSION never arrives
+    (scripts/canary_revert.py, one level). The code loop still neither plans nor merges them (PLAN_DENY).
 19. **(code, done 1.2)** Parse-shape verifier (JS-VERIFY-PARSE-SHAPE-1, qnfo-code-orchestrator 0.3.19, live 08:41Z): V8
     parse wording without its class name is a failed proposal, retried with the error; JSON.parse wording is excluded.
     (Numbered 19 in the register because (1, 14) was taken.)
@@ -423,7 +427,7 @@ retention policy with table families and no snapshot tables older than 30 days.
     whole host env; bindings merge from the parsed tomls; binders and the host's own binding are re-pointed with
     `props.member`; a parity, routing and schedule suite is generated. It refuses a guest exporting a Durable Object or
     Workflow class, a fold that hands research code a personal-plane binding or moves personal resources into a research
-    worker (rule 8), and a host with more than one top-level VERSION line. `scripts/fold_worker_selftest.py` (14) runs in
+    worker (PERSONAL-RESEARCH-SEPARATION-1), and a host with more than one top-level VERSION line. `scripts/fold_worker_selftest.py` (14) runs in
     deploy-gate. Done when the next production fold is produced by it.
 15. **(code, done 1.2)** Fold-guard parity (SCORER-HOST-DENY-1, FOLD-GUARD-PARITY-1, section 1.12).
 
