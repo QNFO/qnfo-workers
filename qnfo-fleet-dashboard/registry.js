@@ -263,10 +263,6 @@ export const REGISTRY = {
    "url": "https://personal-api.q08.workers.dev/health"
   },
   {
-   "name": "qnfo-agent-orchestrator",
-   "url": "https://qnfo-agent-orchestrator.q08.workers.dev/health"
-  },
-  {
    "name": "qnfo-agent-ws",
    "url": "https://qnfo-agent-ws.q08.workers.dev/health"
   },

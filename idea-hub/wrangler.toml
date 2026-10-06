@@ -12,10 +12,7 @@ workers_dev = true
 enabled = true
 head_sampling_rate = 1
 
-[[services]]
-binding = "AGENT_ORCH"
-service = "qnfo-agent-orchestrator"
-environment = "production"
+# AGENT_ORCH (qnfo-agent-orchestrator) removed 2026-10-06: worker retired (ORCH-RETIRE-1, #1756); worker.js never read it.
 
 [ai]
 binding = "AI"

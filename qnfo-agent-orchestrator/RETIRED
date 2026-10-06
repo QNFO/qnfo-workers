@@ -1,0 +1,18 @@
+qnfo-agent-orchestrator is RETIRED (2026-10-06, ORCH-RETIRE-1, agent_issues 1756 and 2010 (TP-3), owner standing grant
+OWNER-STANDING-GRANT-1 / charter decision rule 9: retire a low-value worker after a dependency check, no idle proof needed).
+
+What it did, measured 2026-10-06:
+- Its AgentTask Durable Object namespace (1e9455a737c746e3bd33521f81e6e6e4, sqlite) holds 0 objects with stored data
+  (Cloudflare DO objects listing), so retiring it deletes no data; the earlier "task state with no export path" concern
+  (agent_issues 1756) does not apply.
+- Its only caller, qnfo-intent-orchestrator dispatchCandidate/syncDispatched, last dispatched on 2026-09-26: 6
+  research_candidates are 'dispatched' with tasks that never completed, and 7 'promoted' candidates (newest 2026-10-05)
+  have waited since then because the dispatch fails. The research pipeline that publishes is qnfo-research-exec.
+- idea-hub declared an AGENT_ORCH service binding that its code never reads (removed in the same PR); no other worker
+  binds it; it is not a charter MVP component and owns no metric trigger.
+
+After the delete, intent-orchestrator's dispatch keeps failing as it has since 2026-09-26 (now HTTP 404 instead of the
+earlier error). Routing promoted candidates into qnfo-research-exec's queue instead is recorded on agent_issues 2010.
+The script is removed with cf-ops-actions delete-worker. Bringing it back is a charter net-zero decision recorded in a PR
+that removes this file and redeploys the code below, never a way to get a deploy through. canonical-deploy.yml skips any
+directory containing a RETIRED or FOLDED file.
