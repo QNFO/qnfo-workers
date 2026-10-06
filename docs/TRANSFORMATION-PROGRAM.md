@@ -5,8 +5,9 @@ Version 1.2 (2026-10-06): 1.0 written from a live read of D1 `qnfo-audit`, the C
 lock itself out), each measured 2026-10-06 06:30-07:15Z; 1.2 adds a third read of the engine itself after its first tick
 (section 1.12, 07:40-08:10Z): the program was dispatching work its own merge lane must refuse and counting the refusals
 against the metric its first wave waits on, a fold had lifted the guard on the autonomy scorer, T1 lever 8 contradicted an
-applied owner decision, and the footprint stood at 31 live workers (29 with PR 674). It replaces T1.8 and adds T1.13-T1.18,
-T3.10-T3.15 and T5.10.
+applied owner decision, and the footprint stood at 31 live workers (29 with PR 674). It replaces T1.8 and adds T1.13 and T1.15-T1.19,
+T3.10-T3.15 and T5.11; T1.14, T4.7, T5.10, T7.11 and T7.13 were registered the same morning by another session from its own
+assessment and are listed with their rows.
 Owner directive 2026-10-06: *audit the systemwide backlog and roadmap for fleet improvements, optimisations and
 enhancements; not patches and bugfixes but a continuing program of active transformational change, systemwide, fully
 automatic and 100% autonomous; everything is in scope, including complete refactors, overhauls and teardown/rebuild.*
@@ -222,7 +223,7 @@ Five findings, each with its fix or lever:
   the three lists together) and T1.18 (the verifier workers stay manual: an owner-held row, never dispatched).
 - **The verifier turned fixable proposals into `needs_human`.** The Dynamic Workers sandbox passes only `err.message`, so a
   parse error can arrive as "Unexpected identifier '__name'" with no `SyntaxError` class (ct_lc6has32addg0m, 07:41Z, the
-  code task for #2028), which the verifier read as "could not confirm the syntax" and ended the task. Fixed by T1.14
+  code task for #2028), which the verifier read as "could not confirm the syntax" and ended the task. Fixed by T1.19
   (JS-VERIFY-PARSE-SHAPE-1): V8 parse wording is a failed proposal the next rung retries with the error. T1.4's
   deterministic half (ANCHOR-REPAIR-1, an anchor that no longer occurs is repaired without a model call) lands with it.
 - **A writer re-created what a migration deleted.** PR 677 deleted the dead `kaizen`, `vault_notes_index` and `handoffs`
@@ -230,7 +231,7 @@ Five findings, each with its fix or lever:
   (qnfo-ai-calibration 1.3.2: no `kaizen` signal, `version_queue` an event register with a 336 h window, `amh_coverage`
   graded over the probe roster) lands with this version. The 24 never-probed external ids sit in `ai_model_health` because
   the prober's roster prune has never run: `_del.bind.apply(_del.bind, [null].concat(_roster))` calls `bind` with the wrong
-  receiver and the error is swallowed (T5.10).
+  receiver and the error is swallowed (T5.11).
 
 The wave design itself has a weakness this read exposes: W0 exits on a 30-day trailing ratio, and the 42 tasks closed between
 2026-10-02 and 10-05 stay in its window until 11-01 to 11-05 whatever the loop does now. T1.16 gives W0 a leading exit.
@@ -307,14 +308,15 @@ evidence. A session is called only when a task fails twice. `code_task_success_r
 
 13. **(code, done)** No-op proposal gate (NOOP-PROPOSAL-GATE-1, issue 2018): a proposal whose non-VERSION diff only
     rewords string literals or comments is refused and fed back to the next rung.
-14. **(code, done 1.2)** Parse-shape verifier (JS-VERIFY-PARSE-SHAPE-1, qnfo-code-orchestrator 0.3.19): V8 parse wording
-    without its class name is a failed proposal, retried with the error; JSON.parse wording is excluded.
+14. **(code, control plane)** The code orchestrator takes the work claim on a file before it proposes, so sessions see the
+    task and review instead of duplicating it (registered 08:40Z by another session's assessment; row (1, 14)).
 15. **(code, done 1.2)** Merge-scope intake (MERGE-SCOPE-INTAKE-1, 0.3.19): a task on a CM_DENY worker is refused before
     any model call and its issue's `code-task:` line becomes a `session-task:` line with the reason (section 1.12).
-16. **(code, control plane)** A leading W0 exit: `code_task_success_rate_30d` keeps its scoreboard row, and W0 exits on the
-    success rate of tasks created after levers 14 and 15 landed (at least 8 finished), so the wave measures the engine as
-    it is, not the 42 closures of 2026-10-02 to 10-05 that stay in a 30-day window until November.
-    `qnfo-fleet-control/worker.js` (`TP_WAVES`); one change to that worker at a time (rule 7).
+16. **(code, done 0.4.134)** A leading W0 exit (W0-LEADING-EXIT-1): `code_task_success_rate_30d` keeps its scoreboard
+    row and trigger, and W0 exits on `code_task_success_rate_engine`, the same formula over code tasks created after lever
+    15 landed, unmeasured until 8 have finished, so the wave measures the engine as it is, not the 42 closures of
+    2026-10-02 to 10-05 that stay in a 30-day window until November. `qnfo-fleet-control/worker.js` (`TP_WAVES`,
+    `tpValues`).
 17. **(refactor, W1)** Staged rollout for qnfo-ai and qnfo-gateway, the scope human_actions 21 allows: the canonical deploy
     uploads a version, deploys it to a fraction of traffic, probes it and promotes or rolls back without running through
     the changed worker; after a passing live test the two workers leave CM_DENY, PLAN_DENY_WORKERS and TP_CONTROL_PLANE in
@@ -322,8 +324,11 @@ evidence. A session is called only when a task fails twice. `code_task_success_r
     pillar's surface (`paper_render_defect_pages` 68 is its breach), so this lever opens the reach work to the code loop.
 18. **(owner-held)** The verifier workers (qnfo-fleet-control, qnfo-deploy-guard, qnfo-ops, the code loop) stay manual
     (human_actions 21, option (a), rule 8). Listed so the plan never routes around it; the owner reopens it with a card.
+19. **(code, done 1.2)** Parse-shape verifier (JS-VERIFY-PARSE-SHAPE-1, qnfo-code-orchestrator 0.3.19, live 08:41Z): V8
+    parse wording without its class name is a failed proposal, retried with the error; JSON.parse wording is excluded.
+    (Numbered 19 in the register because (1, 14) was taken.)
 
-**Executor.** qnfo-code-orchestrator (levers 2 to 5, 7, 11, 12, 14, 15), qnfo-fleet-control merge lane (1, 16, 17), `ops_config`
+**Executor.** qnfo-code-orchestrator (levers 2 to 5, 7, 11, 12, 14, 15, 19), qnfo-fleet-control merge lane (1, 16, 17), `ops_config`
 (6), one migration (9), the repo (10).
 **Probe.** `code_task_success_rate_30d` >= 0.6 for 14 days and at least 10 merged control-plane PRs by the loop.
 **Rollback.** Each lever is a version; the merge lane keeps `stale_pr_merge_enabled` and CONTROL-PLANE-MANUAL-1 as
@@ -454,6 +459,9 @@ its cap.
    and the research reviewer, recorded on their issues.
 6. **(code)** Sessions through the governor: the qnfo-ai `/spend` governor caps session callers at a separate budget,
    so a session cannot push the fleet over its cap.
+7. **(code, control plane)** A daily reconciliation of `ai_spend_ledger` against the AI Gateway cost per provider, with
+   `cost_attribution_gap_pct` and its trigger (registered 08:40Z by another session; the ledger attributes $4.52 in its
+   whole history while `fleet_budget` reads $224.55).
 
 **Executor.** code tasks; fleet-control PERF_LEVERS for the model switches.
 **Probe.** `fleet_ai_run_rate_30d_usd` <= 40 for 14 days; `workers_ai_cost_30d_usd` <= 25; `cache_read_tokens` > 0 on
@@ -493,12 +501,15 @@ where the DoD names a table and a count.
    scoring, replacing the hand score; the two other judgement rows (`independent_decision`, `novelty`) get the same
    treatment when a measured input exists, and stay judgement rows, dated, until then.
 
-10. **(session)** Roster prune that runs: the prober's prune of `ai_model_health` rows outside its roster calls
+10. **(code, control plane)** One worker census (the Cloudflare scripts list) feeds `fleet_budget.workers`,
+    `metric_registry.worker_count` and the transformation scoreboard, with a trigger on disagreement (registered 08:40Z by
+    another session: at 08:35Z the three read 31, 32 and 38).
+11. **(session)** Roster prune that runs: the prober's prune of `ai_model_health` rows outside its roster calls
     `_del.bind.apply(_del.bind, ...)` and has never deleted a row (section 1.12). Back up the table, fix the receiver,
     prune only ids outside the roster with no gateway failure in 7 days, and canonicalise the roster ids as `runProbe`
     writes them, so the prune cannot delete the rows the probe just wrote.
 
-**Executor.** fleet-control code tasks; lever 7 in qnfo-ai-calibration and the scorer host; lever 10 a session.
+**Executor.** fleet-control code tasks; lever 7 in qnfo-ai-calibration and the scorer host; lever 11 a session.
 **Probe.** `breach_code_task_pct` >= 30; `needs-machine-probe` contracts on **open** issues = 0 (9 on 2026-10-06; the 82 on
 closed issues get relapse probes where the issue names a metric, 11 of them); `ooda_observe` >= 4.5 with every counted
 row re-checked within 48 hours.
@@ -555,7 +566,13 @@ events by 2026-12-31 (STRATEGY-1 s9).
 10. **(code)** Subscriber digest links carry `utm_source=digest&utm_medium=email&utm_campaign=<slug>`, so a digest joins to
    the reads it caused. `qnfo-subscribers/worker.js`.
 
-Levers 6 to 10 were added on 2026-10-06 by the sessions that built them (the rows came first; this list follows them).
+11. **(code)** A human inbound message gets a plain-text first response within 24 hours from its drafted reply, behind the
+   owner-voice gate (`inbound_first_response_h_median_30d` 72.6 against 48). `qnfo-cloud-ops/worker.js`.
+13. **(code)** The distribution learner carries channel (bluesky, linkedin, mastodon, x) as an arm dimension, so the
+   attention loop's shift is an experiment the learner credits, not a pause. `qnfo-social/worker.js`.
+
+Levers 6 to 11 and 13 were added on 2026-10-06 by the sessions that built or assessed them (the rows came first; this list
+follows them).
 
 **Executor.** code tasks; qnfo-social and qnfo-subscribers loops.
 **Probe.** `subscribers_growth_monthly` >= 10; `credibility_events_90d` >= 2; the review gate reads MET.
@@ -612,7 +629,7 @@ and 8 are `agent_issues` 2026 and 2027, each with a machine probe.
 
 | Wave | Entry | Content | Exit |
 |---|---|---|---|
-| W0 (now) | this document on main | T1.1-T1.7 and T1.9 (the engine's walls), T2.1 first retirements (PR 657), T7.1 subscribe boxes, T8.1 memory-mcp auth, T3.8 archive and applier deletion, T9.1 and T9.4, T5.6-T5.8 | `code_task_success_rate_30d` >= 0.45; `worker_count` <= 38 |
+| W0 (now) | this document on main | T1.1-T1.7 and T1.9 (the engine's walls), T2.1 first retirements (PR 657), T7.1 subscribe boxes, T8.1 memory-mcp auth, T3.8 archive and applier deletion, T9.1 and T9.4, T5.6-T5.8 | `code_task_success_rate_engine` >= 0.45 (code tasks created after T1.15 landed, at least 8 finished; T1.16); `worker_count` <= 38 |
 | W1 | W0 exit | T1.8 branch protection and control-plane merging, T1.10, T2.2-T2.4 one probe pass and heartbeats, T5.2 probe generator, T4.1-T4.2 cost lines and prefix cache, T3.5 one email transport, T7.2-T7.3 | `breach_code_task_pct` >= 30; `contracts_needing_probe` = 0; `worker_count` <= 32 |
 | W2 | W1 exit | T3.1-T3.4 folds and retirements, T3.6-T3.7 D1 folds and retention, T4.3-T4.6, T6.1 durable ops agent, T8.2-T8.3 | `worker_count` <= 26; `fleet_ai_run_rate_30d_usd` <= 40; `cron_schedules` <= 44 |
 | W3 | W2 exit | T6.2-T6.4 research and code loop on Workflows, T1.11 multi-file engine, T8.4-T8.5, research products (Ask QWAV public, living paper) only if the review gate reads MET | `worker_count` <= 24; `cron_schedules` <= 40; `watchmaker_index` 0; sessions used only for `CODE-TASK-NEEDS-SESSION-1` rows |
@@ -651,6 +668,7 @@ charter. A wave whose exit metric has not moved in 14 days is re-planned: the le
 | `cron_schedules` (fleet_budget) | 49 | <= 46 | <= 40 |
 | `d1_databases` | 10 | 10 | 8 |
 | `code_task_success_rate_30d` | 0.29 | >= 0.6 | >= 0.6 |
+| `code_task_success_rate_engine` (T1.16; tasks after T1.15) | unmeasured | >= 0.6 | >= 0.6 |
 | `breach_code_task_pct` | 0 | >= 30 | >= 50 |
 | contracts `needs-machine-probe` on open issues (1.10) | 9 | 0 | 0 |
 | contracts `needs-machine-probe` on closed issues (relapse probes) | 82 | <= 71 | metric-named ones probed |
