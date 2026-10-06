@@ -2019,7 +2019,10 @@ var intakeMod = (function(){
       var items = parseFeed(txt);
       return items.length ? { items: items } : { error: "no items parsed (" + txt.length + " bytes)", items: [] };
     } catch (e) {
-      return { error: String((e && e.message) || e).slice(0, 80), items: [] };
+      // The detail goes to the worker log; the run result (served by POST /intake/run) carries a fixed class only
+      // (CodeQL js/stack-trace-exposure).
+      console.log("signal-intake fetch " + src.url + ": " + String((e && e.message) || e).slice(0, 160));
+      return { error: e && e.name === "AbortError" ? "timeout" : "fetch failed", items: [] };
     } finally { if (timer) clearTimeout(timer); }
   }
   async function run(env, opts) {
@@ -2034,7 +2037,7 @@ var intakeMod = (function(){
     if (!cfg.enabled) { out.status = "skipped"; out.reason = "ops_config signal_intake_enabled=0"; await ledger(db, today, iso, out); return out; }
     var srcs = [];
     try { srcs = (await db.prepare("SELECT name, url, category FROM radar_sources WHERE enabled=1 AND kind='signal' ORDER BY category, name").all()).results || []; }
-    catch (e) { out.status = "error"; out.error = "radar_sources: " + String((e && e.message) || e).slice(0, 80); await ledger(db, today, iso, out); return out; }
+    catch (e) { console.log("signal-intake radar_sources read: " + String((e && e.message) || e).slice(0, 160)); out.status = "error"; out.error = "radar_sources unreadable"; await ledger(db, today, iso, out); return out; }
     if (!srcs.length) { out.status = "error"; out.error = "no radar_sources rows with kind='signal'"; await ledger(db, today, iso, out); return out; }
     var candidates = [];
     for (var b = 0; b < srcs.length; b += 6) {
@@ -2082,7 +2085,7 @@ var intakeMod = (function(){
         } else out.dupes++;
         await db.prepare("INSERT OR IGNORE INTO signal_intake_seen (url, family, source, title, score, accepted, proposal_id, seen_at) VALUES (?1,?2,?3,?4,?5,1,?6,?7)").bind(it2.link, it2.family, it2.source, it2.title.slice(0, 240), it2.score, pid, iso).run();
         out.picked.push({ family: it2.family, score: it2.score, title: it2.title.slice(0, 100), url: it2.link });
-      } catch (e) { out.sources[it2.source] += " insert-error:" + String((e && e.message) || e).slice(0, 60); }
+      } catch (e) { console.log("signal-intake insert " + it2.link + ": " + String((e && e.message) || e).slice(0, 160)); out.sources[it2.source] += " insert-error"; }
     }
     // Every other fresh candidate is recorded as seen-but-not-taken, so the next run does not re-score it.
     for (var q = 0; q < fresh.length; q++) {
@@ -2096,7 +2099,7 @@ var intakeMod = (function(){
       out.families_7d = Number(fm && fm.n) || 0;
       await db.prepare("INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, state, refresh_class) VALUES ('signal_source_families_7d', 'fleet', 'leading', 'COUNT(DISTINCT family) FROM signal_intake_seen WHERE accepted=1 AND seen_at >= now-7d: interdisciplinary source families (radar_sources kind signal) that produced an accepted idea_proposals row in the last 7 days (radar-hub SIGNAL-INTAKE-SOURCES-1, daily 08:30Z, no model call)', 'qnfo-audit.signal_intake_seen (radar-hub intake run ledger cloud_ops_events signal-intake-<day>)', '0 (2026-10-06: every signal came from arXiv quantum, artifact re-entry, q08 or reading)', '>= 5 distinct families a week (SIGNAL-INTAKE-1, owner directive 2026-10-04 and 2026-10-06)', 'radar-hub', 'trigger: fewer than 3 families -> METRIC-TRIGGER issue (migrations/2026-10-06-signal-intake-sources.sql)', 'daily', '< 5', '< 3', 'MEASURED', 'computed')").run();
       await db.prepare("UPDATE metric_registry SET last_value=?1, last_refreshed=?2, state='MEASURED' WHERE metric='signal_source_families_7d'").bind(String(out.families_7d), iso).run();
-    } catch (e) { out.metric_error = String((e && e.message) || e).slice(0, 80); }
+    } catch (e) { console.log("signal-intake metric write: " + String((e && e.message) || e).slice(0, 160)); out.metric_error = "metric write failed"; }
     await ledger(db, today, iso, out);
     return out;
   }

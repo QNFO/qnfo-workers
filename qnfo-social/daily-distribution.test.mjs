@@ -86,7 +86,7 @@ ok(/^posted:queued:qec-landauer:/.test(r.channels.linkedin), "LinkedIn takes the
 ok(/^posted:ok:jps-metric:/.test(r.channels.mastodon) && /^posted:ok:jps-metric:/.test(r.channels.twitter), "Mastodon and X take jps-metric (never carried there) and share now");
 cp = createPosts();
 ok(cp.some((b) => b.includes("chM") && b.includes("shareNow") && b.includes("utm_source=mastodon")) && cp.some((b) => b.includes("chT") && b.includes("shareNow") && b.includes("utm_source=x")), "Mastodon and X posts share now with their own utm_source");
-ok(!cp.some((b) => b.includes("q08.org") || b.includes("not-selected")), "q08 rows and unselected queued rows are never chosen");
+ok(!cp.some((b) => /2026-10-01-x/.test(b) || /not-selected/.test(b)), "q08 rows (slug q08-abc, essay 2026-10-01-x) and unselected queued rows are never chosen");
 ok(cp.filter((b) => b.includes("chM")).every((b) => !b.includes(mod.SUBSCRIBE_LINE.split(" ")[0] + " notes by email")), "short channels carry no subscribe line");
 ok(calls.filter((c) => c.body.includes("organizations")).length === 1, "the Buffer organisation and channels are read once per run");
 
