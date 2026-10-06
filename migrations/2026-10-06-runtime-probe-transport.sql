@@ -17,7 +17,7 @@
 -- Idempotent (CREATE ... IF NOT EXISTS, INSERT OR IGNORE, guarded UPDATEs). No DELETE or DROP.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: UPDATE transport_trust SET runtime_observable = 1 WHERE transport = 'd1-query@personal-life'; DELETE FROM transport_trust WHERE transport = 'runner-https'; UPDATE remediation_contracts SET status = 'superseded' WHERE module = 'runtime-liveness-v1' OR (class = 'issue-1910' AND verify_transport = 'runner-https'); DELETE FROM analytics_metric_triggers WHERE metric_key = 'runtime_verified_share_24h'; DELETE FROM metric_registry WHERE metric = 'runtime_verified_share_24h';
+-- Rollback: UPDATE transport_trust SET runtime_observable = 1 WHERE transport = 'd1-query@personal-life'; DELETE FROM transport_trust WHERE transport = 'runner-https'; UPDATE remediation_contracts SET status = 'superseded' WHERE module = 'runtime-liveness-v1' OR (class = 'issue-1910' AND verify_transport = 'runner-https'); DELETE FROM analytics_metric_triggers WHERE metric_key = 'runtime_verified_share_24h'; DELETE FROM metric_registry WHERE metric = 'runtime_verified_share_24h'; UPDATE human_actions SET status = 'open', resolved_at = NULL WHERE slug = 'review-merge-pr-726';
 
 CREATE TABLE IF NOT EXISTS bak_20261006_transport_trust AS SELECT * FROM transport_trust;
 
@@ -54,3 +54,9 @@ INSERT OR IGNORE INTO analytics_metric_triggers (metric_key, title, source_table
  ('runtime_verified_share_24h', 'Verification monoculture: under 10% of the last day''s verifications observed a running service from an independent vantage', 'registry', 'lt', 10, 7,
   'Pillar autonomy. Either the runner-https executor stopped or runtime contracts dried up. Check: (1) SELECT MAX(verified_at), COUNT(*) FROM remediation_verifications WHERE transport = ''runner-https'' AND verified_at >= datetime(''now'',''-1 day''); if 0 rows, read ci-status/remediation-consumer.json and the last remediation-consumer workflow run in QNFO/qnfo-workers and fix the cause (token, workflow_run chain, allowlist); (2) SELECT class, status, last_verdict FROM remediation_contracts WHERE verify_transport IN (''runner-https'',''external-https''); re-arm superseded ones and give each open issue whose defect is a page, route or latency a runner-https probe instead of a SQL one. Never relabel a d1-query transport as runtime to lift this number. Definition of done: runtime_verified_share_24h >= 10 in metric_registry with the before and after values in issue_triage.close_evidence. If the remedy does not move the metric within 7 days, say so on the issue and try a different lever.',
   'qnfo-ops', 'agent_issues', 24, 1, 'PROBE-TRANSPORT-MONOCULTURE-1 2026-10-06 (#2060)');
+
+-- The owner card review-merge-pr-726 (the session was refused permission to merge its own PR) resolves when this file
+-- applies, which only happens after the PR merges.
+UPDATE human_actions SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now'),
+    resolution = 'PR 726 merged; migration 2026-10-06-runtime-probe-transport.sql applied by apply-migrations'
+WHERE slug = 'review-merge-pr-726' AND status = 'open';
