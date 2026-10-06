@@ -100,7 +100,7 @@ const LADDER = ["@cf/qwen/qwen2.5-coder-32b-instruct", "@cf/moonshotai/kimi-k2.7
 const GOAL_TEXT = "Part of #1758. Inside feedbackScan only, in BOTH SQL subqueries that read q08_feedback f, add the condition AND f.created_at >= '2026-10-03T00:00:00Z' directly after f.slug = p.slug. Change nothing else.";
 function fileIssue(env) {
   return Number(env.AUDIT_DB._db.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at) VALUES (?,?,?,?,?,?,?)")
-    .run("Q08-VOTE-CUTOFF-1: q08 feedbackScan ignores pre-fix crawler votes", "code-task: repo=qnfo-workers path=q08-signal-engine/worker.js\ncode-anchor: " + ANCHOR + "\n" + GOAL_TEXT, "claude-chat:Q08-SELF-IMPROVE-1", "reliability", "high", "open", Date.now() - 3600e3).lastInsertRowid);
+    .run("Q08-VOTE-CUTOFF-1: q08 feedbackScan ignores pre-fix crawler votes", "code-task: repo=qnfo-workers path=q08-signal-engine/worker.js\ncode-anchor: " + ANCHOR + "\n" + GOAL_TEXT, "claude-session:Q08-SELF-IMPROVE-1", "reliability", "high", "open", Date.now() - 3600e3).lastInsertRowid);
 }
 
 // ===== A. the live failure, then the self-repair =====

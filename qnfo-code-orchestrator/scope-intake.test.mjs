@@ -60,7 +60,7 @@ function mkEnv(issues) {
 }
 {
   const issues = [
-    { id: 2023, title: "METRIC-TRIGGER-498 paper render", description: "Fix the render.\ncode-task: repo=qnfo-workers path=qnfo-gateway/worker.js\ncode-anchor: function renderPaper(" },
+    { id: 2023, title: "METRIC-TRIGGER-498 paper render", source: "qnfo-fleet-control", description: "Fix the render.\ncode-task: repo=qnfo-workers path=qnfo-gateway/worker.js\ncode-anchor: function renderPaper(" },
   ];
   const { env, tasks } = mkEnv(issues);
   const out = await __intake(env, 2);

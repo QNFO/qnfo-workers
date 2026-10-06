@@ -362,8 +362,9 @@ function fakeLoader(spinMs) {
 // ---- ISSUE-INTAKE-1: an opted-in open issue becomes exactly one queued task ----
 {
   const { env } = envWith([]);
-  await env.AUDIT_DB.prepare("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT)").run();
-  const ins = (id, title, desc, st) => env.AUDIT_DB.prepare("INSERT INTO agent_issues (id,title,description,status) VALUES (?,?,?,?)").bind(id, title, desc, st).run();
+  // INTAKE-PROVENANCE-1 (0.3.20): intake reads the issue's source; a session-filed issue is a trusted origin.
+  await env.AUDIT_DB.prepare("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, source TEXT)").run();
+  const ins = (id, title, desc, st) => env.AUDIT_DB.prepare("INSERT INTO agent_issues (id,title,description,status,source) VALUES (?,?,?,?,'claude-session')").bind(id, title, desc, st).run();
   await ins(1, "Fix typo", "Fix the typo in the intro.\ncode-task: repo=qnfo-workers path=docs/x.md", "open");
   await ins(2, "No marker", "Please look at docs/y.md", "open");
   await ins(3, "Protected", "code-task: repo=qnfo-workers path=.github/workflows/ci.yml", "open");
@@ -376,8 +377,8 @@ function fakeLoader(spinMs) {
 // ---- PRIORITY-QUEUE-1: intake follows the master queue (critical before an older medium) ----
 {
   const { env } = envWith([]);
-  await env.AUDIT_DB.prepare("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT)").run();
-  const ins = (id, title, desc, pr) => env.AUDIT_DB.prepare("INSERT INTO agent_issues (id,title,description,status,priority) VALUES (?,?,?,'open',?)").bind(id, title, desc, pr).run();
+  await env.AUDIT_DB.prepare("CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, source TEXT)").run();
+  const ins = (id, title, desc, pr) => env.AUDIT_DB.prepare("INSERT INTO agent_issues (id,title,description,status,priority,source) VALUES (?,?,?,'open',?,'claude-session')").bind(id, title, desc, pr).run();
   await ins(10, "Older medium", "code-task: repo=qnfo-workers path=docs/m.md", "medium");
   await ins(11, "Newer critical", "code-task: repo=qnfo-workers path=docs/c.md", "critical");
   await ins(12, "Newer low", "code-task: repo=qnfo-workers path=docs/l.md", "low");
