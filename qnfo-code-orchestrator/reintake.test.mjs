@@ -2,7 +2,8 @@
 // Proves: an issue from a source the merge runner does not trust gets no code task, its code-task line becomes a session-task
 // line with the reason; the orchestrator's default trusted list equals qnfo-fleet-control CM_TRUSTED_SOURCES; an issue whose
 // last task ended is taken again after the cooldown with "[issue #N] [retry k]" first, and not while in flight, inside the
-// cooldown, after a merge, after 3 tasks, or after a review rejection or a no-op refusal.
+// cooldown, after a merge, after 3 tasks, or after a review rejection or a no-op refusal. INTAKE-DEPENDS-1 (0.3.23): a
+// "depends-on: #N" line of its own holds the task while issue N is open, missing or unreadable, and audits the wait once.
 // Run: node --no-warnings qnfo-code-orchestrator/reintake.test.mjs   -> prints "N passed, 0 failed"
 import fs from "node:fs";
 import os from "node:os";
@@ -47,6 +48,7 @@ function mkEnv(issues, tasks, opts) {
       },
       async first() {
         if (/FROM ops_config/.test(q)) return opts.trusted ? { value: opts.trusted } : null;
+        if (/^SELECT status FROM agent_issues WHERE id = \?/.test(q)) { if (opts.depUnreadable) throw new Error("D1_ERROR: unavailable"); const st = (opts.dep || {})[a[0]]; return st ? { status: st } : null; }
         if (/COUNT\(\*\) AS n FROM code_tasks/.test(q)) return { n: 0 };
         return null;
       },
@@ -93,6 +95,29 @@ function mkEnv(issues, tasks, opts) {
   const u = mkEnv(issues, [], { tasksUnreadable: true });
   await __intake(u.env, 2);
   ok(u.inserted.length === 0, "an unreadable code_tasks history builds no task (fail closed)", u.inserted);
+}
+{
+  // INTAKE-DEPENDS-1 (0.3.23): a "depends-on: #N" line holds the task until issue N is no longer open; unreadable waits too
+  const mk = () => [{ id: 1996, title: "METRIC-TRIGGER-1996-X: lower flash share", source: "qnfo-fleet-control", description: "Switch after the A/B.\ndepends-on: #1818\ncode-task: repo=qnfo-workers path=qnfo-infra/worker.js" }];
+  let w = mkEnv(mk(), [], { dep: { 1818: "open" } });
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 0, "while #1818 is open, #1996 builds no task", w.inserted);
+  ok(w.audits.some((x) => JSON.stringify(x).includes("code-task.intake-waiting") && JSON.stringify(x).includes("#1818")), "the wait is audited as code-task.intake-waiting naming #1818", w.audits);
+  const n = w.audits.length;
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 0 && w.audits.filter((x) => JSON.stringify(x).includes("intake-waiting")).length === 1 && w.audits.length === n, "the wait is audited once per isolate, not every tick", w.audits.length - n);
+  w = mkEnv(mk(), [], { depUnreadable: true });
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 0, "an unreadable dependency holds the task (fail closed)", w.inserted);
+  w = mkEnv(mk(), [], {});
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 0, "a dependency that does not exist holds the task", w.inserted);
+  w = mkEnv(mk(), [], { dep: { 1818: "closed" } });
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 1 && /^\[issue #1996\] METRIC-TRIGGER-1996-X/.test(w.inserted[0].goal), "once #1818 is closed the task is built on the next tick", w.inserted);
+  w = mkEnv([{ id: 5, title: "METRIC-TRIGGER-5-X: y", source: "qnfo-fleet-control", description: "See depends-on: #1818 in prose.\ncode-task: repo=qnfo-workers path=qnfo-infra/worker.js" }], [], { dep: { 1818: "open" } });
+  await __intake(w.env, 2);
+  ok(w.inserted.length === 1, "only a line of its own counts, not the words in prose", w.inserted);
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

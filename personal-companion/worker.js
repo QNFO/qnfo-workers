@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.12.1-noindex"; // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.12.3-broadcast-batch"; // 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -1267,9 +1267,12 @@ async function mailOut(env, slug, origin) {
 __name(mailOut, "mailOut");
 __name2(mailOut, "mailOut");
 __name22(mailOut, "mailOut");
-async function sendOne(env, to, subject, body) {
+async function sendOne(env, to, subject, body, pre) {
+  // BROADCAST-BATCH-1 (1.12.2): a caller that already read the opt-out lists for a batch passes them (pre.checked, pre.set),
+  // so a broadcast spends no per-recipient lookups.
+  if (pre && pre.checked) { if (pre.set.has(String(to).toLowerCase())) return { ok: false, suppressed: true, to: to }; }
   // SUPPRESSION-1 (2026-09-22): honour opt-out stored in qnfo-audit before any direct send.
-  try { if (env.AUDIT) { const _s = await env.AUDIT.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(String(to).toLowerCase()).first(); if (_s) return { ok: false, suppressed: true, to: to }; const _l = await env.AUDIT.prepare("SELECT suppress FROM contact_ledger WHERE lower(email)=?1").bind(String(to).toLowerCase()).first(); if (_l && _l.suppress) return { ok: false, suppressed: true, to: to }; } } catch (e) {}
+  else try { if (env.AUDIT) { const _s = await env.AUDIT.prepare("SELECT 1 FROM email_suppression WHERE lower(email)=?1").bind(String(to).toLowerCase()).first(); if (_s) return { ok: false, suppressed: true, to: to }; const _l = await env.AUDIT.prepare("SELECT suppress FROM contact_ledger WHERE lower(email)=?1").bind(String(to).toLowerCase()).first(); if (_l && _l.suppress) return { ok: false, suppressed: true, to: to }; } } catch (e) {}
   if (env.SEND_EMAIL) {
     try {
       await env.SEND_EMAIL.send({ to, from: "rowan.quni@qnfo.org", subject, text: body });
@@ -1387,6 +1390,90 @@ async function feedXml(env, u) {
 __name(feedXml, "feedXml");
 __name2(feedXml, "feedXml");
 __name22(feedXml, "feedXml");
+// ---- BROADCAST-BATCH-1 (1.12.2, agent_issues 2042) ----
+// A send run reads at most SEND_CAP_PER_RUN confirmed subscribers after the run's cursor, reads their opt-outs in batches of
+// SUPP_CHUNK (email_suppression and contact_ledger.suppress, two queries per batch), sends, and stores the cursor in
+// companion_broadcasts (key = piece slug, or "digest:<day>"). The hourly tick resumes an unfinished run. If the opt-out read
+// fails the run stops before any send (fail closed) and the cursor stays, so the next tick retries.
+var SEND_CAP_PER_RUN = 250;
+var SUPP_CHUNK = 50;
+async function suppressedSet(env, emails) {
+  var set = new Set();
+  if (!env.AUDIT) return set;
+  var list = emails.map(function (e) { return String(e).toLowerCase(); });
+  for (var i = 0; i < list.length; i += SUPP_CHUNK) {
+    var chunk = list.slice(i, i + SUPP_CHUNK), ph = chunk.map(function () { return "?"; }).join(",");
+    var s1 = env.AUDIT.prepare("SELECT lower(email) AS e FROM email_suppression WHERE lower(email) IN (" + ph + ")");
+    var r1 = await s1.bind.apply(s1, chunk).all();
+    var s2 = env.AUDIT.prepare("SELECT lower(email) AS e FROM contact_ledger WHERE suppress AND lower(email) IN (" + ph + ")");
+    var r2 = await s2.bind.apply(s2, chunk).all();
+    ((r1 && r1.results) || []).concat((r2 && r2.results) || []).forEach(function (r) { set.add(String(r.e)); });
+  }
+  return set;
+}
+async function ensureSendRuns(env) {
+  await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_broadcasts (key TEXT PRIMARY KEY, last_id INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, suppressed INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, origin TEXT, started_at TEXT, updated_at TEXT)").run();
+}
+async function sendRunState(env, key, origin) {
+  await ensureSendRuns(env);
+  await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_broadcasts (key, origin, started_at, updated_at) VALUES (?1, ?2, ?3, ?3)").bind(key, origin || null, nowIso()).run();
+  return await env.PERSONAL.prepare("SELECT * FROM companion_broadcasts WHERE key = ?1").bind(key).first();
+}
+async function sendRun(env, key, origin, mailFor) {
+  var st = await sendRunState(env, key, origin);
+  if (st && st.done) return { ok: true, key: key, done: true, already: true, sent: 0, failed: 0, suppressed: 0 };
+  var last = st ? Number(st.last_id) || 0 : 0;
+  var q = await env.PERSONAL.prepare("SELECT id, email, token FROM companion_subscribers WHERE status = 'confirmed' AND id > ?1 ORDER BY id LIMIT " + SEND_CAP_PER_RUN).bind(last).all();
+  var rows = (q && q.results) || [];
+  var supp;
+  try { supp = await suppressedSet(env, rows.map(function (r) { return r.email; })); }
+  catch (e) { return { ok: false, key: key, error: "opt-out lists unreadable, nothing sent (fail closed): " + String(e && e.message || e).slice(0, 120), resume: true }; }
+  var sent = 0, failed = 0, suppressed = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var m = mailFor(rows[i]);
+    var rr = await sendOne(env, rows[i].email, m.subject, m.body, { checked: true, set: supp });
+    if (rr && rr.ok) sent++;
+    else if (rr && rr.suppressed) suppressed++;
+    else failed++;
+    last = rows[i].id;
+  }
+  var done = rows.length < SEND_CAP_PER_RUN ? 1 : 0;
+  await env.PERSONAL.prepare("UPDATE companion_broadcasts SET last_id = ?1, sent = sent + ?2, failed = failed + ?3, suppressed = suppressed + ?4, done = ?5, updated_at = ?6 WHERE key = ?7").bind(last, sent, failed, suppressed, done, nowIso(), key).run();
+  return { ok: true, key: key, sent: sent, failed: failed, suppressed: suppressed, batch: rows.length, done: !!done, resume: !done };
+}
+function digestMail(day, list, base) {
+  return function (s) {
+    return { subject: "Reading \u2014 daily digest", body: "Reading \u2014 daily digest (" + day + ")" + NL + NL + list + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token };
+  };
+}
+async function digestList(env, day, base) {
+  var pr = await env.PERSONAL.prepare("SELECT slug, title, form FROM companion_pieces WHERE day = ? ORDER BY id ASC").bind(day).all();
+  var rows = pr.results || [];
+  return { n: rows.length, list: rows.map(function (r) { return "- " + r.title + " \u2014 " + base + "/p/" + r.slug; }).join(NL) };
+}
+function pieceMail(prow, base, link) {
+  return function (s) {
+    return { subject: prow.title, body: (/^\s*#/.test(String(prow.body_md || "")) ? "" : prow.lede ? prow.lede + NL + NL : "") + String(prow.body_md).slice(0, 2e4) + NL + NL + "Read online: " + link + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token };
+  };
+}
+// The hourly tick continues the oldest unfinished run (one per tick, so a tick never sends more than SEND_CAP_PER_RUN).
+async function resumeSendRuns(env) {
+  // the tick creates the cursor table, so the resume read never meets a missing table and the table's presence shows 1.12.2 runs
+  await ensureSendRuns(env);
+  var t = await env.PERSONAL.prepare("SELECT key, origin FROM companion_broadcasts WHERE done = 0 ORDER BY started_at LIMIT 1").first();
+  if (!t) return { ok: true, idle: true };
+  var base = "https://reading.q08.org";
+  if (String(t.key).indexOf("digest:") === 0) {
+    var day = String(t.key).slice(7), dl = await digestList(env, day, base);
+    return await sendRun(env, t.key, null, digestMail(day, dl.list, base));
+  }
+  var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(t.key).all();
+  var prow = (pr.results || [])[0];
+  if (!prow) { await env.PERSONAL.prepare("UPDATE companion_broadcasts SET done = 1, updated_at = ?1 WHERE key = ?2").bind(nowIso(), t.key).run(); return { ok: false, key: t.key, error: "piece gone; run closed" }; }
+  var b2 = subBase(env, t.origin);
+  return await sendRun(env, t.key, t.origin, pieceMail(prow, b2, b2 + "/p/" + t.key));
+}
+// ---- BROADCAST-BATCH-1 end ----
 // PERSONAL-RESILIENCE-1: confirmed subscribers, paged by id (the old single LIMIT 500 silently dropped everyone after the 500th).
 async function confirmedSubscribers(env) {
   var all = [], last = 0;
@@ -1405,18 +1492,9 @@ async function broadcast(env, slug, origin) {
     var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(slug).all();
     var prow = (pr.results || [])[0];
     if (!prow) return { ok: false, error: "no piece" };
-    var subs = await confirmedSubscribers(env);
+    // BROADCAST-BATCH-1: one capped, resumable run per piece; the hourly tick sends the rest.
     var base = subBase(env, origin);
-    var link = base + "/p/" + slug;
-    var sent = 0, failed = 0;
-    for (var i = 0; i < subs.length; i++) {
-      var s = subs[i];
-      var body = (/^\s*#/.test(String(prow.body_md || "")) ? "" : prow.lede ? prow.lede + NL + NL : "") + String(prow.body_md).slice(0, 2e4) + NL + NL + "Read online: " + link + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token;
-      var rr = await sendOne(env, s.email, prow.title, body);
-      if (rr && rr.ok) sent++;
-      else failed++;
-    }
-    return { ok: true, sent, failed, total: subs.length };
+    return await sendRun(env, slug, base, pieceMail(prow, base, base + "/p/" + slug));
   } catch (e) {
     return { ok: false, error: String(e && e.message || e) };
   }
@@ -1428,23 +1506,13 @@ async function sendDigest(env) {
   if (!env.EMAIL) return { ok: false, error: "no email binding" };
   try {
     var day = amsDayKey(/* @__PURE__ */ new Date());
-    var pr = await env.PERSONAL.prepare("SELECT slug, title, form FROM companion_pieces WHERE day = ? ORDER BY id ASC").bind(day).all();
-    var rows = pr.results || [];
-    if (!rows.length) return { ok: true, skipped: "no pieces today", pieces: 0 };
-    var subs = await confirmedSubscribers(env);
     var base = "https://reading.q08.org";
-    var list = rows.map(function(r) {
-      return "- " + r.title + " \u2014 " + base + "/p/" + r.slug;
-    }).join(NL);
-    var sent = 0, failed = 0;
-    for (var i = 0; i < subs.length; i++) {
-      var s = subs[i];
-      var body = "Reading \u2014 daily digest (" + day + ")" + NL + NL + list + NL + NL + "Unsubscribe: " + base + "/unsubscribe?t=" + s.token;
-      var rr = await sendOne(env, s.email, "Reading \u2014 daily digest", body);
-      if (rr && rr.ok) sent++;
-      else failed++;
-    }
-    return { ok: true, pieces: rows.length, sent, failed, total: subs.length };
+    var dl = await digestList(env, day, base);
+    if (!dl.n) return { ok: true, skipped: "no pieces today", pieces: 0 };
+    // BROADCAST-BATCH-1: one capped, resumable run per day ("digest:<day>"); the hourly tick sends the rest.
+    var out = await sendRun(env, "digest:" + day, null, digestMail(day, dl.list, base));
+    out.pieces = dl.n;
+    return out;
   } catch (e) {
     return { ok: false, error: String(e && e.message || e) };
   }
@@ -1872,6 +1940,8 @@ var worker_default = {
       return;
     }
     ctx.waitUntil((async function() {
+      // BROADCAST-BATCH-1: continue an unfinished broadcast or digest before anything else on the hourly tick.
+      try { await resumeSendRuns(env); } catch (eR) { console.log("resumeSendRuns: " + String(eR && eR.message || eR)); }
       try {
         var nowUtc = /* @__PURE__ */ new Date();
         var utcHour = nowUtc.getUTCHours();
@@ -2545,6 +2615,9 @@ export {
   deliverOwnerPrompts,
   broadcast,
   confirmedSubscribers,
+  sendDigest,
+  resumeSendRuns,
+  suppressedSet,
   sendOwnerNotice,
   sendMorningBrief,
   flagUndeliverableQuestions,
