@@ -319,6 +319,10 @@ jobs:
       # per-address throttle as capped, so a degraded radar run says which source is blind and why.
       - name: RADAR-SE-REASON-1 offline suite (qnfo-cloud-ops)
         run: node --no-warnings qnfo-cloud-ops/radar-se-reason.test.mjs
+      # PROJECT-STATE-SECOND-COLLISION-1 (#1998): two fk-violation snapshots in one instant never abort the second parent
+      # write; the migration's rollback block reproduces the defect and its CREATE statements fix it (offline, node:sqlite).
+      - name: PROJECT-STATE-SECOND-COLLISION-1 offline suite (migration)
+        run: node --no-warnings scripts/project-state-collision.test.mjs
       - name: OUTREACH-CF-DOW-1 cron weekday check (qnfo-outreach)
         run: node qnfo-outreach/cron-dow.test.mjs
       - name: KAIZEN-CF-MONDAY-1 cron weekday check (qnfo-kaizen)
