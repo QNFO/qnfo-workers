@@ -44,6 +44,12 @@ because each one was broken at least once; the linked issue holds the evidence.
 - A retired or folded worker directory carries a `RETIRED` or `FOLDED` file; do not remove it to get a deploy through.
 - Bump `var VERSION` in every changed worker.js and keep `deployed-current.worker.js` identical to `worker.js`
   (version-bump-guard and mirror-guard are required checks).
+- The bump says what changed (VERSION-MINOR-CAPABILITY-1, proposed 2026-10-06 with FLEET-CHANGELOG-1). Raise the minor
+  number (x.Y.0) when a change gives a worker a capability it did not have: a new route, page, loop, cron step, data
+  product, or a decision it now takes on its own. Raise the patch number for fixes, tuning, refactors and wording. Raise
+  the major number for a breaking change to a route, binding or table other workers depend on. A 0.x worker follows the
+  same rule (qnfo-fleet-control 0.4.130 -> 0.5.0 for its next feature). The owner's changelog (fleet.qnfo.org/changelog)
+  lists only minor and major releases, so a feature shipped as a patch never reaches the owner.
 
 ## Cloudflare actions without a token
 - `cf-ops-actions.yml` (workflow_dispatch) runs allowlisted Cloudflare API actions with the repository's token:

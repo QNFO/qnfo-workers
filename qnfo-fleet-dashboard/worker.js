@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.24.1-attention-loop"; /* 1.24.1 (2026-10-06): WATCHMAKER_OPS ask-corpus-sync for qnfo-ai-search 2.2.8 ASK-CORPUS-FEEDER-1 (agent_issues 2029, carried for session 01KzS1 and PR 676); 1.24.1 is above PR 671's 1.24.0 (VERSION-AHEAD-1). 1.24.0 ATTENTION-LOOP-1 (2026-10-06, pillar reach; owner directive 2026-10-06 07:44Z: granular human attention per outreach channel and item, audit automatically, do more of what gets noticed, promote better or stop what is not): the reach ingest writes bot-filtered per-item rows (source cf-rum-human: pageviews per page, paper and referrer host; external_pageviews and continuation_pageviews per page) and the Buffer per-post metrics qnfo-cloud-ops collects (source buffer, per channel post); a daily scorecard after the ingest (attention_scorecard: items, human engagements, attention per item, referred visits, impressions per channel over 7 and 28 days; pages and papers noticed from outside; subscribers by source) with a verdict per social channel (INSUFFICIENT, STOP, PROMOTE, IMPROVE, KEEP, RETEST after 28 days) and a share in [0, 1] written to ops_config attention_channel_share, which qnfo-social multiplies into the owner caps and uses to order content by attention; every change is an attention_decisions row with evidence, a prediction and a 7-day verification that grades attention_decision_efficacy_30d; metrics attention_events_7d, attention_per_post_7d, pages_noticed_7d, attention_channels_stopped; GET /api/attention; WATCHMAKER_OPS attention-scorecard; no new cron, binding or model call. 1.23.2 (2026-10-06): the transformation-loop watchmaker entry names qnfo-fleet-control 0.4.132 (TP-1a parity, open-issue contract count, wave-exit stall); 1.23.1 (2026-10-06, pillar autonomy): WATCHMAKER_OPS measures TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132: the transformation program engine, hourly; counted when its tick is stalled or an open CODE-TASK-NEEDS-SESSION-1 row names a lever only a session can land, so session dependence is measured as it falls). 1.22.4 (2026-10-06): the agent-issues remediation lane no longer dispatches to the retired qnfo-kaizen (WORKER-RETIRE-WAVE-2, #1756; noAction with a note) and qnfo-kaizen leaves CON_SVC; 1.22.3 HUMAN-AUDIENCE-1 (2026-10-06, pillar reach; owner directive 2026-10-06 "do real humans find and visit the pages, and keep reading"): two hourly metrics from one bot-filtered RUM read over 7 days, external_referred_pageviews_7d (page loads on the public hosts whose referrer is outside every fleet domain; direct loads excluded, that is where renders, probes and the owner land) and continuation_pageviews_7d (page loads whose referrer is another public page: the reader clicked on), both with falsifiable triggers; breakdown in cloud_ops_events human-audience-<day>, series in reach_signals cf-rum-human; WATCHMAKER_OPS measures the qnfo-social per-channel drain (DAILY-DISTRIBUTION-1) and the radar-hub signal intake (SIGNAL-INTAKE-SOURCES-1). 1.22.2 TEXT-QUALITY-LOOP-1 (agent_issues 1895, pillar reach): GET /api/generators lists the 12 text generators from D1 qnfo-audit.text_generator_inventory with writer family, non-model gate, cross-family read and outcome metric, and each one's latest run from a fixed query in GENERATOR_RUNS; open to everyone, no new cron, no model call. 1.22.1 FLEET-CONSOLE-REDOS-1: dispatch inputs are parsed one anchored k=v token at a time (linear, max 10), so crafted input can no longer backtrack exponentially (CodeQL js/redos alerts 331/332 on PR 623); 1.22.0 FLEET-CONSOLE-1 (owner request 2026-10-05: full control, input and remediation from the dashboard, every detail and decision without leaving it): the command line gains issue <id> (row, triage, contracts, verifications, claims, code task), backlog, info <queue item> (a Details button on every queue card), tasks, locks, prs, pr <n>, runs (open reads); logs <worker>, sql [db] <select>, prio/owner/comment/codetask/reopen (owner session); close/wontfix with evidence, sql! writes backed up to console_backups first, worker calls, workflow dispatch, deploy via canonical-deploy.yml, merge and close PRs (owner + fresh code, confirm button); the loop token cannot run console actions; auto-run owner actions are logged in cmd_log; 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.25.0-changelog"; /* 1.25.0 FLEET-CHANGELOG-1 (owner request 2026-10-06, pillar autonomy): a Changelog tab (/changelog, JSON /api/changelog, open to everyone) of what the fleet ships for itself: each worker version whose major or minor number is above every earlier one, and each worker Cloudflare created after 2026-09-29, from the canonical deploy ledger deployment_history; described from the commit on main that set the version (no model call), tagged with charter pillar and the public hostnames it serves, filterable (autonomy, public-facing, new workers, major, pillar); patch fixes are counted, not listed; an autonomy trend strip reads metric_history (watchmaker_index, metrics_in_breach, code_task_success_rate_30d, session_execution_ratio_30d); personal-plane releases in full only for the signed-in owner; synced in the existing 15-minute cron into qnfo-audit.fleet_changelog, heartbeat changelog-tick in WATCHMAKER_OPS. 1.24.1 (2026-10-06): WATCHMAKER_OPS ask-corpus-sync for qnfo-ai-search 2.2.8 ASK-CORPUS-FEEDER-1 (agent_issues 2029, carried for session 01KzS1 and PR 676); 1.24.1 is above PR 671's 1.24.0 (VERSION-AHEAD-1). 1.24.0 ATTENTION-LOOP-1 (2026-10-06, pillar reach; owner directive 2026-10-06 07:44Z: granular human attention per outreach channel and item, audit automatically, do more of what gets noticed, promote better or stop what is not): the reach ingest writes bot-filtered per-item rows (source cf-rum-human: pageviews per page, paper and referrer host; external_pageviews and continuation_pageviews per page) and the Buffer per-post metrics qnfo-cloud-ops collects (source buffer, per channel post); a daily scorecard after the ingest (attention_scorecard: items, human engagements, attention per item, referred visits, impressions per channel over 7 and 28 days; pages and papers noticed from outside; subscribers by source) with a verdict per social channel (INSUFFICIENT, STOP, PROMOTE, IMPROVE, KEEP, RETEST after 28 days) and a share in [0, 1] written to ops_config attention_channel_share, which qnfo-social multiplies into the owner caps and uses to order content by attention; every change is an attention_decisions row with evidence, a prediction and a 7-day verification that grades attention_decision_efficacy_30d; metrics attention_events_7d, attention_per_post_7d, pages_noticed_7d, attention_channels_stopped; GET /api/attention; WATCHMAKER_OPS attention-scorecard; no new cron, binding or model call. 1.23.2 (2026-10-06): the transformation-loop watchmaker entry names qnfo-fleet-control 0.4.132 (TP-1a parity, open-issue contract count, wave-exit stall); 1.23.1 (2026-10-06, pillar autonomy): WATCHMAKER_OPS measures TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132: the transformation program engine, hourly; counted when its tick is stalled or an open CODE-TASK-NEEDS-SESSION-1 row names a lever only a session can land, so session dependence is measured as it falls). 1.22.4 (2026-10-06): the agent-issues remediation lane no longer dispatches to the retired qnfo-kaizen (WORKER-RETIRE-WAVE-2, #1756; noAction with a note) and qnfo-kaizen leaves CON_SVC; 1.22.3 HUMAN-AUDIENCE-1 (2026-10-06, pillar reach; owner directive 2026-10-06 "do real humans find and visit the pages, and keep reading"): two hourly metrics from one bot-filtered RUM read over 7 days, external_referred_pageviews_7d (page loads on the public hosts whose referrer is outside every fleet domain; direct loads excluded, that is where renders, probes and the owner land) and continuation_pageviews_7d (page loads whose referrer is another public page: the reader clicked on), both with falsifiable triggers; breakdown in cloud_ops_events human-audience-<day>, series in reach_signals cf-rum-human; WATCHMAKER_OPS measures the qnfo-social per-channel drain (DAILY-DISTRIBUTION-1) and the radar-hub signal intake (SIGNAL-INTAKE-SOURCES-1). 1.22.2 TEXT-QUALITY-LOOP-1 (agent_issues 1895, pillar reach): GET /api/generators lists the 12 text generators from D1 qnfo-audit.text_generator_inventory with writer family, non-model gate, cross-family read and outcome metric, and each one's latest run from a fixed query in GENERATOR_RUNS; open to everyone, no new cron, no model call. 1.22.1 FLEET-CONSOLE-REDOS-1: dispatch inputs are parsed one anchored k=v token at a time (linear, max 10), so crafted input can no longer backtrack exponentially (CodeQL js/redos alerts 331/332 on PR 623); 1.22.0 FLEET-CONSOLE-1 (owner request 2026-10-05: full control, input and remediation from the dashboard, every detail and decision without leaving it): the command line gains issue <id> (row, triage, contracts, verifications, claims, code task), backlog, info <queue item> (a Details button on every queue card), tasks, locks, prs, pr <n>, runs (open reads); logs <worker>, sql [db] <select>, prio/owner/comment/codetask/reopen (owner session); close/wontfix with evidence, sql! writes backed up to console_backups first, worker calls, workflow dispatch, deploy via canonical-deploy.yml, merge and close PRs (owner + fresh code, confirm button); the loop token cannot run console actions; auto-run owner actions are logged in cmd_log; 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, zenodo-stats, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2121,7 +2121,7 @@ async function handleRequest(request, env, ctx) {
   // doc is read AND changed on Cloudflare; its claude.ai copy is retired.
   if (path === "/owner" || path === "/owner/" || path.indexOf("/owner/doc/") === 0 || path.indexOf("/owner/edit/") === 0) return await ownerRoute(request, env, path, owner);
   if (path === "/health") {
-    return json({ ok: true, worker: NAME, version: VERSION, capabilities: ["fleet-dashboard", "owner-queue", "objective-decisions", "watchmaker-index", "command-line", "owner-console", "owner-documents", "ctl-link"], limitations: ["every read, every read-only command and plain-English answers are open to everyone; plain-English answers are capped at 5 a day per anonymous visitor and by a global daily cap", "actions (done, dismiss, snooze, notes, tasks, ratify, reject) need the owner: an emailed 6-digit code opens a 12h session, destructive ones need a code from the last 15 minutes; x-loop-token still works for loops; private owner documents keep their gate", "FLEET-CONSOLE-1 console reads (issue, backlog, info, tasks, locks, prs, pr, runs) are open; logs, SQL reads and issue edits need the owner's code session; SQL writes, closes, non-GET worker calls, workflow dispatch, deploy, merge and PR close need a code from the last 15 minutes; the loop token cannot run console actions; no DROP/ALTER/REPLACE, UPDATE/DELETE need a WHERE and are backed up to console_backups first; fleet_budget, remediation_verifications, work_claims and the sign-in tables are read-only; qnfo-identity is not reachable; worker calls carry no credential (a worker that demands its own token answers 401)", "the state refreshes on the */15 cron, so a view can be up to 15 minutes old"], generated_at: (/* @__PURE__ */ new Date()).toISOString() });
+    return json({ ok: true, worker: NAME, version: VERSION, capabilities: ["fleet-dashboard", "owner-queue", "objective-decisions", "watchmaker-index", "command-line", "owner-console", "owner-documents", "ctl-link", "changelog"], limitations: ["every read, every read-only command and plain-English answers are open to everyone; plain-English answers are capped at 5 a day per anonymous visitor and by a global daily cap", "actions (done, dismiss, snooze, notes, tasks, ratify, reject) need the owner: an emailed 6-digit code opens a 12h session, destructive ones need a code from the last 15 minutes; x-loop-token still works for loops; private owner documents keep their gate", "FLEET-CONSOLE-1 console reads (issue, backlog, info, tasks, locks, prs, pr, runs) are open; logs, SQL reads and issue edits need the owner's code session; SQL writes, closes, non-GET worker calls, workflow dispatch, deploy, merge and PR close need a code from the last 15 minutes; the loop token cannot run console actions; no DROP/ALTER/REPLACE, UPDATE/DELETE need a WHERE and are backed up to console_backups first; fleet_budget, remediation_verifications, work_claims and the sign-in tables are read-only; qnfo-identity is not reachable; worker calls carry no credential (a worker that demands its own token answers 401)", "the state refreshes on the */15 cron, so a view can be up to 15 minutes old"], generated_at: (/* @__PURE__ */ new Date()).toISOString() });
   }
   if (path === "/api/refresh") {
     const st = await runRefresh(env, ctx);
@@ -2260,6 +2260,18 @@ async function handleRequest(request, env, ctx) {
   // re-measures (throttled to one run / 2 min) and republishes to the ops/fleet feeds.
   // OWNER-MORNING-1: what changed since a time (the page passes the owner's last visit, kept in the browser).
   if (path === "/api/changes" && request.method === "GET") return json(await changesSince(env, url.searchParams.get("since")));
+  // FLEET-CHANGELOG-1 (1.25.0): the Changelog tab and its JSON, open to everyone; personal-plane details only for the owner.
+  if ((path === "/changelog" || path === "/changelog/" || path === "/api/changelog") && request.method === "GET") {
+    const holder = !!(owner.authed || owner.loop);
+    let v;
+    try {
+      v = await changelogView(env, holder);
+    } catch (e) {
+      return json({ ok: false, error: "changelog unavailable" }, 503);
+    }
+    if (path === "/api/changelog") return json(v);
+    return new Response(changelogHtml(v, holder), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  }
   if (path === "/api/decision" && request.method === "GET") {
     const st = await currentState(env, ctx, 5 * 6e4);
     if (url.searchParams.get("refresh") === "1") ctx.waitUntil(govClaim(env, 12e4).then(async function(ok) {
@@ -2590,6 +2602,9 @@ var worker_default = {
       // IDENTITY-WEEKLY-1 (moved from qnfo-cloud-ops with IDENTITY-STORE-1): Mondays after 06:00Z, throttled inside on the
       // cloud_ops_events row identity-weekly-<day>.
       ctx.waitUntil(within(identityWeeklyRun(env).catch(function() {
+      })));
+      // FLEET-CHANGELOG-1 (1.25.0): new releases from the deploy ledger into fleet_changelog, described from their commits.
+      ctx.waitUntil(within(changelogTick(env).catch(function() {
       })));
       try {
         await within(loopExecute(env, deadline - 12e4), 6e4);
@@ -4463,6 +4478,8 @@ async function generatorInventory(env, nowMs) {
 // watchmaker_runs row, metric_registry 'watchmaker_index', and GET /api/watchmaker.
 var WATCHMAKER_AFTER_UTC_HOUR = 7;
 var WATCHMAKER_OPS = [
+  // FLEET-CHANGELOG-1 (1.25.0): the Changelog tab's sync, heartbeat changelog-tick-<UTC hour> from every */15 tick.
+  { key: "changelog-sync", what: "Fleet changelog: releases from the deploy ledger, described from their commits (FLEET-CHANGELOG-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 2, first_due: "2026-10-07T00:00:00Z", sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'changelog-tick-' AND id < 'changelog-tick.' AND status = 'ok'" },
   { key: "portfolio-daily", what: "Portfolio daily run: owner-voice guard, scorecard, run log", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'portfolio-daily-' AND id < 'portfolio-daily.' AND status = 'ok'", replaces: "claude.ai Routine 'QNFO portfolio management'" },
   { key: "identity-weekly", what: "Identity weekly review (IDENTITY-WEEKLY-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 168, first_due: "2026-10-05T06:00:00Z", sql: "SELECT MAX(created_at) AS last FROM portfolio_runs WHERE kind = 'identity-weekly'", replaces: "claude.ai Routines 'Identity and brand weekly review', 'Weekly identity and opportunity check'" },
   { key: "reach-ingest", what: "Reach signals ingest (REACH-SIGNALS-INGEST-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'reach-ingest-' AND id < 'reach-ingest.'" },
@@ -5853,10 +5870,332 @@ function fleetHead(title) {
   return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><title>' + esc(title) + '</title>' + FLEET_BOOT + FLEET_FONTS + '<style>' + FLEET_DS + CMD_CSS + FLEET_CSS + '</style></head><body>';
 }
 function fleetTop(current, live, holder) {
-  const nav = [["Queue", "/#queue", "queue"], ["Invest", "/#invest", "invest"], ["System", "/#system", "system"], ["Business", "/#business", "business"], ["Command line", "/cmd", "cmd"]];
+  const nav = [["Queue", "/#queue", "queue"], ["Invest", "/#invest", "invest"], ["System", "/#system", "system"], ["Business", "/#business", "business"], ["Changelog", "/changelog", "changelog"], ["Command line", "/cmd", "cmd"]];
   return '<header class="q-top" id="q-top"><div class="wrap"><a class="q-mark" href="/" aria-label="QNFO Fleet home">' + FLEET_MARK + 'QNFO <small>Fleet</small></a><nav class="q-nav" aria-label="Dashboard">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '</nav>' + '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="q-menu-panel">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '<a href="https://qnfo.org/">QNFO public site</a></div></details>' + (live ? '<span class="live"><span id="dot" class="dot g"></span><span id="age">live</span>' + (holder ? '<a href="#" id="so">sign out</a>' : '') + '</span>' : '<span class="live"></span>') + FLEET_THEME_BTN + '</div></header>';
 }
 // ---- FLEET-UI-2:END ----
+// ---- FLEET-CHANGELOG-1:BEGIN ----
+// FLEET-CHANGELOG-1 (1.25.0, pillar autonomy; owner request 2026-10-06: "a changelog on the fleet dashboard as a new tab, to
+// know what new features and functionality the system releases for itself ... major new features, not minor fixes ... keep
+// track of what the fleet is doing for itself and how it is improving its own autonomy").
+// Source of truth is the canonical deploy ledger qnfo-audit.deployment_history: the first successful deploy of each
+// (worker, version). A release is a deploy whose major or minor number is above every earlier version of that worker (a
+// patch bump is a fix and is only counted), or the first deploy of a worker Cloudflare created after the ledger became
+// complete (CHANGELOG_LEDGER_FROM). Each release is described once from the commit on main that set that version (subject,
+// PR number, marker, first paragraph of the body; no model call, cost cap rule), stored in fleet_changelog, and tagged with
+// its charter pillar and the public hostnames its worker serves. Runs inside the existing */15 cron (no new cron).
+// Personal-plane releases are listed by count for everyone and in full only for the signed-in owner.
+var CHANGELOG_LEDGER_FROM = "2026-09-29T16:00:00.000Z";
+var CHANGELOG_ENRICH_PER_TICK = 12;
+var CHANGELOG_PILLARS = ["autonomy", "core", "research", "reach", "cost", "security", "personal"];
+// Charter section 1 planes (docs/QUNIVERSE-CHARTER.md) mapped to pillars; a "pillar <key>" in the commit message wins.
+var CHANGELOG_PILLAR = {
+  "qnfo-fleet-control": "autonomy", "qnfo-autonomy-scorer": "autonomy", "qnfo-fleet-dashboard": "autonomy", "fleet-exec": "autonomy",
+  "qnfo-backlog-exec": "autonomy", "qnfo-kaizen": "autonomy", "qnfo-observability": "autonomy", "qnfo-lifecycle": "autonomy",
+  "qnfo-code-orchestrator": "autonomy",
+  "qnfo-ops": "core", "qnfo-deploy-guard": "core", "qnfo-ai": "core", "qnfo-tools-mcp": "core", "qnfo-memory-mcp": "core",
+  "ai-health-prober": "core", "qnfo-ai-calibration": "core", "qnfo-ai-search": "core", "qnfo-intent-orchestrator": "core",
+  "qnfo-infra": "core", "qnfo-skill-sync": "core", "qnfo-containers-pilot": "core",
+  "qnfo-research-exec": "research", "qnfo-paper-indexer": "research", "qnfo-paper-reviser": "research", "qnfo-pdf": "research",
+  "idea-hub": "research", "qnfo-archive": "research", "errata-hub": "research", "radar-hub": "research", "qnfo-venue-radar": "research",
+  "qnfo-signal-loop": "research", "qnfo-agent-orchestrator": "research",
+  "qnfo-gateway": "reach", "qnfo-subscribers": "reach", "qnfo-social": "reach", "qnfo-outreach": "reach",
+  "qnfo-email-orchestrator": "reach", "q08-signal-engine": "reach", "qnfo-ipatent": "reach", "qnfo-cloud-ops": "reach",
+  "personal-api": "personal", "calendar-api": "personal", "personal-companion": "personal", "qnfo-email": "personal"
+};
+var CHANGELOG_PERSONAL = { "personal-api": 1, "calendar-api": 1, "personal-companion": 1, "qnfo-email": 1 };
+// Public hostnames by serving worker, each checked live on 2026-10-06 (GET https://<host>/health names the worker), plus
+// papers.qnfo.org from the charter MVP table (qnfo-gateway serves it; it has no /health route of its own).
+var CHANGELOG_PUBLIC = {
+  "qnfo-gateway": ["qnfo.org", "papers.qnfo.org", "archive.qnfo.org", "qwav.tech"],
+  "qnfo-ai-search": ["ask.qwav.tech"],
+  "q08-signal-engine": ["q08.org"],
+  "idea-hub": ["ideas.qnfo.org"],
+  "qnfo-ai": ["ai.qnfo.org"],
+  "qnfo-ops": ["ops.qnfo.org"],
+  "qnfo-fleet-dashboard": ["fleet.qnfo.org"]
+};
+// Autonomy trend: metric_history rows (written daily by qnfo-fleet-control's improvement loop), lower or higher is better.
+var CHANGELOG_TREND = [
+  { metric: "watchmaker_index", label: "Recurring jobs that still need a person or a session", better: "lower" },
+  { metric: "metrics_in_breach", label: "Metrics in breach", better: "lower" },
+  { metric: "code_task_success_rate_30d", label: "Code-loop fixes that land (30d)", better: "higher" },
+  { metric: "session_execution_ratio_30d", label: "Session tasks completed (30d)", better: "higher" }
+];
+function changelogCore(v) {
+  const m = /^v?(\d+)\.(\d+)(?:\.(\d+))?/.exec(String(v || ""));
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3] || 0)] : null;
+}
+function changelogCoreText(v) {
+  const m = /^v?(\d+\.\d+(?:\.\d+)?)/.exec(String(v || ""));
+  return m ? m[1] : "";
+}
+function changelogIso(t) {
+  let s = String(t || "").trim().replace(" ", "T");
+  if (!s) return null;
+  if (!/(Z|[+-]\d\d:?\d\d)$/.test(s)) s += "Z";
+  const ms = Date.parse(s);
+  return isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+// rows: [{ w, v, t }], the first deploy of each (worker, version). created: { worker: created_on } from the Cloudflare
+// scripts list, or null when it could not be read (then no release is called a new worker).
+function changelogDetect(rows, created) {
+  const by = {};
+  for (const r of rows || []) {
+    if (!r || !r.w) continue;
+    const at = changelogIso(r.t);
+    if (!at) continue;
+    (by[r.w] = by[r.w] || []).push({ v: r.v, at });
+  }
+  const out = [];
+  for (const w of Object.keys(by)) {
+    const rs = by[w].sort(function(a, b) { return a.at < b.at ? -1 : a.at > b.at ? 1 : 0; });
+    let best = null, bestV = null;
+    for (const r of rs) {
+      const c = changelogCore(r.v);
+      if (!c) continue;
+      if (!best) {
+        const co = created && changelogIso(created[w]);
+        if (co && co >= CHANGELOG_LEDGER_FROM) out.push({ worker: w, version: r.v, prev_version: null, level: "new-worker", released_at: r.at });
+        best = c; bestV = r.v;
+        continue;
+      }
+      if (c[0] > best[0] || c[0] === best[0] && c[1] > best[1]) out.push({ worker: w, version: r.v, prev_version: bestV, level: c[0] > best[0] ? "major" : "minor", released_at: r.at });
+      if (c[0] > best[0] || c[0] === best[0] && (c[1] > best[1] || c[1] === best[1] && c[2] > best[2])) { best = c; bestV = r.v; }
+    }
+  }
+  return out.sort(function(a, b) { return a.released_at < b.released_at ? 1 : a.released_at > b.released_at ? -1 : 0; });
+}
+// Patch bumps (same major.minor, higher patch) first deployed at or after sinceIso: fixes, counted but never listed.
+function changelogPatches(rows, sinceIso) {
+  const by = {};
+  for (const r of rows || []) {
+    const at = r && r.w ? changelogIso(r.t) : null;
+    if (at) (by[r.w] = by[r.w] || []).push({ v: r.v, at });
+  }
+  let n = 0;
+  for (const w of Object.keys(by)) {
+    let best = null;
+    for (const r of by[w].sort(function(a, b) { return a.at < b.at ? -1 : a.at > b.at ? 1 : 0; })) {
+      const c = changelogCore(r.v);
+      if (!c) continue;
+      if (best && c[0] === best[0] && c[1] === best[1] && c[2] > best[2] && r.at >= sinceIso) n++;
+      if (!best || c[0] > best[0] || c[0] === best[0] && (c[1] > best[1] || c[1] === best[1] && c[2] > best[2])) best = c;
+    }
+  }
+  return n;
+}
+function changelogReEsc(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+// The newest commit (GitHub lists newest first) whose message names this version: the subject first, then the body.
+function changelogPickCommit(commits, version) {
+  const core = changelogCoreText(version);
+  if (!core) return null;
+  const re = new RegExp("(^|[^0-9.])v?" + changelogReEsc(core) + "(?![0-9]|\\.[0-9])");
+  const msg = function(c) { return String(c && c.commit && c.commit.message || ""); };
+  const list = Array.isArray(commits) ? commits : [];
+  return list.find(function(c) { return re.test(msg(c).split("\n")[0]); }) || list.find(function(c) { return /-/.test(String(version)) && msg(c).indexOf(String(version)) >= 0 || re.test(msg(c)); }) || null;
+}
+function changelogSlug(version) {
+  const m = /^v?\d+\.\d+(?:\.\d+)?-(.+)$/.exec(String(version || ""));
+  if (!m) return "";
+  const s = m[1].replace(/[-_]+/g, " ").trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+}
+function changelogParse(message, worker, version) {
+  const lines = String(message || "").split("\n");
+  let subject = (lines[0] || "").trim();
+  let pr = null;
+  const pm = /\s*\(#(\d+)\)\s*$/.exec(subject);
+  if (pm) { pr = Number(pm[1]); subject = subject.slice(0, pm.index).trim(); }
+  const keep = lines.slice(1).filter(function(l) { return !/^\s*(co-authored-by|claude-session|signed-off-by)\s*:/i.test(l) && !/claude\.ai|claude\.com|anthropic\.com/i.test(l) && !/generated with \[?claude/i.test(l); });
+  const body = keep.join("\n").trim();
+  const para = (body.split(/\n\s*\n/)[0] || "").replace(/\s+/g, " ").trim();
+  const mk = /\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)\b/.exec(subject) || /\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)\b/.exec(body);
+  const marker = mk ? mk[1] : null;
+  const core = changelogCoreText(version);
+  let head = subject;
+  if (core) head = head.replace(new RegExp("^" + changelogReEsc(worker) + "\\s+v?" + changelogReEsc(core) + "\\S*\\s*:?\\s*"), "");
+  if (marker) head = head.replace(new RegExp("^" + changelogReEsc(marker) + "(\\s*\\([^)]*\\))?\\s*:\\s*"), "");
+  head = head.trim();
+  if (head) head = head.charAt(0).toUpperCase() + head.slice(1);
+  const pl = /\bpillar[:\s]+(autonomy|core|research|reach|cost|security|personal)\b/i.exec(String(message || ""));
+  return { title: head || changelogSlug(version) || version, subject, summary: para.slice(0, 600), marker, pr, pillar: pl ? pl[1].toLowerCase() : null };
+}
+async function changelogEnsure(env) {
+  await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS fleet_changelog (worker TEXT NOT NULL, version TEXT NOT NULL, level TEXT NOT NULL, released_at TEXT NOT NULL, prev_version TEXT, title TEXT, subject TEXT, summary TEXT, marker TEXT, pr INTEGER, sha TEXT, pillar TEXT, public_hosts TEXT, enriched_at TEXT, enrich_tries INTEGER DEFAULT 0, enrich_note TEXT, PRIMARY KEY (worker, version))").run();
+}
+async function changelogCreated(env) {
+  try {
+    if (!env.CF_TOKEN) return null;
+    const resp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + ACCOUNT + "/workers/scripts?per_page=100", { headers: { Authorization: "Bearer " + env.CF_TOKEN }, signal: AbortSignal.timeout(8e3) });
+    if (!resp.ok) return null;
+    const j = await resp.json();
+    const out = {};
+    for (const x of j && j.result || []) if (x && x.id && x.created_on) out[x.id] = x.created_on;
+    return out;
+  } catch (e) {
+    return null;
+  }
+}
+var CHANGELOG_LEDGER_SQL = "SELECT resource_name AS w, version_id AS v, MIN(deployed_at) AS t FROM deployment_history WHERE action = 'deploy' AND COALESCE(status, 'success') = 'success' AND version_id IS NOT NULL AND version_id <> '' GROUP BY resource_name, version_id";
+async function changelogEnrichOne(env, rel) {
+  const until = new Date(Date.parse(rel.released_at) + 15 * 6e4).toISOString();
+  const r = await ghCall(env, "GET", "/repos/" + CON_REPO + "/commits?path=" + encodeURIComponent(rel.worker + "/worker.js") + "&until=" + encodeURIComponent(until) + "&per_page=30");
+  if (!r.ok || !Array.isArray(r.json)) return { ok: false, note: "github " + (r.status || r.error || "error") };
+  const c = changelogPickCommit(r.json, rel.version);
+  if (!c) {
+    const p = changelogParse("", rel.worker, rel.version);
+    return { ok: true, row: { title: p.title, subject: null, summary: "", marker: null, pr: null, sha: null, pillar: null }, note: "no commit on main names " + rel.version };
+  }
+  const p = changelogParse(c.commit && c.commit.message, rel.worker, rel.version);
+  // A "(#N)" in a subject can be an agent_issues id; the PR is the one GitHub says contains the commit, else none (the
+  // page then links the commit itself).
+  let pr = null;
+  if (c.sha) {
+    const pq = await ghCall(env, "GET", "/repos/" + CON_REPO + "/commits/" + encodeURIComponent(c.sha) + "/pulls");
+    if (!pq.ok || !Array.isArray(pq.json)) return { ok: false, note: "github pulls " + (pq.status || pq.error || "error") };
+    const hit = pq.json.find(function(x) { return x && x.merged_at; }) || pq.json[0];
+    pr = hit && hit.number ? Number(hit.number) : null;
+  }
+  return { ok: true, row: { title: p.title, subject: p.subject, summary: p.summary, marker: p.marker, pr, sha: c.sha || null, pillar: p.pillar }, note: "commit " + String(c.sha || "").slice(0, 10) + (pr ? " in PR " + pr : " (no PR)") };
+}
+async function changelogTick(env, opts) {
+  const out = { detected: 0, inserted: 0, enriched: 0, errors: [] };
+  await changelogEnsure(env);
+  const rows = await d1all(env.AUDIT, CHANGELOG_LEDGER_SQL);
+  const firsts = {};
+  for (const r of rows) { const at = changelogIso(r.t); if (at && (!firsts[r.w] || at < firsts[r.w])) firsts[r.w] = at; }
+  // Only ask Cloudflare for creation dates when some worker's first ledger row is inside the complete-ledger era.
+  const needCreated = Object.keys(firsts).some(function(w) { return firsts[w] >= CHANGELOG_LEDGER_FROM; });
+  const created = needCreated ? await (opts && opts.created ? Promise.resolve(opts.created) : changelogCreated(env)) : {};
+  const rels = changelogDetect(rows, created);
+  out.detected = rels.length;
+  const stmts = rels.map(function(x) {
+    const pillar = CHANGELOG_PILLAR[x.worker] || null;
+    return env.AUDIT.prepare("INSERT OR IGNORE INTO fleet_changelog (worker, version, level, released_at, prev_version, pillar, public_hosts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(x.worker, x.version, x.level, x.released_at, x.prev_version, pillar, (CHANGELOG_PUBLIC[x.worker] || []).join(",") || null);
+  });
+  for (let i = 0; i < stmts.length; i += 50) {
+    const res = await env.AUDIT.batch(stmts.slice(i, i + 50));
+    for (const r of res || []) out.inserted += r && r.meta && r.meta.changes || 0;
+  }
+  const todo = await d1all(env.AUDIT, "SELECT worker, version, released_at FROM fleet_changelog WHERE enriched_at IS NULL AND COALESCE(enrich_tries, 0) < 3 ORDER BY released_at DESC LIMIT ?1", [CHANGELOG_ENRICH_PER_TICK]);
+  const nowIso = new Date().toISOString();
+  for (const rel of todo) {
+    const e = await changelogEnrichOne(env, rel);
+    if (!e.ok) {
+      out.errors.push(rel.worker + " " + rel.version + ": " + e.note);
+      await env.AUDIT.prepare("UPDATE fleet_changelog SET enrich_tries = COALESCE(enrich_tries, 0) + 1, enrich_note = ?3 WHERE worker = ?1 AND version = ?2").bind(rel.worker, rel.version, e.note).run();
+      continue;
+    }
+    const x = e.row;
+    await env.AUDIT.prepare("UPDATE fleet_changelog SET title = ?3, subject = ?4, summary = ?5, marker = ?6, pr = ?7, sha = ?8, pillar = COALESCE(?9, pillar), enriched_at = ?10, enrich_note = ?11 WHERE worker = ?1 AND version = ?2").bind(rel.worker, rel.version, x.title, x.subject, x.summary, x.marker, x.pr, x.sha, x.pillar, nowIso, e.note).run();
+    out.enriched++;
+  }
+  // Heartbeat for WATCHMAKER_OPS "changelog-sync": one row per UTC hour, ok unless every enrichment failed.
+  const hour = nowIso.slice(0, 13);
+  const status = out.errors.length && !out.enriched ? "warn" : "ok";
+  try {
+    await env.AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, ?2, 'changelog-tick', ?3, ?4, ?5, ?6)").bind("changelog-tick-" + hour, nowIso, "FLEET-CHANGELOG-1: " + out.detected + " releases, " + out.inserted + " new, " + out.enriched + " described", JSON.stringify(out).slice(0, 2e3), NAME, status).run();
+  } catch (e) {
+  }
+  return out;
+}
+function changelogDayMs(iso) {
+  const ms = Date.parse(iso);
+  return isFinite(ms) ? ms : 0;
+}
+async function changelogView(env, isOwner, nowMs) {
+  const now = nowMs || Date.now();
+  await changelogEnsure(env);
+  const rows = await d1all(env.AUDIT, "SELECT worker, version, level, released_at, prev_version, title, summary, marker, pr, sha, pillar, public_hosts, enriched_at FROM fleet_changelog ORDER BY released_at DESC LIMIT 400");
+  const releases = rows.map(function(r) {
+    const personal = !!CHANGELOG_PERSONAL[r.worker] || r.pillar === "personal";
+    const hosts = r.public_hosts ? String(r.public_hosts).split(",").filter(Boolean) : [];
+    const o = { worker: r.worker, version: r.version, level: r.level, released_at: r.released_at, prev_version: r.prev_version, title: r.title || changelogSlug(r.version) || r.version, summary: r.summary || "", marker: r.marker || null, pr: r.pr || null, sha: r.sha || null, pillar: r.pillar || "unassigned", public_hosts: hosts, described: !!r.enriched_at, personal };
+    if (personal && !isOwner) {
+      o.version = changelogCoreText(r.version) || r.version;
+      o.prev_version = r.prev_version ? changelogCoreText(r.prev_version) || null : null;
+      o.title = "Personal-plane release (details for the signed-in owner)";
+      o.summary = ""; o.marker = null; o.pr = null; o.sha = null;
+    }
+    return o;
+  });
+  const since = function(days) { const c = new Date(now - days * 864e5).toISOString(); return releases.filter(function(r) { return r.released_at >= c; }); };
+  const r7 = since(7), r30 = since(30);
+  const counts = {
+    releases_7d: r7.length, releases_30d: r30.length,
+    autonomy_30d: r30.filter(function(r) { return r.pillar === "autonomy"; }).length,
+    public_30d: r30.filter(function(r) { return r.public_hosts.length; }).length,
+    new_workers_30d: r30.filter(function(r) { return r.level === "new-worker"; }).length,
+    major_30d: r30.filter(function(r) { return r.level === "major"; }).length,
+    total: releases.length
+  };
+  // Version bumps in the last 30 days that are not releases (patch fixes): counted, never listed.
+  let patches_30d = null;
+  try {
+    patches_30d = changelogPatches(await d1all(env.AUDIT, CHANGELOG_LEDGER_SQL), new Date(now - 30 * 864e5).toISOString());
+  } catch (e) {
+  }
+  const trend = [];
+  for (const t of CHANGELOG_TREND) {
+    try {
+      const h = await d1all(env.AUDIT, "SELECT day, value FROM metric_history WHERE metric = ?1 AND value IS NOT NULL ORDER BY day ASC", [t.metric]);
+      if (!h.length) { trend.push({ metric: t.metric, label: t.label, better: t.better, first: null, latest: null }); continue; }
+      const a = h[0], b = h[h.length - 1];
+      const delta = b.value - a.value;
+      const dir = delta === 0 ? "flat" : (delta < 0) === (t.better === "lower") ? "better" : "worse";
+      trend.push({ metric: t.metric, label: t.label, better: t.better, first: { day: a.day, value: a.value }, latest: { day: b.day, value: b.value }, direction: dir, points: h.length });
+    } catch (e) {
+      trend.push({ metric: t.metric, label: t.label, better: t.better, first: null, latest: null, error: "unreadable" });
+    }
+  }
+  return {
+    generated_at: new Date(now).toISOString(), version: VERSION, counts, patches_30d, trend, releases,
+    rule: "A release is the first successful deploy (deployment_history) of a version whose major or minor number is above every earlier version of that worker, or the first deploy of a worker Cloudflare created after " + CHANGELOG_LEDGER_FROM.slice(0, 10) + ". Patch bumps are fixes: counted, not listed. Descriptions come from the commit on main that set the version (no model). Pillar: 'pillar <key>' in the commit message, else the charter plane of the worker. Personal-plane releases show in full only to the signed-in owner."
+  };
+}
+var CHANGELOG_LEVEL_LABEL = { "major": "Major release", "minor": "New capability", "new-worker": "New worker" };
+function changelogFmtVal(v) {
+  if (v == null) return "\u2013";
+  return Math.abs(v) < 1 && v !== 0 ? String(Math.round(v * 100) / 100) : String(Math.round(v * 10) / 10);
+}
+function changelogHtml(v, holder) {
+  const c = v.counts;
+  const kpi = function(n, label, sub) { return '<div class="kpi"><span class="k-l">' + esc(label) + '</span><span class="k-n">' + esc(String(n)) + '</span>' + (sub ? '<span class="k-s">' + esc(sub) + '</span>' : '') + '</div>'; };
+  const trendRows = v.trend.map(function(t) {
+    if (!t.first) return '<div class="cl-tr"><span>' + esc(t.label) + '</span><span class="meta">not measured yet</span></div>';
+    const cls = t.direction === "better" ? "good" : t.direction === "worse" ? "bad" : "";
+    const word = t.direction === "better" ? "improving" : t.direction === "worse" ? "worsening" : "flat";
+    return '<div class="cl-tr"><span>' + esc(t.label) + '</span><span><b class="' + cls + '">' + esc(changelogFmtVal(t.first.value)) + ' \u2192 ' + esc(changelogFmtVal(t.latest.value)) + '</b> <span class="meta">' + esc(word) + ', ' + esc(t.first.day) + ' to ' + esc(t.latest.day) + ' (' + (t.better === "lower" ? "lower is better" : "higher is better") + ')</span></span></div>';
+  }).join("");
+  const filters = [["all", "All releases", c.total], ["autonomy", "Autonomy", null], ["public", "Public-facing", null], ["new-worker", "New workers", null], ["major", "Major", null]];
+  const countTag = function(k) { return v.releases.filter(function(r) { return k === "all" || r.pillar === k || k === "public" && r.public_hosts.length || r.level === k; }).length; };
+  const pillarsPresent = CHANGELOG_PILLARS.filter(function(p) { return p !== "autonomy" && v.releases.some(function(r) { return r.pillar === p; }); });
+  const chips = filters.map(function(f) { return '<button type="button" data-f="' + f[0] + '"' + (f[0] === "all" ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' + esc(f[1]) + ' <span>' + countTag(f[0]) + '</span></button>'; }).join("") + pillarsPresent.map(function(p) { return '<button type="button" data-f="' + p + '" aria-pressed="false">' + esc(p.charAt(0).toUpperCase() + p.slice(1)) + ' <span>' + countTag(p) + '</span></button>'; }).join("");
+  let lastDay = "";
+  const items = v.releases.map(function(r) {
+    const day = r.released_at.slice(0, 10);
+    let h = "";
+    if (day !== lastDay) {
+      lastDay = day;
+      h += '<h3 class="cl-day">' + esc(new Date(r.released_at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })) + '</h3>';
+    }
+    const tags = [r.level, r.pillar].concat(r.public_hosts.length ? ["public"] : []).join(" ");
+    const ver = (r.prev_version ? esc(r.prev_version) + ' \u2192 ' : '') + '<b>' + esc(r.version) + '</b>';
+    const links = [];
+    if (r.pr) links.push('<a href="https://github.com/' + CON_REPO + '/pull/' + r.pr + '">PR ' + r.pr + '</a>');
+    else if (r.sha) links.push('<a href="https://github.com/' + CON_REPO + '/commit/' + esc(r.sha) + '">commit ' + esc(r.sha.slice(0, 7)) + '</a>');
+    if (r.marker) links.push('<code>' + esc(r.marker) + '</code>');
+    h += '<article class="card item cl-rel' + (r.level === "major" || r.level === "new-worker" ? " urgent" : "") + '" data-tags="' + esc(tags) + '"><div class="it-top"><span class="it-src">' + esc(r.worker) + '</span><span class="tag' + (r.level === "major" || r.level === "new-worker" ? " u" : "") + '">' + esc(CHANGELOG_LEVEL_LABEL[r.level] || r.level) + '</span><span class="tag">' + esc(r.pillar) + '</span>' + (r.public_hosts.length ? '<span class="tag cl-pub">public: ' + esc(r.public_hosts.join(", ")) + '</span>' : '') + '<span>' + ver + '</span><span>' + esc(r.released_at.slice(11, 16)) + 'Z</span></div><h2>' + esc(r.title) + '</h2>' + (r.summary ? '<details class="more"><summary>What changed</summary><p class="cl-sum">' + esc(r.summary) + '</p></details>' : (r.described || r.personal ? '' : '<p class="meta">Description pending: the next sync reads the commit that set this version.</p>')) + (links.length ? '<div class="meta cl-links">' + links.join(" \u00b7 ") + '</div>' : '') + '</article>';
+    return h;
+  }).join("");
+  const js = "<script>(function(){var bs=document.querySelectorAll('.cl-chips button'),rs=document.querySelectorAll('.cl-rel'),ds=document.querySelectorAll('.cl-day');function show(f){bs.forEach(function(b){b.setAttribute('aria-pressed',b.getAttribute('data-f')===f?'true':'false')});rs.forEach(function(r){var t=' '+r.getAttribute('data-tags')+' ';r.hidden=!(f==='all'||t.indexOf(' '+f+' ')>=0)});ds.forEach(function(d){var n=d.nextElementSibling,any=false;while(n&&!n.classList.contains('cl-day')){if(!n.hidden)any=true;n=n.nextElementSibling}d.hidden=!any});try{history.replaceState(null,'',f==='all'?location.pathname:location.pathname+'#'+f)}catch(e){}}bs.forEach(function(b){b.addEventListener('click',function(){show(b.getAttribute('data-f'))})});var h=(location.hash||'').slice(1);if(h&&document.querySelector('.cl-chips button[data-f=\"'+h.replace(/[^a-z-]/g,'')+'\"]'))show(h)})()<\/script>";
+  const css = "<style>.cl-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px}.cl-chips button{border:1px solid var(--rule);background:var(--surface);color:var(--muted);border-radius:99px;padding:5px 12px;font:500 13px var(--sans);cursor:pointer}.cl-chips button span{font-weight:600;margin-left:4px}.cl-chips button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--paper)}.cl-day{font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px}.cl-rel h2{margin-bottom:6px}.cl-sum{font-size:14.5px;line-height:1.55;margin:8px 0 0;max-width:90ch}.cl-links{margin-top:8px}.cl-pub{background:var(--teal-wash,var(--wash));color:var(--teal)}.cl-tr{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:14px;padding:8px 0;border-top:1px solid var(--rule)}.cl-tr:first-of-type{border-top:0}.cl-kpis{grid-template-columns:repeat(5,minmax(0,1fr))}@media (max-width:900px){.cl-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}</style>";
+  return fleetHead("Fleet changelog") + css + fleetTop("changelog", false, holder) + '<main class="wrap fl" style="max-width:980px"><h1 class="fl-h" style="font-size:30px;margin:10px 0 6px">Changelog</h1><p class="meta" style="margin:0 0 18px;max-width:90ch">What the fleet has shipped for itself: new capabilities (a major or minor version), new workers, and changes to public sites. Fixes and small improvements (patch versions) are counted, not listed' + (v.patches_30d != null ? ': ' + v.patches_30d + ' in the last 30 days' : '') + '. Updated every 15 minutes from the canonical deploy ledger. JSON: <a href="/api/changelog">/api/changelog</a>.</p><div class="fl-kpis cl-kpis" style="display:grid;gap:12px;margin:0 0 22px">' + kpi(c.releases_7d, "Releases, 7 days") + kpi(c.releases_30d, "Releases, 30 days") + kpi(c.autonomy_30d, "Autonomy releases, 30 days") + kpi(c.public_30d, "Public-facing, 30 days") + kpi(c.new_workers_30d, "New workers, 30 days") + '</div><section class="card" style="margin-bottom:22px"><h3 style="font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px">Is the fleet getting more autonomous?</h3>' + trendRows + '</section><div class="cl-chips" role="group" aria-label="Filter releases">' + chips + '</div>' + (items || '<div class="card empty"><b>No releases recorded yet.</b> The first sync after this deploy reads the deploy ledger.</div>') + '<p class="fl-foot">' + esc(v.rule) + '</p></main>' + js + FLEET_SHELL_JS + '</body></html>';
+}
+// ---- FLEET-CHANGELOG-1:END ----
 function humanHtml(v) {
   const o = [];
   const holder = !!(v.owner && v.owner.authed);

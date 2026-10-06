@@ -123,6 +123,10 @@ jobs:
         run: node qnfo-fleet-dashboard/watchmaker.test.mjs
       - name: TEXT-QUALITY-LOOP-1 generator inventory offline suite (qnfo-fleet-dashboard)
         run: node --no-warnings qnfo-fleet-dashboard/generators.test.mjs
+      # FLEET-CHANGELOG-1: the Changelog tab (release detection from the deploy ledger, commit descriptions, personal-plane
+      # redaction, idempotent sync with heartbeat).
+      - name: FLEET-CHANGELOG-1 changelog offline suite (qnfo-fleet-dashboard)
+        run: node --no-warnings qnfo-fleet-dashboard/changelog.test.mjs
 
       # OWNER-QUEUE-MCP-1 (pillar autonomy): the owner's queue is readable and answerable from any MCP client through the
       # dashboard's own emailed-code gate (qnfo-tools-mcp owner_queue / owner_code / owner_act); the code never reaches mcp_log.
