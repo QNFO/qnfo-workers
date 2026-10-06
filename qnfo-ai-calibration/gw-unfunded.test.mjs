@@ -38,7 +38,8 @@ once("degrade gated by the set", /var recurring = !GW_NO_DEGRADE_CLASSES\[clsLab
 eq("both 24h reads ignore unfunded", (src.match(/error_class NOT IN \('rate-capacity','unfunded'\)/g) || []).length, 2);
 ok("no read still treats only rate-capacity as transient", !/error_class != 'rate-capacity'/.test(src));
 ok("the class is decided in one place", (src.match(/clsLabel = gwErrorClass\(b\.status, /g) || []).length === 2 && !/else if \(\/capacity temporarily\|rate limit\/i\.test\(rh\)\) clsLabel/.test(src));
-ok("version names the change", /^1\.2\.9-gw-402-unfunded$/.test(api.VERSION));
+// The version history keeps the change (a later version bump must not fail this suite).
+ok("version names the change", /1\.2\.9 GW-402-UNFUNDED-1/.test(src) && /^1\.(2\.(9|[1-9]\d)|[3-9]\.|\d{2,}\.)/.test(api.VERSION));
 ok("module still exports a worker", api.worker_default && typeof api.worker_default.fetch === "function");
 
 if (fail.length) { console.log("FAIL " + fail.length + "\n" + fail.join("\n")); process.exit(1); }
