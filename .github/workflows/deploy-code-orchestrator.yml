@@ -20,8 +20,11 @@ on:
       - ".github/workflows/deploy-code-orchestrator.yml"
   workflow_dispatch:
 
+# CONTROL-PLANE-CANARY-2 (2026-10-06): contents write for the canary's revert push and actions write for its redeploy
+# dispatch (scripts/canary_revert.py), the same grants canonical-deploy.yml holds for the workers it deploys.
 permissions:
-  contents: read
+  contents: write
+  actions: write
 
 concurrency:
   group: deploy-code-orchestrator
@@ -39,6 +42,8 @@ jobs:
       GUARD_UA: "QNFO-fleet-ci/1.0 (+https://qnfo.org; deploy-code-orchestrator)"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -162,6 +167,26 @@ jobs:
             echo "::error::live VERSION '$got' != repo '$WANT'"
             exit 1
           fi
+
+      # CONTROL-PLANE-CANARY-2 (2026-10-06, CONTROL-PLANE-SELF-MERGE-1): the canonical canary skips this worker, because it is a
+      # container worker deployed here, so on 2026-10-06 (e202b2e) the lane's revert path did not cover it: the health gate above
+      # fails closed but leaves the bad commit on main. This step runs the same canary as canonical-deploy.yml after a push-mode
+      # wrangler deploy, whatever the gate said: it polls /health for the pushed VERSION and, when it does not arrive, reverts the
+      # push on main (one level, never a revert of a revert), dispatches this workflow for the revert (REVERT-REDEPLOY-1) and files
+      # CONTROL-PLANE-REVERTED-1. A dispatched run reaches it with --no-revert (verify only). Exit is always 0.
+      - name: Canary the pushed VERSION and revert a push that did not arrive
+        if: always() && steps.wrangler.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -uo pipefail
+          printf '%s %s\n' "$WORKER" "qnfo-code-orchestrator/worker.js" > /tmp/canary-targets.txt
+          git config user.name "qnfo-selfheal-bot"
+          git config user.email "bot@qnfo.org"
+          MODE=""
+          if [ "${EVENT_NAME}" != "push" ]; then MODE="--no-revert"; echo "dispatched deploy, verify-only canary"; fi
+          python3 scripts/canary_revert.py --targets /tmp/canary-targets.txt --pushed "$GITHUB_SHA" --canary-min 6 --poll-sec 20 $MODE
 
       - name: Record the deploy in D1 cloud_ops_events
         if: always()

@@ -142,9 +142,10 @@ because each one was broken at least once; the linked issue holds the evidence.
 - merge its own control-plane change (CONTROL-PLANE-SELF-MERGE-1, qnfo-fleet-control 0.7.0, PR 737; owner directive 2026-10-06
   "more flexibility and more autonomy ... proceed with all changes"): the stale-PR lane merges a green, quiet session pull request
   that changes a CM_DENY worker when `ops_config control_plane_self_merge` is `on`, the worker has a versioned `/health`
-  (`CP_CANARY_WORKERS`) and the PR carries `worker.js` with its mirror. canonical-deploy.yml then canaries `/health` for the new
-  VERSION and, when it does not arrive, reverts the push on main (`scripts/canary_revert.py`, one level, never a revert of a
-  revert), dispatches the deploy of the revert and files `CONTROL-PLANE-REVERTED-1`. The canary proves the VERSION arrived, not
+  (`CP_CANARY_WORKERS`) and the PR carries `worker.js` with its mirror. canonical-deploy.yml (deploy-code-orchestrator.yml for
+  the container worker the canonical path skips, CONTROL-PLANE-CANARY-2) then canaries `/health` for the new VERSION and, when
+  it does not arrive, reverts the push on main (`scripts/canary_revert.py`, one level, never a revert of a revert), dispatches
+  the deploy of the revert through the workflow that owns the worker and files `CONTROL-PLANE-REVERTED-1`. The canary proves the VERSION arrived, not
   that the worker works: LOOP-WATCH-1 and the metric triggers are the next line. `off` restores CONTROL-PLANE-MANUAL-1 without a
   deploy. Workflows under `.github/` never auto-merge, and the code loop neither plans nor merges control-plane workers until
   CODE-LOOP-CONTROL-PLANE-1 (lever T1.23) has its evidence: five lane merges of control-plane session PRs with no canary revert.

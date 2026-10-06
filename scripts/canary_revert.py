@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """CONTROL-PLANE-CANARY-1 (2026-10-06, pillar autonomy; CONTROL-PLANE-SELF-MERGE-1, owner directive 2026-10-06).
 
-WHAT   After canonical-deploy.yml has deployed the workers changed by a push to main, this script polls the /health route
+WHAT   After canonical-deploy.yml (or deploy-code-orchestrator.yml for the container worker the canonical path skips,
+       CONTROL-PLANE-CANARY-2) has deployed the workers changed by a push to main, this script polls the /health route
        of every CONTROL-PLANE worker in that set until it reports the VERSION the push carries. A worker whose version does
        not arrive inside the window is treated as a bad deploy: the push is reverted on main (git revert of the pushed
        commit, with each failed worker's VERSION bumped above the bad one so version-bump-guard and the deploy ledger stay
@@ -136,16 +137,39 @@ def revert_flags(parents_line):
     return ["-m", "1"] if len(parts) >= 3 else []
 
 
-def dispatch_redeploy(workers):
-    """REVERT-REDEPLOY-1: a push made with GITHUB_TOKEN starts no workflow run (GitHub suppresses them; see
-    apply-binding-install-gate-1.yml), so the revert commit would sit on main undeployed. Dispatch canonical-deploy.yml for
-    the failed workers (it queues behind this run: cancel-in-progress is false) and, when qnfo-ops is among them, the
-    break-glass deploy-qnfo-ops.yml too (raw_put.py deploys qnfo-ops from main without /ops/deploy when /health is down,
-    and skips itself when the canonical route is healthy). Returns {"redeploy": [...], "redeploy_error": ...}."""
-    repo = os.environ.get("GITHUB_REPOSITORY") or "QNFO/qnfo-workers"
-    runs = [["gh", "workflow", "run", "canonical-deploy.yml", "--repo", repo, "--ref", "main", "-f", "workers=" + " ".join(workers)]]
+# CONTROL-PLANE-CANARY-2: workers the canonical path skips (container workers, CANONICAL-SKIP-CONTAINERS-1) deploy through a
+# wrangler workflow of their own, which also runs this canary; the revert of such a worker is redeployed by that workflow.
+REDEPLOY_WORKFLOW = {"qnfo-code-orchestrator": "deploy-code-orchestrator.yml"}
+
+
+def redeploy_commands(workers, repo):
+    """The gh dispatches that redeploy a revert: canonical-deploy.yml with `workers=` for every worker the canonical path
+    deploys, each REDEPLOY_WORKFLOW workflow once for the workers it owns, and the break-glass deploy-qnfo-ops.yml when
+    qnfo-ops failed (raw_put.py deploys qnfo-ops from main without /ops/deploy when /health is down, and skips itself when
+    the canonical route is healthy)."""
+    canonical = [w for w in workers if w not in REDEPLOY_WORKFLOW]
+    own = []
+    for w in workers:
+        wf = REDEPLOY_WORKFLOW.get(w)
+        if wf and wf not in own:
+            own.append(wf)
+    runs = []
+    if canonical:
+        runs.append(["gh", "workflow", "run", "canonical-deploy.yml", "--repo", repo, "--ref", "main", "-f", "workers=" + " ".join(canonical)])
+    for wf in own:
+        runs.append(["gh", "workflow", "run", wf, "--repo", repo, "--ref", "main"])
     if "qnfo-ops" in workers:
         runs.append(["gh", "workflow", "run", "deploy-qnfo-ops.yml", "--repo", repo, "--ref", "main"])
+    return runs
+
+
+def dispatch_redeploy(workers):
+    """REVERT-REDEPLOY-1: a push made with GITHUB_TOKEN starts no workflow run (GitHub suppresses them; see
+    apply-binding-install-gate-1.yml), so the revert commit would sit on main undeployed. Dispatch the deploy workflows that
+    own the failed workers (redeploy_commands; a dispatched run queues behind this one, cancel-in-progress is false).
+    Returns {"redeploy": [...], "redeploy_error": ...}."""
+    repo = os.environ.get("GITHUB_REPOSITORY") or "QNFO/qnfo-workers"
+    runs = redeploy_commands(workers, repo)
     out, errors = [], []
     for cmd in runs:
         try:
@@ -290,6 +314,12 @@ def selftest():
     ok(res["qnfo-ops"]["state"] == "ok" and res["qnfo-ops"]["polls"] == 2 and res["qnfo-ai"]["state"] == "failed:no-version" and res["qnfo-ai"]["polls"] >= 3, "poll: a worker that arrives stops being polled, a silent one fails at the window")
     ok(set(CANARY_WORKERS) == {"qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-gateway", "qnfo-ai", "qnfo-observability", "qnfo-code-orchestrator"}, "the canary worker set is the control plane with a /health route")
     ok(revert_flags("c0ffee aaa111 bbb222\n") == ["-m", "1"] and revert_flags("c0ffee aaa111\n") == [] and revert_flags("") == [], "revert_flags: a merge commit reverts with -m 1, a squash or plain commit without")
+    rc = redeploy_commands(["qnfo-code-orchestrator"], "o/r")
+    ok(len(rc) == 1 and rc[0][3] == "deploy-code-orchestrator.yml" and "-f" not in rc[0], "redeploy_commands: the container worker is redeployed by its own workflow, never by canonical-deploy.yml", rc)
+    rc = redeploy_commands(["qnfo-ops", "qnfo-ai"], "o/r")
+    ok(len(rc) == 2 and rc[0][3] == "canonical-deploy.yml" and rc[0][-1] == "workers=qnfo-ops qnfo-ai" and rc[1][3] == "deploy-qnfo-ops.yml", "redeploy_commands: canonical workers in one dispatch, plus the break-glass qnfo-ops deploy", rc)
+    rc = redeploy_commands(["qnfo-fleet-control", "qnfo-code-orchestrator"], "o/r")
+    ok(len(rc) == 2 and rc[0][-1] == "workers=qnfo-fleet-control" and rc[1][3] == "deploy-code-orchestrator.yml", "redeploy_commands: a mixed set dispatches both paths once", rc)
     bogus = revert_push("0" * 40, [("qnfo-ops", "qnfo-ops", "0.0.1")], False)
     ok(isinstance(bogus, dict) and "error" in bogus and "git failed" in bogus["error"], "revert_push turns a git failure into an error outcome instead of raising", bogus)
     fake = {"qnfo-ops": {"want": "2.0.0", "state": "failed:wrong-version", "seen": "1.9.9", "polls": 3}, "qnfo-ai": {"want": "5.0.0", "state": "ok", "seen": "5.0.0", "polls": 1}}
