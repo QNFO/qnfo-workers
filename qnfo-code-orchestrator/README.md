@@ -22,7 +22,7 @@ One task = one file edit, verified deterministically, delivered as a **PR (never
 queued --read--> propose --> verify --(fail, attempts<3)--> propose  (NEXT model on the ladder, error fed back)
                                 |--(ok)--> commit --> pr_open
                                 |--(3 failed attempts)--> queued after a backoff (1 h, then 6 h), first rung again; after 3 rounds: failed + one fleet agent_issue (SELF-REPAIR-1, 0.3.6)
-                                |--(no verifier | no-op proposal | file too large | refused path or anchor)--> needs_human
+                                |--(no verifier | no-op proposal | file over 6M chars or over 900k without an anchor | refused path or anchor)--> needs_human
 ```
 - **State**: D1 `code_tasks` (migration `migrations/2026-10-01-code-tasks.sql`; the worker also creates it lazily). Every step is
   bounded and idempotent; a crashed isolate's 90 s lease expires and the next tick resumes the task. FIFO claim.
@@ -61,7 +61,8 @@ Every deployed `worker.js` is larger than the 60,000-char whole-file cap, so unt
   the worker applies them to the full file. Each SEARCH must occur exactly once in the window, edits may not overlap, at most 8.
   A wrong SEARCH is a failed attempt whose error is fed back to the next rung of the ladder.
 - **Which mode.** With an `anchor` (a verbatim string near the edit, at most 300 chars, exactly one occurrence): patch mode, window =
-  about 24,000 chars of whole lines around the anchor, files up to 900,000 chars. Without one: up to 12,000 chars whole-file,
+  about 24,000 chars of whole lines around the anchor, files up to 900,000 chars stored whole in the task row and, since 0.4.0,
+  files up to 6,000,000 chars with only the window stored (LARGE-FILE-WINDOW-1 below). Without one: up to 12,000 chars whole-file,
   12,000 to 24,000 patch mode over the whole file, 24,000 to 60,000 whole-file as before, above 60,000 refused (`needs an anchor`).
 - **Anchor intake.** `POST /v1/tasks {repo, path, goal, anchor}`, or a second opt-in line in the issue: `code-anchor: <text>`.
 - **Worker hygiene done by the loop.** For `.js`/`.mjs` the single `VERSION = "x.y.z..."` declaration is bumped to
@@ -111,6 +112,31 @@ rungs (0.3.3) deployed 5.5 minutes later, but `needs_human` is never retried. In
   and CPU-limit enforcement on the real platform (the worker now measures it itself; see below).
 - **Not built**: GitHub webhook wake-up (CI/review events resuming a task), multi-file edits, a verifier that RUNS tests, the
   `qnfo-code-agent` deploy. Deploy must use a wrangler workflow (this worker has `[[containers]]` + a Durable Object; the canonical `/content` PUT destroys those bindings, see `qnfo-containers-pilot/RETRIGGER-4-DO-BINDING-LOST.md`), and `qnfo-code-agent` needs a GitHub credential with PR-write.
+
+### v0.4.0: a file of any size is edited from its anchor window (LARGE-FILE-WINDOW-1, agent_issues 2073, lever T1.22)
+Until 0.4.0 a file over 900,000 chars ended `needs_human` as "too large for the loop", because the base file and the task context had
+to fit one D1 row together: `qnfo-research-exec/worker.js` (1.03M chars, issue 2052) and `qnfo-agent-ws/worker.js` (2.4M) were
+out of the loop's reach, and the planner refused them too.
+- **What is stored.** Over 900,000 chars (up to 6,000,000) the task row keeps `ctx.win_text` (the anchor window, about 24,000 chars),
+  its offsets, `base_len` and the anchor; never the base. An anchor is required (no anchor: `needs_human` with the reason).
+- **Every later step re-reads main** (`baseFor`): propose, verify and commit each read the file again and find the window text
+  again, exactly once. A window that moved (lines added above it) is re-located and `ctx.win` updated (`ctx.moved`); the edits and
+  the patch are therefore always built on the current file. A window that is gone or ambiguous sends the task back to `read` from
+  the anchor (`code-task.reread`, at most 3 times), after which the task ends `needs_human`.
+- **Unchanged below 900,000 chars**: the base is stored as before, so the pre-0.4.0 path and its suites are untouched.
+- **Planner**: `PLAN_FILE_MAX` now equals the 6,000,000 cap, so ISSUE-PLANNER-1 may plan a large worker.
+- **Suite**: `large-file.test.mjs` (1.2M-char fixture): lands with a small hunk that `git apply --check` accepts, a moved window
+  is found again and the patch applies to the changed file, a vanished window re-reads then ends `needs_human`, no anchor gets one
+  locator pick and then parks, a small file still stores its base, `/health` names the capability.
+
+### v0.4.0 also: the loop locates its own anchor (ANCHOR-LOCATOR-1, agent_issues 2007 second half, human_actions 60)
+ANCHOR-REPAIR-1 (0.3.19) repairs an anchor without a model call. What still parked tasks `needs_human` on 2026-10-06: an anchor
+that occurs 0 times and cannot be repaired (`ct_qjjo05t4elayld`, qnfo-ipatent), an anchor that occurs twice, and a file over 60,000
+chars filed without one. The read step now asks the cheapest rung of the ladder once for one verbatim line among the file excerpts
+near the goal's keywords (`planSnippets`, the planner's own excerpt builder, at most 14,000 chars) and takes it when it occurs
+exactly once in the file (`code-task.anchor-located`). A pick that is not a unique line parks the task with the old reason plus
+`ANCHOR-LOCATOR-1 found no unique line near the goal either`. Small files (whole-file mode) never call it. Suite:
+`anchor-locator.test.mjs` (66k-char fixture; no anchor, unrepairable anchor, duplicate anchor, useless pick, small file, `/health`).
 
 ## Routes (v0.1.1, unchanged)
 | Route | Method | Auth | Effect |

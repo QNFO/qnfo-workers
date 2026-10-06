@@ -13,6 +13,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
+const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; }; // semver minimum, so a minor bump keeps passing
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
@@ -170,7 +171,7 @@ const REAL = [
 {
   const { env } = envWith([]);
   const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
-  ok(/^0\.3\.(1[7-9]|[2-9]\d)-/.test(h.version) && h.capabilities.includes("noop-gate") && h.limitations.some((l) => /NOOP-PROPOSAL-GATE-1/.test(l) && /2 such proposals in a row/.test(l)), "F1 /health names the gate and its limit", { v: h.version });
+  ok(atLeast(h.version, "0.3.17") && /^\d+\.\d+\.\d+-/.test(h.version) && h.capabilities.includes("noop-gate") && h.limitations.some((l) => /NOOP-PROPOSAL-GATE-1/.test(l) && /2 such proposals in a row/.test(l)), "F1 /health names the gate and its limit", { v: h.version });
 }
 
 console.log("noop-gate: " + pass + " passed, " + fail + " failed");

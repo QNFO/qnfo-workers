@@ -286,7 +286,8 @@ function fakeLoader(spinMs) {
   const { env } = envWith([]);
   const r = await worker.fetch(new Request("https://x/health"), env);
   const h = await r.json();
-  check("/health reports the VERSION constant + task-loop + limitations[] + the ladder + js_verify off by default", /^0\.3\.\d+/.test(h.version) && h.capabilities.includes("task-loop") && Array.isArray(h.limitations) && h.limitations.length > 0 && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
+  // a floor (0.3 or later), never a pin: the 0.4.0 bump failed this line on PR 747 (SUITE-RUNNER-1 rule)
+  check("/health reports the VERSION constant + task-loop + limitations[] + the ladder + js_verify off by default", /^(0\.([3-9]|\d{2,})\.\d+|[1-9]\d*\.\d+\.\d+)/.test(h.version) && h.capabilities.includes("task-loop") && Array.isArray(h.limitations) && h.limitations.length > 0 && h.ladder.join() === "cheap-model,strong-model" && h.js_verify === "off" && !h.verifiers.includes("js"), h);
 }
 
 // ===== 12. scheduled() drives the loop with no HTTP request =====

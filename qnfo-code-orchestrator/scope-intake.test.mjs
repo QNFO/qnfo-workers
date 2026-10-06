@@ -9,6 +9,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+// CODE-TASK-PREFLIGHT-1 (0.4.0): intake now reads the target from main before it creates a task; this suite stays hermetic
+// (no network, no dependence on main) by answering every fetch 503, which the preflight treats as unreadable and lets through.
+globalThis.fetch = async () => new Response("unavailable", { status: 503 });
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "msi-"));
 fs.writeFileSync(path.join(tmp, "w.mjs"), fs.readFileSync(path.join(here, "worker.js"), "utf8") + "\nexport { mergeScopeWhy as __scope, enqueue as __enqueue, intakeIssues as __intake, PLAN_DENY_WORKERS as __deny, repairAnchor as __repair };\n");
