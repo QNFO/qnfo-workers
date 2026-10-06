@@ -1,125 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@4f032002bf08",
- "due": 14,
- "pass": 6,
- "fail": 7,
- "skipped": 1,
- "contracts": [
-  {
-   "class": "issue-1935",
-   "issue_id": 1935,
-   "verdict": "fail",
-   "expected": "fixed-and-watched",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1641-MENTIONS",
-   "issue_id": 1641,
-   "verdict": "fail",
-   "expected": "all-sources-ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
-   "verdict": "vacuous-probe-result",
-   "expected": "within-cap",
-   "observed": null,
-   "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-1892",
-   "issue_id": 1892,
-   "verdict": "fail",
-   "expected": "baseline-recorded",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1890",
-   "issue_id": 1890,
-   "verdict": "fail",
-   "expected": "measured",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "EVID-1711-REACH",
-   "issue_id": 1711,
-   "verdict": "fail",
-   "expected": "seven-days",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1164",
-   "issue_id": 1164,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1823",
-   "issue_id": 1823,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1933",
-   "issue_id": 1933,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1934",
-   "issue_id": 1934,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1936",
-   "issue_id": 1936,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1944",
-   "issue_id": 1944,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-ask-hung",
-   "issue_id": 1839,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "pending: qnfo-ai-search >= 2.2.3 not deployed 24h",
-   "written": true
-  },
-  {
-   "class": "issue-1800",
-   "issue_id": 1800,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  }
- ],
+ "verifier": "remediation-consumer@79ca10f38497",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
+ "skipped": 0,
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -136,8 +23,8 @@
   "external-https",
   "http"
  ],
- "spent_ms": 36963,
- "head": "4f032002bf08809492ed3c88dd16d3c620045192",
+ "spent_ms": 1881,
+ "head": "79ca10f384970070f36f9704f5f04d1b95654e92",
  "job_status": "success",
- "ts": "2026-10-06T01:30:06Z"
+ "ts": "2026-10-06T06:17:57Z"
 }

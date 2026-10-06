@@ -1,6 +1,9 @@
 name = "idea-hub"
 main = "worker.js"
 compatibility_date = "2026-09-01"
+# REACH-IDEA-1 (#2001): /api/subscribe forwards to qnfo-subscribers.q08.workers.dev; without this flag a request served on
+# idea-hub.q08.workers.dev would reach the same-zone worker as Cloudflare error 1042 (404).
+compatibility_flags = ["global_fetch_strictly_public"]
 workers_dev = true
 
 # Bindings verified from live CF API 2026-09-13 (BINDING-PRESERVATION-1)

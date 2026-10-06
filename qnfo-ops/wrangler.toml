@@ -59,10 +59,7 @@ binding = "INDEXER"
 service = "qnfo-paper-indexer"
 environment = "production"
 
-[[services]]
-binding = "KAIZEN"
-service = "qnfo-kaizen"
-environment = "production"
+# KAIZEN (qnfo-kaizen) removed 2026-10-06: worker retired (WORKER-RETIRE-WAVE-2, #1756); the binding was a /health probe only.
 
 [[services]]
 binding = "GATEWAY"
@@ -92,10 +89,7 @@ binding = "MEMORY"
 service = "qnfo-memory-mcp"
 environment = "production"
 
-[[services]]
-binding = "SKILLSYNC"
-service = "qnfo-skill-sync"
-environment = "production"
+# SKILLSYNC (qnfo-skill-sync) removed 2026-10-06: worker retired (WORKER-RETIRE-WAVE-2, #1756); the binding was a /health probe only.
 
 # --- v1.0.0 additions ---
 # Backlog executor drain (ops_issue_run tool)

@@ -12,7 +12,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.62-stage-attr"; // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.9.63-related-legacy-fields"; // 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -3035,6 +3035,22 @@ function applyRelatedLink(metadata, patch) {
   if (present) return { related_identifiers: before, changed: false, url: url };
   return { related_identifiers: before.concat([{ identifier: url, relation: "isVariantFormOf", resource_type: "publication-preprint" }]), changed: true, url: url };
 }
+// RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): record 22025544 (trapped-ion-ultrametric-synthesis) came back from the
+// deposit API with an InvenioRDM resource_type {type, subtype} and no legacy upload_type / publication_type, and the
+// legacy PUT of that same metadata failed with "metadata.resource_type: Missing data for required field" (the one error
+// row of 431). The legacy deposit API wants upload_type (and publication_type / image_type for those two), so they are
+// filled from resource_type when absent; metadata that already carries them is returned unchanged.
+function legacyUploadFields(metadata) {
+  var m = metadata && typeof metadata === "object" ? metadata : {};
+  var rt = m.resource_type && typeof m.resource_type === "object" ? m.resource_type : null;
+  var type = rt && rt.type ? String(rt.type) : "";
+  if (m.upload_type || !type) return m;
+  var out = Object.assign({}, m, { upload_type: type });
+  var sub = rt.subtype ? String(rt.subtype) : "";
+  if (sub && type === "publication" && !out.publication_type) out.publication_type = sub;
+  if (sub && type === "image" && !out.image_type) out.image_type = sub;
+  return out;
+}
 async function latestRecordId(recId, fetchImpl) {
   var f = fetchImpl || fetch;
   try {
@@ -3070,7 +3086,7 @@ async function drainRelatedLinks(env, limit, fetchImpl) {
         var ed = await zenodo(env, "POST", "/" + target + "/actions/edit", {});
         if (!ed || ed._status) throw new Error("edit failed: " + JSON.stringify(ed).slice(0, 200));
         editing = true;
-        var base = ed.metadata || dep.metadata;
+        var base = legacyUploadFields(ed.metadata || dep.metadata);
         var applied = applyRelatedLink(base, patch);
         if (applied.error) throw new Error(applied.error);
         var put = await zenodo(env, "PUT", "/" + target, { metadata: Object.assign({}, base, { related_identifiers: applied.related_identifiers }) });
@@ -3336,6 +3352,7 @@ export {
   worker_default as default,
   applyCreatorPatch,
   applyRelatedLink,
+  legacyUploadFields,
   drainMetadataEdits,
   drainRelatedLinks,
   drainVersionRequests,

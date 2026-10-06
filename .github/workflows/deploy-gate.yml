@@ -315,6 +315,14 @@ jobs:
       # and SENT-AS-YOU-DELIVERY-1 (the daily digest mailed once to the owner's qnfo.org address).
       - name: OUTREACH-LEARNER-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/outreach-learner.test.mjs
+      # RADAR-SE-REASON-1 (qnfo-cloud-ops 1.19.2, #1641): the mention radar names why StackExchange failed and reports a
+      # per-address throttle as capped, so a degraded radar run says which source is blind and why.
+      - name: RADAR-SE-REASON-1 offline suite (qnfo-cloud-ops)
+        run: node --no-warnings qnfo-cloud-ops/radar-se-reason.test.mjs
+      # PROJECT-STATE-SECOND-COLLISION-1 (#1998): two fk-violation snapshots in one instant never abort the second parent
+      # write; the migration's rollback block reproduces the defect and its CREATE statements fix it (offline, node:sqlite).
+      - name: PROJECT-STATE-SECOND-COLLISION-1 offline suite (migration)
+        run: node --no-warnings scripts/project-state-collision.test.mjs
       - name: OUTREACH-CF-DOW-1 cron weekday check (qnfo-outreach)
         run: node qnfo-outreach/cron-dow.test.mjs
       - name: KAIZEN-CF-MONDAY-1 cron weekday check (qnfo-kaizen)
@@ -325,6 +333,10 @@ jobs:
         run: node --no-warnings qnfo-fleet-control/land-bundle.test.mjs
       - name: REPO-LIVE-DRIFT-1 offline suite (qnfo-fleet-control)
         run: node --no-warnings qnfo-fleet-control/repo-live-drift.test.mjs
+      # ATTRIBUTION-COVERAGE-DTD-1 (qnfo-fleet-control 0.4.127, #1997): workers_ai_attribution_coverage_pct is the
+      # day-to-date ratio, not one hourly delta, and writes nothing while today's GraphQL total is under the floor.
+      - name: ATTRIBUTION-COVERAGE-DTD-1 offline suite (qnfo-fleet-control)
+        run: node --no-warnings qnfo-fleet-control/attribution-coverage.test.mjs
       - name: REMEDIATION-REOPEN-1 offline suite (qnfo-fleet-control)
         run: node --no-warnings qnfo-fleet-control/remediation-reopen.test.mjs
       - name: METRIC-FRESHNESS cadence units offline suite (qnfo-lifecycle)
@@ -358,6 +370,9 @@ jobs:
       # [gw-fail] issue, no degraded health row, ignored by the 24h reconcile, so MODEL-DEGRADED is not refiled for it.
       - name: GW-402-UNFUNDED-1 offline suite (qnfo-ai-calibration)
         run: node qnfo-ai-calibration/gw-unfunded.test.mjs
+      # PROBER-FOLD-1 (#1756): ai-health-prober runs as a member of qnfo-ai-calibration (cron dispatch, read routes, key on /prober/run).
+      - name: PROBER-FOLD-1 offline suite (qnfo-ai-calibration 1.3.0)
+        run: node --no-warnings qnfo-ai-calibration/prober-fold.test.mjs
       # WORKER-HEALTH-PROBE-AUTH-1 + GMAIL-TRIAGE-UNCONFIGURED-1 (qnfo-cloud-ops 1.18.2): the qnfo-ai chat probe uses the
       # props-authenticated QNFO_AI binding, a probe without its credential is skipped (never a 401 false alarm), real
       # failures still alert, one job-run row per run, and gmail-triage without GMAIL_PASS is skipped rather than an error.
@@ -454,6 +469,7 @@ jobs:
         run: node --no-warnings qnfo-research-exec/math-latex.test.mjs
       # ZENODO-READ-ONLINE-1 (qnfo-research-exec 0.9.61, #1907): kind='related' rows add the papers.qnfo.org page as an
       # isVariantFormOf related identifier to the latest version of a record, idempotently; the probe closes the issue.
+      # RELATED-LEGACY-FIELDS-1 (0.9.63): the drain fills legacy upload_type / publication_type from resource_type before the PUT.
       - name: ZENODO-READ-ONLINE-1 offline suite (qnfo-research-exec)
         run: node --no-warnings qnfo-research-exec/zenodo-related.test.mjs
       # AI-STAGE-ATTRIBUTION-1: research-exec Workers AI counters carry the pipeline stage; the AI call itself is unchanged.
@@ -470,6 +486,9 @@ jobs:
       # REENTRY-DRAIN-1 (#1654): status='new' artifact_reentry signals drain by a model-free age rule, oldest first, bounded.
       - name: REENTRY-DRAIN-1 offline suite (idea-hub 1.5.6, #1654)
         run: node --no-warnings idea-hub/reentry-drain.test.mjs
+      # REACH-IDEA-1 (#2001): ideas.qnfo.org carries a subscribe box that forwards to the qnfo-subscribers double opt-in.
+      - name: REACH-IDEA-1 offline suite (idea-hub 1.5.7, #2001)
+        run: node --no-warnings idea-hub/subscribe-box.test.mjs
       - name: AI-ATTR offline suite (personal-api 4.7.2, #1833)
         run: node --no-warnings personal-api/ai-attr.test.mjs
       - name: TOOL-TRACE-MEMORY-1 offline suite (personal-api 4.7.1, #1805)
@@ -479,6 +498,14 @@ jobs:
         run: node --no-warnings personal-api/twin-flash.test.mjs
       - name: CALLER-PROPS + PREDATORY-BODY offline suite (qnfo-email 2.5.x, #1923, #1924)
         run: node --no-warnings qnfo-email/caller-props-predatory.test.mjs
+      # UNSUB-LINK-1: the outreach footer opt-out link is public on qnfo.org/email/unsubscribe and only adds suppression rows.
+      - name: UNSUB-LINK-1 offline suite (qnfo-email 2.5.4)
+        run: node --no-warnings qnfo-email/unsub-link.test.mjs
+      # DANGLING-SERVICE-UNBIND-1 + DANGLING-BINDING-10143-1 (#1756): a binding to a deleted worker never blocks a deploy.
+      - name: DANGLING-SERVICE-UNBIND-1 offline suite (cf_ops_actions unbind-service)
+        run: python3 scripts/cf_ops_unbind_service_test.py
+      - name: DANGLING-BINDING-10143-1 offline check (qnfo-ops 2.38.43)
+        run: node --no-warnings qnfo-ops/dangling-10143.test.mjs
       - name: BROWSER-SAMPLE-1 offline suite (qnfo-gateway, #1890)
         run: node --test qnfo-gateway/browser-sample.test.mjs
       - name: MATH-CHECK offline suite (qnfo-pdf 1.1.0, #1890)

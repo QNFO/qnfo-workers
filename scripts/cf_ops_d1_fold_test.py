@@ -123,6 +123,8 @@ TASK_HITS = {"n": 0}
 
 
 def fake_call(method, path, token, body=None, timeout=60):
+    if "/workers/durable_objects/namespaces" in path:
+        return 200, {"success": True, "result": [], "result_info": {"total_pages": 1}}
     if path.endswith("/settings") and method == "GET":
         return 200, {"success": True, "result": SETTINGS}
     if "/d1/database/" + C.AUDIT_DB + "/query" in path:

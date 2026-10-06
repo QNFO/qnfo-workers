@@ -1,4 +1,4 @@
-// REMEDIATION-REOPEN-1 + REMEDIATION-HOLD-1 offline suite (qnfo-fleet-control 0.4.119/0.4.121/0.4.123, agent_issues 1297): remediationContractsTick against
+// REMEDIATION-REOPEN-1 + REMEDIATION-HOLD-1 + REMEDIATION-PENDING-PREFIX-1 offline suite (qnfo-fleet-control 0.4.119/0.4.121/0.4.123/0.4.128, agent_issues 1297): remediationContractsTick against
 // node:sqlite with the live tables and the live auto-close trigger. Proves: a contract on a wontfix issue is marked
 // superseded without a probe run; a probe that fails max_attempts times after its issue was closed reopens the issue once
 // (description note with the prior close_evidence, reopened_count + 1, close_evidence cleared) and fewer failures do not;
@@ -113,5 +113,29 @@ const due8 = (Date.parse(st("c8").next_due_at.replace(" ", "T") + "Z") - Date.no
 check(st("c8").status === "holding" && db.prepare("SELECT status FROM agent_issues WHERE id=8").get().status === "closed" && due8 > 23, "'pending' inside the hold keeps holding at 24h and reopens nothing");
 const vr = db.prepare("SELECT COUNT(*) n FROM remediation_verifications WHERE class IN ('c6','c7','c8')").get().n, at = db.prepare("SELECT SUM(attempts) n FROM remediation_contracts WHERE class IN ('c6','c7','c8')").get().n;
 check(vr === at && vr > 12, "every held read writes its verification row (rows " + vr + ", attempts " + at + ")");
+// 0.4.128 REMEDIATION-PENDING-PREFIX-1: 'pending: <reason>' is a deferral like a bare 'pending'. A closed issue whose probe reads
+// it four times is not reopened, the reads do not count toward max_attempts, a held contract stays holding at 24h, and a
+// pass streak survives them.
+db.exec(`INSERT INTO agent_issues VALUES (9, 'closed, pending-with-reason', 'desc9', 'closed', NULL, ${closedLongAgo}), (10, 'open, pending-with-reason in hold', 'desc10', 'open', NULL, ${closedLongAgo});
+  INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (9, 'x', 'closed', 'o', 'n', 'ev9'), (10, 'x', 'triaged', 'o', 'n', NULL);
+  INSERT INTO probe_src VALUES ('p9', 'pending: latest run did not measure the page'), ('p10', 'ok');`);
+add("c9", 9, "p9", 3); add("c10", 10, "p10", 3);
+for (let i = 0; i < 4; i++) await tick();
+check(db.prepare("SELECT status FROM agent_issues WHERE id=9").get().status === "closed", "four 'pending: <reason>' reads do not reopen a closed issue");
+db.exec("UPDATE probe_src SET v = 'broken' WHERE k = 'p9'");
+out = await tick();
+check(!out.reopened.includes(9) && db.prepare("SELECT status FROM agent_issues WHERE id=9").get().status === "closed", "the first real failure after four 'pending: <reason>' rows does not reopen (they are not counted)");
+await tick(); out = await tick();
+check(out.reopened.includes(9), "the third real failure reopens issue 9");
+check(st("c10").status === "holding" && db.prepare("SELECT status FROM agent_issues WHERE id=10").get().status === "closed", "c10 passes: issue closed, contract holding");
+db.prepare("UPDATE remediation_verifications SET verified_at = ? WHERE class = 'c10'").run(ago(3 * 24));
+db.exec("UPDATE probe_src SET v = 'PENDING: window not open yet' WHERE k = 'p10'");
+for (let i = 0; i < 4; i++) await tick();
+const due10 = (Date.parse(st("c10").next_due_at.replace(" ", "T") + "Z") - Date.now()) / 3600e3;
+check(st("c10").status === "holding" && db.prepare("SELECT status FROM agent_issues WHERE id=10").get().status === "closed" && due10 > 23, "'PENDING: <reason>' inside the hold keeps holding at 24h and reopens nothing (case-insensitive)");
+db.prepare("UPDATE remediation_verifications SET verified_at = ? WHERE class = 'c10' AND pass = 1").run(ago(8 * 24));
+db.exec("UPDATE probe_src SET v = 'ok' WHERE k = 'p10'");
+out = await tick();
+check(st("c10").status === "closed", "a pass streak broken only by 'pending: <reason>' reads still closes the contract after 7 days (got " + st("c10").status + ")");
 console.log(fails + " failure(s)");
 process.exit(fails ? 1 : 0);

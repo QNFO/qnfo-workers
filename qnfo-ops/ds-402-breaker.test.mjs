@@ -14,6 +14,9 @@ import { readFileSync } from "node:fs";
 const IMPORT = 'import { WorkflowEntrypoint, DurableObject } from "cloudflare:workers";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 if (src.indexOf(IMPORT) < 0) throw new Error("worker.js import line changed: update the loader in this test");
+// The breaker row carries the worker's own VERSION (read from worker.js, so a version bump does not break this check).
+const WORKER_VERSION = (src.match(/var VERSION = "([^"]+)"/) || [])[1];
+if (!WORKER_VERSION) throw new Error("worker.js VERSION line not found");
 // Each load is a fresh module, so the per-isolate breaker starts closed.
 let loads = 0;
 const load = async () => (await import("data:text/javascript;base64," + Buffer.from(src.replace(IMPORT, "var WorkflowEntrypoint = class {}; var DurableObject = class {};") + "\n// load " + (++loads)).toString("base64"))).default;
@@ -99,7 +102,7 @@ const breakerRows = (t) => t.audit.prepare("SELECT kind, status, meta FROM cloud
   ok(gwCalls(t).length === 1, "A exactly one paid attempt for the whole turn, saw " + gwCalls(t).length + " " + JSON.stringify(gwCalls(t).map((f) => f.body && f.body.model)));
   ok(!gwCalls(t).some((f) => f.body && /deepseek-v4-pro/.test(f.body.model)), "A no deepseek-v4-pro retry after a 402");
   const rows = breakerRows(t);
-  ok(rows.length === 1 && rows[0].status === "open" && /"version":"2\.38\.41/.test(rows[0].meta), "A one ds-402-breaker row with the version: " + JSON.stringify(rows));
+  ok(rows.length === 1 && rows[0].status === "open" && rows[0].meta.includes('"version":"' + WORKER_VERSION + '"'), "A one ds-402-breaker row with the version: " + JSON.stringify(rows));
 
   // B. same isolate, breaker open: no paid fetch on the non-streamed path, still answered, no second row.
   const t2 = mk(402);
