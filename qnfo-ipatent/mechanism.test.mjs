@@ -85,5 +85,11 @@ seen.length = 0;
 r = await post("/api/draft", { title: "Folding drawer hinge", description: desc, mechanism: "not an object" });
 ok(r.status === 200 && !/MECHANISM CARD/.test(seen.find((t) => /REQUIRED OUTPUT FORMAT/.test(t)) || ""), "a malformed card is ignored, the draft still runs");
 
+// 5. The v=2 UI step: present on the page, hidden unless ?v=2, and the draft request carries the card only from it.
+const page = await (await W.fetch(new Request("https://ipatent.qnfo.org/", { headers: { "User-Agent": UA } }), env, ctx)).text();
+ok(/<div class="field" id="mechZone" style="display:none" data-mechanism-first="v2">/.test(page) && /id="mechBtn"/.test(page), "the landing page carries the hidden mechanism step");
+ok(/get\('v'\) === '2'/.test(page) && /mechanism: mechCardValue\(\)/.test(page) && /if\(!MECH_V2 \|\| !mechFields\) return null;/.test(page), "only ?v=2 shows the step and only a read card is sent with the draft");
+const scripts = page.split("<script>").slice(1).map((x) => x.split("</script>")[0]); // the page writes its inline scripts as exactly <script>
+ok(scripts.length > 0 && scripts.every((sc) => { try { new Function(sc); return true; } catch (e) { return false; } }), "every inline page script parses");
 console.log(passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);

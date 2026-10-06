@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.11.1-mechanism-first"; /* 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.12.0-mechanism-ui-v2"; /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -1864,6 +1864,12 @@ var LANDING_HTML = `<!DOCTYPE html>
         <textarea id="description" name="description" placeholder="What is your invention? What problem does it solve? How does it work \u2014 components, mechanism, key novelty?" required></textarea>
         <div class="meter" id="meter" aria-live="polite"><div>COMPLETENESS <span id="meterPct">0%</span> &mdash; a provisional protects only what it describes</div><div class="meter-bar"><div class="meter-fill" id="meterFill" style="width:0%"></div></div><div class="meter-items" id="meterItems"></div></div>
       </div>
+      <div class="field" id="mechZone" style="display:none" data-mechanism-first="v2">
+        <label><span class="num">3b.</span>Mechanism card <span style="color:var(--ink-soft);text-transform:none;letter-spacing:0">&mdash; what it is, what it does, how it works, and the one distinction that makes the difference</span></label>
+        <div class="note" style="margin:0 0 10px">A defensible claim is built on the mechanism, not on the wording. Read the card from your description, correct it, and fill every red hole before drafting: anything marked NOT STATED is not in your description, so a provisional would not protect it.</div>
+        <button type="button" id="mechBtn" class="invent">Read the mechanism from my description</button>
+        <div id="mechCard" aria-live="polite"></div>
+      </div>
             <div class="suggest" id="starterZone">
         <div class="sug-head">STARTERS <span>&mdash; corpus examples. Pick one to load, then improve it before drafting.</span></div>
         <div class="sug-chips" id="starterChips"><span class="sug-empty">Loading corpus examples&hellip;</span></div>
@@ -1980,6 +1986,49 @@ var LANDING_HTML = `<!DOCTYPE html>
 
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   var lastDoc = null;
+  // MECHANISM-FIRST-1 v=2 (agent_issues 2053, measured with IPATENT-UI-OVERHAUL-1 #2049): the mechanism card step between
+  // describe and draft. Only ?v=2 shows it, so the live page is unchanged until both variants are measured.
+  var MECH_V2 = new URLSearchParams(location.search).get('v') === '2';
+  var mechFields = null;
+  if(MECH_V2){ var mz = document.getElementById('mechZone'); if(mz) mz.style.display = 'block'; }
+  function mechHolesHtml(holes){
+    if(!holes || !holes.length) return '<div class="smap"><b>NO OPEN HOLES</b> &mdash; every field is stated. Check each one is true, then draft.</div>';
+    return '<div class="smap"><b>' + holes.length + ' OPEN HOLE' + (holes.length > 1 ? 'S' : '') + '</b> &mdash; fill these in the card or in your description:' + holes.map(function(h){ var lb = h.field; (mechFields || []).forEach(function(f){ if(f.key === h.field) lb = f.label; }); return '<div style="margin-top:6px;color:#b3261e"><b>' + esc(lb) + '</b> &mdash; ' + esc(h.why) + '</div>'; }).join('') + '</div>';
+  }
+  function renderMech(data){
+    mechFields = data.fields || [];
+    var box = document.getElementById('mechCard');
+    if(!box) return;
+    box.innerHTML = mechFields.map(function(f){
+      var v = (data.mechanism && data.mechanism[f.key]) || 'NOT STATED';
+      var hole = v === 'NOT STATED';
+      return '<div style="margin-top:12px"><label for="mech_' + f.key + '" style="' + (hole ? 'color:#b3261e' : '') + '">' + esc(f.label) + (hole ? ' &mdash; NOT STATED' : '') + '</label>'
+        + '<div style="font-size:12px;color:var(--ink-soft);margin:2px 0 4px">' + esc(f.asks) + '</div>'
+        + '<textarea id="mech_' + f.key + '" data-mech="' + f.key + '" rows="2" style="min-height:0;height:64px">' + esc(hole ? '' : v) + '</textarea></div>';
+    }).join('') + mechHolesHtml(data.holes);
+  }
+  function mechCardValue(){
+    if(!MECH_V2 || !mechFields) return null;
+    var out = {}, any = false;
+    mechFields.forEach(function(f){ var el = document.getElementById('mech_' + f.key); var v = el ? el.value.trim() : ''; out[f.key] = v || 'NOT STATED'; if(v) any = true; });
+    return any ? out : null;
+  }
+  document.addEventListener('click', function(ev){
+    if(!ev.target || ev.target.id !== 'mechBtn') return;
+    var b = ev.target, box = document.getElementById('mechCard');
+    b.disabled = true; b.textContent = 'READING THE MECHANISM\u2026';
+    fetch(API_BASE + '/mechanism', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      title: document.getElementById('title').value.trim(),
+      technical_field: document.getElementById('technicalField').value.trim(),
+      description: document.getElementById('description').value.trim()
+    })}).then(function(r){ return r.json().then(function(j){ return {s:r.status, j:j}; }, function(){ return {s:r.status, j:null}; }); })
+      .then(function(res){
+        if(res.s === 200 && res.j && res.j.mechanism) renderMech(res.j);
+        else if(box) box.innerHTML = '<div class="status err">' + esc((res.j && res.j.error) || 'Could not read the mechanism. Please try again.') + '</div>';
+      })
+      .catch(function(){ if(box) box.innerHTML = '<div class="status err">Network error. Please try again.</div>'; })
+      .then(function(){ b.disabled = false; b.textContent = 'Read the mechanism again'; });
+  });
   // COMPLETENESS-METER-1: what a provisional needs, checked as you type. Advisory only; it never blocks drafting.
   var METER = [
     ['problem', 'Problem solved', /\\b(problem|limitation|drawback|existing|conventional|currently|fails?|inefficien|costly|slow)\\b/i],
@@ -2163,7 +2212,8 @@ var LANDING_HTML = `<!DOCTYPE html>
           description: document.getElementById('description').value.trim(),
           inventor_name: document.getElementById('inventorName').value.trim(),
           inventor_email: document.getElementById('inventorEmail').value.trim(),
-          save: !!(document.getElementById('keepCopy') && document.getElementById('keepCopy').checked)
+          save: !!(document.getElementById('keepCopy') && document.getElementById('keepCopy').checked),
+          mechanism: mechCardValue()
         })
       });
       // IPATENT-ERROR-JSON-1: an edge 502/504 arrives as text/plain ('upstream request failed'); read text first and parse
@@ -2182,7 +2232,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       }
       result.style.display = 'block';
       document.getElementById('resultId').textContent = 'SUBMISSION ' + data.submission_id;
-      rc.innerHTML = renderSections(data.sections||{}, data.paragraphs||[]) + renderSupportMap(data.support_map) + '<div class="smap"><b>NEXT</b> \u2014 fix every red element in your own words, add the figures, then have a registered practitioner review it. Want a human review or iPatent for your team? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-result" style="color:var(--green)">Work with me</a>.</div>';
+      rc.innerHTML = renderSections(data.sections||{}, data.paragraphs||[]) + renderSupportMap(data.support_map) + (data.mechanism ? '<div class="smap"><b>MECHANISM CARD USED</b> &mdash; the claims were derived from your card.</div>' + mechHolesHtml(data.mechanism_holes) : '') + '<div class="smap"><b>NEXT</b> \u2014 fix every red element in your own words, add the figures, then have a registered practitioner review it. Want a human review or iPatent for your team? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-result" style="color:var(--green)">Work with me</a>.</div>';
       rag.innerHTML = renderRag(data.rag_sources||[]);
       var cw = document.getElementById('closeWarn');
       if(cw){
