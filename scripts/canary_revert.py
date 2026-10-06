@@ -184,6 +184,16 @@ def dispatch_redeploy(workers):
     return res
 
 
+def existing_revert(subjects, pushed):
+    """The subject of a revert of `pushed` already on main (a push that changed both a canonical control-plane worker and the
+    container worker runs two canaries; the second must not revert the same commit again), else None."""
+    tag = "revert: " + str(pushed or "")[:7]
+    for s in subjects or []:
+        if str(s or "").strip().lower().startswith(tag.lower()):
+            return str(s).strip()
+    return None
+
+
 def revert_push(pushed, failed, dry):
     """failed: [(worker, dir, bad_version)]. Reverts the pushed commit on the current checkout, re-bumps each failed worker's
     VERSION above the bad one, mirrors it, commits, pushes to main and dispatches the redeploy. Returns a dict with sha or
@@ -204,6 +214,9 @@ def _revert_push(pushed, failed, dry):
     if dry:
         return {"dry": True, "would_revert": pushed, "merge_commit": bool(flags), "workers": [w for w, _, _ in failed]}
     git(["fetch", "origin", "main"])
+    done = existing_revert(git(["log", "-n", "60", "--format=%s", "origin/main"]).splitlines(), pushed)
+    if done:
+        return {"refused": "main already carries a revert of " + str(pushed)[:7] + " (" + done[:120] + "); the other canary reverted it", "already_reverted": True}
     git(["checkout", "-q", "-B", "canary-revert", "origin/main"])
     git(["revert", "--no-commit"] + flags + [pushed])
     bumped = []
@@ -318,6 +331,7 @@ def selftest():
     ok(len(rc) == 1 and rc[0][3] == "deploy-code-orchestrator.yml" and "-f" not in rc[0], "redeploy_commands: the container worker is redeployed by its own workflow, never by canonical-deploy.yml", rc)
     rc = redeploy_commands(["qnfo-ops", "qnfo-ai"], "o/r")
     ok(len(rc) == 2 and rc[0][3] == "canonical-deploy.yml" and rc[0][-1] == "workers=qnfo-ops qnfo-ai" and rc[1][3] == "deploy-qnfo-ops.yml", "redeploy_commands: canonical workers in one dispatch, plus the break-glass qnfo-ops deploy", rc)
+    ok(existing_revert(["ci(status): x", "revert: c0ffee1 did not reach /health on qnfo-ops (CONTROL-PLANE-CANARY-1)", "feat: y"], "c0ffee1234567") is not None and existing_revert(["revert: abc1234 x"], "c0ffee1234567") is None and existing_revert([], "c0ffee1") is None, "existing_revert: a revert of the pushed sha already on main is recognised, another sha's is not")
     rc = redeploy_commands(["qnfo-fleet-control", "qnfo-code-orchestrator"], "o/r")
     ok(len(rc) == 2 and rc[0][-1] == "workers=qnfo-fleet-control" and rc[1][3] == "deploy-code-orchestrator.yml", "redeploy_commands: a mixed set dispatches both paths once", rc)
     bogus = revert_push("0" * 40, [("qnfo-ops", "qnfo-ops", "0.0.1")], False)
@@ -388,6 +402,9 @@ def run(a):
     emit("::warning::canary: " + ", ".join(w for w, _, _ in failed) + " did not arrive; revert outcome " + json.dumps(outcome)[:300])
     acct, token = os.environ.get("CLOUDFLARE_ACCOUNT_ID"), os.environ.get("CLOUDFLARE_API_TOKEN")
     if a.dry_run:
+        return 0
+    if outcome.get("already_reverted"):
+        emit("canary: the other canary of this push already reverted it and filed the issue; nothing more to do")
         return 0
     if acct and token:
         emit("canary: issue " + str(file_issue(acct, token, a.pushed, results, outcome)))

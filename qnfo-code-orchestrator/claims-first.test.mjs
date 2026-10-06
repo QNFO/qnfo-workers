@@ -28,8 +28,10 @@ function makeD1() {
   return { prepare: wrap, _db: db };
 }
 
-// the deploy-guard stub: acquire (409 while a session holds the key and no token renews it), release, or down
-const guard = { calls: [], held: null, down: false, tokens: 0 };
+// the deploy-guard stub: acquire (409 while a session holds the key and no token renews it), release, or down.
+// CLAIMS-CTX-1: like the real guard, a token-less acquire against a live lease on the key is refused with the lease's own
+// holder, even when that holder is the caller (the lease is the proof, the owner string is not); the held token renews.
+const guard = { calls: [], held: null, down: false, tokens: 0, lease: {} };
 const GUARD = "https://qnfo-deploy-guard";
 // raw reads fail: a step ends in a read error, which is not this suite's subject; the guard is reached only over the binding
 globalThis.fetch = async () => new Response("nf", { status: 404 });
@@ -41,10 +43,14 @@ const guardFetch = async (u, init) => {
     guard.calls.push({ path: url.slice(GUARD.length), body });
     if (url.endsWith("/acquire")) {
       if (guard.held && !body.token) return new Response(JSON.stringify({ key: body.key, acquired: false, reason: "work_claims", holder: guard.held, expires_at: "2099-01-01T00:00:00Z", intent: "a session edits it" }), { status: 409 });
-      const token = body.token || ("tok" + (++guard.tokens));
-      return new Response(JSON.stringify({ acquired: true, renewed: !!body.token, key: body.key, token, holder: body.owner, expires_at: new Date(Date.now() + body.ttl_sec * 1000).toISOString(), in_flight: [] }), { status: 200 });
+      const lease = guard.lease[body.key];
+      if (body.token && lease && lease.token === body.token) return new Response(JSON.stringify({ acquired: true, renewed: true, key: body.key, token: body.token, holder: lease.owner, expires_at: new Date(Date.now() + body.ttl_sec * 1000).toISOString(), in_flight: [] }), { status: 200 });
+      if (lease) return new Response(JSON.stringify({ key: body.key, acquired: false, holder: lease.owner, since: lease.since, expires_at: "2099-01-01T00:00:00Z", in_flight: [] }), { status: 409 });
+      const token = "tok" + (++guard.tokens);
+      guard.lease[body.key] = { token, owner: body.owner, since: new Date().toISOString() };
+      return new Response(JSON.stringify({ acquired: true, renewed: false, key: body.key, token, holder: body.owner, expires_at: new Date(Date.now() + body.ttl_sec * 1000).toISOString(), in_flight: [] }), { status: 200 });
     }
-    if (url.endsWith("/release")) return new Response(JSON.stringify({ released: true, key: body.key }), { status: 200 });
+    if (url.endsWith("/release")) { if (guard.lease[body.key] && guard.lease[body.key].token === body.token) delete guard.lease[body.key]; return new Response(JSON.stringify({ released: true, key: body.key }), { status: 200 }); }
   }
   return new Response("nf", { status: 404 });
 };
@@ -79,9 +85,9 @@ guard.calls.length = 0;
 t = await tick();
 ok(acquires().length >= 1 && acquires()[0].body.token === "tok1" && ctxOf(a.id).claim.renewals >= 1 && Date.parse(ctxOf(a.id).claim.expires_at) - Date.now() > 60 * 60e3, "a claim under 45 minutes from expiry is renewed with its token", { ren: acquires(), c: ctxOf(a.id).claim });
 
-// 4. a file a session holds: the step is deferred, no model call, the hold recorded
+// 4. a file a session holds: the step is deferred, no model call, the hold recorded (the task's own lease lapsed, so it has no claim)
 db.prepare("UPDATE code_tasks SET ctx = json_remove(ctx, '$.claim'), status = 'queued', lease_until = NULL WHERE id = ?").run(a.id);
-guard.held = "session_other"; guard.calls.length = 0; aiCalls = 0;
+guard.lease = {}; guard.held = "session_other"; guard.calls.length = 0; aiCalls = 0;
 t = await tick();
 ok(t.done.length === 1 && t.done[0].deferred === true && /held by session_other/.test(t.done[0].error) && aiCalls === 0, "a task whose file a session holds is deferred without a model call", t.done);
 const r4 = row(a.id);
@@ -132,6 +138,36 @@ ok(releases().length === 1 && releases()[0].body.outcome === "abandoned" && rele
 // 10. /health names the behaviour
 const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
 ok(atLeast(h.version, "0.3.21") && (h.limitations || []).some((l) => /CLAIMS-FIRST-1/.test(l)), "health names CLAIMS-FIRST-1 and the version is 0.3.21+", { v: h.version });
+
+// 11. CLAIMS-CTX-1 (0.4.1): the claim survives the read step (ctx rebuilt from the file) and the propose step (ctx written back
+//     whole), so the next acquire carries the token and renews. Before the fix the token was gone after the first step and every
+//     later acquire was refused by the task's own lease, which the stub now models like the real guard.
+{
+  const f0 = globalThis.fetch, ai0 = env.AI.run;
+  globalThis.fetch = async (u) => /raw\.githubusercontent\.com\/QNFO\/qnfo-workers\/main\/fx-worker\/keep\.md$/.test(String(u)) ? new Response("# keep\n\nline\n", { status: 200 }) : new Response("nf", { status: 404 });
+  env.AI.run = async () => ({ response: "```file\n# keep\n\nchanged\n```" });
+  db.prepare("UPDATE code_tasks SET status = 'closed' WHERE status = 'queued'").run();
+  guard.held = null; guard.lease = {}; guard.calls.length = 0;
+  const k = await (await worker.fetch(new Request("https://x/v1/tasks", { method: "POST", headers: hdr, body: JSON.stringify({ repo: "qnfo-workers", path: "fx-worker/keep.md", goal: "claims-ctx fixture: change the line" }) }), env)).json();
+  const tok = ctxOf(k.id).claim && ctxOf(k.id).claim.token;
+  ok(k.ok && tok, "11a the task holds a claim at enqueue", ctxOf(k.id));
+  const selfRefused = await (await guardFetch(GUARD + "/work-lock/acquire", { body: JSON.stringify({ key: "file:fx-worker/keep.md", owner: "qnfo-code-orchestrator:" + k.id, ttl_sec: 7200 }) })).json();
+  ok(selfRefused.acquired === false && selfRefused.holder === "qnfo-code-orchestrator:" + k.id, "11b the stub refuses a token-less acquire with the task's own lease, as the guard does", selfRefused);
+  guard.calls.length = 0;
+  let tk = await tick();
+  ok(tk.steps === 1 && !tk.done[0].deferred && tk.done[0].step === "read" && row(k.id).step === "propose" && acquires().length === 0, "11c the read step ran on the fresh claim without a guard call", tk);
+  let ck = ctxOf(k.id);
+  ok(ck.base === "# keep\n\nline\n" && ck.claim && ck.claim.token === tok, "11d after the read step the rebuilt ctx still carries the claim token", { claim: ck.claim, hasBase: !!ck.base });
+  tk = await tick();
+  ck = ctxOf(k.id);
+  ok(row(k.id).step === "verify" && ck.proposal && ck.claim && ck.claim.token === tok, "11e after the propose step (ctx written back whole) the claim token is still on the row", { step: row(k.id).step, claim: ck.claim });
+  db.prepare("UPDATE code_tasks SET ctx = json_set(ctx, '$.claim.expires_at', ?), lease_until = NULL WHERE id = ?").run(new Date(Date.now() + 10 * 60e3).toISOString(), k.id);
+  guard.calls.length = 0;
+  tk = await tick();
+  const ac = acquires();
+  ok(ac.length >= 1 && ac[0].body.token === tok && !tk.done[0].deferred && ctxOf(k.id).claim.renewals >= 1, "11f near expiry the next acquire carries the token and renews; the task is never refused by its own lease", { tokens: ac.map((x) => x.body.token), done: tk.done });
+  globalThis.fetch = f0; env.AI.run = ai0;
+}
 
 console.log(`claims-first: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
