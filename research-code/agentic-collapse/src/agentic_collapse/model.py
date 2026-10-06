@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: LicenseRef-QNFO-ULA-2.1
+# Copyright (c) 2026 Rowan Brad Quni-Gudzinas
+# Licensed under QNFO-ULA v2.1 (Software Terms, Section 12): https://qnfo.org/legal/license
+# Non-commercial use only; commercial use requires a separate agreement.
 """The Agentic Collapse model: a time-delayed stochastic system (phi, psi, U).
 
 Equations are those of Sections 2.2 to 2.6 of the paper (DOI 10.5281/zenodo.18133065):

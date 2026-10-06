@@ -17,7 +17,7 @@
 -- Idempotent: CREATE IF NOT EXISTS, INSERT OR IGNORE, guarded UPDATE and INSERT ... WHERE NOT EXISTS.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TABLE IF EXISTS research_code_libraries; DELETE FROM metric_registry WHERE metric IN ('research_code_public', 'research_code_stars_total'); DELETE FROM analytics_metric_triggers WHERE metric_key = 'research_code_public'; DELETE FROM human_actions WHERE slug IN ('code-repos-create', 'code-release-pypi-zenodo') AND status = 'open'; UPDATE fleet_tasks SET definition = json_remove(definition, '$.steps[' || (json_array_length(definition, '$.steps') - 1) || ']') WHERE id = 'metric-refresh' AND instr(json_extract(definition, '$.steps[' || (json_array_length(definition, '$.steps') - 1) || '].sql'), 'research_code_public') > 0;
+-- Rollback: DROP TABLE IF EXISTS research_code_libraries; DELETE FROM metric_registry WHERE metric IN ('research_code_public', 'research_code_stars_total'); DELETE FROM analytics_metric_triggers WHERE metric_key = 'research_code_public'; DELETE FROM human_actions WHERE slug IN ('code-repos-create', 'code-release-pypi-zenodo', 'ula-v2-1-post') AND status = 'open'; UPDATE fleet_tasks SET definition = json_remove(definition, '$.steps[' || (json_array_length(definition, '$.steps') - 1) || ']') WHERE id = 'metric-refresh' AND instr(json_extract(definition, '$.steps[' || (json_array_length(definition, '$.steps') - 1) || '].sql'), 'research_code_public') > 0;
 
 CREATE TABLE IF NOT EXISTS research_code_libraries (
   name TEXT PRIMARY KEY,
@@ -69,7 +69,13 @@ INSERT OR IGNORE INTO human_actions (slug, title, why, default_in_effect, action
   'A GitHub release becomes a citable software DOI only when the repository is switched on in your Zenodo account''s GitHub settings, and a pip-installable package needs a PyPI project tied to your account. Both are account-level and cannot be done by API from the fleet.',
   'Libraries are installable from source (pip install from the repository) and cited through the paper DOI only.',
   'Zenodo: Account, GitHub, switch on the three repositories. PyPI: add a trusted publisher for each repository (owner QNFO, workflow release.yml). Each library already carries .zenodo.json and CITATION.cff.',
-  'https://zenodo.org/account/settings/github/', 'normal', NULL, 'open', 'owner-only:CODE-REACH-1');
+  'https://zenodo.org/account/settings/github/', 'normal', NULL, 'open', 'owner-only:CODE-REACH-1'),
+ ('ula-v2-1-post',
+  'Post QNFO-ULA v2.1 (Software Terms) on QNFO/license',
+  'Creative Commons licences are not written for software. Version 2.1 keeps every core term (any use that generates money needs a separate agreement; share-alike; attribution; prior-art citation; Swiss law) and adds Section 12, Software Terms: a non-commercial patent licence, source availability, contribution terms. The fleet cannot write to QNFO/license, and posting is the act that makes a version effective (Section 10.3).',
+  'Version 2.0 stays in force; QNFO code keeps CC BY-NC-SA 4.0 as its base licence; legal.qnfo.org keeps serving v2.0.',
+  'Review docs/license/README.md in qnfo-workers (four choices are yours: the funding carve-outs, the patent licence, file-level share-alike, the one-time cure), then copy docs/license/for-QNFO-license/ to the root of QNFO/license. legal.qnfo.org serves v2.1 within the hour and keeps v2.0 at /v2.0. A review by a Swiss-qualified lawyer before posting is prudent.',
+  'https://github.com/QNFO/qnfo-workers/tree/main/docs/license', 'normal', NULL, 'open', 'owner-only:CODE-REACH-1');
 
 INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
 SELECT 'AGENTIC-COLLAPSE-REPRO-1: the v1 paper''s reported trajectory does not follow from its stated equations; four parameters are unstated',

@@ -1,6 +1,6 @@
 # Research code as reach (CODE-REACH-1)
 
-Version 1.0.0, 2026-10-06. Pillars `research` and `reach`. An input to `docs/STRATEGY.md` (which wins on research
+Version 1.1.0, 2026-10-06 (1.1.0: code licensed under QNFO-ULA v2.1 Software Terms, owner direction the same day, `docs/license/`). Pillars `research` and `reach`. An input to `docs/STRATEGY.md` (which wins on research
 identity and portfolio) and to the charter's H1 and H2 horizons. Owner question, 2026-10-06: *publishing reports and
 text is one thing, but can we also increase impact and eyeballs with working, tested, practical code libraries, as paper
 companions and standalone, and widen QNFO beyond quantum and QEC to AI, systems and mathematics, including formal
@@ -26,7 +26,7 @@ for the program.
 | Corpus mean downloads per view | 3.13 (Agentic Collapse: 39) | `zenodo_stats` |
 | Arxiv intake query terms | quantum, ultrametric, p-adic, energy only; no AI or formal-methods term | `qnfo-cloud-ops` `RESEARCH_SCAN_QUERY` |
 | `idea_topic_concentration_30d` | 0.596 against a target of <= 0.50, in breach | `metric_registry`, `v_metric_trigger_state` |
-| Licence of every QNFO repository, code included | QNFO-ULA v2.0 = CC BY-NC-SA 4.0 plus supplemental terms | `QNFO/license` |
+| Licence of every QNFO repository, code included | QNFO-ULA v2.0 = CC BY-NC-SA 4.0 plus supplemental terms; v2.1 (drafted, `docs/license/`) gives code its own Software Terms | `QNFO/license` |
 
 **Read the download numbers with care.** The Agentic Collapse record carries 80 files, and its downloads-per-view ratio
 (39) is twelve times the corpus mean. Zenodo counts file downloads, so per-file fetches by harvesters and crawlers
@@ -49,10 +49,14 @@ Why it should work:
   formal verification of mathematics is a fast-growing field in AI research.
 
 The strongest case against:
-1. **Licence.** CC BY-NC-SA is not a software licence (Creative Commons itself advises against using it for code), and
-   non-commercial share-alike code cannot be a dependency of most companies or permissively licensed projects. The owner
-   decided on 2026-10-06 to keep QNFO-ULA for code. The cost is real and is stated here once: adoption by industry and
-   inclusion in other open-source projects is capped. Researchers and educators are unaffected. Revisit if
+1. **Licence.** CC BY-NC-SA is not a software licence: Creative Commons advises against it for code, and it says nothing
+   about source code, hosting or patents. On 2026-10-06 the owner directed that code stay under the QNFO-ULA, updated for
+   software, with its core tenet intact: any use that generates money needs a separate agreement. QNFO-ULA v2.1
+   (`docs/license/`, waiting to be posted on `QNFO/license`) adds Software Terms (section 12): a non-commercial copyright
+   and patent licence, file-level share-alike with source availability and a network clause, contribution terms, and a
+   plain statement that QNFO code is source-available, not open source. The cost is still real, and stated here once:
+   companies, paid services and permissively licensed projects cannot use QNFO code without a separate agreement, which
+   caps industry adoption. Researchers, teachers, non-profits and public bodies are unaffected. Revisit if
    `research_code_stars_total` and the libraries' downloads stay flat after 90 days.
 2. **Maintenance is verification debt.** Each library is contract surface. The rule in section 5 (tests, CI, a pinned
    toolchain, no network, no runtime dependency where avoidable) keeps each one small. A library nobody uses after six
@@ -137,8 +141,9 @@ SIGNAL-INTAKE-SOURCES-1 and the idea-hub diversity hold). Outreach criteria are 
 2. Tests run in CI on every change (`.github/workflows/research-code.yml`), offline, with a pinned toolchain.
 3. The README carries the three STRATEGY-1 lines: **claim**, **test**, **status**, and a table of what the paper states
    versus what the library assumes. Any disagreement with the paper is a pinned test and an `agent_issues` row.
-4. `CITATION.cff` (the paper as preferred citation), `.zenodo.json` (the paper as `isSupplementTo`), and the QNFO-ULA
-   `LICENSE`.
+4. `CITATION.cff` (the paper as preferred citation), `.zenodo.json` (the paper as `isSupplementTo`), the QNFO-ULA v2.1
+   `LICENSE`, an SPDX header in every source file (`LicenseRef-QNFO-ULA-2.1`, Appendix C), and the words
+   "source-available", never "open source" (section 12.8).
 5. No network access, no secret and no model provider inside the library. A model, if needed, is a function the user
    passes in.
 6. Registered as a `research_code_libraries` row.
@@ -168,7 +173,10 @@ Guards: no library may be counted as public while its CI is red, and the program
   done.
 - `code-release-pypi-zenodo`: switch the repositories on in Zenodo's GitHub settings (software DOIs on release), and add
   PyPI trusted publishers (installable packages). Both are account-level.
-- Decided 2026-10-06: code stays QNFO-ULA v2.0. Cost stated in section 2.
+- Decided 2026-10-06: code stays under the QNFO-ULA, updated for software. Post v2.1 by copying
+  `docs/license/for-QNFO-license/` to `QNFO/license` (the session was refused write access there). Four choices in it are
+  the Licensor's and are listed in `docs/license/README.md`. Post v2.1 before the library repositories go public, so
+  they never ship under CC terms.
 
 ## 8. Open items and failure modes
 

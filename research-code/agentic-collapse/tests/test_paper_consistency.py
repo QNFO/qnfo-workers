@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: LicenseRef-QNFO-ULA-2.1
+# Copyright (c) 2026 Rowan Brad Quni-Gudzinas
+# Licensed under QNFO-ULA v2.1 (Software Terms, Section 12): https://qnfo.org/legal/license
+# Non-commercial use only; commercial use requires a separate agreement.
 """Checks of the published v1 trajectory against the published equations.
 
 These tests document a finding, they do not hide it: with the stated alpha = 0.85 and gamma = 0.65,

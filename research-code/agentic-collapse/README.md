@@ -65,6 +65,9 @@ stated before it can be tested. `test_lag_effect_under_default_assumptions` pins
 
 ## Licence
 
-QNFO Unified License Agreement v2.0 (`LicenseRef-QNFO-ULA-2.0`: CC BY-NC-SA 4.0 plus the QNFO supplemental terms,
-https://legal.qnfo.org/), the licence of every QNFO repository. Research and educational use is free; commercial use
-needs a separate agreement (see `LICENSE`, section 10.7).
+Source-available under the QNFO Unified License Agreement v2.1 (`LicenseRef-QNFO-ULA-2.1`), whose Software Terms
+(section 12) cover code: free for personal use, teaching, published research and non-profit or public work, with a
+patent license for those uses. Any use that generates money, including use inside a company, a paid or ad-funded
+service, or paid deliverables, needs a separate agreement (section 10.7). Changes you share stay under the same
+license, with their source. This is not an open source license (section 12.8). Full text: `LICENSE` and
+https://legal.qnfo.org/.

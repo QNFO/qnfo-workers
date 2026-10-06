@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Reference implementation of the Agentic Collapse model: a time-delayed stochastic system for epistemic stability in autonomous AI agents."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "LicenseRef-QNFO-ULA-2.0" }
+license = { text = "LicenseRef-QNFO-ULA-2.1" }
 dependencies = []
 authors = [{ name = "Rowan Brad Quni-Gudzinas" }]
 keywords = ["autonomous agents", "AI safety", "delay differential equations", "epistemic stability", "reproducibility"]
