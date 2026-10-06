@@ -465,6 +465,9 @@ jobs:
       # TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015): ask.qwav.tech subscribe box posts to the qnfo.org double opt-in.
       - name: TP-7.1 subscribe-box offline suite (qnfo-ai-search 2.2.6)
         run: node --no-warnings qnfo-ai-search/subscribe-box.test.mjs
+      # ASK-LEXICAL-CATALOG-1: retrieve() ranks the published catalog (BM25, no model call) beside the stale vector index.
+      - name: ASK-LEXICAL-CATALOG-1 offline suite (qnfo-ai-search 2.2.7)
+        run: node --no-warnings qnfo-ai-search/lexical-catalog.test.mjs
 
       # GROUND-OR-SLOT-1 + GROUND-THIN-FAILFAST-1 (agent_issues 1751): the arXiv OR fallback keeps its query slot, and a
       # grounding too thin to pass gate-refcount stops at ground instead of running the whole pipeline.

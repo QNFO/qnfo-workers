@@ -28,7 +28,7 @@
 //   LIMITS    public AI use is capped per visitor (hashed IP, hourly) and globally (daily); over a cap, or with the
 //             fleet's 30-day AI spend at SPEND_CAP_TOTAL_USD, the answer is sources-only (no model call).
 
-var VERSION = "2.2.6-subscribe-box"; // 2.2.6 TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015, pillar reach): ask.qwav.tech carries a subscribe box (type="email" plus a honeypot) that posts cross-origin to the qnfo.org double opt-in (POST https://qnfo.org/api/subscribe, CORS already allows this origin) with source ask.qwav.tech; nobody is subscribed without clicking the confirmation link; no binding, no model call; 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
+var VERSION = "2.2.7-lexical-catalog"; // 2.2.7 ASK-LEXICAL-CATALOG-1 (pillar research): retrieve() also ranks the published catalog (titles and abstracts from papers.qnfo.org, BM25, no model call) because the AI Search vector index has had no feeder since 2026-08-11 and held 0 of the 22 golden papers; catalog metadata replaces per-source detail fetches where it has an abstract; 2.2.6 TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015, pillar reach): ask.qwav.tech carries a subscribe box (type="email" plus a honeypot) that posts cross-origin to the qnfo.org double opt-in (POST https://qnfo.org/api/subscribe, CORS already allows this origin) with source ask.qwav.tech; nobody is subscribed without clicking the confirmation link; no binding, no model call; 2.2.5 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv in fetch and scheduled, so ask, question-generation and judge calls are counted in ai_call_counters (worker qnfo-ai-search); 2.2.4: a code comment no longer quotes a NARRATIVE-PROMPT-GUARD-1 phrase (no behaviour change); 2.2.3 ASK-HUNG-REQUEST-1 (#1839, pillar: reach): every await on /api/ask has a deadline (stream writes 15 s, retrieval 25 s, graph 12 s, model start 30 s, model idle 45 s, whole answer 150 s), so a visitor who stops reading ends the answer as limited 'client-gone' and an upstream overrun ends it with an error event; the event is always logged (9 'had hung' exceptions in 72h had none); ASK-RETRIEVAL-DEFINITIONS-1 (#1813): a glossary of the program's own terms (JPCUB, joules-per-solution, distinction-lattice, DLF; extensible in pipeline_flags 'ask_glossary') puts the defining paper first, named entities alone feed the keyword pass, paper sections split at level-1 headings and match on six-letter stems, the prompt no longer asks for an open problem on every answer, and the retrieval eval always includes the defined terms' golden questions and records their ranks (ask_evals.detail.defs); ASK-IDEA-HANDOFF-1 (#1936): an answer the corpus cannot give says that the question goes to the ideas pipeline (idea-hub ASK-GAP-1) and links ideas.qnfo.org; idea thread links use /s/<id> (the #/s/ form landed on the home page); 2.2.2 ASK-JUDGE-1 (pillar: reach): judge() reported judged:0 on 2026-10-03 with 3 eligible answers because every failure was swallowed; it now counts and names them (errors, no_json, bad_counts, last_error, head of the first unparseable output) in ask_loop_runs, and its output budget is 3000 tokens (was 1200; deepseek-v4-flash is a reasoning model, so a thinking-only reply is the suspected cause, unverified until the next 03:41 tick); 2.2.1 FLEET-CTL-ROLLOUT-1.6 (#1775): fleet command-line link before </body>; ASK-GRAPH-ELLIPSIS-1 (#1769): graph labels end in ASCII "..."; ASCII-SOURCE-1: non-ASCII written as escapes (the deploy uploads Latin-1; the page showed mojibake)
 var WORKER = "qnfo-ai-search";
 var DEFAULT_INSTANCE = "qnfo-corpus";
 
@@ -439,6 +439,82 @@ async function conceptSeeds(env, q) {
 // ---------------------------------------------------------------- retrieval
 function slugOf(key) { return String(key || "").replace(/^.*\//, "").replace(/\.(md|markdown|txt|pdf)$/i, ""); }
 function headingOf(text) { var m = String(text || "").match(/^#\s+(.+)$/m); return m ? m[1].trim().slice(0, 200) : ""; }
+// ASK-LEXICAL-CATALOG-1 (2.2.7, pillar research). Measured 2026-10-06: the AI Search instance qnfo-corpus has source null
+// and is filled only by POST /ingest, which nothing calls; its newest item is from 2026-08-11. None of the 22 golden
+// papers (all published since 2026-09-03) was retrievable by vector search even by exact title, so golden MRR was 0.23 on
+// a live replay and Ask could not find any recent paper. This leg ranks the published catalog itself (title counted
+// twice, abstract once, six-letter stems, BM25) and merges its best hits into the groups the vector and keyword passes
+// build. It makes no model call. The catalog is read from the gateway list (CATALOG_PAGE rows a page), cached per isolate
+// for CATALOG_TTL_MS, refreshed in the background after that, and awaited at most CATALOG_WAIT_MS per question, so a slow
+// gateway costs at most that and falls back to the 2.2.6 path. The golden questions are written from abstracts, which
+// favours an abstract-matching ranker: the live grounded share and visitor ratings, not golden MRR alone, judge this.
+// The catalog and the vector corpus barely overlap (the older essays are vector-only), so a fixed lexical score would
+// outrank a vector hit on the exact title a visitor typed (live replay: "orchestrating quantum future" fell from 1 to 3).
+// A title query (the quoted span, or a whole question of 2 to 5 content words) therefore lifts every candidate whose
+// title or slug contains all of its words to TITLE_SCORE, whichever pass found it.
+var CATALOG_TTL_MS = 30 * 60 * 1000, CATALOG_WAIT_MS = 3000, CATALOG_PAGE = 200, CATALOG_MAX_PAGES = 5;
+var LEX_TOP = 3, TITLE_SCORE = 0.8, LEX_SCORE = 0.7, LEX_STEP = 0.03, LEX_MIN_REL = 0.5, BM25_K1 = 1.2, BM25_B = 0.75;
+var LEX_STOP = new Set("the and for with from into onto than then that this these those what which when where while whom whose how why can could would should may might must does did doing done are was were been being has have had its their there here such each per via over under between about after before upon also only very much many more most less least other same some any all both either neither not nor but yet so".split(" "));
+var _catalog = { at: 0, idx: null, loading: null };
+function lexTokens(s) {
+  return (String(s || "").toLowerCase().match(/[a-z0-9]+/g) || []).filter(function (w) { return w.length >= 3 && !LEX_STOP.has(w) && !STOP.has(w); }).map(function (w) { return w.length > 6 ? w.slice(0, 6) : w; });
+}
+function titleQueryTokens(q) {
+  var m = String(q || "").match(/[\u201c"]([^\u201d"]{3,200})[\u201d"]/);
+  var t = Array.from(new Set(lexTokens(m ? m[1] : q)));
+  return m ? (t.length >= 1 ? t : []) : (t.length >= 2 && t.length <= 5 ? t : []);
+}
+function buildCatalogIndex(papers) {
+  var docs = [], df = new Map(), total = 0, seen = new Set();
+  (papers || []).forEach(function (p) {
+    if (!p || !p.slug || seen.has(p.slug) || JUNK_SLUG.test(p.slug)) return;
+    seen.add(p.slug);
+    var tf = new Map(), t = lexTokens(p.title), a = lexTokens(p.abstract);
+    t.forEach(function (w) { tf.set(w, (tf.get(w) || 0) + 2); });
+    a.forEach(function (w) { tf.set(w, (tf.get(w) || 0) + 1); });
+    var len = 2 * t.length + a.length;
+    docs.push({ slug: p.slug, title: String(p.title || ""), abstract: String(p.abstract || ""), doi: p.doi || null, tf: tf, len: len });
+    total += len;
+    tf.forEach(function (_, w) { df.set(w, (df.get(w) || 0) + 1); });
+  });
+  return { docs: docs, df: df, n: docs.length, avg: docs.length ? Math.max(1, total / docs.length) : 1, bySlug: new Map(docs.map(function (d) { return [d.slug, d]; })) };
+}
+function lexSearch(idx, query, k) {
+  if (!idx || !idx.n) return [];
+  var qt = Array.from(new Set(lexTokens(query)));
+  if (!qt.length) return [];
+  var hits = [];
+  idx.docs.forEach(function (d) {
+    var s = 0;
+    qt.forEach(function (w) {
+      var f = d.tf.get(w) || 0;
+      if (!f) return;
+      var n = idx.df.get(w) || 0, idf = Math.log(1 + (idx.n - n + 0.5) / (n + 0.5));
+      s += idf * f * (BM25_K1 + 1) / (f + BM25_K1 * (1 - BM25_B + BM25_B * d.len / idx.avg));
+    });
+    if (s > 0) hits.push({ slug: d.slug, s: s, doc: d });
+  });
+  return hits.sort(function (a, b) { return b.s - a.s; }).slice(0, k || LEX_TOP);
+}
+async function loadCatalog(env) {
+  var path = function (off) { return "/papers?format=json&limit=" + CATALOG_PAGE + "&offset=" + off; };
+  var first = await up(env, "GATEWAY", UP.papers, path(0), null, 8000);
+  if (!first || !Array.isArray(first.papers)) return null;
+  var total = Math.min(Number(first.total) || first.papers.length, CATALOG_PAGE * CATALOG_MAX_PAGES), offs = [];
+  for (var off = CATALOG_PAGE; off < total; off += CATALOG_PAGE) offs.push(off);
+  var rest = await Promise.all(offs.map(function (o) { return up(env, "GATEWAY", UP.papers, path(o), null, 8000); }));
+  var papers = first.papers.slice();
+  rest.forEach(function (r) { if (r && Array.isArray(r.papers)) papers = papers.concat(r.papers); });
+  return buildCatalogIndex(papers);
+}
+// The index, loading it on first use; after CATALOG_TTL_MS the old index is still served while one refresh runs.
+function catalogIndex(env) {
+  var fresh = _catalog.idx && Date.now() - _catalog.at < CATALOG_TTL_MS;
+  if (!fresh && !_catalog.loading) {
+    _catalog.loading = loadCatalog(env).then(function (idx) { if (idx && idx.n) { _catalog.idx = idx; _catalog.at = Date.now(); } return _catalog.idx; }).catch(function () { return _catalog.idx; }).finally(function () { _catalog.loading = null; });
+  }
+  return _catalog.idx ? Promise.resolve(_catalog.idx) : (_catalog.loading || Promise.resolve(null));
+}
 async function corpusSearch(env, query, limit) {
   try {
     var r = await env.AI_SEARCH.get(DEFAULT_INSTANCE).search({ query: query, limit: limit, returnMetadata: true });
@@ -452,6 +528,7 @@ async function retrieve(env, query, cfg) {
   var terms = (named.length ? named : keywords(query)).slice(0, cfg.kw_terms);
   var defs = glossaryHits(query);
   var t0 = Date.now();
+  var catP = deadline(catalogIndex(env), CATALOG_WAIT_MS, "catalog").catch(function () { return null; });
   var res = await Promise.all([corpusSearch(env, query, cfg.retrieval_limit)].concat(terms.map(function (t) { return up(env, "GATEWAY", UP.papers, "/papers?format=json&limit=4&search=" + encodeURIComponent(t), null, 8000); })).concat(defs.map(function (d) { return pinPaper(env, d.slug, query); })));
   var chunks = res[0], kw = res.slice(1, 1 + terms.length), defined = res.slice(1 + terms.length);
   var groups = new Map();
@@ -471,8 +548,30 @@ async function retrieve(env, query, cfg) {
     g.score = Math.max(g.score, c.score || 0);
     if (g.chunks.length < 2) g.chunks.push(String(c.text || (c.content && c.content[0] && c.content[0].text) || ""));
   });
+  // ASK-LEXICAL-CATALOG-1: the catalog's best BM25 hits (at least LEX_MIN_REL of the best one) enter at LEX_SCORE, LEX_STEP
+  // lower per rank; a paper the vector or keyword pass already found keeps the higher of its two scores.
+  var cat = await catP, lex = lexSearch(cat, query, LEX_TOP), tq = titleQueryTokens(query);
+  var addLex = function (h, s, rank) {
+    var g = groups.get(h.slug);
+    if (!g) { groups.set(h.slug, { slug: h.slug, score: s, lex: rank, chunks: [h.doc.title + "\n\n" + h.doc.abstract] }); return; }
+    g.score = Math.max(g.score, s); g.lex = g.lex || rank;
+    if (!g.chunks.length) g.chunks.push(h.doc.title + "\n\n" + h.doc.abstract);
+  };
+  lex.forEach(function (h, i) { if (h.s >= LEX_MIN_REL * lex[0].s) addLex(h, LEX_SCORE - i * LEX_STEP, i + 1); });
+  if (tq.length) {
+    // The title query is also run on its own, so a quoted title is a candidate even when the rest of the question ranks
+    // other papers first; then every candidate whose title or slug holds all its words is lifted.
+    lexSearch(cat, tq.join(" "), LEX_TOP).forEach(function (h) { if (!groups.has(h.slug)) addLex(h, 0, 0); });
+    groups.forEach(function (g) {
+      var c = cat && cat.bySlug.get(g.slug);
+      var have = new Set(lexTokens(g.slug.replace(/[-_]+/g, " ") + " " + (c ? c.title : "") + " " + g.chunks.map(headingOf).join(" ")));
+      // Ties between title matches break on the evidence each had before the lift.
+      if (tq.every(function (w) { return have.has(w); })) { g.score = Math.max(g.score, TITLE_SCORE + 0.01 * g.score); g.title_match = true; }
+    });
+  }
   var top = Array.from(groups.values()).sort(function (a, b) { return b.score - a.score; }).slice(0, cfg.max_sources + 3);
-  var metas = await Promise.all(top.map(function (g) { return up(env, "GATEWAY", UP.papers, "/papers/" + encodeURIComponent(g.slug), null, 8000); }));
+  // A catalog row with an abstract is the source's metadata; only the others are fetched one by one (ASK-LEXICAL-CATALOG-1).
+  var metas = await Promise.all(top.map(function (g) { var c = cat && cat.bySlug.get(g.slug); return c && c.abstract ? { slug: c.slug, title: c.title, doi: c.doi, abstract: c.abstract } : up(env, "GATEWAY", UP.papers, "/papers/" + encodeURIComponent(g.slug), null, 8000); }));
   var items = top.map(function (g, i) {
     var m = metas[i];
     return {
