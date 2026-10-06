@@ -21,6 +21,10 @@ database_id = "35e2e573-92f3-46ac-83c6-22f6429fc5e5"
 [[services]]
 binding = "EMAIL"
 service = "qnfo-email"
+# EMAIL-ORCH-FOLD-1 (#1756, CLAUDE.md #1703 rule): qnfo-email 2.5.1+ authenticates a service binding by ctx.props.caller,
+# so the folded qnfo-email-orchestrator member's /send calls (and this worker's own) need no key copy.
+# Installed by qnfo-ops BINDING-PROPS-APPLY-1 on the canonical deploy.
+props = { caller = "qnfo-cloud-ops" }
 
 # secret (set via wrangler secret put): EMAIL_API_KEY
 # secret (set via wrangler secret put): GH_TOKEN

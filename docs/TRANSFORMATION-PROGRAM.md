@@ -1,6 +1,8 @@
 # Quniverse transformation program (TRANSFORMATION-PROGRAM-1)
 
-Version 1.0, written 2026-10-06 from a live read of D1 `qnfo-audit`, the Cloudflare account and this repository.
+Version 1.1 (2026-10-06): 1.0 written from a live read of D1 `qnfo-audit`, the Cloudflare account and this repository;
+1.1 adds a second read (section 1.10), where each autonomy-score point is lost (1.11), and T9 (a deploy path that cannot
+lock itself out), each measured 2026-10-06 06:30-07:15Z.
 Owner directive 2026-10-06: *audit the systemwide backlog and roadmap for fleet improvements, optimisations and
 enhancements; not patches and bugfixes but a continuing program of active transformational change, systemwide, fully
 automatic and 100% autonomous; everything is in scope, including complete refactors, overhauls and teardown/rebuild.*
@@ -9,7 +11,7 @@ automatic and 100% autonomous; everything is in scope, including complete refact
 roadmap order and decision rules; `docs/STRATEGY.md` wins on identity, audiences, channels and KPIs. This program is an
 input to both: it names the transformations, the order, the levers, the executor loop of each one and the measurement
 that closes it. Its rows live where the fleet acts: `roadmap_implementation` (items `RM-TP-*`) and `agent_issues`
-(epics `TP-*`). The scoreboard is the existing `metric_registry`; no new metric is introduced. Hand edits land by PR
+(epics `TP-*`). The scoreboard is the existing `metric_registry` (1.1 adds one, T9.4, with its trigger). Hand edits land by PR
 with a version bump; the measured section is re-read, never remembered.
 
 ---
@@ -68,10 +70,11 @@ qnfo-autonomy-scorer, qnfo-fleet-dashboard, fleet-exec, qnfo-lifecycle), and fou
   auto-merged (CONTROL-PLANE-MANUAL-1); "stale base" when main moved; "anchor occurs 0 times"; "patch does not apply";
   "file larger than 60000 chars needs an anchor"; "no single var VERSION line"; "source issue came from a chat session".
   The code agent edits one anchor in one file; it does not run the 154 offline suites before opening a PR. Read from
-  the source: the orchestrator stores a verified patch and waits for `.github/workflows/code-task-publish.yml` to push
-  the branch, and that workflow has no cron and runs only after another workflow has run, so publish latency is
-  unbounded; the merge runner opens and merges at most one PR per hourly tick (`code_merge_max_merges_per_tick`,
-  default 1); the planner trusts `REACH-IDEA-*` issues that the merge runner's trusted-origin list refuses, so every
+  the source: the orchestrator stores a verified patch and `.github/workflows/code-task-publish.yml` pushes the branch
+  after the next main push (measured 2026-10-06: 30 runs in 23 minutes, ready to `branch_pushed` in 24 s, so publish
+  is not the wait); qnfo-fleet-control opens the PR only inside the hourly merge tick, so ready to `pr_opened_at` is
+  40 to 50 minutes on every task with a PR and 5 hours overnight (ready 01:00Z, opened 06:00Z on 2026-10-03), and the
+  runner merges at most `code_merge_max_merges_per_tick` (3) per hourly tick; the planner trusts `REACH-IDEA-*` issues that the merge runner's trusted-origin list refuses, so every
   reach-idea task is built and then refused; nine workers are on the `CM_DENY` list; a PR touching more than one file
   is refused; `needs_human` is a terminal state for an anchor that occurs 0 or 2 times, a file over 60,000 characters
   without an anchor, or a JavaScript verifier that is not "enforced"; 19 of 153 suites are referenced by no workflow.
@@ -129,6 +132,53 @@ passing probe and reopen them on relapse; work claims and secret locks that let 
 version and charter guards; the charter and portfolio loops that rewrite their own documents daily; 18 of 18 MVP
 components serving. None of these is torn down by this program; several are the executors of it.
 
+### 1.10 Second read: corrections (measured 2026-10-06, 06:30-07:15Z)
+
+A second session re-read the numbers this program rests on before acting on them (SESSION-EFFECTIVENESS-1: check that a
+gap is measured before treating it as a gap). Four of them do not hold as written:
+
+- **Contracts that need a session.** Of the 92 `remediation_contracts` rows in `needs-machine-probe`, 82 belong to issues
+  that are already closed and 1 to a wontfix; **9** belong to open issues. The open-issue number is the session dependence
+  (an open issue only a session can close); the closed-issue rows are missing relapse detection, a smaller and different
+  gap. T5 lever 2 and the scoreboard are split accordingly.
+- **Subscribe boxes.** ipatent.qnfo.org already serves an email input (2 on the home page), as do qnfo.org,
+  papers.qnfo.org, ideas.qnfo.org (PR 655, live 05:52Z) and q08.org. The one public surface without a box was
+  ask.qwav.tech (qnfo-ai-search 2.2.6, PR 669, posting cross-origin to the qnfo.org double opt-in that already allows the
+  origin).
+- **Freshness is part stale and part frozen.** `freshness_guard` reads 13 fresh of 17, which is the OODA observe stage
+  (3.8, the weakest stage, so it also caps `ooda_closure`) and half of `s2_coordination`. Of the 4 stale rows, `kaizen`
+  monitors a worker retired in PR 657, `version_queue` is graded as a heartbeat although version requests arrive as events,
+  and `amh_coverage` reads 24 of 42 models never probed after the prober fold. Two rows (`handoffs`, `vault_notes_index`)
+  are no longer in the checker's signal list, so nothing re-checks them: `handoffs` still reads fresh at a checked_at of
+  2026-09-29 while its newest row is 2026-09-28. A frozen row is counted as if it were measured.
+- **The undecided issues are mostly decisions already made.** `ooda_decide` counts 6 open issues with no next action.
+  Three (1750, 1901, 1903) are owner or third-party decisions with the default recorded on the issue (owner dismissed the
+  eligibility card for 1901 on 2026-10-04); 2002 closes itself on q08's next published piece; 1898's state lives in the
+  personal-life D1, which a `qnfo-audit` probe cannot read (the personal/research plane separation, by design). A probe
+  that can never pass would raise the score and measure nothing, so none was written; T5 lever 6 gives such issues a
+  state of their own instead.
+
+### 1.11 Autonomy scores: where each point is lost
+
+`autonomy_scores` on 2026-10-06 (composite 4.3 unweighted, SAI 3.39 of 5). The table names, for each dimension below
+5, the term that binds it and the lever in this program that moves it. Scores are only raised by changing what they
+measure, never by changing the formula to read higher (rule 1 of the core prompt; the guard metrics hold).
+
+| Dimension | Score | Binding term (formula) | Lever |
+|---|---|---|---|
+| `s5_policy` | 1.4 | `impact_thresholds` MET 2 of 7 (business gates: subscribers, credibility, funding) | T7; owner-held items stay on the owner list |
+| `issue_flow` | 3.3 | close rate 96.1% x pressure 0.685 (73 open vs ceiling 50) | closures with evidence (7 probes due to pass on 2026-10-06), T5.2, fewer duplicate filings |
+| `sai_weighted` | 3.39 | largest shortfall `self_improv` 0.434 = kaizen x (1 - step x open issues) + closure + heal | open issues again; the same closures move it |
+| `ooda_observe`, `ooda_closure` | 3.8 | `freshness_guard` 13 of 17 fresh | T5 lever 7 (retired-producer and frozen rows) |
+| `s2_coordination` | 4.4 | live==repo 40/40 and freshness 13/17 | T5 lever 7 |
+| `ooda_decide` | 4.5 | 66 of 73 open issues with a next action | T5 lever 6 (blocked-external state; recorded for 5 issues 2026-10-06, epics 2025-2027 filed with probes) |
+| `overall` | 4.3 | mean of 17, with `watchmaker_inverted` a hand score of 4.8 from 2026-09-24, past its next date | T5 lever 8: measure it from `watchmaker_index` (expected to read lower: 3 counted ops today) |
+| SAI `thinking` | 0.6 | `report_card_inputs.arc_agi_10task_pass_rate` = 0.2 | a model benchmark; not moved by this program while spend caps are breached |
+
+Two of these are measurement corrections that will lower a reading before they raise one (`watchmaker_inverted`, the
+frozen `handoffs` row). That is the intended direction: a score that reads high because nothing re-measures it is the
+failure mode the guard metrics exist to catch.
+
 ---
 
 ## 2. Diagnosis: five structural causes
@@ -149,7 +199,7 @@ components serving. None of these is torn down by this program; several are the 
 
 ---
 
-## 3. The program: eight transformations
+## 3. The program: nine transformations
 
 Each transformation names its end state, the measured start, the levers in order, the loop that executes it, the
 metric and probe that close it, and what is torn down. Levers marked **(code)** are single-file changes a code task can
@@ -169,9 +219,11 @@ evidence. A session is called only when a task fails twice. `code_task_success_r
 1. **(code)** Trusted-origin parity: the merge runner's trusted list equals the planner's (`REACH-IDEA-*` and
    `METRIC-TRIGGER-*` included) so a task the planner builds is never refused for provenance.
    `qnfo-fleet-control/worker.js`.
-2. **(code)** The orchestrator pushes its own branch through the GitHub Contents API with the fleet token the merge
-   runner already holds, instead of waiting for `code-task-publish.yml`; publish latency drops from unbounded to one
-   tick, and that workflow is deleted.
+2. **(code)** PR-open on the 20-minute tick (TP-1b2, `agent_issues` 2017): fleet-control's `*/20` cron also runs
+   `codeMergeTick` in an open-only mode, so a pushed branch has its PR (and its CI) within 20 minutes instead of at
+   the next hour; merges stay hourly. `qnfo-fleet-control/worker.js`. (The first form of this lever, the orchestrator
+   pushing through the Contents API, was refuted by measurement on 2026-10-06 and closed as issue 2006: the push
+   already takes under a minute, and the orchestrator holds no GitHub credential by design.)
 3. **(code)** Rebase-before-publish: re-anchor against current main immediately before the push and retry once on
    "stale base" or "patch does not apply" (7 closures named these). `qnfo-code-orchestrator/worker.js`.
 4. **(code)** Anchor repair instead of `needs_human`: when the anchor occurs 0 or 2 times, ask the model for a new
@@ -324,8 +376,24 @@ where the DoD names a table and a count.
 5. **(code)** `security_open_issues` counts every issue whose title starts with `SEC-` **or** whose category is
    `security` **or** that names an unauthenticated route, so the security pillar is graded, not asserted.
 
-**Executor.** fleet-control code tasks.
-**Probe.** `breach_code_task_pct` >= 30; `SELECT COUNT(*) FROM remediation_contracts WHERE status='needs-machine-probe'` = 0.
+6. **(data, done 2026-10-06 for 5 issues)** A blocked-external state: an open issue whose next step is an owner decision,
+   a third party or another worker's self-closing loop records that disposition in `issue_triage.remediation`
+   (`blocked-external: <who> <what>; default in effect: <x>; reopen trigger: <y>` or `self-closing: <worker> <condition>`).
+   The scorer already counts a triage remediation as a next action, so this needs no code, only the honest record the
+   issue text already carried: 1750, 1898, 1901, 1903 (blocked-external) and 2002 (self-closing). **(code, later)** the
+   dashboard lists blocked-external rows under the owner's queue with their default.
+7. **(code)** Freshness that measures: `freshness_guard` drops signals whose producer is RETIRED or FOLDED (`kaizen`),
+   grades event-driven tables as events (`version_queue`), and the scorer counts only rows re-checked within 48 hours,
+   reporting the rest as unmeasured (`handoffs`, `vault_notes_index`). `qnfo-ai-calibration` (the checker since
+   PROBER-FOLD-1) and the scorer's host after FOLD-WAVE-1.
+8. **(code)** `watchmaker_inverted` measured from `watchmaker_index` (5 x (1 - counted / ops measured)) in the daily
+   scoring, replacing the hand score; the two other judgement rows (`independent_decision`, `novelty`) get the same
+   treatment when a measured input exists, and stay judgement rows, dated, until then.
+
+**Executor.** fleet-control code tasks; lever 7 in qnfo-ai-calibration and the scorer host.
+**Probe.** `breach_code_task_pct` >= 30; `needs-machine-probe` contracts on **open** issues = 0 (9 on 2026-10-06; the 82 on
+closed issues get relapse probes where the issue names a metric, 11 of them); `ooda_observe` >= 4.5 with every counted
+row re-checked within 48 hours.
 
 ### T6. Durable execution: Workflows and Queues replace polling and tool budgets
 
@@ -385,11 +453,41 @@ public endpoints, no unauthenticated write surface, a Tail Worker for unsampled 
 
 ---
 
+### T9. A deploy path that cannot lock itself out
+
+**End state.** Retiring or deleting a worker can never make another worker undeployable, and a broken qnfo-ops can always
+be replaced: the deploy of the deployer has a path that does not run through its own live code.
+
+**Measured start (2026-10-06).** PR 657 deleted qnfo-kaizen and qnfo-skill-sync while three live service bindings still
+pointed at them (qnfo-ops `KAIZEN`, `SKILLSYNC`; qnfo-fleet-dashboard `SVC_QNFO_KAIZEN`). The canonical deploy re-declares
+every live binding, so Cloudflare refused both workers (error 10143) from 06:11Z; DANGLING-BINDING-PRUNE-1 only knew 10144.
+qnfo-ops deploys itself through its own live code, so its fix could not ship until the bindings were removed out of band
+(PR 661 unbind-service, PR 663 Durable Object exports, cf-ops-actions runs 06:20-06:25Z); both deploys were green at
+06:26-06:27Z (GitHub #660). A code-only bootstrap (`deploy-qnfo-ops.yml`, `scripts/raw_put.py`) exists but is not a fallback
+any loop takes.
+
+**Levers.**
+1. **(script)** Delete after unbind (DELETE-AFTER-UNBIND-1): cf-ops-actions `delete-worker` reads every live script's
+   bindings first and refuses while any service binding targets the worker, naming the binders; the retirement PR removes
+   the declarations, `unbind-service` removes the live ones, then the delete runs. `scripts/cf_ops_actions.py`.
+2. **(done, 2.38.43)** The deploy prune accepts 10143 as well as 10144.
+3. **(script)** Deployer fallback: when `/ops/deploy` fails for `qnfo-ops` itself, `canonical-deploy.yml` runs the
+   code-only bootstrap once (`deploy-qnfo-ops.yml` path) and records which path landed in `fleet_deploys`.
+4. **(probe)** A daily census of dangling service bindings (every script's `/settings`, the read used on 2026-10-06) written
+   to `worker_live_audit` and registered as `dangling_bindings` with its trigger in the same migration (METRIC-CLOSED-LOOP-1),
+   so a broken reference is found before a deploy needs it.
+
+**Executor.** sessions or the code loop for the two script levers; fleet-control's daily tick for the census.
+**Rows.** `roadmap_implementation` RM-TP-9-DEPLOY-NO-LOCKOUT; epic `agent_issues` 2025 with its `issue-2025` probe. T5 levers 7
+and 8 are `agent_issues` 2026 and 2027, each with a machine probe.
+**Probe.** 0 canonical-deploy failures with error 10143 or 10144 over 30 days; `dangling_bindings` 0.
+**Torn down.** The order "delete, then find the binders" that wave 2 followed.
+
 ## 4. Sequencing: waves gated by metrics, not dates
 
 | Wave | Entry | Content | Exit |
 |---|---|---|---|
-| W0 (now) | this document on main | T1.1-T1.7 and T1.9 (the engine's walls), T2.1 first retirements (PR 657), T7.1 subscribe boxes, T8.1 memory-mcp auth, T3.8 archive and applier deletion | `code_task_success_rate_30d` >= 0.45; `worker_count` <= 38 |
+| W0 (now) | this document on main | T1.1-T1.7 and T1.9 (the engine's walls), T2.1 first retirements (PR 657), T7.1 subscribe boxes, T8.1 memory-mcp auth, T3.8 archive and applier deletion, T9.1 and T9.4, T5.6-T5.8 | `code_task_success_rate_30d` >= 0.45; `worker_count` <= 38 |
 | W1 | W0 exit | T1.8 branch protection and control-plane merging, T1.10, T2.2-T2.4 one probe pass and heartbeats, T5.2 probe generator, T4.1-T4.2 cost lines and prefix cache, T3.5 one email transport, T7.2-T7.3 | `breach_code_task_pct` >= 30; `contracts_needing_probe` = 0; `worker_count` <= 32 |
 | W2 | W1 exit | T3.1-T3.4 folds and retirements, T3.6-T3.7 D1 folds and retention, T4.3-T4.6, T6.1 durable ops agent, T8.2-T8.3 | `worker_count` <= 26; `fleet_ai_run_rate_30d_usd` <= 40; `cron_schedules` <= 44 |
 | W3 | W2 exit | T6.2-T6.4 research and code loop on Workflows, T1.11 multi-file engine, T8.4-T8.5, research products (Ask QWAV public, living paper) only if the review gate reads MET | `worker_count` <= 24; `cron_schedules` <= 40; `watchmaker_index` 0; sessions used only for `CODE-TASK-NEEDS-SESSION-1` rows |
@@ -420,7 +518,7 @@ charter. A wave whose exit metric has not moved in 14 days is re-planned: the le
 
 ---
 
-## 6. Scoreboard (existing metrics; the program adds none)
+## 6. Scoreboard (existing metrics and autonomy dimensions; T9.4 adds one, with its trigger)
 
 | Metric | 2026-10-06 | W1 exit | W3 exit (end state) |
 |---|---|---|---|
@@ -429,7 +527,8 @@ charter. A wave whose exit metric has not moved in 14 days is re-planned: the le
 | `d1_databases` | 10 | 10 | 8 |
 | `code_task_success_rate_30d` | 0.29 | >= 0.6 | >= 0.6 |
 | `breach_code_task_pct` | 0 | >= 30 | >= 50 |
-| contracts `needs-machine-probe` | 91 | 0 | 0 |
+| contracts `needs-machine-probe` on open issues (1.10) | 9 | 0 | 0 |
+| contracts `needs-machine-probe` on closed issues (relapse probes) | 82 | <= 71 | metric-named ones probed |
 | `open_agent_issues` | 71 | <= 40 | <= 10 |
 | `metrics_in_breach` | 19 | <= 10 | 0 |
 | `fleet_ai_run_rate_30d_usd` | 61.67 | <= 50 | <= 40 |
@@ -439,6 +538,10 @@ charter. A wave whose exit metric has not moved in 14 days is re-planned: the le
 | `subscribers_growth_monthly` | 0 | >= 5 | >= 10 |
 | `credibility_events_90d` | 0 | >= 1 | >= 2 |
 | `security_open_issues` (graded per T5.5) | n/a | measured | 0 |
+| autonomy `ooda_observe` (1.11) | 3.8 | >= 4.5 | 5 |
+| autonomy `issue_flow` | 3.3 | >= 4.0 | 5 |
+| SAI (`sai_weighted`) | 3.39 | >= 3.6 | >= 4.0 |
+| `dangling_bindings` (T9.4; registered with its trigger when the census is built) | 0 at 06:28Z (read once) | 0 | 0 |
 
 ---
 

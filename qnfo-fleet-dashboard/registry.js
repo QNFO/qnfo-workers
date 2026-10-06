@@ -317,7 +317,7 @@ export const REGISTRY = {
   },
   {
    "name": "qnfo-email-orchestrator",
-   "url": "https://qnfo-email-orchestrator.q08.workers.dev/health"
+   "url": "https://qnfo-cloud-ops.q08.workers.dev/email-orch/health"
   },
   {
    "name": "qnfo-events",
@@ -369,7 +369,7 @@ export const REGISTRY = {
   },
   {
    "name": "qnfo-paper-indexer",
-   "url": "https://qnfo-paper-indexer.q08.workers.dev/health"
+   "url": "https://qnfo-infra.q08.workers.dev/indexer/health"
   },
   {
    "name": "qnfo-paper-reviser",

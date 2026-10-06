@@ -225,6 +225,10 @@ jobs:
       # a duplicate SEARCH, two no-block replies) through to a patch that git-applies, and runs the dashboard's own owner-card query.
       - name: SELF-REPAIR-1 offline suite (qnfo-code-orchestrator)
         run: node --no-warnings qnfo-code-orchestrator/self-repair.test.mjs
+      # NOOP-PROPOSAL-GATE-1 (#2018): a proposal that only rewords a string literal or a comment is refused before verify and fed
+      # back to the next rung; two in a row end needs_human; a code-like string change (model id, SQL) still passes.
+      - name: NOOP-PROPOSAL-GATE-1 offline suite (qnfo-code-orchestrator)
+        run: node --no-warnings qnfo-code-orchestrator/noop-gate.test.mjs
       # QDS-1: qds.css served; HTML 404s for browsers and JSON for API clients; the privacy notice; archive and QWAV hosts;
       # each paper's JSON-LD names its own licence (LICENSE-ONE-1).
       - name: QDS-1 gateway pages offline suite (qnfo-gateway)
@@ -383,6 +387,14 @@ jobs:
       # suite drives the real scheduled handler (tick, lookback, legacy trigger, ZENODO-CATCHUP-1).
       - name: CRON-SINGLE-TRIGGER-1 offline suite (qnfo-cloud-ops)
         run: node qnfo-cloud-ops/single-trigger.test.mjs
+      # EMAIL-ORCH-FOLD-1 (#1756): qnfo-email-orchestrator runs as a member of qnfo-cloud-ops on the single tick.
+      - name: EMAIL-ORCH-FOLD-1 offline suite (qnfo-cloud-ops 1.20.0)
+        run: node --no-warnings qnfo-cloud-ops/email-orch-fold.test.mjs
+      # SCORER-FOLD-1 and INDEXER-FOLD-1 (#1756): qnfo-autonomy-scorer runs in qnfo-observability, qnfo-paper-indexer in qnfo-infra.
+      - name: SCORER-FOLD-1 offline suite (qnfo-observability 1.3.0)
+        run: node --no-warnings qnfo-observability/scorer-fold.test.mjs
+      - name: INDEXER-FOLD-1 offline suite (qnfo-infra 1.3.0)
+        run: node --no-warnings qnfo-infra/indexer-fold.test.mjs
       - name: ZENODO-CATCHUP-1 and tick handler offline suite (qnfo-cloud-ops)
         run: node --no-warnings qnfo-cloud-ops/zenodo-catchup.test.mjs
       # SIGNAL-INTAKE-1 (qnfo-cloud-ops 1.19.1): the research scan admits error-correction papers only with an energy
@@ -453,6 +465,9 @@ jobs:
         run: |
           node --no-warnings qnfo-ai-search/ai-attribution.test.mjs
           node --no-warnings errata-hub/ai-attribution.test.mjs
+      # TP-7 lever 1 (TRANSFORMATION-PROGRAM-1 T7.1, #2015): ask.qwav.tech subscribe box posts to the qnfo.org double opt-in.
+      - name: TP-7.1 subscribe-box offline suite (qnfo-ai-search 2.2.6)
+        run: node --no-warnings qnfo-ai-search/subscribe-box.test.mjs
 
       # GROUND-OR-SLOT-1 + GROUND-THIN-FAILFAST-1 (agent_issues 1751): the arXiv OR fallback keeps its query slot, and a
       # grounding too thin to pass gate-refcount stops at ground instead of running the whole pipeline.
@@ -504,6 +519,9 @@ jobs:
       # DANGLING-SERVICE-UNBIND-1 + DANGLING-BINDING-10143-1 (#1756): a binding to a deleted worker never blocks a deploy.
       - name: DANGLING-SERVICE-UNBIND-1 offline suite (cf_ops_actions unbind-service)
         run: python3 scripts/cf_ops_unbind_service_test.py
+      # DELETE-AFTER-UNBIND-1 (TP-9 lever 1, #2025): delete-worker refuses while any live service binding targets the worker.
+      - name: DELETE-AFTER-UNBIND-1 offline suite (cf_ops_actions delete-worker)
+        run: python3 scripts/cf_ops_delete_worker_test.py
       - name: DANGLING-BINDING-10143-1 offline check (qnfo-ops 2.38.43)
         run: node --no-warnings qnfo-ops/dangling-10143.test.mjs
       - name: BROWSER-SAMPLE-1 offline suite (qnfo-gateway, #1890)

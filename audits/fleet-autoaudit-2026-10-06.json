@@ -1,46 +1,14 @@
 {
-  "audited_at": "2026-10-06 06:19:18",
+  "audited_at": "2026-10-06 06:49:34",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
-    "_deploy_settle": {
-      "settled": [],
-      "waited_for": [
-        "qnfo-ops"
-      ]
-    },
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-ai-calibration",
-        "qnfo-fleet-control",
-        "qnfo-ops"
-      ],
-      "refreshed": true,
-      "second_pass": [
-        "qnfo-ops"
-      ]
-    },
     "_guard_rc": 0,
-    "ahead": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-ops/deployed-current.worker.js",
-        "dir": "qnfo-ops",
-        "live": "2.38.41-ds-402-breaker",
-        "repo": "2.38.42-retire-wave-2",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "ahead": [],
     "cf_script_list": true,
     "content_checked": true,
     "content_drift": [],
     "cron_only": [
-      {
-        "crons": [
-          "*/20 * * * *"
-        ],
-        "dir": "ai-health-prober",
-        "worker": "ai-health-prober"
-      },
       {
         "crons": [
           "0 */3 * * *",
@@ -50,15 +18,8 @@
         "worker": "qnfo-email-orchestrator"
       }
     ],
-    "cron_only_count": 2,
-    "drift": [
-      {
-        "dir": "qnfo-ops",
-        "live": "2.38.41-ds-402-breaker",
-        "repo": "2.38.42-retire-wave-2",
-        "worker": "qnfo-ops"
-      }
-    ],
+    "cron_only_count": 1,
+    "drift": [],
     "live_err": [],
     "multi_version": [],
     "multi_version_count": 0,
@@ -107,6 +68,7 @@
     "not_a_worker_count": 9,
     "not_deployed_dirs": [
       "agent-orchestrator",
+      "ai-health-prober",
       "audit-hub",
       "companion-hub",
       "errata-orchestrator",
@@ -172,11 +134,15 @@
       "skills-discovery",
       "vault-indexer"
     ],
-    "not_deployed_notdrift": 65,
+    "not_deployed_notdrift": 66,
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
         "worker": "qnfo-agent-orchestrator-legacy-dup"
+      },
+      {
+        "dir": "ai-health-prober",
+        "worker": "ai-health-prober"
       },
       {
         "dir": "audit-hub",
@@ -435,16 +401,10 @@
         "worker": "vault-indexer"
       }
     ],
-    "retired_present": [
-      {
-        "dir": "ai-health-prober",
-        "marker": "FOLDED",
-        "worker": "ai-health-prober"
-      }
-    ],
-    "retired_present_count": 1,
+    "retired_present": [],
+    "retired_present_count": 0,
     "scope": "all",
-    "sync": 36,
+    "sync": 37,
     "sync_workers": [
       {
         "dir": "calendar-api",
@@ -523,7 +483,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.16-dispatch-dedupe",
+        "version": "0.3.17-noop-gate",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -543,7 +503,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.128-pending-prefix",
+        "version": "0.4.129-mvp-fold-aware",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -585,6 +545,11 @@
         "dir": "qnfo-observability",
         "version": "1.2.16-codeagent",
         "worker": "qnfo-observability"
+      },
+      {
+        "dir": "qnfo-ops",
+        "version": "2.38.43-dangling-10143",
+        "worker": "qnfo-ops"
       },
       {
         "dir": "qnfo-paper-indexer",
@@ -632,10 +597,10 @@
   "rows": {
     "ai-health-prober": {
       "before": null,
-      "http": null,
+      "http": 404,
       "live": null,
       "match": 0,
-      "note": "CRON_ONLY+RETIRED_PRESENT",
+      "note": "NOT_DEPLOYED",
       "worker": "ai-health-prober"
     },
     "audit-hub": {
@@ -1063,9 +1028,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.16-dispatch-dedupe",
+      "before": "0.3.17-noop-gate",
       "http": 200,
-      "live": "0.3.16-dispatch-dedupe",
+      "live": "0.3.17-noop-gate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1175,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.128-pending-prefix",
+      "before": "0.4.129-mvp-fold-aware",
       "http": 200,
-      "live": "0.4.128-pending-prefix",
+      "live": "0.4.129-mvp-fold-aware",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1311,11 +1276,11 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.38.42-retire-wave-2",
+      "before": "2.38.43-dangling-10143",
       "http": 200,
-      "live": "2.38.41-ds-402-breaker",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "2.38.43-dangling-10143",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-ops"
     },
     "qnfo-outreach": {
