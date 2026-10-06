@@ -266,6 +266,9 @@ jobs:
       - name: GOOGLE-IDENTITY-DETECT-1 offline suite (qnfo-fleet-control)
         if: ${{ !cancelled() }}
         run: node qnfo-fleet-control/google-identity.test.mjs
+      - name: CRAWL-HEALTH-1 offline suite (qnfo-fleet-control)
+        if: ${{ !cancelled() }}
+        run: node qnfo-fleet-control/crawl-health.test.mjs
       - name: DISCOVERY-1 offline suite (qnfo-gateway)
         if: ${{ !cancelled() }}
         run: node qnfo-gateway/discovery.test.mjs
