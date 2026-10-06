@@ -11,7 +11,7 @@ let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 const hosts = Object.keys(JSON.parse("{" + (src.match(/var RETIRED_HOSTS = \{([^}]*)\}/) || [, ""])[1] + "}"));
 ok(hosts.length === 12 && hosts.every((h) => /^[a-z0-9-]+\.qnfo\.org$/.test(h)), "twelve retired qnfo.org hosts", hosts);
-ok(hosts.indexOf("qnfo.org") < 0 && !hosts.some((h) => /^(www|papers|ipatent|lifecycle|ops|fleet|ideas|memory|personal|ai|research-exec|archive|legal|graph-api)\./.test(h)), "no live host is in the retired list");
+ok(hosts.every((h) => h !== "qnfo.org") && !hosts.some((h) => /^(www|papers|ipatent|lifecycle|ops|fleet|ideas|memory|personal|ai|research-exec|archive|legal|graph-api)\./.test(h)), "no live host is in the retired list");
 for (const h of hosts) {
   const r = await W.fetch(new Request("https://" + h + "/some/path"), {}, { waitUntil() {} });
   const t = await r.text();
