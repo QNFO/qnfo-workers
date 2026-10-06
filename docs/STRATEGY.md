@@ -1,6 +1,6 @@
 # QNFO unified strategy (STRATEGY-1)
 
-Version 1.11, 2026-10-06 (1.11: AI spend caps steer model choice and never stop work, BUDGET-SOFT-ROUTE-1, section 5; 1.10: research code as a reach channel and the research line widened to AI, systems and formal mathematics, CODE-REACH-1, `docs/CODE-REACH-PROGRAM.md`, sections 2.3 and 7; 1.9: the owner's standing grant OWNER-STANDING-GRANT-1 to retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 5 and 9; 1.8: iPatent promoted to the QNFO flagship tool on owner direction, sections 2.1, 2.4a, 3, 5 and 7, and the social cadence counted from the 2026-10-01 reset; 1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5; 1.6: funder replies watched by the fleet, applications use the qnfo.org address, section 5; 1.7: the fleet measures and improves its own effectiveness: the distribution and outreach learners, the reward they can actually measure, and inbound mail answered within 72h, section 6.4). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
+Version 1.12, 2026-10-06 (1.12: core prompt rule 8 is deleted, RULE-8-RETIRED-1: the fleet sets its own spend caps and may delete data on its own, recorded with evidence; suppression, opt-out, outreach consent and cadence caps and the personal/research separation stay, section 5; 1.11: AI spend caps steer model choice and never stop work, BUDGET-SOFT-ROUTE-1, section 5; 1.10: research code as a reach channel and the research line widened to AI, systems and formal mathematics, CODE-REACH-1, `docs/CODE-REACH-PROGRAM.md`, sections 2.3 and 7; 1.9: the owner's standing grant OWNER-STANDING-GRANT-1 to retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 5 and 9; 1.8: iPatent promoted to the QNFO flagship tool on owner direction, sections 2.1, 2.4a, 3, 5 and 7, and the social cadence counted from the 2026-10-01 reset; 1.1: owner delegation of social accounts, section 5; 1.2: plan status at closeout, section 10.1; 1.3: LinkedIn publishes from the Buffer queue, GA4 and Search Console retired as fleet sources; 1.4: owner queue delegation, section 5; 1.5: the 31 October grants submitted on owner direction, section 5; 1.6: funder replies watched by the fleet, applications use the qnfo.org address, section 5; 1.7: the fleet measures and improves its own effectiveness: the distribution and outreach learners, the reward they can actually measure, and inbound mail answered within 72h, section 6.4). **This is the single source of truth** for identity, positioning, audiences, channels, outreach,
 signals, KPIs, portfolio and business objectives. Where any other document disagrees, this one wins; section 11 lists every
 conflict it resolves. Owner directive behind it (2026-10-01): *audit the front end and outreach, unify identity and strategy,
 automate distribution across all channels, maximise reach and prestige, and manage the portfolio and its ROI.*
@@ -226,9 +226,9 @@ resolution. Standing decisions:
   stop at the first real dependent; verified table copies plus an R2 dump read back by SHA-256 before a database is
   deleted; a per-request fallback and an automatic revert on a model switch. Recorded as
   `pipeline_flags.owner_standing_grant` = `2026-10-05`. First uses: `jnl-audit` deleted after verified copies (#1822),
-  `qnfo-venue-radar` and `qnfo-signal-loop` retired (#1756), the twin moved to glm-5.3-flash (#1818). Caps stay
-  owner-held and are never raised; a breached AI spend cap moves work to the cheapest capable model and never stops it
-  (BUDGET-SOFT-ROUTE-1, owner directive 2026-10-06).
+  `qnfo-venue-radar` and `qnfo-signal-loop` retired (#1756), the twin moved to glm-5.3-flash (#1818). Since
+  RULE-8-RETIRED-1 (owner directive 2026-10-06: rule 8 is deleted) the fleet sets its own spend caps and records why;
+  a breached AI spend cap moves work to the cheapest capable model and never stops it (BUDGET-SOFT-ROUTE-1).
 
 **Never automatic (draft only, or not at all):**
 - any change to the owner's name, CV or public profiles (exception below: bios on accounts the fleet holds credentials for);
@@ -239,8 +239,10 @@ resolution. Standing decisions:
 - anything that names a third party (person or company) critically, or makes a claim not present in the source work;
 - topics outside the four pillars (politics, news commentary);
 - follows, likes or reposts at scale;
-- paid promotion; raising any spend cap; credentials; deleting data that has no verified backup (unchanged "Never" items;
-  a deletion after a verified backup is the standing grant above).
+- paid promotion; credentials (unchanged "Never" items). Changing a spend cap and deleting data are the fleet's own
+  decisions since RULE-8-RETIRED-1 (charter rule 10), recorded with the measured spend or the backup state;
+- mail to an address that opted out, outreach outside its consent gate and cadence caps, and personal data on a
+  research or public surface (these protect people outside the fleet and stay).
 
 **Gates every owner-voice item passes:**
 1. Fact check against the source title and abstract (qnfo-social composer already does this).
