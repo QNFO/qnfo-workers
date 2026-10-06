@@ -64,3 +64,9 @@ PR_PUBLISH_MODE = "pull"
 # Cron drives the loop with no human session. CRON-RATE-CEILING-1: one fire per 10 minutes is the floor (144/day).
 [triggers]
 crons = ["*/10 * * * *"]
+
+# CLAIMS-FIRST-1 (0.3.21, transformation lever T1.14): the loop takes the WORK-CLAIM-1 claim on a task's file through
+# qnfo-deploy-guard /work-lock over this binding (the same binding qnfo-ops uses); the canonical deploy installs it.
+[[services]]
+binding = "DEPLOY_GUARD"
+service = "qnfo-deploy-guard"

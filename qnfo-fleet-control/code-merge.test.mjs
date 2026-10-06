@@ -527,10 +527,10 @@ a = J(await W.evAdvance(env, one("SELECT * FROM evolve_candidates WHERE id = 1")
 ok(a.status === "verified", "evAdvance verifies live through evLiveCheck", a);
 
 // ================================================================ 8. CODE-LOOP-STALE-VERSION-1: a stale-base failure is re-proposed, not parked
-async function staleCase(mainText, extraSameGoal, conflict) {
+async function staleCase(mainText, extraSameGoal, conflict, ctxExtra) {
   freshDb(); freshGh();
   db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
-  seedTask({ ctx: JSON.stringify({ base: BASE, patch: PATCH, anchor: "function a() {" }) });
+  seedTask({ ctx: JSON.stringify(Object.assign({ base: BASE, patch: PATCH, anchor: "function a() {" }, ctxExtra || {})) });
   for (let i = 0; i < extraSameGoal; i++) db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, created_at, updated_at) VALUES (?, 'qnfo-workers', ?, '[issue #50] fix a', 'closed', 'done', 0, ?, ?)").run("ct_old" + i + "xxxxxxxxx", PATH, ago(9), ago(9));
   seedWorkerPr(401, BRANCH, "h1");
   if (conflict) { gh.pulls[401].mergeable = false; gh.pulls[401].mergeable_state = "dirty"; gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]); }
@@ -551,6 +551,22 @@ sc = await staleCase(BASE, 0, false);
 ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "failed" && sc.fresh.length === 0, "a failed check while main did NOT change the file is a real failure: failed, handed to the fleet", sc.old);
 sc = await staleCase(MOVED, 2, false);
 ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "failed" && sc.fresh.length === 0, "after two re-proposals of one goal the runner stops and hands it to the fleet", sc.rr.decided);
+
+// ---- REBASE-REQUEUE-1 (0.4.135, transformation lever T1.3 half 2): a stale task that parked its edits goes back to the publisher
+const EDITS = [{ search: "  return 2;", replace: "  return 3;" }];
+sc = await staleCase(MOVED, 0, false, { edits: EDITS });
+ok(sc.rr.decided[0].action === "rebase-requeued" && sc.old.status === "ready_to_publish" && sc.old.step === "done" && sc.old.branch === BRANCH + "-r2" && sc.old.pr_url === null && sc.old.last_error === null && sc.fresh.length === 0, "a stale task with SEARCH/REPLACE edits is sent back to code-task-publish on a fresh branch name, no model call, no new task", sc.old);
+const rc = JSON.parse(sc.old.ctx);
+ok(rc.rebase_round === 1 && rc.edits.length === 1 && rc.edits[0].replace === "  return 3;" && rc.patch === PATCH && rc.base === BASE && /required check/.test(rc.rebase_why) && rc.rebase_from_pr === 401, "the edits, base and patch stay on the task; the rebase round, the reason and the closed PR are recorded", rc);
+ok(/REBASE-REQUEUE-1/.test(sc.old.merge_note) && sc.old.merge_note.includes(BRANCH + "-r2"), "the merge note names the rebuilt branch", sc.old.merge_note);
+ok(gh.calls.includes("PATCH /pulls/401") && gh.comments.some((c) => c.pr === 401 && /REBASE-REQUEUE-1/.test(c.body) && c.body.includes(BRANCH + "-r2")) && gh.merges.length === 0, "the stale PR is closed with a comment naming the rebuilt branch; nothing is merged");
+ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.rebase-requeued'").n === 1 && one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.requeued'").n === 0, "one rebase-requeued event, no re-proposal event");
+sc = await staleCase(MOVED, 0, true, { edits: EDITS });
+ok(sc.rr.decided[0].action === "rebase-requeued" && sc.old.status === "ready_to_publish", "a conflicting PR on a moved file is rebuilt the same way", sc.rr.decided);
+sc = await staleCase(MOVED, 0, false, { edits: EDITS, rebase_round: 1 });
+ok(sc.rr.decided[0].action === "requeued" && sc.old.status === "closed" && sc.fresh.length === 1, "a task already rebuilt once is re-proposed with a model on its next stale base, as before", sc.rr.decided);
+sc = await staleCase(MOVED, 0, false, { edits: [] });
+ok(sc.rr.decided[0].action === "requeued" && sc.fresh.length === 1, "a task without parked edits (whole-file mode) is re-proposed as before", sc.rr.decided);
 
 // ================================================================ 9. CODE-CLOSE-REASON-1: a closure outside the runner records why
 const addCols = () => ["merged_by TEXT", "merged_sha TEXT", "merged_at TEXT", "merge_state TEXT", "merge_note TEXT", "green_since TEXT", "nochecks_sha TEXT", "nochecks_since TEXT", "pr_opened_by TEXT", "pr_opened_at TEXT", "version_to TEXT", "deployed_at TEXT", "revert_cid INTEGER", "merge_checked_at TEXT"].forEach((c) => db.exec("ALTER TABLE code_tasks ADD COLUMN " + c));

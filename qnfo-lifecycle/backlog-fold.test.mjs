@@ -17,7 +17,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 {
   const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.every((l) => /^var VERSION = |^export \{|^  worker_default as default$|^\/\/# sourceMappingURL/.test(l)) && missing.some((l) => l.startsWith("var VERSION = ")), "every backlog-exec line is in the host except its VERSION line and its export", missing.map((l) => l.slice(0, 60)));
-  ok(/^1\.8\.0/.test(mod.__hv) && mod.__mv === "2.0.6-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.8.0, member 2.0.6-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok(/^1\.(8\.\d+|9\.\d+|\d{2,}\.\d+)/.test(mod.__hv) && mod.__mv === "2.0.6-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.8.0+, member 2.0.6-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 
 {

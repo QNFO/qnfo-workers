@@ -112,6 +112,8 @@ const call = (env, path, init) => worker.fetch(new Request("https://qnfo-subscri
   ok(j.ok && j.confirmation_sent, "subscribe sends the confirmation", j);
   ok(t.sends.length === 1 && !t.sends[0].headers, "the confirmation mail carries no list headers", t.sends);
   ok(t.sends[0] && t.sends[0].text.includes("/api/confirm?token="), "the emailed confirm link is unchanged");
+  ok(t.sends[0] && t.sends[0].text.includes("Browse the corpus: https://qnfo.org/papers?utm_source=confirm&utm_medium=email&utm_campaign=corpus"), "DIGEST-LINKS-UTM-1: the corpus link in the confirmation mail is tagged (source confirm)", t.sends[0] && t.sends[0].text);
+  ok(t.sends[0] && !/api\/confirm\?token=[^\s]*utm_/.test(t.sends[0].text), "the confirm link itself stays untagged");
   const ev = t.events.find((e) => e.kind === "subscribers-send");
   ok(ev && ev.status === "ok" && ev.meta.kind === "confirm" && ev.meta.messageId === "msg-1" && ev.meta.domain === "example.org", "confirm send logged ok with messageId and domain", t.events);
   ok(!JSON.stringify(t.events).includes("new.reader"), "the address is never written", t.events);
@@ -136,6 +138,9 @@ const call = (env, path, init) => worker.fetch(new Request("https://qnfo-subscri
   ok(h["List-Unsubscribe-Post"] === "List-Unsubscribe=One-Click", "List-Unsubscribe-Post is one-click", h);
   const ev = t2.events.find((e) => e.kind === "subscribers-send");
   ok(ev && ev.status === "ok" && ev.meta.kind === "digest" && ev.meta.list_unsubscribe === true && ev.meta.messageId, "digest send logged with list_unsubscribe true", t2.events);
+  const dtext = t2.sends[0] && t2.sends[0].text || "";
+  ok(dtext.includes("\n   https://qnfo.org/papers/p-1?utm_source=digest&utm_medium=email&utm_campaign=p-1\n"), "DIGEST-LINKS-UTM-1: every paper link in the digest carries utm_source=digest, utm_medium=email and the slug as campaign", dtext);
+  ok(!/utm_[a-z]+=[^&\s]*(token|reader|example)/.test(dtext) && /Unsubscribe: https:\/\/qnfo\.org\/api\/unsubscribe\?token=abc123def456\n/.test(dtext), "the tags never carry the recipient and the unsubscribe link stays untagged", dtext);
 }
 // Digest: a binding that refuses the headers still delivers, without them, and says so.
 {

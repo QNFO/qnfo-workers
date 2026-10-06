@@ -232,36 +232,125 @@ def requeue_for_syntax(store, tid, err):
         [msg, msg, now(), tid])
 
 
+# REBASE-BEFORE-PUBLISH-1 (2026-10-06, transformation lever T1.3, pillar autonomy). The orchestrator parks the patch it built
+# against the file it read (ctx.base) together with the SEARCH/REPLACE edits it applied (ctx.edits) and the mirror it saw
+# identical (ctx.mirror). main moves between the proposal and this run (every canonical deploy rewrites the VERSION line the
+# patch also touches), so `git apply --check` refused three publishes in the 14 days to 2026-10-06 ("patch does not apply":
+# ct_826d5o9zjt6eix radar-hub, ct_hsbeng8unl6djw calendar-api, ct_6dpoljohrddtgn qnfo-email) and qnfo-fleet-control re-proposed
+# each one with a model call (at most twice). A patch that no longer applies is now rebuilt without a model: the same edits are
+# re-applied to the file at the current base (each SEARCH text exactly once in the whole file, the orchestrator's applyEdits
+# rule over the whole file instead of its window), a js/mjs VERSION line is bumped from the current base as the orchestrator's
+# bumpVersion does, and the mirror carries the same text when it still equals the source on main. No edits, a SEARCH that is
+# gone or ambiguous, a mirror that drifted, or a rebuild that changes nothing still end publish_failed with the reason.
+VERSION_DECL = re.compile(r'^((?:var|const|let) VERSION\s*=\s*")(\d+)\.(\d+)\.(\d+)([^"\n]*)(";?)', re.M)
+MAX_EDITS = 8  # = the orchestrator's MAX_EDITS
+
+
+def bump_version(cur: str, text: str) -> str:
+    """The orchestrator's bumpVersion: patch number + 1 with the -codeagent tag, when the declaration is unchanged and unique."""
+    a, b = VERSION_DECL.search(cur), VERSION_DECL.search(text)
+    if not a or not b or a.group(0) != b.group(0) or text.count(a.group(0)) != 1:
+        return text
+    return text.replace(a.group(0), a.group(1) + a.group(2) + "." + a.group(3) + "." + str(int(a.group(4)) + 1) + "-codeagent" + a.group(6))
+
+
+def apply_edits(cur: str, edits):
+    """The orchestrator's applyEdits over the whole file: (text, None) or (None, reason)."""
+    if not isinstance(edits, list) or not edits:
+        return None, "no SEARCH/REPLACE edits parked in ctx.edits"
+    if len(edits) > MAX_EDITS:
+        return None, f"too many edits ({len(edits)} > {MAX_EDITS})"
+    spans = []
+    for i, e in enumerate(edits, 1):
+        srch, repl = (e or {}).get("search"), (e or {}).get("replace")
+        if not isinstance(srch, str) or not srch or not isinstance(repl, str):
+            return None, f"edit {i}: malformed (search/replace must be non-empty strings)"
+        n = cur.count(srch)
+        if n != 1:
+            return None, f"edit {i}: SEARCH text occurs {n} times in the current file (it must occur exactly once)"
+        at = cur.index(srch)
+        spans.append((at, at + len(srch), repl))
+    spans.sort()
+    for i in range(1, len(spans)):
+        if spans[i][0] < spans[i - 1][1]:
+            return None, "edits overlap"
+    out = cur
+    for at, end, repl in reversed(spans):
+        out = out[:at] + repl + out[end:]
+    return out, None
+
+
+def _read_text(fp):
+    with open(fp, encoding="utf-8", newline="") as fh:
+        return fh.read()
+
+
+def rebase_edits(repo_dir, path, ctx, base):
+    """Rebuild the task's change from ctx.edits on the checked-out base. Returns (files, note, error): files is the set of
+    paths written (the source and, when ctx.mirror names one that equals the source on the base, its mirror)."""
+    fp = os.path.join(repo_dir, path)
+    if not os.path.isfile(fp):
+        return None, None, path + " is not a file on " + base
+    cur = _read_text(fp)
+    text, err = apply_edits(cur, ctx.get("edits"))
+    if err:
+        return None, None, err
+    if path.endswith((".js", ".mjs")):
+        text = bump_version(cur, text)
+    if text == cur:
+        return None, None, "re-applying the edits changes nothing on " + base + " (the change may already be on main)"
+    files = {path}
+    mirror = ctx.get("mirror")
+    if isinstance(mirror, str) and mirror:
+        if mirror.startswith("/") or ".." in mirror or DENY_PATH.search(mirror) or not os.path.isfile(os.path.join(repo_dir, mirror)):
+            return None, None, "mirror " + mirror[:80] + " is not a file on " + base
+        if _read_text(os.path.join(repo_dir, mirror)) != cur:
+            return None, None, "mirror " + mirror[:80] + " no longer equals the source on " + base + " (mirror-guard would fail)"
+        files.add(mirror)
+    for f in sorted(files):
+        with open(os.path.join(repo_dir, f), "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+    head = git(repo_dir, "rev-parse", "--short", "origin/" + base, check=False).stdout.strip() or base
+    edits = ctx.get("edits") or []
+    note = ("REBASE-BEFORE-PUBLISH-1: the parked patch did not apply to " + base + "@" + head + "; " + str(len(edits)) +
+            " edit" + ("" if len(edits) == 1 else "s") + " re-applied to the current file" + (", mirror rewritten" if mirror in files else "") + " (no model call)")
+    return files, note, None
+
+
+def note_rebase(store, tid, note):
+    return store.changes("UPDATE code_tasks SET ctx=json_set(COALESCE(ctx, '{}'), '$.rebased', ?), updated_at=? WHERE id=?", [note[:300], now(), tid])
+
+
 def publish_one(task, repo_dir, base, pr, delegate=False):
-    """Returns (status, pr_url, error). Raises nothing: every failure is a returned publish_failed.
+    """Returns (status, pr_url, error, note). Raises nothing: every failure is a returned publish_failed.
     delegate=True: push the branch and stop at branch_pushed; qnfo-fleet-control opens the PR with the fleet token."""
     try:
         try:
             ctx = json.loads(task.get("ctx") or "{}")
         except ValueError:
-            return "publish_failed", None, "ctx is not valid JSON"
+            return "publish_failed", None, "ctx is not valid JSON", None
         patch, path = ctx.get("patch"), str(task.get("path") or "")
         branch = task.get("branch") or ("codeagent-" + str(task["id"])[3:15])
         if not isinstance(patch, str) or not patch.strip():
-            return "publish_failed", None, "task has no patch in ctx.patch"
+            return "publish_failed", None, "task has no patch in ctx.patch", None
         if len(patch) > MAX_PATCH:
-            return "publish_failed", None, f"patch larger than {MAX_PATCH} chars"
+            return "publish_failed", None, f"patch larger than {MAX_PATCH} chars", None
         if not path or path.startswith("/") or ".." in path or DENY_PATH.search(path):
-            return "publish_failed", None, "path refused by policy: " + path[:100]
+            return "publish_failed", None, "path refused by policy: " + path[:100], None
         if not BRANCH_RE.match(branch) or branch in ("main", "master") or ".." in branch:
-            return "publish_failed", None, "branch refused: " + branch[:100]
+            return "publish_failed", None, "branch refused: " + branch[:100], None
         if task.get("repo") != REPO_NAME:
-            return "publish_failed", None, "task repo is not " + REPO_NAME
+            return "publish_failed", None, "task repo is not " + REPO_NAME, None
         # The patch may only touch the task's declared path.
         files = set(re.findall(r"^\+\+\+ b/(.+)$", patch, re.M)) | set(re.findall(r"^--- a/(.+)$", patch, re.M))
         # PATCH-MODE-1: a worker source may carry its deployed-current mirror in the same patch (mirror-guard), nothing else.
         mirror = path[: -len("worker.js")] + "deployed-current.worker.js" if path.endswith("/worker.js") or path == "worker.js" else None
         if files != {path} and not (mirror and files == {path, mirror}):
-            return "publish_failed", None, "patch touches files other than the task path: " + ",".join(sorted(files))[:150]
+            return "publish_failed", None, "patch touches files other than the task path: " + ",".join(sorted(files))[:150], None
 
         have = pr.existing(branch)  # idempotency: a crashed earlier run may already have opened the PR
         if have:
-            return "published", have, None
+            return "published", have, None, None
 
         git(repo_dir, "checkout", "-q", "--detach", "origin/" + base)
         git(repo_dir, "reset", "-q", "--hard")
@@ -271,19 +360,25 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
         with open(pf, "w", encoding="utf-8", newline="") as fh:
             fh.write(patch)
         chk = git(repo_dir, "apply", "--check", pf, check=False)
+        note = None
         if chk.returncode != 0:
-            return "publish_failed", None, "patch does not apply to " + base + ": " + (chk.stderr or "").strip()[:250]
-        git(repo_dir, "apply", pf)
+            why = "patch does not apply to " + base + ": " + (chk.stderr or "").strip()[:250]
+            files, note, rb_err = rebase_edits(repo_dir, path, ctx, base)
+            if rb_err:
+                git(repo_dir, "reset", "-q", "--hard")
+                return "publish_failed", None, why + "; rebase: " + rb_err, None
+        else:
+            git(repo_dir, "apply", pf)
         bad = js_syntax_errors(repo_dir, sorted(files))
         if bad:
             git(repo_dir, "reset", "-q", "--hard")
             git(repo_dir, "checkout", "-q", "--detach", "origin/" + base)
-            return "syntax_retry", None, bad
+            return "syntax_retry", None, bad, None
         git(repo_dir, "add", "--", *sorted(files))
         git(repo_dir, "commit", "-q", "-m", "code-task " + task["id"] + ": " + str(task.get("goal") or "")[:60])
         git(repo_dir, "push", "origin", "refs/heads/" + branch + ":refs/heads/" + branch)
         if delegate:
-            return "branch_pushed", compare_url(base, branch), None
+            return "branch_pushed", compare_url(base, branch), None, note
         body = ("Opened by code-task-publish from verified code-task `" + task["id"] + "`.\n\nGoal: " + str(task.get("goal") or "")[:500] +
                 "\n\nThe patch passed the orchestrator's deterministic verifier. Review and merge it on GitHub (or close it); this workflow never merges.")
         try:
@@ -293,11 +388,11 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
             # pushed, so record it as branch_pushed with the compare URL instead of failing the task; the
             # owner (from the compare URL) or the next run with a PR-capable token opens the PR from that branch.
             if "not permitted to create or approve pull requests" in str(e) or "createPullRequest" in str(e):
-                return "branch_pushed", compare_url(base, branch), None
+                return "branch_pushed", compare_url(base, branch), None, note
             raise
-        return "published", url, None
+        return "published", url, None, note
     except Exception as e:  # noqa: BLE001 - a failure must become a recorded status, not a crash
-        return "publish_failed", None, str(e)[:300]
+        return "publish_failed", None, str(e)[:300], None
 
 
 def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
@@ -315,13 +410,17 @@ def publish_all(store, repo_dir, base, pr, log=print, delegate=False):
             log(f"skip {t['id']}: claimed by another run")
             out["skipped"] += 1
             continue
-        st, url, err = publish_one(t, repo_dir, base, pr, delegate)
+        st, url, err, note = publish_one(t, repo_dir, base, pr, delegate)
         if st == "syntax_retry":
             requeue_for_syntax(store, t["id"], err)
             out["retried"] = out.get("retried", 0) + 1
             log(f"::warning::syntax_retry {t['id']}: {err} (sent back to the orchestrator, no branch pushed)")
             continue
         finish(store, t["id"], st, url, err)
+        if note:
+            note_rebase(store, t["id"], note)
+            out["rebased"] = out.get("rebased", 0) + 1
+            log(f"::notice::rebased {t['id']}: {note}")
         if st == "branch_pushed" and delegate:
             out["published"] += 1
             log(f"branch_pushed {t['id']} -> {url} (qnfo-fleet-control opens the PR with the fleet token)")
@@ -511,6 +610,72 @@ def selftest():
         check("js that parses (an ES module) still publishes", tg["status"] == "published" and r["published"] == 1, dict(tg))
     else:
         print("SKIP PUBLISH-JS-CHECK-1 selftest: node not installed")
+
+    # 3c. REBASE-BEFORE-PUBLISH-1: a patch main has moved under is rebuilt from ctx.edits on the current base, no model call
+    remote, work, store = fixture()
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    pr = FakePR()
+
+    def add_edits(tid, patch, edits, path="scripts/x.py", mirror=None):
+        store.changes("INSERT INTO code_tasks (id,repo,path,goal,status,step,ctx,branch,created_at,updated_at) VALUES (?,?,?,?,?,'done',?,?,?,?)",
+                      [tid, REPO_NAME, path, "return 2", "ready_to_publish", json.dumps({"patch": patch, "edits": edits, "mirror": mirror}), "codeagent-" + tid[3:15], now(), now()])
+
+    add_edits("ct_rebaseok0001", stale, [{"search": "    return 1", "replace": "    return 2"}])
+    add_edits("ct_rebasegone01", stale, [{"search": "    return 7", "replace": "    return 2"}])
+    add_edits("ct_rebasesame01", stale, [{"search": "    return 1", "replace": "    return 1"}])
+    r = publish_all(store, work, "main", pr, quiet)
+    t = row(store, "ct_rebaseok0001")
+    check("stale patch with edits: rebuilt on main and published, the rebase recorded on the task",
+          t["status"] == "published" and r.get("rebased") == 1 and str(json.loads(t["ctx"]).get("rebased", "")).startswith("REBASE-BEFORE-PUBLISH-1") and t["last_error"] is None, dict(t))
+    shown = subprocess.run(["git", "--git-dir", remote, "show", "codeagent-rebaseok0001:scripts/x.py"], capture_output=True, text=True)
+    check("rebased branch carries the re-applied edit", shown.stdout == "def f():\n    return 2\n", shown.stderr)
+    tg, ts = row(store, "ct_rebasegone01"), row(store, "ct_rebasesame01")
+    check("edit whose SEARCH is gone: publish_failed with both reasons, nothing pushed",
+          tg["status"] == "publish_failed" and "does not apply" in tg["last_error"] and "rebase: edit 1: SEARCH text occurs 0 times" in tg["last_error"], dict(tg))
+    check("edits that change nothing: publish_failed, never an empty branch", ts["status"] == "publish_failed" and "changes nothing" in ts["last_error"], dict(ts))
+    brg = subprocess.run(["git", "--git-dir", remote, "branch", "--list", "codeagent-rebasegone01", "codeagent-rebasesame01"], capture_output=True, text=True)
+    check("failed rebases push no branch", brg.stdout.strip() == "" and r["failed"] == 2)
+    check("rebase helpers: apply_edits refuses an ambiguous SEARCH and overlapping edits",
+          apply_edits("a b a", [{"search": "a", "replace": "c"}])[1].startswith("edit 1: SEARCH text occurs 2 times")
+          and apply_edits("abc", [{"search": "ab", "replace": "x"}, {"search": "bc", "replace": "y"}])[1] == "edits overlap"
+          and apply_edits("abc", [{"search": "b", "replace": "B"}])[0] == "aBc")
+    check("rebase helpers: bump_version bumps the patch number from the current base with the -codeagent tag",
+          bump_version('var VERSION = "1.2.3-main"; // x\nq', 'var VERSION = "1.2.3-main"; // x\nz') == 'var VERSION = "1.2.4-codeagent"; // x\nz'
+          and bump_version('var VERSION = "1.2.3";\n', 'var VERSION = "9.9.9";\n') == 'var VERSION = "9.9.9";\n')
+    if shutil.which("node"):
+        remote, work, store = fixture()
+        os.makedirs(os.path.join(work, "w"))
+        src = 'var VERSION = "1.2.3-main"; // live\nexport default { fetch() { return new Response("a"); } };\n'
+        for f in ("w/worker.js", "w/deployed-current.worker.js"):
+            with open(os.path.join(work, f), "w") as fh:
+                fh.write(src)
+        _sh(work, "git", "add", "-A")
+        _sh(work, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "js")
+        _sh(work, "git", "push", "-q", "origin", "main")
+        _sh(work, "git", "fetch", "-q", "origin", "main")
+        pr = FakePR()
+        stale_js = "".join("diff --git a/%s b/%s\n--- a/%s\n+++ b/%s\n@@ -1 +1 @@\n-var VERSION = \"1.2.2-old\"; // live\n+var VERSION = \"1.2.3-codeagent\"; // live\n" % (f, f, f, f)
+                           for f in ("w/worker.js", "w/deployed-current.worker.js"))
+        add_edits("ct_rebasejs0001", stale_js, [{"search": 'new Response("a")', "replace": 'new Response("b")'}], path="w/worker.js", mirror="w/deployed-current.worker.js")
+        r = publish_all(store, work, "main", pr, quiet)
+        tj = row(store, "ct_rebasejs0001")
+        want = 'var VERSION = "1.2.4-codeagent"; // live\nexport default { fetch() { return new Response("b"); } };\n'
+        got = [subprocess.run(["git", "--git-dir", remote, "show", "codeagent-rebasejs0001:" + f], capture_output=True, text=True).stdout for f in ("w/worker.js", "w/deployed-current.worker.js")]
+        check("js rebase: VERSION bumped from the current main, the edit applied, the mirror identical, parsed and published",
+              tj["status"] == "published" and got[0] == want and got[1] == want and "mirror rewritten" in json.loads(tj["ctx"]).get("rebased", ""), (dict(tj), got))
+        _sh(work, "git", "checkout", "-q", "--detach", "origin/main")
+        with open(os.path.join(work, "w/deployed-current.worker.js"), "w") as fh:
+            fh.write(src.replace("1.2.3", "1.2.2"))
+        _sh(work, "git", "add", "-A")
+        _sh(work, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "mirror drift")
+        _sh(work, "git", "push", "-q", "origin", "HEAD:main")
+        _sh(work, "git", "fetch", "-q", "origin", "main")
+        add_edits("ct_rebasemir001", stale_js, [{"search": 'new Response("a")', "replace": 'new Response("c")'}], path="w/worker.js", mirror="w/deployed-current.worker.js")
+        publish_all(store, work, "main", pr, quiet)
+        tm = row(store, "ct_rebasemir001")
+        check("js rebase: a mirror that drifted from the source on main is refused with the reason", tm["status"] == "publish_failed" and "no longer equals the source" in tm["last_error"], dict(tm))
+    else:
+        print("SKIP REBASE-BEFORE-PUBLISH-1 js selftest: node not installed")
 
     # 4. idempotency: a second run does nothing; a crashed run's existing PR is adopted, not duplicated
     remote, work, store = fixture()
