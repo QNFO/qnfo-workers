@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.21.0-scan-lanes"; /* 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.21.0-scan-lanes"; /* 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). OWNER-STEPS-WATCH-1: a read-only companion of the daily release-check slot resolves the CODE-REACH-1 owner cards ula-v2-1-post and code-release-pypi-zenodo with evidence once their public results exist (QNFO/license v2.1 file; PyPI and Zenodo software records). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -829,6 +829,60 @@ async function jobIdeaTopicMetric(env) {
   return { status: "ok", notes: c };
 }
 __name(jobIdeaTopicMetric, "jobIdeaTopicMetric");
+/* OWNER-STEPS-WATCH-1 (1.21.0, 2026-10-06, pillar autonomy; owner directive 2026-10-06 "never leave loose ends"). Three
+   owner cards from CODE-REACH-1 wait on steps only the owner can take (the build session was refused write access to
+   QNFO/license and repository creation in the organisation). Nothing would notice when they are done, so the cards would
+   stay open after the work was finished. This read-only companion of the daily release-check slot reads the public
+   facts each card's step produces and resolves the card with that evidence; a card whose step is not done is left open
+   with its default in effect. It reads public URLs only (no token), writes only human_actions rows it names, and makes
+   no model call. code-repos-create is resolved by the hourly metric-refresh step instead (research_code_public >= 3). */
+var OWNER_STEP_PROBES = [
+  { slug: "ula-v2-1-post", urls: ["https://raw.githubusercontent.com/QNFO/license/HEAD/QNFO-ULA-v2.1.md"], kind: "ula" },
+  { slug: "code-release-pypi-zenodo", urls: ["https://pypi.org/pypi/agentic-collapse/json", "https://pypi.org/pypi/ignorance-audit/json", "https://zenodo.org/api/records?q=%22agentic-collapse%22&type=software&size=1", "https://zenodo.org/api/records?q=%22ignorance-audit%22&type=software&size=1"], kind: "release" }
+];
+// Pure: one probe and its responses ([{ status, text }], in url order) -> { done, evidence }.
+function ownerStepVerdict(probe, res) {
+  const r = res || [];
+  if (probe.kind === "ula") {
+    const t = r[0] && r[0].status === 200 ? String(r[0].text || "") : "";
+    const done = t.indexOf("Version 2.1") >= 0 && t.indexOf("12. Software Terms") >= 0;
+    return { done, evidence: done ? "QNFO-ULA-v2.1.md is on QNFO/license (" + t.length + " bytes, section 12 present)" : "QNFO/license has no v2.1 file yet (HTTP " + (r[0] ? r[0].status : "none") + ")" };
+  }
+  if (probe.kind === "release") {
+    const pypi = [0, 1].map((i) => !!(r[i] && r[i].status === 200));
+    const zen = [2, 3].map((i) => {
+      if (!(r[i] && r[i].status === 200)) return false;
+      try { return Number(((JSON.parse(r[i].text) || {}).hits || {}).total || 0) > 0; } catch (e) { return false; }
+    });
+    const done = pypi.every(Boolean) && zen.every(Boolean);
+    return { done, evidence: "PyPI agentic-collapse " + pypi[0] + ", ignorance-audit " + pypi[1] + "; Zenodo software records agentic-collapse " + zen[0] + ", ignorance-audit " + zen[1] };
+  }
+  return { done: false, evidence: "unknown probe kind" };
+}
+__name(ownerStepVerdict, "ownerStepVerdict");
+async function jobOwnerStepsWatch(env) {
+  const out = [];
+  for (const probe of OWNER_STEP_PROBES) {
+    const card = await env.AUDIT.prepare("SELECT status FROM human_actions WHERE slug = ?1").bind(probe.slug).first().catch(() => null);
+    if (!card || card.status !== "open") { out.push({ slug: probe.slug, skipped: card ? card.status : "no card" }); continue; }
+    const res = [];
+    for (const u of probe.urls) {
+      try {
+        const r = await fetch(u, { headers: { "User-Agent": "qnfo-cloud-ops/" + VERSION + " (owner-steps-watch)", Accept: "application/json, text/plain" } });
+        res.push({ status: r.status, text: (await r.text()).slice(0, 200000) });
+      } catch (e) {
+        res.push({ status: 0, text: "" });
+      }
+    }
+    const v = ownerStepVerdict(probe, res);
+    if (v.done) {
+      await env.AUDIT.prepare("UPDATE human_actions SET status = 'resolved', resolved_at = datetime('now'), updated_at = datetime('now'), resolution = ?2 WHERE slug = ?1 AND status = 'open'").bind(probe.slug, ("OWNER-STEPS-WATCH-1: " + v.evidence).slice(0, 500)).run();
+    }
+    out.push({ slug: probe.slug, done: v.done, evidence: v.evidence.slice(0, 160) });
+  }
+  return { status: "ok", notes: { cards: out } };
+}
+__name(jobOwnerStepsWatch, "jobOwnerStepsWatch");
 async function jobResearchScan(env) {
   let hits = [];
   // RESEARCH-SCAN-LANES-1: one arXiv query per lane, a lane that fails leaves an error row and the others still run;
@@ -3279,7 +3333,8 @@ var JOBS = {
   "radar": jobRadar,
   "grant-followup": jobGrantFollowup,
   "outreach-learner": jobOutreachLearner,
-  "idea-topic-metric": jobIdeaTopicMetric
+  "idea-topic-metric": jobIdeaTopicMetric,
+  "owner-steps-watch": jobOwnerStepsWatch
 };
 // GRANT-FOLLOWUP-1: a job that rides another job's cron slot, because the dispatch map holds one job per cron and a new
 // cron would count against the account cap (charter rule 2). Companions run first, each in its own try and logged under
@@ -3287,7 +3342,8 @@ var JOBS = {
 // Amsterdam). OUTREACH-LEARNER-1 (1.18.0): outreach-learner rides the daily engagement slot (07:15 Amsterdam, every day)
 // and runs before it, so the sent-as-you digest inside engagement reports that day's learner tick.
 // IDEA-TOPIC-METRIC-1 (1.19.1): idea-topic-metric rides the daily quality-score slot (06:20 Amsterdam, every day).
-var CRON_COMPANIONS = { "worker-health": ["grant-followup"], "engagement": ["outreach-learner"], "quality-score": ["idea-topic-metric"] };
+// OWNER-STEPS-WATCH-1 (1.21.0): owner-steps-watch rides the daily release-check slot (06:15 Amsterdam, every day).
+var CRON_COMPANIONS = { "worker-health": ["grant-followup"], "engagement": ["outreach-learner"], "quality-score": ["idea-topic-metric"], "release-check": ["owner-steps-watch"] };
 // JOB-REASON-1 (1.18.3): the job-run row's meta carries the job's own one-line reason when a run is not 'ok', and 'via'
 // when a catch-up ran it, so a ledger query can say why without parsing the truncated text column.
 function jobRunMeta(job, out, extra) {

@@ -133,6 +133,23 @@ because each one was broken at least once; the linked issue holds the evidence.
   minted or rotated, guards and probes are not weakened, data with no verified backup is never deleted, and governance
   changes (this file, the charter) land by PR.
 
+## No loose ends (OWNER-NO-LOOSE-ENDS-1)
+- Owner directive 2026-10-06: "The system shall fully execute and implement its own suggestions and enhancements across
+  the fleet. You shall never leave open issues unresolved or unremediated, now or in the future, not in this thread nor
+  system/fleet-wide." It binds every session and every loop.
+- A suggestion is implemented, not only written down. A session that proposes a change makes it in the same PR, or files
+  it as an `agent_issues` row that a doer will execute: a `code-task:` line for the code loop, or a named owning loop.
+  Prose in a reply is never the only record.
+- Before a session ends, every item it opened (PR, issue, owner card, work claim, migration) is closed with evidence, or
+  carries an owner, the exact blocker and a closing probe that resolves it on its own: a `remediation_contracts` d1-query
+  probe for an issue, or a probe that resolves a `human_actions` card (qnfo-cloud-ops OWNER-STEPS-WATCH-1, metric-refresh
+  steps). A PR a session opened is followed until it merges and its deploy is verified live.
+- Work another session has claimed is not dropped and not duplicated: review it, and take it over when the claim lapses
+  with the work undone.
+- A step only the owner can take (a permission the session was refused, a credential, a legal or publishing act) becomes
+  a `human_actions` card with its default in effect and a probe that closes it when the step is done. The session states
+  the blocker plainly and never works around a refusal.
+
 ## Open access (OPEN-ACCESS-1)
 - Owner directive 2026-10-01: favor free, open access. The more people see the fleet's data, the more impact the owner makes.
   Do not put reads behind a token, key, login or "owner key", and do not ask the owner to set or enter one. The dashboard
