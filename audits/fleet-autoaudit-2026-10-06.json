@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-06 09:56:18",
+  "audited_at": "2026-10-06 10:48:14",
   "d1_write_failures": [],
   "d1_writes_ok": 113,
   "guard": {
@@ -444,7 +444,7 @@
     "sync_workers": [
       {
         "dir": "calendar-api",
-        "version": "0.7.3-oq-trip-window",
+        "version": "0.7.4-fold-ready",
         "worker": "calendar-api"
       },
       {
@@ -464,7 +464,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.8.7-prompt-cache",
+        "version": "0.8.9-sitemap-indexable",
         "worker": "q08-signal-engine"
       },
       {
@@ -489,7 +489,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.3.20-intake-provenance",
+        "version": "0.3.22-claims-first",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -509,7 +509,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.4.137-search-referrals",
+        "version": "0.4.139-one-count-cost-gap",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -539,7 +539,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.8.0-backlog-fold",
+        "version": "1.8.1-one-worker-count",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -569,12 +569,12 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.8.0-attention-share",
+        "version": "0.8.1-learner-channel-arm",
         "worker": "qnfo-social"
       },
       {
         "dir": "qnfo-subscribers",
-        "version": "1.1.7-confirm-post-send-log",
+        "version": "1.1.8-digest-links-utm",
         "worker": "qnfo-subscribers"
       },
       {
@@ -616,9 +616,9 @@
       "worker": "audits"
     },
     "calendar-api": {
-      "before": "0.7.3-oq-trip-window",
+      "before": "0.7.4-fold-ready",
       "http": 200,
-      "live": "0.7.3-oq-trip-window",
+      "live": "0.7.4-fold-ready",
       "match": 1,
       "note": "SYNC",
       "worker": "calendar-api"
@@ -840,9 +840,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.8.7-prompt-cache",
+      "before": "0.8.9-sitemap-indexable",
       "http": 200,
-      "live": "0.8.7-prompt-cache",
+      "live": "0.8.9-sitemap-indexable",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1024,9 +1024,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.3.20-intake-provenance",
+      "before": "0.3.22-claims-first",
       "http": 200,
-      "live": "0.3.20-intake-provenance",
+      "live": "0.3.22-claims-first",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1136,9 +1136,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.4.137-search-referrals",
+      "before": "0.4.139-one-count-cost-gap",
       "http": 200,
-      "live": "0.4.137-search-referrals",
+      "live": "0.4.139-one-count-cost-gap",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1240,9 +1240,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.8.0-backlog-fold",
+      "before": "1.8.1-one-worker-count",
       "http": 200,
-      "live": "1.8.0-backlog-fold",
+      "live": "1.8.1-one-worker-count",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1408,17 +1408,17 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.8.0-attention-share",
+      "before": "0.8.1-learner-channel-arm",
       "http": 200,
-      "live": "0.8.0-attention-share",
+      "live": "0.8.1-learner-channel-arm",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": "1.1.7-confirm-post-send-log",
+      "before": "1.1.8-digest-links-utm",
       "http": 200,
-      "live": "1.1.7-confirm-post-send-log",
+      "live": "1.1.8-digest-links-utm",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"
