@@ -1,4 +1,4 @@
-var VERSION = "1.8.0-backlog-fold"; // 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
+var VERSION = "1.8.1-one-worker-count"; // 1.8.1 ONE-WORKER-COUNT-1 (2026-10-06, pillar core, transformation lever T5.10): runMetricFreshness no longer writes metric_registry.worker_count; qnfo-fleet-control 0.4.137 writes it from the live scripts census beside fleet_budget.workers (COUNT(service_registry) counted retired rows too, 32 against 31 on 2026-10-06). 1.8.0 BACKLOG-FOLD-1 (#1756, pillar cost): qnfo-backlog-exec runs here as a member (backlogMod) on the 02:00 tick; GET /backlog/health; qnfo-ops reaches its drain over the BACKLOG binding (props.member). qnfo-archive (retired: its KG seed got HTTP 401 on every batch) leaves runPing. 1.7.3 LIFECYCLE-PING-1042-1 (#1994): wrangler.toml sets global_fetch_strictly_public, so runPing and runSync reach *.q08.workers.dev (150 PING FAIL HTTP 404 rows were Cloudflare error 1042). 1.7.2 METRIC-CADENCE-UNITS-1 + METRIC-UNMEASURED-CLASS-1 (#1865): "*/3h" and "2h" cadences parse with their unit; never-measured UNMEASURED/n/a metrics are their own class. 1.7.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code. Worker Contract v1 VERSION constant (read by version-bump-guard / drift checks)
 const QNFO_VERSION = VERSION;
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -1005,13 +1005,10 @@ async function runMetricFreshness(env) {
       out.refreshed.push("open_agent_issues");
     }
   } catch (e) { out.refresh_error_open_issues = e.message; }
-  try {
-    var wc = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS c FROM service_registry").first();
-    if (wc) {
-      await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?, last_refreshed = ?, state = ? WHERE metric = ?").bind(String(wc.c == null ? 0 : wc.c), nowIso, "MEASURED", "worker_count").run();
-      out.refreshed.push("worker_count");
-    }
-  } catch (e) { out.refresh_error_worker_count = e.message; }
+  // ONE-WORKER-COUNT-1 (1.8.1, transformation lever T5.10): worker_count is written by qnfo-fleet-control budgetAudit from the
+  // live Cloudflare scripts census, the same read that writes fleet_budget.workers; this tick no longer writes it from
+  // COUNT(service_registry), which counted every row whatever its state (32 against 31 live scripts on 2026-10-06) and made
+  // the two readers disagree every hour. worker_count_disagreement (qnfo-fleet-control) names the odd ones out.
   // RESEARCH-METRICS-WRITER-1 (2026-10-01, agent_issues #1742): publications_30d and full_reports_live_30d
   // (registry formulas over living-paper.papers) and indexed_surface (<loc> count of the papers.qnfo.org sitemap)
   // had no writer anywhere in the fleet: their last values were written by hand on 2026-09-29 17:18Z and went
