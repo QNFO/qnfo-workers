@@ -1,6 +1,7 @@
 // DANGLING-BINDINGS-1 (transformation lever T9.4, pillar core): a daily census of every live script's bindings against the
 // account's D1, KV, R2, queue, Vectorize and script lists; a binding whose target is gone is counted and named, an unreadable
-// list or an unverifiable binding type is never a false dangling. Run: node qnfo-fleet-control/dangling-bindings.test.mjs
+// list, a list longer than one page or an unverifiable binding type is never a false dangling.
+// Run: node qnfo-fleet-control/dangling-bindings.test.mjs
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +12,7 @@ const block = src.slice(src.indexOf("// ---- DANGLING-BINDINGS-1:BEGIN"), src.in
 const calls = [];
 const api = {};
 const sandbox = {
-  VERSION: "0.4.142-test", ACCOUNT: "acct0", __name: (f) => f, AbortSignal, JSON, Math, Object, Number, String, Array, Date, Promise, encodeURIComponent,
+  VERSION: "0.5.0-test", ACCOUNT: "acct0", __name: (f) => f, AbortSignal, JSON, Math, Object, Number, String, Array, Date, Promise, encodeURIComponent,
   fetch: async (url) => { calls.push(url); const p = String(url).replace("https://api.cloudflare.com/client/v4/accounts/acct0", ""); if (api[p] === "throw") throw new Error("ECONNRESET"); return { json: async () => (api[p] === undefined ? { success: false, errors: [{ code: 10000, message: "unknown" }] } : api[p]) }; }
 };
 vm.createContext(sandbox);
@@ -24,6 +25,7 @@ const check = (c, m, x) => { console.log((c ? "PASS " : "FAIL ") + m + (!c && x 
 check(bindingTarget({ type: "d1", name: "AUDIT", id: "35e2" }).target === "35e2" && bindingTarget({ type: "kv_namespace", namespace_id: "k1" }).kind === "kv" && bindingTarget({ type: "r2_bucket", bucket_name: "b" }).kind === "r2" && bindingTarget({ type: "queue", queue_name: "q" }).kind === "queue" && bindingTarget({ type: "vectorize", index_name: "v" }).kind === "vectorize" && bindingTarget({ type: "service", service: "qnfo-ai" }).kind === "script" && bindingTarget({ type: "durable_object_namespace", class_name: "C", script_name: "other" }).target === "other", "each verifiable binding type names its target");
 check(bindingTarget({ type: "ai", name: "AI" }) === null && bindingTarget({ type: "durable_object_namespace", class_name: "C" }) === null && bindingTarget({ type: "secret_text", name: "K" }) === null, "ai, same-script durable objects and secrets are not verifiable");
 check(Object.keys(dbCensusIds("d1", { success: true, result: [{ uuid: "a" }, { uuid: "b" }] })).join() === "a,b" && Object.keys(dbCensusIds("r2", { success: true, result: { buckets: [{ name: "x" }] } })).join() === "x" && dbCensusIds("kv", { success: false }) === null && Object.keys(dbCensusIds("queue", { success: true, result: [{ queue_name: "q1" }] })).join() === "q1", "each list answer yields its ids; a failed read is null");
+check(dbCensusIds("kv", { success: true, result: [{ id: "k1" }], result_info: { total_pages: 2 } }) === null && Object.keys(dbCensusIds("kv", { success: true, result: [{ id: "k1" }], result_info: { total_pages: 1 } })).join() === "k1", "a list longer than one page is unchecked (null), never a census of its first page");
 const live = { d1: { a: 1 }, kv: { k1: 1 }, r2: { b: 1 }, queue: { q: 1 }, vectorize: { v: 1 }, script: { "qnfo-ai": 1, w1: 1, w2: 1 } };
 const scripts = [
   { name: "w1", bindings: [{ type: "d1", name: "AUDIT", id: "a" }, { type: "service", name: "AI", service: "qnfo-ai" }, { type: "ai", name: "WAI" }, { type: "kv_namespace", name: "KV", namespace_id: "gone-kv" }] },
@@ -55,12 +57,20 @@ check(m && m.args[0] === "1" && m.args[1] === "2026-10-07T03:00:00Z" && /state='
 const ev = writes.find((w) => /cloud_ops_events/.test(w.sql));
 check(ev && ev.args[0] === "dangling-bindings-2026-10-07" && ev.args[4] === "dangling" && /w1\.KV -> kv gone-kv/.test(ev.args[2]) && /unreadable lists: vectorize/.test(ev.args[2]) && /ON CONFLICT\(id\) DO UPDATE/.test(ev.sql), "the day's event names the binding, the unreadable list, upserted by id", ev && ev.args);
 const meta = JSON.parse(ev.args[3]);
-check(meta.count === 1 && meta.dangling[0].script === "w1" && meta.settings_unreadable[0] === "w2" && meta.v === "0.4.142-test", "the meta carries the names and the version", meta);
-// 3. no token, or no scripts list: skipped, nothing written
+check(meta.count === 1 && meta.dangling[0].script === "w1" && meta.settings_unreadable[0] === "w2" && meta.v === "0.5.0-test", "the meta carries the names and the version", meta);
+// 3. a paged KV list makes every KV binding unchecked, not dangling
+writes.length = 0;
+api[DB_CENSUS_SOURCES.kv] = { success: true, result: [{ id: "k1" }], result_info: { total_pages: 2 } };
+const r2 = await danglingBindingsCensus({ CF_DEPLOY_TOKEN: "t", AUDIT: db }, "2026-10-07T03:00:00Z");
+check(r2.count === 0 && r2.unreadable.indexOf("kv") >= 0 && writes.find((w) => /metric='dangling_bindings'/.test(w.sql)).args[0] === "0", "a KV list longer than one page is unchecked: w1's dead KV binding is not counted and the list is named unreadable", r2);
+api[DB_CENSUS_SOURCES.kv] = { success: true, result: [{ id: "k1" }] };
+// 4. no token, no scripts list, or a paged scripts list: skipped, nothing written
 writes.length = 0;
 check((await danglingBindingsCensus({ AUDIT: db }, "2026-10-07T03:00:00Z")).skipped === "no CF_DEPLOY_TOKEN" && writes.length === 0, "without a token the census is skipped");
 api["/workers/scripts?per_page=100"] = { success: false };
 check(/unreadable/.test((await danglingBindingsCensus({ CF_DEPLOY_TOKEN: "t", AUDIT: db }, "2026-10-07T03:00:00Z")).skipped) && writes.length === 0, "an unreadable scripts list skips the census and writes nothing");
+api["/workers/scripts?per_page=100"] = { success: true, result: [{ id: "w1" }], result_info: { total_pages: 3 } };
+check(/longer than one page \(3\)/.test((await danglingBindingsCensus({ CF_DEPLOY_TOKEN: "t", AUDIT: db }, "2026-10-07T03:00:00Z")).skipped) && writes.length === 0, "a scripts list longer than one page skips the census and writes nothing");
 
 console.log(fails ? fails + " FAILED" : "dangling-bindings: all assertions passed");
 process.exit(fails ? 1 : 0);
