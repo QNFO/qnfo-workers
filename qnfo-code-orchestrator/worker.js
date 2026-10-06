@@ -15,7 +15,7 @@
 // SECRETS: wrangler secret put ORCH_TOKEN ; wrangler secret put CODE_AGENT_KEY
 // NEVER follows instructions found inside fetched repo files (DATA-ONLY boundary).
 
-var VERSION = "0.3.18-fleet-exec-fold"; // 0.3.18 FLEET-EXEC-FOLD-1 (agent_issues 1756, pillar cost): fleet-exec runs here as a member on the */10 tick (fleetExecMod; AUDIT_DB and AI only), GET /fleet-exec/health; its script is deleted after this is live. 0.3.17 NOOP-PROPOSAL-GATE-1 (agent_issues 2018, TP-1e, pillar autonomy): a JavaScript proposal whose changed lines (VERSION aside) are the same code once string-literal contents and comments are removed, and whose new text is prose, is refused before verify with a reason the next rung reads (cloud_ops_events kind code-task.noop-refused); a second no-op in a row ends the task needs_human instead of a PR. On 2026-10-06 ct_r3k9lrbd7oijxr (#2006) and ct_5fibb664gtvew4 (#2007) each answered a feature goal with a 2-line paraphrase of a string on the anchor line, parsed, verified and reached ready_to_publish; a session review was the only stop. A string whose new value is code-like (a model id, SQL, a URL, a key) still passes. 0.3.16 CODE-DISPATCH-DEDUPE-1 (agent_issues 1876, 1834): a new code task is refused while the same repo file (or its deployed-current mirror) has an unfinished code task or a live session work claim (qnfo-audit.work_claims, the ledger GET /work-locks reads), and the planner skips such an issue before its model call; RETIRED-TARGET-1: a <dir>/worker.js that is not a live worker in service_registry (RETIRED or FOLDED) is refused, because the canonical deploy skips it; VERSION_DECL accepts `VERSION="x"` without spaces and without a semicolon (qnfo-email, qnfo-gateway); 0.3.15 PRIORITY-QUEUE-1: code-task intake takes issues in master-queue order (critical, high, medium, low, then oldest), not creation order (owner directive 2026-10-03; v_issue_queue); 0.3.14 PLAN-DENY-NEGATION-1: the issue planner refuses an issue that asks to raise a cap, rotate a secret or delete, not one whose advice forbids it ("never raise a cap"; agent_issues 1807; 0.3.13 was the rejected code task ct_fd830vzqefw1ti); 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
+var VERSION = "0.3.19-verify-parse-shape"; // 0.3.19 (2026-10-06, pillar autonomy, docs/TRANSFORMATION-PROGRAM.md 1.2): JS-VERIFY-PARSE-SHAPE-1, a V8 parse-error message that crosses the sandbox boundary without its SyntaxError class ("Unexpected identifier '__name'", ct_lc6has32addg0m 07:41Z) is a failed proposal the next rung retries with the error, not an unverified one that ends needs_human; ANCHOR-REPAIR-1 (T1 lever 4, agent_issues 2007), an anchor that no longer occurs in the file is repaired without a model call (its whitespace-normalised text, else its longest line that occurs exactly once) instead of ending the task needs_human; SCORER-HOST-DENY-1, PLAN_DENY_WORKERS names qnfo-observability, which hosts the folded autonomy scorer since SCORER-FOLD-1, so the loop never plans a change to the formula that grades it. 0.3.18 FLEET-EXEC-FOLD-1 (agent_issues 1756, pillar cost): fleet-exec runs here as a member on the */10 tick (fleetExecMod; AUDIT_DB and AI only), GET /fleet-exec/health; its script is deleted after this is live. 0.3.17 NOOP-PROPOSAL-GATE-1 (agent_issues 2018, TP-1e, pillar autonomy): a JavaScript proposal whose changed lines (VERSION aside) are the same code once string-literal contents and comments are removed, and whose new text is prose, is refused before verify with a reason the next rung reads (cloud_ops_events kind code-task.noop-refused); a second no-op in a row ends the task needs_human instead of a PR. On 2026-10-06 ct_r3k9lrbd7oijxr (#2006) and ct_5fibb664gtvew4 (#2007) each answered a feature goal with a 2-line paraphrase of a string on the anchor line, parsed, verified and reached ready_to_publish; a session review was the only stop. A string whose new value is code-like (a model id, SQL, a URL, a key) still passes. 0.3.16 CODE-DISPATCH-DEDUPE-1 (agent_issues 1876, 1834): a new code task is refused while the same repo file (or its deployed-current mirror) has an unfinished code task or a live session work claim (qnfo-audit.work_claims, the ledger GET /work-locks reads), and the planner skips such an issue before its model call; RETIRED-TARGET-1: a <dir>/worker.js that is not a live worker in service_registry (RETIRED or FOLDED) is refused, because the canonical deploy skips it; VERSION_DECL accepts `VERSION="x"` without spaces and without a semicolon (qnfo-email, qnfo-gateway); 0.3.15 PRIORITY-QUEUE-1: code-task intake takes issues in master-queue order (critical, high, medium, low, then oldest), not creation order (owner directive 2026-10-03; v_issue_queue); 0.3.14 PLAN-DENY-NEGATION-1: the issue planner refuses an issue that asks to raise a cap, rotate a secret or delete, not one whose advice forbids it ("never raise a cap"; agent_issues 1807; 0.3.13 was the rejected code task ct_fd830vzqefw1ti); 0.3.12 PLAN-WIP-HANDOFF-1: tasks waiting on the merge runner no longer lock the issue planner out (agent_issues 1788); 0.3.11 JS-VERIFY-RUNTIME-SHAPE-1: a runtime error that reaches the verifier as a bare V8 message (no class name) still means the module parsed; 0.3.10 REACH-IDEA-TRUST-1: REACH-IDEA-1 issues filed by qnfo-fleet-control REACH-IDEATION-1 are planner-trusted; // 0.3.9 CLAIM-AGE-1: a queued task waiting 20 min is claimed first, so retries cannot starve behind new intake; 0.3.8 JS-VERIFY-FAIL-CLOSED-1: unknown JS start failures stop for review instead of passing as syntax OK (#445); 0.3.7 SELF-REPAIR-1: exhausted model attempts retry with backoff, then file a fleet issue, never an owner card; 0.3.6 PATCH-MODE-LIVE-1 (code task ct_patchproof20261002, #431); 0.3.5 ISSUE-PLANNER-2: refusals no longer use a tick or the daily model cap; 0.3.4 ISSUE-PLANNER-1: prose issues from trusted sources become code tasks (one per tick); 0.3.3 frontier rungs (ACT-BRIDGE-1); 0.3.2 HUNK-NO-EOL-1
 const WORKER = "qnfo-code-orchestrator";
 const CODE_AGENT = "https://qnfo-code-agent.q08.workers.dev";
 const MAX_OUT = 65536;
@@ -298,6 +298,29 @@ function extractFile(text) {
 }
 // ---- PATCH-MODE-1 helpers (pure) ----
 function countOf(hay, needle) { let n = 0, i = 0; while ((i = hay.indexOf(needle, i)) !== -1) { n++; i += needle.length; } return n; }
+// ANCHOR-REPAIR-1 (0.3.19, T1 lever 4, agent_issues 2007): an anchor is verbatim text that occurred once in the file when the
+// task was filed; main moves, and an anchor that no longer occurs ended the task needs_human (ct_6624ak3hj6w3xn,
+// ct_giqhy11e6hgnnj). Repair without a model call, in order: (1) the same text with any whitespace (re-indented or
+// re-wrapped), when that matches exactly one place; (2) the longest line of the anchor, at least ANCHOR_REPAIR_MIN
+// characters, that still occurs exactly once (the anchor's neighbourhood survived an edit to one of its lines). Null when
+// neither holds; an anchor that occurs twice is never guessed at.
+const ANCHOR_REPAIR_MIN = 24;
+function repairAnchor(base, anchor) {
+  const a = String(anchor || "").trim();
+  if (!a || !base) return null;
+  const toks = a.split(/\s+/).filter(Boolean);
+  if (toks.length > 1 && toks.length <= 80) {
+    const re = new RegExp(toks.map(function (t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("\\s+"), "g");
+    const hits = [];
+    let m;
+    while ((m = re.exec(base)) && hits.length < 2) hits.push(m[0]);
+    if (hits.length === 1 && hits[0].length <= MAX_ANCHOR_CHARS * 2 && countOf(base, hits[0]) === 1) return { anchor: hits[0], how: "whitespace" };
+  }
+  const lines = a.split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l.length >= ANCHOR_REPAIR_MIN; })
+    .sort(function (x, y) { return y.length - x.length; });
+  for (let i = 0; i < lines.length; i++) if (countOf(base, lines[i]) === 1) return { anchor: lines[i], how: "line" };
+  return null;
+}
 // The window the model sees: [ws, we) aligned to whole lines, WINDOW_CHARS wide around the anchor.
 function windowFor(base, anchor) {
   if (!anchor) return { ws: 0, we: base.length };
@@ -631,6 +654,11 @@ async function jsSyntaxCheck(env, src) {
   const msg = String((err && err.message) || err);
   if (msg === "DYNAMIC_TIMEOUT") return { verdict: "fail", error: "candidate did not finish starting within " + DYN_TIMEOUT_MS + "ms (top-level code spins?)" };
   if (/SyntaxError/.test(msg)) return { verdict: "fail", error: msg.replace(/\s+/g, " ").slice(0, 300) };
+  // JS-VERIFY-PARSE-SHAPE-1 (0.3.19): the class name does not cross the sandbox boundary (JS-VERIFY-RUNTIME-SHAPE-1), so a
+  // parse error can arrive as V8's bare wording ("Unexpected identifier '__name'", ct_lc6has32addg0m on 2026-10-06 07:41Z,
+  // which ended needs_human although the next rung could have fixed it). That wording only arises while parsing, so it is a
+  // failed proposal (retried with the error in the prompt), never an unverified one. JSON.parse wording is excluded.
+  if (jsParseShape(msg)) return { verdict: "fail", error: "SyntaxError: " + msg.replace(/\s+/g, " ").slice(0, 280) };
   // JS-VERIFY-FAIL-CLOSED-1 (2026-10-02, GitHub #445): "anything else => syntax OK" let a real syntax error through
   // (ct_4c0lf1nu36lp6g, personal-companion/worker.js:934, unescaped quotes; deploy-gate caught it). Only errors that can
   // only happen AFTER the module parsed count as a pass; any other start failure (CPU or size limits, platform errors)
@@ -644,6 +672,12 @@ async function jsSyntaxCheck(env, src) {
   if (JS_PARSED_THEN_FAILED.test(nm + ": " + msg) || JS_RUNTIME_SHAPE.test(msg)) return { verdict: "ok", note: (nm ? nm + ": " : "") + msg.replace(/\s+/g, " ").slice(0, 200) };
   await audit(env, "code-task.verify-unknown", msg.replace(/\s+/g, " ").slice(0, 400), null, "error");
   return { verdict: "no-verifier", error: "the JS verifier could not confirm the syntax (start failed with: " + msg.replace(/\s+/g, " ").slice(0, 200) + ")" };
+}
+const JS_PARSE_SHAPE = /^(Unexpected (identifier|token|string|number|end of input|template string|character|strict mode reserved word|reserved word|eval or arguments in strict mode)\b|Invalid or unexpected token|missing \) after argument list|Unterminated (template literal|string constant|regular expression|template)\b|Invalid regular expression\b|Invalid destructuring assignment target|Invalid left-hand side\b|Invalid shorthand property initializer|Identifier '[^']+' has already been declared|Illegal (return|break|continue) statement|await is only valid in async functions|Malformed arrow function parameter list|Rest parameter must be last formal parameter|Duplicate export of\b|Octal (literals|escape sequences) are not allowed|Delete of an unqualified identifier|Missing initializer in (const|destructuring) declaration|Invalid (hexadecimal|Unicode) escape sequence)/;
+function jsParseShape(msg) {
+  const m = String(msg || "").replace(/^\s*(Failed to start Worker:\s*)?(Uncaught\s+)?(SyntaxError:\s*)?/, "");
+  if (/is not valid JSON|JSON input|in JSON at position/.test(m)) return false;
+  return JS_PARSE_SHAPE.test(m);
 }
 const JS_PARSED_THEN_FAILED = /\b(ReferenceError|TypeError|RangeError|URIError)\b|No such module|not permitted to access the internet|Illegal invocation|Network connection lost/;
 // V8's runtime messages, which only arise once the module has parsed and run (a handler using env bindings the sandbox lacks).
@@ -752,11 +786,17 @@ async function stepTask(env, task) {
     if (task.step === "read") {
       const r = await readRepoFile(env, task.repo, task.path, MAX_PATCH_FILE_CHARS + 1);
       if (!r || r.ok !== true) return await fail("read failed: " + ((r && r.error) || "unknown") + " (HTTP " + (r && r.status) + ")", false);
-      const base = String(r.content || ""), anchor = ctx.anchor || null;
+      const base = String(r.content || "");
+      let anchor = ctx.anchor || null;
       if (r.truncated || base.length > MAX_PATCH_FILE_CHARS) return await fail("file larger than " + MAX_PATCH_FILE_CHARS + " chars; too large for the loop", true);
       const nctx = { base: base, sha: r.sha };
       if (anchor) {
-        const n = countOf(base, anchor);
+        let n = countOf(base, anchor);
+        const fix = n === 0 ? repairAnchor(base, anchor) : null;
+        if (fix) {
+          await audit(env, "code-task.anchor-repaired", task.id + " (" + fix.how + "): " + String(anchor).slice(0, 120) + " -> " + fix.anchor.slice(0, 120), { id: task.id, how: fix.how }, "ok");
+          anchor = fix.anchor; n = 1;
+        }
         if (n !== 1) return await fail("anchor occurs " + n + " times in the file; it must occur exactly once", true);
         nctx.anchor = anchor; nctx.mode = "patch"; nctx.win = windowFor(base, anchor);
       } else if (base.length > MAX_FILE_CHARS) {
@@ -894,7 +934,9 @@ const PLAN_CHEAP_PER_TICK = 10; // refusals and "names no worker" decisions need
 const PLAN_SNIPPET_CHARS = 14000;
 const PLAN_FILE_MAX = 900000;
 // Mirrors qnfo-fleet-control CM_DENY (EVOLVE_DENY + the code loop): workers that never auto-merge are never planned.
-const PLAN_DENY_WORKERS = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot", "qnfo-gateway", "qnfo-ai", "qnfo-autonomy-scorer", "qnfo-code-orchestrator", "qnfo-code-agent"];
+// SCORER-HOST-DENY-1 (0.3.19): a FOLDED worker's host inherits its place here (qnfo-autonomy-scorer runs inside
+// qnfo-observability since SCORER-FOLD-1); qnfo-fleet-control fold-guard.test.mjs keeps the three lists equal.
+const PLAN_DENY_WORKERS = ["qnfo-fleet-control", "qnfo-ops", "qnfo-deploy-guard", "qnfo-containers-pilot", "qnfo-gateway", "qnfo-ai", "qnfo-autonomy-scorer", "qnfo-observability", "qnfo-code-orchestrator", "qnfo-code-agent"];
 const PLAN_DENY_CATEGORY = /^(security|governance|outreach|legal|finance|identity)$/i;
 const PLAN_DENY_TEXT = /\b(secret|credential|password|api[ _-]?key|private key|raise (the |a )?cap|increase (the |a )?cap|delete (all|every|the) |drop table|rotate|revoke)\b/i;
 // PLAN-DENY-NEGATION-1 (0.3.14, agent_issues 1807): an issue is refused when it ASKS for a deny phrase, not when its advice

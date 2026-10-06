@@ -20,10 +20,14 @@ const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " 
 {
   const lines = prober.split("\n");
   const body = lines.slice(lines.indexOf('var WORKER = "ai-health-prober";'), lines.indexOf("export {"));
-  const changed = body.filter((l) => l.trim() && !src.includes(l.trim()));
-  ok(changed.length === 3 && changed.some((l) => l.startsWith("var VERSION = ")) && changed.some((l) => l.startsWith("var LIMS = ")) && changed.some((l) => l.startsWith("var SIGNALS = ")), "every prober line is in the host except its VERSION, LIMS and SIGNALS lines (SIGNALS drops the retired kaizen register, FOLD-HYGIENE-1)", changed.map((l) => l.slice(0, 60)));
+  // AMH-COVERAGE-ROSTER-1 (host 1.3.2): the member's checkHealthCoverage body is the one function rewritten in the host.
+  const cs = body.findIndex((l) => l.includes("async function checkHealthCoverage(")), ce = body.findIndex((l) => l.includes("__name(checkHealthCoverage"));
+  const inCov = (l) => { const i = body.indexOf(l); return cs >= 0 && i > cs && i < ce; };
+  const changed = body.filter((l) => l.trim() && !src.includes(l.trim()) && !inCov(l));
+  ok(cs > 0 && ce > cs && changed.length === 3 && changed.some((l) => l.startsWith("var VERSION = ")) && changed.some((l) => l.startsWith("var LIMS = ")) && changed.some((l) => l.startsWith("var SIGNALS = ")), "every prober line is in the host except its VERSION, LIMS and SIGNALS lines (SIGNALS drops the retired kaizen register, FOLD-HYGIENE-1)", changed.map((l) => l.slice(0, 60)));
   ok(/^1\.3\.[1-9]/.test(api.VERSION) && api.PROBER_VERSION === "2.3.15-folded" && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1+, member 2.3.15-folded, legacy member cron */20 kept for dispatch");
   ok(!/"kaizen", "kaizen_candidates"/.test(src), "the prober SIGNALS in the host no longer grade the retired kaizen register (FOLD-HYGIENE-1)");
+  ok(src.includes('["version_queue", "version_queue", "created_at", 336, "event"]') && !src.includes('["version_queue", "version_queue", "created_at", 72, "heartbeat"]'), "version_queue is an event register with a 336 h window (#2028)");
   ok((src.match(/var VERSION = "/g) || []).length === 1, "one quoted VERSION constant in the bundle (FM7 parity applies to the host)");
 }
 
@@ -86,5 +90,30 @@ const get = (path, headers, envv) => api.worker_default.fetch(new Request("https
 ok(/\ncrons = \["\*\/30 \* \* \* \*"\]\n/.test(toml) && /\n\[ai\]\nbinding = "AI"/.test(toml), "wrangler.toml declares only the */30 cron (the */20 is dropped) and the AI binding");
 ok(fs.existsSync(new URL("../ai-health-prober/FOLDED", import.meta.url)), "ai-health-prober carries a FOLDED marker");
 
+// AMH-COVERAGE-ROSTER-1 (#2028): amh_coverage grades the probe roster only and names the ids it leaves out.
+{
+  const now = Date.now();
+  const roster = ["qwen3.8-27b", "bge-base-en-v1.5"];
+  const mkCov = (rows) => {
+    const writes = [];
+    const stmt = (q) => { let a = []; const s = { bind(...x) { a = x; return s; }, async run() { writes.push({ q, a }); return { success: true }; }, async first() { return null; }, async all() { return { results: /FROM ai_model_health/.test(q) ? rows : [] }; } }; return s; };
+    return { env: { QNFO_AUDIT: { prepare: stmt } }, writes };
+  };
+  const fresh = now - 3600e3, old = now - 40 * 3600e3;
+  const grab = (start, end) => { const i = src.indexOf(start), j = src.indexOf(end, i); return i >= 0 && j > i ? src.slice(i, j) : ""; };
+  const lib = new Function("__name", grab("  var MODELS = [", "\n") + "\n" + grab("  function canonicalId(m) {", "__name(canonicalId") + grab("  async function checkHealthCoverage(env, now) {", "__name(checkHealthCoverage") +
+    "\nreturn { cov: checkHealthCoverage, roster: function () { var r = []; for (var i = 0; i < MODELS.length; i++) { var id = canonicalId(MODELS[i].internal || MODELS[i].id); if (r.indexOf(id) < 0) r.push(id); } return r; } };")(function (f) { return f; });
+  // Every roster model fresh, 24 external never-probed ids outside the roster: fresh, and the 24 are named.
+  const ext = Array.from({ length: 24 }, (_, i) => ({ model_id: "openai/x-" + i, last_probe_ts: null }));
+  const cov = await lib.cov(mkCov(lib.roster().map((m) => ({ model_id: m, last_probe_ts: fresh })).concat(ext)).env, now);
+  ok(cov.status === "fresh" && cov.stale === 0 && cov.outside_roster === 24 && cov.total === lib.roster().length, "external ids outside the roster are counted, not graded", cov);
+  const one = lib.roster();
+  const c2 = await lib.cov(mkCov(one.slice(1).map((m) => ({ model_id: m, last_probe_ts: fresh })).concat([{ model_id: one[0], last_probe_ts: old }])).env, now);
+  ok(c2.status === "stale" && c2.stale === 1, "a roster model probed 40 h ago is stale", c2);
+  const c3 = await lib.cov(mkCov(one.slice(1).map((m) => ({ model_id: m, last_probe_ts: fresh }))).env, now);
+  ok(c3.status === "stale" && c3.neverProbed === 1, "a roster model with no row at all counts as never probed", c3);
+  ok(lib.roster().length >= 4, "the roster is read from MODELS", lib.roster());
+  void roster;
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

@@ -46,5 +46,19 @@ for (const [Ctor, msg, want, label] of [
   const r = await __js(envThrowingAs(Ctor, msg), "export default {}");
   ok(r.verdict === want, label, { msg, r });
 }
+// JS-VERIFY-PARSE-SHAPE-1 (0.3.19): V8 parse wording without the class name is a failed proposal (retried), not unverified.
+for (const [msg, want, label] of [
+  ["Unexpected identifier '__name'", "fail", "the live 07:41Z message (ct_lc6has32addg0m) is a failed proposal, not needs_human"],
+  ["Failed to start Worker:\nUncaught Unexpected token '}'\n  at m.js:12:3", "fail", "bare Unexpected token behind the start prefix fails"],
+  ["Invalid or unexpected token", "fail", "an unterminated string fails"],
+  ["missing ) after argument list", "fail", "a missing paren fails"],
+  ["Identifier 'x' has already been declared", "fail", "a redeclared binding is a parse-time error"],
+  ["Unexpected end of input", "fail", "a truncated module fails"],
+  ["Unexpected token '<', \"<html>\" is not valid JSON", "no-verifier", "JSON.parse wording at runtime is not a parse failure of the module"],
+  ["Unexpected end of JSON input", "no-verifier", "JSON input wording is not a parse failure of the module"],
+]) {
+  const r = await __js(envThrowingAs(Error, msg), "export default {}");
+  ok(r.verdict === want, label, { msg, r });
+}
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
