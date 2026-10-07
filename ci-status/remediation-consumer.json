@@ -1,18 +1,34 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@0ac2898718a6",
- "due": 1,
- "pass": 0,
- "fail": 1,
+ "verifier": "remediation-consumer@63757e4fb265",
+ "due": 3,
+ "pass": 1,
+ "fail": 2,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2129",
-   "issue_id": 2129,
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": "connected",
+   "observed": "pending: no access token in personal-life oauth_tokens yet",
+   "written": true
+  },
+  {
+   "class": "issue-2106",
+   "issue_id": 2106,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no reading.q08.org piece since the 1.13.0 fix (last 2026-10-05T08:06:54.939Z)",
+   "written": true
+  },
+  {
+   "class": "issue-2117",
+   "issue_id": 2117,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   }
  ],
@@ -39,14 +55,12 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 19.6,
+ "runtime_verified_share_24h": 20.2,
  "host_census": {
-  "filed": true,
-  "hosts": 55,
-  "broken": 21
+  "skipped": "ran within 6h"
  },
- "spent_ms": 43787,
- "head": "0ac2898718a6dfcd7ae1ed619886dada70030e5f",
+ "spent_ms": 15618,
+ "head": "63757e4fb265a727a6250cadcc4ac5d7bc5bf080",
  "job_status": "success",
- "ts": "2026-10-07T15:01:35Z"
+ "ts": "2026-10-07T16:01:45Z"
 }
