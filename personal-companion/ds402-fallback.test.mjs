@@ -20,12 +20,12 @@ const msgs = [{ role: "user", content: "hi" }];
   const env = { DEEPSEEK_API_KEY: "k", AI: { run: async (m) => { aiCalls.push(m); return { response: PROSE }; } } };
   const r1 = await callModel(env, msgs, 4000, 1000, "deepseek-reasoner", "essay");
   ok(r1 && r1.text === PROSE, "402 falls through to Workers AI text");
-  ok(r1.model === "@cf/moonshotai/kimi-k2.6", "essay fallback starts at kimi-k2.6, got " + r1.model);
+  ok(r1.model === "@cf/openai/gpt-oss-120b", "essay fallback starts at gpt-oss-120b (fast), got " + r1.model);
   const r2 = await callModel(env, msgs, 900, 1000, "deepseek-chat", "critic");
   ok(fetches === 1, "breaker: one paid 402 only, got " + fetches);
-  ok(r2.model === "@cf/openai/gpt-oss-120b", "critic uses a different model than the essay writer, got " + r2.model);
+  ok(r2.model === "@cf/moonshotai/kimi-k2.6", "critic uses a different model than the essay writer, got " + r2.model);
   const r3 = await callModel(env, msgs, 900, 1000, "deepseek-chat", "writer");
-  ok(r3.model === "@cf/moonshotai/kimi-k2.6", "notes writer fallback is kimi-k2.6, got " + r3.model);
+  ok(r3.model === "@cf/openai/gpt-oss-120b", "notes writer fallback is gpt-oss-120b, got " + r3.model);
 }
 // (2) DeepSeek healthy -> DeepSeek used, no Workers AI call
 {
@@ -40,12 +40,12 @@ const msgs = [{ role: "user", content: "hi" }];
   const { callModel } = await load();
   globalThis.fetch = async () => new Response("down", { status: 503 });
   const seen = [];
-  const env = { DEEPSEEK_API_KEY: "k", AI: { run: async (m) => { seen.push(m); if (m.includes("kimi")) throw new Error("timeout"); if (m.includes("gpt-oss")) return { choices: [{ message: { content: "", reasoning_content: "r".repeat(500) } }] }; return { choices: [{ message: { content: PROSE } }] }; } } };
+  const env = { DEEPSEEK_API_KEY: "k", AI: { run: async (m) => { seen.push(m); if (m.includes("gpt-oss")) throw new Error("timeout"); if (m.includes("kimi")) return { choices: [{ message: { content: "", reasoning_content: "r".repeat(500) } }] }; return { choices: [{ message: { content: PROSE } }] }; } } };
   const r = await callModel(env, msgs, 4000, 1000, "deepseek-reasoner", "essay");
   ok(r.model === "@cf/zai-org/glm-5.3" && r.text === PROSE, "skips a throwing and a reasoning-only model, got " + r.model);
   const env2 = { DEEPSEEK_API_KEY: "k", AI: { run: async () => { throw new Error("boom"); } } };
   const r2 = await callModel(env2, msgs, 4000, 1000, "deepseek-reasoner", "essay");
-  ok(r2.text === null && /HTTP 503/.test(r2.error) && /kimi-k2\.6: boom/.test(r2.error) && /gpt-oss-120b: boom/.test(r2.error), "total failure reports every error: " + r2.error);
+  ok(r2.text === null && /HTTP 503/.test(r2.error) && /kimi-k2\.6: boom/.test(r2.error) && /gpt-oss-120b: boom/.test(r2.error) && /glm-5\.3: boom/.test(r2.error), "total failure reports every error: " + r2.error);
   // 503 is not a funding error: breaker stays shut, DeepSeek is tried again
   let f = 0; globalThis.fetch = async () => { f++; return new Response("down", { status: 503 }); };
   await callModel(env, msgs, 900, 1000, "deepseek-chat", "critic");
@@ -58,6 +58,17 @@ const msgs = [{ role: "user", content: "hi" }];
   let seenInput = null;
   await callModel({ DEEPSEEK_API_KEY: "k", AI: { run: async (m, input) => { seenInput = input; return { response: PROSE }; } } }, msgs, 900, 3e4, "deepseek-chat", "critic");
   ok(seenInput && seenInput.max_tokens === 4000, "critic fallback max_tokens floored at 4000, got " + (seenInput && seenInput.max_tokens));
+}
+// (5) COMPANION-FALLBACK-TUNE-1: a short-only draft is extended, anything else is not
+{
+  const { expandFeedback } = await load();
+  const piece = { title: "T", body_md: "## A\nbody" };
+  const f = expandFeedback(["essay length 1591"], "essay", piece);
+  ok(f && /1591 words against a floor of 2000/.test(f) && /at least 2300 words/.test(f) && /# T/.test(f) && /## A/.test(f), "short essay -> extend with the draft attached");
+  ok(expandFeedback(["essay length 3500"], "essay", piece) === null, "too long is not extended");
+  ok(expandFeedback(["essay length 1591", "banned: delve"], "essay", piece) === null, "a second problem keeps the normal retry");
+  ok(expandFeedback(["notes length 1500"], "notes", piece) && /floor of 1700/.test(expandFeedback(["notes length 1500"], "notes", piece)), "notes floor 1700");
+  ok(expandFeedback(["serial length 1500"], "essay", piece) === null, "form mismatch is ignored");
 }
 // (4) no key -> straight to Workers AI
 {

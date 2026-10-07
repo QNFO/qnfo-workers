@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.13.0-ds402-fallback"; // 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.13.1-fallback-tune"; // 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -755,9 +755,12 @@ var dsBreakerUntil = 0;
 // glm-5.3 spent all 6000 tokens reasoning and returned no prose, so it is last everywhere. Reasoning models need room
 // beyond the prose, so a fallback call gets at least FB_MIN_TOKENS and FB_MIN_TIMEOUT_MS.
 var CF_FALLBACK = {
-  essay: ["@cf/moonshotai/kimi-k2.6", "@cf/openai/gpt-oss-120b", "@cf/zai-org/glm-5.3"],
-  writer: ["@cf/moonshotai/kimi-k2.6", "@cf/openai/gpt-oss-120b", "@cf/zai-org/glm-5.3"],
-  critic: ["@cf/openai/gpt-oss-120b", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3"]
+  // COMPANION-FALLBACK-TUNE-1 (1.13.1): gpt-oss-120b first for writing. Live run 2026-10-07 12:00Z: kimi-k2.6 used the full
+  // 300 s writer timeout on every essay attempt before gpt-oss answered (attempts at 333 s and 667 s), so the run was
+  // killed by the cron wall after three attempts with no piece.
+  essay: ["@cf/openai/gpt-oss-120b", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3"],
+  writer: ["@cf/openai/gpt-oss-120b", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3"],
+  critic: ["@cf/moonshotai/kimi-k2.6", "@cf/openai/gpt-oss-120b", "@cf/zai-org/glm-5.3"]
 };
 var FB_MIN_TOKENS = 4e3;
 var FB_MIN_TIMEOUT_MS = 9e4;
@@ -1175,6 +1178,24 @@ async function sharpenBridge(env, piece, form) {
 __name(sharpenBridge, "sharpenBridge");
 __name2(sharpenBridge, "sharpenBridge");
 __name22(sharpenBridge, "sharpenBridge");
+var GEN_BUDGET_MS = 600e3;
+var LENGTH_FLOOR = { essay: 2000, serial: 1800, notes: 1700 };
+// COMPANION-FALLBACK-TUNE-1: when the only validation problem is a length below the form's floor, the next attempt gets the
+// draft itself and is asked to extend it (keep every claim, title and section; deepen the argument from the anchors) to the
+// floor plus a margin. Any other problem, or a draft that is too long, returns null and the normal retry feedback stands.
+function expandFeedback(problems, form, piece) {
+  if (!problems || problems.length !== 1) return null;
+  var m = /^(essay|serial|notes) length (\d+)$/.exec(String(problems[0]));
+  if (!m || m[1] !== form) return null;
+  var wc = Number(m[2]), floor = LENGTH_FLOOR[form];
+  if (!floor || wc >= floor) return null;
+  var target = floor + 300;
+  return "The previous draft was good but too short: " + wc + " words against a floor of " + floor + ". Do not start over. " +
+    "Return the same piece, same title and the same sections in the same order, extended to at least " + target + " words: " +
+    "deepen each section with more specific particulars from the source material (names, numbers, mechanisms, cases) and a fuller " +
+    "treatment of the strongest objection. Keep every sentence that is already there unless extending it. The draft follows." + NL + NL +
+    "# " + String(piece && piece.title || "") + NL + NL + String(piece && piece.body_md || "").slice(0, 24e3);
+}
 function validatePiece(piece, form) {
   var problems = [];
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
@@ -1642,6 +1663,12 @@ async function generate(env, form, opts) {
     var best = null;
     var feedback = "";
     while (attempt < 5) {
+      // COMPANION-FALLBACK-TUNE-1: no new attempt once GEN_BUDGET_MS is spent, so the run ends with a logged failure
+      // instead of being killed by the 15-minute cron wall mid-attempt (2026-10-07 12:00Z run: killed in attempt 3).
+      if (Date.now() - t0 > GEN_BUDGET_MS) {
+        await logRun(env, form, model, topic.id, "stage", "time budget spent after " + attempt + " attempts", Date.now() - t0);
+        break;
+      }
       attempt++;
       await logRun(env, form, "", topic.id, "stage", "compose attempt " + attempt, Date.now() - t0);
       var comp = await composePiece(env, form, topic, anchors, life, profile, continuity, feedback);
@@ -1666,6 +1693,10 @@ async function generate(env, form, opts) {
       if (!v.ok) {
         await logRun(env, form, model, topic.id, "rejected", "validate: " + v.problems.join("; ") + " || raw: " + String(comp.raw || "").slice(0, 500), Date.now() - t0);
         feedback = "The previous draft failed validation for these reasons: " + v.problems.join("; ") + ". Fix them and try again.";
+        // COMPANION-FALLBACK-TUNE-1: a draft whose only problem is being short is extended, not rewritten from scratch
+        // (12:00Z run: gpt-oss drafts of 1591 and 1764 words against the 2000-word essay floor were thrown away).
+        var shortOnly = expandFeedback(v.problems, form, piece);
+        if (shortOnly) feedback = shortOnly;
         continue;
       }
       var dup = await similarExists(env, String(piece.title) + NL + String(piece.body_md), null);
@@ -2718,6 +2749,7 @@ export {
   isoWeekKey,
   callModel,
   companionStallDetector,
+  expandFeedback,
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
