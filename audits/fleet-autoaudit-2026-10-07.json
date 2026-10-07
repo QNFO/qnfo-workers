@@ -1,8 +1,17 @@
 {
-  "audited_at": "2026-10-07 14:07:41",
+  "audited_at": "2026-10-07 16:03:56",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion",
+        "qnfo-cloud-ops",
+        "qnfo-code-orchestrator"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -463,7 +472,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.13.0-ds402-fallback",
+        "version": "1.13.1-fallback-tune",
         "worker": "personal-companion"
       },
       {
@@ -488,12 +497,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.23.0-pub-gate-loop",
+        "version": "1.23.1-ai-attr",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.7.0-timeout-folded-attr",
+        "version": "0.8.0-edit-indent",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -573,7 +582,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.8.3-codeagent",
+        "version": "0.9.0-promote-route",
         "worker": "qnfo-social"
       },
       {
@@ -804,9 +813,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.13.0-ds402-fallback",
+      "before": "1.13.1-fallback-tune",
       "http": 200,
-      "live": "1.13.0-ds402-fallback",
+      "live": "1.13.1-fallback-tune",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1012,9 +1021,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.23.0-pub-gate-loop",
+      "before": "1.23.1-ai-attr",
       "http": 200,
-      "live": "1.23.0-pub-gate-loop",
+      "live": "1.23.1-ai-attr",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1028,9 +1037,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.7.0-timeout-folded-attr",
+      "before": "0.8.0-edit-indent",
       "http": 200,
-      "live": "0.7.0-timeout-folded-attr",
+      "live": "0.8.0-edit-indent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1412,9 +1421,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.8.3-codeagent",
+      "before": "0.9.0-promote-route",
       "http": 200,
-      "live": "0.8.3-codeagent",
+      "live": "0.9.0-promote-route",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
