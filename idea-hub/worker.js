@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.6.1-budget-soft-health"; // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.7.0-owner-signal-intake"; // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (zenodo/slug/doi/internal), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -363,7 +363,28 @@ function ideaTopicCluster(text) {
 function proposalCluster(name, idea, rationale) { return ideaTopicCluster([name, idea, rationale].filter(Boolean).join(" ")); }
 function diversityExempt(row) {
   var name = String(row && row.name || "");
-  return /owner|rowan/i.test(name) || /^intake:/i.test(name) || String(row && row.contact || "") === "owner";
+  return /owner|rowan/i.test(name) || /^intake:/i.test(name) || String(row && row.contact || "") === "owner" || proposalKind(row) !== "generated";
+}
+// OWNER-SIGNAL-INTAKE-1 (1.7.0, #1947 #2103 #2104). Three kinds of proposal share the one intake:
+//   direct    the owner wrote it (POST /api/intake owner-chat, rowan-*, chat-session, contact 'owner'/'rowan-*'): ACCEPTed,
+//             scored only for the record; the owner's own ideas drive the pipeline and never wait on a model's HOLD;
+//   corpus    'owner-corpus', distilled by runOwnerCorpus from the owner's notebook: ACCEPTed at OWNER_CORPUS_SCORE_MIN, a
+//             lower bar than generated ideas (the source is the owner's own thinking; the model only did the extraction);
+//   generated everything else (arXiv scan, think loop, re-entry, ask-gap, radar intake): the unchanged scorecard.
+// The research pipeline's review, verify and publish gates apply to all three alike.
+var OWNER_CORPUS_SCORE_MIN = 0.55;
+function proposalKind(row) {
+  var name = String(row && row.name || ""), contact = String(row && row.contact || "");
+  if (name === "owner-corpus") return "corpus";
+  if (/^intake:/i.test(name)) return "generated";
+  if (/^(owner|rowan)/i.test(name) || name === "chat-session" || contact === "owner" || /^rowan/i.test(contact)) return "direct";
+  return "generated";
+}
+function ownerDecision(kind, s) {
+  var r = Object.assign({}, s);
+  if (kind === "direct") { r.decision = "ACCEPT"; r.rationale = "[owner-authored: accepted, OWNER-SIGNAL-INTAKE-1] " + (s.rationale || ""); }
+  else if (kind === "corpus") { var ok = s.decision === "ACCEPT" || Number(s.score) >= OWNER_CORPUS_SCORE_MIN; r.decision = ok ? "ACCEPT" : "HOLD"; r.rationale = "[owner notebook, bar " + OWNER_CORPUS_SCORE_MIN + "] " + (s.rationale || ""); }
+  return r;
 }
 async function acceptedMix(env) {
   var rs = (await env.QNFO_AUDIT.prepare("SELECT name, idea, rationale FROM idea_proposals WHERE decision = 'ACCEPT' AND " + DIVERSITY_WINDOW_SQL).all()).results || [];
@@ -432,14 +453,20 @@ async function triageProposals(env) {
     var row = rows[i], now = new Date().toISOString();
     try {
       // Research questions from the fleet's own producers are ideas, not chat questions: the chat-question filter
-      // would HOLD every think-loop proposal unscored ("Can X predict Y?" matches it).
-      var internal = row.name === "think-loop" || row.name === "auto-reentry";
+      // would HOLD every think-loop proposal unscored ("Can X predict Y?" matches it). OWNER-SIGNAL-INTAKE-1: Ask QWAV
+      // gaps (ask-gap) are questions by construction, and notebook extractions are research text. A short chat question
+      // typed by the owner ("What is a qubit?") is still held: it asks for an answer, not for a paper.
+      var kind = proposalKind(row);
+      var internal = row.name === "think-loop" || row.name === "auto-reentry" || row.name === "ask-gap" || kind === "corpus";
       if (isNoise(row.idea) || (!internal && isQuestion(row.idea))) {
         await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision='HOLD', rationale=?, triaged_at=?, status='triaged_hold' WHERE id=?").bind("noise/question filter", now, row.id).run();
         out.triaged++; continue;
       }
       var s = await scoreIdea(env, row.idea, budget.breached);
-      if (s.error) { out.errors++; continue; }
+      if (s.error && kind !== "direct") { out.errors++; continue; }
+      if (s.error) s = { score: null, decision: "HOLD", rationale: "scoring unavailable: " + String(s.error).slice(0, 80) };
+      s = ownerDecision(kind, s);
+      if (kind !== "generated") out.owner_accepted = (out.owner_accepted || 0) + (s.decision === "ACCEPT" ? 1 : 0);
       var cluster = s.decision === "ACCEPT" ? proposalCluster(row.name, row.idea, s.rationale) : null;
       if (cluster && mix && !diversityExempt(row) && diversityBlocks(mix, cluster)) {
         var pct = Math.round(100 * ((mix.by[cluster] || 0) + 1) / (mix.n + 1));
@@ -467,6 +494,15 @@ async function triageProposals(env) {
     var at = new Date().toISOString();
     await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES ('idea-triage-budget', ?1, 'idea-triage-budget', ?2, ?3, 'idea-hub', ?4)")
       .bind(at, "idea triage: " + (budget.breached ? "AI budget caps breached, scored lean on one cheap model; " : "caps clear; ") + out.released + " released, " + out.triaged + " triaged, " + out.deferred_total + " waiting as deferred_budget, " + out.diversity_held_total + " as deferred_diversity", JSON.stringify({ version: VERSION, breached: budget.breached, caps: budget.caps, deferred_run: out.deferred, released_run: out.released, deferred_total: out.deferred_total, triaged_run: out.triaged, diversity_held_run: out.diversity_held, diversity_released_run: out.diversity_released, diversity_expired_run: out.diversity_expired, diversity_held_total: out.diversity_held_total, diversity: out.diversity || null }), budget.breached ? "lean" : "ok").run();
+  } catch (e) {}
+  // OWNER-SIGNAL-INTAKE-1: metric owner_signal_share_30d (registered with its trigger in
+  // migrations/2026-10-07-owner-signal-intake.sql) is the share of research_queue rows created in the last 30 days that
+  // came from an owner proposal (direct or notebook). This run is its producer.
+  try {
+    var osm = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN p.name = 'owner-corpus' OR p.name LIKE 'owner%' OR p.name LIKE 'rowan%' OR p.name = 'chat-session' OR p.contact = 'owner' OR p.contact LIKE 'rowan%' THEN 1 ELSE 0 END) AS own FROM research_queue q LEFT JOIN idea_proposals p ON q.source = 'proposal' AND CAST(p.id AS TEXT) = q.source_id WHERE replace(substr(q.created_at, 1, 19), 'T', ' ') >= datetime('now', '-30 day') AND q.source <> 'diagnostic'").first();
+    var osn = Number(osm && osm.n) || 0, oso = Number(osm && osm.own) || 0;
+    out.owner_signal_share_30d = osn ? Math.round(1000 * oso / osn) / 1000 : 0;
+    await env.QNFO_AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = ?2 WHERE metric = 'owner_signal_share_30d'").bind(String(out.owner_signal_share_30d), new Date().toISOString()).run();
   } catch (e) {}
   console.log("BUDGET-SOFT-ROUTE-1 idea-triage " + JSON.stringify(out));
   try { await env.QNFO_AUDIT.prepare("INSERT INTO fleet_heartbeat (worker, version, ts, ok) VALUES ('idea-hub', ?1, ?2, ?3) ON CONFLICT(worker) DO UPDATE SET version=excluded.version, ts=excluded.ts, ok=excluded.ok").bind(VERSION, new Date().toISOString(), out.errors ? 0 : 1).run(); } catch (e) {}
@@ -496,6 +532,10 @@ var RESCORE_BATCH = 10;
 //      nothing may consume only regrows the backlog).
 // Expiry is a status change only: the row, its open_questions and its weight are kept and the reason is in decision.
 var REENTRY_NOQ_TTL_H = 20, REENTRY_TTL_DAYS = 7, REENTRY_EXPIRE_BATCH = 50;
+var REENTRY_OWNER_TYPES = ["zenodo", "slug", "doi", "internal"];
+// The owner-only re-entry has its own boundary row, so the pre-1.7.0 code (which still reads 'artifact_reentry', paused by
+// OWNER-NARROW-SIGNAL-1) can never resume the arXiv-wide scan if a deploy lags the migration that opens this one.
+var REENTRY_BOUNDARY_SOURCE = "artifact_reentry_owner";
 function extractOpenQuestions(bodyMd) {
   if (!bodyMd) return [];
   var text = String(bodyMd), out = [], seen = new Set();
@@ -515,7 +555,7 @@ function extractOpenQuestions(bodyMd) {
 }
 async function reentryPermitted(env) {
   try {
-    var b = await env.QNFO_AUDIT.prepare("SELECT permitted FROM signal_worker_boundary WHERE worker='idea-hub' AND source='artifact_reentry'").first();
+    var b = await env.QNFO_AUDIT.prepare("SELECT permitted FROM signal_worker_boundary WHERE worker='idea-hub' AND source='" + REENTRY_BOUNDARY_SOURCE + "'").first();
     return !!b && Number(b.permitted) === 1;
   } catch (e) { return false; }
 }
@@ -523,9 +563,12 @@ async function runReentry(env) {
   var out = { scanned: 0, emitted: 0, errors: 0, permitted: await reentryPermitted(env) };
   var papers = [], have = new Set();
   if (out.permitted) {
-    papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' ORDER BY created_at DESC LIMIT 500").all()).results || [];
+    // OWNER-SIGNAL-INTAKE-1 (1.7.0): re-entry reads only the owner's own papers. The newest-500 scan recycled arXiv-derived
+    // QEC papers into more QEC (the reason for OWNER-NARROW-SIGNAL-1); REENTRY_OWNER_TYPES are the identifier types of
+    // papers the owner wrote (Zenodo deposits, his slugs, DOIs, internal), not arxiv, kg-backfill or pipeline 'qnfo' rows.
+    papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' AND status IN ('published','distributed') AND identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ") ORDER BY created_at DESC LIMIT 500").bind(...REENTRY_OWNER_TYPES).all()).results || [];
     have = new Set(((await env.QNFO_AUDIT.prepare("SELECT source_ref FROM signals WHERE source='artifact_reentry'").all()).results || []).map(function (r) { return String(r.source_ref); }));
-  } else out.emit_paused = "signal_worker_boundary idea-hub/artifact_reentry not permitted";
+  } else out.emit_paused = "signal_worker_boundary idea-hub/" + REENTRY_BOUNDARY_SOURCE + " not permitted";
   out.scanned = papers.length;
   var todo = papers.filter(function (p) { return !have.has(String(p.doi)); }).slice(0, REENTRY_BATCH);
   for (var i = 0; i < todo.length; i++) {
@@ -585,7 +628,7 @@ async function runConsume(env) {
   var out = { consumed: 0, proposals: 0, paused: false, errors: 0 };
   var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status IN ('new','deferred_budget')").first();
   if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) { out.paused = true; return out; }
-  var b = await env.QNFO_AUDIT.prepare("SELECT permitted FROM signal_worker_boundary WHERE worker='idea-hub' AND source='artifact_reentry'").first();
+  var b = await env.QNFO_AUDIT.prepare("SELECT permitted FROM signal_worker_boundary WHERE worker='idea-hub' AND source='" + REENTRY_BOUNDARY_SOURCE + "'").first();
   if (!b || Number(b.permitted) !== 1) { out.paused = true; return out; }
   var rows = (await env.QNFO_AUDIT.prepare("SELECT id, source_ref, open_questions FROM signals WHERE source='artifact_reentry' AND status='new' AND evidential_weight > 0 ORDER BY created_at LIMIT ?1").bind(CONSUME_SIGNALS).all()).results || [];
   for (var i = 0; i < rows.length; i++) {
@@ -605,6 +648,76 @@ async function runConsume(env) {
   return out;
 }
 
+// OWNER-SIGNAL-INTAKE-1 (1.7.0): the think loop used a fixed prompt ("energy-efficient computing, quantum foundations,
+// information thermodynamics"), which kept the generated ideas on the themes the owner has moved away from. It now seeds
+// from up to THINK_SEED_N of the owner's own accepted ideas (direct and notebook), sampled at random, and asks for a
+// question that extends or connects them; with none on file it falls back to the corpus-gap prompt without fixed themes.
+var THINK_SEED_N = 3;
+async function thinkSeed(env) {
+  var rows = [];
+  try { rows = (await env.QNFO_AUDIT.prepare("SELECT idea FROM idea_proposals WHERE decision='ACCEPT' AND (name='owner-corpus' OR contact='owner' OR name LIKE 'rowan%' OR name LIKE 'owner%') ORDER BY random() LIMIT ?1").bind(THINK_SEED_N).all()).results || []; } catch (e) {}
+  if (!rows.length) return "Generate one novel research question that fills a gap in the existing QNFO corpus. Avoid quantum error correction, which the corpus already over-represents.";
+  return "The author's own lines of work:\n" + rows.map(function (r) { return "- " + String(r.idea || "").replace(/\s+/g, " ").slice(0, 500); }).join("\n") + "\n\nPropose ONE novel, falsifiable question that extends one of these lines or connects two of them. Stay in the author's own terms and fields.";
+}
+// ---- owner corpus (OWNER-SIGNAL-INTAKE-1, #2104) ----
+// notes_intake (written hourly by calendar-api from the R2 bucket obsidian-vault) indexes the owner's notebook: 6,589
+// notes on 2026-10-07, read until now only by the calendar/GTD leg. Each hourly cycle takes OWNER_CORPUS_BATCH notes not
+// yet in owner_corpus_seen (newest path first), reads the body from VAULT, and asks one cheap model to extract the
+// single strongest original research idea, or none. An extracted idea becomes an idea_proposals row (name 'owner-corpus',
+// contact 'owner', ip_hash corpus:<path hash>) that triage ACCEPTs at OWNER_CORPUS_SCORE_MIN. Every note gets one
+// owner_corpus_seen row (proposed, none, short, missing, error) so nothing is read twice. The leg pauses under the same
+// PROPOSAL_BACKPRESSURE as the others, and while OWNER_CORPUS_RQ_CAP research rows are already waiting, so the notebook
+// cannot flood research_queue.
+var OWNER_CORPUS_BATCH = 2, OWNER_CORPUS_MIN_CHARS = 600, OWNER_CORPUS_EXCERPT = 7000, OWNER_CORPUS_RQ_CAP = 12;
+var OWNER_CORPUS_TYPES = ["note", "synthesis", "synthesis-working-draft", "development-note", "lesson"];
+var OWNER_CORPUS_MODEL = "@cf/zai-org/glm-5.3-flash";
+var OWNER_CORPUS_PROMPT = "You read one note from the private research notebook of Rowan Brad Quni-Gudzinas, an independent researcher. Extract the single strongest ORIGINAL research idea the author is developing in it: a claim, conjecture or question that a theoretical or computational paper could investigate. Ignore assistant boilerplate, chat pleasantries, task lists, system prompts and operations notes. Return JSON only, either {\"title\": \"<= 14 words\", \"idea\": \"<= 160 words: the claim or question, why it matters, and how a derivation, simulation or formal analysis could test it\"} or {\"none\": \"<= 15 words why\"} when the note holds no research idea.\n\nNOTE:\n";
+function corpusBody(t) { return String(t || "").replace(/^---\n[\s\S]*?\n---\n/, "").replace(/\r/g, "").trim(); }
+async function shortHash(s) {
+  var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s)));
+  return Array.from(new Uint8Array(d)).slice(0, 8).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+}
+async function runOwnerCorpus(env) {
+  var out = { ok: true, picked: 0, proposed: 0, none: 0, short: 0, missing: 0, errors: 0 };
+  if (!env.VAULT) { out.ok = false; out.why = "VAULT binding absent"; return out; }
+  var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status IN ('new','deferred_budget')").first();
+  if (pending && Number(pending.n) > PROPOSAL_BACKPRESSURE) { out.paused = "proposal backpressure"; return out; }
+  var rq = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE status IN ('queued','researching','review')").first();
+  if (rq && Number(rq.n) >= OWNER_CORPUS_RQ_CAP) { out.paused = "research_queue at " + rq.n; return out; }
+  await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS owner_corpus_seen (path TEXT PRIMARY KEY, sig TEXT, ts TEXT, outcome TEXT, proposal_id INTEGER, note TEXT)").run();
+  var rows = (await env.QNFO_AUDIT.prepare("SELECT n.path, n.sig FROM notes_intake n LEFT JOIN owner_corpus_seen s ON s.path = n.path WHERE s.path IS NULL AND n.type IN (" + OWNER_CORPUS_TYPES.map(function () { return "?"; }).join(",") + ") AND n.path LIKE 'notes/%' AND COALESCE(n.status, '') NOT IN ('archived', 'done') ORDER BY n.path DESC LIMIT ?").bind(...OWNER_CORPUS_TYPES, OWNER_CORPUS_BATCH).all()).results || [];
+  for (var i = 0; i < rows.length; i++) {
+    var n = rows[i], now = new Date().toISOString(), outcome = "error", pid = null, note = "";
+    out.picked++;
+    try {
+      var obj = await env.VAULT.get(n.path);
+      if (!obj) { outcome = "missing"; out.missing++; }
+      else {
+        var body = corpusBody(await obj.text());
+        if (body.length < OWNER_CORPUS_MIN_CHARS) { outcome = "short"; out.short++; }
+        else {
+          var ai = await aiRunAttr(env, "idea-hub", "owner-corpus", OWNER_CORPUS_MODEL, { messages: [{ role: "user", content: OWNER_CORPUS_PROMPT + body.slice(0, OWNER_CORPUS_EXCERPT) }], max_tokens: 600, temperature: 0.2 });
+          var m = tExtract(ai).match(/\{[\s\S]*\}/), j = null;
+          if (m) { try { j = JSON.parse(m[0]); } catch (e) {} }
+          if (j && j.idea && String(j.idea).trim().length >= 40) {
+            var idea = (j.title ? String(j.title).trim().replace(/[.\s]+$/, "") + ". " : "") + String(j.idea).trim().slice(0, 1600) + "\n\nSource: owner notebook " + n.path;
+            var tag = "corpus:" + await shortHash(n.path);
+            var seen = await env.QNFO_AUDIT.prepare("SELECT id FROM idea_proposals WHERE ip_hash = ?1 LIMIT 1").bind(tag).first();
+            if (seen) pid = seen.id;
+            else {
+              var ins = await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES ('owner-corpus', ?1, 'owner', 'new', ?2, ?3)").bind(idea, tag, now).run();
+              pid = ins && ins.meta && ins.meta.last_row_id || null;
+            }
+            outcome = "proposed"; out.proposed++;
+          } else if (j && j.none) { outcome = "none"; note = String(j.none).slice(0, 200); out.none++; }
+          else { outcome = "error"; note = "unparseable model reply"; out.errors++; }
+        }
+      }
+    } catch (e) { outcome = "error"; note = String(e && e.message || e).slice(0, 200); out.errors++; }
+    try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO owner_corpus_seen (path, sig, ts, outcome, proposal_id, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(n.path, n.sig || null, now, outcome, pid, note).run(); } catch (e) { out.errors++; }
+  }
+  return out;
+}
 // ---- think loop (folded from qnfo-autopilot 0.3.3) ----
 var THINK_EVERY_H = 6;
 var THINK_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
@@ -614,7 +727,7 @@ async function thinkLoop(env) {
   await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS self_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, question TEXT, hypothesis TEXT, source TEXT, status TEXT)").run();
   var ai = await aiRunAttr(env, "idea-hub", "think", THINK_MODEL, { messages: [
     { role: "system", content: 'You are the research planner for QNFO, an independent research imprint (one researcher with an AI-assisted pipeline). Propose ONE novel, falsifiable research question the fleet should investigate next. Output strict JSON only: {"question": "...", "hypothesis": "...", "why": "..."}. No markdown.' },
-    { role: "user", content: "Generate one novel research question. Consider energy-efficient computing, quantum foundations, information thermodynamics, or a gap in the existing corpus." }
+    { role: "user", content: await thinkSeed(env) }
   ], max_tokens: 1024 });
   var text = tExtract(ai).trim();
   if (!text) return { ok: false, why: "model empty" };
@@ -664,6 +777,7 @@ async function ideationCycle(env) {
   try { r.reentry = await runReentry(env); } catch (e) { r.reentry = { error: String(e && e.message || e) }; }
   try { r.consume = await runConsume(env); } catch (e) { r.consume = { error: String(e && e.message || e) }; }
   try { r.askgap = await runAskGap(env); } catch (e) { r.askgap = { error: String(e && e.message || e) }; }
+  try { r.corpus = await runOwnerCorpus(env); } catch (e) { r.corpus = { error: String(e && e.message || e) }; }
   if (new Date().getUTCHours() % THINK_EVERY_H === 0) { try { r.think = await thinkLoop(env); } catch (e) { r.think = { error: String(e && e.message || e) }; } }
   r.triage = await triageProposals(env);
   return r;
@@ -932,4 +1046,4 @@ async function subscribeProxy(req) {
     return json({ ok: false, error: "Sign-up is unavailable right now. Please try again shortly." }, 502);
   } finally { clearTimeout(timer); }
 }
-export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(u.pathname==='/robots.txt')return new Response('User-agent: *\nAllow: /\nSitemap: https://ideas.qnfo.org/sitemap.xml\n',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=86400'}});if(u.pathname==='/sitemap.xml')return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://ideas.qnfo.org/</loc><changefreq>daily</changefreq></url></urlset>',{headers:{'Content-Type':'application/xml; charset=utf-8','Cache-Control':'public, max-age=3600'}});/* SEO-HYGIENE-1: robots + sitemap (home only: the idea pages are machine-generated questions, not invited into the index) */if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/api/subscribe'&&req.method==='POST')return await subscribeProxy(req);if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}let td=-1,tdd=-1;try{const r=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();td=Number(r&&r.n)||0;const r2=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_diversity'").first();tdd=Number(r2&&r2.n)||0}catch(e){}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,triage_deferred_budget:td,triage_deferred_diversity:tdd,diversity_cap:{max_share:DIVERSITY_MAX_SHARE,min_n:DIVERSITY_MIN_N},public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated; POST /api/subscribe forwards an address to the qnfo-subscribers double opt-in (source ideas.qnfo.org; nobody is subscribed without clicking the confirmation link)", "ideation runs on the hourly :23 cron", "while a fleet_budget ai_spend cap is breached, triage still runs and scores on one cheap model (BUDGET-SOFT-ROUTE-1); rows left as status deferred_budget by older versions are released every run (count in triage_deferred_budget)", "a generated proposal scored ACCEPT waits as deferred_diversity (count in triage_deferred_diversity) while its topic cluster would exceed half of the 30-day accepts; owner and intake:* rows are never held"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
+export default{async scheduled(event,env,ctx){ctx.waitUntil(ideationCycle(env))},async fetch(req,env,ctx){const u=new URL(req.url);if(u.pathname==='/robots.txt')return new Response('User-agent: *\nAllow: /\nSitemap: https://ideas.qnfo.org/sitemap.xml\n',{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'public, max-age=86400'}});if(u.pathname==='/sitemap.xml')return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://ideas.qnfo.org/</loc><changefreq>daily</changefreq></url></urlset>',{headers:{'Content-Type':'application/xml; charset=utf-8','Cache-Control':'public, max-age=3600'}});/* SEO-HYGIENE-1: robots + sitemap (home only: the idea pages are machine-generated questions, not invited into the index) */if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors()});try{if(u.pathname==='/api/subscribe'&&req.method==='POST')return await subscribeProxy(req);if(u.pathname==='/health'){let qt=-1;try{qt=(await quarantined(env)).size}catch(e){}let td=-1,tdd=-1;try{const r=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_budget'").first();td=Number(r&&r.n)||0;const r2=await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM idea_proposals WHERE status='deferred_diversity'").first();tdd=Number(r2&&r2.n)||0}catch(e){}let oc=null;try{oc={};((await env.QNFO_AUDIT.prepare("SELECT outcome, COUNT(*) AS n FROM owner_corpus_seen GROUP BY outcome").all()).results||[]).forEach(function(x){oc[x.outcome]=x.n})}catch(e){oc=null}return json({ok:true,worker:'idea-hub',version:VERSION,private:false,owner_signal_intake:{vault_bound:!!env.VAULT,corpus_seen:oc,reentry_owner_types:REENTRY_OWNER_TYPES,corpus_score_min:OWNER_CORPUS_SCORE_MIN},triage_deferred_budget:td,triage_deferred_diversity:tdd,diversity_cap:{max_share:DIVERSITY_MAX_SHARE,min_n:DIVERSITY_MIN_N},public_filter:true,thread_filter:true,strict_filter:true,match_mode:'boundary',quarantine_wired:true,errata_wired:true,quarantine_threads:qt,mutation_routes:false,capabilities:["public-ideas-feed", "questions-feed", "rss", "session-pages", "ideation", "qds-pages", "owner-intake"],limitations:["read-only public surface: /, /s/*, /rss.xml, /api/sessions, /api/session/* load with no credential", "chat threads: only a first research-domain question passes the public filter; personal, ops and quarantined threads are never shown", "the feed also carries the pipeline's own open questions and triaged proposals (kind q-N / p-N, source ideation)", "/api/ask, /api/proposals and /run answer 503; POST /api/intake is owner-authenticated; POST /api/subscribe forwards an address to the qnfo-subscribers double opt-in (source ideas.qnfo.org; nobody is subscribed without clicking the confirmation link)", "ideation runs on the hourly :23 cron", "while a fleet_budget ai_spend cap is breached, triage still runs and scores on one cheap model (BUDGET-SOFT-ROUTE-1); rows left as status deferred_budget by older versions are released every run (count in triage_deferred_budget)", "a generated proposal scored ACCEPT waits as deferred_diversity (count in triage_deferred_diversity) while its topic cluster would exceed half of the 30-day accepts; owner and intake:* rows are never held"],bindings:{audit:!!env.QNFO_AUDIT}})}if(u.pathname==='/api/gate'){const q=u.searchParams.get('q')||'';return json({q,public:publicTitle(q),internal:has(q,INTERNAL),ops:has(q,OPS),junk:has(q,JUNK),research:has(q,RESEARCH),match_mode:'boundary'})}if(u.pathname==='/rss.xml')return rss(env);if(u.pathname==='/api/sessions'||u.pathname==='/api/feed')return sessions(u,env);if(u.pathname.startsWith('/api/session/'))return session(u.pathname,env);if(u.pathname==='/api/suggest')return json({policy:'research-domain only; personal/ops/actions/runtime metadata are never suggested',groups:[]});if(u.pathname==='/api/ask'||u.pathname==='/api/proposals'||u.pathname==='/run')return json({error:'mutation or ask route disabled on public ideas surface'},503);if(u.pathname==='/'||u.pathname==='/index.html')return ideasCached(req,ctx,function(){return ideasHome(env)});if(u.pathname.startsWith('/s/')&&u.pathname.length>3)return ideasCached(req,ctx,function(){return ideasThread(env,u.pathname.slice(3))});if(u.pathname==='/api/intake'){if(!ownerOk(req,env))return json({error:'Authentication required'},401);if(req.method!=='POST')return json({error:'POST required'},405);return await intake(req,env)}return json({error:'Not found'},404)}catch(e){return json({error:'Server error: '+(e&&e.message||String(e))},500)}}};
