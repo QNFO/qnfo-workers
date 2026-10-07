@@ -7,8 +7,8 @@
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
- "active_contracts": 193,
- "active_with_executable_probe": 193,
+ "active_contracts": 194,
+ "active_with_executable_probe": 194,
  "active_with_prose_probe": 0,
  "prose_probe_contracts": [],
  "contracts_needs_machine_probe": 8,
@@ -23,7 +23,7 @@
   2079,
   2119
  ],
- "head": "050482f1b29de454e073ee04b75c22472fddc8a2",
+ "head": "9cf81592c90d10e5b69c2cfca73c7612b0953c7e",
  "job_status": "success",
- "ts": "2026-10-07T13:01:08Z"
+ "ts": "2026-10-07T13:53:36Z"
 }
