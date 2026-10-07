@@ -201,9 +201,33 @@ def compare_url(base, branch):
 # .js/.mjs file the patch touches is parsed here after `git apply`, before anything is pushed. A file that does not parse
 # goes back to the orchestrator's propose step with the parser's message as feedback (SELF-REPAIR-1 counts the attempt),
 # never to a PR. The check is syntax only: imports are not resolved and nothing is executed.
+#
+# PUBLISH-PY-CHECK-1 (2026-10-07, SCOPE-SCRIPTS-1, issue 2100): the same gate for a patched .py file, so that a scripts/*.py code
+# task that does not parse goes back to propose instead of to a pull request once the merge runner takes that path. This runner
+# is Python, so compile() is the parser; the file is read, never imported or executed.
+def py_syntax_error(repo_dir, f):
+    """The parse error of one .py file, or None."""
+    src = os.path.join(repo_dir, f)
+    if not os.path.isfile(src):
+        return None
+    try:
+        with open(src, "rb") as fh:
+            compile(fh.read(), f, "exec")
+    except SyntaxError as e:
+        return (f + ": SyntaxError: " + str(e.msg) + " (" + f + ":" + str(e.lineno or 0) + ")")[:400]
+    except ValueError as e:  # a null byte in the source
+        return (f + ": " + str(e))[:400]
+    return None
+
+
 def js_syntax_errors(repo_dir, files):
-    """First parse error among the patched .js/.mjs files, or None (also None when node is not installed)."""
+    """First parse error among the patched .js/.mjs/.py files, or None (a .js file is also None when node is not installed)."""
     for f in files:
+        if f.endswith(".py"):
+            bad = py_syntax_error(repo_dir, f)
+            if bad:
+                return bad
+            continue
         if not (f.endswith(".js") or f.endswith(".mjs")):
             continue
         src = os.path.join(repo_dir, f)
@@ -225,7 +249,9 @@ def js_syntax_errors(repo_dir, files):
 
 def requeue_for_syntax(store, tid, err):
     """Send a task whose patch does not parse back to the orchestrator's propose step with the parser's message."""
-    msg = ("JavaScript does not parse after applying the edits (node --check, PUBLISH-JS-CHECK-1): " + err)[:500]
+    lang = "Python does not parse after applying the edits (compile, PUBLISH-PY-CHECK-1): " if "SyntaxError" in err and ".py:" in err else \
+        "JavaScript does not parse after applying the edits (node --check, PUBLISH-JS-CHECK-1): "
+    msg = (lang + err)[:500]
     return store.changes(
         "UPDATE code_tasks SET status='queued', step='propose', attempts=attempts+1, lease_until=NULL, last_error=?, "
         "ctx=json_set(COALESCE(ctx, '{}'), '$.lastError', ?), updated_at=? WHERE id=?",
@@ -610,6 +636,22 @@ def selftest():
         check("js that parses (an ES module) still publishes", tg["status"] == "published" and r["published"] == 1, dict(tg))
     else:
         print("SKIP PUBLISH-JS-CHECK-1 selftest: node not installed")
+
+    # 3b2. PUBLISH-PY-CHECK-1: a .py patch that does not parse is sent back to propose with the parser's message, never pushed
+    remote, work, store = fixture()
+    _sh(work, "git", "fetch", "-q", "origin", "main")
+    pr = FakePR()
+    add(store, "ct_pybad0000001", good.replace("+    return 2", "+    return (2"))
+    r = publish_all(store, work, "main", pr, quiet)
+    tb = row(store, "ct_pybad0000001")
+    cb = json.loads(tb["ctx"] or "{}")
+    check("py parse fails: sent back to propose with the parser's message and line, attempts counted",
+          tb["status"] == "queued" and tb["step"] == "propose" and tb["attempts"] == 1 and "PUBLISH-PY-CHECK-1" in (tb["last_error"] or "")
+          and "scripts/x.py:2" in (tb["last_error"] or "") and "SyntaxError" in (cb.get("lastError") or "") and r.get("retried") == 1, dict(tb))
+    brb = subprocess.run(["git", "--git-dir", remote, "branch", "--list", "codeagent-pybad0000001"], capture_output=True, text=True)
+    check("py parse fails: nothing pushed, no PR", brb.stdout.strip() == "" and "codeagent-pybad0000001" not in pr.created)
+    check("py helper: a file that parses is None, a missing file is None",
+          py_syntax_error(work, "scripts/x.py") is None and py_syntax_error(work, "scripts/none.py") is None)
 
     # 3c. REBASE-BEFORE-PUBLISH-1: a patch main has moved under is rebuilt from ctx.edits on the current base, no model call
     remote, work, store = fixture()
