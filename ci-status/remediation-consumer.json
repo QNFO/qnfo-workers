@@ -1,31 +1,103 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@63757e4fb265",
- "due": 3,
- "pass": 1,
+ "verifier": "remediation-consumer@56b7cef6616c",
+ "due": 12,
+ "pass": 10,
  "fail": 2,
  "skipped": 0,
  "contracts": [
   {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
+   "class": "issue-1825",
+   "issue_id": 1825,
    "verdict": "fail",
-   "expected": "connected",
-   "observed": "pending: no access token in personal-life oauth_tokens yet",
+   "expected": "within-cap",
+   "observed": "over-cap",
    "written": true
   },
   {
-   "class": "issue-2106",
-   "issue_id": 2106,
+   "class": "issue-2072",
+   "issue_id": 2072,
    "verdict": "fail",
+   "expected": "merged",
+   "observed": "queued",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: no reading.q08.org piece since the 1.13.0 fix (last 2026-10-05T08:06:54.939Z)",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2117",
-   "issue_id": 2117,
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -55,12 +127,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 20.2,
+ "https": 8,
+ "runtime_verified_share_24h": 20.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 15618,
- "head": "63757e4fb265a727a6250cadcc4ac5d7bc5bf080",
+ "spent_ms": 35067,
+ "head": "56b7cef6616c90cabfb17e633e4da66ea37e57ed",
  "job_status": "success",
- "ts": "2026-10-07T16:01:45Z"
+ "ts": "2026-10-07T16:11:13Z"
 }
