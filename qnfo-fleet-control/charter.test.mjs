@@ -150,6 +150,16 @@ eq(evF.breaches.length, 0, "no CHARTER-MVP-DOWN-1 for a folded component");
 const foldedPresent = JSON.parse(JSON.stringify(folded));
 foldedPresent.worker_live_audit.push({ worker: "qnfo-autonomy-scorer", note: "RETIRED_PRESENT", live_version: null, http: null });
 eq(C.charterEvaluate(foldedPresent, "2026-10-06T07:00:00.000Z").mvp_up, C.CHARTER_MVP.length, "before the old script is deleted (RETIRED_PRESENT), the host still decides");
+// MVP-FOLD-NOTDEPLOYED-1: after cf-ops delete-worker the old script reads NOT_DEPLOYED (404); the host still decides
+const foldedDeleted = JSON.parse(JSON.stringify(folded));
+foldedDeleted.worker_live_audit.push({ worker: "qnfo-autonomy-scorer", note: "NOT_DEPLOYED", live_version: null, http: 404 });
+const evFX = C.charterEvaluate(foldedDeleted, "2026-10-07T03:00:00.000Z");
+eq(evFX.mvp_up, C.CHARTER_MVP.length, "a folded component whose deleted script reads NOT_DEPLOYED serves through its SYNC host");
+eq(evFX.breaches.length, 0, "no CHARTER-MVP-DOWN-1 for a deleted, folded component");
+eq(evFX.mvp.find((r) => r.worker === "qnfo-autonomy-scorer").note, "FOLDED:qnfo-ai-calibration/SYNC", "the NOT_DEPLOYED row is reported through its host");
+const foldedDeletedHostDown = JSON.parse(JSON.stringify(foldedDeleted));
+foldedDeletedHostDown.worker_live_audit = foldedDeletedHostDown.worker_live_audit.filter((r) => r.worker !== "qnfo-ai-calibration");
+eq(C.charterEvaluate(foldedDeletedHostDown, "2026-10-07T03:00:00.000Z").breaches.map((b) => b.key).join(","), "CHARTER-MVP-DOWN-1: qnfo-autonomy-scorer", "a deleted, folded component whose host is absent is still down");
 const foldedHostDown = JSON.parse(JSON.stringify(folded));
 foldedHostDown.worker_live_audit = foldedHostDown.worker_live_audit.filter((r) => r.worker !== "qnfo-ai-calibration");
 const evFD = C.charterEvaluate(foldedHostDown, "2026-10-06T07:00:00.000Z");

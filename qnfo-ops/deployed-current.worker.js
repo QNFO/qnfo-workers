@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.39.1-cost-soft"; /* 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
+var VERSION = "2.39.2-context-compact"; /* 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
 // FOLD-WAVE-2 (2.38.45, 2026-10-06, #1756): qnfo-archive is retired (its 04:00 KG seed got HTTP 401 on every batch), so its
 // ARCHIVE probe binding leaves FLEET, BINDING_KEYS, wrangler.toml and the fleet_status text. BACKLOG now reaches the
 // qnfo-backlog-exec member inside qnfo-lifecycle (props.member); the code calling it is unchanged.
@@ -674,6 +674,27 @@ __name222(estTokens, "estTokens");
 __name2222(estTokens, "estTokens");
 __name22222(estTokens, "estTokens");
 __name222222(estTokens, "estTokens");
+// OPS-CONTEXT-COMPACT-1 (2.39.2, agent_issues 2068): older tool results are compacted before the budget walk. A round is one
+// non-tool message plus the tool messages that follow it (the grouping truncateToContext already uses). The newest
+// OPS_TOOL_KEEP_ROUNDS rounds that hold tool output keep it whole; older tool messages longer than OPS_TOOL_COMPACT_CHARS keep
+// their head and a marker. Only role "tool" content that is a string is touched, so no instruction or answer is ever cut.
+var OPS_TOOL_KEEP_ROUNDS = 2;
+var OPS_TOOL_COMPACT_CHARS = 1200;
+function compactToolRounds(rounds) {
+  let seen = 0;
+  for (let i = rounds.length - 1; i >= 0; i--) {
+    const r = rounds[i];
+    if (!r.some(function(m) { return m && m.role === "tool"; })) continue;
+    seen++;
+    if (seen <= OPS_TOOL_KEEP_ROUNDS) continue;
+    rounds[i] = r.map(function(m) {
+      const c = m && m.role === "tool" ? m.content : null;
+      if (typeof c !== "string" || c.length <= OPS_TOOL_COMPACT_CHARS) return m;
+      return Object.assign({}, m, { content: c.slice(0, OPS_TOOL_COMPACT_CHARS) + "\n[compacted: " + (c.length - OPS_TOOL_COMPACT_CHARS) + " more chars of this older tool result were dropped to save context; re-run the tool if you need the full output]" });
+    });
+  }
+  return rounds;
+}
 function truncateToContext(msgs, budgetTokens) {
   if (!Array.isArray(msgs) || !msgs.length) return msgs;
   const sys = [], rest = [];
@@ -690,6 +711,7 @@ function truncateToContext(msgs, budgetTokens) {
       rounds.push(cur);
     } else cur.push(m);
   }
+  compactToolRounds(rounds);
   const kept = [];
   let used = 0;
   for (let i = rounds.length - 1; i >= 0; i--) {

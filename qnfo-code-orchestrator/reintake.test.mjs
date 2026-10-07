@@ -14,8 +14,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 globalThis.fetch = async () => new Response("unavailable", { status: 503 });
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "rit-"));
-fs.writeFileSync(path.join(tmp, "w.mjs"), fs.readFileSync(path.join(here, "worker.js"), "utf8") + "\nexport { intakeIssues as __intake, intakeTrusted as __trusted, intakeRetryDecision as __decide, INTAKE_TRUSTED_DEFAULT as __default };\n");
-const { __intake, __trusted, __decide, __default } = await import(pathToFileURL(path.join(tmp, "w.mjs")).href);
+fs.writeFileSync(path.join(tmp, "w.mjs"), fs.readFileSync(path.join(here, "worker.js"), "utf8") + "\nexport { intakeIssues as __intake, intakeTrusted as __trusted, intakeRetryDecision as __decide, INTAKE_TRUSTED_DEFAULT as __default, intakeGoal as __goal, intakePrevFailure as __prevFail };\n");
+const { __intake, __trusted, __decide, __default, __goal, __prevFail } = await import(pathToFileURL(path.join(tmp, "w.mjs")).href);
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 
@@ -121,6 +121,23 @@ function mkEnv(issues, tasks, opts) {
   w = mkEnv([{ id: 5, title: "METRIC-TRIGGER-5-X: y", source: "qnfo-fleet-control", description: "See depends-on: #1818 in prose.\ncode-task: repo=qnfo-workers path=qnfo-infra/worker.js" }], [], { dep: { 1818: "open" } });
   await __intake(w.env, 2);
   ok(w.inserted.length === 1, "only a line of its own counts, not the words in prose", w.inserted);
+}
+// CI-FEEDBACK-1 (0.5.0): a retry leads with why the previous task failed, and the goal still fits validTask's 2000 chars.
+{
+  const failNote = "required check(s) failed on c9d25b5: gate=failure; failing: gate: FAIL q08-signal-engine/quality.test.mjs | AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: | 4000 !== 2000 | at q08-signal-engine/quality.test.mjs:190:37 {";
+  ok(__prevFail({ id: "ct_a", merge_note: failNote }) === "PREVIOUS ATTEMPT ct_a FAILED: " + failNote + " Keep every behaviour the worker's existing tests pin; change only what the goal needs.", "the previous failure is quoted from the task's merge_note");
+  ok(/^PREVIOUS ATTEMPT ct_b FAILED: the JS verifier/.test(__prevFail({ id: "ct_b", last_error: "merge-runner: the JS verifier could not confirm the syntax" })), "last_error is used when there is no merge_note, without its merge-runner: prefix");
+  ok(__prevFail({ id: "ct_c" }) === "" && __prevFail(null) === "", "no failure text, no line");
+  const g0 = __goal("[issue #9]", 0, "X-1: title", "", "body");
+  ok(g0 === "[issue #9] X-1: title\nbody", "a first task's goal is unchanged in shape", g0);
+  const long = "y".repeat(1500);
+  const g1 = __goal("[issue #9]", 1, "X-1: " + "t".repeat(300), __prevFail({ id: "ct_a", merge_note: "z".repeat(5000) }), long);
+  ok(g1.length <= 2000 && /^\[issue #9\] \[retry 1\] X-1: t+\nPREVIOUS ATTEMPT ct_a FAILED: z{700} Keep every behaviour/.test(g1), "the failure comes first, is capped, and the body is cut so the goal stays within 2000 chars", g1.length);
+  const issues = [{ id: 2085, title: "METRIC-TRIGGER-806-X: panel", source: "qnfo-fleet-control", description: "Read the ensemble.\n" + "w".repeat(1400) + "\ncode-task: repo=qnfo-workers path=qnfo-infra/worker.js" }];
+  const tasks = [{ id: "ct_0jiys30uonkcps", goal: "[issue #2085] METRIC-TRIGGER-806-X", status: "failed", last_error: "merge-runner: " + failNote, merge_note: failNote, created_at: "2026-10-06T23:00:00Z", updated_at: "2026-10-07T00:00:00Z" }];
+  const w2 = mkEnv(issues, tasks);
+  await __intake(w2.env, 2);
+  ok(w2.inserted.length === 1 && w2.inserted[0].goal.length <= 2000 && /^\[issue #2085\] \[retry 1\] METRIC-TRIGGER-806-X: panel\nPREVIOUS ATTEMPT ct_0jiys30uonkcps FAILED: required check\(s\) failed on c9d25b5: gate=failure; failing: gate: FAIL q08-signal-engine\/quality\.test\.mjs/.test(w2.inserted[0].goal) && /4000 !== 2000/.test(w2.inserted[0].goal), "end to end: the retried task's goal carries the failing suite and values ahead of the long issue body", w2.inserted[0] && w2.inserted[0].goal.slice(0, 300));
 }
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

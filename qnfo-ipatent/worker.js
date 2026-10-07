@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.12.1-budget-soft"; // 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.13.0-draft-metering"; // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -390,6 +390,31 @@ __name(searchDisclosures, "searchDisclosures");
 __name2(searchDisclosures, "searchDisclosures");
 __name22(searchDisclosures, "searchDisclosures");
 __name222(searchDisclosures, "searchDisclosures");
+async function upsertDraftAudit(env, model, inChars, ms, err, result) {
+  if (!env.AUDIT) return;
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const usage = result && typeof result === "object" ? (result.usage || result.response?.usage || result.choices?.[0]?.usage || null) : null;
+    const inTok = Number(usage?.prompt_tokens ?? usage?.input_tokens ?? 0);
+    const outTok = Number(usage?.completion_tokens ?? usage?.output_tokens ?? 0);
+    const neurons = Number(usage?.neurons ?? 0);
+    await env.AUDIT.prepare(
+      `INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms, in_tok, out_tok, neurons)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+       ON CONFLICT(day, worker, purpose, model) DO UPDATE SET
+         calls = calls + excluded.calls,
+         errors = errors + excluded.errors,
+         in_chars = in_chars + excluded.in_chars,
+         ms = ms + excluded.ms,
+         in_tok = in_tok + excluded.in_tok,
+         out_tok = out_tok + excluded.out_tok,
+         neurons = neurons + excluded.neurons`
+    ).bind(day, "qnfo-ipatent", "draft", model, 1, err ? 1 : 0, inChars, ms, inTok, outTok, neurons).run();
+  } catch (e) {
+    console.error("Draft audit upsert failed:", e?.message || e);
+  }
+}
+
 async function draftDisclosure(env, { title, technicalField, description, ragContext, mechanism }) {
   const ragText = ragContext.length > 0 ? ragContext.map(
     (r, i) => `EXAMPLE ${i + 1}: "${r.title}" [field: ${r.technical_field || "n/a"}] \u2014 ${(r.disclosure_text || "").slice(0, 500)}`
@@ -455,20 +480,22 @@ IMPORTANT:
     const left = DRAFT_BUDGET_MS - (Date.now() - t0);
     if (left < DRAFT_MIN_ATTEMPT_MS) { attempts.push({ model, ms: 0, outcome: "skipped: budget spent" }); continue; }
     const ta = Date.now();
+    const opts = {
+      messages: [
+        { role: "system", content: "You are an expert US patent attorney and drafter. Write formal, precise, and defensible patent disclosures. Output only the disclosure text \u2014 no preamble or meta-commentary.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; expose at least one concrete limitation or failure mode in the drafted output (e.g. claims that may lack enablement or written-description support); label uncertainty, never inflate confidence." },
+        { role: "user", content: prompt }
+      ],
+      max_tokens: 8e3,
+      temperature: 0.5
+    };
+    if (DRAFT_EFFORT[model]) opts.reasoning_effort = DRAFT_EFFORT[model];
+    const inChars = opts.messages.reduce((sum, m) => sum + String(m.content || "").length, 0);
     try {
-      const opts = {
-        messages: [
-          { role: "system", content: "You are an expert US patent attorney and drafter. Write formal, precise, and defensible patent disclosures. Output only the disclosure text \u2014 no preamble or meta-commentary.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; expose at least one concrete limitation or failure mode in the drafted output (e.g. claims that may lack enablement or written-description support); label uncertainty, never inflate confidence." },
-          { role: "user", content: prompt }
-        ],
-        max_tokens: 8e3,
-        temperature: 0.5
-      };
-      if (DRAFT_EFFORT[model]) opts.reasoning_effort = DRAFT_EFFORT[model];
       let timer;
       const deadline = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("deadline " + Math.min(DRAFT_ATTEMPT_MS, left) + " ms")), Math.min(DRAFT_ATTEMPT_MS, left)); });
       let result;
       try { result = await Promise.race([env.AI.run(model, opts), deadline]); } finally { clearTimeout(timer); }
+      await upsertDraftAudit(env, model, inChars, Date.now() - ta, null, result);
       text = typeof result === "string" ? result : (result?.response || result?.choices?.[0]?.message?.content || "");
       text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
       const sectionCount = ["TITLE OF INVENTION", "TECHNICAL FIELD", "BACKGROUND", "SUMMARY", "DETAILED DESCRIPTION", "CLAIMS", "ABSTRACT"].filter(
@@ -485,6 +512,7 @@ IMPORTANT:
         attempts.push({ model, ms: Date.now() - ta, outcome: "empty" });
       }
     } catch (err) {
+      await upsertDraftAudit(env, model, inChars, Date.now() - ta, err, null);
       lastError = `${model}: ${err.message}`;
       attempts.push({ model, ms: Date.now() - ta, outcome: "error: " + String(err && err.message || err).slice(0, 120) });
       console.error(`Model ${model} failed:`, err.message);

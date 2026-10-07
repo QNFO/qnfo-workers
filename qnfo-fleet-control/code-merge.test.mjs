@@ -118,7 +118,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(src.slice(A, B + END.length) + "\n" + orch.slice(o1, o2) + "\n" + orch.slice(o3, o4) +
-  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED };", sandbox, { filename: "code-merge-block.js" });
+  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES };", sandbox, { filename: "code-merge-block.js" });
 const W = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -193,6 +193,15 @@ ok(W.cmTrusted("kaizen-ai", "x", "kaizen-*") && !W.cmTrusted("claude-session-x",
 
 // ================================================================ 3. the decision
 ok(act(task(), g()).action === "merge", "all gates green: merge", act(task(), g()));
+// MERGE-VERIFY-ATTEMPTS-1: a task that verified after SELF-REPAIR-1 retries (step done, no last_error) is mergeable; the bound
+// is the orchestrator's MAX_ATTEMPTS * RETRY_ROUNDS
+ok(act(task({ attempts: 4 }), g()).action === "merge" && act(task({ attempts: 8 }), g()).action === "merge", "a task that verified after self-repair rounds (attempts 4, 8) merges");
+{
+  const ma = Number((/^const MAX_ATTEMPTS = (\d+);/m.exec(orch) || [])[1]), rr = Number((/^const RETRY_ROUNDS = (\d+);/m.exec(orch) || [])[1]);
+  const cm = Number((/^var CM_TASK_MAX_ATTEMPTS = (\d+);/m.exec(src) || [])[1]);
+  ok(ma > 0 && rr > 0 && cm === ma * rr, "CM_TASK_MAX_ATTEMPTS equals the orchestrator's MAX_ATTEMPTS * RETRY_ROUNDS", { ma, rr, cm });
+}
+
 ok(act(task(), g({ integrity: undefined })).action === "need-integrity", "integrity is fetched only when every cheap gate passed");
 const refuses = [
   ["a branch that is not the loop's own", task({ branch: "feature-x" }), g()],
@@ -201,7 +210,7 @@ const refuses = [
   ["a head ref that is not the task branch", task(), g({ pr: prJson({ head: { ref: "codeagent-zzz", sha: "h1", repo: { full_name: "QNFO/qnfo-workers" } } }) })],
   ["a base other than main", task(), g({ pr: prJson({ base: { ref: "develop", repo: { full_name: "QNFO/qnfo-workers" } } }) })],
   ["verify not done", task({ step: "verify" }), g()],
-  ["three failed attempts", task({ attempts: 3 }), g()],
+  ["as many failed attempts as self-repair allows", task({ attempts: 9 }), g()],
   ["a last_error", task({ last_error: "verify failed" }), g()],
   ["no stored patch", task({ ctx: JSON.stringify({ base: BASE }) }), g()],
   ["unparseable ctx", task({ ctx: "{nope" }), g()],
@@ -267,7 +276,8 @@ const orefuses = [
   ["an extra file on the branch", pushedT(), og({ files: [{ filename: PATH, status: "modified" }, { filename: "scripts/deploy_gate.py", status: "modified" }] })],
   ["a path out of scope", pushedT({ path: "scripts/x.py" }), og({ files: [{ filename: "scripts/x.py", status: "modified" }] })],
   ["an untrusted origin", pushedT(), og({ provenance: { ok: false, why: "kaizen-ai" } })],
-  ["verify not passed", pushedT({ attempts: 3 }), og()],
+  ["verify not passed", pushedT({ step: "verify" }), og()],
+  ["verify not passed (a last_error)", pushedT({ last_error: "verify failed" }), og()],
   ["content other than the verified patch", pushedT(), og({ integrity: { ok: false, why: "not the verified patch" } })],
   ["a worker that cannot be auto-reverted", pushedT(), og({ integrity: { ok: true, revertible: false, revert_why: "const VERSION" } })],
 ];
@@ -662,6 +672,107 @@ ok(gh.newPulls.length === 2 && r.opened.length === 1 && r.decided.length >= 1, "
   ok(W.cmTrusted("qnfo-fleet-control", "SOMETHING-ELSE-1") === false, "a fleet-control issue outside the trusted prefixes is still refused");
   ok(W.cmTrusted("qnfo-fleet-control", "TP-1.3-REBASE-1: x") === true && W.cmTrusted("TRANSFORMATION-PROGRAM-1", "TP-9-X: y") === true, "the transformation program's two origins are trusted by default (TRANSFORMATION-LOOP-1)");
 }
+
+// ---------------------------------------------------------------- GOAL-REVIEW-1 (0.9.0)
+// Pure parts: reviewer choice outside the proposer's family, reply parsing, the diff the reviewer reads, the decision.
+ok(W.cmModelFamily("@cf/qwen/qwen2.5-coder-32b-instruct") === "qwen" && W.cmModelFamily("@cf/openai/gpt-oss-120b") === "openai", "model family is the @cf/<family>/ segment");
+ok(W.cmReviewModel("@cf/qwen/qwen2.5-coder-32b-instruct") === "@cf/openai/gpt-oss-120b" && W.cmReviewModel("@cf/openai/gpt-oss-20b") === "@cf/deepseek-ai/deepseek-v4-flash-0731", "the reviewer is the first listed model outside the proposer's family");
+ok(W.cmReviewModel(null) === W.CM_REVIEW_MODELS[0] && W.cmReviewModel("@cf/qwen/x", ["@cf/qwen/y"]) === null, "no proposer recorded: the first reviewer; only same-family reviewers: none");
+ok(!W.CM_REVIEW_MODELS.some((m) => ["qwen", "moonshotai", "zai-org"].includes(W.cmModelFamily(m))), "the default reviewers share no family with the orchestrator's default ladder (qwen, moonshotai, zai-org)");
+{
+  const ld = orch.indexOf("const DEFAULT_LADDER = ["), le = orch.indexOf("];", ld);
+  const lad = JSON.parse(orch.slice(ld + "const DEFAULT_LADDER = ".length, le + 1));
+  ok(lad.length > 0 && lad.every((m) => W.cmReviewModel(m) && W.cmModelFamily(W.cmReviewModel(m)) !== W.cmModelFamily(m)), "every rung of the orchestrator's DEFAULT_LADDER gets a reviewer from another family", lad);
+}
+ok(J(W.cmReviewParse('<think>the diff passes [] only</think>{"verdict":"no","defects":["publishStage only passes [] to publishToZenodo; no citation is checked"]}')).verdict === "no", "a reply with a think block parses");
+ok(W.cmReviewParse('```json\n{"verdict": "Implements", "defects": []}\n```').verdict === "implements" && W.cmReviewParse('noise "verdict": "partial" noise').verdict === "partial", "fenced JSON and a bare verdict field parse; case is ignored");
+ok(W.cmReviewParse("I think it is fine").verdict === null && W.cmReviewParse('{"verdict":"maybe"}').verdict === null && W.cmReviewParse("").verdict === null, "an unreadable reply or an unknown verdict is no verdict");
+ok(W.cmReviewParse('{"verdict":"no","defects":["a","b","c","d","e","f"]}').defects.length === 4, "at most 4 defects are kept");
+ok(J(W.cmReviewParse('Reasoning {x}. {"verdict":"no","defects":["handleClaims writes papers.claim_line but no line runs ALTER TABLE papers ADD COLUMN claim_line { }"]}')).defects[0].indexOf("ALTER TABLE") > 0, "a defect that quotes braces, after braces in prose, is kept");
+{
+  const d = W.cmReviewDiff([{ filename: PATH, patch: "@@ -1 +1 @@\n-" + "x".repeat(900) + "\n+  return 11;" }, { filename: MIRROR, patch: "@@ mirror @@" }]);
+  ok(d.indexOf("--- " + PATH) === 0 && d.indexOf(MIRROR) < 0 && /\[line cut\]/.test(d) && d.indexOf("+  return 11;") > 0, "the reviewer reads the worker diff, not the mirror; long lines are cut", d.slice(0, 120));
+  ok(W.cmReviewDiff([{ filename: PATH, patch: ("+line\n").repeat(5000) }]).length < 14200, "the diff is capped");
+}
+ok(W.cmReviewDecision({ verdict: "no", model: "m", defects: ["x"] }).refuse === true && /goal review \(m\): the diff does not implement the goal: x/.test(W.cmReviewDecision({ verdict: "no", model: "m", defects: ["x"] }).why), "verdict no refuses with the defects");
+ok(!/rejected by|review-rejected|noop-proposal|superseded|already shipped|DROPPED|withdrawn/i.test(W.cmReviewDecision({ verdict: "no", model: "m", defects: ["x"] }).why), "a goal-review refusal does not match the orchestrator's INTAKE_NO_RETRY, so the issue is retried with the defects");
+// GOAL-REVIEW-HARM-1 (0.9.1): the live review of ct_hdaim0vx7h7vvl (2026-10-07 08:40Z) answered partial while naming errors
+{
+  const live = W.cmReviewParse('{"verdict":"partial","harm":true,"defects":["The added inner if/else inside the diversity-hold block makes the else branch unreachable and still increments diversity_held, causing incorrect accounting","Owner rows are not forced to ACCEPT"]}');
+  ok(live.verdict === "partial" && live.harm === true && live.defects.length === 2, "harm is parsed apart from the verdict", live);
+  const d = W.cmReviewDecision(Object.assign({ model: "@cf/openai/gpt-oss-120b" }, live));
+  ok(d.refuse === true && /goal review \(@cf\/openai\/gpt-oss-120b\): the diff carries an error \(verdict partial\): The added inner if\/else/.test(d.why), "partial with harm refuses with the errors", d);
+  ok(W.cmReviewDecision({ verdict: "implements", harm: true, model: "m", defects: ["x"] }).refuse === true, "implements with harm refuses too");
+  ok(W.cmReviewParse('{"verdict":"partial","harm":false,"defects":["the gateway half is left for a second task"]}').harm === false && !W.cmReviewDecision({ verdict: "partial", harm: false, model: "m" }).refuse, "partial without harm still passes");
+  ok(W.cmReviewParse('noise "verdict": "partial", "harm": "yes" noise').harm === true && W.cmReviewParse('{"verdict":"implements"}').harm === false, "harm as a string parses; a reply without harm is no harm (a pre-0.9.1 cached review decides as before)");
+  ok(/harm/.test(W.cmReviewDecision({ verdict: "no", harm: true, model: "m", defects: ["y"] }).why) === false && W.cmReviewDecision({ verdict: "no", harm: true, model: "m", defects: ["y"] }).refuse, "verdict no keeps its own reason");
+}
+ok(W.cmReviewDecision({ verdict: "partial", model: "m" }).note === "goal review partial (m)" && W.cmReviewDecision({ tries: 1, err: "3046" }).wait === true && /unavailable after 3 tries/.test(W.cmReviewDecision({ tries: 3 }).note), "partial passes with a note; an unread review waits, then the checks decide after 3 tries");
+// End to end through codeMergeTick: the open lane and the merge lane.
+const GPATCH = [{ filename: PATH, status: "modified", patch: "@@ -2,3 +2,3 @@\n function a() {\n-  return 1;\n+  return 11;\n }" }, { filename: MIRROR, status: "modified", patch: "@@ mirror @@" }];
+let aiCalls = [];
+const reviewer = (reply) => async (env0, worker, purpose, model, input) => { aiCalls.push({ worker, purpose, model, input }); if (reply instanceof Error) throw reply; return { choices: [{ message: { content: reply } }] }; };
+function goalSetup(over) {
+  freshDb(); freshGh(); aiCalls = [];
+  db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+  seedTask(Object.assign({ status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" }, over || {}));
+  db.prepare("UPDATE code_tasks SET model = '@cf/qwen/qwen2.5-coder-32b-instruct'").run();
+  gh.branches[BRANCH] = "h1";
+  seedHead("h1");
+  gh.compareFiles.h1 = GPATCH;
+}
+const genv = { AUDIT, GITHUB_TOKEN: "test-token", AI: {} };
+const openedWhy = () => (one("SELECT text FROM cloud_ops_events WHERE kind = 'code-merge.pr-opened' ORDER BY ts DESC LIMIT 1") || {}).text || "";
+goalSetup();
+sandbox.aiRunAttr = reviewer('{"verdict":"no","defects":["a() now returns 11 but the goal asks for the citation check, which no line adds"]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 0 && row.status === "failed" && /goal review \(@cf\/openai\/gpt-oss-120b\): the diff does not implement the goal: a\(\) now returns 11/.test(row.merge_note), "verdict no: the PR is not opened and the task fails with the reviewer's defects", { pulls: gh.newPulls.length, row: [row.status, row.merge_note] });
+ok(aiCalls.length === 1 && aiCalls[0].purpose === "goal-review" && aiCalls[0].model === "@cf/openai/gpt-oss-120b" && /fix a/.test(aiCalls[0].input.messages[1].content) && /\+  return 11;/.test(aiCalls[0].input.messages[1].content), "one metered call (purpose goal-review) to a reviewer outside the proposer's family, with the goal and the head diff", aiCalls.map((c) => [c.purpose, c.model]));
+ok(one("SELECT status FROM cloud_ops_events WHERE id = ?", "goal-review-" + ID + "-h1").status === "refused", "the verdict is cached under goal-review-<task>-<head>");
+goalSetup();
+sandbox.aiRunAttr = reviewer('{"verdict":"implements","defects":[]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 1 && row.status === "published" && /goal review implements \(@cf\/openai\/gpt-oss-120b\)/.test(openedWhy()), "verdict implements: the PR is opened and the open records the review", openedWhy());
+gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+r = J(await W.codeMergeTick(genv, { now: NOW + 2 * 36e5 }));
+ok(gh.merges.length === 1 && aiCalls.length === 1, "green checks merge it; the merge lane reuses the cached review (one model call per head)", { merges: gh.merges.length, calls: aiCalls.length });
+goalSetup();
+sandbox.aiRunAttr = reviewer(new Error("3046: Request timeout"));
+for (let k = 0; k < 2; k++) r = J(await W.codeMergeTick(genv, { now: NOW + k * 36e5 }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 0 && row.status === "branch_pushed" && /goal review pending \(try 2 of 3: 3046/.test(row.merge_note), "a failing reviewer only waits", row.merge_note);
+r = J(await W.codeMergeTick(genv, { now: NOW + 2 * 36e5 }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 1 && /goal review unavailable after 3 tries; the checks decide/.test(openedWhy()) && aiCalls.length === 3, "after three failed reviews the checks decide alone, and that is recorded", { n: gh.newPulls.length, why: openedWhy(), calls: aiCalls.length });
+goalSetup();
+db.prepare("INSERT INTO ops_config (key, value) VALUES ('code_goal_review_enabled', 'off')").run();
+sandbox.aiRunAttr = reviewer('{"verdict":"no","defects":["x"]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+ok(gh.newPulls.length === 1 && aiCalls.length === 0 && /goal review off/.test(openedWhy()), "ops_config code_goal_review_enabled off: no model call, the PR opens", openedWhy());
+goalSetup();
+db.prepare("INSERT INTO ops_config (key, value) VALUES ('code_goal_review_models', '@cf/meta/llama-3.3-70b-instruct-fp8-fast, not-a-model')").run();
+sandbox.aiRunAttr = reviewer('{"verdict":"partial","defects":[]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+ok(aiCalls.length === 1 && aiCalls[0].model === "@cf/meta/llama-3.3-70b-instruct-fp8-fast" && gh.newPulls.length === 1, "ops_config code_goal_review_models replaces the list (only @cf/ ids kept); partial opens the PR", aiCalls.map((c) => c.model));
+goalSetup();
+sandbox.aiRunAttr = reviewer('{"verdict":"partial","harm":true,"defects":["the else branch is unreachable and still increments diversity_held"]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 0 && row.status === "failed" && /the diff carries an error \(verdict partial\): the else branch is unreachable/.test(row.merge_note) && /"harm":true/.test(one("SELECT meta FROM cloud_ops_events WHERE id = ?", "goal-review-" + ID + "-h1").meta), "partial with harm: no PR, the task fails with the error, the cached review keeps harm", row.merge_note);
+// the merge lane reviews a PR opened before 0.9.0 (no cached review) and refuses a "no" with a comment on the PR
+freshDb(); freshGh(); aiCalls = [];
+db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+seedTask({ status: "published" });
+seedWorkerPr(401, BRANCH, "h1");
+gh.files[401] = GPATCH;
+gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+sandbox.aiRunAttr = reviewer('{"verdict":"no","defects":["the change does not do what the goal asks"]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.merges.length === 0 && row.status === "failed" && gh.comments.some((c) => c.pr === 401 && /goal review/.test(c.body)), "merge lane: a green PR whose review says no is not merged; the task fails and the PR says why", { merges: gh.merges.length, status: row.status, comments: gh.comments.length });
+sandbox.aiRunAttr = async () => null;
 
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
