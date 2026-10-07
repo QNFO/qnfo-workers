@@ -287,6 +287,18 @@ const orefuses = [
 ];
 for (const [label, t, gg] of orefuses) ok(oact(t, gg).action === "refuse", "not opened: " + label, oact(t, gg));
 ok(oact(pushedT(), og({ pulls: undefined })).action === "wait" && oact(pushedT(), og({ provenance: { ok: false, transient: true, why: "d1" } })).action === "wait", "unread pulls or a transient provenance read only wait");
+// REBASE-BRANCH-ACCEPT-1 (0.11.1): the -r<n> rebuild of cmRequeueStale is the loop's own branch (codeagent-3oa9p0pglnnj-r2 was refused 2026-10-07T15:20Z)
+const r2T = (over) => pushedT(Object.assign({ branch: BRANCH + "-r2", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "-r2?expand=1" }, over || {}));
+ok(oact(r2T(), og()).action === "open", "REBASE-BRANCH-ACCEPT-1: a -r2 rebuilt branch is opened as a pull request", oact(r2T(), og()));
+ok(oact(r2T({ branch: BRANCH + "-r12" }), og()).action === "open", "a -r12 rebuild is the loop's own branch too");
+const r2adopt = oact(r2T(), og({ pulls: [prJson({ number: 457, head: { ref: BRANCH + "-r2", sha: "h1", repo: { full_name: "QNFO/qnfo-workers" } } })] }));
+ok(r2adopt.action === "adopt" && r2adopt.pr === 457, "an existing pull request for the -r2 branch is adopted", r2adopt);
+ok(oact(pushedT(), og({ pulls: [prJson({ number: 458, head: { ref: BRANCH + "-r2", sha: "h1", repo: { full_name: "QNFO/qnfo-workers" } } })] })).action === "open" && oact(r2T(), og({ pulls: [prJson({ number: 459 })] })).action === "open", "a pull request for the other name (base vs -r2) is not adopted");
+for (const bad of [BRANCH + "-r", BRANCH + "-rx", BRANCH + "-r0", BRANCH + "-r2-r2", BRANCH + "-r2x", BRANCH + "-r1000", "codeagent-zzzzzzzzzzzz-r2", BRANCH + "x-r2"]) ok(oact(pushedT({ branch: bad }), og()).action === "refuse" && /not a code-loop branch/.test(oact(pushedT({ branch: bad }), og()).why), "not opened: branch " + bad, oact(pushedT({ branch: bad }), og()));
+// and cmDecide (a pull request on the -r2 branch) takes the same gates as the base branch
+const r2M = task({ branch: BRANCH + "-r2" }), r2G = g({ pr: prJson({ head: { ref: BRANCH + "-r2", sha: "h1", repo: { full_name: "QNFO/qnfo-workers" } } }) });
+ok(act(r2M, r2G).action === act(task(), g()).action && act(task(), g()).action === "merge", "REBASE-BRANCH-ACCEPT-1: a -r2 branch's pull request merges like the base branch's", { r2: act(r2M, r2G), base: act(task(), g()) });
+ok(act(r2M, g()).action === "refuse" && act(task({ branch: BRANCH + "-r2-r2" }), r2G).action === "refuse", "a -r2 task whose pull request head is the base branch, or a malformed rebuild name, is refused");
 
 // ================================================================ 4. end to end: pushed branch -> PR opened by the runner -> merge -> deploy -> verify
 function seedTask(over) {
@@ -386,7 +398,8 @@ ok(one("SELECT merge_state FROM code_tasks WHERE id = ?", T2).merge_state === "d
 
 // ================================================================ 6. refusals, provenance, kill switch, person merges, budget
 freshDb(); freshGh();
-db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+// ISSUE-NOTE-NEWLINE-1: the issue ends with its ACT-BRIDGE-1 lines, as a metric-trigger issue does
+db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd' || char(10) || 'code-task: repo=qnfo-workers path=qnfo-demo/worker.js' || char(10) || 'code-anchor: function a() {', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
 db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (60, 'kaizen idea', 'd', 'kaizen-ai', 'open')").run();
 seedTask();
 seedWorkerPr(401, BRANCH, "h1");
@@ -395,7 +408,9 @@ r = J(await W.codeMergeTick(env, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
 ok(r.decided[0].action === "refuse" && row.status === "failed" && /^merge-runner: the branch changes/.test(row.last_error) && gh.merges.length === 0 && gh.commits.length === 0, "an extra file: failed (not an owner card) with the reason, nothing pushed, no merge", row);
 ok(gh.comments.length === 1 && gh.comments[0].pr === 401 && /did not merge this pull request/.test(gh.comments[0].body) && /handed to the fleet/.test(gh.comments[0].body), "the refusal is explained on the PR");
-ok(/CODE-TASK-MERGE-RUNNER-1: code task ct_abcdefghijklmn was refused by the merge runner/.test(one("SELECT description FROM agent_issues WHERE id = 50").description) && one("SELECT status FROM agent_issues WHERE id = 50").status === "open", "MERGE-RUNNER-REFUSAL-TAXONOMY-1: the refusal is noted on the source issue, which stays open for the fleet");
+const d50 = one("SELECT description FROM agent_issues WHERE id = 50").description;
+ok(/CODE-TASK-MERGE-RUNNER-1: code task ct_abcdefghijklmn was refused by the merge runner/.test(d50) && one("SELECT status FROM agent_issues WHERE id = 50").status === "open", "MERGE-RUNNER-REFUSAL-TAXONOMY-1: the refusal is noted on the source issue, which stays open for the fleet");
+ok(/\n\nCODE-TASK-MERGE-RUNNER-1: code task ct_abcdefghijklmn was refused/.test(d50) && /^code-anchor: function a\(\) \{$/m.test(d50) && !/\{ \| CODE-TASK/.test(d50), "ISSUE-NOTE-NEWLINE-1: the note starts on its own line and the issue's code-anchor: line stays intact", d50);
 ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.refused' AND status = 'refused'").n === 1, "the refusal writes one cloud_ops_events row");
 r = J(await W.codeMergeTick(env, { now: NOW + 36e5 }));
 ok(r.decided.length === 0 && gh.comments.length === 1, "a refused task is not re-evaluated or re-commented");
