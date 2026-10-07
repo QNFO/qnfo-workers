@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-07 18:09:41",
+  "audited_at": "2026-10-07 21:03:25",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -453,7 +453,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.7.3-reasoning-budget",
+        "version": "1.7.4-codeagent",
         "worker": "idea-hub"
       },
       {
@@ -684,9 +684,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.7.3-reasoning-budget",
+      "before": "1.7.4-codeagent",
       "http": 200,
-      "live": "1.7.3-reasoning-budget",
+      "live": "1.7.4-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
