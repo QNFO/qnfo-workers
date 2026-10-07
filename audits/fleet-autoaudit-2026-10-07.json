@@ -1,11 +1,11 @@
 {
-  "audited_at": "2026-10-07 11:03:28",
+  "audited_at": "2026-10-07 12:04:10",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "idea-hub"
+        "qnfo-cloud-ops"
       ],
       "refreshed": true,
       "second_pass": []
@@ -495,7 +495,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.22.1-grant-gmail-ungraded",
+        "version": "1.23.0-pub-gate-loop",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -580,7 +580,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.8.2-utm-visits",
+        "version": "0.8.3-codeagent",
         "worker": "qnfo-social"
       },
       {
@@ -1019,9 +1019,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.22.1-grant-gmail-ungraded",
+      "before": "1.23.0-pub-gate-loop",
       "http": 200,
-      "live": "1.22.1-grant-gmail-ungraded",
+      "live": "1.23.0-pub-gate-loop",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1419,9 +1419,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.8.2-utm-visits",
+      "before": "0.8.3-codeagent",
       "http": 200,
-      "live": "0.8.2-utm-visits",
+      "live": "0.8.3-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
