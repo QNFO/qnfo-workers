@@ -1,18 +1,130 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@88da9cb1d656",
- "due": 1,
- "pass": 0,
- "fail": 1,
+ "verifier": "remediation-consumer@f6758f981f9b",
+ "due": 15,
+ "pass": 11,
+ "fail": 4,
  "skipped": 0,
  "contracts": [
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "EVID-GATE-A2-PUBLISHV2",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "assert-ok",
+   "observed": "pending: no publish-v2-metadata event since 2026-10-01 15:17",
+   "written": true
+  },
   {
    "class": "issue-1825",
    "issue_id": 1825,
    "verdict": "fail",
    "expected": "within-cap",
    "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "fail",
+   "expected": "connected",
+   "observed": "pending: no access token in personal-life oauth_tokens yet",
+   "written": true
+  },
+  {
+   "class": "issue-2106",
+   "issue_id": 2106,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no reading.q08.org piece since the 1.13.0 fix (last 2026-10-05T08:06:54.939Z)",
+   "written": true
+  },
+  {
+   "class": "issue-2117",
+   "issue_id": 2117,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   }
  ],
@@ -39,12 +151,13 @@
   "http",
   "runner-https"
  ],
+ "https": 8,
  "runtime_verified_share_24h": 20.4,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 9489,
- "head": "88da9cb1d6568ca424dfffd2b589f8fa86d6529e",
+ "spent_ms": 44638,
+ "head": "f6758f981f9b528b38c6e34008be5c3e33d06a3a",
  "job_status": "success",
- "ts": "2026-10-07T21:01:11Z"
+ "ts": "2026-10-07T22:11:17Z"
 }
