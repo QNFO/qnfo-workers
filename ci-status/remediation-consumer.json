@@ -1,12 +1,29 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@4ef51e4fc34e",
- "due": 0,
- "pass": 0,
+ "verifier": "remediation-consumer@b40c8c774cf9",
+ "due": 2,
+ "pass": 2,
  "fail": 0,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-2127",
+   "issue_id": 2127,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1800",
+   "issue_id": 1800,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,9 +47,9 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 18.4,
- "spent_ms": 3992,
- "head": "4ef51e4fc34e619c8cbb02450176366f8750b85d",
+ "runtime_verified_share_24h": 19.4,
+ "spent_ms": 8715,
+ "head": "b40c8c774cf9ab4fabea29bb81a1d91cfbea2db1",
  "job_status": "success",
- "ts": "2026-10-07T13:06:06Z"
+ "ts": "2026-10-07T13:57:36Z"
 }
