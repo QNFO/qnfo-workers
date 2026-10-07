@@ -1,17 +1,8 @@
 {
-  "audited_at": "2026-10-07 16:03:56",
+  "audited_at": "2026-10-07 16:37:47",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "personal-companion",
-        "qnfo-cloud-ops",
-        "qnfo-code-orchestrator"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -497,7 +488,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.23.1-ai-attr",
+        "version": "1.24.0-probe-review",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -1021,9 +1012,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.23.1-ai-attr",
+      "before": "1.24.0-probe-review",
       "http": 200,
-      "live": "1.23.1-ai-attr",
+      "live": "1.24.0-probe-review",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
