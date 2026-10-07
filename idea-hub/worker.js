@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.7.0-owner-signal-intake"; // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (zenodo/slug/doi/internal), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.7.1-codeagent"; // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (zenodo/slug/doi/internal), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -268,19 +268,25 @@ function tExtract(r) {
 // COST-ATTRIBUTION (#1833): every env.AI.run here goes through aiRunAttr (the qnfo-fleet-control helper), which adds one
 // per-worker/purpose call counter to D1 ai_call_counters (fail-soft, never blocks or alters the AI call).
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
-  var t0 = Date.now(), ok = 1;
-  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  var t0 = Date.now(), ok = 1, res;
+  try { res = await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
   finally {
     try {
       var db = env.QNFO_AUDIT;
-      if (db) {
+      if (db && !/\/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(model)) {
         var ic = 0; try { ic = JSON.stringify(input && input.messages || input || "").length; } catch (e2) {}
         var day = new Date().toISOString().slice(0, 10);
-        await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
-        await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, Date.now() - t0).run();
+        var usage = res && res.usage || {};
+        var cached = (usage.prompt_tokens_details && usage.prompt_tokens_details.cached_tokens || 0) +
+                     (usage.cached_tokens || 0) +
+                     (usage.input_tokens_details && usage.input_tokens_details.cached_tokens || 0) || 0;
+        var in_tok = (usage.prompt_tokens || 0) + (usage.input_tokens || 0) || 0;
+        await db.prepare("CREATE TABLE IF NOT EXISTS ai_cache_counters (day TEXT, worker TEXT, model TEXT, calls INTEGER DEFAULT 0, cached_calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, cached_tok INTEGER DEFAULT 0, PRIMARY KEY (day, worker, model))").run();
+        await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(day, worker, String(model), cached, in_tok).run();
       }
     } catch (e3) {}
   }
+  return res;
 }
 // True while any fleet_budget ai_spend cap is breached (current > cap). Since 1.6.0 (BUDGET-SOFT-ROUTE-1) a breach only
 // selects lean scoring (one cheap model); an unreadable fleet_budget counts as breached, so a D1 fault selects lean too.
