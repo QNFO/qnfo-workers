@@ -1,12 +1,60 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@4c39d90e604a",
- "due": 10,
+ "verifier": "remediation-consumer@134ca2f96426",
+ "due": 17,
  "pass": 10,
- "fail": 0,
- "skipped": 0,
+ "fail": 6,
+ "skipped": 1,
  "contracts": [
+  {
+   "class": "EVID-1641-MENTIONS",
+   "issue_id": 1641,
+   "verdict": "fail",
+   "expected": "all-sources-ok",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "vacuous-probe-result",
+   "expected": "within-cap",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-1815",
+   "issue_id": 1815,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
+   "written": true
+  },
+  {
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-2071",
+   "issue_id": 2071,
+   "verdict": "fail",
+   "expected": "MET",
+   "observed": "OPEN",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "pending: no code task yet",
+   "written": true
+  },
   {
    "class": "TWIN-VISION-TOOLLEAK-1",
    "issue_id": 1805,
@@ -86,6 +134,14 @@
    "expected": "ok",
    "observed": "ok",
    "written": true
+  },
+  {
+   "class": "issue-2095",
+   "issue_id": 2095,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by q08-signal-engine, which owns it for 48h",
+   "written": true
   }
  ],
  "trusted_transports": [
@@ -112,9 +168,9 @@
   "runner-https"
  ],
  "https": 8,
- "runtime_verified_share_24h": 11.3,
- "spent_ms": 21148,
- "head": "4c39d90e604a874eaad9ff33f4419295b27b659a",
+ "runtime_verified_share_24h": 12.2,
+ "spent_ms": 32598,
+ "head": "134ca2f9642622f12c92f1a8590c211e0796ed1b",
  "job_status": "success",
- "ts": "2026-10-07T03:01:26Z"
+ "ts": "2026-10-07T04:11:29Z"
 }
