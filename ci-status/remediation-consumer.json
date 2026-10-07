@@ -1,26 +1,72 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@b40c8c774cf9",
- "due": 2,
- "pass": 2,
- "fail": 0,
- "skipped": 0,
+ "verifier": "remediation-consumer@b296658f2506",
+ "due": 8,
+ "pass": 5,
+ "fail": 2,
+ "skipped": 1,
  "contracts": [
   {
-   "class": "issue-2127",
-   "issue_id": 2127,
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-2128",
+   "issue_id": 2128,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "probe-error",
+   "reason": "The read operation timed out"
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1800",
-   "issue_id": 1800,
+   "class": "rt-gateway",
+   "issue_id": null,
    "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   }
  ],
@@ -47,9 +93,10 @@
   "http",
   "runner-https"
  ],
+ "https": 3,
  "runtime_verified_share_24h": 19.4,
- "spent_ms": 8715,
- "head": "b40c8c774cf9ab4fabea29bb81a1d91cfbea2db1",
+ "spent_ms": 102276,
+ "head": "b296658f25067555cf97566b0b109bb9e40114c8",
  "job_status": "success",
- "ts": "2026-10-07T13:57:36Z"
+ "ts": "2026-10-07T14:03:48Z"
 }
