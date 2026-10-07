@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.22.1-grant-gmail-ungraded"; /* 1.22.1 GRANT-GMAIL-UNGRADED-1 (2026-10-07, pillar autonomy): grant-followup grades only the mailboxes it holds a credential for; without GMAIL_PASS Gmail is reported (channels.gmail no-credential, gmail_graded false) but the run is ok when qnfo.org mail was read and issues filed, since the owner dismissed both Gmail cards (human_actions 42, 47) and OPEN-ACCESS-1 forbids asking for a token (the pattern of RADAR-CAP-GRADING-1); 10 degraded runs in a row had kept watchmaker_index at 2 on a step no one may ask for. A Gmail read that fails with the credential set still degrades the run. 1.22.0 1.22.0 PROBE-CADENCE-1 (2026-10-06, pillar autonomy; owner question 2026-10-06 "why do fleet probes only run as SQL against qnfo-audit"): every 10-minute tick reads the last run of remediation-consumer.yml, the only runner of runtime probes (runner-https on fleet hosts, plane D1s), and sends repository_dispatch remediation-tick when that run is older than 60 minutes; 98 of its last 100 runs were chained to pushes on main, so a quiet main stopped every runtime probe. State in scheduler_state probe_cadence; a dispatch the token may not send files PROBE-CADENCE-DISPATCH-1. 1.21.1 RADAR-CAP-GRADING-1 (2026-10-06, agent_issues 1641, pillar reach): the mention radar reports a source blocked by an external per-IP quota (capped:..., StackExchange on shared Workers egress, never answered since 2026-10-02) without grading it, so the run is ok when every readable source is; any other failure still degrades it; the owner card stackexchange-key (free stackapps key, STACKEXCHANGE_KEY var) tracks the blind spot and resolves itself on the first ok answer. 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). OWNER-STEPS-WATCH-1: a read-only companion of the daily release-check slot resolves the CODE-REACH-1 owner cards ula-v2-1-post and code-release-pypi-zenodo with evidence once their public results exist (QNFO/license v2.1 file; PyPI and Zenodo software records). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.23.0-pub-gate-loop"; /* 1.23.0 PUB-GATE-LOOP-1 (2026-10-07, agent_issues 2105, pillar research): the daily quality-score sweep scores every published paper (it wrote only the first 200 of 466 and still reported ok, so 266 papers were never scored) and runs the publication gate on all of them: papers.release_gate_pass/at/reason are written for the first time, publication_gate_audit gets a row per changed verdict (the only earlier run was the one-off shadow-20261004), and a score under 25 quarantines the paper unless ops_config publication_gate_mode = shadow or the run would demote more than 20 (then none, degraded). 1.22.1 GRANT-GMAIL-UNGRADED-1 (2026-10-07, pillar autonomy): grant-followup grades only the mailboxes it holds a credential for; without GMAIL_PASS Gmail is reported (channels.gmail no-credential, gmail_graded false) but the run is ok when qnfo.org mail was read and issues filed, since the owner dismissed both Gmail cards (human_actions 42, 47) and OPEN-ACCESS-1 forbids asking for a token (the pattern of RADAR-CAP-GRADING-1); 10 degraded runs in a row had kept watchmaker_index at 2 on a step no one may ask for. A Gmail read that fails with the credential set still degrades the run. 1.22.0 1.22.0 PROBE-CADENCE-1 (2026-10-06, pillar autonomy; owner question 2026-10-06 "why do fleet probes only run as SQL against qnfo-audit"): every 10-minute tick reads the last run of remediation-consumer.yml, the only runner of runtime probes (runner-https on fleet hosts, plane D1s), and sends repository_dispatch remediation-tick when that run is older than 60 minutes; 98 of its last 100 runs were chained to pushes on main, so a quiet main stopped every runtime probe. State in scheduler_state probe_cadence; a dispatch the token may not send files PROBE-CADENCE-DISPATCH-1. 1.21.1 RADAR-CAP-GRADING-1 (2026-10-06, agent_issues 1641, pillar reach): the mention radar reports a source blocked by an external per-IP quota (capped:..., StackExchange on shared Workers egress, never answered since 2026-10-02) without grading it, so the run is ok when every readable source is; any other failure still degrades it; the owner card stackexchange-key (free stackapps key, STACKEXCHANGE_KEY var) tracks the blind spot and resolves itself on the first ok answer. 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). OWNER-STEPS-WATCH-1: a read-only companion of the daily release-check slot resolves the CODE-REACH-1 owner cards ula-v2-1-post and code-release-pypi-zenodo with evidence once their public results exist (QNFO/license v2.1 file; PyPI and Zenodo software records). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 var WORKER_NAME = "qnfo-cloud-ops";
@@ -3212,39 +3212,116 @@ async function jobGtdReconcile(env) {
   }
 }
 __name(jobGtdReconcile, "jobGtdReconcile");
-async function jobQualityScore(env) {
+// PUB-GATE-LOOP-1 (1.23.0, agent_issues 2105, pillar research): the publication gate is a daily step of this sweep.
+// Before it, the only gate run was one hand-run shadow pass (living-paper.publication_gate_audit run_id shadow-20261004,
+// 464 rows in 16 seconds, never repeated; papers.release_gate_* never written by anything), and the sweep scored only the
+// first 200 of 466 published papers (stmts.slice(0, 200)) while reporting ok, so 266 papers never had a score and 28 of
+// them were "demoted" for having none. Now every published paper is scored (batches of PUB_GATE_CHUNK), each gets a
+// verdict in papers.release_gate_pass / release_gate_at / release_gate_reason, and publication_gate_audit gets a row
+// whenever a paper's verdict changes. Verdicts: pass (score >= 50); revise (25..49, "thin": stays published with
+// release_gate_pass 0 and a reason naming what is missing); demote (< 25, "quarantine-candidate"): status -> quarantined
+// when ops_config publication_gate_mode is enforce (the default; 'shadow' records without acting). A run that would demote
+// more than PUB_GATE_MAX_DEMOTES papers quarantines none and reports degraded (a broken scorer must not empty the site).
+var PUB_GATE_VERSION = "pub-gate-v1-deterministic";
+var PUB_GATE_CHUNK = 100;
+var PUB_GATE_MAX_DEMOTES = 20;
+var PUB_GATE_MAX_CHANGES = 100;
+function pubGateScore(md) {
   const NLc = String.fromCharCode(10), TBc = String.fromCharCode(9), BQc = String.fromCharCode(96);
   const litRe = new RegExp("#{1,4}[^" + NLc + "]*(prior work|related work|literature review)", "i");
   const doiRe = new RegExp("10[.][0-9]{4,9}/", "g");
   const axRe = new RegExp("(?:arxiv[.]org/|arXiv:[" + NLc + TBc + " ]*[0-9]{4}[.][0-9]{4,5})", "gi");
   const tableRe = new RegExp("^[" + NLc + TBc + " ]*[|][-:| ]+[|]", "m");
+  md = String(md || "");
+  const len = md.length;
+  const lit = litRe.test(md) ? 1 : 0;
+  const refs = (md.match(doiRe) || []).length + (md.match(axRe) || []).length;
+  const verif = md.indexOf(BQc + BQc + BQc) >= 0 || tableRe.test(md) ? 1 : 0;
+  const score = Math.min(100, Math.min(len / 100, 40) + Math.min(refs * 3, 30) + lit * 15 + verif * 15);
+  const flag = score < 25 ? "quarantine-candidate" : score < 50 ? "thin" : "";
+  return { len, refs, lit, verif, score, flag };
+}
+__name(pubGateScore, "pubGateScore");
+function pubGateVerdict(q) {
+  if (q.flag === "quarantine-candidate") return { decision: "demote", pass: 0, reason: "quality:quarantine-candidate score=" + Math.round(q.score) };
+  if (q.flag === "thin") {
+    const miss = [];
+    if (q.refs < 3) miss.push("refs<3");
+    if (!q.lit) miss.push("no-prior-work-section");
+    if (!q.verif) miss.push("no-table-or-code");
+    return { decision: "revise", pass: 0, reason: "quality:thin score=" + Math.round(q.score) + (miss.length ? " missing=" + miss.join(",") : "") };
+  }
+  return { decision: "pass", pass: 1, reason: "ok score=" + Math.round(q.score) };
+}
+__name(pubGateVerdict, "pubGateVerdict");
+async function pubGateMode(env) {
+  try {
+    const r = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'publication_gate_mode'").first();
+    return String(r && r.value || "").trim().toLowerCase() === "shadow" ? "shadow" : "enforce";
+  } catch (e) {
+    return "shadow";
+  }
+}
+__name(pubGateMode, "pubGateMode");
+async function jobQualityScore(env) {
   try {
     await env.AUDIT.prepare("CREATE TABLE IF NOT EXISTS quality_scores (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, slug TEXT, status TEXT, body_len INTEGER, refs INTEGER, lit INTEGER, verif INTEGER, score INTEGER, flag TEXT)").run();
-    const rows = await env.LIVING.prepare("SELECT slug, status, body_md FROM papers WHERE status='published'").all();
+    const rows = await env.LIVING.prepare("SELECT slug, status, body_md, release_gate_pass, release_gate_reason FROM papers WHERE status='published'").all();
     const list = rows && rows.results || [];
-    const stmts = [];
+    const day = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const mode = await pubGateMode(env);
+    const runId = "pg-" + day + "-" + Date.now().toString(36);
+    const scoreStmts = [];
+    const judged = [];
     let flagged = 0;
     for (const p of list) {
-      const md = String(p.body_md || "");
-      const len = md.length;
-      const lit = litRe.test(md) ? 1 : 0;
-      const refs = (md.match(doiRe) || []).length + (md.match(axRe) || []).length;
-      const verif = md.indexOf(BQc + BQc + BQc) >= 0 || tableRe.test(md) ? 1 : 0;
-      const score = Math.min(100, Math.min(len / 100, 40) + Math.min(refs * 3, 30) + lit * 15 + verif * 15);
-      const flag = score < 25 ? "quarantine-candidate" : score < 50 ? "thin" : "";
-      if (flag === "quarantine-candidate") flagged++;
-      stmts.push(env.AUDIT.prepare("INSERT INTO quality_scores (ts, slug, status, body_len, refs, lit, verif, score, flag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind((/* @__PURE__ */ new Date()).toISOString().slice(0, 10), p.slug, p.status, len, refs, lit, verif, score, flag));
+      const q = pubGateScore(p.body_md);
+      if (q.flag === "quarantine-candidate") flagged++;
+      scoreStmts.push(env.AUDIT.prepare("INSERT INTO quality_scores (ts, slug, status, body_len, refs, lit, verif, score, flag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(day, p.slug, p.status, q.len, q.refs, q.lit, q.verif, q.score, q.flag));
+      judged.push({ p, q, v: pubGateVerdict(q) });
     }
     let wrote = 0;
-    if (stmts.length) {
-      const batch = stmts.slice(0, 200);
-      await env.AUDIT.batch(batch);
-      wrote = batch.length;
+    for (let i = 0; i < scoreStmts.length; i += PUB_GATE_CHUNK) {
+      const chunk = scoreStmts.slice(i, i + PUB_GATE_CHUNK);
+      await env.AUDIT.batch(chunk);
+      wrote += chunk.length;
     }
-    await recordEvent(env, "quality-score", "qs-" + Date.now().toString(36), "quality sweep: scanned=" + list.length + " rows=" + wrote + " quarantine_candidates=" + flagged, { job: "quality-score" });
-    return { status: "ok", scanned: list.length, rows: wrote, quarantine_candidates: flagged };
+    const demotes = judged.filter((j) => j.v.decision === "demote");
+    const tooMany = demotes.length > PUB_GATE_MAX_DEMOTES;
+    const act = mode === "enforce" && !tooMany;
+    const gateStmts = [];
+    let changed = 0, quarantined = 0;
+    // Only changed verdicts are written, demotes first, at most PUB_GATE_MAX_CHANGES papers a run (two statements each),
+    // so the first run's backlog (every paper, ~930 statements) stays inside the per-invocation D1 query limit with the
+    // score rows and drains over the next daily runs.
+    const pending = judged.filter((j) => (act && j.v.decision === "demote") || Number(j.p.release_gate_pass) !== j.v.pass || String(j.p.release_gate_reason || "") !== j.v.reason);
+    pending.sort((a, b) => (a.v.decision === "demote" ? 0 : 1) - (b.v.decision === "demote" ? 0 : 1));
+    const backlog = Math.max(0, pending.length - PUB_GATE_MAX_CHANGES);
+    for (const j of pending.slice(0, PUB_GATE_MAX_CHANGES)) {
+      const quarantine = act && j.v.decision === "demote";
+      changed++;
+      if (quarantine) quarantined++;
+      gateStmts.push(env.LIVING.prepare("UPDATE papers SET release_gate_pass = ?1, release_gate_at = ?2, release_gate_reason = ?3" + (quarantine ? ", status = 'quarantined', updated_at = datetime('now')" : "") + " WHERE slug = ?4 AND status = 'published'").bind(j.v.pass, now, j.v.reason, j.p.slug));
+      gateStmts.push(env.LIVING.prepare("INSERT INTO publication_gate_audit (run_id, slug, status, mode, decision, reason, score, quality_flag, body_len, has_abstract, refs, gate_version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, ?10, ?11)").bind(runId, j.p.slug, quarantine ? "quarantined" : j.p.status, mode, j.v.decision, j.v.reason, Math.round(j.q.score), j.q.flag || "ok", j.q.len, j.q.refs, PUB_GATE_VERSION));
+    }
+    for (let i = 0; i < gateStmts.length; i += PUB_GATE_CHUNK) await env.LIVING.batch(gateStmts.slice(i, i + PUB_GATE_CHUNK));
+    const passN = judged.filter((j) => j.v.pass === 1).length;
+    const reviseN = judged.filter((j) => j.v.decision === "revise").length;
+    const notes = { scanned: list.length, scored: wrote, pass: passN, revise: reviseN, demote: demotes.length, quarantined, verdicts_changed: changed, gate_backlog: backlog, mode, gate_version: PUB_GATE_VERSION };
+    let status = "ok", reason = "";
+    if (wrote < list.length) {
+      status = "degraded";
+      reason = "scored " + wrote + " of " + list.length + " published papers";
+    }
+    if (tooMany) {
+      status = "degraded";
+      reason = "gate would demote " + demotes.length + " papers (> " + PUB_GATE_MAX_DEMOTES + "): none quarantined, check the scorer";
+    }
+    await recordEvent(env, "quality-score", "qs-" + Date.now().toString(36), "quality sweep: scanned=" + list.length + " rows=" + wrote + " quarantine_candidates=" + flagged + " gate=" + mode + " pass=" + passN + " revise=" + reviseN + " demote=" + demotes.length + " quarantined=" + quarantined + " changed=" + changed + " backlog=" + backlog, { job: "quality-score", run_id: runId });
+    return { status, reason, notes, scanned: list.length, rows: wrote, quarantine_candidates: flagged };
   } catch (e) {
-    return { status: "error", error: String(e).slice(0, 200) };
+    return { status: "error", reason: String(e).slice(0, 200), error: String(e).slice(0, 200) };
   }
 }
 __name(jobQualityScore, "jobQualityScore");
