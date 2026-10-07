@@ -118,7 +118,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(src.slice(A, B + END.length) + "\n" + orch.slice(o1, o2) + "\n" + orch.slice(o3, o4) +
-  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES };", sandbox, { filename: "code-merge-block.js" });
+  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmEditsApply, cmRebaseText, cmRevertEdits, cmIntegrity, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES };", sandbox, { filename: "code-merge-block.js" });
 const W = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -320,6 +320,33 @@ function seedWorkerPr(num, branch, headSha) {
 }
 freshDb(); freshGh();
 const env = { AUDIT, GITHUB_TOKEN: "test-token" };
+// ---- REBASE-INTEGRITY-1 (0.11.2): a branch rebuilt from ctx.edits on a moved main is verified by its edits, not the parked patch
+{
+  const BASE2 = BASE.replace('var VERSION = "1.2.3-demo";', 'var VERSION = "1.2.9-moved";').replace("function b() {", "function b0() {\n  return 0;\n}\nfunction b() {");
+  const EDITS = [{ search: "  return 1;", replace: "  return 11;" }];
+  const REBUILT = W.cmRebaseText(BASE2, EDITS, true);
+  ok(REBUILT && REBUILT.includes("  return 11;") && REBUILT.includes("function b0() {") && /var VERSION = "1\.2\.10-codeagent";/.test(REBUILT), "cmRebaseText re-applies the edits on the moved base and bumps its VERSION as the publisher does", REBUILT && REBUILT.slice(0, 80));
+  const noop = [{ search: "  return 1;", replace: "  return 1;" }];
+  ok(W.cmRebaseText(BASE2, noop, false) === null && W.cmRebaseText(BASE2, noop, true) === BASE2.replace('"1.2.9-moved"', '"1.2.10-codeagent"') && W.cmRebaseText(BASE2 + "  return 1;\n", EDITS, true) === null && W.cmRebaseText(BASE2, [], true) === null, "a no-op edit gives nothing on a non-js file and only the VERSION bump on a worker (as the publisher does); an ambiguous SEARCH or no edits give nothing");
+  gh.contents["mb2:" + PATH] = BASE2; gh.contents["mb2:" + MIRROR] = BASE2;
+  gh.contents["r2h:" + PATH] = REBUILT; gh.contents["r2h:" + MIRROR] = REBUILT; gh.contents["r2h:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\nmain = "worker.js"\n';
+  const rctx = { base: BASE, patch: PATCH, edits: EDITS, mirror: MIRROR, rebased: "REBASE-BEFORE-PUBLISH-1: the parked patch did not apply to main@mb2; 1 edit re-applied to the current file, mirror rewritten (no model call)" };
+  const rt = task({ status: "branch_pushed", branch: BRANCH + "-r2", pr_url: null, ctx: JSON.stringify(rctx) });
+  const ig = J(await W.cmIntegrity(env, rt, "r2h", [PATH, MIRROR], W.cmScope(PATH), "mb2"));
+  ok(ig.ok === true && ig.revertible === true && ig.version_to === "1.2.10-codeagent" && ig.merge_base === "mb2", "REBASE-INTEGRITY-1: the rebuilt branch is intact (merge base + edits + bump), revertible, and carries the bumped VERSION", ig);
+  const stale = task({ status: "branch_pushed", branch: BRANCH + "-r2", pr_url: null, ctx: JSON.stringify({ base: BASE, patch: PATCH, edits: EDITS, mirror: MIRROR }) });
+  const ig0 = J(await W.cmIntegrity(env, stale, "r2h", [PATH, MIRROR], W.cmScope(PATH), "mb2"));
+  ok(ig0.ok === false && /does not apply to/.test(ig0.why), "without ctx.rebased the parked patch still decides (it does not apply on the moved base)", ig0);
+  gh.contents["r2x:" + PATH] = REBUILT + "// other\n"; gh.contents["r2x:" + MIRROR] = REBUILT; gh.contents["r2x:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\n';
+  const igx = J(await W.cmIntegrity(env, rt, "r2x", [PATH, MIRROR], W.cmScope(PATH), "mb2"));
+  ok(igx.ok === false && /is not the verified patch/.test(igx.why), "other content on the rebuilt head is refused", igx);
+  gh.contents["mb3:" + PATH] = BASE2.replace("  return 1;", "  return 2;"); gh.contents["mb3:" + MIRROR] = gh.contents["mb3:" + PATH];
+  const igm = J(await W.cmIntegrity(env, rt, "r2h", [PATH, MIRROR], W.cmScope(PATH), "mb3"));
+  ok(igm.ok === false && /do not re-apply/.test(igm.why), "edits whose SEARCH is gone from the merge base are refused with the REBASE-INTEGRITY-1 reason", igm);
+  const rv = W.cmRevertEdits(REBUILT, EDITS, "-revert-c9");
+  ok(rv && rv.content.includes("  return 1;") && !rv.content.includes("  return 11;") && rv.from === "1.2.10-codeagent" && rv.to === "1.2.11-revert-c9", "cmRevertEdits puts the SEARCH text back on today's main and bumps main's VERSION", rv && { from: rv.from, to: rv.to });
+  ok(W.cmEditsApply("aXbXc", [{ search: "X", replace: "Y" }], false) === null && W.cmEditsApply("abc", [{ search: "b", replace: "" }], true) === null && W.cmEditsApply("abc", [{ search: "a", replace: "1" }, { search: "c", replace: "3" }], false) === "1b3", "cmEditsApply: unique SEARCH only, an empty REPLACE cannot be inverted, several edits apply in place");
+}
 db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
 seedTask({ status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" });
 gh.branches[BRANCH] = "h1";
