@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-07 08:32:53",
+  "audited_at": "2026-10-07 09:03:32",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -468,7 +468,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.8.12-phrase-revise",
+        "version": "0.8.13-codeagent",
         "worker": "q08-signal-engine"
       },
       {
@@ -488,7 +488,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.22.0-probe-cadence",
+        "version": "1.22.1-grant-gmail-ungraded",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -513,7 +513,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.8.1-mvp-fold-notdeployed",
+        "version": "0.9.1-goal-review-harm",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -538,7 +538,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.12.1-budget-soft",
+        "version": "3.13.0-draft-metering",
         "worker": "qnfo-ipatent"
       },
       {
@@ -844,9 +844,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.8.12-phrase-revise",
+      "before": "0.8.13-codeagent",
       "http": 200,
-      "live": "0.8.12-phrase-revise",
+      "live": "0.8.13-codeagent",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1012,9 +1012,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.22.0-probe-cadence",
+      "before": "1.22.1-grant-gmail-ungraded",
       "http": 200,
-      "live": "1.22.0-probe-cadence",
+      "live": "1.22.1-grant-gmail-ungraded",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.8.1-mvp-fold-notdeployed",
+      "before": "0.9.1-goal-review-harm",
       "http": 200,
-      "live": "0.8.1-mvp-fold-notdeployed",
+      "live": "0.9.1-goal-review-harm",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1228,9 +1228,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.12.1-budget-soft",
+      "before": "3.13.0-draft-metering",
       "http": 200,
-      "live": "3.12.1-budget-soft",
+      "live": "3.13.0-draft-metering",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
