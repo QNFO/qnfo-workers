@@ -38,6 +38,8 @@ CENSUS_EVERY_H = 6
 CENSUS_TIMEOUT_S = 15
 CENSUS_READ_CAP = 64 * 1024
 CENSUS_MAX_HOSTS = 200
+# A census that saw fewer hosts than this read too little of the account (token scope, API error) to prove anything.
+CENSUS_MIN_HOSTS = 30
 CENSUS_WORKERS = 16
 ISSUE_PREFIX = "HOST-CENSUS-BROKEN-1"
 METRIC = "public_hosts_broken"
@@ -171,6 +173,9 @@ def record(d1, res, verifier):
     open_rows = d1("SELECT id, description FROM agent_issues WHERE status = 'open' AND title LIKE ?1", [ISSUE_PREFIX + ":%"])
     listing = "; ".join("%s=%s" % (h, t) for h, t in res["broken"].items())
     now_ms = int(time.time() * 1000)
+    if n == 0 and res["hosts"] < CENSUS_MIN_HOSTS:
+        d1("UPDATE cloud_ops_events SET status = 'degraded', text = text || ' (too few hosts to judge; nothing closed)' WHERE id = ?1", ["host-census-" + day])
+        return {"degraded": res["hosts"]}
     if n == 0:
         for r in open_rows:
             d1("UPDATE issue_triage SET close_evidence = ?1 WHERE issue_id = ?2",
