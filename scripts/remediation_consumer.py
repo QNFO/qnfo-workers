@@ -494,8 +494,16 @@ def _selftest():
     if classify("ok", "status=404") != (0, "fail") or classify("ok", "ok") != (1, "pass"):
         print(json.dumps({"ok": False, "case": "https-classify"}))
         return 1
+    try:
+        import host_census
+        hc = host_census.selftest()
+    except Exception as e:  # noqa: BLE001
+        hc = {"ok": False, "error": str(e)[:200]}
+    if not hc.get("ok"):
+        print(json.dumps({"ok": False, "case": "host-census", "detail": hc}))
+        return 1
     print(json.dumps({"ok": True, "marker": "REMEDIATION-CONSUMER-1",
-                      "selftest": "classify+probe-guard+runner-https green"}))
+                      "selftest": "classify+probe-guard+runner-https+host-census green"}))
     return 0
 
 
@@ -622,6 +630,14 @@ def main():
         refresh_runtime_share(out)
     except Exception as e:  # noqa: BLE001 - the metric must not kill the run record
         out["runtime_share_error"] = str(e)[:200]
+
+    # HOST-CENSUS-1 (2026-10-07): every public hostname of the account, probed from this runner every 6h; read-only,
+    # self-filing and self-closing (scripts/host_census.py). A failure here never stops the contract run.
+    try:
+        import host_census
+        out["host_census"] = host_census.run(d1, lambda path: _req("GET", CF_API + path), VERIFIER)
+    except Exception as e:  # noqa: BLE001
+        out["host_census_error"] = str(e)[:200]
 
     spent = int((time.time() - t0) * 1000)
     try:
