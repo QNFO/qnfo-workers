@@ -202,7 +202,7 @@ def compare_url(base, branch):
 # goes back to the orchestrator's propose step with the parser's message as feedback (SELF-REPAIR-1 counts the attempt),
 # never to a PR. The check is syntax only: imports are not resolved and nothing is executed.
 #
-# PUBLISH-PY-CHECK-1 (2026-10-07, SCOPE-SCRIPTS-1, issue 2100): the same gate for a patched .py file, so that a scripts/*.py code
+# PUBLISH-PY-CHECK-1 (2026-10-07, SCOPE-SCRIPTS-1, issue 2101): the same gate for a patched .py file, so that a scripts/*.py code
 # task that does not parse goes back to propose instead of to a pull request once the merge runner takes that path. This runner
 # is Python, so compile() is the parser; the file is read, never imported or executed.
 def py_syntax_error(repo_dir, f):
