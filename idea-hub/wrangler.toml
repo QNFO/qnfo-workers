@@ -39,3 +39,9 @@ index_name = "qwav-research-v2"
 # IDEA-TRIAGE-CONSUMER-ABSENT-1 (issue 1689): hourly proposal triage (ported from retired qnfo-idea-triage).
 [triggers]
 crons = ["23 * * * *"]
+
+# OWNER-SIGNAL-INTAKE-1 (1.7.0, #2104, pillar research): the owner-corpus feeder reads note bodies from the owner's
+# Obsidian vault (same bucket calendar-api binds as VAULT; notes_intake indexes it). Read-only use.
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "obsidian-vault"

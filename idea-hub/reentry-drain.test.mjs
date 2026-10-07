@@ -23,7 +23,7 @@ const audit = new DatabaseSync(":memory:"), lp = new DatabaseSync(":memory:");
 audit.exec(`CREATE TABLE signals (id TEXT PRIMARY KEY, ts TEXT, source TEXT, source_ref TEXT, content TEXT, open_questions TEXT, evidential_weight REAL, domain TEXT, status TEXT DEFAULT 'new', decision TEXT, score REAL, created_at TEXT);
 CREATE TABLE signal_worker_boundary (worker TEXT NOT NULL, source TEXT NOT NULL, permitted INTEGER DEFAULT 1, domain TEXT, note TEXT, PRIMARY KEY (worker, source));
 CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT, decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);`);
-lp.exec("CREATE TABLE papers (doi TEXT, title TEXT, body_md TEXT, created_at TEXT)");
+lp.exec("CREATE TABLE papers (doi TEXT, title TEXT, body_md TEXT, created_at TEXT, status TEXT DEFAULT 'published', identifier_type TEXT DEFAULT 'zenodo')");
 let aiCalls = 0;
 const env = { QNFO_AUDIT: shim(audit), LIVING_PAPER: shim(lp), AI: { async run() { aiCalls++; return { response: "{}" }; } } };
 let pass = 0, fail = 0;
@@ -52,7 +52,7 @@ sig("10.5281/zenodo.w30h", now - 30 * H, 0.9, ["Does the 30-hour-old question ge
 sig("10.5281/zenodo.w1h", now - 1 * H, 0.9, ["Does the newest question wait its turn?"]);
 for (let i = 0; i < 5; i++) { const d = "10.5281/zenodo.young" + i; sig(d, now - 2 * H, 0); paper(d, PLAIN, now - 2 * H); }
 for (let i = 0; i < 4; i++) paper("10.5281/zenodo.fresh" + i, PLAIN + OPENQ, now - 10 * 60e3);
-audit.prepare("INSERT INTO signal_worker_boundary (worker, source, permitted, note) VALUES ('idea-hub', 'artifact_reentry', 0, 'OWNER-NARROW-SIGNAL-1 test')").run();
+audit.prepare("INSERT INTO signal_worker_boundary (worker, source, permitted, note) VALUES ('idea-hub', 'artifact_reentry', 0, 'OWNER-NARROW-SIGNAL-1 test'), ('idea-hub', 'artifact_reentry_owner', 0, 'OWNER-SIGNAL-INTAKE-1 test')").run();
 const TOTAL0 = n("SELECT COUNT(*) n FROM signals");
 const stuck = () => n("SELECT COUNT(*) n FROM signals WHERE status='new' AND created_at < ?", iso(Date.now() - 24 * H));
 const oldW0New = () => n("SELECT COUNT(*) n FROM signals WHERE status='new' AND COALESCE(evidential_weight,0)=0 AND created_at < ?", iso(Date.now() - api.REENTRY_NOQ_TTL_H * H));

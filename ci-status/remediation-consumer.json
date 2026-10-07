@@ -1,12 +1,53 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@76d32721a3ef",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@fced85855a09",
+ "due": 5,
+ "pass": 1,
+ "fail": 4,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-2120",
+   "issue_id": 2120,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2067",
+   "issue_id": 2067,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2068",
+   "issue_id": 2068,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 0 job rows since the issue was filed (needs 3)",
+   "written": true
+  },
+  {
+   "class": "issue-2103",
+   "issue_id": 2103,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2104",
+   "issue_id": 2104,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,9 +71,9 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 15.4,
- "spent_ms": 2776,
- "head": "76d32721a3ef0f3748603444f7bbe1c37dcddbdb",
+ "runtime_verified_share_24h": 16,
+ "spent_ms": 21229,
+ "head": "fced85855a09dbcadd932f2428161e3b0569cd84",
  "job_status": "success",
- "ts": "2026-10-07T09:09:27Z"
+ "ts": "2026-10-07T11:01:37Z"
 }
