@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.6.1-budget-soft-health"; // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.6.2-codeagent"; // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -433,17 +433,21 @@ async function triageProposals(env) {
     try {
       // Research questions from the fleet's own producers are ideas, not chat questions: the chat-question filter
       // would HOLD every think-loop proposal unscored ("Can X predict Y?" matches it).
-      var internal = row.name === "think-loop" || row.name === "auto-reentry";
-      if (isNoise(row.idea) || (!internal && isQuestion(row.idea))) {
+      var internal = row.name === "think-loop" || row.name === "auto-reentry" || row.name === "ask-gap";
+      if (isNoise(row.idea) || (!internal && !diversityExempt(row) && isQuestion(row.idea))) {
         await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision='HOLD', rationale=?, triaged_at=?, status='triaged_hold' WHERE id=?").bind("noise/question filter", now, row.id).run();
         out.triaged++; continue;
       }
       var s = await scoreIdea(env, row.idea, budget.breached);
       if (s.error) { out.errors++; continue; }
       var cluster = s.decision === "ACCEPT" ? proposalCluster(row.name, row.idea, s.rationale) : null;
-      if (cluster && mix && !diversityExempt(row) && diversityBlocks(mix, cluster)) {
+      if (cluster && mix && !isNoise(row.idea) && !diversityExempt(row) && diversityBlocks(mix, cluster)) {
         var pct = Math.round(100 * ((mix.by[cluster] || 0) + 1) / (mix.n + 1));
-        await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision='DEFER-DIVERSITY', score=?, rationale=?, triaged_at=?, status='deferred_diversity' WHERE id=?").bind(s.score, "[diversity hold " + now.slice(0, 16) + "Z: " + cluster + " would be " + pct + "% of 30-day accepts, cap " + Math.round(100 * DIVERSITY_MAX_SHARE) + "%] " + (s.rationale || ""), now, row.id).run();
+        if (!diversityExempt(row)) {
+  await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision='DEFER-DIVERSITY', score=?, rationale=?, triaged_at=?, status='deferred_diversity' WHERE id=?").bind(s.score, "[diversity hold " + now.slice(0, 16) + "Z: " + cluster + " would be " + pct + "% of 30-day accepts, cap " + Math.round(100 * DIVERSITY_MAX_SHARE) + "%] " + (s.rationale || ""), now, row.id).run();
+} else {
+  await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision=?, score=?, rationale=?, triaged_at=?, status=? WHERE id=?").bind(s.decision, s.score, s.rationale || "", now, s.decision === "ACCEPT" ? "triaged_accepted" : "triaged_hold", row.id).run();
+}
         out.triaged++; out.diversity_held++; continue;
       }
       await env.QNFO_AUDIT.prepare("UPDATE idea_proposals SET decision=?, score=?, rationale=?, triaged_at=?, status=? WHERE id=?").bind(s.decision, s.score, s.rationale || "", now, s.decision === "ACCEPT" ? "triaged_accepted" : "triaged_hold", row.id).run();
