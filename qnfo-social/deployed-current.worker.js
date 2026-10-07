@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.8.3-codeagent"; // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
+var VERSION = "0.9.0-promote-route"; // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -1061,10 +1061,37 @@ async function pickChannelRow(env, channel, epoch) {
   const rows = (await env.DB.prepare("SELECT id, slug, title, posts, status, doi, notes, flags, posted_at, post_uri FROM social_threads WHERE (status='queued' AND (COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%')) OR (status='posted' AND posted_at >= ?1 AND posted_at >= datetime('now','-60 days')) ORDER BY CASE WHEN status='queued' THEN 0 ELSE 1 END, CASE WHEN status='queued' THEN id ELSE 0 END ASC, posted_at DESC LIMIT 24").bind(epoch === '0' ? '2026-10-01 00:00:00' : epoch).all()).results || [];
   // ATTENTION-SHARE-1: noticed items first among the posted rows.
   const ordered = await attentionOrder(env, rows);
+  // PROMOTE-ROUTE-1 (0.9.0): new research papers reach the Buffer channels. qnfo-research-exec queues every published
+  // paper in dissemination_tracker for Bluesky only, and the channel drain read social_threads only, so with Bluesky at
+  // attention share 0 (STOP since 2026-10-06) the 28 papers published 2026-09-30..10-06 reached no channel at all. Order:
+  // queued curated threads first, then the newest queued paper not yet carried on this channel, then recycled posted threads.
+  let paperTried = false;
   for (const row of ordered) {
+    if (row.status !== 'queued' && !paperTried) {
+      paperTried = true;
+      const pr = await pickPaperRow(env, channel);
+      if (pr) return pr;
+    }
     if (!row.slug || /^q08-/.test(String(row.slug))) continue;
     if (await channelCarried(env, channel, row.slug)) continue;
     return row;
+  }
+  return paperTried ? null : await pickPaperRow(env, channel);
+}
+// PROMOTE-ROUTE-1: a queued dissemination row (a paper the research pipeline published in the last PAPER_PROMOTE_DAYS)
+// as a channel-drain candidate, shaped like a social_threads row: one post, title and papers.qnfo.org link. The tracker
+// row stays queued for Bluesky; channelCarried keeps one post per paper per channel.
+var PAPER_PROMOTE_DAYS = 30;
+async function pickPaperRow(env, channel) {
+  let rows = [];
+  try { rows = (await env.DB.prepare("SELECT id, paper_slug, paper_title, paper_doi, pages_url FROM dissemination_tracker WHERE action='queued' AND channel='bluesky' AND paper_slug IS NOT NULL AND paper_slug <> '' AND created_at >= datetime('now', ?1) ORDER BY created_at DESC LIMIT 20").bind('-' + PAPER_PROMOTE_DAYS + ' days').all()).results || []; } catch (e) { return null; }
+  for (const d of rows) {
+    const slug = String(d.paper_slug);
+    if (/^q08-/.test(slug)) continue;
+    if (await channelCarried(env, channel, slug)) continue;
+    const link = d.pages_url || ('https://papers.qnfo.org/papers/' + slug + '/');
+    const title = repairMojibake(String(d.paper_title || slug));
+    return { id: 'dissem:' + d.id, slug: slug, title: title, posts: JSON.stringify([title + ' \u2014 new open-access paper: ' + link]), status: 'paper', doi: d.paper_doi || null, notes: 'paper:dissemination_tracker', flags: '', posted_at: null, post_uri: null };
   }
   return null;
 }
@@ -2608,4 +2635,4 @@ export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, ut
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
-  learnerEngagementRate, learnerReport, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF };
+  learnerEngagementRate, learnerReport, ensureLearnerSchema, setLearnerRng, LEARNER_SLOTS, LEARNER_METRIC, LEARNER_METRIC_DEF , pickPaperRow, PAPER_PROMOTE_DAYS };
