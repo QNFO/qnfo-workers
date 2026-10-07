@@ -1,98 +1,66 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@054846e3e8e7",
- "due": 11,
- "pass": 3,
- "fail": 8,
+ "verifier": "remediation-consumer@82231d74624f",
+ "due": 7,
+ "pass": 2,
+ "fail": 5,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2004",
-   "issue_id": 2004,
+   "class": "issue-1800",
+   "issue_id": 1800,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: code_task_success_rate_30d 0.25 (needs >= 0.6 on 14 days)",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2005",
-   "issue_id": 2005,
+   "class": "issue-1815",
+   "issue_id": 1815,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: qnfo-fleet-control 0.4.132 not live yet (0.7.1-charter-rule-10)",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
    "written": true
   },
   {
-   "class": "issue-2008",
-   "issue_id": 2008,
+   "class": "issue-1825",
+   "issue_id": 1825,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no code task yet for issue 2008",
+   "expected": "within-cap",
+   "observed": "over-cap",
    "written": true
   },
   {
-   "class": "issue-2009",
-   "issue_id": 2009,
+   "class": "issue-2071",
+   "issue_id": 2071,
+   "verdict": "fail",
+   "expected": "MET",
+   "observed": "OPEN",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "pending: no code task yet",
+   "written": true
+  },
+  {
+   "class": "issue-1712",
+   "issue_id": 1712,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "1",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-2010",
-   "issue_id": 2010,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: worker_count 28 (needs <= 24)",
-   "written": true
-  },
-  {
-   "class": "issue-2011",
-   "issue_id": 2011,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: fleet_ai_run_rate_30d_usd 56.65, workers_ai_cost_30d_usd 58.83 (needs <= 40 on 14 days and <= 25)",
-   "written": true
-  },
-  {
-   "class": "issue-2012",
-   "issue_id": 2012,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: breach_code_task_pct 8.3, needs-machine-probe contracts 12",
-   "written": true
-  },
-  {
-   "class": "issue-2013",
-   "issue_id": 2013,
+   "class": "issue-1724",
+   "issue_id": 1724,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2015",
-   "issue_id": 2015,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: subscribers_growth_monthly 0, credibility_events_90d 0",
-   "written": true
-  },
-  {
-   "class": "issue-2016",
-   "issue_id": 2016,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2014",
-   "issue_id": 2014,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: metric ops_tool_budget_bail_7d not registered yet (TP-6 lever 1 registers it with its trigger)",
+   "expected": "1",
+   "observed": "1",
    "written": true
   }
  ],
@@ -119,9 +87,9 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 13.4,
- "spent_ms": 30205,
- "head": "054846e3e8e714013f3e9535adeaa76ce5a310f5",
+ "runtime_verified_share_24h": 14.1,
+ "spent_ms": 19801,
+ "head": "82231d74624fedba5519a353f2528aab3ea47e4a",
  "job_status": "success",
- "ts": "2026-10-07T06:29:24Z"
+ "ts": "2026-10-07T07:17:05Z"
 }
