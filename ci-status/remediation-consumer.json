@@ -1,50 +1,202 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@fced85855a09",
- "due": 5,
- "pass": 1,
- "fail": 4,
+ "verifier": "remediation-consumer@e5c67eff9e75",
+ "due": 24,
+ "pass": 11,
+ "fail": 13,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2120",
-   "issue_id": 2120,
+   "class": "issue-2076",
+   "issue_id": 2076,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "observed": "missing-marker",
    "written": true
   },
   {
-   "class": "issue-2067",
-   "issue_id": 2067,
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2068",
-   "issue_id": 2068,
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2055",
+   "issue_id": 2055,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: 0 job rows since the issue was filed (needs 3)",
+   "observed": "pending: no metered iPatent draft yet (qnfo-ipatent 3.13.0, PR 764, meters each draft call as purpose draft)",
    "written": true
   },
   {
-   "class": "issue-2103",
-   "issue_id": 2103,
+   "class": "watchmaker-owner-steps-1",
+   "issue_id": 2058,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2124",
+   "issue_id": 2124,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2104",
-   "issue_id": 2104,
+   "class": "issue-1987",
+   "issue_id": 1987,
+   "verdict": "fail",
+   "expected": "posting",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1885",
+   "issue_id": 1885,
+   "verdict": "fail",
+   "expected": "clean",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1952",
+   "issue_id": 1952,
+   "verdict": "fail",
+   "expected": "learning",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1953",
+   "issue_id": 1953,
+   "verdict": "fail",
+   "expected": "answered",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1857",
+   "issue_id": 1857,
+   "verdict": "fail",
+   "expected": "done",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2047",
+   "issue_id": 2047,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2037",
+   "issue_id": 2037,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: items A/D child CITATION-EXISTENCE-GATE-1 open, item B cost_attribution_gap_pct 97.9, item C is trigger 362 (issue 1798) and ORPHAN-ISSUE-GUARD-1",
+   "written": true
+  },
+  {
+   "class": "issue-2048",
+   "issue_id": 2048,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2049",
+   "issue_id": 2049,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: lever T7.15 status session",
+   "written": true
+  },
+  {
+   "class": "issue-2053",
+   "issue_id": 2053,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the remaining DoD of 2053 (mechanism card shown in the v=2 flow) rides lever T7.15 ipatent-ui-overhaul, status session",
    "written": true
   }
  ],
@@ -71,9 +223,10 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 16,
- "spent_ms": 21229,
- "head": "fced85855a09dbcadd932f2428161e3b0569cd84",
+ "https": 9,
+ "runtime_verified_share_24h": 17.4,
+ "spent_ms": 59103,
+ "head": "e5c67eff9e7524f8a3590c0904114523b6fd847b",
  "job_status": "success",
- "ts": "2026-10-07T11:01:37Z"
+ "ts": "2026-10-07T12:01:59Z"
 }
