@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.8.2-utm-visits"; // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
+var VERSION = "0.8.3-codeagent"; // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -2577,8 +2577,8 @@ export default {
 // Unlike fleet-control the counter write is NOT awaited (fire-and-forget, errors swallowed) so it can never add latency.
 var AI_ATTR_DB_BINDINGS = ["DB"];
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
-  var t0 = Date.now(), ok = 1;
-  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  var t0 = Date.now(), ok = 1, res;
+  try { res = await env.AI.run(model, input, opts); return res; } catch (e) { ok = 0; throw e; }
   finally {
     try {
       var db = null;
@@ -2590,6 +2590,13 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
         var wr = (async function() {
           await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
           await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, ms).run();
+          if (res && !/(?:bge|embed|whisper|m2m100|resnet|flux|sdxl)/i.test(String(model))) {
+            var u = (res && res.usage) || {};
+            var cached = (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) || u.cached_tokens || (u.input_tokens_details && u.input_tokens_details.cached_tokens) || 0;
+            var in_tok = u.prompt_tokens || u.input_tokens || 0;
+            await db.prepare("CREATE TABLE IF NOT EXISTS ai_cache_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, in_tok INTEGER DEFAULT 0, cached INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
+            await db.prepare("INSERT INTO ai_cache_counters (day, worker, purpose, model, in_tok, cached) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET in_tok=in_tok+?5, cached=cached+?6").bind(day, worker, purpose, String(model), in_tok, cached).run();
+          }
         })();
         wr.catch(function() {});
       }
