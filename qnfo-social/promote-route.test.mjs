@@ -28,7 +28,7 @@ const env = { DB: { prepare: stmt } };
 let r = await mod.pickChannelRow(env, "linkedin", "0");
 ok(r && r.slug === "newest-paper" && r.status === "paper" && r.id === "dissem:d2", "with no queued thread, the newest queued paper goes before a recycled posted thread", r);
 const posts = JSON.parse(r.posts);
-ok(Array.isArray(posts) && posts.length === 1 && posts[0].includes("https://papers.qnfo.org/papers/newest-paper/") && posts[0].startsWith("Boundary-crossing paths bound emergence"), "the candidate is one post with the title and the papers.qnfo.org link", posts);
+ok(Array.isArray(posts) && posts.length === 1 && (posts[0].match(/https:\/\/\S+/g) || []).some((u) => { try { const x = new URL(u); return x.hostname === "papers.qnfo.org" && x.pathname === "/papers/newest-paper/"; } catch (e) { return false; } }) && posts[0].startsWith("Boundary-crossing paths bound emergence"), "the candidate is one post with the title and the papers.qnfo.org link", posts);
 db.prepare("INSERT INTO social_media_posts (id, platform, project_id, status, published_at) VALUES ('p1', 'buffer-linkedin', 'newest-paper', 'published', datetime('now'))").run();
 r = await mod.pickChannelRow(env, "linkedin", "0");
 ok(r && r.slug === "older-paper", "a paper carried on LinkedIn is not offered there again; the next newest is", r);
