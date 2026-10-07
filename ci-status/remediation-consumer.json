@@ -1,58 +1,34 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@7163c7db14c7",
- "due": 6,
+ "verifier": "remediation-consumer@aa79fc585613",
+ "due": 3,
  "pass": 0,
- "fail": 6,
+ "fail": 3,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2139",
-   "issue_id": 2139,
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "pending: the shared-cap window is read from 2026-10-08",
+   "written": true
+  },
+  {
+   "class": "issue-2050",
+   "issue_id": 2050,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: filed by loop-watch, which owns it for 48h",
+   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2113,2114,2115,2116",
    "written": true
   },
   {
-   "class": "issue-2140",
-   "issue_id": 2140,
+   "class": "issue-1815",
+   "issue_id": 1815,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: filed by loop-watch, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2076",
-   "issue_id": 2076,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-1987",
-   "issue_id": 1987,
-   "verdict": "fail",
-   "expected": "posting",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1885",
-   "issue_id": 1885,
-   "verdict": "fail",
-   "expected": "clean",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1952",
-   "issue_id": 1952,
-   "verdict": "fail",
-   "expected": "learning",
-   "observed": "pending",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
    "written": true
   }
  ],
@@ -79,13 +55,12 @@
   "http",
   "runner-https"
  ],
- "https": 1,
- "runtime_verified_share_24h": 20.5,
+ "runtime_verified_share_24h": 20.2,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 21046,
- "head": "7163c7db14c74405438f4c81940325ca9ebc995d",
+ "spent_ms": 14482,
+ "head": "aa79fc5856138448536577b4ff0953a624bebfdc",
  "job_status": "success",
- "ts": "2026-10-07T18:02:01Z"
+ "ts": "2026-10-07T18:07:04Z"
 }
