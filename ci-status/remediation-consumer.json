@@ -1,122 +1,58 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@80824391011d",
- "due": 14,
- "pass": 14,
- "fail": 0,
+ "verifier": "remediation-consumer@7163c7db14c7",
+ "due": 6,
+ "pass": 0,
+ "fail": 6,
  "skipped": 0,
  "contracts": [
   {
-   "class": "detect-threshold-blindspot",
-   "issue_id": 1165,
-   "verdict": "pass",
-   "expected": "armed",
-   "observed": "armed",
-   "written": true
-  },
-  {
-   "class": "act-half-unverified",
-   "issue_id": 1207,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "closure-evidence-unbacked",
-   "issue_id": 1263,
-   "verdict": "pass",
-   "expected": "reachable",
-   "observed": "reachable",
-   "written": true
-  },
-  {
-   "class": "remediation-class-death",
-   "issue_id": 1200,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "capability-precondition-missing",
-   "issue_id": 1118,
-   "verdict": "pass",
+   "class": "issue-2139",
+   "issue_id": 2139,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: filed by loop-watch, which owns it for 48h",
    "written": true
   },
   {
-   "class": "mixed-type-timestamp",
-   "issue_id": 1283,
-   "verdict": "pass",
-   "expected": "guarded",
-   "observed": "guarded",
-   "written": true
-  },
-  {
-   "class": "timestamp-seconds-bypass",
-   "issue_id": 1298,
-   "verdict": "pass",
-   "expected": "guarded",
-   "observed": "guarded",
-   "written": true
-  },
-  {
-   "class": "router-calib-agent-class",
-   "issue_id": 1293,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "outreach-selector-drift",
-   "issue_id": 1294,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "outreach-drain-scheduled",
-   "issue_id": 1295,
-   "verdict": "pass",
-   "expected": "scheduled",
-   "observed": "scheduled",
-   "written": true
-  },
-  {
-   "class": "cron-registry-truth",
-   "issue_id": 1494,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1783",
-   "issue_id": 1783,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1950",
-   "issue_id": 1950,
-   "verdict": "pass",
-   "expected": "producing",
-   "observed": "producing",
-   "written": true
-  },
-  {
-   "class": "issue-2082",
-   "issue_id": 2082,
-   "verdict": "pass",
+   "class": "issue-2140",
+   "issue_id": 2140,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: filed by loop-watch, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2076",
+   "issue_id": 2076,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-1987",
+   "issue_id": 1987,
+   "verdict": "fail",
+   "expected": "posting",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1885",
+   "issue_id": 1885,
+   "verdict": "fail",
+   "expected": "clean",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1952",
+   "issue_id": 1952,
+   "verdict": "fail",
+   "expected": "learning",
+   "observed": "pending",
    "written": true
   }
  ],
@@ -143,12 +79,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 20.4,
+ "https": 1,
+ "runtime_verified_share_24h": 20.5,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 42889,
- "head": "80824391011d0620895e82cb7dc96e2ebe8fea69",
+ "spent_ms": 21046,
+ "head": "7163c7db14c74405438f4c81940325ca9ebc995d",
  "job_status": "success",
- "ts": "2026-10-07T17:38:20Z"
+ "ts": "2026-10-07T18:02:01Z"
 }
