@@ -15,7 +15,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8").replace(/export default\s*\{/, "var __default = {");
 const sb = { console: { log() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { triageProposals, runOwnerCorpus, runReentry, thinkSeed, proposalKind, OWNER_CORPUS_SCORE_MIN, OWNER_CORPUS_RQ_CAP, OWNER_CORPUS_BATCH };", sb);
+vm.runInContext(src + "\n__x = { ownerPipelineDois, triageProposals, runOwnerCorpus, runReentry, runConsume, thinkSeed, proposalKind, realQuestion, ownerPaper, aiRunAttr, promptCacheOpts, OWNER_CORPUS_SCORE_MIN, OWNER_CORPUS_RQ_CAP, OWNER_CORPUS_BATCH, REASONING_MAX_TOKENS, OWNER_CORPUS_FLEET_ERA };", sb);
 const api = sb.__x;
 const mk = () => new DatabaseSync(":memory:");
 const shim = (db) => ({ prepare(sql) { let a = []; const q = sql.replace(/\?(\d+)/g, "?"); const st = { bind(...x) { a = x; return st; }, async all() { return { results: db.prepare(q).all(...a) }; }, async first() { return db.prepare(q).get(...a) ?? null; }, async run() { const r = db.prepare(q).run(...a); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } }; return st; } });
@@ -28,12 +28,15 @@ CREATE TABLE research_queue (id TEXT PRIMARY KEY, source TEXT, source_id TEXT, i
 CREATE TABLE signals (id TEXT PRIMARY KEY, ts TEXT, source TEXT, source_ref TEXT, content TEXT, open_questions TEXT, evidential_weight REAL, domain TEXT, status TEXT, decision TEXT, created_at TEXT);
 CREATE TABLE signal_worker_boundary (worker TEXT, source TEXT, permitted INTEGER);
 CREATE TABLE notes_intake (path TEXT PRIMARY KEY, type TEXT, title TEXT, status TEXT, sig TEXT);
-CREATE TABLE ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model));`);
+CREATE TABLE ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model));
+CREATE TABLE ai_cache_counters (day TEXT, worker TEXT, model TEXT, calls INTEGER DEFAULT 0, cached_calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, cached_tok INTEGER DEFAULT 0, PRIMARY KEY (day, worker, model));`);
 // Scripted model: a scorecard whose merit depends on a marker in the idea; an extraction reply for notebook prompts.
 const card = (m) => JSON.stringify({ novelty: m, technical_merit: m, impact_potential: m, exposure_potential: m, feasibility: 0.9, risk: 0.1, rationale: "r" + m, hook: "h" });
 const calls = [];
-const AI = { async run(model, input) {
+const seenMax = [], seenAff = [];
+const AI = { async run(model, input, opts) {
   const p = String(input.messages[0].content);
+  seenMax.push(input.max_tokens); seenAff.push(opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"] || null);
   calls.push(p.startsWith("You read one note") ? "corpus" : "score");
   if (p.startsWith("You read one note")) {
     if (/NO-IDEA-HERE/.test(p)) return { response: '{"none":"shopping list"}' };
@@ -120,6 +123,54 @@ const seed = await api.thinkSeed(env);
 ok(/The author's own lines of work/.test(seed) && /Distinction lattices|anyon condensation/.test(seed) && !/quantum foundations, information thermodynamics/.test(seed), "the think loop is seeded from the owner's accepted ideas, not fixed quantum themes", seed.slice(0, 200));
 const empty = mk(); empty.exec("CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY, name TEXT, idea TEXT, contact TEXT, decision TEXT)");
 ok(/Avoid quantum error correction/.test(await api.thinkSeed({ QNFO_AUDIT: shim(empty) })), "with no owner ideas on file the seed falls back without fixed quantum themes");
+
+// 6. 1.7.2: reasoning budget, call + cache counters, prompt-cache affinity.
+ok(api.REASONING_MAX_TOKENS >= 2000 && seenMax.length > 0 && seenMax.every((m) => m === api.REASONING_MAX_TOKENS), "every scoring and notebook call carries the reasoning budget (>= 2000 tokens), never 600/700", [...new Set(seenMax)]);
+ok(db.prepare("SELECT SUM(calls) n FROM ai_call_counters WHERE worker = 'idea-hub'").get().n > 0, "ai_call_counters still records every idea-hub call (cost attribution kept)");
+const cc = db.prepare("SELECT SUM(calls) calls, SUM(cached_calls) cached FROM ai_cache_counters WHERE worker = 'idea-hub'").get();
+ok(cc.calls > 0 && cc.cached === 0, "ai_cache_counters gets a row per call; cached_calls counts calls, not tokens", cc);
+await api.aiRunAttr({ QNFO_AUDIT: shim(db), AI: { async run() { return { response: "{}", usage: { prompt_tokens: 900, prompt_tokens_details: { cached_tokens: 700 } } }; } } }, "idea-hub", "t", "@cf/zai-org/glm-5.3-flash", { messages: [{ role: "user", content: "x" }] });
+const cc2 = db.prepare("SELECT SUM(cached_calls) cached, SUM(cached_tok) tok FROM ai_cache_counters WHERE worker = 'idea-hub'").get();
+ok(cc2.cached === 1 && cc2.tok === 700, "a call with 700 cached tokens adds one cached call and 700 cached tokens", cc2);
+ok(seenAff.some((k) => /^pc-[0-9a-z]+$/.test(String(k))), "long prompts carry a PROMPT-CACHE-1 session-affinity key");
+const k1 = api.promptCacheOpts("m", { messages: [{ content: "A".repeat(5000) }] }, null).extraHeaders["x-session-affinity"];
+const k2 = api.promptCacheOpts("m", { messages: [{ content: "A".repeat(5000) + " a tail past the first 4 KB" }] }, null).extraHeaders["x-session-affinity"];
+ok(k1 === k2 && api.promptCacheOpts("m", { messages: [{ content: "short" }] }, null) === null, "the same model and prompt prefix share a key; prompts under 1 KB get none");
+
+// 7. 1.7.2 notebook: order and retries.
+const d2 = mk(); d2.exec("CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT); CREATE TABLE research_queue (id TEXT, status TEXT); CREATE TABLE notes_intake (path TEXT PRIMARY KEY, type TEXT, title TEXT, status TEXT, sig TEXT); CREATE TABLE ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model)); CREATE TABLE ai_cache_counters (day TEXT, worker TEXT, model TEXT, calls INTEGER DEFAULT 0, cached_calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, cached_tok INTEGER DEFAULT 0, PRIMARY KEY (day, worker, model));");
+for (const p of ["notes/v1/_weekly-review.md", "notes/v1/personal-events-radar.md", "notes/v1/2026/10/02/ops.md", "notes/v1/2025/10/28/idea-a.md", "notes/v1/2025/06/14/idea-b.md"]) d2.prepare("INSERT INTO notes_intake (path, type, status) VALUES (?, 'note', 'active')").run(p);
+const v2 = new Map([["notes/v1/2025/10/28/idea-a.md", longNote], ["notes/v1/2025/06/14/idea-b.md", longNote]]);
+let failNext = true;
+const AI2 = { async run(model, input) { if (failNext) { failNext = false; return { choices: [{ finish_reason: "length", message: { content: "" } }] }; } return AI.run(model, input); } };
+const env2 = { QNFO_AUDIT: shim(d2), AI: AI2, VAULT: { async get(k) { return v2.has(k) ? { async text() { return v2.get(k); } } : null; } } };
+let o1 = await api.runOwnerCorpus(env2);
+const seen2 = () => Object.fromEntries(d2.prepare("SELECT path, outcome FROM owner_corpus_seen").all().map((r) => [r.path, r.outcome]));
+ok(Object.keys(seen2()).join(",") === "notes/v1/2025/10/28/idea-a.md,notes/v1/2025/06/14/idea-b.md" || (seen2()["notes/v1/2025/10/28/idea-a.md"] && seen2()["notes/v1/2025/06/14/idea-b.md"] && Object.keys(seen2()).length === 2), "pre-fleet dated notes are read first, newest first; ops files and undated logs wait", seen2());
+ok(seen2()["notes/v1/2025/10/28/idea-a.md"] === "error1" && seen2()["notes/v1/2025/06/14/idea-b.md"] === "proposed", "a truncated reply is recorded as error1 (retryable), not lost", seen2());
+d2.prepare("UPDATE owner_corpus_seen SET ts = ? WHERE outcome = 'error1'").run(new Date(Date.now() - 2 * 864e5).toISOString());
+let o2 = await api.runOwnerCorpus(env2);
+ok(seen2()["notes/v1/2025/10/28/idea-a.md"] === "proposed", "a day later the failed note is retried and proposed", { o2, s: seen2() });
+
+// 8. 1.7.2 re-entry consume: owner papers and real questions only.
+ok(api.realQuestion("Does the ultrametric bound extend to infinite products?") && api.realQuestion("It remains open whether the bound is tight.") && !api.realQuestion("We flag this as an open question rather than a result.") && !api.realQuestion("The results are summarised in Table 2."), "re-entry keeps real questions and drops sentences that only mention an open question");
+const lp2 = mk(); lp2.exec("CREATE TABLE papers (doi TEXT, identifier_type TEXT)"); lp2.prepare("INSERT INTO papers VALUES ('10.5281/zenodo.own', 'zenodo'), ('10.5281/zenodo.pipe', 'qnfo')").run();
+const a3 = mk(); a3.exec("CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT); CREATE TABLE signals (id TEXT PRIMARY KEY, ts TEXT, source TEXT, source_ref TEXT, content TEXT, open_questions TEXT, evidential_weight REAL, domain TEXT, status TEXT, decision TEXT, created_at TEXT); CREATE TABLE signal_worker_boundary (worker TEXT, source TEXT, permitted INTEGER);");
+a3.prepare("INSERT INTO signal_worker_boundary VALUES ('idea-hub', 'artifact_reentry_owner', 1)").run();
+a3.prepare("INSERT INTO signals (id, source, source_ref, open_questions, evidential_weight, status, created_at) VALUES ('s1', 'artifact_reentry', '10.5281/zenodo.pipe', ?, 0.9, 'new', '2026-10-01'), ('s2', 'artifact_reentry', '10.5281/zenodo.own', ?, 0.9, 'new', '2026-10-02')").run(JSON.stringify(["Is the QEC threshold universal?"]), JSON.stringify(["We flag this as an open question rather than a result.", "Does the bound hold for p = 2?"]));
+const cs = await api.runConsume({ QNFO_AUDIT: shim(a3), LIVING_PAPER: shim(lp2) });
+const props = a3.prepare("SELECT idea FROM idea_proposals").all().map((r) => r.idea);
+ok(a3.prepare("SELECT status FROM signals WHERE id='s1'").get().status === "expired" && cs.expired_not_owner === 1, "a signal from a pipeline (qnfo) paper is expired, not consumed", cs);
+ok(props.length === 1 && /Does the bound hold for p = 2\?/.test(props[0]), "the owner paper's real question becomes a proposal; the hedge sentence does not", props);
+
+// 9. 1.7.2: a pipeline paper that came from an owner proposal counts as the owner's.
+a3.exec("CREATE TABLE research_queue (id TEXT, source TEXT, source_id TEXT, status TEXT, doi TEXT)");
+const op = Number(a3.prepare("INSERT INTO idea_proposals (name, idea, contact, status) VALUES ('owner-corpus', 'x', 'owner', 'triaged_accepted')").run().lastInsertRowid);
+const gp = Number(a3.prepare("INSERT INTO idea_proposals (name, idea, contact, status) VALUES ('auto-scan', 'y', '', 'triaged_accepted')").run().lastInsertRowid);
+a3.prepare("INSERT INTO research_queue VALUES ('r1', 'proposal', ?, 'published', '10.5281/zenodo.ownpipe'), ('r2', 'proposal', ?, 'published', '10.5281/zenodo.pipe')").run(String(op), String(gp));
+lp2.prepare("INSERT INTO papers VALUES ('10.5281/zenodo.ownpipe', 'qnfo')").run();
+const e3 = { QNFO_AUDIT: shim(a3), LIVING_PAPER: shim(lp2) };
+ok(await api.ownerPaper(e3, "10.5281/zenodo.ownpipe") && !(await api.ownerPaper(e3, "10.5281/zenodo.pipe")) && await api.ownerPaper(e3, "10.5281/zenodo.own"), "a pipeline paper from an owner proposal is the owner's; one from an arXiv scan is not; a Zenodo deposit is");
 
 const ih = readFileSync(join(here, "worker.js"), "utf8");
 ok(/r\.corpus = await runOwnerCorpus\(env\)/.test(ih), "the hourly ideation cycle runs the corpus feeder");

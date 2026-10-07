@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.7.0-owner-signal-intake"; // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (zenodo/slug/doi/internal), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.7.3-reasoning-budget"; // 1.7.3 OWNER-SIGNAL-INTAKE-2b: a pipeline paper whose research row came from an owner proposal counts as an owner paper for re-entry. // 1.7.2 REASONING-BUDGET-1 + OWNER-SIGNAL-INTAKE-2 + PROMPT-CACHE-COUNT-2 (2026-10-07, pillars research and cost): glm-5.3-flash is a reasoning model and spent all 700 scoring tokens thinking (finish length, empty content; measured 2026-10-07 11:40Z: 1,538 completion tokens needed), so triage scoring failed on rows 828/831 every hour; scoring and notebook extraction now get REASONING_MAX_TOKENS 2000. A failed notebook extraction is retried (3 tries, a day apart) instead of being lost; dated pre-fleet notes are read first; re-entry consumes only signals of the owner's own papers and drops sentences that merely mention an open question; aiRunAttr keeps ai_call_counters and adds ai_cache_counters plus the PROMPT-CACHE-1 session-affinity header (issue 2113, replacing code task ct_yghmskhqci2vv1, which dropped the call counters). // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (zenodo/slug/doi/internal), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -251,6 +251,9 @@ var TRIAGE_BATCH = 5;
 var T_MODELS = { a: "@cf/zai-org/glm-5.3-flash", b: "@cf/deepseek-ai/deepseek-v4-flash-0731", tiebreak: "@cf/qwen/qwen3-30b-a3b-fp8" };
 var T_CHAIN = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/deepseek-ai/deepseek-v4-flash-0731", "@cf/qwen/qwen3-30b-a3b-fp8", "@cf/zai-org/glm-5.2"];
 var ACCEPT_MIN = 0.7, FEAS_MIN = 0.5, RISK_MAX = 0.4, STD_TIE = 0.25;
+// REASONING-BUDGET-1 (1.7.2): the triage and notebook models are reasoning models; their thinking counts against max_tokens,
+// and at 700 glm-5.3-flash returned finish_reason length with no content. 2000 covers the measured 1,538.
+var REASONING_MAX_TOKENS = 2000;
 var T_KEYS = ["novelty", "technical_merit", "impact_potential", "exposure_potential", "feasibility", "risk"];
 var SCORECARD_PROMPT = "You are QNFO's research-idea merit reviewer. Score the idea below for the QNFO autonomous research pipeline.\n" +
 "Return JSON ONLY: {\"novelty\":0-1,\"technical_merit\":0-1,\"impact_potential\":0-1,\"exposure_potential\":0-1,\"feasibility\":0-1,\"risk\":0-1,\"rationale\":\"<=120 chars\",\"hook\":\"<=90 chars, one-line public-facing hook\"}\n" +
@@ -268,8 +271,8 @@ function tExtract(r) {
 // COST-ATTRIBUTION (#1833): every env.AI.run here goes through aiRunAttr (the qnfo-fleet-control helper), which adds one
 // per-worker/purpose call counter to D1 ai_call_counters (fail-soft, never blocks or alters the AI call).
 async function aiRunAttr(env, worker, purpose, model, input, opts) {
-  var t0 = Date.now(), ok = 1;
-  try { return await env.AI.run(model, input, opts); } catch (e) { ok = 0; throw e; }
+  var t0 = Date.now(), ok = 1, res;
+  try { res = await env.AI.run(model, input, promptCacheOpts(model, input, opts)); } catch (e) { ok = 0; throw e; }
   finally {
     try {
       var db = env.QNFO_AUDIT;
@@ -278,9 +281,32 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
         var day = new Date().toISOString().slice(0, 10);
         await db.prepare("CREATE TABLE IF NOT EXISTS ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, PRIMARY KEY (day, worker, purpose, model))").run();
         await db.prepare("INSERT INTO ai_call_counters (day, worker, purpose, model, calls, errors, in_chars, ms) VALUES (?1,?2,?3,?4,1,?5,?6,?7) ON CONFLICT(day, worker, purpose, model) DO UPDATE SET calls=calls+1, errors=errors+?5, in_chars=in_chars+?6, ms=ms+?7").bind(day, worker, purpose, String(model), ok ? 0 : 1, ic, Date.now() - t0).run();
+        // PROMPT-CACHE-COUNT-2 (issue 2113): the same ai_cache_counters row the other fleet wrappers write (qnfo-ops form).
+        var u = res && typeof res === "object" && res.usage || {};
+        if (!/bge|embed|whisper|m2m100|resnet|flux|sdxl/i.test(String(model))) {
+          var cTok = Number(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens || u.cached_tokens || u.input_tokens_details && u.input_tokens_details.cached_tokens || 0) || 0;
+          await db.prepare("INSERT INTO ai_cache_counters (day, worker, model, calls, cached_calls, in_tok, cached_tok) VALUES (?1,?2,?3,1,?4,?5,?6) ON CONFLICT(day, worker, model) DO UPDATE SET calls=calls+1, cached_calls=cached_calls+excluded.cached_calls, in_tok=in_tok+excluded.in_tok, cached_tok=cached_tok+excluded.cached_tok").bind(day, worker, String(model).slice(0, 120), cTok > 0 ? 1 : 0, Number(u.prompt_tokens || u.input_tokens || 0) || 0, cTok).run();
+        }
       }
     } catch (e3) {}
   }
+  return res;
+}
+// PROMPT-CACHE-1 (fleet pattern, qnfo-ops): the same model and the same first 4 KB of prompt get the same session-affinity
+// key, so Workers AI prefix caching bills the repeated scorecard prompt at the cached-input rate. Prompts under 1 KB and
+// calls that already carry a key are left alone.
+function promptCacheOpts(model, input, opts) {
+  try {
+    if (opts && opts.extraHeaders && opts.extraHeaders["x-session-affinity"]) return opts;
+    var m = input && input.messages, c = m && m.length ? m[0].content : (input && input.prompt);
+    var t = typeof c === "string" ? c : JSON.stringify(c || "");
+    if (t.length < 1024) return opts;
+    t = String(model) + "|" + t.slice(0, 4096);
+    var h = 2166136261; for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+    var o = Object.assign({}, opts || {});
+    o.extraHeaders = Object.assign({}, o.extraHeaders || {}, { "x-session-affinity": "pc-" + (h >>> 0).toString(36) });
+    return o;
+  } catch (e) { return opts; }
 }
 // True while any fleet_budget ai_spend cap is breached (current > cap). Since 1.6.0 (BUDGET-SOFT-ROUTE-1) a breach only
 // selects lean scoring (one cheap model); an unreadable fleet_budget counts as breached, so a D1 fault selects lean too.
@@ -297,7 +323,7 @@ async function tRunModel(env, name, prompt) {
   var chain = [name].concat(T_CHAIN.filter(function (x) { return x !== name; })).slice(0, 4);
   for (var i = 0; i < chain.length; i++) {
     try {
-      var r = await aiRunAttr(env, "idea-hub", "triage", chain[i], { messages: [{ role: "user", content: prompt }], max_tokens: 700, temperature: 0.2 });
+      var r = await aiRunAttr(env, "idea-hub", "triage", chain[i], { messages: [{ role: "user", content: prompt }], max_tokens: REASONING_MAX_TOKENS, temperature: 0.2 });
       var mm = tExtract(r).match(/\{[\s\S]*\}/);
       if (!mm) { lastErr = chain[i] + ": no JSON"; continue; }
       var c = JSON.parse(mm[0]); var ok = true;
@@ -566,7 +592,8 @@ async function runReentry(env) {
     // OWNER-SIGNAL-INTAKE-1 (1.7.0): re-entry reads only the owner's own papers. The newest-500 scan recycled arXiv-derived
     // QEC papers into more QEC (the reason for OWNER-NARROW-SIGNAL-1); REENTRY_OWNER_TYPES are the identifier types of
     // papers the owner wrote (Zenodo deposits, his slugs, DOIs, internal), not arxiv, kg-backfill or pipeline 'qnfo' rows.
-    papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' AND status IN ('published','distributed') AND identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ") ORDER BY created_at DESC LIMIT 500").bind(...REENTRY_OWNER_TYPES).all()).results || [];
+    var ownDois = (await ownerPipelineDois(env)).slice(0, 200);
+    papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' AND status IN ('published','distributed') AND (identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ")" + (ownDois.length ? " OR doi IN (" + ownDois.map(function () { return "?"; }).join(",") + ")" : "") + ") ORDER BY created_at DESC LIMIT 500").bind(...REENTRY_OWNER_TYPES, ...ownDois).all()).results || [];
     have = new Set(((await env.QNFO_AUDIT.prepare("SELECT source_ref FROM signals WHERE source='artifact_reentry'").all()).results || []).map(function (r) { return String(r.source_ref); }));
   } else out.emit_paused = "signal_worker_boundary idea-hub/" + REENTRY_BOUNDARY_SOURCE + " not permitted";
   out.scanned = papers.length;
@@ -624,6 +651,32 @@ async function runReentry(env) {
   }
   return out;
 }
+// OWNER-SIGNAL-INTAKE-2: the DOIs of pipeline papers (identifier_type qnfo) whose research_queue row came from an owner
+// proposal, direct or notebook: those are the owner's ideas carried through the pipeline, so re-entry treats them as his.
+var OWNER_PROPOSAL_SQL = "p.name = 'owner-corpus' OR p.name LIKE 'owner%' OR p.name LIKE 'rowan%' OR p.name = 'chat-session' OR p.contact = 'owner' OR p.contact LIKE 'rowan%'";
+async function ownerPipelineDois(env) {
+  try {
+    var rs = (await env.QNFO_AUDIT.prepare("SELECT DISTINCT q.doi FROM research_queue q JOIN idea_proposals p ON q.source = 'proposal' AND CAST(p.id AS TEXT) = q.source_id WHERE q.status = 'published' AND q.doi IS NOT NULL AND q.doi <> '' AND (" + OWNER_PROPOSAL_SQL + ")").all()).results || [];
+    return rs.map(function (r) { return String(r.doi); });
+  } catch (e) { return []; }
+}
+// OWNER-SIGNAL-INTAKE-2: true when the paper behind a re-entry signal is one of the owner's own (REENTRY_OWNER_TYPES, or a
+// pipeline paper that came from an owner proposal).
+async function ownerPaper(env, doi) {
+  if (!env.LIVING_PAPER || !doi) return false;
+  if ((await ownerPipelineDois(env)).indexOf(String(doi)) >= 0) return true;
+  try {
+    var p = await env.LIVING_PAPER.prepare("SELECT identifier_type FROM papers WHERE doi = ?1 AND identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ") LIMIT 1").bind(String(doi), ...REENTRY_OWNER_TYPES).first();
+    return !!p;
+  } catch (e) { return false; }
+}
+// A re-entry line is a research question when it asks one: it ends with "?" or says what is unknown ("whether", "remains
+// open", "unresolved", "not yet known"). "We flag this as an open question rather than a result." only mentions one.
+function realQuestion(t) {
+  t = String(t || "").trim();
+  if (/\?\s*$/.test(t)) return true;
+  return /\b(whether|remains? (open|unknown|unresolved|to be (shown|determined|established))|unresolved|not yet (known|understood|resolved|established)|open problem)\b/i.test(t) && !/\b(we|this paper|this note) (flag|leave|treat|mark)\b/i.test(t);
+}
 async function runConsume(env) {
   var out = { consumed: 0, proposals: 0, paused: false, errors: 0 };
   var pending = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM idea_proposals WHERE status IN ('new','deferred_budget')").first();
@@ -634,8 +687,14 @@ async function runConsume(env) {
   for (var i = 0; i < rows.length; i++) {
     var sg = rows[i], oq = [];
     try { oq = JSON.parse(sg.open_questions || "[]"); } catch (e) {}
+    // OWNER-SIGNAL-INTAKE-2 (1.7.2): a signal emitted before the owner-only filter (from an arXiv-derived or pipeline paper)
+    // is expired here instead of consumed; 1.7.0 consumed three such QEC signals on its first tick.
+    if (!(await ownerPaper(env, sg.source_ref))) {
+      await env.QNFO_AUDIT.prepare("UPDATE signals SET status='expired', decision=? WHERE id=?").bind("idea-hub " + VERSION + ": OWNER-SIGNAL-INTAKE-2 not an owner paper (identifier_type outside " + REENTRY_OWNER_TYPES.join("/") + "); not consumed", sg.id).run();
+      out.expired_not_owner = (out.expired_not_owner || 0) + 1; continue;
+    }
     var ok = true;
-    var qs = Array.isArray(oq) ? oq.slice(0, CONSUME_QUESTIONS) : [];
+    var qs = Array.isArray(oq) ? oq.filter(realQuestion).slice(0, CONSUME_QUESTIONS) : [];
     for (var j = 0; j < qs.length; j++) {
       try {
         await env.QNFO_AUDIT.prepare("INSERT INTO idea_proposals (name, idea, contact, status, ip_hash, created_at) VALUES (?,?,?,?,?,?)")
@@ -669,6 +728,7 @@ async function thinkSeed(env) {
 // PROPOSAL_BACKPRESSURE as the others, and while OWNER_CORPUS_RQ_CAP research rows are already waiting, so the notebook
 // cannot flood research_queue.
 var OWNER_CORPUS_BATCH = 2, OWNER_CORPUS_MIN_CHARS = 600, OWNER_CORPUS_EXCERPT = 7000, OWNER_CORPUS_RQ_CAP = 12;
+var OWNER_CORPUS_FLEET_ERA = "notes/v1/2026/08";
 var OWNER_CORPUS_TYPES = ["note", "synthesis", "synthesis-working-draft", "development-note", "lesson"];
 var OWNER_CORPUS_MODEL = "@cf/zai-org/glm-5.3-flash";
 var OWNER_CORPUS_PROMPT = "You read one note from the private research notebook of Rowan Brad Quni-Gudzinas, an independent researcher. Extract the single strongest ORIGINAL research idea the author is developing in it: a claim, conjecture or question that a theoretical or computational paper could investigate. Ignore assistant boilerplate, chat pleasantries, task lists, system prompts and operations notes. Return JSON only, either {\"title\": \"<= 14 words\", \"idea\": \"<= 160 words: the claim or question, why it matters, and how a derivation, simulation or formal analysis could test it\"} or {\"none\": \"<= 15 words why\"} when the note holds no research idea.\n\nNOTE:\n";
@@ -685,7 +745,10 @@ async function runOwnerCorpus(env) {
   var rq = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) n FROM research_queue WHERE status IN ('queued','researching','review')").first();
   if (rq && Number(rq.n) >= OWNER_CORPUS_RQ_CAP) { out.paused = "research_queue at " + rq.n; return out; }
   await env.QNFO_AUDIT.prepare("CREATE TABLE IF NOT EXISTS owner_corpus_seen (path TEXT PRIMARY KEY, sig TEXT, ts TEXT, outcome TEXT, proposal_id INTEGER, note TEXT)").run();
-  var rows = (await env.QNFO_AUDIT.prepare("SELECT n.path, n.sig FROM notes_intake n LEFT JOIN owner_corpus_seen s ON s.path = n.path WHERE s.path IS NULL AND n.type IN (" + OWNER_CORPUS_TYPES.map(function () { return "?"; }).join(",") + ") AND n.path LIKE 'notes/%' AND COALESCE(n.status, '') NOT IN ('archived', 'done') ORDER BY n.path DESC LIMIT ?").bind(...OWNER_CORPUS_TYPES, OWNER_CORPUS_BATCH).all()).results || [];
+  // OWNER-SIGNAL-INTAKE-2 (1.7.2): dated notes before OWNER_CORPUS_FLEET_ERA (the owner's own pre-fleet thinking) first,
+    // newest first among them, then later dated notes, then undated files (indexes, ops logs). A note whose extraction failed
+    // (outcome error1, error2) is retried a day later; the third failure (error3) is final.
+    var rows = (await env.QNFO_AUDIT.prepare("SELECT n.path, n.sig, s.outcome AS prev FROM notes_intake n LEFT JOIN owner_corpus_seen s ON s.path = n.path WHERE (s.path IS NULL OR (s.outcome IN ('error', 'error1', 'error2') AND s.ts < ?)) AND n.type IN (" + OWNER_CORPUS_TYPES.map(function () { return "?"; }).join(",") + ") AND n.path LIKE 'notes/%' AND COALESCE(n.status, '') NOT IN ('archived', 'done') ORDER BY CASE WHEN n.path GLOB 'notes/v1/20[0-9][0-9]/*' THEN 0 ELSE 1 END, CASE WHEN n.path < ? THEN 0 ELSE 1 END, n.path DESC LIMIT ?").bind(new Date(Date.now() - 864e5).toISOString(), ...OWNER_CORPUS_TYPES, OWNER_CORPUS_FLEET_ERA, OWNER_CORPUS_BATCH).all()).results || [];
   for (var i = 0; i < rows.length; i++) {
     var n = rows[i], now = new Date().toISOString(), outcome = "error", pid = null, note = "";
     out.picked++;
@@ -696,7 +759,7 @@ async function runOwnerCorpus(env) {
         var body = corpusBody(await obj.text());
         if (body.length < OWNER_CORPUS_MIN_CHARS) { outcome = "short"; out.short++; }
         else {
-          var ai = await aiRunAttr(env, "idea-hub", "owner-corpus", OWNER_CORPUS_MODEL, { messages: [{ role: "user", content: OWNER_CORPUS_PROMPT + body.slice(0, OWNER_CORPUS_EXCERPT) }], max_tokens: 600, temperature: 0.2 });
+          var ai = await aiRunAttr(env, "idea-hub", "owner-corpus", OWNER_CORPUS_MODEL, { messages: [{ role: "user", content: OWNER_CORPUS_PROMPT + body.slice(0, OWNER_CORPUS_EXCERPT) }], max_tokens: REASONING_MAX_TOKENS, temperature: 0.2 });
           var m = tExtract(ai).match(/\{[\s\S]*\}/), j = null;
           if (m) { try { j = JSON.parse(m[0]); } catch (e) {} }
           if (j && j.idea && String(j.idea).trim().length >= 40) {
@@ -714,6 +777,7 @@ async function runOwnerCorpus(env) {
         }
       }
     } catch (e) { outcome = "error"; note = String(e && e.message || e).slice(0, 200); out.errors++; }
+    if (outcome === "error") { var tries = /^error(\d)$/.exec(String(n.prev || "")); outcome = "error" + Math.min(3, (tries ? Number(tries[1]) : (n.prev === "error" ? 1 : 0)) + 1); }
     try { await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO owner_corpus_seen (path, sig, ts, outcome, proposal_id, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(n.path, n.sig || null, now, outcome, pid, note).run(); } catch (e) { out.errors++; }
   }
   return out;
