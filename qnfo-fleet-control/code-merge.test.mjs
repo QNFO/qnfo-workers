@@ -181,8 +181,8 @@ ok(C1 && C1.to === "1.15.5-r" && C1.content.startsWith('var VERSION = "1.15.5-r"
 ok(W.cmBump('const VERSION = "1.0.0";\n', "-r") === null && W.cmBump('var VERSION = "1.0.0";\nvar VERSION = "2.0.0";\n', "-r") === null, "const VERSION and duplicate VERSION lines are not bumpable");
 
 // ================================================================ 2. scope, required checks, provenance
-ok(J(W.cmScope(PATH)).kind === "worker" && J(W.cmScope("docs/a/b.md")).kind === "doc" && J(W.cmScope("qnfo-x/README.md")).kind === "doc", "worker.js, docs/**.md and <dir>/README.md are in scope");
-ok(["scripts/x.py", ".github/workflows/a.yml", "qnfo-x/wrangler.toml", "migrations/a.sql", "qnfo-x/a.test.mjs", "qnfo-x/registry.js", "docs/../x.md"].every((p) => !W.cmScope(p).ok), "scripts, workflows, configs, migrations, tests and other modules are out of scope");
+ok(J(W.cmScope(PATH)).kind === "worker" && J(W.cmScope("docs/a/b.md")).kind === "doc" && J(W.cmScope("qnfo-x/README.md")).kind === "doc" && J(W.cmScope("scripts/cf_ops_actions.py")).kind === "script" && J(W.cmScope("scripts/drift-check.mjs")).kind === "script" && J(W.cmScope("scripts/fleet-autoaudit.py")).kind === "script", "worker.js, docs/**.md, <dir>/README.md and fleet scripts are in scope (SCOPE-SCRIPTS-1)");
+ok(["scripts/deploy_gate.py", "scripts/mirror-guard.py", "scripts/version-bump-guard.py", "scripts/workflow-lint.py", "scripts/run-suites.mjs", "scripts/code-task-publish.py", "scripts/canary_revert.py", "scripts/canonical_deploy.py", "scripts/raw_put.py", "scripts/remediation_consumer.py", "scripts/secret_lock.py", "scripts/fold_worker_selftest.py", "scripts/cf_ops_delete_worker_test.py", "scripts/probe-semicolon.test.mjs", "scripts/mention-radar-test.mjs", "scripts/x.sh", "scripts/sub/x.py", ".github/workflows/a.yml", "qnfo-x/wrangler.toml", "migrations/a.sql", "qnfo-x/a.test.mjs", "qnfo-x/registry.js", "docs/../x.md"].every((p) => !W.cmScope(p).ok), "gates, guards, suites, deploy primitives, the loop's runners, workflows, configs, migrations, tests and other modules are out of scope");
 ok(["qnfo-fleet-control", "qnfo-ops", "qnfo-ai", "qnfo-code-orchestrator", "qnfo-code-agent"].every((w) => !W.cmScope(w + "/worker.js").ok), "control-plane and code-loop workers never auto-merge");
 ok(J(W.cmRequired([PATH, MIRROR])).join(",") === "gate,mirror-guard,comparator,guard", "a worker.js needs gate, mirror-guard, comparator and guard");
 ok(J(W.cmRequired(["docs/x.md"])).join(",") === "gate,mirror-guard,comparator", "a doc needs no version-bump guard (its workflow does not run for docs)");
@@ -217,7 +217,7 @@ const refuses = [
   ["an extra file", task(), g({ files: [{ filename: PATH, status: "modified" }, { filename: "scripts/x.py", status: "modified" }] })],
   ["only the mirror", task(), g({ files: [{ filename: MIRROR, status: "modified" }] })],
   ["an added file", task(), g({ files: [{ filename: PATH, status: "added" }] })],
-  ["a path out of scope", task({ path: "scripts/x.py" }), g({ files: [{ filename: "scripts/x.py", status: "modified" }] })],
+  ["a path out of scope", task({ path: "scripts/deploy_gate.py" }), g({ files: [{ filename: "scripts/deploy_gate.py", status: "modified" }] })],
   ["a denied worker", task({ path: "qnfo-ops/worker.js" }), g({ files: [{ filename: "qnfo-ops/worker.js", status: "modified" }] })],
   ["an untrusted origin", task(), g({ provenance: { ok: false, why: "source issue #50 came from 'kaizen-ai'" } })],
   ["a failed required check", task(), g({ checks: green("h1", ["gate", "mirror-guard", "comparator"]).concat([{ id: 300, name: "guard", status: "completed", conclusion: "failure" }]) })],
@@ -259,6 +259,10 @@ ok(act(task(), g({ pr: prJson({ state: "closed" }) })).status === "closed", "a P
 const docT = task({ path: "docs/x.md", ctx: JSON.stringify({ patch: WHOLE }) });
 const docG = g({ files: [{ filename: "docs/x.md", status: "modified" }], checks: green("h1", ["gate", "mirror-guard", "comparator"]), integrity: { ok: true } });
 ok(act(docT, docG).action === "merge" && act(docT, docG).kind === "doc", "a doc merges on gate, mirror-guard and comparator");
+const scrT = task({ path: "scripts/cf_ops_actions.py", ctx: JSON.stringify({ patch: WHOLE }) });
+const scrG = g({ files: [{ filename: "scripts/cf_ops_actions.py", status: "modified" }], checks: green("h1", ["gate", "mirror-guard", "comparator"]), integrity: { ok: true } });
+ok(act(scrT, scrG).action === "merge" && act(scrT, scrG).kind === "script", "SCOPE-SCRIPTS-1: a fleet script merges on gate, mirror-guard and comparator");
+ok(act(task({ path: "scripts/deploy_gate.py", ctx: JSON.stringify({ patch: WHOLE }) }), g({ files: [{ filename: "scripts/deploy_gate.py", status: "modified" }], checks: green("h1", ["gate", "mirror-guard", "comparator"]), integrity: { ok: true } })).action === "refuse", "a CI gate script never merges on its own");
 ok(act(task({ status: "pr_open", path: "docs/x.md", ctx: JSON.stringify({ proposal: "x\n" }) }), docG).action === "merge", "a code-agent pr_open row with a stored proposal can merge");
 ok(act(task({ status: "pr_open", ctx: JSON.stringify({ proposal: "x" }) }), g({ integrity: { ok: true, revertible: false, revert_why: "a code-agent pull request stores no patch to invert" } })).action === "refuse", "a code-agent worker.js PR is refused (no patch to revert)");
 // ---- opening a pushed branch (status branch_pushed): cmOpenDecide
@@ -274,7 +278,7 @@ const orefuses = [
   ["a branch that is not the loop's own", pushedT({ branch: "feature-x" }), og()],
   ["a deleted branch", pushedT(), og({ head_sha: null, branch_missing: true })],
   ["an extra file on the branch", pushedT(), og({ files: [{ filename: PATH, status: "modified" }, { filename: "scripts/deploy_gate.py", status: "modified" }] })],
-  ["a path out of scope", pushedT({ path: "scripts/x.py" }), og({ files: [{ filename: "scripts/x.py", status: "modified" }] })],
+  ["a path out of scope", pushedT({ path: "scripts/deploy_gate.py" }), og({ files: [{ filename: "scripts/deploy_gate.py", status: "modified" }] })],
   ["an untrusted origin", pushedT(), og({ provenance: { ok: false, why: "kaizen-ai" } })],
   ["verify not passed", pushedT({ step: "verify" }), og()],
   ["verify not passed (a last_error)", pushedT({ last_error: "verify failed" }), og()],
