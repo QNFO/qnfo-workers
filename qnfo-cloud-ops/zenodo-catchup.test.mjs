@@ -4,8 +4,9 @@
 // and no zenodo-stats run started in 20h (the five-week freeze after the 2026-09-25..30 trigger outage), after its own job,
 // logged as its own job-run row; it does not run when the weekly data is still inside its cadence, twice in a day, or
 // from another slot; a failed Sunday run is retried the next day; a run Zenodo refuses stops after 20 reads and says why
-// in meta.reason; and a grant-followup run without GMAIL_PASS writes a 'degraded' job-run row whose meta.reason names the
-// unread mailbox, which qnfo-fleet-dashboard's WATCHMAKER_OPS grant-followup entry reads as counted, with that reason
+// in meta.reason; and a grant-followup run whose Gmail read fails writes a 'degraded' job-run row whose meta.reason names the
+// unread mailbox, which qnfo-fleet-dashboard's WATCHMAKER_OPS grant-followup entry reads as counted, with that reason (without
+// GMAIL_PASS the run is ok and not counted: GRANT-GMAIL-UNGRADED-1)
 // (not "never ran").
 // Run: node qnfo-cloud-ops/zenodo-catchup.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
@@ -136,15 +137,20 @@ ok(zCalls() === 20, "the refused run counts as today's attempt: no second try th
 zenodoMode = "ok";
 setCorpus(3);
 
-// 9. JOB-REASON-1: grant-followup rides worker-health (05:05 and 17:05 Amsterdam); without GMAIL_PASS its row is degraded
-// and names the unread mailbox.
+// 9. JOB-REASON-1: grant-followup rides worker-health (05:05 and 17:05 Amsterdam). GRANT-GMAIL-UNGRADED-1 (1.22.1): without
+// GMAIL_PASS the owner keeps Gmail outside the fleet, so the run is ok and reports Gmail as not graded; with the credential
+// set, a Gmail read that fails makes the row degraded and names the unread mailbox.
 audit.exec("DELETE FROM cloud_ops_events");
 await W.scheduled({ cron: "5 3,15 * * *" }, env, ctx);
-const g = runs("grant-followup");
-const gm = g[0] && JSON.parse(g[0].meta);
-ok(g.length === 1 && g[0].status === "degraded" && /"gmail":"no-credential: GMAIL_PASS unset"/.test(g[0].text), "a run without GMAIL_PASS is a degraded job-run row (" + (g[0] && g[0].text.slice(0, 120)) + ")");
-ok(gm && gm.job === "grant-followup" && gm.reason === "Gmail not read: the GMAIL_PASS secret is unset", "meta.reason names the unread mailbox (" + JSON.stringify(gm) + ")");
+let g = runs("grant-followup");
+ok(g.length === 1 && g[0].status === "ok" && /"gmail":"no-credential: GMAIL_PASS unset"/.test(g[0].text) && /"gmail_graded":false/.test(g[0].text), "a run without GMAIL_PASS is an ok job-run row that reports Gmail as not graded (" + (g[0] && g[0].status + " " + g[0].text.slice(0, 160)) + ")");
 ok(runs("worker-health").some((r) => r.status === "ok"), "the slot's own worker-health job still runs");
+audit.exec("DELETE FROM cloud_ops_events");
+await W.scheduled({ cron: "5 3,15 * * *" }, Object.assign({}, env, { GMAIL_PASS: "set-but-unreachable" }), ctx);
+g = runs("grant-followup");
+const gm = g[0] && JSON.parse(g[0].meta);
+ok(g.length === 1 && g[0].status === "degraded" && /"gmail":"error:/.test(g[0].text), "with GMAIL_PASS set, a failed Gmail read is a degraded job-run row (" + (g[0] && g[0].status + " " + g[0].text.slice(0, 160)) + ")");
+ok(gm && gm.job === "grant-followup" && /^Gmail not read \(error:/.test(gm.reason || ""), "meta.reason names the unread mailbox (" + JSON.stringify(gm) + ")");
 
 // 10. The dashboard's WATCHMAKER_OPS grant-followup entry reads that real row as run, counted, with the reason.
 const dsrc = readFileSync(new URL("../qnfo-fleet-dashboard/worker.js", import.meta.url), "utf8");
@@ -156,10 +162,10 @@ const last = audit.prepare(gop.sql).get().last;
 ok(last === g[0].ts, "the watchmaker sql dates the degraded run as the runner's last run (not 'never ran')");
 const params = (gop.stuck_hours || [48]).map((h) => new Date(Date.now() - h * 36e5).toISOString());
 let st = audit.prepare(gop.stuck_sql).get(...params);
-ok(Number(st.stuck) === 1 && Number(st.gmail_pass_unset) === 1, "its stuck_sql still counts the op, with the reason as a column (" + JSON.stringify(st) + ")");
+ok(Number(st.stuck) === 1 && Number(st.gmail_pass_unset) === 0, "its stuck_sql counts the failed read, and no unset credential (" + JSON.stringify(st) + ")");
 audit.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status, meta) VALUES ('jr-grant-followup-full', ?, 'job-run', 'grant-followup', 'ok', ?)").run(new Date(Date.now() + 1000).toISOString(), JSON.stringify({ job: "grant-followup", status: "ok" }));
 st = audit.prepare(gop.stuck_sql).get(...params);
-ok(Number(st.stuck) === 0, "once a run reads both mailboxes the op is clear");
+ok(Number(st.stuck) === 0, "once a run reads every mailbox it holds a credential for, the op is clear");
 
 // CRON-SINGLE-TRIGGER-1: the one tick drives the real handler. Sunday 2026-10-04 07:00Z is 09:00 in Amsterdam: zenodo-stats.
 const TICK = "*/10 * * * *", SUN0900 = Date.UTC(2026, 9, 4, 7, 0);
