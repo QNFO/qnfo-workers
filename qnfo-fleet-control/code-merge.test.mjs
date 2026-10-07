@@ -696,6 +696,17 @@ ok(J(W.cmReviewParse('Reasoning {x}. {"verdict":"no","defects":["handleClaims wr
 }
 ok(W.cmReviewDecision({ verdict: "no", model: "m", defects: ["x"] }).refuse === true && /goal review \(m\): the diff does not implement the goal: x/.test(W.cmReviewDecision({ verdict: "no", model: "m", defects: ["x"] }).why), "verdict no refuses with the defects");
 ok(!/rejected by|review-rejected|noop-proposal|superseded|already shipped|DROPPED|withdrawn/i.test(W.cmReviewDecision({ verdict: "no", model: "m", defects: ["x"] }).why), "a goal-review refusal does not match the orchestrator's INTAKE_NO_RETRY, so the issue is retried with the defects");
+// GOAL-REVIEW-HARM-1 (0.9.1): the live review of ct_hdaim0vx7h7vvl (2026-10-07 08:40Z) answered partial while naming errors
+{
+  const live = W.cmReviewParse('{"verdict":"partial","harm":true,"defects":["The added inner if/else inside the diversity-hold block makes the else branch unreachable and still increments diversity_held, causing incorrect accounting","Owner rows are not forced to ACCEPT"]}');
+  ok(live.verdict === "partial" && live.harm === true && live.defects.length === 2, "harm is parsed apart from the verdict", live);
+  const d = W.cmReviewDecision(Object.assign({ model: "@cf/openai/gpt-oss-120b" }, live));
+  ok(d.refuse === true && /goal review \(@cf\/openai\/gpt-oss-120b\): the diff carries an error \(verdict partial\): The added inner if\/else/.test(d.why), "partial with harm refuses with the errors", d);
+  ok(W.cmReviewDecision({ verdict: "implements", harm: true, model: "m", defects: ["x"] }).refuse === true, "implements with harm refuses too");
+  ok(W.cmReviewParse('{"verdict":"partial","harm":false,"defects":["the gateway half is left for a second task"]}').harm === false && !W.cmReviewDecision({ verdict: "partial", harm: false, model: "m" }).refuse, "partial without harm still passes");
+  ok(W.cmReviewParse('noise "verdict": "partial", "harm": "yes" noise').harm === true && W.cmReviewParse('{"verdict":"implements"}').harm === false, "harm as a string parses; a reply without harm is no harm (a pre-0.9.1 cached review decides as before)");
+  ok(/harm/.test(W.cmReviewDecision({ verdict: "no", harm: true, model: "m", defects: ["y"] }).why) === false && W.cmReviewDecision({ verdict: "no", harm: true, model: "m", defects: ["y"] }).refuse, "verdict no keeps its own reason");
+}
 ok(W.cmReviewDecision({ verdict: "partial", model: "m" }).note === "goal review partial (m)" && W.cmReviewDecision({ tries: 1, err: "3046" }).wait === true && /unavailable after 3 tries/.test(W.cmReviewDecision({ tries: 3 }).note), "partial passes with a note; an unread review waits, then the checks decide after 3 tries");
 // End to end through codeMergeTick: the open lane and the merge lane.
 const GPATCH = [{ filename: PATH, status: "modified", patch: "@@ -2,3 +2,3 @@\n function a() {\n-  return 1;\n+  return 11;\n }" }, { filename: MIRROR, status: "modified", patch: "@@ mirror @@" }];
@@ -745,6 +756,11 @@ db.prepare("INSERT INTO ops_config (key, value) VALUES ('code_goal_review_models
 sandbox.aiRunAttr = reviewer('{"verdict":"partial","defects":[]}');
 r = J(await W.codeMergeTick(genv, { now: NOW }));
 ok(aiCalls.length === 1 && aiCalls[0].model === "@cf/meta/llama-3.3-70b-instruct-fp8-fast" && gh.newPulls.length === 1, "ops_config code_goal_review_models replaces the list (only @cf/ ids kept); partial opens the PR", aiCalls.map((c) => c.model));
+goalSetup();
+sandbox.aiRunAttr = reviewer('{"verdict":"partial","harm":true,"defects":["the else branch is unreachable and still increments diversity_held"]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 0 && row.status === "failed" && /the diff carries an error \(verdict partial\): the else branch is unreachable/.test(row.merge_note) && /"harm":true/.test(one("SELECT meta FROM cloud_ops_events WHERE id = ?", "goal-review-" + ID + "-h1").meta), "partial with harm: no PR, the task fails with the error, the cached review keeps harm", row.merge_note);
 // the merge lane reviews a PR opened before 0.9.0 (no cached review) and refuses a "no" with a comment on the PR
 freshDb(); freshGh(); aiCalls = [];
 db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
