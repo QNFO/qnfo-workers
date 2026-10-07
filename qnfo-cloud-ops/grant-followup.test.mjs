@@ -3,7 +3,7 @@
 // cloud_ops_events evidence trigger) and a fake Gmail IMAP server. Proves: sender-domain matching and its edge cases,
 // reply/receipt/bulk classification, IMAP query and response parsing, that the mailbox is only ever opened read-only
 // (EXAMINE + BODY.PEEK; no STORE, COPY, EXPUNGE, APPEND or SELECT), that body text is never stored, one row per message
-// across runs, one issue per application, the tracking-issue route (Lightcone 1750), and 'degraded' without GMAIL_PASS.
+// across runs, one issue per application, the tracking-issue route (Lightcone 1750), and 'ok' without GMAIL_PASS (Gmail reported, not graded: GRANT-GMAIL-UNGRADED-1).
 // Run: node qnfo-cloud-ops/grant-followup.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -142,7 +142,7 @@ ok(r.notes.new_rows === 0 && events().length === 6 && issues().length === issueC
 
 db.prepare("INSERT INTO emails (message_id, sender, recipient, subject, body_text, headers_json, received_at) VALUES ('<ea-2@effectivealtruism.com>', 'funds@effectivealtruism.com', 'rowan.quni@qwav.tech', 'Re: grant application - one question', 'SECRET-BODY-MARKER', '{\"in-reply-to\":\"<z@qwav.tech>\"}', '2026-10-04T10:00:00.000Z')").run();
 r = await api.jobGrantFollowup({ AUDIT }, deps(NOW + 24 * 36e5));
-ok(r.status === "degraded" && /^no-credential/.test(r.notes.channels.gmail) && r.notes.new_rows === 1, "without GMAIL_PASS the job still reads qnfo.org mail and reports degraded");
+ok(r.status === "ok" && /^no-credential/.test(r.notes.channels.gmail) && r.notes.gmail_graded === false && !r.reason && r.notes.new_rows === 1, "without GMAIL_PASS (owner keeps Gmail outside the fleet) the job reads qnfo.org mail, reports Gmail as not graded, and is ok (GRANT-GMAIL-UNGRADED-1)", { status: r.status, reason: r.reason, channels: r.notes.channels });
 is = issues();
 ok(is.length === issueCount && (is.find((x) => /^GRANT-REPLY-EA-FUNDS-LTFF:/.test(x.title)).description.match(/GRANT-FOLLOWUP-1 /g) || []).length === 2, "a second EA reply extends the open EA issue instead of filing another");
 
