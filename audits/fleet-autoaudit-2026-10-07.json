@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-07 12:04:10",
+  "audited_at": "2026-10-07 13:03:51",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-cloud-ops"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -500,7 +493,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.5.0-retry-feedback",
+        "version": "0.7.0-timeout-folded-attr",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -520,7 +513,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.9.1-goal-review-harm",
+        "version": "0.11.0-owner-local-ingest",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1035,9 +1028,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.5.0-retry-feedback",
+      "before": "0.7.0-timeout-folded-attr",
       "http": 200,
-      "live": "0.5.0-retry-feedback",
+      "live": "0.7.0-timeout-folded-attr",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1147,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.9.1-goal-review-harm",
+      "before": "0.11.0-owner-local-ingest",
       "http": 200,
-      "live": "0.9.1-goal-review-harm",
+      "live": "0.11.0-owner-local-ingest",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
