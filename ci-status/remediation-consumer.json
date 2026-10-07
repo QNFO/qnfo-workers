@@ -1,170 +1,130 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@393bc868970b",
- "due": 20,
- "pass": 7,
- "fail": 13,
+ "verifier": "remediation-consumer@ffe1833b3081",
+ "due": 15,
+ "pass": 10,
+ "fail": 5,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2072",
-   "issue_id": 2072,
-   "verdict": "fail",
-   "expected": "merged",
-   "observed": "queued",
-   "written": true
-  },
-  {
-   "class": "issue-1683",
-   "issue_id": 1683,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1836",
-   "issue_id": 1836,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1623",
-   "issue_id": 1623,
-   "verdict": "fail",
-   "expected": "classified",
-   "observed": "unclassified",
-   "written": true
-  },
-  {
-   "class": "issue-1962",
-   "issue_id": 1962,
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
    "verdict": "pass",
-   "expected": "fresh",
-   "observed": "fresh",
+   "expected": "fixed",
+   "observed": "fixed",
    "written": true
   },
   {
-   "class": "issue-1981",
-   "issue_id": 1981,
+   "class": "issue-2042",
+   "issue_id": 2042,
    "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
+   "expected": "live",
+   "observed": "live",
    "written": true
   },
   {
-   "class": "issue-1982",
-   "issue_id": 1982,
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
    "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1983",
-   "issue_id": 1983,
+   "class": "rt-gateway",
+   "issue_id": null,
    "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1920",
-   "issue_id": 1920,
+   "class": "rt-ai-router",
+   "issue_id": null,
    "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1726",
-   "issue_id": 1726,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "2",
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1780",
-   "issue_id": 1780,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "EVID-1683-SPEND",
-   "issue_id": 1683,
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
    "verdict": "fail",
    "expected": "within-cap",
-   "observed": "over-cap",
+   "observed": "pending: the shared-cap window is read from 2026-10-08",
    "written": true
   },
   {
-   "class": "issue-1802",
-   "issue_id": 1802,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1796",
-   "issue_id": 1796,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "issue-1902",
-   "issue_id": 1902,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1916",
-   "issue_id": 1916,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1760",
-   "issue_id": 1760,
+   "class": "issue-2050",
+   "issue_id": 2050,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending",
+   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2113,2114,2115,2116",
    "written": true
   },
   {
-   "class": "issue-1889",
-   "issue_id": 1889,
-   "verdict": "fail",
-   "expected": "disjoint",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1895",
-   "issue_id": 1895,
+   "class": "issue-1815",
+   "issue_id": 1815,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "panel-votes-unmeasured",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
    "written": true
   },
   {
-   "class": "issue-2001",
-   "issue_id": 2001,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
+   "class": "issue-2084",
+   "issue_id": 2084,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2100",
+   "issue_id": 2100,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 5 informed retries, none merged yet",
    "written": true
   }
  ],
@@ -191,12 +151,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 20.4,
+ "https": 8,
+ "runtime_verified_share_24h": 20.5,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 53495,
- "head": "393bc868970b3365674c1aa62cb9128881c7b5f7",
+ "spent_ms": 49560,
+ "head": "ffe1833b30810b2dc731dda3285fe82775b229f2",
  "job_status": "success",
- "ts": "2026-10-07T20:13:14Z"
+ "ts": "2026-10-07T20:39:38Z"
 }
