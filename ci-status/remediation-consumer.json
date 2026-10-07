@@ -1,12 +1,77 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3dd0afc1a6ba",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@050482f1b29d",
+ "due": 8,
+ "pass": 2,
+ "fail": 6,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "plane-living-paper-fresh",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2126",
+   "issue_id": 2126,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by personal-companion, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "EVID-1718-SHAREDCAP",
+   "issue_id": 1718,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "pending: the shared-cap window is read from 2026-10-08",
+   "written": true
+  },
+  {
+   "class": "issue-2050",
+   "issue_id": 2050,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2113,2114,2115,2116",
+   "written": true
+  },
+  {
+   "class": "issue-1815",
+   "issue_id": 1815,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
+   "written": true
+  },
+  {
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "failed",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,9 +95,9 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 17.3,
- "spent_ms": 3985,
- "head": "3dd0afc1a6baaa380eda77342867ebb312790fc6",
+ "runtime_verified_share_24h": 17.5,
+ "spent_ms": 27256,
+ "head": "050482f1b29de454e073ee04b75c22472fddc8a2",
  "job_status": "success",
- "ts": "2026-10-07T12:02:57Z"
+ "ts": "2026-10-07T13:01:34Z"
 }
