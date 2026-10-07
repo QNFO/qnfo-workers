@@ -1,7 +1,12 @@
 {
-  "audited_at": "2026-10-07 13:03:51",
-  "d1_write_failures": [],
-  "d1_writes_ok": 114,
+  "audited_at": "2026-10-07 14:01:26",
+  "d1_write_failures": [
+    [
+      "qnfo-arxiv-radar",
+      "The read operation timed out (after 3 attempts, D1-TRANSIENT-RETRY-1)"
+    ]
+  ],
+  "d1_writes_ok": 113,
   "guard": {
     "_guard_rc": 0,
     "ahead": [],
@@ -453,7 +458,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.7.0-owner-signal-intake",
+        "version": "1.7.3-reasoning-budget",
         "worker": "idea-hub"
       },
       {
@@ -684,9 +689,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.7.0-owner-signal-intake",
+      "before": "1.7.3-reasoning-budget",
       "http": 200,
-      "live": "1.7.0-owner-signal-intake",
+      "live": "1.7.3-reasoning-budget",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1508,5 +1513,5 @@
       "worker": "vault-indexer"
     }
   },
-  "stale_rows_purged": 0
+  "stale_rows_purged": 1
 }
