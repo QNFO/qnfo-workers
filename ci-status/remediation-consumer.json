@@ -1,12 +1,28 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@134ca2f96426",
- "due": 17,
- "pass": 10,
- "fail": 6,
+ "verifier": "remediation-consumer@f1b0da72d213",
+ "due": 4,
+ "pass": 1,
+ "fail": 2,
  "skipped": 1,
  "contracts": [
+  {
+   "class": "issue-2076",
+   "issue_id": 2076,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-1958",
+   "issue_id": 1958,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
   {
    "class": "EVID-1641-MENTIONS",
    "issue_id": 1641,
@@ -22,126 +38,6 @@
    "expected": "within-cap",
    "observed": null,
    "reason": "probe returned no expected/observed pair"
-  },
-  {
-   "class": "issue-1815",
-   "issue_id": 1815,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
-   "written": true
-  },
-  {
-   "class": "issue-1825",
-   "issue_id": 1825,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
-  },
-  {
-   "class": "issue-2071",
-   "issue_id": 2071,
-   "verdict": "fail",
-   "expected": "MET",
-   "observed": "OPEN",
-   "written": true
-  },
-  {
-   "class": "issue-2072",
-   "issue_id": 2072,
-   "verdict": "fail",
-   "expected": "merged",
-   "observed": "pending: no code task yet",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "issue-2042",
-   "issue_id": 2042,
-   "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ipatent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2095",
-   "issue_id": 2095,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by q08-signal-engine, which owns it for 48h",
-   "written": true
   }
  ],
  "trusted_transports": [
@@ -167,10 +63,10 @@
   "http",
   "runner-https"
  ],
- "https": 8,
- "runtime_verified_share_24h": 12.2,
- "spent_ms": 32598,
- "head": "134ca2f9642622f12c92f1a8590c211e0796ed1b",
+ "https": 1,
+ "runtime_verified_share_24h": 12.4,
+ "spent_ms": 13606,
+ "head": "f1b0da72d2139a3dc0be48083d20b4548597a0b2",
  "job_status": "success",
- "ts": "2026-10-07T04:11:29Z"
+ "ts": "2026-10-07T05:11:12Z"
 }
