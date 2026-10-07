@@ -1,11 +1,13 @@
-// OWNER-LOCAL-INGEST-1 offline suite (qnfo-fleet-control 0.11.0, agent_issues 2080, pillar cost).
+// OWNER-LOCAL-INGEST-1 offline suite (qnfo-fleet-control 0.11.0, 1b in 0.11.1, agent_issues 2080, pillar cost).
 // Replays the COST-ATTRIBUTION-GAP-1 and OWNER-LOCAL-INGEST-1 blocks of worker.js in a sandbox with a scripted Cloudflare
 // API (gateway list, gateway logs, GraphQL) and real SQL (node:sqlite behind a D1-shaped shim). Proves: a log row is classed
 // by its cf-aig-metadata tag (untagged -> owner-local, tagged by a fleet worker with no ledger of its own -> that worker,
 // tagged by a self-writing router -> skipped); cached, Workers AI and costless rows are skipped; rows at or before the cursor
 // are skipped and the cursor advances to the newest row; the ingest writes ai_spend_owner_local and ai_spend_ledger, saves a
 // per-gateway cursor, is idempotent on a second run, fails soft on a logs error and hard on an unreadable gateway list; and
-// the gap tick counts the owner-local table as attributed.
+// the gap tick counts the owner-local table as attributed. 1b: the logs request carries the API filters (cost gt 0, provider
+// neq workers-ai, created_at gt cursor) and pages oldest first; a backfill larger than OL_MAX_PAGES pages continues on the
+// next run from the cursor with nothing lost or double counted (more/remaining); the v1 cursor key is removed.
 // Run: node --no-warnings qnfo-fleet-control/owner-local-ingest.test.mjs   (exit 0 = all passed)
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -55,18 +57,28 @@ const resp = (status, body) => new Response(JSON.stringify(body), { status, head
 const fakeFetch = async (url, opts) => {
   const u = String(url); api.calls.push(u);
   if (u.indexOf("/ai-gateway/gateways?") >= 0) return api.gatewayStatus === 200 ? resp(200, { success: true, result: api.gateways }) : resp(api.gatewayStatus, { success: false, errors: [{ message: "nope" }] });
-  const m = /\/ai-gateway\/gateways\/([^/]+)\/logs\?per_page=(\d+)&page=(\d+)&order_by=created_at&direction=desc$/.exec(u);
+  // OWNER-LOCAL-INGEST-1b: the API applies the request's filters (cost gt 0, provider neq workers-ai, created_at gt cursor)
+  // and pages oldest first; result_info.total_count is the filtered total, as the live API answers (probed 2026-10-07).
+  const m = /\/ai-gateway\/gateways\/([^/]+)\/logs\?per_page=(\d+)&page=(\d+)&order_by=created_at&order_by_direction=asc&filters=([^&]+)$/.exec(u);
   if (m) {
     if (api.logsStatus !== 200) return resp(api.logsStatus, { success: false, errors: [{ message: "forbidden" }] });
-    const all = api.logs[decodeURIComponent(m[1])] || [], per = Number(m[2]), page = Number(m[3]);
-    return resp(200, { success: true, result: all.slice((page - 1) * per, page * per) });
+    const per = Number(m[2]), page = Number(m[3]), filters = JSON.parse(decodeURIComponent(m[4]));
+    const keep = (r) => filters.every((f) => {
+      const v = r[f.key];
+      if (f.operator === "gt") return typeof v === "string" ? v > String(f.value[0]) : Number(v) > Number(f.value[0]);
+      if (f.operator === "neq") return v !== f.value[0];
+      if (f.operator === "eq") return v === f.value[0];
+      throw new Error("unexpected filter " + JSON.stringify(f));
+    });
+    const all = (api.logs[decodeURIComponent(m[1])] || []).filter(keep).sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+    return resp(200, { success: true, result: all.slice((page - 1) * per, page * per), result_info: { page, per_page: per, count: Math.min(per, Math.max(0, all.length - (page - 1) * per)), total_count: all.length } });
   }
   if (u.indexOf("/graphql") >= 0) return resp(200, api.graphql || { data: { viewer: { accounts: [{ aiGatewayRequestsAdaptiveGroups: [] }] } } });
   return resp(404, { success: false });
 };
 const sandbox = { __name: (f) => f, fetch: fakeFetch, AbortSignal, console, __export: null, VERSION: vmatch ? vmatch[1] : "0.11.0", encodeURIComponent };
 vm.createContext(sandbox);
-vm.runInContext(src.slice(A, B + END.length) + "\n__export = { olMeta, olProvider, olClassify, olAggregate, ownerLocalIngest, costAttributionTick, costAttributionGap, OL_PAGE, OL_MAX_PAGES, OL_SELF_WRITERS };", sandbox);
+vm.runInContext(src.slice(A, B + END.length) + "\n__export = { olMeta, olProvider, olClassify, olAggregate, olLogsUrl, ownerLocalIngest, costAttributionTick, costAttributionGap, OL_PAGE, OL_MAX_PAGES, OL_SELF_WRITERS, OL_CURSOR_KEY, OL_CURSOR_KEY_V1 };", sandbox);
 const W = sandbox.__export;
 
 // ---- 1. pure parts ----
@@ -106,9 +118,15 @@ const NOW = "2026-10-07T09:00:00.000Z";
   const r = await W.ownerLocalIngest(env, d1, "acct", NOW);
   const owner = d1._db.prepare("SELECT day, gateway, provider, model, calls, ROUND(usd, 4) AS usd FROM ai_spend_owner_local ORDER BY day, model").all();
   const ledger = d1._db.prepare("SELECT day, provider, caller, model, calls, ROUND(usd, 4) AS usd FROM ai_spend_ledger").all();
-  const cur = d1._db.prepare("SELECT value FROM ops_config WHERE key = 'owner_local_cursor:qnfo'").get();
+  const cur = d1._db.prepare("SELECT value FROM ops_config WHERE key = 'owner_local_cursor_v2:qnfo'").get();
   // first run: cursor = now - 7d, so every row in the fixture is after it (the two 'cursor' rows above are after too)
   ok(r.gateways === 1 && r.taken === 6 && r.pages === 1 && Math.abs(r.owner_usd - 18.85) < 1e-9 && Math.abs(r.fleet_usd - 0.02) < 1e-9, "first run reaches back 7 days and takes every paid, tagged-or-not, non-router row", r);
+  // 1b: the request carries the three API filters with the 7-day cursor, oldest first
+  const q = /[?&]filters=([^&]+)/.exec(api.calls.find((u) => /\/logs\?/.test(u)) || "");
+  const flt = q ? JSON.parse(decodeURIComponent(q[1])) : null;
+  ok(flt && flt.length === 3 && flt[0].key === "cost" && flt[0].operator === "gt" && flt[0].value[0] === 0 && flt[1].key === "provider" && flt[1].operator === "neq" && flt[1].value[0] === "workers-ai" && flt[2].key === "created_at" && flt[2].operator === "gt" && flt[2].value[0] === "2026-09-30T09:00:00.000Z", "1b: the logs request filters cost gt 0, provider neq workers-ai, created_at gt the cursor (now - 7d on the first run)", flt);
+  ok(/order_by=created_at&order_by_direction=asc&filters=/.test(api.calls.find((u) => /\/logs\?/.test(u)) || "") && W.olLogsUrl("B", "g w", "C", 2).indexOf("B/ai-gateway/gateways/g%20w/logs?per_page=" + W.OL_PAGE + "&page=2&order_by=created_at&order_by_direction=asc&filters=") === 0, "1b: oldest first, gateway id and filters URL-encoded", api.calls);
+  ok(r.by_gateway.qnfo.more === false && r.by_gateway.qnfo.remaining === 0, "1b: one page: nothing more, nothing remaining", r.by_gateway);
   ok(owner.length === 3 && owner.every((o) => o.gateway === "qnfo" && o.provider === "deepseek") && ledger.length === 1 && ledger[0].caller === "qnfo-ops", "owner-local rows go to ai_spend_owner_local, the fleet direct caller to ai_spend_ledger", { owner, ledger });
   ok(cur && cur.value === "2026-10-07T08:03:00Z", "the per-gateway cursor is the newest created_at", cur);
   const meta = d1._db.prepare("SELECT value FROM analytics_dash_meta WHERE key = 'owner_local_cost_usd_30d'").get();
@@ -125,19 +143,42 @@ const NOW = "2026-10-07T09:00:00.000Z";
   api.logs.qnfo.unshift(row({ created_at: "2026-10-07T08:30:00Z", cost: 1 }));
   const r3 = await W.ownerLocalIngest(env, d1, "acct", NOW);
   const owner3 = d1._db.prepare("SELECT ROUND(SUM(usd), 4) AS usd, SUM(calls) AS calls FROM ai_spend_owner_local").get();
-  ok(r3.taken === 1 && Math.abs(owner3.usd - 19.85) < 1e-9 && owner3.calls === 6 && d1._db.prepare("SELECT value FROM ops_config WHERE key = 'owner_local_cursor:qnfo'").get().value === "2026-10-07T08:30:00Z", "a newer request is added and moves the cursor", { r3, owner3 });
+  ok(r3.taken === 1 && Math.abs(owner3.usd - 19.85) < 1e-9 && owner3.calls === 6 && d1._db.prepare("SELECT value FROM ops_config WHERE key = 'owner_local_cursor_v2:qnfo'").get().value === "2026-10-07T08:30:00Z", "a newer request is added and moves the cursor", { r3, owner3 });
 }
-// paging: more rows than one page, stop at the cursor on the second page
+// paging: more rows than one page after the cursor; the row before the cursor is filtered by the API; the v1 key is removed
 {
   const d1 = makeD1();
-  d1._db.prepare("INSERT INTO ops_config (key, value) VALUES ('owner_local_cursor:qnfo', '2026-10-07T00:00:00Z')").run();
+  d1._db.prepare("INSERT INTO ops_config (key, value) VALUES ('owner_local_cursor_v2:qnfo', '2026-10-07T00:00:00Z')").run();
+  d1._db.prepare("INSERT INTO ops_config (key, value) VALUES ('owner_local_cursor:qnfo', '2026-10-07T16:00:28.873Z')").run(); // 0.11.0's cursor
   const many = [];
   for (let i = 0; i < W.OL_PAGE + 10; i++) many.push(row({ created_at: "2026-10-07T0" + (i < 60 ? "1" : "2") + ":" + String(59 - (i % 60)).padStart(2, "0") + ":00Z", cost: 0.01 }));
   many.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-  many.push(row({ created_at: "2026-10-06T23:00:00Z", cost: 5 })); // before the cursor, on page 2
+  many.push(row({ created_at: "2026-10-06T23:00:00Z", cost: 5 })); // before the cursor: the API filter leaves it out
+  many.push(row({ created_at: "2026-10-07T01:30:30Z", cost: 0, provider: "deepseek" })); // costless: left out
+  many.push(row({ created_at: "2026-10-07T01:30:40Z", cost: 0.2, provider: "workers-ai", model: "@cf/x" })); // Workers AI: left out
   api.logs = { qnfo: many };
+  api.calls = [];
   const r = await W.ownerLocalIngest(env, d1, "acct", NOW);
-  ok(r.pages === 2 && r.taken === W.OL_PAGE + 10 && Math.abs(r.owner_usd - (W.OL_PAGE + 10) * 0.01) < 1e-6, "paging continues until a row at or before the cursor is seen", r);
+  ok(r.pages === 2 && r.taken === W.OL_PAGE + 10 && r.by_gateway.qnfo.seen === W.OL_PAGE + 10 && Math.abs(r.owner_usd - (W.OL_PAGE + 10) * 0.01) < 1e-6 && r.by_gateway.qnfo.more === false, "paging continues while pages are full; the API filters leave the pre-cursor, costless and Workers AI rows out", r);
+  ok(api.calls.filter((u) => /\/logs\?/.test(u)).every((u) => /created_at%22%2C%22operator%22%3A%22gt%22%2C%22value%22%3A%5B%222026-10-07T00%3A00%3A00Z%22%5D/.test(u)), "every page of one tick filters on the same cursor", api.calls);
+  ok(d1._db.prepare("SELECT value FROM ops_config WHERE key = 'owner_local_cursor_v2:qnfo'").get().value === "2026-10-07T01:59:00Z" && !d1._db.prepare("SELECT value FROM ops_config WHERE key = 'owner_local_cursor:qnfo'").get(), "the v2 cursor is the newest row ingested (the 60 fixture rows are 01:00..01:59) and the v1 key is gone", d1._db.prepare("SELECT key, value FROM ops_config").all());
+}
+// 1b: a backfill larger than OL_MAX_PAGES pages continues on the next run from the cursor, nothing lost, nothing double counted
+{
+  const d1 = makeD1();
+  const cap = W.OL_MAX_PAGES * W.OL_PAGE, extra = 7, t0 = Date.parse("2026-10-05T00:00:00Z");
+  const many = [];
+  for (let i = 0; i < cap + extra; i++) many.push(row({ created_at: new Date(t0 + i * 1000).toISOString(), cost: 0.001 }));
+  api.logs = { qnfo: many };
+  api.calls = [];
+  const r1 = await W.ownerLocalIngest(env, d1, "acct", NOW);
+  ok(r1.pages === W.OL_MAX_PAGES && r1.taken === cap && r1.by_gateway.qnfo.more === true && r1.by_gateway.qnfo.remaining === extra && r1.by_gateway.qnfo.cursor === new Date(t0 + (cap - 1) * 1000).toISOString(), "a first run reads OL_MAX_PAGES full pages, reports more and the rows remaining, and leaves the cursor on the last row it ingested", { pages: r1.pages, taken: r1.taken, gw: r1.by_gateway.qnfo });
+  api.calls = [];
+  const r2 = await W.ownerLocalIngest(env, d1, "acct", NOW);
+  const tot = d1._db.prepare("SELECT SUM(calls) AS calls, ROUND(SUM(usd), 6) AS usd FROM ai_spend_owner_local").get();
+  ok(r2.pages === 1 && r2.taken === extra && r2.by_gateway.qnfo.more === false && r2.by_gateway.qnfo.remaining === 0 && tot.calls === cap + extra && Math.abs(tot.usd - (cap + extra) * 0.001) < 1e-6, "the next run takes the rest from the cursor: every row counted once", { r2: r2.by_gateway.qnfo, tot });
+  const r3 = await W.ownerLocalIngest(env, d1, "acct", NOW);
+  ok(r3.taken === 0 && r3.pages === 1, "and then nothing", r3.by_gateway);
 }
 // two gateways, one with a logs error: the other is still ingested and the error is recorded
 {
