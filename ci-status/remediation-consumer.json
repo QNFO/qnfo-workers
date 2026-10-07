@@ -1,26 +1,98 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@8a981ce87c1b",
- "due": 2,
- "pass": 0,
- "fail": 2,
+ "verifier": "remediation-consumer@5ec3de311d6d",
+ "due": 11,
+ "pass": 8,
+ "fail": 3,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2098",
-   "issue_id": 2098,
-   "verdict": "fail",
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: goal reviews with a verdict 0, open false MVP-down issues 5",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2107",
-   "issue_id": 2107,
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2099",
+   "issue_id": 2099,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "pending: no code-task.timeout event yet (0 timeouts still counted as failures since 09:00Z)",
+   "written": true
+  },
+  {
+   "class": "issue-2110",
+   "issue_id": 2110,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: trigger 0, guard metric 0, active contracts vacuous or not executable 6",
+   "written": true
+  },
+  {
+   "class": "issue-2111",
+   "issue_id": 2111,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 13 SEARCH-not-found failures in 7 days (target <= 3)",
    "written": true
   }
  ],
@@ -47,9 +119,10 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 14.6,
- "spent_ms": 8050,
- "head": "8a981ce87c1bdcd519abef43bf960b123eeedb68",
+ "https": 8,
+ "runtime_verified_share_24h": 15.3,
+ "spent_ms": 26261,
+ "head": "5ec3de311d6def1c584422b6802f9a7f44d569e4",
  "job_status": "success",
- "ts": "2026-10-07T08:39:20Z"
+ "ts": "2026-10-07T09:05:54Z"
 }
