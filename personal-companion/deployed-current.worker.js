@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.12.3-broadcast-batch"; // 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.13.0-ds402-fallback"; // 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -744,9 +744,64 @@ async function fetchWikiSearch(query) {
 __name(fetchWikiSearch, "fetchWikiSearch");
 __name2(fetchWikiSearch, "fetchWikiSearch");
 __name22(fetchWikiSearch, "fetchWikiSearch");
-async function callModel(env, messages, maxTokens, timeoutMs, model) {
+// COMPANION-DEEPSEEK-402-FALLBACK-1 (1.13.0, 2026-10-07, pillar core): the owner left the DeepSeek balance empty
+// (decision 2026-10-05, #1986), every writer and critic call got HTTP 402 in under a second, and reading.q08.org
+// published nothing after 2026-10-05 08:06Z (companion_runs: "composed 0" x5 per run, steward "collapse" every hour).
+// Now a DeepSeek failure falls through to Workers AI; a 401/402/403 opens a 60-minute breaker so later calls skip the
+// paid round trip. The fallback order differs by role so writer and critic stay on different models.
+var DS_BREAKER_MS = 36e5;
+var dsBreakerUntil = 0;
+// Measured 2026-10-07 (400-word probe, max_tokens 6000): kimi-k2.6 402 words in 60s, gpt-oss-120b 400 words in 26s,
+// glm-5.3 spent all 6000 tokens reasoning and returned no prose, so it is last everywhere. Reasoning models need room
+// beyond the prose, so a fallback call gets at least FB_MIN_TOKENS and FB_MIN_TIMEOUT_MS.
+var CF_FALLBACK = {
+  essay: ["@cf/moonshotai/kimi-k2.6", "@cf/openai/gpt-oss-120b", "@cf/zai-org/glm-5.3"],
+  writer: ["@cf/moonshotai/kimi-k2.6", "@cf/openai/gpt-oss-120b", "@cf/zai-org/glm-5.3"],
+  critic: ["@cf/openai/gpt-oss-120b", "@cf/moonshotai/kimi-k2.6", "@cf/zai-org/glm-5.3"]
+};
+var FB_MIN_TOKENS = 4e3;
+var FB_MIN_TIMEOUT_MS = 9e4;
+function fallbackChain(model, role) {
+  if (role && CF_FALLBACK[role]) return CF_FALLBACK[role];
+  return String(model || "").indexOf("reasoner") >= 0 ? CF_FALLBACK.essay : CF_FALLBACK.writer;
+}
+function cfText(r) {
+  if (!r) return { text: "", rlen: 0 };
+  var c = "", rc = "";
+  if (typeof r.response === "string") c = r.response;
+  var m = r.choices && r.choices[0] && r.choices[0].message;
+  if (m) {
+    if (!c && typeof m.content === "string") c = m.content;
+    rc = m.reasoning_content || m.reasoning || "";
+  }
+  return { text: c, rlen: String(rc || "").length };
+}
+async function callWorkersAI(env, messages, maxTokens, timeoutMs, chain, prevErr) {
+  var errs = prevErr ? [prevErr] : [];
+  for (var i = 0; i < chain.length; i++) {
+    var m = chain[i];
+    if (!modelAllowed(m)) continue;
+    try {
+      var r = await aiRunAttr(env, "personal-companion", "compose-fallback", m,
+        { messages: messages, max_tokens: Math.min(Math.max(Number(maxTokens) || 0, FB_MIN_TOKENS), 14e3), temperature: 0.7 },
+        { gateway: { id: "default" }, signal: AbortSignal.timeout(Math.max(Number(timeoutMs) || 0, FB_MIN_TIMEOUT_MS)) });
+      var t = cfText(r);
+      if (typeof t.text === "string" && t.text.trim().length > 80) return { model: m, text: t.text };
+      errs.push(m + ": empty (clen=" + String(t.text || "").length + " rlen=" + t.rlen + ")");
+    } catch (e) {
+      errs.push(m + ": " + String(e && e.message || e).slice(0, 160));
+    }
+  }
+  return { model: chain[0], text: null, error: errs.join(" | ").slice(0, 600) };
+}
+async function callModel(env, messages, maxTokens, timeoutMs, model, role) {
   var useModel = model || WRITER_MODEL;
   var isReasoner = String(useModel).indexOf("reasoner") >= 0;
+  var chain = fallbackChain(useModel, role);
+  if (!env.DEEPSEEK_API_KEY || Date.now() < dsBreakerUntil) {
+    return await callWorkersAI(env, messages, maxTokens, timeoutMs, chain, Date.now() < dsBreakerUntil ? "deepseek breaker open" : "no deepseek key");
+  }
+  var dsErr = "";
   try {
     var mt = isReasoner ? Math.min(Number(maxTokens) || 16e3, 16e3) : Math.min(Number(maxTokens) || 4e3, 14e3);
     var body = { model: useModel, messages, max_tokens: mt, stream: false };
@@ -763,20 +818,19 @@ async function callModel(env, messages, maxTokens, timeoutMs, model) {
         errText = await resp.text();
       } catch (e2) {
       }
-      return { model: useModel, text: null, error: "HTTP " + resp.status + " " + errText.slice(0, 200) };
+      if (resp.status === 401 || resp.status === 402 || resp.status === 403) dsBreakerUntil = Date.now() + DS_BREAKER_MS;
+      dsErr = useModel + ": HTTP " + resp.status + " " + errText.slice(0, 160);
+    } else {
+      var j = await resp.json();
+      var msg = j && j.choices && j.choices[0] && j.choices[0].message;
+      var text = msg && msg.content || "";
+      if (typeof text === "string" && text.trim().length > 80) return { model: useModel, text };
+      dsErr = useModel + ": " + (msg && msg.reasoning_content ? "reasoning only, rlen=" + String(msg.reasoning_content).length : "empty");
     }
-    var j = await resp.json();
-    var msg = j && j.choices && j.choices[0] && j.choices[0].message;
-    if (!msg) return null;
-    var text = msg.content || "";
-    if (typeof text === "string" && text.trim().length > 80) return { model: useModel, text };
-    if (msg.reasoning_content && String(msg.reasoning_content).length > 100) {
-      return { model: useModel, text: null, error: "reasoner emitted reasoning only (no prose); rlen=" + String(msg.reasoning_content).length };
-    }
-    return null;
   } catch (e) {
-    return { model: useModel, text: null, error: String(e && e.message || e) };
+    dsErr = useModel + ": " + String(e && e.message || e).slice(0, 160);
   }
+  return await callWorkersAI(env, messages, maxTokens, timeoutMs, chain, dsErr);
 }
 __name(callModel, "callModel");
 __name2(callModel, "callModel");
@@ -1056,10 +1110,10 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
   var lenRule = concreteRule + " " + (form === "essay" ? "Length: 2000 to 2800 words. This is a requirement, not a suggestion." : form === "serial" ? "Length: 1800 to 2400 words. This is a requirement, not a suggestion." : "Length: 1800 to 2400 words, in 3 to 5 movements. This is a requirement, not a suggestion.");
   var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous draft was rejected by an adversarial reader for this reason: " + feedback + " Write a better draft that fixes that." : ""].join(NL);
   var writerModel = form === "notes" ? WRITER_MODEL : WRITER_MODEL_ESSAY;
-  var r = await callModel(env, [{ role: "system", content: sys }, { role: "user", content: user }], GEN_MAX_TOKENS, WRITER_TIMEOUT_MS, writerModel);
+  var r = await callModel(env, [{ role: "system", content: sys }, { role: "user", content: user }], GEN_MAX_TOKENS, WRITER_TIMEOUT_MS, writerModel, form === "notes" ? "writer" : "essay");
   if (!r || !r.text) {
     var errMsg = r && r.error ? r.error : "callModel returned null";
-    return { piece: null, model: writerModel, raw: "", error: errMsg };
+    return { piece: null, model: r && r.model || writerModel, raw: "", error: errMsg };
   }
   var md = String(r.text || "").trim();
   if (md.indexOf("```") === 0) {
@@ -1096,7 +1150,7 @@ __name22(composePiece, "composePiece");
 async function critiquePiece(env, piece, form) {
   var band = form === "essay" ? "2000 to 2800 words" : form === "serial" ? "1800 to 2400 words" : "1800 to 2400 words in 3 to 5 movements";
   var user = "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED OBJECTION: " + (piece.objection || "") + NL + NL + "BODY:" + NL + piece.body_md;
-  var r = await callModel(env, [{ role: "system", content: P_CRITIQUE }, { role: "user", content: user }], 900, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL);
+  var r = await callModel(env, [{ role: "system", content: P_CRITIQUE }, { role: "user", content: user }], 900, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL, "critic");
   return parseJsonLoose(r.text);
 }
 __name(critiquePiece, "critiquePiece");
@@ -1105,7 +1159,7 @@ __name22(critiquePiece, "critiquePiece");
 async function sharpenBridge(env, piece, form) {
   try {
     var user = "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL + NL + "PIECE:" + NL + String(piece.body_md).slice(0, 6e3);
-    var r = await callModel(env, [{ role: "system", content: P_BRIDGE }, { role: "user", content: user }], 1400, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL);
+    var r = await callModel(env, [{ role: "system", content: P_BRIDGE }, { role: "user", content: user }], 1400, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL, "critic");
     var j = parseJsonLoose(r && r.text);
     if (j && j.bridge && j.bridge.a && j.bridge.b) {
       piece.bridge = j.bridge;
@@ -1592,7 +1646,7 @@ async function generate(env, form, opts) {
       await logRun(env, form, "", topic.id, "stage", "compose attempt " + attempt, Date.now() - t0);
       var comp = await composePiece(env, form, topic, anchors, life, profile, continuity, feedback);
       model = comp.model;
-      await logRun(env, form, model, topic.id, "stage", "composed " + String(comp.piece && comp.piece.body_md || "").length, Date.now() - t0);
+      await logRun(env, form, model, topic.id, "stage", "composed " + String(comp.piece && comp.piece.body_md || "").length + (comp.error ? " err: " + String(comp.error).slice(0, 400) : ""), Date.now() - t0);
       var piece = comp.piece;
       if (!piece) {
         continue;
@@ -1733,6 +1787,43 @@ async function cronTickDispatch(event, one) {
   };
   if (TICK_PARALLEL) { await Promise.all(due.map(run)); return; }
   for (var i = 0; i < due.length; i++) await run(due[i]);
+}
+// COMPANION-PUBLISH-STALL-AUTO-1 (1.13.0, 2026-10-07, pillar core): reading.q08.org went silent for 48h (2026-10-05 08:06Z
+// onward) while the steward wrote "collapse" to companion_runs every hour and nothing outside this worker read it. The
+// q08 stallDetector pattern, ported: every hourly tick writes companion_hours_since_last_piece into
+// qnfo-audit.metric_registry, files one agent_issue when no piece landed for STALL_HOURS and the last two generation
+// runs failed (with their causes), and closes it with evidence when a piece lands. No model call.
+var STALL_HOURS = 12;
+var STALL_TITLE = "COMPANION-PUBLISH-STALL-AUTO-1";
+async function companionStallDetector(env, nowMs) {
+  if (!env.AUDIT || !env.PERSONAL) return { skipped: "no binding" };
+  var now = nowMs || Date.now();
+  var lastRow = await env.PERSONAL.prepare("SELECT slug, created_at FROM companion_pieces ORDER BY id DESC LIMIT 1").first();
+  var lastMs = lastRow && lastRow.created_at ? Date.parse(String(lastRow.created_at)) : 0;
+  var hours = lastMs ? Math.round((now - lastMs) / 36e5 * 10) / 10 : null;
+  try {
+    await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?2, last_refreshed = ?3, state = 'MEASURED' WHERE metric = ?1").bind("companion_hours_since_last_piece", hours == null ? null : String(hours), new Date(now).toISOString()).run();
+  } catch (eM) {}
+  var open = await env.AUDIT.prepare("SELECT id FROM agent_issues WHERE status='open' AND title LIKE ?1").bind(STALL_TITLE + ":%").all();
+  var openIds = ((open && open.results) || []).map(function (o) { return o.id; });
+  if (hours != null && hours < STALL_HOURS) {
+    for (var i = 0; i < openIds.length; i++) {
+      var ev = "personal-companion " + VERSION + " stall detector: piece " + lastRow.slug + " created " + lastRow.created_at + " (" + hours + "h ago) at " + new Date(now).toISOString();
+      await env.AUDIT.prepare("UPDATE issue_triage SET close_evidence=?1 WHERE issue_id=?2").bind(ev, openIds[i]).run().catch(function () {});
+      await env.AUDIT.prepare("UPDATE agent_issues SET status='closed', close_channel='auto-recovery', updated_at=?1 WHERE id=?2").bind(now, openIds[i]).run();
+    }
+    return { hours: hours, closed: openIds.length };
+  }
+  var fr = await env.PERSONAL.prepare("SELECT run_at, status, model, topic, detail FROM companion_runs WHERE status IN ('ok','failed','blocked') AND form <> 'steward' ORDER BY id DESC LIMIT 2").all();
+  var runs = (fr && fr.results) || [];
+  if (runs.length < 2 || runs.some(function (r) { return r.status === "ok"; })) return { hours: hours, stalled: false };
+  if (openIds.length) return { hours: hours, stalled: true, open: openIds[0] };
+  var causes = runs.map(function (r) { return r.run_at + " " + (r.model || "-") + " " + (r.topic || "") + ": " + String(r.detail || "").slice(0, 120); }).join(" | ");
+  var errs = await env.PERSONAL.prepare("SELECT detail FROM companion_runs WHERE status='stage' AND detail LIKE '%err:%' ORDER BY id DESC LIMIT 1").first();
+  var title = STALL_TITLE + ": reading.q08.org published nothing for " + (hours == null ? "ever" : Math.round(hours) + "h") + "; last 2 generation runs failed";
+  var desc = "Filed automatically by personal-companion " + VERSION + " companionStallDetector. Last 2 generation runs: " + causes + (errs && errs.detail ? ". Latest model-call error: " + String(errs.detail).slice(0, 400) : "") + ". Check companion_runs in personal-life D1 (stage rows carry the call error since 1.13.0). Closes itself when a piece is created.\ncode-task: repo=qnfo-workers path=personal-companion/worker.js";
+  await env.AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'personal-companion', 'reliability', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE status='open' AND title LIKE ?4)").bind(title, desc, now, STALL_TITLE + ":%").run();
+  return { hours: hours, stalled: true, filed: true };
 }
 var worker_default = {
   async fetch(request, env, ctx) {
@@ -1969,6 +2060,7 @@ var worker_default = {
           }
         }
         await steward(env);
+        try { await companionStallDetector(env); } catch (eSt) { console.error("stall-detector:", String(eSt && eSt.message || eSt)); }
         if (utcHour >= 6) await sendMorningBrief(env);
         try { var _lf = await queueLedgerFollowUp(env); if (_lf.error) console.error("ledger-followup:", _lf.error); } catch (eLf) { console.error("ledger-followup:", String(eLf && eLf.message || eLf)); }
         try { var _cm = await refreshConnectionMetrics(env); if (_cm.error) console.error("connection-metrics:", _cm.error); } catch (eCm) { console.error("connection-metrics:", String(eCm && eCm.message || eCm)); }
@@ -2624,6 +2716,8 @@ export {
   queueLedgerFollowUp,
   refreshConnectionMetrics,
   isoWeekKey,
+  callModel,
+  companionStallDetector,
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
