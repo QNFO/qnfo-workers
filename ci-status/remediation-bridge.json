@@ -1,29 +1,8 @@
 {
- "ok": true,
+ "ok": false,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
- "probe_map_entries": 45,
- "open_issues": 117,
- "with_contract_before": 117,
- "upgraded_sentinel_to_active": 0,
- "inserted_active": 0,
- "inserted_needs_machine_probe": 0,
- "active_contracts": 194,
- "active_with_executable_probe": 194,
- "active_with_prose_probe": 0,
- "prose_probe_contracts": [],
- "contracts_needs_machine_probe": 8,
- "open_issues_without_active_contract": 8,
- "residual_gap_ids": [
-  2077,
-  2080,
-  2121,
-  2122,
-  1996,
-  2078,
-  2079,
-  2119
- ],
- "head": "9cf81592c90d10e5b69c2cfca73c7612b0953c7e",
+ "error": "The read operation timed out",
+ "head": "b296658f25067555cf97566b0b109bb9e40114c8",
  "job_status": "success",
- "ts": "2026-10-07T13:53:36Z"
+ "ts": "2026-10-07T14:02:59Z"
 }
