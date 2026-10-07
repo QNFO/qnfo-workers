@@ -15,7 +15,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8").replace(/export default\s*\{/, "var __default = {");
 const sb = { console: { log() {} }, Date, JSON, Math, Number, String, RegExp, Set, Map, Array, Object, Promise, URL, Response, Request, Headers, TextEncoder, crypto, fetch: async () => { throw new Error("no network"); } };
 vm.createContext(sb);
-vm.runInContext(src + "\n__x = { triageProposals, runOwnerCorpus, runReentry, runConsume, thinkSeed, proposalKind, realQuestion, ownerPaper, aiRunAttr, promptCacheOpts, OWNER_CORPUS_SCORE_MIN, OWNER_CORPUS_RQ_CAP, OWNER_CORPUS_BATCH, REASONING_MAX_TOKENS, OWNER_CORPUS_FLEET_ERA };", sb);
+vm.runInContext(src + "\n__x = { ownerPipelineDois, triageProposals, runOwnerCorpus, runReentry, runConsume, thinkSeed, proposalKind, realQuestion, ownerPaper, aiRunAttr, promptCacheOpts, OWNER_CORPUS_SCORE_MIN, OWNER_CORPUS_RQ_CAP, OWNER_CORPUS_BATCH, REASONING_MAX_TOKENS, OWNER_CORPUS_FLEET_ERA };", sb);
 const api = sb.__x;
 const mk = () => new DatabaseSync(":memory:");
 const shim = (db) => ({ prepare(sql) { let a = []; const q = sql.replace(/\?(\d+)/g, "?"); const st = { bind(...x) { a = x; return st; }, async all() { return { results: db.prepare(q).all(...a) }; }, async first() { return db.prepare(q).get(...a) ?? null; }, async run() { const r = db.prepare(q).run(...a); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } }; return st; } });
@@ -162,6 +162,15 @@ const cs = await api.runConsume({ QNFO_AUDIT: shim(a3), LIVING_PAPER: shim(lp2) 
 const props = a3.prepare("SELECT idea FROM idea_proposals").all().map((r) => r.idea);
 ok(a3.prepare("SELECT status FROM signals WHERE id='s1'").get().status === "expired" && cs.expired_not_owner === 1, "a signal from a pipeline (qnfo) paper is expired, not consumed", cs);
 ok(props.length === 1 && /Does the bound hold for p = 2\?/.test(props[0]), "the owner paper's real question becomes a proposal; the hedge sentence does not", props);
+
+// 9. 1.7.2: a pipeline paper that came from an owner proposal counts as the owner's.
+a3.exec("CREATE TABLE research_queue (id TEXT, source TEXT, source_id TEXT, status TEXT, doi TEXT)");
+const op = Number(a3.prepare("INSERT INTO idea_proposals (name, idea, contact, status) VALUES ('owner-corpus', 'x', 'owner', 'triaged_accepted')").run().lastInsertRowid);
+const gp = Number(a3.prepare("INSERT INTO idea_proposals (name, idea, contact, status) VALUES ('auto-scan', 'y', '', 'triaged_accepted')").run().lastInsertRowid);
+a3.prepare("INSERT INTO research_queue VALUES ('r1', 'proposal', ?, 'published', '10.5281/zenodo.ownpipe'), ('r2', 'proposal', ?, 'published', '10.5281/zenodo.pipe')").run(String(op), String(gp));
+lp2.prepare("INSERT INTO papers VALUES ('10.5281/zenodo.ownpipe', 'qnfo')").run();
+const e3 = { QNFO_AUDIT: shim(a3), LIVING_PAPER: shim(lp2) };
+ok(await api.ownerPaper(e3, "10.5281/zenodo.ownpipe") && !(await api.ownerPaper(e3, "10.5281/zenodo.pipe")) && await api.ownerPaper(e3, "10.5281/zenodo.own"), "a pipeline paper from an owner proposal is the owner's; one from an arXiv scan is not; a Zenodo deposit is");
 
 const ih = readFileSync(join(here, "worker.js"), "utf8");
 ok(/r\.corpus = await runOwnerCorpus\(env\)/.test(ih), "the hourly ideation cycle runs the corpus feeder");

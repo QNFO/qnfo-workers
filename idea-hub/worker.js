@@ -592,7 +592,8 @@ async function runReentry(env) {
     // OWNER-SIGNAL-INTAKE-1 (1.7.0): re-entry reads only the owner's own papers. The newest-500 scan recycled arXiv-derived
     // QEC papers into more QEC (the reason for OWNER-NARROW-SIGNAL-1); REENTRY_OWNER_TYPES are the identifier types of
     // papers the owner wrote (Zenodo deposits, his slugs, DOIs, internal), not arxiv, kg-backfill or pipeline 'qnfo' rows.
-    papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' AND status IN ('published','distributed') AND identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ") ORDER BY created_at DESC LIMIT 500").bind(...REENTRY_OWNER_TYPES).all()).results || [];
+    var ownDois = (await ownerPipelineDois(env)).slice(0, 200);
+    papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' AND status IN ('published','distributed') AND (identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ")" + (ownDois.length ? " OR doi IN (" + ownDois.map(function () { return "?"; }).join(",") + ")" : "") + ") ORDER BY created_at DESC LIMIT 500").bind(...REENTRY_OWNER_TYPES, ...ownDois).all()).results || [];
     have = new Set(((await env.QNFO_AUDIT.prepare("SELECT source_ref FROM signals WHERE source='artifact_reentry'").all()).results || []).map(function (r) { return String(r.source_ref); }));
   } else out.emit_paused = "signal_worker_boundary idea-hub/" + REENTRY_BOUNDARY_SOURCE + " not permitted";
   out.scanned = papers.length;
@@ -650,9 +651,20 @@ async function runReentry(env) {
   }
   return out;
 }
-// OWNER-SIGNAL-INTAKE-2: true when the paper behind a re-entry signal is one of the owner's own (REENTRY_OWNER_TYPES).
+// OWNER-SIGNAL-INTAKE-2: the DOIs of pipeline papers (identifier_type qnfo) whose research_queue row came from an owner
+// proposal, direct or notebook: those are the owner's ideas carried through the pipeline, so re-entry treats them as his.
+var OWNER_PROPOSAL_SQL = "p.name = 'owner-corpus' OR p.name LIKE 'owner%' OR p.name LIKE 'rowan%' OR p.name = 'chat-session' OR p.contact = 'owner' OR p.contact LIKE 'rowan%'";
+async function ownerPipelineDois(env) {
+  try {
+    var rs = (await env.QNFO_AUDIT.prepare("SELECT DISTINCT q.doi FROM research_queue q JOIN idea_proposals p ON q.source = 'proposal' AND CAST(p.id AS TEXT) = q.source_id WHERE q.status = 'published' AND q.doi IS NOT NULL AND q.doi <> '' AND (" + OWNER_PROPOSAL_SQL + ")").all()).results || [];
+    return rs.map(function (r) { return String(r.doi); });
+  } catch (e) { return []; }
+}
+// OWNER-SIGNAL-INTAKE-2: true when the paper behind a re-entry signal is one of the owner's own (REENTRY_OWNER_TYPES, or a
+// pipeline paper that came from an owner proposal).
 async function ownerPaper(env, doi) {
   if (!env.LIVING_PAPER || !doi) return false;
+  if ((await ownerPipelineDois(env)).indexOf(String(doi)) >= 0) return true;
   try {
     var p = await env.LIVING_PAPER.prepare("SELECT identifier_type FROM papers WHERE doi = ?1 AND identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ") LIMIT 1").bind(String(doi), ...REENTRY_OWNER_TYPES).first();
     return !!p;
