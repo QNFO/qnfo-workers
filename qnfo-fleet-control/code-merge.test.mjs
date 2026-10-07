@@ -193,6 +193,15 @@ ok(W.cmTrusted("kaizen-ai", "x", "kaizen-*") && !W.cmTrusted("claude-session-x",
 
 // ================================================================ 3. the decision
 ok(act(task(), g()).action === "merge", "all gates green: merge", act(task(), g()));
+// MERGE-VERIFY-ATTEMPTS-1: a task that verified after SELF-REPAIR-1 retries (step done, no last_error) is mergeable; the bound
+// is the orchestrator's MAX_ATTEMPTS * RETRY_ROUNDS
+ok(act(task({ attempts: 4 }), g()).action === "merge" && act(task({ attempts: 8 }), g()).action === "merge", "a task that verified after self-repair rounds (attempts 4, 8) merges");
+{
+  const ma = Number((/^const MAX_ATTEMPTS = (\d+);/m.exec(orch) || [])[1]), rr = Number((/^const RETRY_ROUNDS = (\d+);/m.exec(orch) || [])[1]);
+  const cm = Number((/^var CM_TASK_MAX_ATTEMPTS = (\d+);/m.exec(src) || [])[1]);
+  ok(ma > 0 && rr > 0 && cm === ma * rr, "CM_TASK_MAX_ATTEMPTS equals the orchestrator's MAX_ATTEMPTS * RETRY_ROUNDS", { ma, rr, cm });
+}
+
 ok(act(task(), g({ integrity: undefined })).action === "need-integrity", "integrity is fetched only when every cheap gate passed");
 const refuses = [
   ["a branch that is not the loop's own", task({ branch: "feature-x" }), g()],
@@ -201,7 +210,7 @@ const refuses = [
   ["a head ref that is not the task branch", task(), g({ pr: prJson({ head: { ref: "codeagent-zzz", sha: "h1", repo: { full_name: "QNFO/qnfo-workers" } } }) })],
   ["a base other than main", task(), g({ pr: prJson({ base: { ref: "develop", repo: { full_name: "QNFO/qnfo-workers" } } }) })],
   ["verify not done", task({ step: "verify" }), g()],
-  ["three failed attempts", task({ attempts: 3 }), g()],
+  ["as many failed attempts as self-repair allows", task({ attempts: 9 }), g()],
   ["a last_error", task({ last_error: "verify failed" }), g()],
   ["no stored patch", task({ ctx: JSON.stringify({ base: BASE }) }), g()],
   ["unparseable ctx", task({ ctx: "{nope" }), g()],
@@ -267,7 +276,8 @@ const orefuses = [
   ["an extra file on the branch", pushedT(), og({ files: [{ filename: PATH, status: "modified" }, { filename: "scripts/deploy_gate.py", status: "modified" }] })],
   ["a path out of scope", pushedT({ path: "scripts/x.py" }), og({ files: [{ filename: "scripts/x.py", status: "modified" }] })],
   ["an untrusted origin", pushedT(), og({ provenance: { ok: false, why: "kaizen-ai" } })],
-  ["verify not passed", pushedT({ attempts: 3 }), og()],
+  ["verify not passed", pushedT({ step: "verify" }), og()],
+  ["verify not passed (a last_error)", pushedT({ last_error: "verify failed" }), og()],
   ["content other than the verified patch", pushedT(), og({ integrity: { ok: false, why: "not the verified patch" } })],
   ["a worker that cannot be auto-reverted", pushedT(), og({ integrity: { ok: true, revertible: false, revert_why: "const VERSION" } })],
 ];
