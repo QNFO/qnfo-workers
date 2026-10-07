@@ -1,34 +1,98 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@1c78f4a0e7aa",
- "due": 21,
+ "verifier": "remediation-consumer@34ba7f5b6df6",
+ "due": 33,
  "pass": 12,
- "fail": 8,
+ "fail": 20,
  "skipped": 1,
  "contracts": [
   {
-   "class": "issue-2067",
-   "issue_id": 2067,
+   "class": "issue-1885",
+   "issue_id": 1885,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 1 of 8 finished tasks since 2026-10-06T16:00",
+   "expected": "clean",
+   "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-2034",
-   "issue_id": 2034,
+   "class": "issue-1952",
+   "issue_id": 1952,
+   "verdict": "fail",
+   "expected": "learning",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1953",
+   "issue_id": 1953,
+   "verdict": "fail",
+   "expected": "answered",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1857",
+   "issue_id": 1857,
+   "verdict": "fail",
+   "expected": "done",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "plane-living-paper-fresh",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2068",
-   "issue_id": 2068,
+   "class": "issue-2075",
+   "issue_id": 2075,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: 0 job rows since the issue was filed (needs 3)",
+   "observed": "pending: runtime_verified_share_24h 8.2, probe_cadence 2026-10-07 00:00:05, other-plane rows 24h 2",
+   "written": true
+  },
+  {
+   "class": "issue-2047",
+   "issue_id": 2047,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2048",
+   "issue_id": 2048,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2037",
+   "issue_id": 2037,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: items A/D child CITATION-EXISTENCE-GATE-1 open, item B cost_attribution_gap_pct 98.2, item C is trigger 362 (issue 1798) and ORPHAN-ISSUE-GUARD-1",
+   "written": true
+  },
+  {
+   "class": "issue-2049",
+   "issue_id": 2049,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: lever T7.15 status session",
+   "written": true
+  },
+  {
+   "class": "issue-2053",
+   "issue_id": 2053,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the remaining DoD of 2053 (mechanism card shown in the v=2 flow) rides lever T7.15 ipatent-ui-overhaul, status session",
    "written": true
   },
   {
@@ -168,8 +232,40 @@
    "written": true
   },
   {
-   "class": "issue-2060",
-   "issue_id": 2060,
+   "class": "issue-1833",
+   "issue_id": 1833,
+   "verdict": "fail",
+   "expected": "attributed",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1876",
+   "issue_id": 1876,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: under 7 days since the deploy",
+   "written": true
+  },
+  {
+   "class": "issue-1877",
+   "issue_id": 1877,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: under 3 days since the deploy",
+   "written": true
+  },
+  {
+   "class": "issue-1960",
+   "issue_id": 1960,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: under 7 days of the merge lane",
+   "written": true
+  },
+  {
+   "class": "issue-1965",
+   "issue_id": 1965,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -200,9 +296,9 @@
   "runner-https"
  ],
  "https": 8,
- "runtime_verified_share_24h": 8.1,
- "spent_ms": 60114,
- "head": "1c78f4a0e7aa493edcbc2cb5375103d2aeb6910f",
+ "runtime_verified_share_24h": 9.2,
+ "spent_ms": 106558,
+ "head": "34ba7f5b6df6ea568fff48ea40b01de5abcab4c4",
  "job_status": "success",
- "ts": "2026-10-06T22:41:14Z"
+ "ts": "2026-10-07T00:02:01Z"
 }
