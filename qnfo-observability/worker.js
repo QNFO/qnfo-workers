@@ -114,7 +114,7 @@ const FLEET = [
   "research-daily-brief"
 ];
 
-var VERSION = "1.4.0-wm-measured"; // 1.4.0 WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027) + SAI-KAIZEN-GRADIENT-1 (agent_issues 2054), pillar autonomy: the scorer member writes watchmaker_inverted as a MEASURED dimension, 5 x (1 - counted/ops) from the latest watchmaker_runs row (was a hand score of 4.8 from 2026-09-24, past due), and computeSai's kaizen term is 1 / (1 + step x open issues), keeping a gradient at every backlog size, in parity with qnfo-fleet-dashboard. 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
+var VERSION = "1.4.1-canary-test"; // CANARY-TEST-1 (2026-10-07, agent_issues 1824): a deliberate bad version whose host /health answers 500, so the canonical-deploy canary reverts the push; the live proof CONTROL-PLANE-STAGED-ROLLOUT-1 asks for. The previous line follows. // 1.4.0 WATCHMAKER-INVERTED-MEASURED-1 (agent_issues 2027) + SAI-KAIZEN-GRADIENT-1 (agent_issues 2054), pillar autonomy: the scorer member writes watchmaker_inverted as a MEASURED dimension, 5 x (1 - counted/ops) from the latest watchmaker_runs row (was a hand score of 4.8 from 2026-09-24, past due), and computeSai's kaizen term is 1 / (1 + step x open issues), keeping a gradient at every backlog size, in parity with qnfo-fleet-dashboard. 1.3.2 FOLD-HYGIENE-1 (#1756): the public /scorer/preview logs a failure and answers "preview failed" instead of the exception text (CodeQL js/stack-trace-exposure, PR 668). 1.3.1 SCORER-FOLD-1 (#1756): qnfo-autonomy-scorer runs here as a member (05:17 UTC daily, awaited; /scorer/* read routes). 1.2.16 FIX-ALERTS-DIGEST-CONSUMER: mark digest anomaly alerts consumed
 const NAME = 'qnfo-observability';
 const KNOWN = new Set(FLEET);
 // FLEET-SIZE-LIVE-1 (2026-09-23): derive the fleet set from the LIVE service_registry (census
@@ -1066,6 +1066,10 @@ export default {
       if (!okTok) return json({ error: 'forbidden: on a public hostname only /health, /integration and /trend are open (OBS-PUBLIC-READONLY-1)' }, 403);
     }
     await ensureSchema(env);
+    // CANARY-TEST-1 (agent_issues 1824, CONTROL-PLANE-STAGED-ROLLOUT-1): a deliberate bad version. The host's /health answers 500 and
+    // never reports the pushed VERSION, so the canonical-deploy canary (scripts/canary_revert.py) reverts this push on main and
+    // redeploys the previous version: the live proof the issue's definition of done asks for. Every other route is unchanged.
+    if (p === '/health') return json({ ok: false, name: NAME, error: 'CANARY-TEST-1: deliberate bad version for the live canary-revert test (agent_issues 1824); the canonical-deploy canary reverts this push' }, 500);
     if (p === '/health') {
       const cursor = await getCursor(env);
       const agg = await env.AUDIT.prepare('SELECT COUNT(*) n, MAX(ingested_at) latest FROM worker_logs').first();
