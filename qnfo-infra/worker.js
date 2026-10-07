@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.1-indexer-fold"; // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.3.2-codeagent"; // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -609,8 +609,23 @@ var indexerMod = (function() {
 
   async function handleWebhook(env, slug) {
     if (!slug) return json({ error: "missing slug" }, 400);
+    try {
+      await env.LIVING_PAPER.prepare(
+        "ALTER TABLE papers ADD COLUMN claim_line TEXT"
+      ).run();
+    } catch (e) {}
+    try {
+      await env.LIVING_PAPER.prepare(
+        "ALTER TABLE papers ADD COLUMN test_line TEXT"
+      ).run();
+    } catch (e) {}
+    try {
+      await env.LIVING_PAPER.prepare(
+        "ALTER TABLE papers ADD COLUMN status_line TEXT"
+      ).run();
+    } catch (e) {}
     const paper = await env.LIVING_PAPER.prepare(
-      "SELECT slug, body_md, updated_at, status FROM papers WHERE slug = ?1"
+      "SELECT slug, body_md, updated_at, status, claim_line, test_line, status_line FROM papers WHERE slug = ?1"
     ).bind(slug).first();
     if (!paper) return json({ success: false, error: "slug not found" }, 404);
     if (!CORPUS_STATUSES.includes(String(paper.status))) {
