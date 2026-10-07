@@ -28,7 +28,9 @@ function makeD1() {
     return st;
   };
   db.exec(`CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT DEFAULT 'optimization', priority TEXT DEFAULT 'medium', status TEXT DEFAULT 'open', linked_session TEXT, created_at INTEGER, updated_at INTEGER);
-    CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);`);
+    CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT, job TEXT, status TEXT);
+    CREATE TABLE ai_spend_ledger (day TEXT NOT NULL, provider TEXT NOT NULL, caller TEXT NOT NULL, model TEXT NOT NULL, calls INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, usd REAL DEFAULT 0, downgraded INTEGER DEFAULT 0, refused INTEGER DEFAULT 0, PRIMARY KEY (day, provider, caller, model));
+    CREATE TABLE ai_call_counters (day TEXT, worker TEXT, purpose TEXT, model TEXT, calls INTEGER DEFAULT 0, errors INTEGER DEFAULT 0, in_chars INTEGER DEFAULT 0, ms INTEGER DEFAULT 0, in_tok INTEGER DEFAULT 0, out_tok INTEGER DEFAULT 0, neurons REAL DEFAULT 0, PRIMARY KEY (day, worker, purpose, model));`);
   return { prepare: wrap, _db: db };
 }
 const SRC = 'export default { fetch() { return new Response("a"); } };\n';
@@ -91,6 +93,11 @@ ok(atLeast(h.version, "0.6.0") && h.capabilities.indexOf("timeout-retry") >= 0, 
   t = await tick(env);
   r = row(env, c.id);
   ok(calls.length === 3 && r.attempts === 0 && r.step !== "propose" && r.status !== "failed", "a reply after two timeouts carries the task on with no attempt spent", { step: r.step, status: r.status, attempts: r.attempts });
+  // ORCH-NEURON-ATTR-1: the one call that answered is counted in ai_call_counters (the two that timed out threw before accounting)
+  const cnt = env.AUDIT_DB._db.prepare("SELECT worker, purpose, model, calls, in_tok, out_tok, neurons FROM ai_call_counters").all();
+  const led = env.AUDIT_DB._db.prepare("SELECT caller, calls, usd FROM ai_spend_ledger").all();
+  ok(cnt.length === 1 && cnt[0].worker === "qnfo-code-orchestrator" && cnt[0].purpose === "ladder" && cnt[0].calls === 1 && cnt[0].model === calls[2].model && cnt[0].neurons > 0 && cnt[0].in_tok > 0, "ORCH-NEURON-ATTR-1: the answered ladder call is one ai_call_counters row with neurons", cnt);
+  ok(led.length === 1 && led[0].caller === "qnfo-code-orchestrator" && led[0].calls === 1 && led[0].usd > 0 && Math.abs(led[0].usd - cnt[0].neurons * 0.011 / 1000) < 1e-9, "the ledger row and the counters row agree (usd = neurons x $0.011/1k)", led);
 }
 
 // ===== 3. the timeout after TIMEOUT_MAX takes the ordinary failure path =====
