@@ -1,111 +1,119 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@f9d45c68fed8",
- "due": 13,
- "pass": 11,
- "fail": 2,
+ "verifier": "remediation-consumer@80824391011d",
+ "due": 14,
+ "pass": 14,
+ "fail": 0,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1825",
-   "issue_id": 1825,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
-  },
-  {
-   "class": "issue-2072",
-   "issue_id": 2072,
-   "verdict": "fail",
-   "expected": "merged",
-   "observed": "queued",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
+   "class": "detect-threshold-blindspot",
+   "issue_id": 1165,
    "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
+   "expected": "armed",
+   "observed": "armed",
    "written": true
   },
   {
-   "class": "issue-2042",
-   "issue_id": 2042,
+   "class": "act-half-unverified",
+   "issue_id": 1207,
    "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
+   "class": "closure-evidence-unbacked",
+   "issue_id": 1263,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "reachable",
+   "observed": "reachable",
    "written": true
   },
   {
-   "class": "rt-gateway",
-   "issue_id": null,
+   "class": "remediation-class-death",
+   "issue_id": 1200,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "capability-precondition-missing",
+   "issue_id": 1118,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-ai-router",
-   "issue_id": null,
+   "class": "mixed-type-timestamp",
+   "issue_id": 1283,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "guarded",
+   "observed": "guarded",
    "written": true
   },
   {
-   "class": "rt-idea-hub",
-   "issue_id": null,
+   "class": "timestamp-seconds-bypass",
+   "issue_id": 1298,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "guarded",
+   "observed": "guarded",
    "written": true
   },
   {
-   "class": "rt-personal-api",
-   "issue_id": null,
+   "class": "router-calib-agent-class",
+   "issue_id": 1293,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "rt-ipatent",
-   "issue_id": null,
+   "class": "outreach-selector-drift",
+   "issue_id": 1294,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "rt-papers",
-   "issue_id": null,
+   "class": "outreach-drain-scheduled",
+   "issue_id": 1295,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "scheduled",
+   "observed": "scheduled",
    "written": true
   },
   {
-   "class": "issue-1958",
-   "issue_id": 1958,
+   "class": "cron-registry-truth",
+   "issue_id": 1494,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1783",
+   "issue_id": 1783,
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
    "written": true
   },
   {
-   "class": "rt-q08",
-   "issue_id": null,
+   "class": "issue-1950",
+   "issue_id": 1950,
+   "verdict": "pass",
+   "expected": "producing",
+   "observed": "producing",
+   "written": true
+  },
+  {
+   "class": "issue-2082",
+   "issue_id": 2082,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -135,13 +143,12 @@
   "http",
   "runner-https"
  ],
- "https": 8,
- "runtime_verified_share_24h": 20.7,
+ "runtime_verified_share_24h": 20.4,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 39189,
- "head": "f9d45c68fed84539f16f4bc3b26dd1bc4dfc24d1",
+ "spent_ms": 42889,
+ "head": "80824391011d0620895e82cb7dc96e2ebe8fea69",
  "job_status": "success",
- "ts": "2026-10-07T17:12:56Z"
+ "ts": "2026-10-07T17:38:20Z"
 }
