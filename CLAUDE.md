@@ -30,6 +30,10 @@ because each one was broken at least once; the linked issue holds the evidence.
   ```
   W=<worker>; R=repos/QNFO/qnfo-workers; for x in main $(gh api "$R/pulls?state=open&per_page=100" --jq '.[]|"\(.head.sha)#\(.number)"'); do gh api "$R/contents/$W/worker.js?ref=${x%#*}" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep -m1 -oE 'var VERSION = "[^"]*"' | sed -E "s/.*\"(.*)\"/\1 ${x#*#}/"; done | sort -V | tail -3
   ```
+- Messages from other sessions reach you only between turns. Read your session's notifications before you merge, and
+  leave a green control-plane pull request you authored to the stale-PR lane (CONTROL-PLANE-SELF-MERGE-1, about 2h
+  quiet) unless a live defect needs it sooner: lever T1.23 counts only lane merges (FAILURE-AUDIT-1, 2026-10-07: three
+  control-plane PRs were merged by their author within minutes while a request to leave them to the lane sat unread).
 
 ## Internal calls to qnfo-ai (#1703)
 - Internal workers authenticate to qnfo-ai by service-binding props, not by a copy of the router key. Add
