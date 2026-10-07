@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-07 08:03:56",
+  "audited_at": "2026-10-07 08:32:53",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -493,7 +493,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.4.1-claims-ctx",
+        "version": "0.5.0-retry-feedback",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -513,7 +513,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.7.1-charter-rule-10",
+        "version": "0.8.1-mvp-fold-notdeployed",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -558,7 +558,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.39.1-cost-soft",
+        "version": "2.39.2-context-compact",
         "worker": "qnfo-ops"
       },
       {
@@ -1028,9 +1028,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.4.1-claims-ctx",
+      "before": "0.5.0-retry-feedback",
       "http": 200,
-      "live": "0.4.1-claims-ctx",
+      "live": "0.5.0-retry-feedback",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.7.1-charter-rule-10",
+      "before": "0.8.1-mvp-fold-notdeployed",
       "http": 200,
-      "live": "0.7.1-charter-rule-10",
+      "live": "0.8.1-mvp-fold-notdeployed",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1276,9 +1276,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.39.1-cost-soft",
+      "before": "2.39.2-context-compact",
       "http": 200,
-      "live": "2.39.1-cost-soft",
+      "live": "2.39.2-context-compact",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
