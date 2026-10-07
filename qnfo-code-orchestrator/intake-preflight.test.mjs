@@ -131,6 +131,6 @@ const auditText = (audits) => audits.map((x) => x.map(String).join(" | ")).join(
 }
 
 const src = fs.readFileSync(path.join(here, "worker.js"), "utf8");
-ok(/"CODE-TASK-PREFLIGHT-1: intake reads the target from main once/.test(src) && /var VERSION = "0\.4\.\d+-/.test(src), "/health names CODE-TASK-PREFLIGHT-1 and the version is 0.4.x (a minor: a decision the loop now takes)");
+ok(/"CODE-TASK-PREFLIGHT-1: intake reads the target from main once/.test(src) && (function (m) { return !!m && (+m[1] > 0 || +m[2] >= 4); })(/var VERSION = "(\d+)\.(\d+)\.\d+-/.exec(src)), "/health names CODE-TASK-PREFLIGHT-1 and the version is 0.4.0 or later (a minimum, not a pin)");
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
