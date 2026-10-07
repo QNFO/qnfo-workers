@@ -50,6 +50,8 @@ audit.prepare("UPDATE signals SET created_at = ?, ts = ? WHERE source_ref = ?").
 for (let i = 0; i < 3; i++) sig("10.5281/zenodo.stale" + i, now - (10 - i) * 24 * H, 0.9, ["Is the stale question still open after a week?"]);
 sig("10.5281/zenodo.w30h", now - 30 * H, 0.9, ["Does the 30-hour-old question get consumed when the pause lifts?"]);
 sig("10.5281/zenodo.w1h", now - 1 * H, 0.9, ["Does the newest question wait its turn?"]);
+// OWNER-SIGNAL-INTAKE-2 (1.7.2): consume needs the signal's paper in living-paper as an owner paper (fixture default zenodo).
+for (const d of ["10.5281/zenodo.w30h", "10.5281/zenodo.w1h", "10.5281/zenodo.stale0", "10.5281/zenodo.stale1", "10.5281/zenodo.stale2"]) paper(d, PLAIN, now - 30 * H);
 for (let i = 0; i < 5; i++) { const d = "10.5281/zenodo.young" + i; sig(d, now - 2 * H, 0); paper(d, PLAIN, now - 2 * H); }
 for (let i = 0; i < 4; i++) paper("10.5281/zenodo.fresh" + i, PLAIN + OPENQ, now - 10 * 60e3);
 audit.prepare("INSERT INTO signal_worker_boundary (worker, source, permitted, note) VALUES ('idea-hub', 'artifact_reentry', 0, 'OWNER-NARROW-SIGNAL-1 test'), ('idea-hub', 'artifact_reentry_owner', 0, 'OWNER-SIGNAL-INTAKE-1 test')").run();
