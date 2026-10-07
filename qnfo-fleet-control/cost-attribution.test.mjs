@@ -61,7 +61,7 @@ check(r.gap_pct === 98.7 && r.gateway_usd === 33.21 && r.ledger_usd === 0.44, "t
 const m = writes.find((w) => /metric='cost_attribution_gap_pct'/.test(w.sql));
 check(m && m.args[0] === "98.7" && m.args[1] === "2026-10-06T10:00:00Z" && /state='MEASURED'/.test(m.sql), "cost_attribution_gap_pct is written with the tick", m);
 const ev = writes.find((w) => /cloud_ops_events/.test(w.sql));
-check(ev && ev.args[0] === "cost-attribution-2026-10-06" && ev.args[4] === "gap" && /ON CONFLICT\(id\) DO UPDATE/.test(ev.sql) && /gateway \$33\.21 paid, ledger \$0\.44, gap 98\.7%/.test(ev.args[2]), "the day's cost-attribution event is upserted with the figures", ev && ev.args);
+check(ev && ev.args[0] === "cost-attribution-2026-10-06" && ev.args[4] === "gap" && /ON CONFLICT\(id\) DO UPDATE/.test(ev.sql) && /gateway \$33\.21 paid, ledger \$0\.44 \(owner-local \$0\.00\), gap 98\.7%/.test(ev.args[2]), "the day's cost-attribution event is upserted with the figures", ev && ev.args);
 const meta = JSON.parse(ev.args[3]);
 check(meta.top_models[0].model === "deepseek/deepseek-flash" && meta.top_models[0].gateway_usd === 19.87 && meta.top_models[2].model === "openai/openai/gpt-5.6" && meta.by_provider.openai.gap_pct === 100 && meta.v === "0.4.139-test", "the meta names the models with the largest cost and the per-provider gap", meta);
 // 2b. OWNER-LOCAL-INGEST-1 (0.11.0): the owner's untagged client spend, attributed in ai_spend_owner_local, counts as attributed
