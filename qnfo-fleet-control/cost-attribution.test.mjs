@@ -34,12 +34,14 @@ check(g.gap_pct === 0 && g.gateway_usd === 0 && Object.keys(g.by_provider).lengt
 
 // 2. the tick: one 7-day GraphQL read, one ledger read, the metric and the day's event
 const writes = [];
+let ownerRows = [];
 const db = {
   prepare(sql) {
     let args = [];
     const s = {
       bind(...a) { args = a; return s; },
-      async all() { return { results: [{ provider: "deepseek", usd: 0.44 }, { provider: "workers-ai", usd: 4.08 }] }; },
+      // OWNER-LOCAL-INGEST-1 (0.11.0): the tick also reads ai_spend_owner_local; ownerRows scripts that answer
+      async all() { return { results: /ai_spend_owner_local/.test(sql) ? ownerRows : [{ provider: "deepseek", usd: 0.44 }, { provider: "workers-ai", usd: 4.08 }] }; },
       async run() { writes.push({ sql, args }); return { meta: { changes: 1 } }; }
     };
     return s;
@@ -62,6 +64,13 @@ const ev = writes.find((w) => /cloud_ops_events/.test(w.sql));
 check(ev && ev.args[0] === "cost-attribution-2026-10-06" && ev.args[4] === "gap" && /ON CONFLICT\(id\) DO UPDATE/.test(ev.sql) && /gateway \$33\.21 paid, ledger \$0\.44, gap 98\.7%/.test(ev.args[2]), "the day's cost-attribution event is upserted with the figures", ev && ev.args);
 const meta = JSON.parse(ev.args[3]);
 check(meta.top_models[0].model === "deepseek/deepseek-flash" && meta.top_models[0].gateway_usd === 19.87 && meta.top_models[2].model === "openai/openai/gpt-5.6" && meta.by_provider.openai.gap_pct === 100 && meta.v === "0.4.139-test", "the meta names the models with the largest cost and the per-provider gap", meta);
+// 2b. OWNER-LOCAL-INGEST-1 (0.11.0): the owner's untagged client spend, attributed in ai_spend_owner_local, counts as attributed
+writes.length = 0; fetchCalls = []; ownerRows = [{ provider: "deepseek", usd: 29.06 }];
+const r2 = await costAttributionTick({}, db, "acct1", { Authorization: "Bearer x" }, "2026-10-06T10:00:00Z");
+check(r2.gap_pct === 11.2 && r2.ledger_usd === 29.5 && r2.gateway_usd === 33.21, "the gap counts the owner-local table next to the ledger (0.44 + 29.06 of 33.21)", r2);
+const ev2 = writes.find((w) => /cloud_ops_events/.test(w.sql));
+check(ev2 && ev2.args[4] === "ok" && /ledger \$29\.50 \(owner-local \$29\.06\), gap 11\.2%/.test(ev2.args[2]) && JSON.parse(ev2.args[3]).owner_local_usd === 29.06, "the event names the owner-local share and reads ok under 25", ev2 && ev2.args[2]);
+ownerRows = [];
 // 3. an unreadable gateway writes nothing and reports why
 writes.length = 0; fetchCalls = []; graphRows = null;
 let threw = null;
