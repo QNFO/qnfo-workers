@@ -93,6 +93,7 @@ ok(atLeast(h.version, "0.6.0") && h.capabilities.indexOf("timeout-retry") >= 0, 
   t = await tick(env);
   r = row(env, c.id);
   ok(calls.length === 3 && r.attempts === 0 && r.step !== "propose" && r.status !== "failed", "a reply after two timeouts carries the task on with no attempt spent", { step: r.step, status: r.status, attempts: r.attempts });
+  ok(!("timeouts" in ctxOf(r)), "0.8.0: a propose that answered resets ctx.timeouts, so a later round starts at rung 1", Object.keys(ctxOf(r)));
   // ORCH-NEURON-ATTR-1: the one call that answered is counted in ai_call_counters (the two that timed out threw before accounting)
   const cnt = env.AUDIT_DB._db.prepare("SELECT worker, purpose, model, calls, in_tok, out_tok, neurons FROM ai_call_counters").all();
   const led = env.AUDIT_DB._db.prepare("SELECT caller, calls, usd FROM ai_spend_ledger").all();
