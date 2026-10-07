@@ -1,12 +1,117 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@902a726ed2bc",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@f9d45c68fed8",
+ "due": 13,
+ "pass": 11,
+ "fail": 2,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "queued",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1958",
+   "issue_id": 1958,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,12 +135,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 20,
+ "https": 8,
+ "runtime_verified_share_24h": 20.7,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 5312,
- "head": "902a726ed2bca7aaf6eda7f6590e91e4ddffacba",
+ "spent_ms": 39189,
+ "head": "f9d45c68fed84539f16f4bc3b26dd1bc4dfc24d1",
  "job_status": "success",
- "ts": "2026-10-07T17:08:20Z"
+ "ts": "2026-10-07T17:12:56Z"
 }
