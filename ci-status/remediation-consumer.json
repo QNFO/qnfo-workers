@@ -1,101 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@5ec3de311d6d",
- "due": 11,
- "pass": 8,
- "fail": 3,
+ "verifier": "remediation-consumer@76d32721a3ef",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ipatent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2099",
-   "issue_id": 2099,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no code-task.timeout event yet (0 timeouts still counted as failures since 09:00Z)",
-   "written": true
-  },
-  {
-   "class": "issue-2110",
-   "issue_id": 2110,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: trigger 0, guard metric 0, active contracts vacuous or not executable 6",
-   "written": true
-  },
-  {
-   "class": "issue-2111",
-   "issue_id": 2111,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 13 SEARCH-not-found failures in 7 days (target <= 3)",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -119,10 +30,9 @@
   "http",
   "runner-https"
  ],
- "https": 8,
- "runtime_verified_share_24h": 15.3,
- "spent_ms": 26261,
- "head": "5ec3de311d6def1c584422b6802f9a7f44d569e4",
+ "runtime_verified_share_24h": 15.4,
+ "spent_ms": 2776,
+ "head": "76d32721a3ef0f3748603444f7bbe1c37dcddbdb",
  "job_status": "success",
- "ts": "2026-10-07T09:05:54Z"
+ "ts": "2026-10-07T09:09:27Z"
 }
