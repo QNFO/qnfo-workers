@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.13.0-ds402-fallback"; // 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.13.1-codeagent"; // 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -796,6 +796,46 @@ async function callWorkersAI(env, messages, maxTokens, timeoutMs, chain, prevErr
 }
 async function callModel(env, messages, maxTokens, timeoutMs, model, role) {
   var useModel = model || WRITER_MODEL;
+if (useModel.startsWith("deepseek")) {
+  try {
+    var mt = isReasoner ? Math.min(Number(maxTokens) || 16e3, 16e3) : Math.min(Number(maxTokens) || 4e3, 14e3);
+    var body = { model: useModel, messages, max_tokens: mt, stream: false };
+    body.temperature = isReasoner ? 1 : 0.7;
+    var resp = await fetch(WRITER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs || 9e4)
+    });
+    if (!resp.ok) {
+      var errText = "";
+      try {
+        errText = await resp.text();
+      } catch (e2) {
+      }
+      throw new Error("HTTP " + resp.status + " " + errText.slice(0, 200));
+    }
+    var j = await resp.json();
+    var msg = j && j.choices && j.choices[0] && j.choices[0].message;
+    if (!msg) return null;
+    var text = msg.content || "";
+    if (typeof text === "string" && text.trim().length > 80) return { model: useModel, text };
+    if (msg.reasoning_content && String(msg.reasoning_content).length > 100) {
+      throw new Error("reasoner emitted reasoning only (no prose); rlen=" + String(msg.reasoning_content).length);
+    }
+    return null;
+  } catch (e) {
+    if (String(e).includes("402")) {
+      console.error("402 error encountered, falling back to Workers AI");
+      useModel = "kimi-k2.6"; // Fallback model
+    } else {
+      throw e;
+    }
+  }
+}
+if (!useModel) {
+  useModel = "kimi-k2.6"; // Default fallback model
+}
   var isReasoner = String(useModel).indexOf("reasoner") >= 0;
   var chain = fallbackChain(useModel, role);
   if (!env.DEEPSEEK_API_KEY || Date.now() < dsBreakerUntil) {
