@@ -81,19 +81,18 @@ WHERE h.status = 'open' AND datetime(h.created_at) < datetime('now', '-60 minute
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('unverified_blocker_claims', 'operational', 'guard',
   'COUNT of v_blocker_claims: open issues asserting a blocker and open owner cards, older than 60 minutes, with no blocker_redteam verdict in 24 hours (ANTIFRAGILE-1).',
-  'qnfo-audit.v_blocker_claims (migrations/2026-10-08-antifragile.sql), refreshed every 10 minutes by trigger antifragile_tick_10m',
+  'qnfo-audit.v_blocker_claims (migrations/2026-10-08-11-antifragile.sql), refreshed every 10 minutes by trigger antifragile_tick_10m',
   '39 on 2026-10-08 (33 issues, 6 owner cards)', '0', 'qnfo-ops',
   'trigger gt 0 -> one METRIC-TRIGGER issue asking for the adversarial attempt on each claim', '10m', '> 0', '> 20',
   NULL, NULL, 'MEASURED', 'computed'),
  ('issues_open_over_24h', 'operational', 'target',
   'COUNT of v_issue_age with age_h >= 24 (ANTIFRAGILE-1). The ladder raises their priority one level per 24 h.',
-  'qnfo-audit.v_issue_age (migrations/2026-10-08-antifragile.sql), refreshed every 10 minutes by trigger antifragile_tick_10m',
+  'qnfo-audit.v_issue_age (migrations/2026-10-08-11-antifragile.sql), refreshed every 10 minutes by trigger antifragile_tick_10m',
   '97 of 136 on 2026-10-08', '0', 'qnfo-fleet-control',
   'trigger gt 0 -> one METRIC-TRIGGER issue', '10m', '> 0', '> 50',
   NULL, NULL, 'MEASURED', 'computed');
 
-CREATE TRIGGER IF NOT EXISTS antifragile_tick_10m AFTER INSERT ON cron_fire_log
-WHEN NEW.cron_name IN ('container-warmup-every-10min', 'invest-decision-heartbeat-10m')
+CREATE TRIGGER IF NOT EXISTS antifragile_tick_10m AFTER INSERT ON fleet_tick
 BEGIN
   -- (1) the age ladder: one level per 24 h, never to critical, never twice inside 24 h.
   INSERT INTO issue_age_bumps (issue_id, from_priority, to_priority, age_h)
@@ -114,11 +113,11 @@ END;
 INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 SELECT 'unverified_blocker_claims', 'Red team: blocker claims nobody has tested adversarially', 'registry', 'gt', 0, 2,
   'Pillar autonomy (ANTIFRAGILE-1). A blocker is a belief until an attempt proves it. Read SELECT * FROM v_blocker_claims. For each target: attempt the blocked action with what exists (the repository CLOUDFLARE_API_TOKEN through a workflow or scripts/cf_ops_actions.py, the service bindings, the code loop, the D1 tools), or build a workaround through a second path. Then INSERT INTO blocker_redteam (target, claim, attempt, verdict, evidence, actor): verdict false-belief-removed (the claim was wrong; remove the hold, card or session-task line and say so on the item), workaround-built (name the second path), or confirmed-with-evidence (the exact refusal: status code, error body, who refused; only then may the item stay with the owner). Never record confirmed without the refusal text. Definition of done: unverified_blocker_claims = 0 at a refresh.',
-  'qnfo-ops', 'agent_issues', 1, 1, 'ANTIFRAGILE-1 (migrations/2026-10-08-antifragile.sql)'
+  'qnfo-ops', 'agent_issues', 1, 1, 'ANTIFRAGILE-1 (migrations/2026-10-08-11-antifragile.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'unverified_blocker_claims');
 
 INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 SELECT 'issues_open_over_24h', 'Issue age: open issues older than one day', 'registry', 'gt', 0, 3,
   'Pillar autonomy (ANTIFRAGILE-1). Read SELECT * FROM v_issue_age WHERE age_h >= 24 ORDER BY age_h DESC. The ladder already raised their priority. For each, in order: (1) no doer (no code-task line, no active probe, no claim): give it one now (a code-task: and code-anchor: line for a one-file change, else a named owning loop and an issue claim); (2) a doer that failed: read the failure (code_tasks.merge_note, the probe verdicts) and change the lever, never repeat it; (3) a blocker claim: red-team it (v_blocker_claims). Close only with live evidence. Definition of done: issues_open_over_24h lower than at filing at every refresh, then 0.',
-  'qnfo-fleet-control', 'agent_issues', 6, 1, 'ANTIFRAGILE-1 (migrations/2026-10-08-antifragile.sql)'
+  'qnfo-fleet-control', 'agent_issues', 6, 1, 'ANTIFRAGILE-1 (migrations/2026-10-08-11-antifragile.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'issues_open_over_24h');

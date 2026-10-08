@@ -139,6 +139,12 @@ because each one was broken at least once; the linked issue holds the evidence.
 - `v_issue_age` dates every open issue; the 10-minute tick raises an issue's priority one level per 24 h (to high, never
   critical; ledger `issue_age_bumps`), and `issues_open_over_24h` files the backlog. A design with one executor, one
   model or one transport on a critical path ships with its second path or an issue that builds it.
+- Never silently drop an issue (owner directive 2026-10-08): a guard on `agent_issues` normalises, annotates or reopens, never
+  aborts or ignores; a worker dedupes only against OPEN issues of the same title (a closed one is reopened by the D1 trigger
+  `issue_refile_reopen` when you insert); a caught insert error is logged, never swallowed. Two signals from one producer
+  are one path, not two.
+- Every failure mode you find gets a `failure_modes` row (root cause, remediation) and an `fm-<key>` detector contract in the
+  PR that fixes it; `v_failure_mode_status` and `failure_modes_recurring` show a recurrence within the hour.
 
 ## The charter (QUNIVERSE-CHARTER-1)
 - `docs/QUNIVERSE-CHARTER.md` is the system's charter: what the Quniverse is, what it should be, objectives, SWOT, MVP,

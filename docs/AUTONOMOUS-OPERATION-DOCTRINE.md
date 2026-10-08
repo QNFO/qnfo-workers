@@ -205,7 +205,7 @@ cycle ends done, remediated, or backlogged with a trigger. Nothing is left loose
 | Clause | Where it runs | Status 2026-10-08 |
 |---|---|---|
 | Prime, §1, §3 interrupt gate | CLAUDE.md AUTONOMY-FIRST-1; `v_human_action_gate` reroutes non-identity-bound owner cards (migrations/2026-10-08-autonomy-first.sql) | live |
-| §1 red-team every blocker | `v_blocker_claims`, `blocker_redteam`, metric `unverified_blocker_claims` (2026-10-08-antifragile.sql) | in PR 801 |
+| §1 red-team every blocker | `v_blocker_claims`, `blocker_redteam`, metric `unverified_blocker_claims` (2026-10-08-11-antifragile.sql) | in PR 801 |
 | §2 idempotency | every 2026-10-08 migration re-applies as a no-op (tested) | in PR 801 |
 | §2 loop-breaker | code loop SELF-REPAIR-1 and CI-FEEDBACK-1 change the rung and carry the failure into the retry | live; three-identical-failure incident not yet automatic |
 | §4 aging SLA, escalation | `queue_sla`, `v_stuck_summary`, `queue_sla_tick_10m`; `v_issue_age` and the age ladder (`issue_age_bumps`); metrics `stuck_items_over_sla`, `issues_open_over_24h`, `backlog_age_p95_min` | in PR 801 |
@@ -214,7 +214,9 @@ cycle ends done, remediated, or backlogged with a trigger. Nothing is left loose
 | §6 security | plaintext `command_drain_key` removed; the trusted-sources filter keeps outside text out of merged code | applied / in PR 801 |
 | §8 permission model | `.claude/settings.json`: `acceptEdits`, denies for direct deploy, secret writes, deletes, pushes to main | live |
 | §8 reversibility | control-plane canary with automatic revert (#2138 proved it); snapshot tables before every data change (`bak_*`) | live; functional canary #2176 |
-| §10 SPOF inventory | `spof_registry`, metric `spofs_on_critical_path`; second paths #2175 (research executor), #2137 (publication), #2178 (deploy), #2179 (AI router); the 10-minute fixer fires on two cron rows | in PR 801 |
+| §10 SPOF inventory | `spof_registry` (11 rows, fleet level included: qnfo-audit D1, GitHub Actions, the cron scheduler), metric `spofs_on_critical_path`; second paths #2175 (research executor), #2137 (publication), #2178 (deploy), #2179 (AI router); the 10-minute work runs off `fleet_tick`, advanced by the cron log or by `fleet_heartbeat` from six workers (the first two-cron-row design was one producer, a false alternate, corrected) | in PR 801 |
+| Never silently drop an issue (owner directive 2026-10-08) | guards that aborted or ignored issue and alert writes replaced (normalise, annotate, count, reopen); qnfo-observability 1.4.3 escalates recurrences; detectors `fm-silent-refile-drop`, `fm-enum-abort-drop`, `fm-observability-escalation-drop` | in PR 801 |
+| Probe own failure modes continuously | `failure_modes` (10 modes found 2026-10-08, root cause and remediation each), `fm-*` detectors run hourly by the remediation tick, `v_failure_mode_status`, metric `failure_modes_recurring` (2026-10-08-13-failure-modes.sql) | in PR 801 |
 | §10 chaos verification | #2180 CHAOS-DRILL-1 (6-hourly exercise of the oldest alternate) | backlog |
 | §11 control disposition | `control_registry` (17 controls, disposition, critical path, alternate, alternate_tested_at), metric `controls_on_critical_path_untested` | in PR 801 |
 | §12 provenance | `decision_log`, append-only by trigger | in PR 801 |

@@ -14,9 +14,8 @@
 -- What this file builds (all on Cloudflare; no session, no claude.ai schedule):
 -- (1) queue_sla: every known queue with its cycle and SLA in MINUTES and the automatic fix; one row per stuck type.
 -- (2) v_stuck_summary: one row, one column per stuck type, plus stuck_total. Ages are measured, never counts alone.
--- (3) The 10-minute fixer: an AFTER INSERT trigger on cron_fire_log for either fleet_crons 10-minute row
---     ('container-warmup-every-10min' or 'invest-decision-heartbeat-10m', two rows so one stopping is not a single point of
---     failure; every fix is idempotent, so both firing in one tick is harmless) applies each automatic fix, writes
+-- (3) The 10-minute fixer: an AFTER INSERT trigger on fleet_tick, which advances at most once per 9 minutes from either of
+--     two independent producers (the fleet cron log, or fleet_heartbeat written by six workers on their own crons) applies each automatic fix, writes
 --     one queue_sla_actions ledger row per fix that touched rows, and refreshes the two metrics below. ops_config
 --     queue_sla_autofix = 'off' stops the fixes (measurement continues).
 -- (4) Probe cadence: every remediation contract of an open issue is due hourly (expected_cadence_h 1), now and for every
@@ -24,10 +23,10 @@
 -- (5) Metrics stuck_items_over_sla and issues_unprobed_60m (target 0) with triggers that name the lever.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TRIGGER IF EXISTS queue_sla_tick_10m; DROP INDEX IF EXISTS idx_remediation_verifications_issue_ts; DROP TRIGGER IF EXISTS remediation_contracts_cadence_1h_ai; DROP VIEW IF EXISTS v_stuck_summary; DROP TABLE IF EXISTS queue_sla; DELETE FROM metric_registry WHERE metric IN ('stuck_items_over_sla', 'issues_unprobed_60m'); DELETE FROM analytics_metric_triggers WHERE metric_key IN ('stuck_items_over_sla', 'issues_unprobed_60m'); DELETE FROM ops_config WHERE key = 'queue_sla_autofix'; -- queue_sla_actions is the ledger and stays; rows changed by a fix carry their prior state in their error/triage text.
+-- Rollback: DROP TRIGGER IF EXISTS queue_sla_tick_10m; DROP TRIGGER IF EXISTS fleet_tick_from_cron; DROP TRIGGER IF EXISTS fleet_tick_from_heartbeat_ins; DROP TRIGGER IF EXISTS fleet_tick_from_heartbeat_upd; DROP TABLE IF EXISTS fleet_tick; DROP INDEX IF EXISTS idx_remediation_verifications_issue_ts; DROP TRIGGER IF EXISTS remediation_contracts_cadence_1h_ai; DROP VIEW IF EXISTS v_stuck_summary; DROP TABLE IF EXISTS queue_sla; DELETE FROM metric_registry WHERE metric IN ('stuck_items_over_sla', 'issues_unprobed_60m'); DELETE FROM analytics_metric_triggers WHERE metric_key IN ('stuck_items_over_sla', 'issues_unprobed_60m'); DELETE FROM ops_config WHERE key = 'queue_sla_autofix'; -- queue_sla_actions is the ledger and stays; rows changed by a fix carry their prior state in their error/triage text.
 
 INSERT OR IGNORE INTO ops_config (key, value, note, updated_at) VALUES ('queue_sla_autofix', 'on',
-  'QUEUE-SLA-1 (migrations/2026-10-08-queue-sla.sql): on = the 10-minute fixer applies the queue_sla automatic fixes; off = measure only.',
+  'QUEUE-SLA-1 (migrations/2026-10-08-10-queue-sla.sql): on = the 10-minute fixer applies the queue_sla automatic fixes; off = measure only.',
   datetime('now'));
 
 CREATE TABLE IF NOT EXISTS queue_sla (
@@ -93,13 +92,13 @@ SELECT
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('stuck_items_over_sla', 'operational', 'target',
   'Sum of v_stuck_summary columns except issues_unprobed_60m (its own metric): queue items past their queue_sla.sla_min plus open issues with no doer after 180 minutes (QUEUE-SLA-1).',
-  'qnfo-audit.v_stuck_summary + queue_sla (migrations/2026-10-08-queue-sla.sql), refreshed every 10 minutes by trigger queue_sla_tick_10m',
+  'qnfo-audit.v_stuck_summary + queue_sla (migrations/2026-10-08-10-queue-sla.sql), refreshed every 10 minutes by trigger queue_sla_tick_10m',
   '13 on 2026-10-08 before the first fix (2 intents, 2 outreach, 9 issues without a doer)', '0', 'qnfo-fleet-control',
   'trigger gt 0 -> one METRIC-TRIGGER issue naming the stuck type and its fix', '10m', '> 0', '> 5',
   NULL, NULL, 'MEASURED', 'computed'),
  ('issues_unprobed_60m', 'operational', 'target',
   'v_stuck_summary.issues_unprobed_60m: open agent_issues with no remediation_verifications row in the last 60 minutes (QUEUE-SLA-1).',
-  'qnfo-audit.v_stuck_summary (migrations/2026-10-08-queue-sla.sql), refreshed every 10 minutes by trigger queue_sla_tick_10m',
+  'qnfo-audit.v_stuck_summary (migrations/2026-10-08-10-queue-sla.sql), refreshed every 10 minutes by trigger queue_sla_tick_10m',
   '105 of 136 on 2026-10-08 (94 older than 3 h, 11 never)', '0', 'qnfo-fleet-control',
   'trigger gt 10 -> one METRIC-TRIGGER issue', '10m', '> 10', '> 40',
   NULL, NULL, 'MEASURED', 'computed');
@@ -118,8 +117,34 @@ BEGIN
 END;
 
 -- (3) the 10-minute fixer.
-CREATE TRIGGER IF NOT EXISTS queue_sla_tick_10m AFTER INSERT ON cron_fire_log
-WHEN NEW.cron_name IN ('container-warmup-every-10min', 'invest-decision-heartbeat-10m')
+-- The tick (redundant, SPOF-AUDIT-1): fleet_tick gets at most one row per 9 minutes, written by whichever of several
+-- independent producers arrives first: the fleet cron log (one scheduler) and fleet_heartbeat, which six workers write on
+-- their own crons (qnfo-deploy-guard, qnfo-research-exec, the AI health prober, the email loop, idea-hub, qnfo-lifecycle).
+-- Two rows from one scheduler would be one failure, not two paths (doctrine section 6), so the heartbeat feed is the second
+-- path. Every work trigger below runs AFTER INSERT ON fleet_tick, and every fix is idempotent.
+CREATE TABLE IF NOT EXISTS fleet_tick (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  source TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fleet_tick_ts ON fleet_tick (ts);
+CREATE TRIGGER IF NOT EXISTS fleet_tick_from_cron AFTER INSERT ON cron_fire_log
+WHEN NOT EXISTS (SELECT 1 FROM fleet_tick WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'))
+BEGIN
+  INSERT INTO fleet_tick (source) VALUES ('cron:' || NEW.cron_name);
+END;
+CREATE TRIGGER IF NOT EXISTS fleet_tick_from_heartbeat_ins AFTER INSERT ON fleet_heartbeat
+WHEN NOT EXISTS (SELECT 1 FROM fleet_tick WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'))
+BEGIN
+  INSERT INTO fleet_tick (source) VALUES ('heartbeat:' || COALESCE(NEW.worker, '?'));
+END;
+CREATE TRIGGER IF NOT EXISTS fleet_tick_from_heartbeat_upd AFTER UPDATE ON fleet_heartbeat
+WHEN NOT EXISTS (SELECT 1 FROM fleet_tick WHERE ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-9 minutes'))
+BEGIN
+  INSERT INTO fleet_tick (source) VALUES ('heartbeat:' || COALESCE(NEW.worker, '?'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS queue_sla_tick_10m AFTER INSERT ON fleet_tick
 BEGIN
   -- research-review-error: park the failing head row so the queue behind it runs.
   INSERT INTO queue_sla_actions (stuck_type, n, note)
@@ -166,11 +191,11 @@ END;
 INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 SELECT 'stuck_items_over_sla', 'Queue SLA breach: an item is stuck past its SLA (minutes)', 'registry', 'gt', 0, 2,
   'Pillar autonomy (QUEUE-SLA-1). Read SELECT * FROM v_stuck_summary and SELECT * FROM queue_sla: each non-zero column names a stuck type, its SLA in minutes and its automatic fix. If the type has a fix and queue_sla_actions shows it ran in the last 20 minutes, the fix did not clear it: find why (a status the fix does not match, a new failure shape) and widen the fix by migration. If ops_config queue_sla_autofix is off, say why on this issue and turn it back on. A stuck type with no automatic fix (research-head-stalled, code-task-stalled) gets one now: write the fix into queue_sla and the tick trigger by migration, with its revert in the row it changes. A new queue gets a queue_sla row and a v_stuck_summary column in the same PR that creates it. Definition of done: stuck_items_over_sla = 0 at two refreshes 10 minutes apart.',
-  'qnfo-fleet-control', 'agent_issues', 1, 1, 'QUEUE-SLA-1 (migrations/2026-10-08-queue-sla.sql)'
+  'qnfo-fleet-control', 'agent_issues', 1, 1, 'QUEUE-SLA-1 (migrations/2026-10-08-10-queue-sla.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'stuck_items_over_sla');
 
 INSERT INTO analytics_metric_triggers (metric_key, title, source_table, operator, threshold, priority, action, owner, queue_target, cooldown_hours, enabled, notes)
 SELECT 'issues_unprobed_60m', 'Issue SLA breach: open issues not probed in the last 60 minutes', 'registry', 'gt', 10, 2,
   'Pillar autonomy (QUEUE-SLA-1). Every open issue''s closing probe runs hourly. Read SELECT a.id, c.class, c.status, c.verify_transport, c.next_due_at FROM agent_issues a LEFT JOIN remediation_contracts c ON c.issue_id = a.id WHERE a.status = ''open'' AND NOT EXISTS (SELECT 1 FROM remediation_verifications v WHERE v.issue_id = a.id AND v.verified_at > datetime(''now'', ''-60 minutes'')). Causes in order: (1) contract status needs-machine-probe: write the probe (UPDATE class issue-<id>); (2) next_due_at in the future although expected_cadence_h is 1: reset next_due_at; (3) the qnfo-fleet-control remediation tick hit its per-tick limit (150): raise it; (4) a transport no executor reads: move the contract to one that runs. Definition of done: issues_unprobed_60m <= 10 at a refresh.',
-  'qnfo-fleet-control', 'agent_issues', 1, 1, 'QUEUE-SLA-1 (migrations/2026-10-08-queue-sla.sql)'
+  'qnfo-fleet-control', 'agent_issues', 1, 1, 'QUEUE-SLA-1 (migrations/2026-10-08-10-queue-sla.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'issues_unprobed_60m');
