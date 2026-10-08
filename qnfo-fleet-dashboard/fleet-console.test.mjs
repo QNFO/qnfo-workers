@@ -164,7 +164,6 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
     ["sql! update notes set flag = 1", /without WHERE/],
     ["sql! drop table notes", /migration/],
     ["sql! alter table notes add column x", /migration/],
-    ["sql! update fleet_budget set cap = 99 where node_class = 'ai_usd'", /read-only/],
     ["sql! delete from remediation_verifications where id = 1", /read-only/],
     ["sql! insert or replace into notes (id, body) values (1, 'x')", /REPLACE/],
     ["sql! create trigger t after insert on notes begin delete from notes; end", /One statement|Triggers/],
@@ -177,6 +176,10 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
     ok(rx.test(j.text || j.error || "") && !(j.actions && j.actions.length), "C15 refused: " + q, j);
   }
   ok(db.prepare("SELECT cap FROM fleet_budget").get().cap === 10 && db.prepare("SELECT COUNT(*) n FROM notes").get().n === 3, "C16 nothing refused was written");
+  // CONSOLE-BUDGET-WRITE-1 (1.28.0, #2072): fleet_budget is writable since RULE-8-RETIRED-1; the write is proposed behind the
+  // confirm button like every other sql! write, not refused as read-only.
+  j = await (await cmd(env, "sql! update fleet_budget set cap = 99 where node_class = 'ai_usd'", C)).json();
+  ok(!/read-only/.test(j.text || j.error || "") && j.actions && j.actions.length > 0 && db.prepare("SELECT cap FROM fleet_budget").get().cap === 10, "C15b a fleet_budget write is proposed with a confirm button, not refused and not yet run", j);
   j = await (await cmd(env, "sql! update notes set flag = 1, body = 'x where y' where id in (1, 2)", C)).json();
   ok(!j.executed && j.actions[0].op === "sqlw" && j.actions[0].destructive && /rows backed up first/.test(j.text), "C17 a SQL write comes back as a confirm button", j);
   r = await run(env, "sqlw", j.actions[0].args, C); j = await r.json();
