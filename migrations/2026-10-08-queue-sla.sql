@@ -74,6 +74,7 @@ SELECT
   (CASE WHEN (SELECT COUNT(*) FROM research_queue WHERE status IN ('queued', 'researching')) > 0
      AND NOT EXISTS (SELECT 1 FROM cloud_ops_events WHERE job = 'qnfo-research-exec' AND kind = 'done' AND status = 'ok'
        AND ts > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-60 minutes')) THEN 1 ELSE 0 END) AS research_head_stalled,
+  (SELECT COUNT(*) FROM research_queue WHERE status = 'queued' AND datetime(created_at) < datetime('now', '-180 minutes')) AS research_queued_180m,
   (SELECT COUNT(*) FROM intents WHERE status = 'pending' AND datetime(created_at) < datetime('now', '-60 minutes')) AS intents_pending,
   (SELECT COUNT(*) FROM outreach_queue WHERE status IN ('needs-email', 'needs-contact')
      AND datetime(created_at) < datetime('now', '-180 minutes')) AS outreach_waiting,
@@ -153,7 +154,7 @@ BEGIN
     AND status IN ('needs-email', 'needs-contact') AND datetime(created_at) < datetime('now', '-180 minutes');
 
   -- the two metrics, every 10 minutes.
-  UPDATE metric_registry SET last_value = CAST((SELECT research_review_error + research_head_stalled + intents_pending + outreach_waiting + code_tasks_stalled + issues_without_doer_3h FROM v_stuck_summary) AS TEXT),
+  UPDATE metric_registry SET last_value = CAST((SELECT research_review_error + research_head_stalled + research_queued_180m + intents_pending + outreach_waiting + code_tasks_stalled + issues_without_doer_3h FROM v_stuck_summary) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
   WHERE metric = 'stuck_items_over_sla';
   UPDATE metric_registry SET last_value = CAST((SELECT issues_unprobed_60m FROM v_stuck_summary) AS TEXT),

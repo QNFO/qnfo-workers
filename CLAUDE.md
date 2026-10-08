@@ -119,6 +119,18 @@ because each one was broken at least once; the linked issue holds the evidence.
   or loop that can hold items adds its `queue_sla` row and its `v_stuck_summary` column, with an automatic fix and its revert,
   in the PR that creates it. A chain or guard that checks only a count is incomplete: add the age of the oldest item.
 
+## Anti-fragile by default (ANTIFRAGILE-1, charter rule 12)
+- Owner directive 2026-10-08: no holds, filters or blocks without live evidence; red-team every blocker; redundant paths,
+  never a single critical path; flag and remediate anything older than one cycle; root out false beliefs.
+- A hold, filter or park needs a current, recorded reason and an expiry; prefer backpressure (a rate) to a hold. Release
+  what has neither (backup table first, revert text in the row), as the 2026-10-08 audit did (bak_20261008_hold_release).
+- Before you write "blocked", "owner only", "needs a token" or "cannot", attempt it with what exists and record the attempt in
+  `blocker_redteam` (verdict false-belief-removed, workaround-built or confirmed-with-evidence with the refusal text).
+  `v_blocker_claims` and metric `unverified_blocker_claims` list every claim nobody has tested.
+- `v_issue_age` dates every open issue; the 10-minute tick raises an issue's priority one level per 24 h (to high, never
+  critical; ledger `issue_age_bumps`), and `issues_open_over_24h` files the backlog. A design with one executor, one
+  model or one transport on a critical path ships with its second path or an issue that builds it.
+
 ## The charter (QUNIVERSE-CHARTER-1)
 - `docs/QUNIVERSE-CHARTER.md` is the system's charter: what the Quniverse is, what it should be, objectives, SWOT, MVP,
   blue-sky footprint, roadmap order and decision rules. Read it, and `GET https://qnfo-fleet-control.q08.workers.dev/charter`,
