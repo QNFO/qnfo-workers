@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-08 18:08:45",
+  "audited_at": "2026-10-08 20:08:03",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -453,7 +453,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.7.6-codeagent",
+        "version": "1.8.0-reentry-rate",
         "worker": "idea-hub"
       },
       {
@@ -513,12 +513,12 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.11.7-charter-doctrine",
+        "version": "0.12.0-code-publish",
         "worker": "qnfo-fleet-control"
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.27.0-autonomy-first",
+        "version": "1.28.0-budget-write",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -568,7 +568,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.9.70-codeagent",
+        "version": "0.10.0-parallel",
         "worker": "qnfo-research-exec"
       },
       {
@@ -684,9 +684,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.7.6-codeagent",
+      "before": "1.8.0-reentry-rate",
       "http": 200,
-      "live": "1.7.6-codeagent",
+      "live": "1.8.0-reentry-rate",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -1140,17 +1140,17 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.11.7-charter-doctrine",
+      "before": "0.12.0-code-publish",
       "http": 200,
-      "live": "0.11.7-charter-doctrine",
+      "live": "0.12.0-code-publish",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.27.0-autonomy-first",
+      "before": "1.28.0-budget-write",
       "http": 200,
-      "live": "1.27.0-autonomy-first",
+      "live": "1.28.0-budget-write",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
@@ -1356,9 +1356,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.9.70-codeagent",
+      "before": "0.10.0-parallel",
       "http": 200,
-      "live": "0.9.70-codeagent",
+      "live": "0.10.0-parallel",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
