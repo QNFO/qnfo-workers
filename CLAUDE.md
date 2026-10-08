@@ -3,6 +3,26 @@
 Several agent sessions work this fleet concurrently with shared credentials. These rules exist
 because each one was broken at least once; the linked issue holds the evidence.
 
+## Autonomy-first protocol (AUTONOMY-FIRST-1)
+- Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
+  binds every session and every loop, and is charter decision rule 11 (docs/AUTONOMY-DECISION-POLICY.md has the detail).
+- Decide, don't ask. Before any question, exhaust tools, files, D1, the charter and this file; state the assumption in one
+  line, act, verify, and report what the tools returned. Never stop to ask which approach, whether to proceed, or for a
+  merge approval on reversible work, and never end a turn as a courtesy while work remains.
+- The only interrupt is an action that is both irreversible and identity-bound: a credential only the owner can mint,
+  money, a legal or signing act, the owner's own accounts, machine or personal data, or posting on a channel whose
+  terms forbid automation. Everything else proceeds: reads, compute, code, config, deploys, content, reversible changes.
+- A technical, credential or operational blocker is never the owner's: recover, work around it, or file it as an
+  `agent_issues` row with a doer and a closing probe (OWNER-NO-LOOSE-ENDS-1). The guardrails below still hold: the
+  secret lock, the canonical deploy path, outreach consent, the personal/research separation, and the harness's own
+  permission checks. A refusal by those is handed over with its reason, never worked around.
+- The owner queue enforces this in D1 (migrations/2026-10-08-autonomy-first.sql): `v_human_action_gate` reads each new
+  `human_actions` card, and one that is not irreversible and identity-bound becomes an `AUTONOMY-FIRST-REROUTE-1` issue
+  for the fleet, with the card set `rerouted`. A card that truly needs the owner but reads as technical carries an
+  `IDENTITY-BOUND:` line in its `why`. `ops_config autonomy_first_gate = off` stops the reroute without a deploy.
+- The hourly metric tick audits it: `v_autonomy_first_audit`, metrics `owner_queue_fleet_cards_open` and
+  `session_dependent_issues_open` (target 0 each), triggers on both and on `code_task_superseded_share_30d`.
+
 ## Shared secrets (#1701)
 - Before you PUT, rotate or delete any worker secret, take the lease:
   `POST https://qnfo-deploy-guard.q08.workers.dev/secret-lock/acquire {"worker":"<script>","owner":"<session>","ttl_sec":300}`.
