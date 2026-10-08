@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.13.1-fallback-tune"; // 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.13.2-fallback-floor"; // 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -751,6 +751,7 @@ __name22(fetchWikiSearch, "fetchWikiSearch");
 // paid round trip. The fallback order differs by role so writer and critic stay on different models.
 var DS_BREAKER_MS = 36e5;
 var dsBreakerUntil = 0;
+var lastCallFallback = false; // COMPANION-FALLBACK-FLOOR-1: true when the latest model call was answered by Workers AI
 // Measured 2026-10-07 (400-word probe, max_tokens 6000): kimi-k2.6 402 words in 60s, gpt-oss-120b 400 words in 26s,
 // glm-5.3 spent all 6000 tokens reasoning and returned no prose, so it is last everywhere. Reasoning models need room
 // beyond the prose, so a fallback call gets at least FB_MIN_TOKENS and FB_MIN_TIMEOUT_MS.
@@ -801,7 +802,9 @@ async function callModel(env, messages, maxTokens, timeoutMs, model, role) {
   var useModel = model || WRITER_MODEL;
   var isReasoner = String(useModel).indexOf("reasoner") >= 0;
   var chain = fallbackChain(useModel, role);
+  lastCallFallback = false;
   if (!env.DEEPSEEK_API_KEY || Date.now() < dsBreakerUntil) {
+    lastCallFallback = true;
     return await callWorkersAI(env, messages, maxTokens, timeoutMs, chain, Date.now() < dsBreakerUntil ? "deepseek breaker open" : "no deepseek key");
   }
   var dsErr = "";
@@ -833,6 +836,7 @@ async function callModel(env, messages, maxTokens, timeoutMs, model, role) {
   } catch (e) {
     dsErr = useModel + ": " + String(e && e.message || e).slice(0, 160);
   }
+  lastCallFallback = true;
   return await callWorkersAI(env, messages, maxTokens, timeoutMs, chain, dsErr);
 }
 __name(callModel, "callModel");
@@ -1180,6 +1184,14 @@ __name2(sharpenBridge, "sharpenBridge");
 __name22(sharpenBridge, "sharpenBridge");
 var GEN_BUDGET_MS = 600e3;
 var LENGTH_FLOOR = { essay: 2000, serial: 1800, notes: 1700 };
+// COMPANION-FALLBACK-FLOOR-1: measured 2026-10-07/08, 40+ gpt-oss-120b drafts all landed at 1100-1750 words and none passed the
+// 1700-2000 floor, so nothing published for 78h. A draft written by the Workers AI fallback is held to 70% of the floor
+// (the critic, banned-phrase and citation gates are unchanged); DeepSeek drafts keep the full floor.
+var FALLBACK_FLOOR_RATIO = 0.7;
+function floorFor(form) {
+  var f = LENGTH_FLOOR[form];
+  return f && lastCallFallback ? Math.round(f * FALLBACK_FLOOR_RATIO) : f;
+}
 // COMPANION-FALLBACK-TUNE-1: when the only validation problem is a length below the form's floor, the next attempt gets the
 // draft itself and is asked to extend it (keep every claim, title and section; deepen the argument from the anchors) to the
 // floor plus a margin. Any other problem, or a draft that is too long, returns null and the normal retry feedback stands.
@@ -1187,7 +1199,7 @@ function expandFeedback(problems, form, piece) {
   if (!problems || problems.length !== 1) return null;
   var m = /^(essay|serial|notes) length (\d+)$/.exec(String(problems[0]));
   if (!m || m[1] !== form) return null;
-  var wc = Number(m[2]), floor = LENGTH_FLOOR[form];
+  var wc = Number(m[2]), floor = floorFor(form);
   if (!floor || wc >= floor) return null;
   var target = floor + 300;
   return "The previous draft was good but too short: " + wc + " words against a floor of " + floor + ". Do not start over. " +
@@ -1201,12 +1213,12 @@ function validatePiece(piece, form) {
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
   var md = String(piece.body_md);
   var wc = wordCount(md);
-  if (form === "essay" && (wc < 2e3 || wc > 3200)) problems.push("essay length " + wc);
-  if (form === "serial" && (wc < 1800 || wc > 2800)) problems.push("serial length " + wc);
+  if (form === "essay" && (wc < floorFor("essay") || wc > 3200)) problems.push("essay length " + wc);
+  if (form === "serial" && (wc < floorFor("serial") || wc > 2800)) problems.push("serial length " + wc);
   if (form === "notes") {
     var items = countHeadings(md, 2);
     if (items < 3) problems.push("notes items " + items);
-    if (wc < 1700 || wc > 3200) problems.push("notes length " + wc);
+    if (wc < floorFor("notes") || wc > 3200) problems.push("notes length " + wc);
   }
   var hits = bannedHits(md + " " + String(piece.title || "") + " " + String(piece.lede || ""));
   if (hits.length) problems.push("banned: " + hits.join(", "));
@@ -2750,6 +2762,7 @@ export {
   callModel,
   companionStallDetector,
   expandFeedback,
+  validatePiece,
   worker_default as default
 };
 //# sourceMappingURL=worker.js.map
