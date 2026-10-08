@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-08 05:10:53",
+  "audited_at": "2026-10-08 10:03:27",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -513,7 +513,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.11.2-rebase-integrity",
+        "version": "0.11.4-charter-autonomy-first",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -573,7 +573,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.9.0-promote-route",
+        "version": "0.9.1-cache-count",
         "worker": "qnfo-social"
       },
       {
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.11.2-rebase-integrity",
+      "before": "0.11.4-charter-autonomy-first",
       "http": 200,
-      "live": "0.11.2-rebase-integrity",
+      "live": "0.11.4-charter-autonomy-first",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.9.0-promote-route",
+      "before": "0.9.1-cache-count",
       "http": 200,
-      "live": "0.9.0-promote-route",
+      "live": "0.9.1-cache-count",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"

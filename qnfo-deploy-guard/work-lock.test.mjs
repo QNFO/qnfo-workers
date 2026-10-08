@@ -8,6 +8,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
@@ -139,7 +140,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   ok(l.j.count === 1 && l.j.claims[0].key === "file:qnfo-ops/worker.js", "D9 GET /work-locks lists work claims only, not deploy or secret leases");
   ok(db.prepare("SELECT worker FROM deploy_locks").get().worker === "work:file:qnfo-ops/worker.js", "D10 a work claim is stored as a work:<key> lease in deploy_locks");
   const h = await get(env, "/health");
-  ok(/^1\.3\.(2[1-9]|[3-9][0-9])-/.test(h.j.version) && h.j.capabilities.includes("work-claim"), "D11 /health reports the version and the work-claim capability");
+  ok(versionAtLeast(h.j.version, "1.3.21") && h.j.capabilities.includes("work-claim"), "D11 /health reports the version and the work-claim capability");
 }
 
 // E. the read reports an unavailable store instead of an empty list

@@ -37,6 +37,30 @@ outreach outside its consent gate and cadence caps, and moving personal data int
 surface joined Never: they were rule 8's protections for people outside the fleet, which the owner's directive does not
 reach, and the law requires most of them.
 
+Changed 2026-10-08 (AUTONOMY-FIRST-1, charter decision rule 11): the owner directed "Implement autonomy-first protocol
+system/fleet-wide and in all Claude operations". The owner is interrupted only for a step that is both irreversible and
+identity-bound: a credential only the owner can mint, money, a legal or signing act, the owner's own accounts, machine
+or personal data, or posting on a channel whose terms forbid automation (LinkedIn below). Every other decision is T1,
+merge approvals and tuning included; T2 now holds only the identity-bound credential and access-gate items, each parked
+with its default in effect. The Never list is unchanged. A machine gate enforces it: `v_human_action_gate`
+(migrations/2026-10-08-autonomy-first.sql) reroutes a new owner card that is not identity-bound into an
+`AUTONOMY-FIRST-REROUTE-1` issue. Measured at authoring against all 63 cards ever written, 18 historical cards had
+asked the owner for a fleet decision (merge PR 574, 726, 762 and 763, the q08 cap, the remedy window, control-plane
+scope, a bulk edit of 417 records, ...); of the 7 then open, one (#63, an ASK-TUNE-1 search-space choice) was rerouted.
+
+### Autonomy-first audit (AUTONOMY-FIRST-AUDIT-1, 2026-10-08)
+| Failure mode | Measured 2026-10-08 | Root cause | Remedy (all automatic from the merge) |
+|---|---|---|---|
+| owner card for a fleet decision | 1 open (#63), 18 of 63 ever | loops (qnfo-ai-search ASK-TUNE-1/ASK-FIX-1) and sessions escalated stalls and merges to the owner | `v_human_action_gate` + trigger reroute; metric `owner_queue_fleet_cards_open`, target 0 |
+| issue waits on a Claude session | 28 of 130 open, unmeasured | the code loop refuses control-plane workers, `scripts/`, several files and huge files, and the refusal becomes a `session-task:` line | metric `session_dependent_issues_open` with a trigger whose lever closes the largest scope gap first (#2074, #2101 open) |
+| a session redoes loop work | `code_task_superseded_share_30d` 0.29 vs 0.10, no trigger | sessions start the same change while a loop task holds it | trigger on the metric, lever on CLAIMS-FIRST-1 and the work-lock refusal |
+| code loop output lost | `code_task_success_rate_30d` 0.24 | goal-review rejections, control-plane refusals, retries after failing suites | already filed (open METRIC-TRIGGER issue); not duplicated |
+| recurring step needs a person | `watchmaker_index` 1 | one operation still needs a person or session | already filed (open METRIC-TRIGGER issue); not duplicated |
+| "still computing mergeability" closures | 3 in 7 days | a mislabelled wait note, fixed in qnfo-fleet-control (see its comment at the merge runner) | none needed |
+
+The audit repeats itself: `v_autonomy_first_audit` is refreshed on every hourly `open_agent_issues` write, and each
+breach files one deduped METRIC-TRIGGER issue with its lever. No session or claude.ai schedule is involved.
+
 ## Owner-voice publishing (gated T1)
 Source: docs/STRATEGY.md section 5, which is authoritative; this is a summary. The system decides and executes inside these
 gates and records each act.
@@ -71,7 +95,7 @@ This one was resolved by a peer session within the hour, and nothing on the crit
 | Cloudflare Access (#1277) | needs an Access-scoped credential; a wrong policy locks the owner out | admin routes stay bearer-protected; `scripts/access_probe.py` (PR #219) measures exposure | owner enables Access per `docs/CF-ACCESS-ROLLOUT-1277.md` |
 | Publication of a curated article (#1163), Zenodo deposit (#1091) | the parked reason ("publishes externally as the owner") no longer holds: publication as the owner is gated T1 since 2026-10-01 (STRATEGY.md section 5) | stays a draft; `fleet-control` publication preflight reports the route state hourly | the system publishes once the item passes the owner-voice gates (or the owner publishes); the deposit still needs the deposit credential |
 | `qnfo-code-agent` PR-write credential | a session cannot mint a GitHub App or PAT | `qnfo-code-orchestrator` parks tasks as `needs_human` (it never opens an unverified PR) | a credential is supplied |
-| Spend caps (#1683, #1699) | raising a cap is **Never** | caps unchanged; the *measurement* is fixed, never the threshold | owner changes the cap |
+| Spend caps (#1683, #1699) | no longer parked: caps are the fleet's to set since RULE-8-RETIRED-1 (charter rule 10) and steer model choice only (BUDGET-SOFT-ROUTE-1) | a breached cap routes work to the cheapest capable model | n/a (T1) |
 | Local DeepChat guards (#1686) | they inspect the owner's machine | **T1 decided below** | n/a |
 
 ## Decision record: #1686 GUARDS-LOCAL-ONLY-1 (T1)
