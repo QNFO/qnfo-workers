@@ -13,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.9.70-codeagent"; // 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.10.0-parallel"; // 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2898,6 +2898,59 @@ __name2(remediationPublish, "remediationPublish");
 __name22(remediationPublish, "remediationPublish");
 __name222(remediationPublish, "remediationPublish");
 __name2222(remediationPublish, "remediationPublish");
+// RESEARCH-THROUGHPUT-1 (0.10.0, agent_issues 2175, pillar research): run() advanced one paper at a time, so 68 queued
+// rows waited behind the one in flight (about one paper per 1.5-2 h). A tick now runs RESEARCH_PARALLEL slots at once; slot
+// k advances the k-th in-flight row (oldest claim first) and a slot with no in-flight row claims a queued one only while
+// fewer than RESEARCH_PARALLEL rows are in flight. Stages are keyed by row id, so slots never share a row. ops_config
+// research_parallel sets the width (1 restores single-flight without a deploy); the lease still serialises invocations.
+var RESEARCH_PARALLEL_DEFAULT = 2;
+var RESEARCH_PARALLEL_MAX = 4;
+var INFLIGHT_SQL = "SELECT * FROM research_queue WHERE (status='review' AND stage='publish') OR (status='researching' AND stage IN ('ground','ensemble','reconcile','review','revise','verify')) ORDER BY COALESCE(claimed_at, created_at) ASC LIMIT ?1";
+async function researchParallel(env) {
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_parallel'").first();
+    const n = r ? parseInt(String(r.value), 10) : NaN;
+    if (Number.isFinite(n) && n >= 1) return Math.min(n, RESEARCH_PARALLEL_MAX);
+  } catch (e) {}
+  return RESEARCH_PARALLEL_DEFAULT;
+}
+async function runSlot(env, slot, width, inflight) {
+  try {
+    const row = inflight[slot];
+    if (row && row.status === "review") {
+      const r2 = row.source === "remediation" ? await remediationPublish(env, row) : await publishStageV2(env, row);
+      await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), r2.ok ? "ok" : "error");
+      return { status: r2.ok ? "ok" : "error", res: r2, slot };
+    }
+    if (row) {
+      const fn = { ground: stageGround, ensemble: stageEnsemble, reconcile: stageReconcile, review: stageReview, revise: stageRevise, verify: stageVerify }[row.stage];
+      const r2 = await fn(env, row);
+      await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), r2.ok ? "ok" : "error");
+      return { status: r2.ok ? "ok" : "error", res: r2, slot };
+    }
+    if (inflight.length >= width) return { status: "ok", claimed: 0, slot };
+    return Object.assign(await claimNew(env), { slot });
+  } catch (e) {
+    const msg = String(e && e.message || e).slice(0, 600);
+    await logEvent(env, "error", "slot " + slot + ": " + msg, "error");
+    return { status: "error", error: msg.slice(0, 300), slot };
+  }
+}
+// RESEARCH-THROUGHPUT-1: the claim half of run(), so a free slot claims a new row and never re-advances an in-flight one.
+async function claimNew(env) {
+  let row;
+    row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='queued' ORDER BY CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN 0 ELSE 1 END, CASE WHEN created_at < strftime('%Y-%m-%dT%H:%M:%SZ','now','-72 hours') THEN created_at END ASC, score DESC LIMIT 1").first();
+    if (!row) {
+      return { status: "ok", claimed: 0 };
+    }
+    const up = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='researching', stage='ground', claimed_at=?, attempt=attempt+1 WHERE id=? AND status='queued'").bind(nowIso(), row.id).run();
+    if (!up || !up.meta || !up.meta.changes) return { status: "ok", claimed: 0 };
+    await logEvent(env, "claim", "claimed " + row.source_id + " (pipeline " + PIPELINE_VERSION + ")");
+    row.stage = "ground";
+    const r = await stageGround(env, row);
+    await logEvent(env, "done", JSON.stringify(r).slice(0, 600), r.ok ? "ok" : "error");
+    return { status: r.ok ? "ok" : "error", res: r };
+}
 async function run(env) {
   try {
     let row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='review' AND stage='publish' LIMIT 1").first();
@@ -2980,12 +3033,23 @@ async function runLeased(env, holder, maxStages, budgetMs) {
   const t0 = Date.now();
   const stages = [];
   try {
+    const width = maxStages > 1 ? await researchParallel(env) : 1;
     for (let i = 0; i < maxStages; i++) {
-      const r = await run(env);
-      stages.push(r);
-      // Stop when idle (nothing claimable), on any failure (no hammering a failing stage),
+      // RESEARCH-THROUGHPUT-1: one round runs every slot concurrently; slots are assigned by position in the in-flight
+      // list, which is fixed for the round, so two slots never advance the same row.
+      let round;
+      if (width > 1) {
+        // One snapshot per round: slot k owns inflight[k], so a row that leaves the list mid-round cannot shift another
+        // slot onto a row already being advanced.
+        const inflight = (await env.QNFO_AUDIT.prepare(INFLIGHT_SQL).bind(width).all()).results || [];
+        round = await Promise.all(Array.from({ length: width }, function(_, k) { return runSlot(env, k, width, inflight); }));
+      } else {
+        round = [await run(env)];
+      }
+      for (const r of round) stages.push(r);
+      // Stop when every slot is idle (nothing claimable) or failed (no hammering a failing stage),
       // or when another full stage might not fit the scheduled wall limit.
-      if (!r || r.status !== "ok" || r.claimed === 0) break;
+      if (!round.some(function(r) { return r && r.status === "ok" && r.claimed !== 0; })) break;
       if (Date.now() - t0 > budgetMs) break;
     }
   } finally {
