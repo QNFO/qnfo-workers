@@ -14,8 +14,9 @@
 -- What this file builds (all on Cloudflare; no session, no claude.ai schedule):
 -- (1) queue_sla: every known queue with its cycle and SLA in MINUTES and the automatic fix; one row per stuck type.
 -- (2) v_stuck_summary: one row, one column per stuck type, plus stuck_total. Ages are measured, never counts alone.
--- (3) The 10-minute fixer: an AFTER INSERT trigger on cron_fire_log for the fleet_crons row 'container-warmup-every-10min'
---     (written every 10 minutes by the fleet cron trigger since before 2026-10-08) applies each automatic fix, writes
+-- (3) The 10-minute fixer: an AFTER INSERT trigger on cron_fire_log for either fleet_crons 10-minute row
+--     ('container-warmup-every-10min' or 'invest-decision-heartbeat-10m', two rows so one stopping is not a single point of
+--     failure; every fix is idempotent, so both firing in one tick is harmless) applies each automatic fix, writes
 --     one queue_sla_actions ledger row per fix that touched rows, and refreshes the two metrics below. ops_config
 --     queue_sla_autofix = 'off' stops the fixes (measurement continues).
 -- (4) Probe cadence: every remediation contract of an open issue is due hourly (expected_cadence_h 1), now and for every
@@ -118,7 +119,7 @@ END;
 
 -- (3) the 10-minute fixer.
 CREATE TRIGGER IF NOT EXISTS queue_sla_tick_10m AFTER INSERT ON cron_fire_log
-WHEN NEW.cron_name = 'container-warmup-every-10min'
+WHEN NEW.cron_name IN ('container-warmup-every-10min', 'invest-decision-heartbeat-10m')
 BEGIN
   -- research-review-error: park the failing head row so the queue behind it runs.
   INSERT INTO queue_sla_actions (stuck_type, n, note)

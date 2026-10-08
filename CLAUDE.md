@@ -3,6 +3,15 @@
 Several agent sessions work this fleet concurrently with shared credentials. These rules exist
 because each one was broken at least once; the linked issue holds the evidence.
 
+## The Autonomous Operation Doctrine (DOCTRINE-1)
+- `docs/AUTONOMOUS-OPERATION-DOCTRINE.md` (owner directive 2026-10-08, verbatim; charter rule 13) binds every session and
+  loop and wins over the sections below where they differ, except that the harness's own permission checks and the
+  shared-secrets rules still hold. Its precedence: interrupt gate, security, no loose ends, anti-fragility, autonomy.
+- Before adding, keeping or reviewing a hold, filter, pause, kill switch, gate or cap, read and update `control_registry`
+  (disposition remove / demote / replace / keep, critical path, tested alternate). Record a new single point of failure in
+  `spof_registry`, a belief you act on in `belief_registry` with a `belief-<key>` probe, and every autonomous decision in
+  `decision_log` (append-only). `v_doctrine_scorecard` grades them every tick.
+
 ## Autonomy-first protocol (AUTONOMY-FIRST-1)
 - Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
   binds every session and every loop, and is charter decision rule 11 (docs/AUTONOMY-DECISION-POLICY.md has the detail).

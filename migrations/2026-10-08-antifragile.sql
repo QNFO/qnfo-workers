@@ -93,7 +93,7 @@ INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_t
   NULL, NULL, 'MEASURED', 'computed');
 
 CREATE TRIGGER IF NOT EXISTS antifragile_tick_10m AFTER INSERT ON cron_fire_log
-WHEN NEW.cron_name = 'container-warmup-every-10min'
+WHEN NEW.cron_name IN ('container-warmup-every-10min', 'invest-decision-heartbeat-10m')
 BEGIN
   -- (1) the age ladder: one level per 24 h, never to critical, never twice inside 24 h.
   INSERT INTO issue_age_bumps (issue_id, from_priority, to_priority, age_h)
