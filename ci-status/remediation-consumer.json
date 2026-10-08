@@ -1,12 +1,28 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@7b1f00ed6719",
- "due": 20,
- "pass": 12,
- "fail": 8,
+ "verifier": "remediation-consumer@8d4e6d9ec2a0",
+ "due": 16,
+ "pass": 10,
+ "fail": 6,
  "skipped": 0,
  "contracts": [
+  {
+   "class": "issue-2076",
+   "issue_id": 2076,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-2126",
+   "issue_id": 2126,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by personal-companion, which owns it for 48h",
+   "written": true
+  },
   {
    "class": "issue-2072",
    "issue_id": 2072,
@@ -37,46 +53,6 @@
    "verdict": "fail",
    "expected": "within-cap",
    "observed": "over-cap",
-   "written": true
-  },
-  {
-   "class": "issue-2055",
-   "issue_id": 2055,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no metered iPatent draft yet (qnfo-ipatent 3.13.0, PR 764, meters each draft call as purpose draft)",
-   "written": true
-  },
-  {
-   "class": "watchmaker-owner-steps-1",
-   "issue_id": 2058,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2105",
-   "issue_id": 2105,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: ungated published=366 newest verdict=2026-10-08T04:20:25.132Z published quarantine-candidates=0",
-   "written": true
-  },
-  {
-   "class": "issue-2125",
-   "issue_id": 2125,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "dangling-bindings-1",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
    "written": true
   },
   {
@@ -158,14 +134,6 @@
    "expected": "ok",
    "observed": "ok",
    "written": true
-  },
-  {
-   "class": "issue-2131",
-   "issue_id": 2131,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
   }
  ],
  "trusted_transports": [
@@ -192,12 +160,12 @@
   "runner-https"
  ],
  "https": 9,
- "runtime_verified_share_24h": 21.9,
+ "runtime_verified_share_24h": 22.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 49804,
- "head": "7b1f00ed67194811b8bb7214211c2c07fc50a8e7",
+ "spent_ms": 41304,
+ "head": "8d4e6d9ec2a0b59bd82d17c6a991f4a88eddfe44",
  "job_status": "success",
- "ts": "2026-10-08T12:21:39Z"
+ "ts": "2026-10-08T13:31:31Z"
 }
