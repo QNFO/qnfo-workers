@@ -1,83 +1,17 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@643ff7e64866",
- "due": 20,
- "pass": 13,
- "fail": 7,
- "skipped": 0,
+ "verifier": "remediation-consumer@199218eac15a",
+ "due": 14,
+ "pass": 12,
+ "fail": 1,
+ "skipped": 1,
  "contracts": [
   {
-   "class": "EVID-GATE-A2-PUBLISHV2",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "assert-ok",
-   "observed": "pending: no publish-v2-metadata event since 2026-10-01 15:17",
-   "written": true
-  },
-  {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
-   "verdict": "fail",
-   "expected": "connected",
-   "observed": "pending: no access token in personal-life oauth_tokens yet",
-   "written": true
-  },
-  {
-   "class": "issue-2106",
-   "issue_id": 2106,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no reading.q08.org piece since the 1.13.0 fix (last 2026-10-05T08:06:54.939Z)",
-   "written": true
-  },
-  {
-   "class": "issue-2117",
-   "issue_id": 2117,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2095",
-   "issue_id": 2095,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2072",
-   "issue_id": 2072,
-   "verdict": "fail",
-   "expected": "merged",
-   "observed": "failed",
-   "written": true
-  },
-  {
-   "class": "EVID-1718-SHAREDCAP",
-   "issue_id": 1718,
-   "verdict": "pass",
-   "expected": "within-cap",
-   "observed": "within-cap",
-   "written": true
-  },
-  {
-   "class": "issue-2050",
-   "issue_id": 2050,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2113,2114,2115,2116",
-   "written": true
-  },
-  {
-   "class": "issue-1815",
-   "issue_id": 1815,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
-   "written": true
+   "class": "issue-2077",
+   "issue_id": 2077,
+   "verdict": "probe-not-machine-executable",
+   "reason": "bad-contains"
   },
   {
    "class": "TWIN-VISION-TOOLLEAK-1",
@@ -128,11 +62,11 @@
    "written": true
   },
   {
-   "class": "issue-1825",
-   "issue_id": 1825,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
+   "class": "plane-living-paper-fresh",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -166,6 +100,22 @@
    "expected": "ok",
    "observed": "ok",
    "written": true
+  },
+  {
+   "class": "issue-2129",
+   "issue_id": 2129,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2130",
+   "issue_id": 2130,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by host-census, which owns it for 48h",
+   "written": true
   }
  ],
  "trusted_transports": [
@@ -192,12 +142,12 @@
   "runner-https"
  ],
  "https": 8,
- "runtime_verified_share_24h": 20.4,
+ "runtime_verified_share_24h": 21.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 46653,
- "head": "643ff7e648667eb363e0f6a28b47cff97dfabf6c",
+ "spent_ms": 45960,
+ "head": "199218eac15a7b683ba189c024f7b29f04273a19",
  "job_status": "success",
- "ts": "2026-10-08T04:31:20Z"
+ "ts": "2026-10-08T15:11:35Z"
 }

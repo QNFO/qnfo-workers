@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const api = new Function(src.replace(/export default\{/, "const __handler={") + "\nreturn {handler:__handler,VERSION};")();
 const out = fs.readFileSync(new URL("../qnfo-outreach/worker.js", import.meta.url), "utf8");
@@ -22,7 +23,7 @@ const call = (q, method, envv) => api.handler.fetch(new Request("https://qnfo.or
 const rows = () => db.prepare("SELECT email, reason, source FROM email_suppression ORDER BY email").all();
 
 ok(/sha16\(e \+ ":qnfo-unsub-2026"\)/.test(out) && /qnfo\.org\/email\/unsubscribe\?e=/.test(out), "the link format matches the one qnfo-outreach sends");
-ok(/^2\.5\.\d/.test(api.VERSION), "VERSION is 2.5.x", api.VERSION);
+ok(versionAtLeast(api.VERSION, "2.5.0"), "VERSION is 2.5.x", api.VERSION);
 
 {
   const r = await call("?e=" + encodeURIComponent("Reader@Example.org") + "&t=" + tok("reader@example.org"));

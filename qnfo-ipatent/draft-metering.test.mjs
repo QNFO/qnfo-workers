@@ -4,6 +4,7 @@
 // reports them; no AUDIT binding or a failing write never breaks a draft.
 // Run: node qnfo-ipatent/draft-metering.test.mjs   (prints "N passed, 0 failed")
 import { DatabaseSync } from "node:sqlite";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const W = (await import("./worker.js")).default;
 let passed = 0, failed = 0;
 const ok = (c, l, x) => { if (c) passed++; else { failed++; console.error("FAIL " + l + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 400) : "")); } };
@@ -50,6 +51,6 @@ ok((await post(noAudit)).status === 200, "no AUDIT binding: the draft still succ
 const badAudit = Object.assign({}, env, { AUDIT: { prepare() { throw new Error("D1 down"); } } });
 ok((await post(badAudit)).status === 200, "a failing audit write never breaks the draft");
 const h = await (await W.fetch(new Request("https://ipatent.qnfo.org/health"), env, ctx)).json();
-ok(/^3\.(1[3-9]|[2-9]\d)\./.test(h.version), "VERSION is 3.13.0 or later (a minimum, not a pin)", h.version);
+ok(versionAtLeast(h.version, "3.13.0"), "VERSION is 3.13.0 or later (a minimum, not a pin)", h.version);
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
