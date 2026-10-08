@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-08 00:25:33",
+  "audited_at": "2026-10-08 05:10:53",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -538,7 +538,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.13.0-draft-metering",
+        "version": "3.14.0-guided-flow",
         "worker": "qnfo-ipatent"
       },
       {
@@ -1228,9 +1228,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.13.0-draft-metering",
+      "before": "3.14.0-guided-flow",
       "http": 200,
-      "live": "3.13.0-draft-metering",
+      "live": "3.14.0-guided-flow",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
