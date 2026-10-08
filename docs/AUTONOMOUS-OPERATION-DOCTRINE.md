@@ -6,6 +6,12 @@
 > Standing limits the fleet keeps under §0 precedence (security first): the harness's own permission checks, the
 > shared-secrets lock, outreach consent and the personal/research separation. "Engineer a reversible path" never means
 > constructing authority to act as the owner in a legal, financial or signing act.
+> Two readings are fixed so an agent that reads this doctrine alone cannot misapply it (DOCTRINE-CONFLICT-1, agent_issues
+> 2187): (a) "credential blockers are never user issues; recover, rotate" never licenses minting or rotating a live shared
+> credential: rotation stays on the Never list except under the secret lock (CLAUDE.md #1701) with a verified re-probe of
+> every consumer, because the 2026-10-01 rotation broke deploys and the owner's own clients; (b) "authority is discovered and
+> constructed" means composing capabilities the fleet already holds, never circumventing a refusal, a permission denial or
+> a safety classifier: a refused action is recorded with its refusal text and handed on, not retried another way.
 
 ## Prime clause
 
@@ -223,22 +229,22 @@ Independent autonomy is the floor, not the goal. The system is self-directed, se
 | Clause (revision 2) | Where it runs | Status 2026-10-08 |
 |---|---|---|
 | Prime, §1, §3 interrupt gate | CLAUDE.md AUTONOMY-FIRST-1; `v_human_action_gate` reroutes non-identity-bound owner cards (2026-10-08-autonomy-first.sql) | live |
-| §1, §10 red-team every blocker | `v_blocker_claims`, `blocker_redteam`, metric `unverified_blocker_claims` (2026-10-08-11-antifragile.sql) | in PR 801 |
-| §2 idempotency | every 2026-10-08 migration re-applies as a no-op (tested) | in PR 801 |
+| §1, §10 red-team every blocker | `v_blocker_claims`, `blocker_redteam`, metric `unverified_blocker_claims` (2026-10-08-11-antifragile.sql) | live (PR 801, migration_runs ok 2026-10-08) |
+| §2 idempotency | every 2026-10-08 migration re-applies as a no-op (tested) | live (PR 801, migration_runs ok 2026-10-08) |
 | §2 loop-breaker | code loop SELF-REPAIR-1 and CI-FEEDBACK-1 change the rung and carry the failure into the retry | live; three-identical-failure incident: #2183 |
-| §4 aging SLA, escalation | `queue_sla`, `v_stuck_summary`, `queue_sla_tick_10m`; `v_issue_age` and the age ladder; metrics `stuck_items_over_sla`, `issues_open_over_24h`, `backlog_age_p95_min` | in PR 801 |
+| §4 aging SLA, escalation | `queue_sla`, `v_stuck_summary`, `queue_sla_tick_10m`; `v_issue_age` and the age ladder; metrics `stuck_items_over_sla`, `issues_open_over_24h`, `backlog_age_p95_min` | live (PR 801, migration_runs ok 2026-10-08) |
 | §4 self-tuned WIP | ops_config `code_merge_max_merges_per_tick` = 3 today; self-tuning: #2182 | backlog |
-| §5 belief registry | `belief_registry`, `belief-*` probes run hourly, `v_belief_status`, metric `beliefs_unverified_60m` | in PR 801 |
-| §5 capability ledger | `capability_ledger` (provenance, prerequisites, last exercised), metric `capabilities_acquired_7d` (2026-10-08-14-accounting.sql) | in PR 801 |
+| §5 belief registry | `belief_registry`, `belief-*` probes run hourly, `v_belief_status`, metric `beliefs_unverified_60m` | live (PR 801, migration_runs ok 2026-10-08) |
+| §5 capability ledger | `capability_ledger` (provenance, prerequisites, last exercised), metric `capabilities_acquired_7d` (2026-10-08-14-accounting.sql) | live (PR 801, migration_runs ok 2026-10-08) |
 | §5 self-audit cadence | doctrine red-team every 7 days, emitting a backlog entry: #2181 | backlog |
-| §6 no silent drop, accounting invariant, drop detector | `issue_lifecycle` (append-only, every open, status change and delete), `v_issue_accounting` (entered = open + closed with disposition + superseded), metrics `silent_drops` and `issues_unaccounted`; guards that aborted or ignored issue and alert writes replaced; qnfo-observability 1.4.3 | in PR 801 |
-| §7 security | plaintext `command_drain_key` removed; detector `fm-secret-in-config`; trusted-sources filter keeps outside text out of merged code | in PR 801 |
+| §6 no silent drop, accounting invariant, drop detector | `issue_lifecycle` (append-only, every open, status change and delete), `v_issue_accounting` (entered = open + closed with disposition + superseded), metrics `silent_drops` and `issues_unaccounted`; guards that aborted or ignored issue and alert writes replaced; qnfo-observability 1.4.3 | live (PR 801, migration_runs ok 2026-10-08) |
+| §7 security | plaintext `command_drain_key` removed; detector `fm-secret-in-config`; trusted-sources filter keeps outside text out of merged code | live (PR 801, migration_runs ok 2026-10-08) |
 | §9 permission model | `.claude/settings.json`: `acceptEdits`, denies for direct deploy, secret writes, deletes, pushes to main | live |
 | §9 reversibility | control-plane canary with automatic revert (#2138); `bak_*` snapshots before data changes | live; functional canary #2176 |
-| §12 SPOF register and eradication | `spof_registry` (11 rows incl. qnfo-audit D1, GitHub Actions, the cron scheduler), metrics `spofs_on_critical_path` and `spofs_total`; second paths #2175, #2137, #2178, #2179; the 10-minute work runs off `fleet_tick` (cron log or six workers' heartbeats; the first two-cron-row design was one producer, corrected); pre-merge SPOF review: #2184 | in PR 801 |
+| §12 SPOF register and eradication | `spof_registry` (11 rows incl. qnfo-audit D1, GitHub Actions, the cron scheduler), metrics `spofs_on_critical_path` and `spofs_total`; second paths #2175, #2137, #2178, #2179; the 10-minute work runs off `fleet_tick` (cron log or six workers' heartbeats; the first two-cron-row design was one producer, corrected); pre-merge SPOF review: #2184 | live (PR 801, migration_runs ok 2026-10-08) |
 | §12 chaos verification | #2180 (6-hourly exercise of the oldest alternate) | backlog |
-| §13 control disposition | `control_registry` (21 controls), metric `controls_on_critical_path_untested` | in PR 801 |
-| §14 provenance | `decision_log` (append-only, with `capability_gain`), `issue_lifecycle` | in PR 801 |
-| §15 scorecard | `v_doctrine_scorecard` (silent drops, unaccounted issues, SPOFs on path and total, controls, beliefs, failure modes probed, root causes unremediated, capabilities acquired, backlog age p95), refreshed every tick | in PR 801 |
-| §16 failure-mode register | `failure_modes` with trigger, symptom, blast radius, detection, root cause, remediation, status; `fm-*` detectors hourly; `v_failure_mode_status`; metric `failure_modes_recurring` | in PR 801 |
+| §13 control disposition | `control_registry` (21 controls), metric `controls_on_critical_path_untested` | live (PR 801, migration_runs ok 2026-10-08) |
+| §14 provenance | `decision_log` (append-only, with `capability_gain`), `issue_lifecycle` | live (PR 801, migration_runs ok 2026-10-08) |
+| §15 scorecard | `v_doctrine_scorecard` (silent drops, unaccounted issues, SPOFs on path and total, controls, beliefs, failure modes probed, root causes unremediated, capabilities acquired, backlog age p95), refreshed every tick | live (PR 801, migration_runs ok 2026-10-08) |
+| §16 failure-mode register | `failure_modes` with trigger, symptom, blast radius, detection, root cause, remediation, status; `fm-*` detectors hourly; `v_failure_mode_status`; metric `failure_modes_recurring` | live (PR 801, migration_runs ok 2026-10-08) |
 | §17 self-modification | doctrine and registers change by PR with tests, rollback lines and `decision_log` rows | live practice |
