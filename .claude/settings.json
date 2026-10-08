@@ -1,4 +1,24 @@
 {
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "deny": [
+      "Bash(wrangler deploy:*)",
+      "Bash(npx wrangler deploy:*)",
+      "Bash(wrangler delete:*)",
+      "Bash(npx wrangler delete:*)",
+      "Bash(wrangler secret put:*)",
+      "Bash(npx wrangler secret put:*)",
+      "Bash(wrangler secret delete:*)",
+      "Bash(npx wrangler secret delete:*)",
+      "Bash(wrangler d1 delete:*)",
+      "Bash(npx wrangler d1 delete:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push -f origin main:*)",
+      "Bash(git push --force origin main:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)"
+    ]
+  },
   "hooks": {
     "Stop": [
       { "hooks": [ { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/drain-reprompt.py\"" } ] }

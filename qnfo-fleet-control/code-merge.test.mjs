@@ -118,7 +118,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(src.slice(A, B + END.length) + "\n" + orch.slice(o1, o2) + "\n" + orch.slice(o3, o4) +
-  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES };", sandbox, { filename: "code-merge-block.js" });
+  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmEditsApply, cmRebaseText, cmRevertEdits, cmIntegrity, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES };", sandbox, { filename: "code-merge-block.js" });
 const W = sandbox.__export;
 
 let passed = 0, failed = 0;
@@ -287,6 +287,18 @@ const orefuses = [
 ];
 for (const [label, t, gg] of orefuses) ok(oact(t, gg).action === "refuse", "not opened: " + label, oact(t, gg));
 ok(oact(pushedT(), og({ pulls: undefined })).action === "wait" && oact(pushedT(), og({ provenance: { ok: false, transient: true, why: "d1" } })).action === "wait", "unread pulls or a transient provenance read only wait");
+// REBASE-BRANCH-ACCEPT-1 (0.11.1): the -r<n> rebuild of cmRequeueStale is the loop's own branch (codeagent-3oa9p0pglnnj-r2 was refused 2026-10-07T15:20Z)
+const r2T = (over) => pushedT(Object.assign({ branch: BRANCH + "-r2", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "-r2?expand=1" }, over || {}));
+ok(oact(r2T(), og()).action === "open", "REBASE-BRANCH-ACCEPT-1: a -r2 rebuilt branch is opened as a pull request", oact(r2T(), og()));
+ok(oact(r2T({ branch: BRANCH + "-r12" }), og()).action === "open", "a -r12 rebuild is the loop's own branch too");
+const r2adopt = oact(r2T(), og({ pulls: [prJson({ number: 457, head: { ref: BRANCH + "-r2", sha: "h1", repo: { full_name: "QNFO/qnfo-workers" } } })] }));
+ok(r2adopt.action === "adopt" && r2adopt.pr === 457, "an existing pull request for the -r2 branch is adopted", r2adopt);
+ok(oact(pushedT(), og({ pulls: [prJson({ number: 458, head: { ref: BRANCH + "-r2", sha: "h1", repo: { full_name: "QNFO/qnfo-workers" } } })] })).action === "open" && oact(r2T(), og({ pulls: [prJson({ number: 459 })] })).action === "open", "a pull request for the other name (base vs -r2) is not adopted");
+for (const bad of [BRANCH + "-r", BRANCH + "-rx", BRANCH + "-r0", BRANCH + "-r2-r2", BRANCH + "-r2x", BRANCH + "-r1000", "codeagent-zzzzzzzzzzzz-r2", BRANCH + "x-r2"]) ok(oact(pushedT({ branch: bad }), og()).action === "refuse" && /not a code-loop branch/.test(oact(pushedT({ branch: bad }), og()).why), "not opened: branch " + bad, oact(pushedT({ branch: bad }), og()));
+// and cmDecide (a pull request on the -r2 branch) takes the same gates as the base branch
+const r2M = task({ branch: BRANCH + "-r2" }), r2G = g({ pr: prJson({ head: { ref: BRANCH + "-r2", sha: "h1", repo: { full_name: "QNFO/qnfo-workers" } } }) });
+ok(act(r2M, r2G).action === act(task(), g()).action && act(task(), g()).action === "merge", "REBASE-BRANCH-ACCEPT-1: a -r2 branch's pull request merges like the base branch's", { r2: act(r2M, r2G), base: act(task(), g()) });
+ok(act(r2M, g()).action === "refuse" && act(task({ branch: BRANCH + "-r2-r2" }), r2G).action === "refuse", "a -r2 task whose pull request head is the base branch, or a malformed rebuild name, is refused");
 
 // ================================================================ 4. end to end: pushed branch -> PR opened by the runner -> merge -> deploy -> verify
 function seedTask(over) {
@@ -308,6 +320,33 @@ function seedWorkerPr(num, branch, headSha) {
 }
 freshDb(); freshGh();
 const env = { AUDIT, GITHUB_TOKEN: "test-token" };
+// ---- REBASE-INTEGRITY-1 (0.11.2): a branch rebuilt from ctx.edits on a moved main is verified by its edits, not the parked patch
+{
+  const BASE2 = BASE.replace('var VERSION = "1.2.3-demo";', 'var VERSION = "1.2.9-moved";').replace("function b() {", "function b0() {\n  return 0;\n}\nfunction b() {");
+  const EDITS = [{ search: "  return 1;", replace: "  return 11;" }];
+  const REBUILT = W.cmRebaseText(BASE2, EDITS, true);
+  ok(REBUILT && REBUILT.includes("  return 11;") && REBUILT.includes("function b0() {") && /var VERSION = "1\.2\.10-codeagent";/.test(REBUILT), "cmRebaseText re-applies the edits on the moved base and bumps its VERSION as the publisher does", REBUILT && REBUILT.slice(0, 80));
+  const noop = [{ search: "  return 1;", replace: "  return 1;" }];
+  ok(W.cmRebaseText(BASE2, noop, false) === null && W.cmRebaseText(BASE2, noop, true) === BASE2.replace('"1.2.9-moved"', '"1.2.10-codeagent"') && W.cmRebaseText(BASE2 + "  return 1;\n", EDITS, true) === null && W.cmRebaseText(BASE2, [], true) === null, "a no-op edit gives nothing on a non-js file and only the VERSION bump on a worker (as the publisher does); an ambiguous SEARCH or no edits give nothing");
+  gh.contents["mb2:" + PATH] = BASE2; gh.contents["mb2:" + MIRROR] = BASE2;
+  gh.contents["r2h:" + PATH] = REBUILT; gh.contents["r2h:" + MIRROR] = REBUILT; gh.contents["r2h:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\nmain = "worker.js"\n';
+  const rctx = { base: BASE, patch: PATCH, edits: EDITS, mirror: MIRROR, rebased: "REBASE-BEFORE-PUBLISH-1: the parked patch did not apply to main@mb2; 1 edit re-applied to the current file, mirror rewritten (no model call)" };
+  const rt = task({ status: "branch_pushed", branch: BRANCH + "-r2", pr_url: null, ctx: JSON.stringify(rctx) });
+  const ig = J(await W.cmIntegrity(env, rt, "r2h", [PATH, MIRROR], W.cmScope(PATH), "mb2"));
+  ok(ig.ok === true && ig.revertible === true && ig.version_to === "1.2.10-codeagent" && ig.merge_base === "mb2", "REBASE-INTEGRITY-1: the rebuilt branch is intact (merge base + edits + bump), revertible, and carries the bumped VERSION", ig);
+  const stale = task({ status: "branch_pushed", branch: BRANCH + "-r2", pr_url: null, ctx: JSON.stringify({ base: BASE, patch: PATCH, edits: EDITS, mirror: MIRROR }) });
+  const ig0 = J(await W.cmIntegrity(env, stale, "r2h", [PATH, MIRROR], W.cmScope(PATH), "mb2"));
+  ok(ig0.ok === false && /does not apply to/.test(ig0.why), "without ctx.rebased the parked patch still decides (it does not apply on the moved base)", ig0);
+  gh.contents["r2x:" + PATH] = REBUILT + "// other\n"; gh.contents["r2x:" + MIRROR] = REBUILT; gh.contents["r2x:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\n';
+  const igx = J(await W.cmIntegrity(env, rt, "r2x", [PATH, MIRROR], W.cmScope(PATH), "mb2"));
+  ok(igx.ok === false && /is not the verified patch/.test(igx.why), "other content on the rebuilt head is refused", igx);
+  gh.contents["mb3:" + PATH] = BASE2.replace("  return 1;", "  return 2;"); gh.contents["mb3:" + MIRROR] = gh.contents["mb3:" + PATH];
+  const igm = J(await W.cmIntegrity(env, rt, "r2h", [PATH, MIRROR], W.cmScope(PATH), "mb3"));
+  ok(igm.ok === false && /do not re-apply/.test(igm.why), "edits whose SEARCH is gone from the merge base are refused with the REBASE-INTEGRITY-1 reason", igm);
+  const rv = W.cmRevertEdits(REBUILT, EDITS, "-revert-c9");
+  ok(rv && rv.content.includes("  return 1;") && !rv.content.includes("  return 11;") && rv.from === "1.2.10-codeagent" && rv.to === "1.2.11-revert-c9", "cmRevertEdits puts the SEARCH text back on today's main and bumps main's VERSION", rv && { from: rv.from, to: rv.to });
+  ok(W.cmEditsApply("aXbXc", [{ search: "X", replace: "Y" }], false) === null && W.cmEditsApply("abc", [{ search: "b", replace: "" }], true) === null && W.cmEditsApply("abc", [{ search: "a", replace: "1" }, { search: "c", replace: "3" }], false) === "1b3", "cmEditsApply: unique SEARCH only, an empty REPLACE cannot be inverted, several edits apply in place");
+}
 db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
 seedTask({ status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1" });
 gh.branches[BRANCH] = "h1";
@@ -386,7 +425,8 @@ ok(one("SELECT merge_state FROM code_tasks WHERE id = ?", T2).merge_state === "d
 
 // ================================================================ 6. refusals, provenance, kill switch, person merges, budget
 freshDb(); freshGh();
-db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+// ISSUE-NOTE-NEWLINE-1: the issue ends with its ACT-BRIDGE-1 lines, as a metric-trigger issue does
+db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'd' || char(10) || 'code-task: repo=qnfo-workers path=qnfo-demo/worker.js' || char(10) || 'code-anchor: function a() {', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
 db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (60, 'kaizen idea', 'd', 'kaizen-ai', 'open')").run();
 seedTask();
 seedWorkerPr(401, BRANCH, "h1");
@@ -395,7 +435,9 @@ r = J(await W.codeMergeTick(env, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
 ok(r.decided[0].action === "refuse" && row.status === "failed" && /^merge-runner: the branch changes/.test(row.last_error) && gh.merges.length === 0 && gh.commits.length === 0, "an extra file: failed (not an owner card) with the reason, nothing pushed, no merge", row);
 ok(gh.comments.length === 1 && gh.comments[0].pr === 401 && /did not merge this pull request/.test(gh.comments[0].body) && /handed to the fleet/.test(gh.comments[0].body), "the refusal is explained on the PR");
-ok(/CODE-TASK-MERGE-RUNNER-1: code task ct_abcdefghijklmn was refused by the merge runner/.test(one("SELECT description FROM agent_issues WHERE id = 50").description) && one("SELECT status FROM agent_issues WHERE id = 50").status === "open", "MERGE-RUNNER-REFUSAL-TAXONOMY-1: the refusal is noted on the source issue, which stays open for the fleet");
+const d50 = one("SELECT description FROM agent_issues WHERE id = 50").description;
+ok(/CODE-TASK-MERGE-RUNNER-1: code task ct_abcdefghijklmn was refused by the merge runner/.test(d50) && one("SELECT status FROM agent_issues WHERE id = 50").status === "open", "MERGE-RUNNER-REFUSAL-TAXONOMY-1: the refusal is noted on the source issue, which stays open for the fleet");
+ok(/\n\nCODE-TASK-MERGE-RUNNER-1: code task ct_abcdefghijklmn was refused/.test(d50) && /^code-anchor: function a\(\) \{$/m.test(d50) && !/\{ \| CODE-TASK/.test(d50), "ISSUE-NOTE-NEWLINE-1: the note starts on its own line and the issue's code-anchor: line stays intact", d50);
 ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.refused' AND status = 'refused'").n === 1, "the refusal writes one cloud_ops_events row");
 r = J(await W.codeMergeTick(env, { now: NOW + 36e5 }));
 ok(r.decided.length === 0 && gh.comments.length === 1, "a refused task is not re-evaluated or re-commented");

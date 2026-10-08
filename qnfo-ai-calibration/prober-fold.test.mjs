@@ -8,6 +8,7 @@
 // only */30 and the AI binding.
 // Run: node qnfo-ai-calibration/prober-fold.test.mjs   -> prints "N passed, 0 failed"
 import fs from "node:fs";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const prober = fs.readFileSync(new URL("../ai-health-prober/worker.js", import.meta.url), "utf8");
 const toml = fs.readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
@@ -30,7 +31,7 @@ const ok = (c, m, extra) => { if (c) pass++; else { fail++; console.log("FAIL " 
   const inPrune = (l) => { const i = body.indexOf(l); return ps > fs0 && pe > ps && pe < fe && i >= ps && i <= pe; };
   const changed = body.filter((l) => l.trim() && !src.includes(l.trim()) && !inCov(l) && !inPrune(l));
   ok(cs > 0 && ce > cs && changed.length === 3 && changed.some((l) => l.startsWith("var VERSION = ")) && changed.some((l) => l.startsWith("var LIMS = ")) && changed.some((l) => l.startsWith("var SIGNALS = ")), "every prober line is in the host except its VERSION, LIMS and SIGNALS lines (SIGNALS drops the retired kaizen register, FOLD-HYGIENE-1)", changed.map((l) => l.slice(0, 60)));
-  ok(/^1\.3\.[1-9]/.test(api.VERSION) && api.PROBER_VERSION === "2.3.15-folded" && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1+, member 2.3.15-folded, legacy member cron */20 kept for dispatch");
+  ok(versionAtLeast(api.VERSION, "1.3.1") && api.PROBER_VERSION === "2.3.15-folded" && api.PROBER_CRON === "*/20 * * * *", "host 1.3.1+, member 2.3.15-folded, legacy member cron */20 kept for dispatch");
   ok(!/"kaizen", "kaizen_candidates"/.test(src), "the prober SIGNALS in the host no longer grade the retired kaizen register (FOLD-HYGIENE-1)");
   ok(src.includes('["version_queue", "version_queue", "created_at", 336, "event"]') && !src.includes('["version_queue", "version_queue", "created_at", 72, "heartbeat"]'), "version_queue is an event register with a 336 h window (#2028)");
   ok((src.match(/var VERSION = "/g) || []).length === 1, "one quoted VERSION constant in the bundle (FM7 parity applies to the host)");

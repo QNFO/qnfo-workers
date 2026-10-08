@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.11, written 2026-10-01 (1.0.11, 2026-10-06: core prompt rule 8 is deleted on the owner's directive (RULE-8-RETIRED-1): spend caps, guard metrics, verification probes and data deletion are the fleet's own decisions, recorded with the reason and a live measurement, while the protections for people outside the fleet stay, section 8 rules 4, 9 and 10; 1.0.10, 2026-10-06: AI spend caps steer model choice and never stop work, BUDGET-SOFT-ROUTE-1, section 8; 1.0.9, 2026-10-06: `docs/TRANSFORMATION-PROGRAM.md` (TRANSFORMATION-PROGRAM-1) is an input to this charter, the source of the `RM-TP-*` roadmap rows and the `TP-*` epics; 1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1; 1.0.8, 2026-10-05: the owner's standing grant OWNER-STANDING-GRANT-1, which lets the fleet retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 2, 7 and 8). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.14, written 2026-10-01 (1.0.14, 2026-10-08: the Autonomous Operation Doctrine is adopted verbatim and binds the fleet, with its control, belief and SPOF registers, decision log and scorecard in D1, DOCTRINE-1, section 8 rule 13; 1.0.13, 2026-10-08: anti-fragile by default, no hold without live evidence, a red team for every blocker, redundant paths, SLAs in minutes and hours, ANTIFRAGILE-1 and QUEUE-SLA-1, section 8 rule 12; 1.0.12, 2026-10-08: autonomy first, the only owner interrupt is an action both irreversible and identity-bound, enforced on the owner queue and audited hourly, AUTONOMY-FIRST-1, section 8 rule 11; 1.0.11, 2026-10-06: core prompt rule 8 is deleted on the owner's directive (RULE-8-RETIRED-1): spend caps, guard metrics, verification probes and data deletion are the fleet's own decisions, recorded with the reason and a live measurement, while the protections for people outside the fleet stay, section 8 rules 4, 9 and 10; 1.0.10, 2026-10-06: AI spend caps steer model choice and never stop work, BUDGET-SOFT-ROUTE-1, section 8; 1.0.9, 2026-10-06: `docs/TRANSFORMATION-PROGRAM.md` (TRANSFORMATION-PROGRAM-1) is an input to this charter, the source of the `RM-TP-*` roadmap rows and the `TP-*` epics; 1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1; 1.0.8, 2026-10-05: the owner's standing grant OWNER-STANDING-GRANT-1, which lets the fleet retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 2, 7 and 8). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -382,6 +382,36 @@ close-evidence trigger) and stated here for the rest.
    CONTACT-LEDGER-IMMUTABLE-1), the outreach consent gate and outreach cadence caps (OUTREACH-CONSENT-1), and the
    personal/research separation (personal data includes other people's mail, calendar entries and contacts, and the
    fleet's research plane is open access).
+11. **Autonomy first (AUTONOMY-FIRST-1).** Owner directive 2026-10-08: "Implement autonomy-first protocol
+   system/fleet-wide and in all Claude operations." Loops and sessions decide; they do not ask. The only step that
+   waits for the owner is one that is both irreversible and identity-bound (a credential only the owner can mint,
+   money, a legal or signing act, the owner's own accounts, machine or personal data, posting on a channel whose
+   terms forbid automation). Merge approvals, thresholds, caps, tuning, retries and scope choices are the fleet's.
+   A blocker is recovered from, worked around or filed with a doer and a closing probe; it is never handed to the
+   owner. Enforced in D1, not only stated here: `v_human_action_gate` reroutes an owner card that is not
+   irreversible and identity-bound into an `agent_issues` row, and `v_autonomy_first_audit` feeds the metrics
+   `owner_queue_fleet_cards_open` and `session_dependent_issues_open` (target 0) that the hourly tick grades
+   (migrations/2026-10-08-autonomy-first.sql). Rules 4, 9 and 10 still hold: the "never" list and the protections
+   for people outside the fleet do not move.
+12. **Anti-fragile by default (ANTIFRAGILE-1, QUEUE-SLA-1).** Owner directive 2026-10-08: independent autonomy is the
+   bare minimum; aggressive robustness and anti-fragility are integrated fleet-wide. Four consequences:
+   - **No holds, filters or blocks without live evidence.** A hold exists only while a recorded, current reason holds;
+     the 2026-10-08 audit released 58 held items (research `owner_hold`, outage-parked rows, held owner and re-entry
+     ideas) and turned the remaining filters into rate limits (backpressure), not holds.
+   - **Red team every blocker.** A claim that something is blocked, owner-only or needs a credential is a belief until
+     an attempt with what exists proves it (`blocker_redteam` verdict with the refusal text). Workarounds almost always
+     exist; the 2026-10-08 "no token can write routes" claim was false.
+   - **Redundant paths.** A critical path with one executor is a defect: a second path (parallel workers, a fallback
+     model, another transport, a retry from another runner) is built before the first fails.
+   - **Time is measured in minutes and hours.** Every queue has an SLA in minutes (`queue_sla`), the 10-minute fixer
+     clears known stuck types, every open issue is probed hourly, an issue with no doer after 3 hours is a breach, and
+     an issue older than a day rises in priority every day until it closes.
+13. **The Autonomous Operation Doctrine (DOCTRINE-1).** Owner directive 2026-10-08: `docs/AUTONOMOUS-OPERATION-DOCTRINE.md`
+   (verbatim) binds every loop, worker, workflow and session, with its own precedence (interrupt gate, then security, then
+   no loose ends, then anti-fragility, then autonomy, then improvement). No hold, filter, pause or kill switch sits on a
+   critical path; every surviving control has a tested alternate. The registers it requires live in D1 and are graded
+   every tick: `control_registry`, `spof_registry`, `belief_registry` (each belief probed hourly), the append-only
+   `decision_log` and `v_doctrine_scorecard`. The doctrine's map of clause to machinery is kept current in the same file.
 
 ## 9. How this charter maintains itself (CHARTER-LOOP-1)
 
@@ -428,95 +458,95 @@ close-evidence trigger) and stated here for the rest.
   staleness of the timestamp below is the alarm (`RM-MONITOR-THE-MONITORS-1` is the roadmap item that makes it one).
 
 <!-- CHARTER-LIVE:BEGIN -->
-_Generated by qnfo-fleet-control CHARTER-LOOP-1 at 2026-10-07T03:00:57.677Z (charter 1.0.11). Do not edit by hand: the next daily tick overwrites this section. Live JSON: `GET https://qnfo-fleet-control.q08.workers.dev/charter`._
+_Generated by qnfo-fleet-control CHARTER-LOOP-1 at 2026-10-08T03:00:26.149Z (charter 1.0.11). Do not edit by hand: the next daily tick overwrites this section. Live JSON: `GET https://qnfo-fleet-control.q08.workers.dev/charter`._
 
 ### Scoreboard
 
 | Signal | Value |
 |---|---|
-| Charter health (mean pillar health, metrics meeting target) | 0.71 |
-| Autonomy composite (owner-weighted SAI / 20, sai_config weights; qnfo-autonomy-scorer sai_weighted = survival_state.sai) | 3.39 / 5 (scored 2026-10-06) |
-| Autonomy dimension mean (unweighted, autonomy_scores.overall) | 4.3 / 5 |
-| MVP components serving | 13 / 18 |
+| Charter health (mean pillar health, metrics meeting target) | 0.81 |
+| Autonomy composite (owner-weighted SAI / 20, sai_config weights; qnfo-autonomy-scorer sai_weighted = survival_state.sai) | 3.51 / 5 (scored 2026-10-07) |
+| Autonomy dimension mean (unweighted, autonomy_scores.overall) | 4.4 / 5 |
+| MVP components serving | 18 / 18 |
 | Live workers (service_registry) | 30 |
-| Open agent issues (high) | 97 (53) |
-| Canonical deploys last 7d (ok) | 3644 (3591) |
+| Open agent issues (high) | 134 (86) |
+| Canonical deploys last 7d (ok) | 3316 (3277) |
 | Confirmed subscribers | 1 |
 | Objective revisions awaiting ratification | 0 |
-| Survival state (sai / survival_score) | 3.39 / 0.7200000000000001 at 2026-10-07 02:50:57 |
+| Survival state (sai / survival_score) | 3.51 / 0.7200000000000001 at 2026-10-08 02:50:35 |
 
 ### Pillars
 
 | Pillar | Objective | Metrics met | Health | Missing target |
 |---|---|---|---|---|
-| core: Smallest verified core | mission | 4/5 | 0.8 | worker_count |
-| autonomy: Human as override, never dependency | objective-function | 3/4 | 0.75 | open_agent_issues |
+| core: Smallest verified core | mission | 3/5 | 0.6 | worker_count, probe_coverage_pct |
+| autonomy: Human as override, never dependency | objective-function | 2/4 | 0.5 | open_agent_issues, capability_contract_conformance |
 | research: Research that is read and cited | return-on-spend | 4/4 | 1 | none |
 | reach: Credible reach | return-on-spend | 5/6 | 0.83 | subscribers_growth_monthly |
-| cost: Cost that returns | cost-ceiling | 4/7 | 0.57 | cost_usd_30d, workers_ai_cost_30d_usd, workers_ai_attribution_coverage_pct |
+| cost: Cost that returns | cost-ceiling | 5/7 | 0.71 | cost_usd_30d, workers_ai_cost_30d_usd |
 | security: A trust boundary that holds | mission | 1/1 | 1 | none |
-| personal: Personal utility layer | mission | 0/1 | 0 | personal_mvp_serving |
+| personal: Personal utility layer | mission | 1/1 | 1 | none |
 
 ### MVP (the minimum verified core)
 
 | Component | Pillar | Role | Live | Version |
 |---|---|---|---|---|
-| qnfo-ops | core | canonical deploy path (/ops/deploy), service registry, ops agent | yes (SYNC) | 2.39.1-cost-soft |
+| qnfo-ops | core | canonical deploy path (/ops/deploy), service registry, ops agent | yes (SYNC) | 2.39.2-context-compact |
 | qnfo-deploy-guard | core | deploy lock, deploy ledger, secret-lock leases, mutation detector | yes (SYNC) | 1.3.23-secret-only-ledger |
 | qnfo-ai | core | model router and research gateway (cost ladder, ensembles, RAG) | yes (SYNC) | 5.32.0-budget-soft |
 | qnfo-tools-mcp | core | the machine tool surface every client uses | yes (SYNC) | 1.2.0-owner-queue |
 | qnfo-memory-mcp | core | persistent agent memory (D1 + Vectorize + KG) | yes (SYNC) | 2.0.5-capability-contract |
-| qnfo-fleet-control | autonomy | governance kernel: drift scan, self-heal, evolve, metrics, charter loop | yes (SYNC) | 0.7.1-charter-rule-10 |
-| qnfo-autonomy-scorer | autonomy | measured VSM/OODA autonomy scores and survival state | **NO** (NOT_DEPLOYED) |  |
-| qnfo-fleet-dashboard | autonomy | the owner surface (fleet.qnfo.org) and probe coverage | yes (SYNC) | 1.26.4-codeagent |
-| fleet-exec | autonomy | D1-defined task engine and cron dispatcher | **NO** (NOT_DEPLOYED) |  |
-| qnfo-research-exec | research | research queue -> publish (Zenodo DOI, PDF, KG) | yes (SYNC) | 0.9.68-latex-escape |
-| qnfo-paper-indexer | research | corpus index, versions, citation impact | **NO** (NOT_DEPLOYED) |  |
-| qnfo-paper-reviser | research | adversarial revision loop | **NO** (NOT_DEPLOYED) |  |
+| qnfo-fleet-control | autonomy | governance kernel: drift scan, self-heal, evolve, metrics, charter loop | yes (SYNC) | 0.11.2-rebase-integrity |
+| qnfo-autonomy-scorer | autonomy | measured VSM/OODA autonomy scores and survival state | yes (FOLDED:qnfo-observability/SYNC) | 1.4.2-revert-e70f166 |
+| qnfo-fleet-dashboard | autonomy | the owner surface (fleet.qnfo.org) and probe coverage | yes (SYNC) | 1.26.6-codeagent |
+| fleet-exec | autonomy | D1-defined task engine and cron dispatcher | yes (FOLDED:qnfo-code-orchestrator/SYNC) | 0.8.0-edit-indent |
+| qnfo-research-exec | research | research queue -> publish (Zenodo DOI, PDF, KG) | yes (SYNC) | 0.9.69-codeagent |
+| qnfo-paper-indexer | research | corpus index, versions, citation impact | yes (FOLDED:qnfo-infra/SYNC) | 1.3.1-indexer-fold |
+| qnfo-paper-reviser | research | adversarial revision loop | yes (FOLDED:qnfo-research-exec/SYNC) | 0.9.69-codeagent |
 | qnfo-gateway | reach | qnfo.org and papers.qnfo.org, the home of record | yes (SYNC) | 3.11.3-math-residue-3 |
 | qnfo-subscribers | reach | the owned audience (double opt-in, digest) | yes (SYNC) | 1.1.8-digest-links-utm |
-| qnfo-social | reach | distribution of published work inside the cadence caps | yes (SYNC) | 0.8.2-utm-visits |
+| qnfo-social | reach | distribution of published work inside the cadence caps | yes (SYNC) | 0.9.0-promote-route |
 | qnfo-email | personal | owner channel: alerts, command verbs, intake | yes (SYNC) | 2.5.6-itin-audit |
 | personal-api | personal | personal twin (calendar, tasks, memory, brief) | yes (SYNC) | 4.8.3-noindex |
-| calendar-api | personal | calendar plane and ICS publish | **NO** (NOT_DEPLOYED) |  |
+| calendar-api | personal | calendar plane and ICS publish | yes (FOLDED:qnfo-lifecycle/SYNC) | 1.9.1-retired-hosts |
 
 ### SWOT, measured today
 
 **Strengths**
 
-- full_reports_live_30d = 31 (target >=2 by 2026-10-25, then >=1/month)
+- full_reports_live_30d = 30 (target >=2 by 2026-10-25, then >=1/month)
 - zenodo_versions_per_flagship = 3 (target >=2 per flagship)
 - gateway_cap_30d_usd = 150 (target <=150)
-- external_impact_per_dollar = 0.00927 (target <= 0.012 cost per impact unit)
-- publications_30d = 31 (target >=2/30d)
-- distribution_posts_30d = 132 (target >=1/day via qnfo-social)
+- external_impact_per_dollar = 0.00926 (target <= 0.012 cost per impact unit)
+- publications_30d = 30 (target >=2/30d)
+- distribution_posts_30d = 131 (target >=1/day via qnfo-social)
 - zenodo_views_total = 41774 (target >= 41000 integrity floor)
 - pageviews_30d = 6800 (target >= 5500)
 - indexed_surface = 474 (target >= 455)
-- referral_30d = 150 (target >= 100)
+- referral_30d = 180 (target >= 100)
 - drift_total = 0 (target 0)
 - guard_rcs = 0 (target all 0)
 - deploy_freshness_h = 0 (target < 24h behind repo main)
-- fleet_context_tokens = 208595 (target <=1000000)
-- and 61 more
+- fleet_context_tokens = 208465 (target <=1000000)
+- and 72 more
 
 **Weaknesses**
 
 - subscribers_growth_monthly = 0 vs target +10 new/month
-- workers_ai_cost_30d_usd = 59.19 vs target <= 7.50
+- workers_ai_cost_30d_usd = 58.33 vs target <= 7.50
 - worker_count = 28 vs target <= 24
-- cost_usd_30d = 453.23 vs target <= 200
-- open_agent_issues = 97 vs target <=10
-- workers_ai_attribution_coverage_pct = 31.7 vs target >= 80
+- cost_usd_30d = 452.37 vs target <= 200
+- open_agent_issues = 132 vs target <=10
+- probe_coverage_pct = 93.3 vs target >=95
 - invest_decision_level = 2 vs target 0 continue, 1 continue-at-risk, 2 scale back, 3 stop, -1 unknown
 - human_actions_open = 8 vs target 0
 - watchmaker_index = 2 vs target 0
+- capability_contract_conformance = 0.9677 vs target >= 1.0
 - session_execution_ratio_30d = 0.74 vs target >= 0.8
-- metrics_in_breach = 26 vs target 0
+- metrics_in_breach = 21 vs target 0
 - code_task_success_rate_30d = 0.25 vs target >= 0.6
-- breach_code_task_pct = 7.7 vs target >= 30
-- remediation_latest_pass_pct_7d = 62.4 vs target >= 80
-- and 34 more
+- breach_code_task_pct = 14.3 vs target >= 30
+- and 30 more
 
 **Opportunities (highest-leverage open roadmap items)**
 
@@ -541,9 +571,9 @@ _Generated by qnfo-fleet-control CHARTER-LOOP-1 at 2026-10-07T03:00:57.677Z (cha
 - AI spend ai_spend:total $224.55 over cap $150
 - AI spend ai_spend:openai $197.78 over cap $60
 - AI spend ai_spend:deepseek $169.49 over cap $50
-- AI spend ai_spend:workers-ai $59.19 over cap $25
+- AI spend ai_spend:workers-ai $58.33 over cap $25
 - AI spend ai_spend:anthropic $25.96 over cap $15
-- 53 open high-priority issues (reliability 16, continuous-improvement 10, optimization 7, autonomy 3)
+- 86 open high-priority issues (reliability 24, remediation 15, optimization 9, continuous-improvement 9)
 
 ### Roadmap by horizon (roadmap_implementation)
 
@@ -580,15 +610,11 @@ State **OPEN**. credibility_events >= 2 OR confirmed_subscribers >= 50 OR fundin
 
 ### Charter breaches
 
-- **high** CHARTER-MVP-DOWN-1: qnfo-autonomy-scorer: MVP component qnfo-autonomy-scorer (measured VSM/OODA autonomy scores and survival state) is NOT_DEPLOYED in worker_live_audit.
-- **high** CHARTER-MVP-DOWN-1: fleet-exec: MVP component fleet-exec (D1-defined task engine and cron dispatcher) is NOT_DEPLOYED in worker_live_audit.
-- **high** CHARTER-MVP-DOWN-1: qnfo-paper-indexer: MVP component qnfo-paper-indexer (corpus index, versions, citation impact) is NOT_DEPLOYED in worker_live_audit.
-- **high** CHARTER-MVP-DOWN-1: qnfo-paper-reviser: MVP component qnfo-paper-reviser (adversarial revision loop) is NOT_DEPLOYED in worker_live_audit.
-- **high** CHARTER-MVP-DOWN-1: calendar-api: MVP component calendar-api (calendar plane and ICS publish) is NOT_DEPLOYED in worker_live_audit.
+None. Every MVP component is serving.
 
 ### Portfolio (GitHub organisation QNFO)
 
-127 repositories (10 private): platform 13, research 14, demo 8, archived 76; synced 2026-10-07T02:00:57.623Z. Full register: docs/PORTFOLIO.md and `GET /portfolio`.
+127 repositories (10 private): platform 13, research 14, demo 8, archived 76; synced 2026-10-08T02:00:24.970Z. Full register: docs/PORTFOLIO.md and `GET /portfolio`.
 
 ### Terminal objectives (qnfo-audit.objectives, immutable by the fleet)
 
