@@ -6,6 +6,7 @@
 // reachable); wrangler.toml adds no cron (a newly registered trigger was seen not to fire, PROBER-ON-CAL-TICK-1).
 // Run: node qnfo-infra/indexer-fold.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync, existsSync } from "node:fs";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const guest = readFileSync(new URL("../qnfo-paper-indexer/worker.js", import.meta.url), "utf8");
 const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
@@ -18,7 +19,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "3.0.12-math-browser-metric";')), lines.indexOf("export { worker_default as default };"));
   const missing = body.filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every indexer line is in the host except its VERSION line", missing.map((l) => l.slice(0, 60)));
-  ok(/^1\.3\.1/.test(mod.__hv) && mod.__mv === "3.0.13-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1, member 3.0.13-folded, one quoted VERSION constant");
+  ok(versionAtLeast(mod.__hv, "1.3.1") && mod.__mv === "3.0.13-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1, member 3.0.13-folded, one quoted VERSION constant");
 }
 
 // cron dispatch with mapped bindings
