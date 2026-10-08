@@ -10,6 +10,9 @@
 -- The 110 reopened 2026-08 issues are closed again with that evidence (the live sites three of them name answer 200 today:
 -- qnfo.org, papers.qnfo.org). reconcile_tick now reopens only closures made after the issue_lifecycle ledger began
 -- (dispositioned with has_evidence = 0), which is the doctrine's silent-drop definition going forward.
+-- Second apply 2026-10-08: the first run stopped at statement 4, because a triage row inserted as closed fires
+-- triage_close_sync_issue_ins before its evidence exists (close-without-evidence). Rows are inserted as triaged; the
+-- evidence and the closed state are set by one UPDATE, so the sync trigger sees the evidence.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261008_retro_disposition
@@ -32,7 +35,7 @@ BEGIN
 END;
 
 INSERT OR IGNORE INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at)
-SELECT id, 'NO-SILENT-DROP-3', 'closed', 'qnfo-fleet-control', datetime('now') FROM bak_20261008_retro_disposition;
+SELECT id, 'NO-SILENT-DROP-3', 'triaged', 'qnfo-fleet-control', datetime('now') FROM bak_20261008_retro_disposition;
 
 UPDATE issue_triage SET triage_state = 'closed', close_evidence = (
   SELECT CASE
