@@ -18,8 +18,10 @@
 -- code_merge_trusted_sources--bak-20261008T1440Z); research holds REMOVED (bak_20261008_hold_release).
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- BACKUP: control_registry
--- (the only DROP is of trigger issue_refile_guard: control_registry row issue-refile-guard records it, and the Rollback line recreates its exact SQL)
+-- BACKUP: bak_20261008_doctrine_triggers
+-- (bak_20261008_doctrine_triggers is created by this file ahead of its first DROP: a copy of every trigger's SQL from sqlite_master, so each
+-- dropped guard can be recreated from D1 itself. Re-applied 2026-10-08: the first run named control_registry, which the
+-- runner requires to exist before the file starts, and refused the file with no statement run.)
 -- Rollback: DROP TRIGGER IF EXISTS doctrine_tick_10m; DROP TRIGGER IF EXISTS decision_log_no_update; DROP TRIGGER IF EXISTS decision_log_no_delete; DROP TRIGGER IF EXISTS issue_refile_reopen; CREATE TRIGGER issue_refile_guard BEFORE INSERT ON agent_issues WHEN EXISTS (SELECT 1 FROM agent_issues t WHERE t.title = NEW.title AND t.status IN ('resolved','wontfix','closed') AND typeof(t.updated_at) = 'integer' AND t.updated_at > (strftime('%s','now') * 1000 - 86400000)) BEGIN SELECT RAISE(IGNORE); END; DROP VIEW IF EXISTS v_doctrine_scorecard; DROP VIEW IF EXISTS v_belief_status; DELETE FROM remediation_contracts WHERE class LIKE 'belief-%'; DELETE FROM metric_registry WHERE metric IN ('controls_on_critical_path_untested','spofs_on_critical_path','beliefs_unverified_60m','backlog_age_p95_min'); DELETE FROM analytics_metric_triggers WHERE metric_key IN ('controls_on_critical_path_untested','spofs_on_critical_path','beliefs_unverified_60m','backlog_age_p95_min'); -- the four registers are ledgers and stay.
 
 CREATE TABLE IF NOT EXISTS control_registry (
@@ -162,6 +164,8 @@ BEGIN
 END;
 
 -- Replace issue_refile_guard: a relapse reopens the closed issue (with a dated note) instead of vanishing.
+CREATE TABLE IF NOT EXISTS bak_20261008_doctrine_triggers AS SELECT type, name, tbl_name, sql, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS saved_at FROM sqlite_master WHERE type = 'trigger';
+
 DROP TRIGGER IF EXISTS issue_refile_guard;
 CREATE TRIGGER IF NOT EXISTS issue_refile_reopen BEFORE INSERT ON agent_issues
 WHEN EXISTS (SELECT 1 FROM agent_issues t WHERE t.title = NEW.title AND t.status IN ('resolved', 'wontfix', 'closed')
