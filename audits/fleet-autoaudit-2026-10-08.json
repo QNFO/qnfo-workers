@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-08 10:03:27",
+  "audited_at": "2026-10-08 15:36:58",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -513,7 +513,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.11.4-charter-autonomy-first",
+        "version": "0.11.7-charter-doctrine",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -553,7 +553,7 @@
       },
       {
         "dir": "qnfo-observability",
-        "version": "1.4.2-revert-e70f166",
+        "version": "1.4.3-escalate-recurrence",
         "worker": "qnfo-observability"
       },
       {
@@ -1140,9 +1140,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.11.4-charter-autonomy-first",
+      "before": "0.11.7-charter-doctrine",
       "http": 200,
-      "live": "0.11.4-charter-autonomy-first",
+      "live": "0.11.7-charter-doctrine",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1268,9 +1268,9 @@
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
-      "before": "1.4.2-revert-e70f166",
+      "before": "1.4.3-escalate-recurrence",
       "http": 200,
-      "live": "1.4.2-revert-e70f166",
+      "live": "1.4.3-escalate-recurrence",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-observability"
