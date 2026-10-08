@@ -317,8 +317,25 @@ def apply_file(path, text, acct, token, commit, emit=print):
             return record_failure(path, sha, commit, info, acct, token, db_id, "statement " + str(done_n + 1) + ": " + str(e)[:400], emit, done_n)
     d1(acct, token, db_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
        [path, sha, commit or "", info["db"], str(done_n)])
+    resolve_failure(path, sha, acct, token, db_id, done_n)
     emit(json.dumps({"file": path, "ok": True, "statements": done_n, "sha256": sha[:12]}))
     return 0
+
+
+def resolve_failure(path, sha, acct, token, db_id, done_n):
+    """MIGRATION-APPLY-RESOLVE-1 (2026-10-08): a later ok run closes the MIGRATION-APPLY-FAILED-1 issue this runner filed
+    for the file, with the ok run as evidence. Before, nothing closed it: its birth probe read pending for 48h and then
+    stale, so a migration fixed within the hour still left an open issue (2188-2190). Best effort; never fails the run."""
+    title = "MIGRATION-APPLY-FAILED-1: " + os.path.basename(path)
+    ev = "migration_runs ok for " + path + " (sha256 " + sha[:12] + ", " + str(done_n) + " statements, ci:apply-migrations)"
+    try:
+        d1(acct, token, db_id, "UPDATE issue_triage SET close_evidence = ?2 WHERE issue_id IN (SELECT id FROM agent_issues WHERE title = ?1 "
+           "AND status NOT IN ('closed','resolved','wontfix'))", [title, ev])
+        d1(acct, token, db_id, "UPDATE agent_issues SET status = 'closed', updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000, "
+           "description = COALESCE(description, '') || char(10) || 'MIGRATION-APPLY-RESOLVE-1: ' || ?2 WHERE title = ?1 "
+           "AND status NOT IN ('closed','resolved','wontfix')", [title, ev])
+    except Exception as e:  # noqa: BLE001
+        print("resolve " + title + " failed: " + str(e)[:200], file=sys.stderr)
 
 
 def record_failure(path, sha, commit, info, acct, token, db_id, err, emit, done_n=0):
