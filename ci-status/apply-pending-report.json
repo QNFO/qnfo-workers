@@ -1,17 +1,14 @@
 {
   "workflow": "apply-pending-patches",
   "marker": "APPLY-PENDING-1",
-  "head": "156b1199424c82d3af69c63eb7e37bd83f915708",
-  "total": 77,
+  "head": "08495fb6540e783b1335a5f961727aad129bef5f",
+  "total": 75,
   "summary": {
-    "already-applied": 71,
+    "already-applied": 70,
     "error": 3,
-    "stale-anchor": 2,
-    "landed": 1
+    "stale-anchor": 2
   },
-  "landed": [
-    "owner-sender-no-reply-1-patch.py"
-  ],
+  "landed": [],
   "retired": [],
   "reverted": [],
   "results": [
@@ -57,7 +54,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "ALREADY APPLIED (SELFHEAL-EXCLUSION-TABLE-1 present)"
     },
     {
@@ -75,7 +72,7 @@
       "verdict": "error",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL: missing scripts/version-anchor-normalize-patch.py"
     },
     {
@@ -84,7 +81,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.14,
+      "seconds": 0.16,
       "tail": "POST_CONDITIONS_OK /home/runner/work/qnfo-workers/qnfo-workers/scripts/applier-doctor.py"
     },
     {
@@ -120,7 +117,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "CLASSIFY-FAILCLOSED-DEFAULT-1: nothing to do (all edits already applied)"
     },
     {
@@ -129,7 +126,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "TOTAL_EDITS 0"
     },
     {
@@ -138,7 +135,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "TOTAL_EDITS 0"
     },
     {
@@ -147,7 +144,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "ALREADY PATCHED (CLOUD-OPS-HEALTH-AUTH-1 present); no change"
     },
     {
@@ -183,7 +180,7 @@
       "verdict": "stale-anchor",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "FAIL-CLOSED: anchor A1 occurs 0 times (expected exactly 1) - nothing written"
     },
     {
@@ -232,24 +229,6 @@
       "tail": "TOTAL_EDITS 0"
     },
     {
-      "script": "fleet-autoaudit-d1ok-patch-v2.py",
-      "rc": 0,
-      "verdict": "already-applied",
-      "changed": false,
-      "reverted": [],
-      "seconds": 0.03,
-      "tail": "ALREADY-PATCHED: /home/runner/work/qnfo-workers/qnfo-workers/scripts/fleet-autoaudit.py already carries d1_ok/d1_err (D1-REST-ENVELOPE-OK-1)"
-    },
-    {
-      "script": "fleet-autoaudit-d1ok-patch.py",
-      "rc": 0,
-      "verdict": "already-applied",
-      "changed": false,
-      "reverted": [],
-      "seconds": 0.03,
-      "tail": "ALREADY-PATCHED: /home/runner/work/qnfo-workers/qnfo-workers/scripts/fleet-autoaudit.py already carries d1_ok/d1_err (D1-REST-ENVELOPE-OK-1)"
-    },
-    {
       "script": "fleet-writeback-close-patch.py",
       "rc": 0,
       "verdict": "already-applied",
@@ -273,7 +252,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "parity: source==mirror"
     },
     {
@@ -282,7 +261,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "changed=false"
     },
     {
@@ -328,7 +307,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "  deployed-current.worker.js bytes=465166 marker=1"
+      "tail": "  deployed-current.worker.js bytes=478718 marker=1"
     },
     {
       "script": "outreach-cap-status-1-patch.py",
@@ -345,17 +324,17 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "already applied (marker present) - nothing written"
     },
     {
       "script": "owner-sender-no-reply-1-patch.py",
       "rc": 0,
-      "verdict": "landed",
-      "changed": true,
+      "verdict": "already-applied",
+      "changed": false,
       "reverted": [],
       "seconds": 0.03,
-      "tail": "TOTAL_EDITS 6"
+      "tail": "TOTAL_EDITS 0"
     },
     {
       "script": "patch-404hint-list-1.py",
@@ -408,7 +387,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "changed=0"
     },
     {
@@ -453,7 +432,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.02,
+      "seconds": 0.03,
       "tail": "OK changed=0"
     },
     {
@@ -561,7 +540,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.04,
+      "seconds": 0.05,
       "tail": "already-patched: qnfo-research-exec/deployed-current.worker.js"
     },
     {
@@ -571,7 +550,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=655742e3a152f108"
+      "tail": "already patched (marker '_lastRouterHost' present); no write. sha256=3fae496a147c9a3e"
     },
     {
       "script": "routerfetch-host-order-correction-patch.py",
@@ -580,7 +559,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=655742e3a152f108"
+      "tail": "already corrected (marker 'ROUTER-HOST-ORDER-CORRECTION-1' present); no write. sha256=3fae496a147c9a3e"
     },
     {
       "script": "samezone-fetch-fallback-patch.py",
@@ -615,7 +594,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "already patched (SELFHEAL-EXTRACTOR-BARE-NAME-1 present); no change"
     },
     {
@@ -624,7 +603,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "already patched (SELFHEAL-METRIC-TABLE-MISMATCH-1 present); no change"
     },
     {
@@ -634,7 +613,7 @@
       "changed": false,
       "reverted": [],
       "seconds": 0.04,
-      "tail": "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 551323}"
+      "tail": "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 713975}"
     },
     {
       "script": "tool-budget-pending-toolcalls-patch.py",
@@ -642,7 +621,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.03,
+      "seconds": 0.04,
       "tail": "TOOL-BUDGET-PENDING-1: already applied to qnfo-ops/worker.js (no change)"
     },
     {
@@ -651,7 +630,7 @@
       "verdict": "already-applied",
       "changed": false,
       "reverted": [],
-      "seconds": 0.09,
+      "seconds": 0.1,
       "tail": "TOOLBUDGET-BAIL-1: APPLIED AND VERIFIED (0 target(s) changed)"
     },
     {
@@ -709,5 +688,5 @@
       "tail": "SUPERSEDED: UNAUTH-TRIGGER-1 already closed by patch-fleet-exec-tick-unauth-1.py (commit 81581bf); no-op"
     }
   ],
-  "ts": "2026-10-03T13:15:56Z"
+  "ts": "2026-10-08T15:47:12Z"
 }
