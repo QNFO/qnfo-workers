@@ -70,8 +70,11 @@ ok(/owner-authored/.test(row(own).rationale) && row(own).score !== null, "the ow
 ok(row(chatQ).status === "triaged_hold" && row(chatQ).rationale === "noise/question filter", "an owner's short chat question is still held by the question filter");
 ok(row(gap).rationale !== "noise/question filter" && row(gap).score !== null, "an Ask QWAV gap is scored, not dropped by the question filter", row(gap));
 ok(row(corpHi).status === "triaged_accepted" && queued(corpHi), "a notebook idea at the corpus bar (" + api.OWNER_CORPUS_SCORE_MIN + ") is ACCEPTed and queued", row(corpHi));
-ok(row(corpLo).status === "triaged_hold" && !queued(corpLo), "a notebook idea below the corpus bar is held");
-ok(out.owner_accepted === 2, "the run counts owner accepts", out);
+// HOLD-RELEASE-OWNER-BAR-1 (#2173, owner directive 2026-10-08: remove holds): the corpus bar is 0, so a notebook idea the
+// model scores low is accepted too; the score is kept for ordering, never used to hold the owner's own idea.
+ok(api.OWNER_CORPUS_SCORE_MIN === 0, "the owner-corpus bar is 0 (no hold on the owner's notebook)");
+ok(row(corpLo).status === "triaged_accepted" && queued(corpLo), "a notebook idea the model scores low is ACCEPTed and queued", row(corpLo));
+ok(out.owner_accepted === 3, "the run counts owner accepts", out);
 
 // 3. Corpus feeder.
 db.exec("DELETE FROM research_queue");
