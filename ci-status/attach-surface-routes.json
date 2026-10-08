@@ -5,7 +5,7 @@
   "stage": "partial",
   "status": "failed",
   "error": "qwav.org: created unverified; www.qwav.org: created unverified",
-  "gateway_version": "3.9.2-reading",
+  "gateway_version": "3.11.3-math-residue-3",
   "hosts": {
     "archive.qnfo.org": {
       "zone": "qnfo.org",
@@ -16,7 +16,7 @@
     },
     "qwav.org": {
       "zone": "qwav.org",
-      "route_id": "99da29da63724ea0805f742b4f295fe4",
+      "route_id": "332343b19e83471eb3a5bc65a9002676",
       "status": "created",
       "detail": null,
       "dns_record": "bf15ded6489cd075d294f307eb16a2e5",
@@ -30,7 +30,7 @@
     },
     "www.qwav.org": {
       "zone": "qwav.org",
-      "route_id": "5c30031c299a43e2b29f1fc3e72d4a82",
+      "route_id": "5f7214bca86244e1ab7da217c8ced6f1",
       "status": "created",
       "detail": null,
       "dns_record": "26ff1daa55c154d3a62c0a6ae7400a7d",
@@ -48,7 +48,91 @@
       "status": "present",
       "detail": null,
       "verified": true
+    },
+    "agent-orchestrator.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "defc645024594631a0bbf560a59a5f6e",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "fleet-executor.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "cdf069e60faa480898c8115552beda05",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "fleet-scheduler.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "f9dd8ba8e12d4598a96df231ae34fec1",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-arxiv-radar.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "86b6969f646447eb8169b097b0c0a291",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-calibration-audit.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "c830202cbba04cb0867734163a5470b8",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-citation-watch.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "1e12e7c037bc438dacda4e9894b23ea6",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-paper-reviser.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "b3109629cd9548a58c077c058301c758",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-research-radar.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "36d201abc84b4e2884a277ef309c2fa2",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-secrets-audit.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "eb7f8da86d9c46c5ae5ca27f8c487493",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "qnfo-system-health.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "d9a04302c5b245329a14736f3a35251e",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "scorecard.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "8a052ea00f30409b8f8d2af38236f0a2",
+      "status": "created",
+      "detail": null,
+      "verified": true
+    },
+    "analytics.qnfo.org": {
+      "zone": "qnfo.org",
+      "route_id": "327ec2a262274cf595b7dc68f60f89c3",
+      "status": "created",
+      "detail": null,
+      "verified": true
     }
   },
-  "ts": "2026-10-02T13:51:18Z"
+  "ts": "2026-10-08T15:50:54Z"
 }
