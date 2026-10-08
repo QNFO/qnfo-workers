@@ -1,18 +1,82 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@dbeca1ca0e61",
+ "verifier": "remediation-consumer@7b1f00ed6719",
  "due": 20,
- "pass": 13,
- "fail": 7,
+ "pass": 12,
+ "fail": 8,
  "skipped": 0,
  "contracts": [
   {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
+   "class": "issue-2072",
+   "issue_id": 2072,
    "verdict": "fail",
-   "expected": "connected",
-   "observed": "pending: no access token in personal-life oauth_tokens yet",
+   "expected": "merged",
+   "observed": "failed",
+   "written": true
+  },
+  {
+   "class": "issue-1815",
+   "issue_id": 1815,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
+   "written": true
+  },
+  {
+   "class": "issue-2050",
+   "issue_id": 2050,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2114,2115,2116",
+   "written": true
+  },
+  {
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-2055",
+   "issue_id": 2055,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no metered iPatent draft yet (qnfo-ipatent 3.13.0, PR 764, meters each draft call as purpose draft)",
+   "written": true
+  },
+  {
+   "class": "watchmaker-owner-steps-1",
+   "issue_id": 2058,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2105",
+   "issue_id": 2105,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: ungated published=366 newest verdict=2026-10-08T04:20:25.132Z published quarantine-candidates=0",
+   "written": true
+  },
+  {
+   "class": "issue-2125",
+   "issue_id": 2125,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "dangling-bindings-1",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -80,14 +144,6 @@
    "written": true
   },
   {
-   "class": "issue-2120",
-   "issue_id": 2120,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
    "class": "rt-papers",
    "issue_id": null,
    "verdict": "pass",
@@ -104,67 +160,11 @@
    "written": true
   },
   {
-   "class": "issue-2104",
-   "issue_id": 2104,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2167",
-   "issue_id": 2167,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2168",
-   "issue_id": 2168,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "calendar-fold-2-binders",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2022",
-   "issue_id": 2022,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1905",
-   "issue_id": 1905,
+   "class": "issue-2131",
+   "issue_id": 2131,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: no subscribers-send event yet (0 rows of any status)",
-   "written": true
-  },
-  {
-   "class": "issue-2132",
-   "issue_id": 2132,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "close-predicate-monotone",
-   "issue_id": 1297,
-   "verdict": "fail",
-   "expected": "guarded",
-   "observed": "unguarded",
+   "observed": "missing-marker",
    "written": true
   }
  ],
@@ -191,13 +191,13 @@
   "http",
   "runner-https"
  ],
- "https": 8,
- "runtime_verified_share_24h": 21.6,
+ "https": 9,
+ "runtime_verified_share_24h": 21.9,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 47659,
- "head": "dbeca1ca0e6157f5088d98102f6c07a231f1c2ef",
+ "spent_ms": 49804,
+ "head": "7b1f00ed67194811b8bb7214211c2c07fc50a8e7",
  "job_status": "success",
- "ts": "2026-10-08T11:11:37Z"
+ "ts": "2026-10-08T12:21:39Z"
 }
