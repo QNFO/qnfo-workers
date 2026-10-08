@@ -181,6 +181,45 @@ okp, probs, inf = M.plan("migrations/cad.sql", bad_cad)
 ok(okp and any("METRIC-CADENCE-CANONICAL-1" in p for p in probs), "the 2063 cadence is a --check problem", probs)
 okp, probs, inf = M.plan("migrations/cad.sql", bad_cad.replace("'hourly (D1 triggers metric_orphan_issues_au/ai on the open_agent_issues refresh)'", "'hourly'"))
 ok(okp and not probs, "the canonical 'hourly' passes", probs)
+# D1-TRIGGER-DEPTH-1: upstream reachability, the canary drops a trigger D1 would refuse, ADD COLUMN re-runs are idempotent.
+rows = [{"sql": "CREATE TRIGGER a AFTER INSERT ON cron_log BEGIN INSERT INTO tick (s) VALUES (1); END"},
+        {"sql": "CREATE TRIGGER b AFTER INSERT ON tick BEGIN UPDATE issues SET x = 1; END"},
+        {"sql": "CREATE TRIGGER c AFTER UPDATE ON other BEGIN DELETE FROM unrelated; END"}]
+ok(M.trigger_upstream(rows, "issues") == {"issues", "tick", "cron_log"}, "upstream of issues is tick and cron_log, not other", M.trigger_upstream(rows, "issues"))
+db.execute("CREATE TABLE heartbeat (w TEXT)")
+db.execute("CREATE TABLE ticks (s TEXT)")
+db.commit()
+real_call = C.call
+def deep_call(method, path, token, body=None, timeout=60):
+    if " WHERE 0" in body["sql"] and '"heartbeat"' in body["sql"] and db.execute("SELECT 1 FROM sqlite_master WHERE name = 'hb_feed'").fetchone():
+        return 400, {"success": False, "errors": [{"code": 7500, "message": "triggers nested too deep: SQLITE_ERROR"}]}
+    return real_call(method, path, token, body, timeout)
+C.call = deep_call
+deep = """-- depth test
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: DROP TRIGGER IF EXISTS hb_feed
+CREATE TRIGGER IF NOT EXISTS hb_feed AFTER INSERT ON heartbeat BEGIN INSERT INTO ticks (s) VALUES (NEW.w); END;
+INSERT OR REPLACE INTO ops_config (key, value) VALUES ('after_deep', '1');
+"""
+rc = M.apply_file("migrations/deep.sql", deep, "a", "t", "c7", emit)
+ok(rc == 1 and "D1-TRIGGER-DEPTH-1" in out[-1] and not db.execute("SELECT 1 FROM sqlite_master WHERE name = 'hb_feed'").fetchone()
+   and not db.execute("SELECT 1 FROM ops_config WHERE key = 'after_deep'").fetchone(), "a trigger that makes a write too deep is dropped at once and the file stops", out[-1])
+C.call = real_call
+shallow = deep.replace("migrations/deep", "x")
+rc = M.apply_file("migrations/shallow.sql", shallow, "a", "t", "c8", emit)
+ok(rc == 0 and db.execute("SELECT 1 FROM sqlite_master WHERE name = 'hb_feed'").fetchone(), "a trigger within the limit stays", out[-1])
+addcol = """-- add column twice
+-- APPLY-BY: ci
+-- DB: qnfo-audit
+-- Rollback: none needed
+ALTER TABLE ticks ADD COLUMN extra TEXT;
+INSERT OR REPLACE INTO ops_config (key, value) VALUES ('addcol', '1');
+"""
+M.apply_file("migrations/addcol.sql", addcol, "a", "t", "c9", emit)
+rc = M.apply_file("migrations/addcol.sql", addcol + "-- changed\n", "a", "t", "c10", emit)
+ok(rc == 0, "a re-run meets the column it already added and carries on", out[-1])
+n1 = len(calls)
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf):
     rc = M.main(["--check"] + sorted(glob.glob(os.path.join(HERE, "..", "migrations", "*.sql"))))

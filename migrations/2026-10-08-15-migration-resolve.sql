@@ -9,6 +9,7 @@
 --     resolve_failure() closes the issue with the ok run as close evidence.
 -- Detector: fm-migration-unapplied counts files whose runs are all errors and whose last error is over 3 hours old (the
 -- QUEUE-SLA-1 limit), so a refused migration that nobody fixes is caught without a session.
+-- Second apply 2026-10-08: the first run failed because 2026-10-08-14 had not yet added failure_modes.trigger_condition.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DELETE FROM failure_modes WHERE fm_key IN ('backup-created-later', 'failed-migration-issue-never-closed'); DELETE FROM remediation_contracts WHERE class = 'fm-migration-unapplied'

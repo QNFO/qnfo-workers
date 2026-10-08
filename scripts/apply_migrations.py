@@ -274,6 +274,58 @@ def d1(acct, token, db_id, sql, params=None):
     return (res[0].get("results") if res else []) or []
 
 
+# D1-TRIGGER-DEPTH-1 (2026-10-08): D1 refuses any write whose trigger programs nest more than 10 levels ("triggers nested
+# too deep"), and it counts at compile time: a trigger whose WHEN is never true still counts, and so does an INSERT ... WHERE 0.
+# Measured on scratch tables: a 10-trigger chain compiles, 11 fails. On 2026-10-08 two migrations (fleet_tick feeders in
+# -10, self-updating agent_issues triggers in -13) pushed the cron log, heartbeat, event and metric writes over it for about
+# 30 minutes. So after every CREATE TRIGGER the runner compiles a zero-row INSERT, UPDATE and DELETE on every table whose
+# trigger chain can reach the new trigger's table, and drops the trigger at once if any of them is refused.
+TRIGGER_ON = re.compile(r'(?is)^\s*CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?"?(\w+)"?\s+(?:BEFORE|AFTER|INSTEAD\s+OF)?\s*(?:INSERT|UPDATE|DELETE)\b.*?\bON\s+"?(\w+)"?')
+WRITE_TARGET = re.compile(r'(?is)\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM)\s+"?(\w+)"?')
+ADD_COLUMN = re.compile(r"(?is)^\s*ALTER\s+TABLE\s+\S+\s+ADD\s+(?:COLUMN\s+)?")
+
+
+def trigger_upstream(trigger_rows, table):
+    """Tables whose writes can reach `table` through trigger bodies (the table itself included)."""
+    edges = {}
+    for r in trigger_rows:
+        m = TRIGGER_ON.match(r.get("sql") or "")
+        if not m:
+            continue
+        sql = r["sql"]
+        begin = re.search(r"(?is)\bBEGIN\b", sql)
+        for t in WRITE_TARGET.findall(sql[begin.end():] if begin else ""):
+            edges.setdefault(t.lower(), set()).add(m.group(2).lower())
+    seen, todo = {table.lower()}, [table.lower()]
+    while todo:
+        for src in edges.get(todo.pop(), ()):
+            if src not in seen:
+                seen.add(src)
+                todo.append(src)
+    return seen
+
+
+def depth_canary(acct, token, db_id, table):
+    """None when every zero-row write upstream of `table` still compiles, else the refused statement and error."""
+    trig = d1(acct, token, db_id, "SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger'")
+    tables = {r["name"].lower(): r["name"] for r in d1(acct, token, db_id, "SELECT name FROM sqlite_master WHERE type = 'table'")}
+    for t in sorted(trigger_upstream(trig, table)):
+        if t not in tables:
+            continue
+        name = tables[t]
+        cols = [c["name"] for c in d1(acct, token, db_id, "SELECT name FROM pragma_table_info(?1)", [name])]
+        probes = ['INSERT INTO "%s" SELECT * FROM "%s" WHERE 0' % (name, name), 'DELETE FROM "%s" WHERE 0' % name]
+        if cols:
+            probes.append('UPDATE "%s" SET %s WHERE 0' % (name, ", ".join('"%s" = "%s"' % (c, c) for c in cols)))
+        for q in probes:
+            try:
+                d1(acct, token, db_id, q)
+            except Exception as e:  # noqa: BLE001
+                if "nested too deep" in str(e) or "too many levels of trigger" in str(e):
+                    return q[:120] + " -> " + str(e)[:200]
+    return None
+
+
 def apply_file(path, text, acct, token, commit, emit=print):
     ok, problems, info = plan(path, text)
     if not ok:
@@ -314,7 +366,21 @@ def apply_file(path, text, acct, token, commit, emit=print):
             d1(acct, token, db_id, body(s))
             done_n += 1
         except Exception as e:  # noqa: BLE001
+            # A re-run after a partial apply meets the columns it already added; SQLite has no ADD COLUMN IF NOT EXISTS.
+            if ADD_COLUMN.match(body(s)) and "duplicate column name" in str(e):
+                done_n += 1
+                continue
             return record_failure(path, sha, commit, info, acct, token, db_id, "statement " + str(done_n + 1) + ": " + str(e)[:400], emit, done_n)
+        tm = TRIGGER_ON.match(body(s))
+        if tm:
+            refused = depth_canary(acct, token, db_id, tm.group(2))
+            if refused:
+                try:
+                    d1(acct, token, db_id, 'DROP TRIGGER IF EXISTS "%s"' % tm.group(1))
+                except Exception:  # noqa: BLE001
+                    pass
+                return record_failure(path, sha, commit, info, acct, token, db_id, "statement " + str(done_n) + " (trigger " + tm.group(1) +
+                                      "): D1-TRIGGER-DEPTH-1, a write now nests deeper than D1's limit, so the trigger was dropped at once: " + refused, emit, done_n)
     d1(acct, token, db_id, "INSERT INTO migration_runs (file, sha256, commit_sha, db, status, statements, applied_by) VALUES (?1, ?2, ?3, ?4, 'ok', ?5, 'ci:apply-migrations')",
        [path, sha, commit or "", info["db"], str(done_n)])
     resolve_failure(path, sha, acct, token, db_id, done_n)
