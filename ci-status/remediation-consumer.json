@@ -1,79 +1,47 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@2ae6aeb8ff6a",
- "due": 25,
- "pass": 18,
+ "verifier": "remediation-consumer@643ff7e64866",
+ "due": 20,
+ "pass": 13,
  "fail": 7,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1962",
-   "issue_id": 1962,
-   "verdict": "pass",
-   "expected": "fresh",
-   "observed": "fresh",
+   "class": "EVID-GATE-A2-PUBLISHV2",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "assert-ok",
+   "observed": "pending: no publish-v2-metadata event since 2026-10-01 15:17",
    "written": true
   },
   {
-   "class": "issue-1981",
-   "issue_id": 1981,
-   "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "fail",
+   "expected": "connected",
+   "observed": "pending: no access token in personal-life oauth_tokens yet",
    "written": true
   },
   {
-   "class": "issue-1982",
-   "issue_id": 1982,
-   "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
-   "written": true
-  },
-  {
-   "class": "issue-1983",
-   "issue_id": 1983,
-   "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
-   "written": true
-  },
-  {
-   "class": "issue-1895",
-   "issue_id": 1895,
+   "class": "issue-2106",
+   "issue_id": 2106,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "panel-votes-unmeasured",
+   "observed": "pending: no reading.q08.org piece since the 1.13.0 fix (last 2026-10-05T08:06:54.939Z)",
    "written": true
   },
   {
-   "class": "issue-2001",
-   "issue_id": 2001,
+   "class": "issue-2117",
+   "issue_id": 2117,
    "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2159",
-   "issue_id": 2159,
-   "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-advisor, which owns it for 48h",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2160",
-   "issue_id": 2160,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2100",
-   "issue_id": 2100,
+   "class": "issue-2095",
+   "issue_id": 2095,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -85,14 +53,6 @@
    "verdict": "fail",
    "expected": "merged",
    "observed": "failed",
-   "written": true
-  },
-  {
-   "class": "issue-2110",
-   "issue_id": 2110,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
    "written": true
   },
   {
@@ -232,14 +192,12 @@
   "runner-https"
  ],
  "https": 8,
- "runtime_verified_share_24h": 20.6,
+ "runtime_verified_share_24h": 20.4,
  "host_census": {
-  "updated": 2130,
-  "hosts": 55,
-  "broken": 20
+  "skipped": "ran within 6h"
  },
- "spent_ms": 90462,
- "head": "2ae6aeb8ff6aed4d04c24b73e42c9b3e66cba38d",
+ "spent_ms": 46653,
+ "head": "643ff7e648667eb363e0f6a28b47cff97dfabf6c",
  "job_status": "success",
- "ts": "2026-10-08T03:22:02Z"
+ "ts": "2026-10-08T04:31:20Z"
 }
