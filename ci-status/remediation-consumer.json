@@ -1,15 +1,95 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@849928d8c1c6",
- "due": 15,
- "pass": 12,
- "fail": 3,
+ "verifier": "remediation-consumer@2ae6aeb8ff6a",
+ "due": 25,
+ "pass": 18,
+ "fail": 7,
  "skipped": 0,
  "contracts": [
   {
-   "class": "plane-living-paper-fresh",
-   "issue_id": null,
+   "class": "issue-1962",
+   "issue_id": 1962,
+   "verdict": "pass",
+   "expected": "fresh",
+   "observed": "fresh",
+   "written": true
+  },
+  {
+   "class": "issue-1981",
+   "issue_id": 1981,
+   "verdict": "pass",
+   "expected": "retired",
+   "observed": "retired",
+   "written": true
+  },
+  {
+   "class": "issue-1982",
+   "issue_id": 1982,
+   "verdict": "pass",
+   "expected": "retired",
+   "observed": "retired",
+   "written": true
+  },
+  {
+   "class": "issue-1983",
+   "issue_id": 1983,
+   "verdict": "pass",
+   "expected": "retired",
+   "observed": "retired",
+   "written": true
+  },
+  {
+   "class": "issue-1895",
+   "issue_id": 1895,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "panel-votes-unmeasured",
+   "written": true
+  },
+  {
+   "class": "issue-2001",
+   "issue_id": 2001,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2159",
+   "issue_id": 2159,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-advisor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2160",
+   "issue_id": 2160,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-code-orchestrator, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2100",
+   "issue_id": 2100,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "failed",
+   "written": true
+  },
+  {
+   "class": "issue-2110",
+   "issue_id": 2110,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -152,12 +232,14 @@
   "runner-https"
  ],
  "https": 8,
- "runtime_verified_share_24h": 21.1,
+ "runtime_verified_share_24h": 20.6,
  "host_census": {
-  "skipped": "ran within 6h"
+  "updated": 2130,
+  "hosts": 55,
+  "broken": 20
  },
- "spent_ms": 39277,
- "head": "849928d8c1c6bfdef53d988d9735dd75f6a59774",
+ "spent_ms": 90462,
+ "head": "2ae6aeb8ff6aed4d04c24b73e42c9b3e66cba38d",
  "job_status": "success",
- "ts": "2026-10-08T02:11:10Z"
+ "ts": "2026-10-08T03:22:02Z"
 }
