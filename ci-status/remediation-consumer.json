@@ -1,12 +1,85 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@06104d965d0f",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@c26f3e72ed2d",
+ "due": 9,
+ "pass": 8,
+ "fail": 1,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2191",
+   "issue_id": 2191,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "no ok run yet",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,12 +103,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 18.8,
+ "https": 8,
+ "runtime_verified_share_24h": 18.2,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 5877,
- "head": "06104d965d0fbf2efce3e9f3dded558c9c668123",
+ "spent_ms": 29467,
+ "head": "c26f3e72ed2d4ef6bcb46f4988a53e87e1d84eb9",
  "job_status": "success",
- "ts": "2026-10-08T15:46:25Z"
+ "ts": "2026-10-08T16:15:18Z"
 }
