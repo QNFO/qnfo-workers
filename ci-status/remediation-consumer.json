@@ -1,12 +1,173 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@cabf1b8b6016",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@dbeca1ca0e61",
+ "due": 20,
+ "pass": 13,
+ "fail": 7,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "fail",
+   "expected": "connected",
+   "observed": "pending: no access token in personal-life oauth_tokens yet",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2120",
+   "issue_id": 2120,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2104",
+   "issue_id": 2104,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2167",
+   "issue_id": 2167,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2168",
+   "issue_id": 2168,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "calendar-fold-2-binders",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2022",
+   "issue_id": 2022,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1905",
+   "issue_id": 1905,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no subscribers-send event yet (0 rows of any status)",
+   "written": true
+  },
+  {
+   "class": "issue-2132",
+   "issue_id": 2132,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "close-predicate-monotone",
+   "issue_id": 1297,
+   "verdict": "fail",
+   "expected": "guarded",
+   "observed": "unguarded",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,12 +191,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 21.7,
+ "https": 8,
+ "runtime_verified_share_24h": 21.6,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 4297,
- "head": "cabf1b8b60161e12e97ddd9a16b69444e0382c04",
+ "spent_ms": 47659,
+ "head": "dbeca1ca0e6157f5088d98102f6c07a231f1c2ef",
  "job_status": "success",
- "ts": "2026-10-08T10:01:50Z"
+ "ts": "2026-10-08T11:11:37Z"
 }
