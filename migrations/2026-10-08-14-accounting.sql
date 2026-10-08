@@ -20,6 +20,8 @@
 --   v_doctrine_scorecard_v2 the section 15 scorecard; metrics refreshed on fleet_tick.
 -- Re-applied 2026-10-08: the first run stopped at statement 16 (failure_modes did not exist, because
 -- 2026-10-08-13-failure-modes.sql had been refused); every statement here is idempotent.
+-- Third apply 2026-10-08: the second run stopped at statement 7 (ADD COLUMN deleted_at, added by the first run); the runner
+-- now treats a duplicate ADD COLUMN as applied (D1-TRIGGER-DEPTH-1 change), and its trigger-depth canary checks each trigger.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DROP TRIGGER IF EXISTS issue_lifecycle_ai; DROP TRIGGER IF EXISTS issue_lifecycle_au; DROP TRIGGER IF EXISTS issue_lifecycle_bd; DROP TRIGGER IF EXISTS issue_lifecycle_no_update; DROP TRIGGER IF EXISTS issue_lifecycle_no_delete; DROP TRIGGER IF EXISTS reconcile_tick; DROP TRIGGER IF EXISTS scorecard_v2_tick; DROP VIEW IF EXISTS v_doctrine_scorecard_v2; DROP VIEW IF EXISTS v_issue_accounting; DELETE FROM issue_triage WHERE close_evidence LIKE 'NO-SILENT-DROP-2 superseded by #%'; DELETE FROM metric_registry WHERE metric IN ('silent_drops','issues_unaccounted','capabilities_acquired_7d','spofs_total','failure_modes_unprobed_pct'); DELETE FROM analytics_metric_triggers WHERE metric_key IN ('silent_drops','issues_unaccounted','spofs_total'); -- reopened issues keep their note; issue_lifecycle, agent_issues_tombstone and capability_ledger are ledgers and stay.

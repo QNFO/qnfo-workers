@@ -25,35 +25,32 @@
 -- (bak_20261008_failure_mode_triggers is created by this file ahead of its first DROP: a copy of every trigger's SQL from sqlite_master, so each
 -- dropped guard can be recreated from D1 itself. Re-applied 2026-10-08: the first run named control_registry, which the
 -- runner requires to exist before the file starts, and refused the file with no statement run.)
--- Rollback: DROP TRIGGER IF EXISTS agent_issues_status_normalise_ai; DROP TRIGGER IF EXISTS agent_issues_status_normalise_au; DROP TRIGGER IF EXISTS agent_issues_evidence_annotate_ai; DROP TRIGGER IF EXISTS alerts_dedup_count; DROP TRIGGER IF EXISTS failure_modes_tick; DROP VIEW IF EXISTS v_failure_mode_status; CREATE TRIGGER agent_issues_enum_guard_ins BEFORE INSERT ON agent_issues WHEN (NEW.status IS NOT NULL AND NOT EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = NEW.status)) OR (NEW.priority IS NOT NULL AND NOT EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = NEW.priority)) BEGIN SELECT RAISE(ABORT,'unmapped-enum-value'); END; CREATE TRIGGER agent_issues_enum_guard_upd BEFORE UPDATE OF status, priority ON agent_issues WHEN (NEW.status IS NOT NULL AND NOT EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = NEW.status)) OR (NEW.priority IS NOT NULL AND NOT EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = NEW.priority)) BEGIN SELECT RAISE(ABORT,'unmapped-enum-value'); END; CREATE TRIGGER agent_issues_evidence_must_exist_ins BEFORE INSERT ON agent_issues WHEN NEW.source LIKE 'cloud_ops_events:%' AND NOT EXISTS (SELECT 1 FROM cloud_ops_events e WHERE e.id = replace(NEW.source,'cloud_ops_events:','')) BEGIN SELECT RAISE(ABORT, 'EVIDENCE-REFERENTIAL-INTEGRITY-1: agent_issues.source cites a cloud_ops_events id that does not exist'); END; CREATE TRIGGER alerts_dedup BEFORE INSERT ON alerts WHEN EXISTS (SELECT 1 FROM alerts WHERE source = NEW.source AND message = NEW.message AND created_at > datetime('now','-60 minutes')) BEGIN SELECT RAISE(IGNORE); END; DELETE FROM remediation_contracts WHERE class LIKE 'fm-%'; DELETE FROM metric_registry WHERE metric = 'failure_modes_recurring'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'failure_modes_recurring'; -- failure_modes, alerts.repeats and the registry rows stay.
+-- Rollback: DROP TRIGGER IF EXISTS agent_issues_normalise_tick; DROP TRIGGER IF EXISTS agent_issues_evidence_annotate_ai; DROP TRIGGER IF EXISTS alerts_dedup_count; DROP TRIGGER IF EXISTS failure_modes_tick; DROP VIEW IF EXISTS v_failure_mode_status; CREATE TRIGGER agent_issues_enum_guard_ins BEFORE INSERT ON agent_issues WHEN (NEW.status IS NOT NULL AND NOT EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = NEW.status)) OR (NEW.priority IS NOT NULL AND NOT EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = NEW.priority)) BEGIN SELECT RAISE(ABORT,'unmapped-enum-value'); END; CREATE TRIGGER agent_issues_enum_guard_upd BEFORE UPDATE OF status, priority ON agent_issues WHEN (NEW.status IS NOT NULL AND NOT EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = NEW.status)) OR (NEW.priority IS NOT NULL AND NOT EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = NEW.priority)) BEGIN SELECT RAISE(ABORT,'unmapped-enum-value'); END; CREATE TRIGGER agent_issues_evidence_must_exist_ins BEFORE INSERT ON agent_issues WHEN NEW.source LIKE 'cloud_ops_events:%' AND NOT EXISTS (SELECT 1 FROM cloud_ops_events e WHERE e.id = replace(NEW.source,'cloud_ops_events:','')) BEGIN SELECT RAISE(ABORT, 'EVIDENCE-REFERENTIAL-INTEGRITY-1: agent_issues.source cites a cloud_ops_events id that does not exist'); END; CREATE TRIGGER alerts_dedup BEFORE INSERT ON alerts WHEN EXISTS (SELECT 1 FROM alerts WHERE source = NEW.source AND message = NEW.message AND created_at > datetime('now','-60 minutes')) BEGIN SELECT RAISE(IGNORE); END; DELETE FROM remediation_contracts WHERE class LIKE 'fm-%'; DELETE FROM metric_registry WHERE metric = 'failure_modes_recurring'; DELETE FROM analytics_metric_triggers WHERE metric_key = 'failure_modes_recurring'; -- failure_modes, alerts.repeats and the registry rows stay.
 
 -- (1) Never drop an issue for an unmapped status or priority: accept it, then normalise (open / medium) with a note.
 CREATE TABLE IF NOT EXISTS bak_20261008_failure_mode_triggers AS SELECT type, name, tbl_name, sql, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS saved_at FROM sqlite_master WHERE type = 'trigger';
 
 DROP TRIGGER IF EXISTS agent_issues_enum_guard_ins;
 DROP TRIGGER IF EXISTS agent_issues_enum_guard_upd;
-CREATE TRIGGER IF NOT EXISTS agent_issues_status_normalise_ai AFTER INSERT ON agent_issues
-WHEN (NEW.status IS NOT NULL AND NOT EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = NEW.status))
-  OR (NEW.priority IS NOT NULL AND NOT EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = NEW.priority))
+-- D1-TRIGGER-DEPTH-1 (second apply, 2026-10-08): the first apply created agent_issues_status_normalise_ai/_au, AFTER
+-- triggers on agent_issues that UPDATE agent_issues. D1 counts trigger nesting at compile time (limit 10, WHEN ignored), and
+-- they pushed every write whose chain reaches agent_issues past it ("triggers nested too deep"): cloud_ops_events and
+-- metric_registry inserts failed from 15:56 to 16:00Z, when the session dropped them (SQL kept in
+-- bak_20261008_incident_triggers). Normalisation now runs once per fleet tick instead, one level deep: an unmapped status or
+-- priority is accepted on insert (the enum guards that refused it are dropped above) and set to open / medium with a note
+-- within 10 minutes.
+DROP TRIGGER IF EXISTS agent_issues_status_normalise_ai;
+DROP TRIGGER IF EXISTS agent_issues_status_normalise_au;
+CREATE TRIGGER IF NOT EXISTS agent_issues_normalise_tick AFTER INSERT ON fleet_tick
 BEGIN
   UPDATE agent_issues SET
-    status = CASE WHEN NEW.status IS NULL OR EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = NEW.status) THEN NEW.status ELSE 'open' END,
-    priority = CASE WHEN NEW.priority IS NULL OR EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = NEW.priority) THEN NEW.priority ELSE 'medium' END,
-    description = COALESCE(description, '') || char(10) || 'NO-SILENT-DROP-1: filed with unmapped status/priority "' || COALESCE(NEW.status, '') || '"/"' || COALESCE(NEW.priority, '') || '"; normalised instead of refused.'
-  WHERE id = NEW.id;
-END;
-CREATE TRIGGER IF NOT EXISTS agent_issues_status_normalise_au AFTER UPDATE OF status, priority ON agent_issues
-WHEN (NEW.status IS NOT NULL AND NOT EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = NEW.status))
-  OR (NEW.priority IS NOT NULL AND NOT EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = NEW.priority))
-BEGIN
-  UPDATE agent_issues SET
-    status = CASE WHEN NEW.status IS NULL OR EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = NEW.status) THEN NEW.status ELSE OLD.status END,
-    priority = CASE WHEN NEW.priority IS NULL OR EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = NEW.priority) THEN NEW.priority ELSE OLD.priority END,
-    description = COALESCE(description, '') || char(10) || 'NO-SILENT-DROP-1: an update set unmapped status/priority "' || COALESCE(NEW.status, '') || '"/"' || COALESCE(NEW.priority, '') || '"; the prior value was kept.'
-  WHERE id = NEW.id;
+    description = COALESCE(description, '') || char(10) || 'NO-SILENT-DROP-1: unmapped status/priority "' || COALESCE(status, '') || '"/"' || COALESCE(priority, '') || '" normalised by the fleet tick instead of refused.',
+    status = CASE WHEN status IS NULL OR EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = agent_issues.status) THEN status ELSE 'open' END,
+    priority = CASE WHEN priority IS NULL OR EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = agent_issues.priority) THEN priority ELSE 'medium' END
+  WHERE (status IS NOT NULL AND NOT EXISTS (SELECT 1 FROM status_canon s WHERE s.raw_value = agent_issues.status))
+     OR (priority IS NOT NULL AND NOT EXISTS (SELECT 1 FROM priority_canon p WHERE p.raw_value = agent_issues.priority));
 END;
 
--- (2) Never drop an issue for a missing evidence reference: accept and annotate.
 DROP TRIGGER IF EXISTS agent_issues_evidence_must_exist_ins;
 CREATE TRIGGER IF NOT EXISTS agent_issues_evidence_annotate_ai AFTER INSERT ON agent_issues
 WHEN NEW.source LIKE 'cloud_ops_events:%' AND NOT EXISTS (SELECT 1 FROM cloud_ops_events e WHERE e.id = replace(NEW.source, 'cloud_ops_events:', ''))

@@ -14,8 +14,11 @@ let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + JSON.stringify(x).slice(0, 300) : "")); } };
 
 {
+  // D1-TRIGGER-DEPTH-1 (0.9.0): the member's scheduled handler logs a failed tick and feeds fleet_tick, so its swallowing
+  // catch line is the one allowed change to the frozen guest (fleet-exec is FOLDED; the member evolves here).
+  const allowed = (l) => l.startsWith("var VERSION = ") || l.startsWith("export default schedDefault") || l.trim() === "try { await runTick(env); } catch (e) {}";
   const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
-  ok(missing.length === 2 && missing.some((l) => l.startsWith("var VERSION = ")) && missing.some((l) => l.startsWith("export default schedDefault")), "every fleet-exec line is in the host except its VERSION line and its export", missing.map((l) => l.slice(0, 60)));
+  ok(missing.every(allowed) && missing.some((l) => l.startsWith("var VERSION = ")) && /feedFleetTick\(env\)/.test(src), "every fleet-exec line is in the host except its VERSION line, its export and the logged tick catch", missing.map((l) => l.slice(0, 60)));
   ok(atLeast(mod.__hv, "0.3.18") && mod.__mv === "1.0.4-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.3.18 or later, member 1.0.4-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 
