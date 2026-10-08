@@ -102,6 +102,22 @@ because each one was broken at least once; the linked issue holds the evidence.
 - `cf-ops-actions.yml` (workflow_dispatch) runs allowlisted Cloudflare API actions with the repository's token:
   report, delete-worker (marker-guarded), gateway-logs, gateway-cost, ai-neurons, access-probe, r2-get. Extend
   `scripts/cf_ops_actions.py` rather than parking an issue as "needs the credential holder".
+- Owner directive 2026-10-08: no new Cloudflare token will be issued; use the ones in place. The repository's
+  `CLOUDFLARE_API_TOKEN` writes zone routes and DNS records (attach-lifecycle-custom-domain 2026-09-30, attach-ask-qwav-route
+  and attach-surface-routes 2026-10-02, the twelve retired hosts 2026-10-08) and deploys, deletes and unbinds workers and D1.
+  Of the session connectors, the Cloudflare MCP reads every zone but may not write routes. A card or issue that says "needs a
+  token" is wrong until a run with the repository token has been refused and its error recorded.
+
+## Stuck items and SLAs (QUEUE-SLA-1)
+- Owner directive 2026-10-08: no item or queue is stuck for more than one run or cycle; no issue stays unprocessed or
+  unremediated for more than 3 hours; every SLA is in minutes or hours, never days.
+- `queue_sla` lists each known stuck type with its cycle, SLA (minutes) and automatic fix; `v_stuck_summary` measures them
+  by age, not by count. The D1 trigger `queue_sla_tick_10m` runs the fixes every 10 minutes off the fleet cron heartbeat
+  and logs each to `queue_sla_actions`; `ops_config queue_sla_autofix = off` stops the fixes, not the measurement.
+  Metrics `stuck_items_over_sla` (target 0) and `issues_unprobed_60m` (target <= 10) file their own issues.
+- Every open issue's remediation contract is due hourly (trigger `remediation_contracts_cadence_1h_ai`). A new queue, status
+  or loop that can hold items adds its `queue_sla` row and its `v_stuck_summary` column, with an automatic fix and its revert,
+  in the PR that creates it. A chain or guard that checks only a count is incomplete: add the age of the oldest item.
 
 ## The charter (QUNIVERSE-CHARTER-1)
 - `docs/QUNIVERSE-CHARTER.md` is the system's charter: what the Quniverse is, what it should be, objectives, SWOT, MVP,

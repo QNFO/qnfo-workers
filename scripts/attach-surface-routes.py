@@ -39,6 +39,20 @@ ORIGIN_HEALTH = "https://qnfo.org/health"
 MIN_VERSION = (3, 9)  # 3.9.0-qds is the first gateway that renders these hosts (3.8.x would serve its default page)
 # (zone, hostname). www.qwav.tech is left out: a zone redirect rule already sends it to qwav.tech.
 HOSTS = [("qnfo.org", "archive.qnfo.org"), ("qwav.org", "qwav.org"), ("qwav.org", "www.qwav.org"), ("qwav.tech", "qwav.tech")]
+# RETIRED-HOSTS-ROUTES-1 (2026-10-08, agent_issues 2010, owner card cf-dns-redirect-token): twelve retired qnfo.org hostnames
+# keep proxied DNS and answered 522. qnfo-lifecycle 1.9.1 (RETIRED-HOSTS-1) answers them 410 Gone; only the zone routes were
+# missing. The card said no fleet token could write routes, but this script's CLOUDFLARE_API_TOKEN created routes on
+# 2026-10-02 (ASK-QWAV-ROUTE-1, SURFACE-ROUTES-1), so the routes are attached here. Verified by an external 410.
+SERVICE_BY_HOST = {}
+for _h in ("agent-orchestrator", "fleet-executor", "fleet-scheduler", "qnfo-arxiv-radar", "qnfo-calibration-audit",
+           "qnfo-citation-watch", "qnfo-paper-reviser", "qnfo-research-radar", "qnfo-secrets-audit", "qnfo-system-health",
+           "scorecard", "analytics"):
+    HOSTS.append(("qnfo.org", _h + ".qnfo.org"))
+    SERVICE_BY_HOST[_h + ".qnfo.org"] = "qnfo-lifecycle"
+
+
+def service_for(host):
+    return SERVICE_BY_HOST.get(host, SERVICE)
 UA = "qnfo-ops-surface-routes/1.4"
 # SURFACE-ROUTES-PROXY-1 (2026-10-02): qwav.org and www.qwav.org are DNS-only CNAMEs to qwav.pages.dev, so a zone route never
 # runs on them (first run: "no proxied DNS record"). For these hosts only, a single CNAME to *.pages.dev is switched to
@@ -135,7 +149,7 @@ def attach(zone_name, host, zones):
     for r in j.get("result") or []:
         if r.get("pattern") == host + "/*":
             h["route_id"] = r.get("id")
-            if r.get("script") != SERVICE:
+            if r.get("script") != service_for(host):
                 h.update(status="conflict", detail="route already points at %s" % r.get("script"))
                 return False
             h.update(status="present")
@@ -160,12 +174,12 @@ def attach(zone_name, host, zones):
     if not any(x.get("proxied") for x in recs):
         h.update(status="failed", detail="no proxied DNS record; a route would be inert (records: %s)" % json.dumps([{k: x.get(k) for k in ("type", "content", "proxied")} for x in recs])[:300])
         return False
-    st, j = req("POST", "/zones/%s/workers/routes" % zone, {"pattern": host + "/*", "script": SERVICE})
+    st, j = req("POST", "/zones/%s/workers/routes" % zone, {"pattern": host + "/*", "script": service_for(host)})
     if st not in (200, 201) or not j.get("success"):
         h.update(status="failed", detail="create route http=%s body=%s" % (st, json.dumps(j)[:300]))
         return False
     h.update(route_id=(j.get("result") or {}).get("id"), status="created")
-    print("route created: %s -> %s (%s)" % (host, SERVICE, h["route_id"]))
+    print("route created: %s -> %s (%s)" % (host, service_for(host), h["route_id"]))
     return True
 
 
@@ -174,6 +188,22 @@ def verify(host):
     # A record just switched to proxied keeps its old DNS-only answer in resolvers for up to its TTL (auto = 300 s), so
     # those hosts get 7 minutes instead of 2 before the route is judged (run 37011152668 rolled qwav.org back at 2 min).
     tries = 42 if h.get("dns_proxied_from") is False else 12
+    if service_for(host) == "qnfo-lifecycle":
+        # A retired host is verified by qnfo-lifecycle's 410 Gone (RETIRED-HOSTS-1), seen from outside the account.
+        for i in range(1, tries + 1):
+            try:
+                urllib.request.urlopen(urllib.request.Request("https://%s/" % host, headers={"User-Agent": UA, "Cache-Control": "no-cache"}), timeout=20)
+                print("verify %s %d: answered 2xx/3xx, not 410" % (host, i))
+            except urllib.error.HTTPError as e:
+                if e.code == 410:
+                    h["verified"] = True
+                    return True
+                print("verify %s %d: http=%s" % (host, i, e.code))
+            except Exception as e:
+                print("verify %s %d: %s %s" % (host, i, type(e).__name__, e))
+            time.sleep(10)
+        h["verified"] = False
+        return False
     for i in range(1, tries + 1):
         if i == 4 and host in PAGES_DETACH and h.get("status") == "created" and not h.get("pages_detached"):
             proj = PAGES_DETACH[host]
@@ -207,7 +237,7 @@ def ledger(host, route_id):
     sql = ("INSERT INTO deployment_history (resource_type,resource_name,action,version_id,deployed_by,deployed_at,status,notes) "
            "VALUES ('worker_route',?,'attach',?,'scripts/attach-surface-routes.py',datetime('now'),'success',?)")
     st, j = req("POST", "/accounts/%s/d1/database/%s/query" % (ACCT, dbid),
-                {"sql": sql, "params": [host, str(route_id), "SURFACE-ROUTES-1; worker %s %s" % (SERVICE, RESULT.get("gateway_version"))]})
+                {"sql": sql, "params": [host, str(route_id), "SURFACE-ROUTES-1; worker %s %s" % (service_for(host), RESULT.get("gateway_version"))]})
     print("ledger %s http=%s ok=%s" % (host, st, j.get("success")))
 
 
