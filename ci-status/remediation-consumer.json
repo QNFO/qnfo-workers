@@ -1,98 +1,66 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@5dfe5a01001b",
- "due": 11,
- "pass": 10,
- "fail": 1,
+ "verifier": "remediation-consumer@8c47d2ea35c4",
+ "due": 7,
+ "pass": 0,
+ "fail": 7,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2131",
-   "issue_id": 2131,
+   "class": "issue-2162",
+   "issue_id": 2162,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker",
+   "observed": "pending: filed by qnfo-email, which owns it for 48h",
    "written": true
   },
   {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "failed",
    "written": true
   },
   {
-   "class": "issue-2042",
-   "issue_id": 2042,
-   "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-1815",
+   "issue_id": 1815,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
    "written": true
   },
   {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-2050",
+   "issue_id": 2050,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2114,2115,2116",
    "written": true
   },
   {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
    "written": true
   },
   {
-   "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-2017",
+   "issue_id": 2017,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: fewer than 80% of PRs opened within 20 min of code-task.ready since 2026-10-06T08:00",
    "written": true
   },
   {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-2018",
+   "issue_id": 2018,
+   "verdict": "fail",
    "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ipatent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "observed": "pending: qnfo-code-orchestrator 0.3.17 not live yet (0.8.0-edit-indent)",
    "written": true
   }
  ],
@@ -119,13 +87,12 @@
   "http",
   "runner-https"
  ],
- "https": 9,
- "runtime_verified_share_24h": 21.4,
+ "runtime_verified_share_24h": 20.6,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 29135,
- "head": "5dfe5a01001bb86e1aa93dff766d3f67702219ff",
+ "spent_ms": 22606,
+ "head": "8c47d2ea35c4033c3de98740fdb7df0d5aa4f5ee",
  "job_status": "success",
- "ts": "2026-10-08T06:21:01Z"
+ "ts": "2026-10-08T07:01:48Z"
 }
