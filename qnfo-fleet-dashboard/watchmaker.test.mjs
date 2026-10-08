@@ -37,6 +37,8 @@ CREATE TABLE improvement_loop_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEX
 CREATE TABLE reach_idea_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT);
 CREATE TABLE ask_loop_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, version TEXT, kind TEXT NOT NULL, ok INTEGER NOT NULL, note TEXT);
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, last_attempt_at TEXT);
+CREATE TABLE remediation_verifications (id INTEGER PRIMARY KEY AUTOINCREMENT, verifier TEXT, verified_at TEXT);
+CREATE TABLE scheduler_state (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
 CREATE TABLE cf_changelog_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, status TEXT, items INTEGER, note TEXT);
 CREATE TABLE intents (id TEXT PRIMARY KEY, status TEXT, type TEXT, created_at TEXT);
 CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merged_by TEXT, merged_at TEXT, merge_state TEXT, green_since TEXT, merge_note TEXT, last_error TEXT);
@@ -80,6 +82,10 @@ db.prepare("INSERT INTO perf_runs (ts, day, kind) VALUES (?, '2026-10-05', 'expe
 const PERF_KPIS = ["issue_mttr_h_30d", "deploy_failure_rate_7d", "worker_health_failure_rate", "credibility_events_90d", "selected_works_citation_coverage"];
 for (const k of PERF_KPIS) db.prepare("INSERT INTO metric_registry (metric, layer, kind, source_of_truth, disposition_actor, refresh_cadence, last_value, last_refreshed, state) VALUES (?, 'operational', 'leading', 's', 'a', 'hourly', 'n/a: unmeasured', ?, 'UNMEASURED')").run(k, ago(0.5));
 db.prepare("INSERT INTO remediation_contracts (class, last_attempt_at) VALUES ('EVID-1', ?)").run(new Date(NOW - 2 * 36e5).toISOString().replace("T", " ").slice(0, 19));
+const sp = (h) => new Date(NOW - h * 36e5).toISOString().replace("T", " ").slice(0, 19);
+db.prepare("INSERT INTO remediation_verifications (verifier, verified_at) VALUES ('remediation-consumer@abc', ?)").run(sp(1));
+db.prepare("INSERT INTO remediation_verifications (verifier, verified_at) VALUES ('session-x', ?)").run(sp(0.1));
+db.prepare("INSERT INTO scheduler_state (key, value, updated_at) VALUES ('probe_cadence', '{}', ?)").run(sp(0.5));
 db.prepare("INSERT INTO cf_changelog_runs (ts, status, items) VALUES (?, 'ok', 60)").run(ago(4));   // CF-CHANGELOG-WATCH-1
 db.prepare("INSERT INTO intents (id, status, type, created_at) VALUES ('i1', 'pending', 'research', ?)").run(ago(10));
 // errata-hub hourly ticks (#1747): the watchmaker reads $.last_ok, which a failed tick carries forward.
