@@ -1,18 +1,250 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@a800ba806919",
- "due": 19,
- "pass": 10,
- "fail": 9,
+ "verifier": "remediation-consumer@f080ed39e630",
+ "due": 40,
+ "pass": 9,
+ "fail": 31,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2131",
-   "issue_id": 2131,
+   "class": "issue-2142",
+   "issue_id": 2142,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2143",
+   "issue_id": 2143,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2144",
+   "issue_id": 2144,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2145",
+   "issue_id": 2145,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2146",
+   "issue_id": 2146,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2147",
+   "issue_id": 2147,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2148",
+   "issue_id": 2148,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2149",
+   "issue_id": 2149,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2150",
+   "issue_id": 2150,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2151",
+   "issue_id": 2151,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2152",
+   "issue_id": 2152,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2153",
+   "issue_id": 2153,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2154",
+   "issue_id": 2154,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2155",
+   "issue_id": 2155,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2156",
+   "issue_id": 2156,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2157",
+   "issue_id": 2157,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2076",
+   "issue_id": 2076,
    "verdict": "fail",
    "expected": "ok",
    "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-1987",
+   "issue_id": 1987,
+   "verdict": "fail",
+   "expected": "posting",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1885",
+   "issue_id": 1885,
+   "verdict": "fail",
+   "expected": "clean",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1952",
+   "issue_id": 1952,
+   "verdict": "fail",
+   "expected": "learning",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2087",
+   "issue_id": 2087,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-1953",
+   "issue_id": 1953,
+   "verdict": "fail",
+   "expected": "answered",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2088",
+   "issue_id": 2088,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2089",
+   "issue_id": 2089,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-1857",
+   "issue_id": 1857,
+   "verdict": "fail",
+   "expected": "done",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2047",
+   "issue_id": 2047,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2037",
+   "issue_id": 2037,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: items A/D child CITATION-EXISTENCE-GATE-1 open, item B cost_attribution_gap_pct 0, item C is trigger 362 (issue 1798) and ORPHAN-ISSUE-GUARD-1",
+   "written": true
+  },
+  {
+   "class": "issue-2048",
+   "issue_id": 2048,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2049",
+   "issue_id": 2049,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: lever T7.15 status session",
+   "written": true
+  },
+  {
+   "class": "issue-2053",
+   "issue_id": 2053,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the remaining DoD of 2053 (mechanism card shown in the v=2 flow) rides lever T7.15 ipatent-ui-overhaul, status session",
    "written": true
   },
   {
@@ -26,9 +258,9 @@
   {
    "class": "EVID-1718-SHAREDCAP",
    "issue_id": 1718,
-   "verdict": "fail",
+   "verdict": "pass",
    "expected": "within-cap",
-   "observed": "pending: the shared-cap window is read from 2026-10-08",
+   "observed": "within-cap",
    "written": true
   },
   {
@@ -45,30 +277,6 @@
    "verdict": "fail",
    "expected": "ok",
    "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
-   "written": true
-  },
-  {
-   "class": "issue-2067",
-   "issue_id": 2067,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "dead-on-arrival tasks still created",
-   "written": true
-  },
-  {
-   "class": "issue-2068",
-   "issue_id": 2068,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 0 job rows since the issue was filed (needs 3)",
-   "written": true
-  },
-  {
-   "class": "issue-2107",
-   "issue_id": 2107,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 0 paper posts on Buffer channels in 72h",
    "written": true
   },
   {
@@ -118,46 +326,6 @@
    "expected": "ok",
    "observed": "ok",
    "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ipatent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1825",
-   "issue_id": 1825,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
   }
  ],
  "trusted_transports": [
@@ -183,13 +351,13 @@
   "http",
   "runner-https"
  ],
- "https": 9,
- "runtime_verified_share_24h": 20.3,
+ "https": 5,
+ "runtime_verified_share_24h": 20.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 52542,
- "head": "a800ba806919d284917caf1ea69e65015790e37e",
+ "spent_ms": 106011,
+ "head": "f080ed39e630e0cfe3c55d129a7d7fe7e90ab335",
  "job_status": "success",
- "ts": "2026-10-07T23:21:23Z"
+ "ts": "2026-10-08T00:29:05Z"
 }
