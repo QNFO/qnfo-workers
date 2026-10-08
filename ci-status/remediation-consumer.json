@@ -1,330 +1,330 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@72cbe997bf98",
+ "verifier": "remediation-consumer@dd021a257b0d",
  "due": 40,
- "pass": 20,
- "fail": 20,
+ "pass": 40,
+ "fail": 0,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2197",
-   "issue_id": 2197,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by recurrence-guard, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-13",
-   "issue_id": 13,
+   "class": "issue-76",
+   "issue_id": 76,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-14",
-   "issue_id": 14,
+   "class": "issue-77",
+   "issue_id": 77,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-15",
-   "issue_id": 15,
+   "class": "issue-78",
+   "issue_id": 78,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-16",
-   "issue_id": 16,
+   "class": "issue-79",
+   "issue_id": 79,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-17",
-   "issue_id": 17,
+   "class": "issue-80",
+   "issue_id": 80,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-18",
-   "issue_id": 18,
+   "class": "issue-81",
+   "issue_id": 81,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-19",
-   "issue_id": 19,
+   "class": "issue-82",
+   "issue_id": 82,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-20",
-   "issue_id": 20,
+   "class": "issue-83",
+   "issue_id": 83,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-21",
-   "issue_id": 21,
+   "class": "issue-84",
+   "issue_id": 84,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-22",
-   "issue_id": 22,
+   "class": "issue-85",
+   "issue_id": 85,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1987",
-   "issue_id": 1987,
-   "verdict": "fail",
-   "expected": "posting",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-2053",
-   "issue_id": 2053,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the remaining DoD of 2053 (mechanism card shown in the v=2 flow) rides lever T7.15 ipatent-ui-overhaul, status session",
-   "written": true
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "issue-2042",
-   "issue_id": 2042,
-   "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
+   "class": "issue-86",
+   "issue_id": 86,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-gateway",
-   "issue_id": null,
+   "class": "issue-87",
+   "issue_id": 87,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-ai-router",
-   "issue_id": null,
+   "class": "issue-88",
+   "issue_id": 88,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-idea-hub",
-   "issue_id": null,
+   "class": "issue-89",
+   "issue_id": 89,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-personal-api",
-   "issue_id": null,
+   "class": "issue-90",
+   "issue_id": 90,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-ipatent",
-   "issue_id": null,
+   "class": "issue-91",
+   "issue_id": 91,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-papers",
-   "issue_id": null,
+   "class": "issue-92",
+   "issue_id": 92,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "rt-q08",
-   "issue_id": null,
+   "class": "issue-93",
+   "issue_id": 93,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2044",
-   "issue_id": 2044,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "close-predicate-monotone",
-   "issue_id": 1297,
-   "verdict": "fail",
-   "expected": "guarded",
-   "observed": "unguarded",
-   "written": true
-  },
-  {
-   "class": "issue-1716",
-   "issue_id": 1716,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1750",
-   "issue_id": 1750,
-   "verdict": "fail",
+   "class": "issue-94",
+   "issue_id": 94,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: owner card lightcone-application-text open",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1753",
-   "issue_id": 1753,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1779",
-   "issue_id": 1779,
-   "verdict": "fail",
+   "class": "issue-95",
+   "issue_id": 95,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: no ipatent_benchmark_results table yet (lever T7.14 steps 1-4, patents table present: 0)",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1793",
-   "issue_id": 1793,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1795",
-   "issue_id": 1795,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1798",
-   "issue_id": 1798,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1818",
-   "issue_id": 1818,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1834",
-   "issue_id": 1834,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1838",
-   "issue_id": 1838,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1872",
-   "issue_id": 1872,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1873",
-   "issue_id": 1873,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1875",
-   "issue_id": 1875,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1876",
-   "issue_id": 1876,
-   "verdict": "fail",
+   "class": "issue-96",
+   "issue_id": 96,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "a task created after the deploy ended superseded",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1877",
-   "issue_id": 1877,
-   "verdict": "fail",
+   "class": "issue-97",
+   "issue_id": 97,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: under 3 days since the deploy",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-98",
+   "issue_id": 98,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-99",
+   "issue_id": 99,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-100",
+   "issue_id": 100,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-101",
+   "issue_id": 101,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-102",
+   "issue_id": 102,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-103",
+   "issue_id": 103,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-104",
+   "issue_id": 104,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-105",
+   "issue_id": 105,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-106",
+   "issue_id": 106,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-107",
+   "issue_id": 107,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-108",
+   "issue_id": 108,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-109",
+   "issue_id": 109,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-110",
+   "issue_id": 110,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-111",
+   "issue_id": 111,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-112",
+   "issue_id": 112,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-113",
+   "issue_id": 113,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-114",
+   "issue_id": 114,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-115",
+   "issue_id": 115,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   }
  ],
@@ -351,13 +351,12 @@
   "http",
   "runner-https"
  ],
- "https": 8,
- "runtime_verified_share_24h": 12.4,
+ "runtime_verified_share_24h": 10.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 93188,
- "head": "72cbe997bf9842add59ce4afc84b2254a9eb589a",
+ "spent_ms": 132266,
+ "head": "dd021a257b0d487c4b603bde17aeea96c55576c2",
  "job_status": "success",
- "ts": "2026-10-08T19:41:53Z"
+ "ts": "2026-10-08T20:12:02Z"
 }
