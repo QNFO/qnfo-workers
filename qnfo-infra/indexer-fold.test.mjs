@@ -22,7 +22,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   // the member (#1815 failed on it). The member keeps its structure: every function the guest declared is still declared in
   // the host, and only the member may differ from the guest.
   const fnames = [...new Set((body.join("\n").match(/function\s+([A-Za-z_$][\w$]*)/g) || []).map((m) => m.split(/\s+/)[1]))];
-  const lost = fnames.filter((n) => !new RegExp("function\\s+" + n.replace(/\$/g, "\\$") + "\\b").test(src));
+  const lost = fnames.filter((n) => !new RegExp("function\\s+" + n.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&") + "\\b").test(src));
   ok(fnames.length > 5 && lost.length === 0, "every function the indexer declared is still in the host member", lost);
   ok(versionAtLeast(mod.__hv, "1.3.1") && mod.__mv === "3.0.13-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1, member 3.0.13-folded, one quoted VERSION constant");
 }
