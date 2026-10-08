@@ -87,13 +87,16 @@ vault.set("notes/v1/2025/10/26/c.md", "NO-IDEA-HERE " + "milk eggs bread ".repea
 const before = db.prepare("SELECT COUNT(*) n FROM idea_proposals").get().n;
 calls.length = 0;
 let c1 = await api.runOwnerCorpus(env);
-ok(c1.picked === api.OWNER_CORPUS_BATCH && api.OWNER_CORPUS_BATCH === 2, "one run reads at most OWNER_CORPUS_BATCH notes, newest path first", c1);
+// Batch-size agnostic (2026-10-08): #2125 raised OWNER_CORPUS_BATCH to read more of the owner's notes per run; the
+// invariants are the batch bound, newest first, and every eligible note read exactly once, not a batch of exactly 2.
+const B = api.OWNER_CORPUS_BATCH;
+ok(B >= 2 && c1.picked === Math.min(B, 4), "one run reads at most OWNER_CORPUS_BATCH notes, newest path first", c1);
 ok(c1.proposed === 1 && c1.short === 1, "the research note becomes a proposal; the short note is recorded as short", c1);
 const p = db.prepare("SELECT * FROM idea_proposals WHERE name = 'owner-corpus' AND idea LIKE '%notes/v1/2025/10/28/a.md%'").get();
 ok(p && p.contact === "owner" && p.status === "new" && /^corpus:[0-9a-f]{16}$/.test(p.ip_hash) && /^Distinction lattices bound measurement records\. /.test(p.idea), "the proposal is owner-corpus, contact owner, status new, tagged by path hash, titled", p);
 ok(db.prepare("SELECT COUNT(*) n FROM idea_proposals").get().n === before + 1, "exactly one proposal was written");
 let c2 = await api.runOwnerCorpus(env);
-ok(c2.none === 1 && c2.missing === 1 && c2.proposed === 0, "the next run takes the next two notes: no idea in one, missing body in the other", c2);
+ok((c1.none + c2.none) === 1 && (c1.missing + c2.missing) === 1 && c2.proposed === 0 && c1.picked + c2.picked === 4, "across runs: no idea in one note, missing body in another, each read once", [c1, c2]);
 const seen = Object.fromEntries(db.prepare("SELECT path, outcome FROM owner_corpus_seen").all().map((r) => [r.path, r.outcome]));
 ok(seen["notes/v1/2025/10/28/a.md"] === "proposed" && seen["notes/v1/2025/10/27/b.md"] === "short" && seen["notes/v1/2025/10/26/c.md"] === "none" && seen["notes/v1/2025/10/25/d.md"] === "missing" && !("notes/v1/2025/10/29/daily.md" in seen), "every eligible note gets one outcome row; daily notes are not corpus", seen);
 let c3 = await api.runOwnerCorpus(env);
@@ -146,7 +149,7 @@ const AI2 = { async run(model, input) { if (failNext) { failNext = false; return
 const env2 = { QNFO_AUDIT: shim(d2), AI: AI2, VAULT: { async get(k) { return v2.has(k) ? { async text() { return v2.get(k); } } : null; } } };
 let o1 = await api.runOwnerCorpus(env2);
 const seen2 = () => Object.fromEntries(d2.prepare("SELECT path, outcome FROM owner_corpus_seen").all().map((r) => [r.path, r.outcome]));
-ok(Object.keys(seen2()).join(",") === "notes/v1/2025/10/28/idea-a.md,notes/v1/2025/06/14/idea-b.md" || (seen2()["notes/v1/2025/10/28/idea-a.md"] && seen2()["notes/v1/2025/06/14/idea-b.md"] && Object.keys(seen2()).length === 2), "pre-fleet dated notes are read first, newest first; ops files and undated logs wait", seen2());
+ok(B > 2 ? (seen2()["notes/v1/2025/10/28/idea-a.md"] && seen2()["notes/v1/2025/06/14/idea-b.md"]) : (Object.keys(seen2()).join(",") === "notes/v1/2025/10/28/idea-a.md,notes/v1/2025/06/14/idea-b.md" || (seen2()["notes/v1/2025/10/28/idea-a.md"] && seen2()["notes/v1/2025/06/14/idea-b.md"] && Object.keys(seen2()).length === 2)), "pre-fleet dated notes are read first, newest first; with a batch of 2 ops files and undated logs wait", seen2());
 ok(seen2()["notes/v1/2025/10/28/idea-a.md"] === "error1" && seen2()["notes/v1/2025/06/14/idea-b.md"] === "proposed", "a truncated reply is recorded as error1 (retryable), not lost", seen2());
 d2.prepare("UPDATE owner_corpus_seen SET ts = ? WHERE outcome = 'error1'").run(new Date(Date.now() - 2 * 864e5).toISOString());
 let o2 = await api.runOwnerCorpus(env2);
