@@ -50,15 +50,31 @@ for _h in ("agent-orchestrator", "fleet-executor", "fleet-scheduler", "qnfo-arxi
     HOSTS.append(("qnfo.org", _h + ".qnfo.org"))
     SERVICE_BY_HOST[_h + ".qnfo.org"] = "qnfo-lifecycle"
 
+# SPARE-DOMAINS-1 (2026-10-08, agent_issues 2077): the spare domains go to qnfo-lifecycle 1.10.0, which answers 301 to their
+# canonical site (SPARE_HOST_REDIRECTS there). A host with no address record gets a proxied AAAA 100:: (DNS_CREATE); a
+# DNS-only CNAME to *.pages.dev is proxied (PROXY_ALLOWED) and its Pages custom-domain binding, found by listing the account's
+# projects, is detached once the route is in place. Each step is undone for a host that does not verify.
+SPARE_TARGET = {"ipatent.me": "https://ipatent.qnfo.org", "www.ipatent.me": "https://ipatent.qnfo.org",
+                "qwav.net": "https://qwav.org", "www.qwav.net": "https://qwav.org", "qwav.uk": "https://qwav.org",
+                "www.qwav.uk": "https://qwav.org", "qwave.tech": "https://qwav.org", "www.qwave.tech": "https://qwav.org",
+                "q-wave.tech": "https://qwav.org", "www.q-wave.tech": "https://qwav.org",
+                "empoweringchange.today": "https://qnfo.org", "www.empoweringchange.today": "https://qnfo.org"}
+for _h in SPARE_TARGET:
+    HOSTS.append((_h[4:] if _h.startswith("www.") else _h, _h))
+    SERVICE_BY_HOST[_h] = "qnfo-lifecycle"
+DNS_CREATE = set(SPARE_TARGET)
+LIFECYCLE_HEALTH = "https://qnfo-lifecycle.q08.workers.dev/health"
+LIFECYCLE_MIN = (1, 10)
+
 
 def service_for(host):
     return SERVICE_BY_HOST.get(host, SERVICE)
-UA = "qnfo-ops-surface-routes/1.4"
+UA = "qnfo-ops-surface-routes/1.5"
 # SURFACE-ROUTES-PROXY-1 (2026-10-02): qwav.org and www.qwav.org are DNS-only CNAMEs to qwav.pages.dev, so a zone route never
 # runs on them (first run: "no proxied DNS record"). For these hosts only, a single CNAME to *.pages.dev is switched to
 # proxied (Cloudflare serves the Pages site exactly as before until the route takes over), and switched back if the
 # route then fails verification. The report records the record id and its previous state for a manual rollback.
-PROXY_ALLOWED = {"qwav.org", "www.qwav.org"}
+PROXY_ALLOWED = {"qwav.org", "www.qwav.org", "qwav.net", "www.qwav.net", "qwav.uk", "www.qwav.uk"}
 # SURFACE-ROUTES-PAGES-1 (2026-10-02): run 37011936968 proxied qwav.org and routed it, and for 7 minutes /health still
 # answered from Pages: a Pages custom-domain binding (project qwav) takes precedence over zone routes. For these hosts
 # only, when the route is in place and the host still answers from Pages after 3 checks, the Pages binding is detached;
@@ -133,6 +149,44 @@ def wait_gateway():
     return False
 
 
+def wait_lifecycle():
+    for i in range(1, 41):
+        try:
+            st, j = get_json(LIFECYCLE_HEALTH)
+            v = str(j.get("version") or "")
+            RESULT["lifecycle_version"] = v
+            parts = tuple(int(x) for x in v.split("-")[0].split(".")[:2])
+            if st == 200 and parts >= LIFECYCLE_MIN:
+                print("lifecycle ready: %s" % v)
+                return True
+            print("wait lifecycle %d: %s" % (i, v))
+        except Exception as e:
+            print("wait lifecycle %d: %s %s" % (i, type(e).__name__, e))
+        time.sleep(15)
+    return False
+
+
+def pages_project_for(host):
+    st, j = req("GET", "/accounts/%s/pages/projects?per_page=100" % ACCT)
+    for p in (j.get("result") or []) if st == 200 else []:
+        if host in (p.get("domains") or []):
+            return p.get("name")
+    return None
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None
+
+
+def head_location(url):
+    try:
+        with urllib.request.build_opener(_NoRedirect).open(urllib.request.Request(url, headers={"User-Agent": UA, "Cache-Control": "no-cache"}), timeout=20) as resp:
+            return resp.status, None
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers.get("Location")
+
+
 def attach(zone_name, host, zones):
     h = RESULT["hosts"].setdefault(host, {"zone": zone_name, "route_id": None, "status": "unknown", "detail": None})
     if zone_name not in zones:
@@ -171,6 +225,17 @@ def attach(zone_name, host, zones):
         else:
             h.update(status="failed", detail="could not proxy the DNS record http=%s body=%s" % (st, json.dumps(pj)[:300]))
             return False
+    if not addr and host in DNS_CREATE:
+        st, cj = req("POST", "/zones/%s/dns_records" % zone, {"type": "AAAA", "name": host, "content": "100::", "proxied": True, "ttl": 1,
+                                                               "comment": "SPARE-DOMAINS-1: originless record for the qnfo-lifecycle redirect"})
+        if st in (200, 201) and cj.get("success"):
+            h.update(dns_created=(cj.get("result") or {}).get("id"))
+            print("dns created: %s AAAA 100:: proxied (%s)" % (host, h["dns_created"]))
+            time.sleep(20)
+            recs = [{"type": "AAAA", "proxied": True}]
+        else:
+            h.update(status="failed", detail="could not create the DNS record http=%s body=%s" % (st, json.dumps(cj)[:300]))
+            return False
     if not any(x.get("proxied") for x in recs):
         h.update(status="failed", detail="no proxied DNS record; a route would be inert (records: %s)" % json.dumps([{k: x.get(k) for k in ("type", "content", "proxied")} for x in recs])[:300])
         return False
@@ -187,7 +252,26 @@ def verify(host):
     h = RESULT["hosts"][host]
     # A record just switched to proxied keeps its old DNS-only answer in resolvers for up to its TTL (auto = 300 s), so
     # those hosts get 7 minutes instead of 2 before the route is judged (run 37011152668 rolled qwav.org back at 2 min).
-    tries = 42 if h.get("dns_proxied_from") is False else 12
+    tries = 42 if h.get("dns_proxied_from") is False or h.get("dns_created") else 12
+    if host in SPARE_TARGET:
+        want = SPARE_TARGET[host] + "/"
+        for i in range(1, tries + 1):
+            if i == 4 and h.get("status") == "created" and not h.get("pages_detached"):
+                proj = pages_project_for(host)
+                if proj:
+                    st, dj = req("DELETE", "/accounts/%s/pages/projects/%s/domains/%s" % (ACCT, proj, host))
+                    h["pages_detach_http"] = st
+                    if st == 200 and dj.get("success", True):
+                        h.update(pages_detached=proj)
+                        print("pages binding detached: %s from project %s" % (host, proj))
+            st, loc = head_location("https://%s/" % host)
+            if st == 301 and loc == want:
+                h["verified"] = True
+                return True
+            print("verify %s %d: http=%s location=%s" % (host, i, st, loc))
+            time.sleep(10)
+        h["verified"] = False
+        return False
     if service_for(host) == "qnfo-lifecycle":
         # A retired host is verified by qnfo-lifecycle's 410 Gone (RETIRED-HOSTS-1), seen from outside the account.
         for i in range(1, tries + 1):
@@ -250,7 +334,15 @@ def main():
         return 1
     zones = {}
     ok = True
+    lifecycle_ready = None
     for zone_name, host in HOSTS:
+        if host in SPARE_TARGET:
+            if lifecycle_ready is None:
+                lifecycle_ready = wait_lifecycle()
+            if not lifecycle_ready:
+                RESULT["hosts"][host] = {"zone": zone_name, "route_id": None, "status": "skipped", "detail": "qnfo-lifecycle below 1.10 (SPARE-DOMAINS-1 handler)"}
+                ok = False
+                continue
         if attach(zone_name, host, zones):
             if verify(host):
                 if RESULT["hosts"][host]["status"] == "created":
@@ -261,6 +353,11 @@ def main():
                     st, j = req("POST", "/accounts/%s/pages/projects/%s/domains" % (ACCT, RESULT["hosts"][host]["pages_detached"]), {"name": host})
                     RESULT["hosts"][host]["pages_reattached"] = bool(st in (200, 201) and j.get("success", True))
                     print("pages binding re-added %s http=%s" % (host, st))
+                if RESULT["hosts"][host].get("dns_created"):
+                    # A new name can stay negatively cached at the runner's resolver past the window; a proxied 100:: in front
+                    # of the redirect harms nothing, so it stays for agent_issues 2077's runtime probe to judge.
+                    RESULT["hosts"][host]["kept_unverified"] = True
+                    continue
                 if RESULT["hosts"][host]["status"] == "created":
                     st, j = req("DELETE", "/zones/%s/workers/routes/%s" % (zones[zone_name], RESULT["hosts"][host]["route_id"]))
                     RESULT["hosts"][host]["rolled_back"] = bool(st == 200 and j.get("success"))

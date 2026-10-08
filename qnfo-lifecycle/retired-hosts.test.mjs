@@ -25,6 +25,16 @@ ok(typeof W.scheduled === "function", "the scheduled handler survives the wrappe
 const r2 = await W.fetch(new Request("https://lifecycle.qnfo.org/calendar/health"), {}, { waitUntil() {} }).catch((e) => ({ status: -1, e: String(e) }));
 passedThrough = r2.status !== 410;
 ok(passedThrough, "lifecycle.qnfo.org is not answered with 410", r2.status);
+// SPARE-DOMAINS-1 (1.10.0, agent_issues 2077): every spare host answers 301 to its canonical site with path and query.
+const spare = JSON.parse("{" + (src.match(/var SPARE_HOST_REDIRECTS = \{([^}]*)\}/) || [, ""])[1] + "}");
+ok(Object.keys(spare).length === 12 && Object.values(spare).every((t) => /^https:\/\/(ipatent\.qnfo\.org|qwav\.org|qnfo\.org)$/.test(t)), "twelve spare hosts, each to a canonical site", spare);
+ok(!Object.keys(spare).some((h) => /\.qnfo\.org$|^qwav\.org$|^qwav\.tech$/.test(h)), "no live site is a spare host");
+for (const [h, t] of Object.entries(spare)) {
+  const r = await W.fetch(new Request("https://" + h + "/a/b?x=1"), {}, { waitUntil() {} });
+  ok(r.status === 301 && r.headers.get("Location") === t + "/a/b?x=1", h + " answers 301 to " + t + " keeping path and query", [r.status, r.headers.get("Location")]);
+}
+const r3 = await W.fetch(new Request("https://ipatent.me/"), {}, { waitUntil() {} });
+ok(r3.headers.get("Location") === "https://ipatent.qnfo.org/", "ipatent.me/ goes to ipatent.qnfo.org/", r3.headers.get("Location"));
 // Routing these hostnames to this worker is a DNS/route change held for the owner (card cf-dns-redirect-token); the
 // handler is ready, and no route is declared here, so a deploy can never attach one unreviewed.
 ok(!/^routes\s*=/m.test(toml) && !/^route\s*=/m.test(toml), "wrangler.toml declares no routes");
