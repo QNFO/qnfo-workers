@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-08 16:08:48",
+  "audited_at": "2026-10-08 18:08:45",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -463,7 +463,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.13.2-fallback-floor",
+        "version": "1.13.3-forced-fallback",
         "worker": "personal-companion"
       },
       {
@@ -493,7 +493,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.8.0-edit-indent",
+        "version": "0.9.0-fleet-tick",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -518,7 +518,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.26.8-codeagent",
+        "version": "1.27.0-autonomy-first",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -804,9 +804,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.13.2-fallback-floor",
+      "before": "1.13.3-forced-fallback",
       "http": 200,
-      "live": "1.13.2-fallback-floor",
+      "live": "1.13.3-forced-fallback",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -1028,9 +1028,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.8.0-edit-indent",
+      "before": "0.9.0-fleet-tick",
       "http": 200,
-      "live": "0.8.0-edit-indent",
+      "live": "0.9.0-fleet-tick",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1148,9 +1148,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.26.8-codeagent",
+      "before": "1.27.0-autonomy-first",
       "http": 200,
-      "live": "1.26.8-codeagent",
+      "live": "1.27.0-autonomy-first",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
