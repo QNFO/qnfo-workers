@@ -19,6 +19,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const worker = (await import(pathToFileURL(path.join(here, "worker.js")).href)).default;
@@ -184,7 +185,7 @@ function applies(fileText, patch) {
 {
   const { env } = envWith([]);
   const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
-  ok(/^0\.([4-9]|\d\d)\.\d+-/.test(h.version) && h.capabilities.includes("large-file-window") && h.limitations.some((l) => /LARGE-FILE-WINDOW-1/.test(l) && /900000/.test(l) && /6000000/.test(l)), "F1 /health names the capability and its bounds", { v: h.version });
+  ok(versionAtLeast(h.version, "0.4.0") && h.capabilities.includes("large-file-window") && h.limitations.some((l) => /LARGE-FILE-WINDOW-1/.test(l) && /900000/.test(l) && /6000000/.test(l)), "F1 /health names the capability and its bounds", { v: h.version });
 }
 
 console.log("large-file: " + pass + " passed, " + fail + " failed");

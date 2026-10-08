@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.13.0-draft-metering"; // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.14.0-guided-flow"; // 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -785,6 +785,7 @@ async function handleDraft(request, env, ctx) {
   }
   const searchQuery = `${title} ${technicalField} ${description.slice(0, 1e3)}`;
   ctx?.waitUntil?.(countUsage(env, "draft", searchQuery, request.headers.get("User-Agent") || ""));
+  if (body.variant === "v2") ctx?.waitUntil?.(countUsage(env, "draft-v2", searchQuery, request.headers.get("User-Agent") || ""));
   const ragContext = await searchDisclosures(env, searchQuery);
   const topRag = ragContext && ragContext.length ? ragContext[0] : null;
   const priorArt = topRag && Number(topRag.score) >= 0.8 ? { flag: true, top_title: topRag.title, top_score: Math.round(Number(topRag.score) * 100) / 100, section: topRag.section || "", message: "Very close to an existing corpus filing - refine the distinguishing features before filing." } : null;
@@ -1563,6 +1564,45 @@ function renderExamplePage() {
 }
 __name(renderExamplePage, "renderExamplePage");
 
+// ---- GUIDED-FLOW-1:BEGIN (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049): the ?v=2 guided flow (describe, mechanism card,
+// draft, support map, fix gaps, file). ipDeadline is the 12-month date the flow puts in front of the inventor: a US
+// nonprovisional or PCT/Paris filing must follow the provisional within 12 months (35 U.S.C. 119(e), Paris Art. 4), and
+// a date that falls on a Saturday or Sunday moves to the next Monday (35 U.S.C. 21(b)); federal holidays are named in
+// the copy, not computed. The same function runs in the page (stringified below) and in the suite.
+function ipDeadline(iso) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+  if (!m) return null;
+  var y = Number(m[1]) + 1, mo = Number(m[2]), d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  var last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  var dt = new Date(Date.UTC(y, mo - 1, Math.min(d, last)));
+  var dow = dt.getUTCDay(), rolled = false;
+  if (dow === 6) { dt.setUTCDate(dt.getUTCDate() + 2); rolled = true; }
+  else if (dow === 0) { dt.setUTCDate(dt.getUTCDate() + 1); rolled = true; }
+  return { due: dt.toISOString().slice(0, 10), rolled: rolled, weekday: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dt.getUTCDay()] };
+}
+__name(ipDeadline, "ipDeadline");
+// One VEVENT for the 12-month date, with reminders 60 and 14 days before; built in the page, nothing leaves the browser.
+function ipDeadlineIcs(due, title) {
+  var ymd = String(due).replace(/-/g, "");
+  var safe = String(title || "my invention").replace(/[\r\n,;]+/g, " ").slice(0, 120);
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//QNFO//iPatent//EN", "BEGIN:VEVENT", "UID:ipatent-" + ymd + "-" + safe.length + "@ipatent.qnfo.org",
+    "DTSTAMP:" + ymd + "T000000Z", "DTSTART;VALUE=DATE:" + ymd, "SUMMARY:12-month deadline: nonprovisional / PCT for " + safe,
+    "DESCRIPTION:The provisional for " + safe + " expires. File the nonprovisional and any PCT or foreign application by today. Confirm the date with a registered practitioner.",
+    "BEGIN:VALARM", "TRIGGER:-P60D", "ACTION:DISPLAY", "DESCRIPTION:60 days to the 12-month patent deadline", "END:VALARM",
+    "BEGIN:VALARM", "TRIGGER:-P14D", "ACTION:DISPLAY", "DESCRIPTION:14 days to the 12-month patent deadline", "END:VALARM",
+    "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+}
+__name(ipDeadlineIcs, "ipDeadlineIcs");
+var FLOW_STEPS = [["describe", "Describe"], ["mechanism", "Mechanism"], ["draft", "Draft"], ["map", "Support map"], ["fix", "Fix gaps"], ["file", "File"]];
+var FLOW_PAGE_JS = "var ipDeadline = " + ipDeadline.toString() + ";\nvar ipDeadlineIcs = " + ipDeadlineIcs.toString() + ";\nvar FLOW_STEPS = " + JSON.stringify(FLOW_STEPS) + ";";
+function flowRailHtml() {
+  return '<nav class="flow" id="flowRail" style="display:none" data-flow="v2" aria-label="Guided flow"><ol>' + FLOW_STEPS.map(function (st, i) {
+    return '<li><a href="#flow-' + st[0] + '" data-step="' + st[0] + '" class="fs todo"><span class="fn">' + (i + 1) + '</span><span class="fl">' + st[1] + '</span></a></li>';
+  }).join("") + '</ol></nav>';
+}
+__name(flowRailHtml, "flowRailHtml");
+// ---- GUIDED-FLOW-1:END
 var LANDING_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1827,7 +1867,44 @@ var LANDING_HTML = `<!DOCTYPE html>
   .paper .para{margin:0 0 10px;white-space:pre-wrap;font-size:15.5px;line-height:1.75}
     .close-warn{display:none;margin:0 0 18px;border:1px solid var(--amber);border-left:4px solid var(--amber);background:rgba(169,123,29,.08);padding:12px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.65;color:var(--ink)}
   .close-warn b{color:var(--amber);letter-spacing:.06em}
-@media print{.docket,.hero,.chips,.actions,.status,.how,footer,.suggest,.form-card,#dlBar{display:none}}
+  /* ===== GUIDED-FLOW-1 (?v=2 only; mobile-first) ===== */
+  .flow{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--line);margin:0 -28px;padding:10px 28px;overflow-x:auto}
+  .flow ol{list-style:none;display:flex;gap:6px;min-width:max-content}
+  .flow .fs{display:flex;align-items:center;gap:6px;text-decoration:none;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:var(--white)}
+  .flow .fn{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;border:1px solid currentColor;font-size:10px}
+  .flow .fs.active{color:var(--white);background:var(--green);border-color:var(--green)}
+  .flow .fs.done{color:var(--green);border-color:var(--green)}
+  .flow .fs.done .fn{background:var(--green);color:var(--white)}
+  .flow .fs.warn{color:var(--amber);border-color:var(--amber)}
+  .fz{background:var(--white);border:1px solid var(--line);padding:20px 18px;margin:22px 0;position:relative}
+  .fz h2{font-size:22px;font-weight:600;margin-bottom:6px;letter-spacing:-.01em}
+  .fz .fk{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px}
+  .fz p{font-size:15px;color:var(--ink-soft)}
+  .sm-bar{display:flex;height:14px;border:1px solid var(--line);margin:14px 0 8px;overflow:hidden}
+  .sm-bar span{display:block;height:100%}
+  .sm-bar .b-s{background:var(--green)} .sm-bar .b-w{background:var(--amber)} .sm-bar .b-u{background:var(--danger)}
+  .sm-legend{display:flex;flex-wrap:wrap;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:11px}
+  .sm-score{font-size:44px;font-weight:600;line-height:1;color:var(--green)}
+  .sm-score small{font-size:15px;color:var(--ink-soft);font-weight:400}
+  .gap-item{border-top:1px dotted var(--line);padding:12px 0}
+  .gap-item .gl{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  .gap-item.unsupported .gl{color:var(--danger)} .gap-item.weak .gl{color:var(--amber)} .gap-item.hole .gl{color:var(--danger)}
+  .gap-item .gw{font-size:14px;margin:4px 0 6px}
+  .gap-item textarea{width:100%;min-height:58px;border:1px solid var(--line);background:var(--paper);font-family:'Fraunces',serif;font-size:15px;padding:8px}
+  .dl-row{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}
+  .dl-row label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--green);display:block;margin-bottom:4px}
+  .dl-row input{width:100%;border:1px solid var(--line);background:var(--paper);padding:10px;font-size:16px;font-family:'IBM Plex Mono',monospace}
+  .deadline{border-left:4px solid var(--amber);background:rgba(169,123,29,.08);padding:12px 14px;margin-top:14px;font-size:15px}
+  .deadline b.big{display:block;font-size:26px;color:var(--ink);font-weight:600}
+  .fz .btns{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+  .v2 .paper{overflow:hidden}
+  .fz,.flow-a{scroll-margin-top:64px}
+  .fz .btns button:not(.invent){width:100%;padding:14px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;cursor:pointer;background:var(--green);color:var(--white);border:1.5px solid var(--green)}
+  .fz .btns button:not(.invent):hover{background:var(--green-bright)}
+  .fz .btns .invent{font-size:12px;padding:14px}
+  @media(max-width:639px){.v2 .paper{padding:28px 18px}}
+  @media(min-width:640px){.fz{padding:26px 28px}.dl-row,.fz .btns{grid-template-columns:1fr 1fr}}
+@media print{.docket,.hero,.chips,.actions,.status,.how,footer,.suggest,.form-card,#dlBar,.flow,#fixZone,#fileZone,#smHero{display:none}}
 </style>
 </head>
 <body>
@@ -1856,8 +1933,9 @@ var LANDING_HTML = `<!DOCTYPE html>
     </div>
   </section>
 
+  ${flowRailHtml()}
   <!-- Filing form -->
-  <section class="form-card" id="draft">
+  <section class="form-card" id="draft"><span id="flow-describe" class="flow-a"></span>
     <div class="form-head">
       <span class="form-no">1 / INVENTOR INPUT</span>
       <span>ALL FIELDS OPTIONAL EXCEPT TITLE &amp; DESCRIPTION</span>
@@ -1893,7 +1971,7 @@ var LANDING_HTML = `<!DOCTYPE html>
         <textarea id="description" name="description" placeholder="What is your invention? What problem does it solve? How does it work \u2014 components, mechanism, key novelty?" required></textarea>
         <div class="meter" id="meter" aria-live="polite"><div>COMPLETENESS <span id="meterPct">0%</span> &mdash; a provisional protects only what it describes</div><div class="meter-bar"><div class="meter-fill" id="meterFill" style="width:0%"></div></div><div class="meter-items" id="meterItems"></div></div>
       </div>
-      <div class="field" id="mechZone" style="display:none" data-mechanism-first="v2">
+      <div class="field" id="mechZone" style="display:none" data-mechanism-first="v2"><span id="flow-mechanism" class="flow-a"></span>
         <label><span class="num">3b.</span>Mechanism card <span style="color:var(--ink-soft);text-transform:none;letter-spacing:0">&mdash; what it is, what it does, how it works, and the one distinction that makes the difference</span></label>
         <div class="note" style="margin:0 0 10px">A defensible claim is built on the mechanism, not on the wording. Read the card from your description, correct it, and fill every red hole before drafting: anything marked NOT STATED is not in your description, so a provisional would not protect it.</div>
         <button type="button" id="mechBtn" class="invent">Read the mechanism from my description</button>
@@ -1915,7 +1993,7 @@ var LANDING_HTML = `<!DOCTYPE html>
           <input id="inventorEmail" name="inventor_email" type="email" placeholder="you@example.com">
         </div>
       </div>
-      <div class="actions">
+      <div class="actions"><span id="flow-draft" class="flow-a"></span>
         <div class="actions-row">
           <button type="submit" id="generateBtn">Draft Disclosure</button>
           <button type="button" id="inventBtn" class="invent" title="Load an example from the corpus and draft it">\u26A1 Try an example</button>
@@ -1939,12 +2017,41 @@ var LANDING_HTML = `<!DOCTYPE html>
       <button type="button" id="dlPrint" class="invent" style="width:auto;padding:10px 16px">Print / save as PDF</button>
     </div>
     <div class="close-warn" id="closeWarn" style="display:none"></div>
+    <section class="fz" id="smHero" style="display:none" data-flow="v2"><span id="flow-map"></span>
+      <div class="fk">Step 4 \u2014 Support map</div>
+      <h2>Is every claim element actually described?</h2>
+      <p>A provisional protects only what its description teaches. Each claim element below is checked against the numbered paragraphs of your draft: green is worded there, amber partly, red not at all.</p>
+      <div id="smHeroBody"></div>
+    </section>
     <div class="paper">
       <div class="wm">DRAFT</div>
       <div class="pno">UNITED STATES PROVISIONAL PATENT DISCLOSURE \xB7 SUBMISSION DRAFT</div>
       <div id="resultContent"></div>
       <div class="src" id="ragSources"></div>
     </div>
+    <section class="fz" id="fixZone" style="display:none" data-flow="v2"><span id="flow-fix"></span>
+      <div class="fk">Step 5 \u2014 Fix gaps</div>
+      <h2>Close the gaps in your own words</h2>
+      <p>Each item is a claim element or a mechanism field your description does not yet teach. Write the missing detail (parts, values, how it works, an alternative) and redraft: your answers are added to the description, so the new draft can support them. iPatent never invents the missing detail for you.</p>
+      <div id="fixList"></div>
+      <div class="btns"><button type="button" id="fixRedraft">Add my answers and redraft</button><button type="button" id="fixSkip" class="invent">Skip to filing</button></div>
+      <div class="status" id="fixStatus"></div>
+    </section>
+    <section class="fz" id="fileZone" style="display:none" data-flow="v2"><span id="flow-file"></span>
+      <div class="fk">Step 6 \u2014 File</div>
+      <h2>File it, and put the 12-month date in your calendar</h2>
+      <p>A US provisional costs $65 to $325 at the USPTO (by entity size), is never examined and never published, and gives you a filing date for exactly what it describes. Within 12 months you must file the nonprovisional, and any PCT or foreign application, or the date is lost. Disclose nothing in public before you file: most countries outside the US have no grace period.</p>
+      <div class="dl-row">
+        <div><label for="fileDate">Provisional filing date</label><input type="date" id="fileDate"></div>
+        <div><label for="pubDate">First public disclosure (if any)</label><input type="date" id="pubDate"></div>
+      </div>
+      <div class="deadline" id="deadlineOut" aria-live="polite"></div>
+      <div class="btns">
+        <button type="button" id="icsBtn">Add the 12-month date to my calendar (.ics)</button>
+        <a class="invent" href="/guide/file-a-us-provisional" style="display:block;text-align:center;text-decoration:none">Step-by-step: file at the USPTO</a>
+      </div>
+      <p style="margin-top:12px;font-size:13px">Dates are computed in your browser; a date on a weekend moves to Monday (35 U.S.C. 21(b)); if it lands on a federal holiday, the next business day applies. Not legal advice: confirm every date with a registered patent attorney or agent.</p>
+    </section>
   </section>
 
   <!-- How it works -->
@@ -2015,11 +2122,104 @@ var LANDING_HTML = `<!DOCTYPE html>
 
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   var lastDoc = null;
+  ${FLOW_PAGE_JS}
   // MECHANISM-FIRST-1 v=2 (agent_issues 2053, measured with IPATENT-UI-OVERHAUL-1 #2049): the mechanism card step between
   // describe and draft. Only ?v=2 shows it, so the live page is unchanged until both variants are measured.
   var MECH_V2 = new URLSearchParams(location.search).get('v') === '2';
   var mechFields = null;
   if(MECH_V2){ var mz = document.getElementById('mechZone'); if(mz) mz.style.display = 'block'; }
+  // GUIDED-FLOW-1 (agent_issues 2049): the step rail, the support map as the centrepiece, fix gaps, file with the 12-month date.
+  var flowState = { describe:false, mechanism:false, draft:false, map:false, fix:false, file:false, gaps:0 };
+  function flowPaint(){
+    if(!MECH_V2) return;
+    var d = (document.getElementById('description') || {}).value || '', t = (document.getElementById('title') || {}).value || '';
+    flowState.describe = t.trim().length > 0 && d.trim().length >= 200;
+    var order = FLOW_STEPS.map(function(x){ return x[0]; }), active = null;
+    order.forEach(function(k){ if(!active && !flowState[k]) active = k; });
+    order.forEach(function(k){
+      var a = document.querySelector('.flow .fs[data-step="' + k + '"]'); if(!a) return;
+      var cls = flowState[k] ? 'done' : (k === active ? 'active' : 'todo');
+      if(k === 'map' && flowState.map && flowState.gaps > 0) cls = 'warn';
+      a.className = 'fs ' + cls;
+      if(k === active) a.setAttribute('aria-current', 'step'); else a.removeAttribute('aria-current');
+      if(k === active){ var rail = document.getElementById('flowRail'); if(rail) rail.scrollLeft = Math.max(0, a.offsetLeft - 24); }
+    });
+  }
+  if(MECH_V2){ document.documentElement.classList.add('v2'); var fr = document.getElementById('flowRail'); if(fr) fr.style.display = 'block'; flowPaint(); }
+  function smHeroHtml(sm){
+    if(!sm || !sm.rows || !sm.rows.length) return '<p><b>No claim elements to check.</b> The draft has no numbered claims to map; describe the parts and how they work, then redraft.</p>';
+    var n = sm.elements || sm.rows.length, pc = function(x){ return n ? (Math.round(x / n * 1000) / 10) : 0; };
+    return '<div class="sm-score">' + sm.supported + '<small> of ' + n + ' claim elements supported</small></div>'
+      + '<div class="sm-bar" role="img" aria-label="' + sm.supported + ' supported, ' + sm.weak + ' partly, ' + sm.unsupported + ' not supported"><span class="b-s" style="width:' + pc(sm.supported) + '%"></span><span class="b-w" style="width:' + pc(sm.weak) + '%"></span><span class="b-u" style="width:' + pc(sm.unsupported) + '%"></span></div>'
+      + '<div class="sm-legend"><span style="color:var(--green)">\u25A0 ' + sm.supported + ' supported</span><span style="color:var(--amber)">\u25A0 ' + sm.weak + ' partly</span><span style="color:var(--danger)">\u25A0 ' + sm.unsupported + ' not described</span></div>'
+      + renderSupportMap(sm);
+  }
+  function gapItems(data){
+    var items = [];
+    ((data.support_map && data.support_map.rows) || []).forEach(function(r){
+      if(r.status === 'supported') return;
+      var why = [];
+      if(r.missing_terms && r.missing_terms.length) why.push('not in the description: ' + r.missing_terms.join(', '));
+      if(r.missing_values && r.missing_values.length) why.push('values not described: ' + r.missing_values.join(', '));
+      items.push({ kind: r.status, label: 'Claim ' + r.claim + ' \u2014 ' + (r.status === 'weak' ? 'partly described' : 'not described'), text: r.element, why: why.join('; ') || 'explain how this element is built and what it does' });
+    });
+    (data.mechanism_holes || []).forEach(function(h){
+      var lb = h.field; (mechFields || []).forEach(function(f){ if(f.key === h.field) lb = f.label; });
+      items.push({ kind: 'hole', label: 'Mechanism \u2014 ' + lb, text: '', why: h.why });
+    });
+    return items;
+  }
+  function renderFix(data){
+    var items = gapItems(data), list = document.getElementById('fixList');
+    flowState.gaps = items.length;
+    if(!list) return;
+    if(!items.length){ list.innerHTML = '<p><b>No open gaps.</b> Every claim element is worded in a numbered paragraph. Read the draft once more for accuracy, then file.</p>'; flowState.fix = true; return; }
+    list.innerHTML = items.map(function(it, i){
+      return '<div class="gap-item ' + it.kind + '"><div class="gl">' + esc(it.label) + '</div>' + (it.text ? '<div class="gw"><b>' + esc(it.text) + '</b></div>' : '') + '<div class="gw" style="color:var(--ink-soft)">' + esc(it.why) + '</div>'
+        + '<label for="gap_' + i + '" style="position:absolute;left:-9999px">Your answer for ' + esc(it.label) + '</label><textarea id="gap_' + i + '" data-gap="' + i + '" data-label="' + esc(it.text || it.label) + '" placeholder="The missing detail, in your own words"></textarea></div>';
+    }).join('');
+  }
+  function fileRender(){
+    var out = document.getElementById('deadlineOut'); if(!out) return;
+    var fd = (document.getElementById('fileDate') || {}).value, pd = (document.getElementById('pubDate') || {}).value;
+    var dl = ipDeadline(fd), html = '';
+    if(dl) html += 'Nonprovisional and PCT / foreign filing due by<b class="big">' + dl.weekday + ' ' + dl.due + '</b>' + (dl.rolled ? '(12 months fell on a weekend, so the date moves to the next business day.) ' : '') + 'Miss it and the provisional\u2019s filing date is lost.';
+    var pdl = ipDeadline(pd);
+    if(pdl) html += '<div style="margin-top:10px">You disclosed in public on ' + esc(pd) + ': the US one-year grace period (35 U.S.C. 102(b)(1)) ends <b>' + pdl.due + '</b>. '
+      + (fd && fd > pdl.due ? '<b style="color:var(--danger)">Your filing date is after it ends, so your own disclosure is prior art against this application.</b> ' : (fd ? 'Your filing date ' + esc(fd) + ' is inside it, so the US can still except that disclosure. ' : 'File before then. '))
+      + 'Most other countries were lost on the day of disclosure.</div>';
+    out.innerHTML = html || 'Enter the date you file (or plan to file) the provisional.';
+  }
+  function todayIso(){ var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  if(MECH_V2){
+    var fdi = document.getElementById('fileDate'); if(fdi && !fdi.value) fdi.value = todayIso();
+    ['fileDate','pubDate'].forEach(function(id){ var el = document.getElementById(id); if(el) el.addEventListener('input', fileRender); if(el) el.addEventListener('change', fileRender); });
+    fileRender();
+    document.addEventListener('input', function(ev){ if(ev.target && (ev.target.id === 'description' || ev.target.id === 'title')) flowPaint(); });
+  }
+  document.addEventListener('click', function(ev){
+    var t = ev.target; if(!MECH_V2 || !t) return;
+    if(t.id === 'fixRedraft'){
+      var adds = [];
+      Array.prototype.forEach.call(document.querySelectorAll('#fixList textarea[data-gap]'), function(el){ var v = el.value.trim(); if(v) adds.push(el.getAttribute('data-label') + ': ' + v); });
+      var fs = document.getElementById('fixStatus');
+      if(!adds.length){ if(fs){ fs.className = 'status err'; fs.textContent = 'Write at least one missing detail first, or skip to filing.'; } return; }
+      var de = document.getElementById('description');
+      de.value = de.value.replace(/\\s+$/, '') + '\\n\\nFurther detail:\\n' + adds.map(function(a){ return '- ' + a; }).join('\\n');
+      updateMeter(); flowState.fix = true; flowPaint();
+      if(fs){ fs.className = 'status'; fs.textContent = adds.length + ' answer' + (adds.length > 1 ? 's' : '') + ' added to your description; redrafting\u2026'; }
+      if(form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', {cancelable:true}));
+    }
+    if(t.id === 'fixSkip'){ flowState.fix = true; flowPaint(); var fz = document.getElementById('fileZone'); if(fz) fz.scrollIntoView({behavior:'smooth'}); }
+    if(t.id === 'icsBtn'){
+      var dl = ipDeadline((document.getElementById('fileDate') || {}).value);
+      if(!dl){ fileRender(); return; }
+      var blob = new Blob([ipDeadlineIcs(dl.due, (document.getElementById('title') || {}).value)], {type:'text/calendar'});
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ipatent-12-month-deadline-' + dl.due + '.ics';
+      document.body.appendChild(a); a.click(); a.remove();
+      flowState.file = true; flowPaint();
+    }
+  });
   function mechHolesHtml(holes){
     if(!holes || !holes.length) return '<div class="smap"><b>NO OPEN HOLES</b> &mdash; every field is stated. Check each one is true, then draft.</div>';
     return '<div class="smap"><b>' + holes.length + ' OPEN HOLE' + (holes.length > 1 ? 'S' : '') + '</b> &mdash; fill these in the card or in your description:' + holes.map(function(h){ var lb = h.field; (mechFields || []).forEach(function(f){ if(f.key === h.field) lb = f.label; }); return '<div style="margin-top:6px;color:#b3261e"><b>' + esc(lb) + '</b> &mdash; ' + esc(h.why) + '</div>'; }).join('') + '</div>';
@@ -2052,7 +2252,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       description: document.getElementById('description').value.trim()
     })}).then(function(r){ return r.json().then(function(j){ return {s:r.status, j:j}; }, function(){ return {s:r.status, j:null}; }); })
       .then(function(res){
-        if(res.s === 200 && res.j && res.j.mechanism) renderMech(res.j);
+        if(res.s === 200 && res.j && res.j.mechanism){ renderMech(res.j); flowState.mechanism = true; flowPaint(); }
         else if(box) box.innerHTML = '<div class="status err">' + esc((res.j && res.j.error) || 'Could not read the mechanism. Please try again.') + '</div>';
       })
       .catch(function(){ if(box) box.innerHTML = '<div class="status err">Network error. Please try again.</div>'; })
@@ -2242,7 +2442,8 @@ var LANDING_HTML = `<!DOCTYPE html>
           inventor_name: document.getElementById('inventorName').value.trim(),
           inventor_email: document.getElementById('inventorEmail').value.trim(),
           save: !!(document.getElementById('keepCopy') && document.getElementById('keepCopy').checked),
-          mechanism: mechCardValue()
+          mechanism: mechCardValue(),
+          variant: MECH_V2 ? 'v2' : undefined
         })
       });
       // IPATENT-ERROR-JSON-1: an edge 502/504 arrives as text/plain ('upstream request failed'); read text first and parse
@@ -2261,7 +2462,15 @@ var LANDING_HTML = `<!DOCTYPE html>
       }
       result.style.display = 'block';
       document.getElementById('resultId').textContent = 'SUBMISSION ' + data.submission_id;
-      rc.innerHTML = renderSections(data.sections||{}, data.paragraphs||[]) + renderSupportMap(data.support_map) + (data.mechanism ? '<div class="smap"><b>MECHANISM CARD USED</b> &mdash; the claims were derived from your card.</div>' + mechHolesHtml(data.mechanism_holes) : '') + '<div class="smap"><b>NEXT</b> \u2014 fix every red element in your own words, add the figures, then have a registered practitioner review it. Want a human review or iPatent for your team? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-result" style="color:var(--green)">Work with me</a>.</div>';
+      if(MECH_V2){
+        var smh = document.getElementById('smHero'), smb = document.getElementById('smHeroBody');
+        if(smb) smb.innerHTML = smHeroHtml(data.support_map);
+        if(smh) smh.style.display = 'block';
+        renderFix(data);
+        ['fixZone','fileZone'].forEach(function(id){ var z = document.getElementById(id); if(z) z.style.display = 'block'; });
+        flowState.draft = true; flowState.map = true; fileRender(); flowPaint();
+      }
+      rc.innerHTML = renderSections(data.sections||{}, data.paragraphs||[]) + (MECH_V2 ? '' : renderSupportMap(data.support_map)) + (data.mechanism ? '<div class="smap"><b>MECHANISM CARD USED</b> &mdash; the claims were derived from your card.</div>' + mechHolesHtml(data.mechanism_holes) : '') + '<div class="smap"><b>NEXT</b> \u2014 fix every red element in your own words, add the figures, then have a registered practitioner review it. Want a human review or iPatent for your team? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-result" style="color:var(--green)">Work with me</a>.</div>';
       rag.innerHTML = renderRag(data.rag_sources||[]);
       var cw = document.getElementById('closeWarn');
       if(cw){
@@ -2276,7 +2485,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       status.textContent = data.saved
         ? 'Draft generated \xB7 private copy kept \xB7 reopen at ' + data.private_link
         : 'Draft generated \xB7 not stored \u2014 download or print it now';
-      document.getElementById('result').scrollIntoView({behavior:'smooth'});
+      document.getElementById(MECH_V2 ? 'smHero' : 'result').scrollIntoView({behavior:'smooth'});
     }catch(err){
       showRetry();
     }finally{
@@ -2340,7 +2549,7 @@ var qnfo_ipatent_default = {
           status: "ok",
           worker: "qnfo-ipatent",
           version: VERSION,
-          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics", "usage-topics", "support-map", "completeness-meter", "subscribe", "llms-txt"],
+          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics", "usage-topics", "support-map", "completeness-meter", "guided-flow-v2", "subscribe", "llms-txt"],
           limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token", "searches and drafts are counted per day by broad topic only (usage_counts); their text is never stored (IPATENT-USAGE-1)", "page metrics are daily counts by source class only (no IP, user agent or cookie); crawler detection is a user-agent heuristic", "the support map is a lexical check of claim wording against numbered paragraphs, not a legal opinion", "at most 150 drafts in 24 hours across all users"],
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
@@ -2352,7 +2561,8 @@ var qnfo_ipatent_default = {
       }
       const isRead = request.method === "GET" || request.method === "HEAD";
       if (path === "/" && isRead) {
-        if (request.method === "GET") ctx?.waitUntil?.(countPageView(env, "/", pageSource(request)));
+        // GUIDED-FLOW-1: the ?v=2 variant is counted under its own path so the two variants can be compared (#2049 step 2).
+        if (request.method === "GET") ctx?.waitUntil?.(countPageView(env, url.searchParams.get("v") === "2" ? "/?v=2" : "/", pageSource(request)));
         return html(LANDING_HTML);
       }
       if ((path === "/example" || path === "/example/") && isRead) {

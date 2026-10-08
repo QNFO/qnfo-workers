@@ -3,6 +3,41 @@
 Several agent sessions work this fleet concurrently with shared credentials. These rules exist
 because each one was broken at least once; the linked issue holds the evidence.
 
+## The Autonomous Operation Doctrine (DOCTRINE-1)
+- `docs/AUTONOMOUS-OPERATION-DOCTRINE.md` (owner directive 2026-10-08, verbatim; charter rule 13) binds every session and
+  loop and wins over the sections below where they differ, except that the harness's own permission checks and the
+  shared-secrets rules still hold. Its precedence: interrupt gate, security, no loose ends, anti-fragility, autonomy.
+- Before adding, keeping or reviewing a hold, filter, pause, kill switch, gate or cap, read and update `control_registry`
+  (disposition remove / demote / replace / keep, critical path, tested alternate). Record a new single point of failure in
+  `spof_registry`, a belief you act on in `belief_registry` with a `belief-<key>` probe, and every autonomous decision in
+  `decision_log` (append-only, with `capability_gain`). `v_doctrine_scorecard_v2` grades them every tick.
+- Revision 2 (2026-10-08) adds section 6, no silent drop: every issue's open, status change and delete is written to the
+  append-only `issue_lifecycle`, a delete leaves a copy in `agent_issues_tombstone`, and `v_issue_accounting` checks
+  entered = open + closed with disposition + superseded each tick (metrics `silent_drops`, `issues_unaccounted`). Close an
+  issue only with `issue_triage.close_evidence`, supersede it with the successor's id, or leave it open. Record a capability
+  the fleet gains in `capability_ledger`. Building a reversible path never means constructing authority to act as the owner
+  in a legal, financial or signing act; the harness checks and the secret lock still hold.
+
+## Autonomy-first protocol (AUTONOMY-FIRST-1)
+- Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
+  binds every session and every loop, and is charter decision rule 11 (docs/AUTONOMY-DECISION-POLICY.md has the detail).
+- Decide, don't ask. Before any question, exhaust tools, files, D1, the charter and this file; state the assumption in one
+  line, act, verify, and report what the tools returned. Never stop to ask which approach, whether to proceed, or for a
+  merge approval on reversible work, and never end a turn as a courtesy while work remains.
+- The only interrupt is an action that is both irreversible and identity-bound: a credential only the owner can mint,
+  money, a legal or signing act, the owner's own accounts, machine or personal data, or posting on a channel whose
+  terms forbid automation. Everything else proceeds: reads, compute, code, config, deploys, content, reversible changes.
+- A technical, credential or operational blocker is never the owner's: recover, work around it, or file it as an
+  `agent_issues` row with a doer and a closing probe (OWNER-NO-LOOSE-ENDS-1). The guardrails below still hold: the
+  secret lock, the canonical deploy path, outreach consent, the personal/research separation, and the harness's own
+  permission checks. A refusal by those is handed over with its reason, never worked around.
+- The owner queue enforces this in D1 (migrations/2026-10-08-autonomy-first.sql): `v_human_action_gate` reads each new
+  `human_actions` card, and one that is not irreversible and identity-bound becomes an `AUTONOMY-FIRST-REROUTE-1` issue
+  for the fleet, with the card set `rerouted`. A card that truly needs the owner but reads as technical carries an
+  `IDENTITY-BOUND:` line in its `why`. `ops_config autonomy_first_gate = off` stops the reroute without a deploy.
+- The hourly metric tick audits it: `v_autonomy_first_audit`, metrics `owner_queue_fleet_cards_open` and
+  `session_dependent_issues_open` (target 0 each), triggers on both and on `code_task_superseded_share_30d`.
+
 ## Shared secrets (#1701)
 - Before you PUT, rotate or delete any worker secret, take the lease:
   `POST https://qnfo-deploy-guard.q08.workers.dev/secret-lock/acquire {"worker":"<script>","owner":"<session>","ttl_sec":300}`.
@@ -82,6 +117,40 @@ because each one was broken at least once; the linked issue holds the evidence.
 - `cf-ops-actions.yml` (workflow_dispatch) runs allowlisted Cloudflare API actions with the repository's token:
   report, delete-worker (marker-guarded), gateway-logs, gateway-cost, ai-neurons, access-probe, r2-get. Extend
   `scripts/cf_ops_actions.py` rather than parking an issue as "needs the credential holder".
+- Owner directive 2026-10-08: no new Cloudflare token will be issued; use the ones in place. The repository's
+  `CLOUDFLARE_API_TOKEN` writes zone routes and DNS records (attach-lifecycle-custom-domain 2026-09-30, attach-ask-qwav-route
+  and attach-surface-routes 2026-10-02, the twelve retired hosts 2026-10-08) and deploys, deletes and unbinds workers and D1.
+  Of the session connectors, the Cloudflare MCP reads every zone but may not write routes. A card or issue that says "needs a
+  token" is wrong until a run with the repository token has been refused and its error recorded.
+
+## Stuck items and SLAs (QUEUE-SLA-1)
+- Owner directive 2026-10-08: no item or queue is stuck for more than one run or cycle; no issue stays unprocessed or
+  unremediated for more than 3 hours; every SLA is in minutes or hours, never days.
+- `queue_sla` lists each known stuck type with its cycle, SLA (minutes) and automatic fix; `v_stuck_summary` measures them
+  by age, not by count. The D1 trigger `queue_sla_tick_10m` runs the fixes every 10 minutes off the fleet cron heartbeat
+  and logs each to `queue_sla_actions`; `ops_config queue_sla_autofix = off` stops the fixes, not the measurement.
+  Metrics `stuck_items_over_sla` (target 0) and `issues_unprobed_60m` (target <= 10) file their own issues.
+- Every open issue's remediation contract is due hourly (trigger `remediation_contracts_cadence_1h_ai`). A new queue, status
+  or loop that can hold items adds its `queue_sla` row and its `v_stuck_summary` column, with an automatic fix and its revert,
+  in the PR that creates it. A chain or guard that checks only a count is incomplete: add the age of the oldest item.
+
+## Anti-fragile by default (ANTIFRAGILE-1, charter rule 12)
+- Owner directive 2026-10-08: no holds, filters or blocks without live evidence; red-team every blocker; redundant paths,
+  never a single critical path; flag and remediate anything older than one cycle; root out false beliefs.
+- A hold, filter or park needs a current, recorded reason and an expiry; prefer backpressure (a rate) to a hold. Release
+  what has neither (backup table first, revert text in the row), as the 2026-10-08 audit did (bak_20261008_hold_release).
+- Before you write "blocked", "owner only", "needs a token" or "cannot", attempt it with what exists and record the attempt in
+  `blocker_redteam` (verdict false-belief-removed, workaround-built or confirmed-with-evidence with the refusal text).
+  `v_blocker_claims` and metric `unverified_blocker_claims` list every claim nobody has tested.
+- `v_issue_age` dates every open issue; the 10-minute tick raises an issue's priority one level per 24 h (to high, never
+  critical; ledger `issue_age_bumps`), and `issues_open_over_24h` files the backlog. A design with one executor, one
+  model or one transport on a critical path ships with its second path or an issue that builds it.
+- Never silently drop an issue (owner directive 2026-10-08): a guard on `agent_issues` normalises, annotates or reopens, never
+  aborts or ignores; a worker dedupes only against OPEN issues of the same title (a closed one is reopened by the D1 trigger
+  `issue_refile_reopen` when you insert); a caught insert error is logged, never swallowed. Two signals from one producer
+  are one path, not two.
+- Every failure mode you find gets a `failure_modes` row (root cause, remediation) and an `fm-<key>` detector contract in the
+  PR that fixes it; `v_failure_mode_status` and `failure_modes_recurring` show a recurrence within the hour.
 
 ## The charter (QUNIVERSE-CHARTER-1)
 - `docs/QUNIVERSE-CHARTER.md` is the system's charter: what the Quniverse is, what it should be, objectives, SWOT, MVP,
