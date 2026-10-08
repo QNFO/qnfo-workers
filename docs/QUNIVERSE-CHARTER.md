@@ -1,6 +1,6 @@
 # The Quniverse charter (QUNIVERSE-CHARTER-1)
 
-Charter 1.0.11, written 2026-10-01 (1.0.11, 2026-10-06: core prompt rule 8 is deleted on the owner's directive (RULE-8-RETIRED-1): spend caps, guard metrics, verification probes and data deletion are the fleet's own decisions, recorded with the reason and a live measurement, while the protections for people outside the fleet stay, section 8 rules 4, 9 and 10; 1.0.10, 2026-10-06: AI spend caps steer model choice and never stop work, BUDGET-SOFT-ROUTE-1, section 8; 1.0.9, 2026-10-06: `docs/TRANSFORMATION-PROGRAM.md` (TRANSFORMATION-PROGRAM-1) is an input to this charter, the source of the `RM-TP-*` roadmap rows and the `TP-*` epics; 1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1; 1.0.8, 2026-10-05: the owner's standing grant OWNER-STANDING-GRANT-1, which lets the fleet retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 2, 7 and 8). **This document is the heart of the system**: what the Quniverse is, what it should
+Charter 1.0.12, written 2026-10-01 (1.0.12, 2026-10-08: autonomy first, the only owner interrupt is an action both irreversible and identity-bound, enforced on the owner queue and audited hourly, AUTONOMY-FIRST-1, section 8 rule 11; 1.0.11, 2026-10-06: core prompt rule 8 is deleted on the owner's directive (RULE-8-RETIRED-1): spend caps, guard metrics, verification probes and data deletion are the fleet's own decisions, recorded with the reason and a live measurement, while the protections for people outside the fleet stay, section 8 rules 4, 9 and 10; 1.0.10, 2026-10-06: AI spend caps steer model choice and never stop work, BUDGET-SOFT-ROUTE-1, section 8; 1.0.9, 2026-10-06: `docs/TRANSFORMATION-PROGRAM.md` (TRANSFORMATION-PROGRAM-1) is an input to this charter, the source of the `RM-TP-*` roadmap rows and the `TP-*` epics; 1.0.1: portfolio loop; 1.0.2: Cloudflare mirror; 1.0.3: cloud-only verification; 1.0.4: every pillar graded and the portfolio repairs itself, same day; 1.0.5, 2026-10-02: the Autonomy composite is the owner-weighted SAI, section 3.1; 1.0.6, 2026-10-02: the three objective constraints are graded and enforced, section 3.1; 1.0.7, 2026-10-02: the objective-authority audit, those constraints and the 2026-10-01 weights were ratified under the owner's queue delegation, not by the owner in person, section 3.1; 1.0.8, 2026-10-05: the owner's standing grant OWNER-STANDING-GRANT-1, which lets the fleet retire low-value workers, delete unused stores after a verified backup and switch to cheaper models without an owner card, sections 2, 7 and 8). **This document is the heart of the system**: what the Quniverse is, what it should
 be, why it exists, what it is weak and strong at, the smallest version of it that counts as working, the largest
 version worth building, the order in which to build it, and the rules every development decision passes through.
 
@@ -382,6 +382,17 @@ close-evidence trigger) and stated here for the rest.
    CONTACT-LEDGER-IMMUTABLE-1), the outreach consent gate and outreach cadence caps (OUTREACH-CONSENT-1), and the
    personal/research separation (personal data includes other people's mail, calendar entries and contacts, and the
    fleet's research plane is open access).
+11. **Autonomy first (AUTONOMY-FIRST-1).** Owner directive 2026-10-08: "Implement autonomy-first protocol
+   system/fleet-wide and in all Claude operations." Loops and sessions decide; they do not ask. The only step that
+   waits for the owner is one that is both irreversible and identity-bound (a credential only the owner can mint,
+   money, a legal or signing act, the owner's own accounts, machine or personal data, posting on a channel whose
+   terms forbid automation). Merge approvals, thresholds, caps, tuning, retries and scope choices are the fleet's.
+   A blocker is recovered from, worked around or filed with a doer and a closing probe; it is never handed to the
+   owner. Enforced in D1, not only stated here: `v_human_action_gate` reroutes an owner card that is not
+   irreversible and identity-bound into an `agent_issues` row, and `v_autonomy_first_audit` feeds the metrics
+   `owner_queue_fleet_cards_open` and `session_dependent_issues_open` (target 0) that the hourly tick grades
+   (migrations/2026-10-08-autonomy-first.sql). Rules 4, 9 and 10 still hold: the "never" list and the protections
+   for people outside the fleet do not move.
 
 ## 9. How this charter maintains itself (CHARTER-LOOP-1)
 
