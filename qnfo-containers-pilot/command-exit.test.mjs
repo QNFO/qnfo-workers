@@ -5,6 +5,7 @@
 // container.error, so the pilot never hides its own failure.
 // Run: node qnfo-containers-pilot/command-exit.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8")
   .replace(/^export \{ ShellContainer \};$/m, "")
@@ -37,7 +38,7 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
 const last = () => rows[rows.length - 1];
 
-ok(/^1\.0\.11-/.test(mod.VERSION), "VERSION is bumped (" + mod.VERSION + ")");
+ok(versionAtLeast(mod.VERSION, "1.0.11"), "VERSION is bumped (" + mod.VERSION + ")");
 ok(mod.commandEventStatus(0) === "ok" && mod.commandEventStatus(1) === "warn" && mod.commandEventStatus(137) === "warn", "status mapping: 0 -> ok, non-zero -> warn");
 
 nextExit = 0;

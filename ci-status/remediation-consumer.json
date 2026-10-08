@@ -1,59 +1,17 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@8d4e6d9ec2a0",
- "due": 16,
- "pass": 10,
- "fail": 6,
- "skipped": 0,
+ "verifier": "remediation-consumer@199218eac15a",
+ "due": 14,
+ "pass": 12,
+ "fail": 1,
+ "skipped": 1,
  "contracts": [
   {
-   "class": "issue-2076",
-   "issue_id": 2076,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2126",
-   "issue_id": 2126,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by personal-companion, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2072",
-   "issue_id": 2072,
-   "verdict": "fail",
-   "expected": "merged",
-   "observed": "failed",
-   "written": true
-  },
-  {
-   "class": "issue-1815",
-   "issue_id": 1815,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
-   "written": true
-  },
-  {
-   "class": "issue-2050",
-   "issue_id": 2050,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2114,2115,2116",
-   "written": true
-  },
-  {
-   "class": "issue-1825",
-   "issue_id": 1825,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
+   "class": "issue-2077",
+   "issue_id": 2077,
+   "verdict": "probe-not-machine-executable",
+   "reason": "bad-contains"
   },
   {
    "class": "TWIN-VISION-TOOLLEAK-1",
@@ -104,6 +62,14 @@
    "written": true
   },
   {
+   "class": "plane-living-paper-fresh",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
    "class": "rt-personal-api",
    "issue_id": null,
    "verdict": "pass",
@@ -134,6 +100,22 @@
    "expected": "ok",
    "observed": "ok",
    "written": true
+  },
+  {
+   "class": "issue-2129",
+   "issue_id": 2129,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2130",
+   "issue_id": 2130,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by host-census, which owns it for 48h",
+   "written": true
   }
  ],
  "trusted_transports": [
@@ -159,13 +141,13 @@
   "http",
   "runner-https"
  ],
- "https": 9,
- "runtime_verified_share_24h": 22.1,
+ "https": 8,
+ "runtime_verified_share_24h": 21.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 41304,
- "head": "8d4e6d9ec2a0b59bd82d17c6a991f4a88eddfe44",
+ "spent_ms": 45960,
+ "head": "199218eac15a7b683ba189c024f7b29f04273a19",
  "job_status": "success",
- "ts": "2026-10-08T13:31:31Z"
+ "ts": "2026-10-08T15:11:35Z"
 }
