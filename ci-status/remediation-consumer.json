@@ -1,85 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@c26f3e72ed2d",
- "due": 9,
- "pass": 8,
- "fail": 1,
+ "verifier": "remediation-consumer@90c299fc7deb",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ipatent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2191",
-   "issue_id": 2191,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "no ok run yet",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -103,13 +30,12 @@
   "http",
   "runner-https"
  ],
- "https": 8,
  "runtime_verified_share_24h": 18.2,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 29467,
- "head": "c26f3e72ed2d4ef6bcb46f4988a53e87e1d84eb9",
+ "spent_ms": 5404,
+ "head": "90c299fc7debea508b814a1a1e97722f04d1d5a7",
  "job_status": "success",
- "ts": "2026-10-08T16:15:18Z"
+ "ts": "2026-10-08T16:16:40Z"
 }
