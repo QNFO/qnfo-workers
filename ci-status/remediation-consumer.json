@@ -1,98 +1,120 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3fc0d2257ec6",
- "due": 11,
- "pass": 0,
- "fail": 11,
- "skipped": 0,
+ "verifier": "remediation-consumer@199218eac15a",
+ "due": 14,
+ "pass": 12,
+ "fail": 1,
+ "skipped": 1,
  "contracts": [
   {
-   "class": "issue-1877",
-   "issue_id": 1877,
-   "verdict": "fail",
+   "class": "issue-2077",
+   "issue_id": 2077,
+   "verdict": "probe-not-machine-executable",
+   "reason": "bad-contains"
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: under 3 days since the deploy",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1793",
-   "issue_id": 1793,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1960",
-   "issue_id": 1960,
-   "verdict": "fail",
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "stuck code tasks: 8",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1794",
-   "issue_id": 1794,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1795",
-   "issue_id": 1795,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1798",
-   "issue_id": 1798,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
+   "class": "plane-living-paper-fresh",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1834",
-   "issue_id": 1834,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1838",
-   "issue_id": 1838,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2062",
-   "issue_id": 2062,
-   "verdict": "fail",
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2129",
+   "issue_id": 2129,
+   "verdict": "pass",
    "expected": "1",
-   "observed": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-2128",
-   "issue_id": 2128,
+   "class": "issue-2130",
+   "issue_id": 2130,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2171",
-   "issue_id": 2171,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
+   "observed": "pending: filed by host-census, which owns it for 48h",
    "written": true
   }
  ],
@@ -119,13 +141,13 @@
   "http",
   "runner-https"
  ],
- "https": 1,
- "runtime_verified_share_24h": 21.6,
+ "https": 8,
+ "runtime_verified_share_24h": 21.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 36792,
- "head": "3fc0d2257ec6fc3f0a5954499d7e251ac41d1df8",
+ "spent_ms": 45960,
+ "head": "199218eac15a7b683ba189c024f7b29f04273a19",
  "job_status": "success",
- "ts": "2026-10-08T14:04:21Z"
+ "ts": "2026-10-08T15:11:35Z"
 }
