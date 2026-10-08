@@ -728,7 +728,7 @@ async function thinkSeed(env) {
 // owner_corpus_seen row (proposed, none, short, missing, error) so nothing is read twice. The leg pauses under the same
 // PROPOSAL_BACKPRESSURE as the others, and while OWNER_CORPUS_RQ_CAP research rows are already waiting, so the notebook
 // cannot flood research_queue.
-var OWNER_CORPUS_BATCH = 2, OWNER_CORPUS_MIN_CHARS = 600, OWNER_CORPUS_EXCERPT = 7000, OWNER_CORPUS_RQ_CAP = 12;
+var OWNER_CORPUS_BATCH = 10, OWNER_CORPUS_MIN_CHARS = 600, OWNER_CORPUS_EXCERPT = 7000, OWNER_CORPUS_RQ_CAP = 12;
 var OWNER_CORPUS_FLEET_ERA = "notes/v1/2026/08";
 var OWNER_CORPUS_TYPES = ["note", "synthesis", "synthesis-working-draft", "development-note", "lesson"];
 var OWNER_CORPUS_MODEL = "@cf/zai-org/glm-5.3-flash";

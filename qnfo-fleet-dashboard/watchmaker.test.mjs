@@ -58,6 +58,7 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('reach-ingest-
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jo-qnfo-backlog-exec-abc', ?, 'ok')").run(ago(7));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-grant-followup-ok1', ?, 'ok')").run(ago(4));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('code-merge-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
+db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('probe-review-tick', ?, 'ok')").run(ago(0.2));   // PROBE-REVIEW-WATCHMAKER-1 (#2131): qnfo-cloud-ops probe-review heartbeat
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('branch-hygiene-tick-2026-10-06', ?, 'ok')").run(ago(0.5));
 // SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39): the */30 heartbeat.
 db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('evt-secret-watch-1', ?, 'secret-watch-tick', 'qnfo-ops', 'ok')").run(ago(0.3));
