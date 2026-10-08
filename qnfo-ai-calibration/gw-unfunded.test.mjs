@@ -4,6 +4,7 @@
 // that clears a degraded row must ignore it (as it ignores rate-capacity). No network, no production data.
 // Run: node qnfo-ai-calibration/gw-unfunded.test.mjs
 import fs from "node:fs";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const api = new Function(src.replace(/export \{\s*worker_default as default\s*\};?/, "") + "\nreturn { gwErrorClass, GW_NO_DEGRADE_CLASSES, VERSION, worker_default };")();
 const fail = [];
@@ -39,7 +40,7 @@ eq("both 24h reads ignore unfunded", (src.match(/error_class NOT IN \('rate-capa
 ok("no read still treats only rate-capacity as transient", !/error_class != 'rate-capacity'/.test(src));
 ok("the class is decided in one place", (src.match(/clsLabel = gwErrorClass\(b\.status, /g) || []).length === 2 && !/else if \(\/capacity temporarily\|rate limit\/i\.test\(rh\)\) clsLabel/.test(src));
 // The version history keeps the change (a later version bump must not fail this suite).
-ok("version names the change", /1\.2\.9 GW-402-UNFUNDED-1/.test(src) && /^1\.(2\.(9|[1-9]\d)|[3-9]\.|\d{2,}\.)/.test(api.VERSION));
+ok("version names the change", /1\.2\.9 GW-402-UNFUNDED-1/.test(src) && versionAtLeast(api.VERSION, "1.2.9"));
 ok("module still exports a worker", api.worker_default && typeof api.worker_default.fetch === "function");
 
 if (fail.length) { console.log("FAIL " + fail.length + "\n" + fail.join("\n")); process.exit(1); }

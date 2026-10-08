@@ -6,6 +6,7 @@
 // job-run row of its own (its caller records one), and failed/skipped lead the notes so the 300-char job-run text keeps them.
 // Run: node qnfo-cloud-ops/worker-health.test.mjs   -> prints "N passed, 0 failed"
 import { readFileSync } from "node:fs";
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 function slice(start, end) {
@@ -39,7 +40,7 @@ const reset = () => { for (const k of Object.keys(log)) log[k].length = 0; };
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
 
-ok(/^1\.(18\.([2-9]|[1-9][0-9])|(19|[2-9][0-9])\.\d+)-/.test(VERSION), "VERSION is bumped (" + VERSION + ")");
+ok(versionAtLeast(VERSION, "1.18.2"), "VERSION is bumped (" + VERSION + ")");
 
 // 1. This worker as it is live: QNFO_AI binding (after this deploy), no ROUTER_AUTH_KEY, no PL_API_KEY.
 reset();
