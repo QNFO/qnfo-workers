@@ -166,8 +166,15 @@ a3.prepare("INSERT INTO signal_worker_boundary VALUES ('idea-hub', 'artifact_ree
 a3.prepare("INSERT INTO signals (id, source, source_ref, open_questions, evidential_weight, status, created_at) VALUES ('s1', 'artifact_reentry', '10.5281/zenodo.pipe', ?, 0.9, 'new', '2026-10-01'), ('s2', 'artifact_reentry', '10.5281/zenodo.own', ?, 0.9, 'new', '2026-10-02')").run(JSON.stringify(["Is the QEC threshold universal?"]), JSON.stringify(["We flag this as an open question rather than a result.", "Does the bound hold for p = 2?"]));
 const cs = await api.runConsume({ QNFO_AUDIT: shim(a3), LIVING_PAPER: shim(lp2) });
 const props = a3.prepare("SELECT idea FROM idea_proposals").all().map((r) => r.idea);
-ok(a3.prepare("SELECT status FROM signals WHERE id='s1'").get().status === "expired" && cs.expired_not_owner === 1, "a signal from a pipeline (qnfo) paper is expired, not consumed", cs);
-ok(props.length === 1 && /Does the bound hold for p = 2\?/.test(props[0]), "the owner paper's real question becomes a proposal; the hedge sentence does not", props);
+// HOLD-RELEASE-REENTRY-1 (1.8.0, #2174): a non-owner paper's signal is admitted under a daily rate instead of expired.
+const s1 = a3.prepare("SELECT status, decision FROM signals WHERE id='s1'").get();
+ok(s1.status === "consumed" && /HOLD-RELEASE-REENTRY-1 non-owner/.test(s1.decision) && !cs.expired_not_owner, "a signal from a pipeline (qnfo) paper is consumed under the non-owner rate, not expired", { s1, cs });
+ok(props.length === 2 && props.some((x) => /Does the bound hold for p = 2\?/.test(x)) && props.some((x) => /QEC threshold universal/.test(x)) && !props.some((x) => /We flag this/.test(x)), "both real questions become proposals; the hedge sentence does not", props);
+// The rate: 2 non-owner signals per UTC day; the rest stay new, and an owner signal behind them is still consumed.
+a3.prepare("INSERT INTO signals (id, source, source_ref, open_questions, evidential_weight, status, created_at) VALUES ('n1', 'artifact_reentry', '10.5281/zenodo.pipe', ?, 0.9, 'new', '2026-10-03'), ('n2', 'artifact_reentry', '10.5281/zenodo.pipe', ?, 0.9, 'new', '2026-10-04'), ('o3', 'artifact_reentry', '10.5281/zenodo.own', ?, 0.9, 'new', '2026-10-05')").run(JSON.stringify(["Is n1 open?"]), JSON.stringify(["Is n2 open?"]), JSON.stringify(["Is o3 open?"]));
+const cs2 = await api.runConsume({ QNFO_AUDIT: shim(a3), LIVING_PAPER: shim(lp2) });
+const st = (id) => a3.prepare("SELECT status FROM signals WHERE id=?").get(id).status;
+ok(st("n1") === "consumed" && st("n2") === "new" && st("o3") === "consumed" && cs2.deferred_not_owner === 1, "the second non-owner signal of the day is admitted, the third waits as new, the owner signal behind it is consumed", { cs2, n1: st("n1"), n2: st("n2"), o3: st("o3") });
 
 // 9. 1.7.2: a pipeline paper that came from an owner proposal counts as the owner's.
 a3.exec("CREATE TABLE research_queue (id TEXT, source TEXT, source_id TEXT, status TEXT, doi TEXT)");
