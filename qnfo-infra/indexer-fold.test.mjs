@@ -17,8 +17,13 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 {
   const lines = guest.split("\n");
   const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "3.0.12-math-browser-metric";')), lines.indexOf("export { worker_default as default };"));
-  const missing = body.filter((l) => l.trim() && !src.includes(l.trim()));
-  ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every indexer line is in the host except its VERSION line", missing.map((l) => l.slice(0, 60)));
+  // CONTROL-DISPOSITION (2026-10-08, doctrine section 13, REPLACE): line-by-line identity proved the fold copied the member
+  // unchanged (INDEXER-FOLD-1), but the original directory is frozen (FOLDED), so the check then blocked every later fix to
+  // the member (#1815 failed on it). The member keeps its structure: every function the guest declared is still declared in
+  // the host, and only the member may differ from the guest.
+  const fnames = [...new Set((body.join("\n").match(/function\s+([A-Za-z_$][\w$]*)/g) || []).map((m) => m.split(/\s+/)[1]))];
+  const lost = fnames.filter((n) => !new RegExp("function\\s+" + n.replace(/\$/g, "\\$") + "\\b").test(src));
+  ok(fnames.length > 5 && lost.length === 0, "every function the indexer declared is still in the host member", lost);
   ok(versionAtLeast(mod.__hv, "1.3.1") && mod.__mv === "3.0.13-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 1.3.1, member 3.0.13-folded, one quoted VERSION constant");
 }
 
