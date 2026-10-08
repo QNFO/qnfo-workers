@@ -10,7 +10,13 @@ because each one was broken at least once; the linked issue holds the evidence.
 - Before adding, keeping or reviewing a hold, filter, pause, kill switch, gate or cap, read and update `control_registry`
   (disposition remove / demote / replace / keep, critical path, tested alternate). Record a new single point of failure in
   `spof_registry`, a belief you act on in `belief_registry` with a `belief-<key>` probe, and every autonomous decision in
-  `decision_log` (append-only). `v_doctrine_scorecard` grades them every tick.
+  `decision_log` (append-only, with `capability_gain`). `v_doctrine_scorecard_v2` grades them every tick.
+- Revision 2 (2026-10-08) adds section 6, no silent drop: every issue's open, status change and delete is written to the
+  append-only `issue_lifecycle`, a delete leaves a copy in `agent_issues_tombstone`, and `v_issue_accounting` checks
+  entered = open + closed with disposition + superseded each tick (metrics `silent_drops`, `issues_unaccounted`). Close an
+  issue only with `issue_triage.close_evidence`, supersede it with the successor's id, or leave it open. Record a capability
+  the fleet gains in `capability_ledger`. Building a reversible path never means constructing authority to act as the owner
+  in a legal, financial or signing act; the harness checks and the secret lock still hold.
 
 ## Autonomy-first protocol (AUTONOMY-FIRST-1)
 - Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
