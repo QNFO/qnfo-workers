@@ -1,12 +1,196 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@272e72ed9e15",
- "due": 12,
- "pass": 12,
- "fail": 0,
+ "verifier": "remediation-consumer@c1e7e92972d7",
+ "due": 33,
+ "pass": 23,
+ "fail": 10,
  "skipped": 0,
  "contracts": [
+  {
+   "class": "issue-2163",
+   "issue_id": 2163,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2164",
+   "issue_id": 2164,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2029",
+   "issue_id": 2029,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "ready_to_publish",
+   "written": true
+  },
+  {
+   "class": "issue-1815",
+   "issue_id": 1815,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: code task on qnfo-paper-indexer (issue 1815, claim/test/status fill) not merged yet",
+   "written": true
+  },
+  {
+   "class": "issue-2050",
+   "issue_id": 2050,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2114,2115,2116",
+   "written": true
+  },
+  {
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "fail",
+   "expected": "within-cap",
+   "observed": "over-cap",
+   "written": true
+  },
+  {
+   "class": "issue-1753",
+   "issue_id": 1753,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1756",
+   "issue_id": 1756,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2097",
+   "issue_id": 2097,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "plane-living-paper-fresh",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2025",
+   "issue_id": 2025,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "pending: 30-day window from 2026-10-06T06:30Z still open",
+   "written": true
+  },
+  {
+   "class": "issue-2026",
+   "issue_id": 2026,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2027",
+   "issue_id": 2027,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "attention-loop-1",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2086",
+   "issue_id": 2086,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-advisor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2090",
+   "issue_id": 2090,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2091",
+   "issue_id": 2091,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2092",
+   "issue_id": 2092,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2093",
+   "issue_id": 2093,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2094",
+   "issue_id": 2094,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2096",
+   "issue_id": 2096,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by objective-constraints, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2023",
+   "issue_id": 2023,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
   {
    "class": "TWIN-VISION-TOOLLEAK-1",
    "issue_id": 1805,
@@ -86,22 +270,6 @@
    "expected": "ok",
    "observed": "ok",
    "written": true
-  },
-  {
-   "class": "issue-1712",
-   "issue_id": 1712,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1724",
-   "issue_id": 1724,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
   }
  ],
  "trusted_transports": [
@@ -128,12 +296,12 @@
   "runner-https"
  ],
  "https": 8,
- "runtime_verified_share_24h": 21.6,
+ "runtime_verified_share_24h": 22.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 26802,
- "head": "272e72ed9e15d4986cfb92d052ac09b6a913f45f",
+ "spent_ms": 87339,
+ "head": "c1e7e92972d716e4bffb2b8c56ec4ce3b3fc5e38",
  "job_status": "success",
- "ts": "2026-10-08T07:27:59Z"
+ "ts": "2026-10-08T08:32:16Z"
 }
