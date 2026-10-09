@@ -98,6 +98,17 @@ jobs:
         run: |
           python3 scripts/se_mentions_runner.py --selftest && python3 scripts/se_mentions_runner.py
 
+      # ZENODO-EXIT-RUNNER-1 (agent_issues 2186): one zenodo_exit_ledger row per DataCite DOI; DataCite records to R2 and
+      # Internet Archive recovery from the runner's own address (archive.org refuses shared sandbox addresses). Bounded by
+      # ZX_BUDGET_S inside the job timeout; never fails the job.
+      - name: Recover Zenodo-exit records from the runner
+        continue-on-error: true
+        timeout-minutes: 6
+        env:
+          ZX_BUDGET_S: "300"
+        run: |
+          python3 scripts/zenodo_exit_runner.py --selftest && python3 scripts/zenodo_exit_runner.py
+
       - name: Publish the status artifact
         if: always()
         run: |
