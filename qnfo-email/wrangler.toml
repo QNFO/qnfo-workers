@@ -18,6 +18,14 @@ send_email = [
 
 
 
+# NOTICE-REPLY-1 (2026-10-09): ops authenticates this binding by ctx.props.caller (qnfo-ops OPS-INTERNAL-CALLER-1), so owner
+# email commands no longer depend on a copy of the router key (OPS_KEY answered HTTP 401 after the 2026-10-01 rotation).
+[[services]]
+binding = "OPS"
+service = "qnfo-ops"
+environment = "production"
+props = { caller = "qnfo-email" }
+
 [observability]
 enabled = true
 head_sampling_rate = 1
