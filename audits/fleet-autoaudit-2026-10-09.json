@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-09 11:02:55",
+  "audited_at": "2026-10-09 12:04:46",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -468,7 +468,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.8.13-codeagent",
+        "version": "0.9.0",
         "worker": "q08-signal-engine"
       },
       {
@@ -508,7 +508,7 @@
       },
       {
         "dir": "qnfo-email",
-        "version": "2.5.6-itin-audit",
+        "version": "2.6.0-notice-reply",
         "worker": "qnfo-email"
       },
       {
@@ -558,7 +558,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.39.2-context-compact",
+        "version": "2.40.0-internal-caller",
         "worker": "qnfo-ops"
       },
       {
@@ -568,12 +568,12 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.10.5-revise-patch-parse",
+        "version": "0.11.0-citation-gate",
         "worker": "qnfo-research-exec"
       },
       {
         "dir": "qnfo-social",
-        "version": "0.9.1-cache-count",
+        "version": "0.9.2-paper-alternate",
         "worker": "qnfo-social"
       },
       {
@@ -844,9 +844,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.8.13-codeagent",
+      "before": "0.9.0",
       "http": 200,
-      "live": "0.8.13-codeagent",
+      "live": "0.9.0",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1060,9 +1060,9 @@
       "worker": "qnfo-deploy-guard"
     },
     "qnfo-email": {
-      "before": "2.5.6-itin-audit",
+      "before": "2.6.0-notice-reply",
       "http": 200,
-      "live": "2.5.6-itin-audit",
+      "live": "2.6.0-notice-reply",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-email"
@@ -1276,9 +1276,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.39.2-context-compact",
+      "before": "2.40.0-internal-caller",
       "http": 200,
-      "live": "2.39.2-context-compact",
+      "live": "2.40.0-internal-caller",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
@@ -1356,9 +1356,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.10.5-revise-patch-parse",
+      "before": "0.11.0-citation-gate",
       "http": 200,
-      "live": "0.10.5-revise-patch-parse",
+      "live": "0.11.0-citation-gate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1412,9 +1412,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.9.1-cache-count",
+      "before": "0.9.2-paper-alternate",
       "http": 200,
-      "live": "0.9.1-cache-count",
+      "live": "0.9.2-paper-alternate",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
