@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-09 00:39:58",
+  "audited_at": "2026-10-09 05:05:05",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -568,7 +568,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.10.0-parallel",
+        "version": "0.10.2-prompt-prefix",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1356,9 +1356,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.10.0-parallel",
+      "before": "0.10.2-prompt-prefix",
       "http": 200,
-      "live": "0.10.0-parallel",
+      "live": "0.10.2-prompt-prefix",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
