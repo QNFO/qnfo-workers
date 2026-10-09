@@ -14,8 +14,8 @@ assert.equal(mod.repairMojibake('caf\u00c3\u00a9'), 'caf\u00e9'); ok('two-byte m
 const legit = 'marriage\u2011guardianship caf\u00e9 \u201cquoted\u201d \u2014 \u03b1 \u2248 1/137 [\u03b6]^\u00d7';
 assert.equal(mod.repairMojibake(legit), legit); ok('legit unicode untouched');
 assert.equal(mod.contentGate([legit]).ok, true); ok('legit unicode passes gate');
-assert.equal(mod.contentGate(['x \u00e2\u0080\u0094 https://q08.org/p/2026-10-01-a']).reason, 'q08-link'); ok('q08 link refused');
-assert.equal(mod.contentGate(['see www.q08.org.']).reason, 'q08-link'); ok('bare q08.org refused');
+assert.equal(mod.contentGate(['x \u00e2\u0080\u0094 https://q08.org/p/2026-10-01-a']).ok, true); ok('q08 link allowed (Q08-OPEN-1)');
+assert.equal(mod.contentGate(['see www.q08.org.']).ok, true); ok('bare q08.org allowed (Q08-OPEN-1)');
 assert.equal(mod.contentGate(['https://qnfo-social.q08.workers.dev/health and https://papers.qnfo.org/papers/x/']).ok, true); ok('q08.workers.dev and papers.qnfo.org allowed');
 assert.equal(mod.contentGate(['broken \u00e2\u0080 text']).reason, 'mojibake'); ok('unrepairable mojibake held');
 assert.equal(mod.contentGate([{ text: 'obj \u00e2\u0080\u0094 ok', uri: 'at://x' }]).texts[0], 'obj ' + EM + ' ok'); ok('object posts handled');
@@ -99,7 +99,7 @@ function baseState(over) {
   assert.equal(g.allowed, 0); assert.equal(st.boundEpoch, '0'); ok('no epoch flag: the rolling 7 days count (96 posts hold)');
   const st2 = baseState({ posted7: 96, epochCounts: true, epoch: '2026-10-01 21:30:00' });
   g = await mod.socialGate(mkEnv(st2).env, 't');
-  assert.equal(st2.boundEpoch, '2026-10-01 21:30:00'); assert.equal(g.allowed, 2); ok('epoch flag: posts before the reset no longer count, cap still 2');
+  assert.equal(st2.boundEpoch, '2026-10-01 21:30:00'); assert.equal(g.allowed, 7); ok('epoch flag: posts before the reset no longer count, cap is the 7 default (Q08-OPEN-1)');
   const st3 = baseState({ posted7: 96, epochCounts: true, epoch: 'not-a-date' });
   g = await mod.socialGate(mkEnv(st3).env, 't');
   assert.equal(st3.boundEpoch, '0'); ok('malformed epoch is ignored');
@@ -142,11 +142,9 @@ function baseState(over) {
   const st = baseState({ queued: [{ id: 8, slug: 'q08-x', title: 'x', posts: JSON.stringify(['Essay \u00e2\u0080\u0094 https://q08.org/p/2026-10-01-x']) }] });
   const { env, log } = mkEnv(st);
   const r = await mod.drainQueue(env);
-  assert.equal(r.posted, 0);
-  assert.equal(calls.filter(c => c.u.includes('createRecord') || c.u === 'https://api.buffer.com').length, 0);
   const sup = log.find(l => l.sql.includes('UPDATE social_threads SET status=?') && l.args[0] === 'suppressed');
-  assert.ok(sup && sup.args[2] === 8);
-  ok('drainQueue suppresses q08.org row without posting');
+  assert.ok(!sup);
+  ok('drainQueue no longer suppresses a q08.org row (Q08-OPEN-1)');
 }
 // ---------- pause flag honoured by cron drain and routes ----------
 {
@@ -168,7 +166,7 @@ function baseState(over) {
 {
   const calls = [];
   globalThis.fetch = mkFetch(calls);
-  const st = baseState({ posted7: 2 });
+  const st = baseState({ posted7: 7 });
   const { env } = mkEnv(st);
   const res = await W.fetch(new Request('https://x/post', { method: 'POST', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ text: 'hi' }) }), env);
   assert.equal(res.status, 429);
@@ -182,8 +180,8 @@ function baseState(over) {
   const rec = JSON.parse(calls.find(c => c.u.includes('createRecord')).body).record;
   assert.ok(!rec.text.includes('utm_') && rec.facets[0].features[0].uri.includes('utm_campaign=abc'));
   const res3 = await W.fetch(new Request('https://x/post', { method: 'POST', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ text: 'x https://q08.org/p/y' }) }), mkEnv(baseState()).env);
-  assert.equal(res3.status, 422);
-  ok('routes: cap -> 429, q08 -> 422, allowed /post records social_threads row with post_uri and UTM');
+  assert.notEqual(res3.status, 422);
+  ok('routes: cap -> 429, q08 no longer 422, allowed /post records social_threads row with post_uri and UTM');
 }
 // ---------- /cross records the LinkedIn draft id ----------
 {

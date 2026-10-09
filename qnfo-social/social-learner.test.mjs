@@ -50,7 +50,7 @@ function stmtOn(conn, sql) {
   return s;
 }
 const DB = { prepare: (sql) => stmtOn(db, sql), async batch(list) { return list.map((s) => s._exec()); } };
-const env = { DB, BSKY_HANDLE: "qnfo.bsky.social", BSKY_APP_PASS: "x", AI: {} };
+const env = { DB, BSKY_HANDLE: "qnfo.bsky.social", BSKY_APP_PASS: "x", AI: {}, SOCIAL_WEEKLY_CAP: "2" }; // the suite pins the weekly cap it was written for (the default is 7 since Q08-OPEN-1)
 
 let records = [];
 const roots = () => records.filter((r) => !r.reply).length;   // a thread is one post: its replies are not new posts
@@ -264,7 +264,7 @@ q = await mod.drainQueue(env, { nowMs: OFF });
 const dq = pendingState().decision;
 ok(dq.via_arms === false && Number(dq.id) === onlyQ && dq.topic === null, "with no arm row queued, the learner falls back to the old order (in a sampled slot)");
 q = await mod.drainQueue(env, { nowMs: slotTick("2026-10-06", dq.slot) });
-ok(q.posted === 0 && records.length === 0 && one("SELECT status FROM social_threads WHERE id = ?", onlyQ).status === "suppressed", "the content gate still suppresses a q08 row the learner chose");
+ok(one("SELECT status FROM social_threads WHERE id = ?", onlyQ).status !== "suppressed", "the content gate no longer suppresses a q08 row the learner chose (Q08-OPEN-1)");
 
 // ---------- 8. The posterior steers the choice; the prior explores ----------
 reset();
