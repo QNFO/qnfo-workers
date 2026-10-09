@@ -105,6 +105,8 @@ def post_deploy(worker: str, path: str, ref: str, token: str, timeout: int, allo
         return {"ok": False, "status": e.code, "error": detail}
     except urllib.error.URLError as e:
         return {"ok": False, "status": 0, "error": f"URLError: {e.reason}"}
+    except (TimeoutError, OSError) as e:  # DEPLOY-SECOND-PATH-1: a read timeout is an unreachable route, not a crash
+        return {"ok": False, "status": 0, "error": f"{type(e).__name__}: {e}"}
 
     try:
         parsed = json.loads(body)
@@ -173,6 +175,18 @@ def deploy_with_contention(worker: str, path: str, ref: str, token: str, timeout
         time.sleep(LOCK_POLL_S)
 
 
+def route_unavailable(res: dict) -> bool:
+    """DEPLOY-SECOND-PATH-1 (agent_issues 2178): the route itself did not answer (connection error, timeout, or a 5xx from
+    ops.qnfo.org or Cloudflare's edge), as opposed to a deliberate refusal (4xx, a lock, a guard, a Cloudflare API error the
+    route reports). Only the first is a reason to take the second deploy path."""
+    st = res.get("status")
+    try:
+        st = int(st)
+    except (TypeError, ValueError):
+        return False
+    return st == 0 or st >= 500
+
+
 def read_manifest(path: str) -> list[tuple[str, str]]:
     """Parse deploy-targets.txt.
 
@@ -221,6 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ref", default=DEFAULT_REF, help=f"git ref to deploy from (default {DEFAULT_REF})")
     ap.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="per-deploy timeout seconds")
     ap.add_argument("--dry-run", action="store_true", help="print the plan, call nothing")
+    ap.add_argument("--fallback-file", help="DEPLOY-SECOND-PATH-1: write '<worker> <path>' for each worker whose route was unreachable; exit 3 when every failure is one")
     ap.add_argument("--allow-create", action="store_true", help="allow creating a worker that does not exist on the account (WORKER-RESURRECTION-GUARD-1)")
     args = ap.parse_args(argv)
 
@@ -284,6 +299,14 @@ def main(argv: list[str] | None = None) -> int:
 
     failed = [w for w, ok, _ in results if not ok]
     print(f"\nsummary: {len(results) - len(failed)}/{len(results)} ok")
+    unavailable = [(w, p) for (w, ok, res), (_, p) in zip(results, targets) if not ok and route_unavailable(res)]
+    if args.fallback_file and unavailable:
+        with open(args.fallback_file, "a", encoding="utf-8") as fh:
+            for w, p in unavailable:
+                fh.write(f"{w} {p}\n")
+        print(f"route unavailable for {', '.join(w for w, _ in unavailable)}: listed for the second deploy path", file=sys.stderr)
+        if len(unavailable) == len(failed):
+            return 3
     if failed:
         print(f"failed workers: {', '.join(failed)}", file=sys.stderr)
         return 1
