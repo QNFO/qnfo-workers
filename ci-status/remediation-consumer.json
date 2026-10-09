@@ -1,12 +1,53 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@1b10c373ff33",
- "due": 0,
- "pass": 0,
+ "verifier": "remediation-consumer@7b044424bfb4",
+ "due": 5,
+ "pass": 5,
  "fail": 0,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,12 +71,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 6.7,
+ "https": 5,
+ "runtime_verified_share_24h": 6.9,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 5190,
- "head": "1b10c373ff33b723bf91cdb40decd066afbe6841",
+ "spent_ms": 18112,
+ "head": "7b044424bfb48cc55a81492f7cc29c2a080050ee",
  "job_status": "success",
- "ts": "2026-10-09T07:42:25Z"
+ "ts": "2026-10-09T07:45:00Z"
 }
