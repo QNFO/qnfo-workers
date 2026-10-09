@@ -1,0 +1,19 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+  "@type": "SoftwareSourceCode",
+  "name": "qnfo-workers",
+  "description": "The QNFO Cloudflare Workers fleet: papers.qnfo.org, the open-data endpoints and the autonomous maintenance loops.",
+  "codeRepository": "https://github.com/QNFO/qnfo-workers",
+  "url": "https://qnfo.org",
+  "license": "https://legal.qnfo.org/",
+  "programmingLanguage": "JavaScript",
+  "runtimePlatform": "Cloudflare Workers",
+  "author": [
+    {
+      "@type": "Person",
+      "givenName": "Rowan Brad",
+      "familyName": "Quni-Gudzinas",
+      "@id": "https://orcid.org/0009-0002-4317-5604"
+    }
+  ]
+}
