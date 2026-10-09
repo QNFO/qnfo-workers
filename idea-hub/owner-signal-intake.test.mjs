@@ -108,7 +108,7 @@ ok(calls.filter((x) => x === "corpus").length === 2, "only notes with a long eno
 db.prepare("INSERT INTO notes_intake (path, type, title, status, sig) VALUES (?,?,?,?,?)").run("notes/v1/2025/11/01/e.md", "note", "e", "active", "s6");
 for (let i = 0; i < api.OWNER_CORPUS_RQ_CAP; i++) db.prepare("INSERT INTO research_queue (id, source, source_id, status) VALUES (?, 'proposal', ?, 'queued')").run("rq" + i, "x" + i);
 let c4 = await api.runOwnerCorpus(env);
-ok(c4.picked === 0 && /research_queue/.test(String(c4.paused)), "the feeder pauses while research_queue already holds OWNER_CORPUS_RQ_CAP waiting rows", c4);
+ok(c4.picked === 1 && !c4.paused && /research_queue/.test(String(c4.slowed)), "OWNER-CORPUS-RATE-1: a full research_queue slows the feeder to a small batch instead of pausing it", c4);
 let c5 = await api.runOwnerCorpus({ QNFO_AUDIT: shim(db), AI });
 ok(c5.ok === false && /VAULT/.test(c5.why), "without the VAULT binding the feeder reports it and does nothing", c5);
 
