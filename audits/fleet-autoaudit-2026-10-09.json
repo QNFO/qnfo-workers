@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-09 08:15:17",
+  "audited_at": "2026-10-09 09:46:28",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-research-exec"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -568,7 +575,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.10.3-inhouse-publish-key",
+        "version": "0.10.5-revise-patch-parse",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1356,9 +1363,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.10.3-inhouse-publish-key",
+      "before": "0.10.5-revise-patch-parse",
       "http": 200,
-      "live": "0.10.3-inhouse-publish-key",
+      "live": "0.10.5-revise-patch-parse",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
