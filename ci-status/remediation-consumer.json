@@ -1,12 +1,45 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3b423cc878a4",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@dba294d98d0d",
+ "due": 4,
+ "pass": 1,
+ "fail": 3,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-1889",
+   "issue_id": 1889,
+   "verdict": "fail",
+   "expected": "disjoint",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2001",
+   "issue_id": 2001,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2110",
+   "issue_id": 2110,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: trigger 1, guard metric 1, active contracts vacuous or not executable 2",
+   "written": true
+  },
+  {
+   "class": "issue-2236",
+   "issue_id": 2236,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by ci:apply-migrations, which owns it for 48h",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,12 +63,12 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 6.2,
+ "runtime_verified_share_24h": 6.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 4172,
- "head": "3b423cc878a4f6e89e140f927d4216300886c964",
+ "spent_ms": 12997,
+ "head": "dba294d98d0d11460ec16f0a9f9a5084c972030f",
  "job_status": "success",
- "ts": "2026-10-09T10:28:36Z"
+ "ts": "2026-10-09T11:04:58Z"
 }
