@@ -1,12 +1,20 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@8e14073e7cad",
+ "verifier": "remediation-consumer@78f4f48c69ec",
  "due": 40,
- "pass": 0,
- "fail": 40,
+ "pass": 3,
+ "fail": 37,
  "skipped": 0,
  "contracts": [
+  {
+   "class": "issue-2254",
+   "issue_id": 2254,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by loop-watch, which owns it for 48h",
+   "written": true
+  },
   {
    "class": "issue-2180",
    "issue_id": 2180,
@@ -138,9 +146,9 @@
   {
    "class": "issue-1836",
    "issue_id": 1836,
-   "verdict": "fail",
+   "verdict": "pass",
    "expected": "0",
-   "observed": "1",
+   "observed": "0",
    "written": true
   },
   {
@@ -210,9 +218,17 @@
   {
    "class": "EVID-1683-SPEND",
    "issue_id": 1683,
-   "verdict": "fail",
+   "verdict": "pass",
    "expected": "within-cap",
-   "observed": "over-cap",
+   "observed": "within-cap",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "failed",
    "written": true
   },
   {
@@ -224,11 +240,51 @@
    "written": true
   },
   {
+   "class": "issue-2175",
+   "issue_id": 2175,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1825",
+   "issue_id": 1825,
+   "verdict": "pass",
+   "expected": "within-cap",
+   "observed": "within-cap",
+   "written": true
+  },
+  {
    "class": "issue-1780",
    "issue_id": 1780,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2050",
+   "issue_id": 2050,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2116",
+   "written": true
+  },
+  {
+   "class": "issue-2199",
+   "issue_id": 2199,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2206",
+   "issue_id": 2206,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
    "written": true
   },
   {
@@ -240,6 +296,22 @@
    "written": true
   },
   {
+   "class": "issue-2193",
+   "issue_id": 2193,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2194",
+   "issue_id": 2194,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
    "class": "issue-1796",
    "issue_id": 1796,
    "verdict": "fail",
@@ -248,83 +320,11 @@
    "written": true
   },
   {
-   "class": "issue-1895",
-   "issue_id": 1895,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "panel-votes-unmeasured",
-   "written": true
-  },
-  {
-   "class": "issue-1902",
-   "issue_id": 1902,
+   "class": "issue-2195",
+   "issue_id": 2195,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-issues-probed-hourly",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-research-drains-in-3h",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-nothing-stuck",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-no-untested-control-on-critical-path",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-no-spof-on-critical-path",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-unprobed-issues",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1223",
-   "issue_id": 1223,
-   "verdict": "fail",
-   "expected": "census-fresh",
-   "observed": "census-stale",
-   "written": true
-  },
-  {
-   "class": "unified-cost-decision-1",
-   "issue_id": 2069,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "over",
    "written": true
   }
  ],
@@ -351,12 +351,14 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 4.6,
+ "runtime_verified_share_24h": 4.7,
  "host_census": {
-  "skipped": "ran within 6h"
+  "updated": 2130,
+  "hosts": 58,
+  "broken": 10
  },
- "spent_ms": 105990,
- "head": "8e14073e7cad4751d2bbe9f78c21a0a086b41a39",
+ "spent_ms": 114413,
+ "head": "78f4f48c69ecbb7a4e6ba72570c5854642568c50",
  "job_status": "success",
- "ts": "2026-10-09T22:07:16Z"
+ "ts": "2026-10-09T23:14:36Z"
 }
