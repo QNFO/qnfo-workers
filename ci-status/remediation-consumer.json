@@ -1,34 +1,128 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@25b6b91400f2",
+ "verifier": "remediation-consumer@4108e8d840ad",
  "due": 40,
- "pass": 1,
- "fail": 39,
- "skipped": 0,
+ "pass": 11,
+ "fail": 28,
+ "skipped": 1,
  "contracts": [
   {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
-   "verdict": "fail",
-   "expected": "connected",
-   "observed": "pending: no access token in personal-life oauth_tokens yet",
-   "written": true
-  },
-  {
-   "class": "issue-1987",
-   "issue_id": 1987,
-   "verdict": "fail",
-   "expected": "posting",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-2053",
-   "issue_id": 2053,
+   "class": "issue-2105",
+   "issue_id": 2105,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: the remaining DoD of 2053 (mechanism card shown in the v=2 flow) rides lever T7.15 ipatent-ui-overhaul, status session",
+   "observed": "pending: ungated published=287 newest verdict=2026-10-09T04:20:16.096Z published quarantine-candidates=0",
+   "written": true
+  },
+  {
+   "class": "issue-2171",
+   "issue_id": 2171,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-2187",
+   "issue_id": 2187,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1965",
+   "issue_id": 1965,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "a stale PR was closed without a merge attempt",
+   "written": true
+  },
+  {
+   "class": "issue-2129",
+   "issue_id": 2129,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
    "written": true
   },
   {
@@ -230,102 +324,6 @@
    "expected": "ok",
    "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
    "written": true
-  },
-  {
-   "class": "issue-2149",
-   "issue_id": 2149,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by fi-executor, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2151",
-   "issue_id": 2151,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by fi-executor, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2155",
-   "issue_id": 2155,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2157",
-   "issue_id": 2157,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2158",
-   "issue_id": 2158,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2159",
-   "issue_id": 2159,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-advisor, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2161",
-   "issue_id": 2161,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by scheduled-check, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2162",
-   "issue_id": 2162,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-email, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2165",
-   "issue_id": 2165,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by autonomy-first-gate, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2167",
-   "issue_id": 2167,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1683",
-   "issue_id": 1683,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2168",
-   "issue_id": 2168,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
   }
  ],
  "trusted_transports": [
@@ -351,12 +349,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 5.1,
+ "https": 9,
+ "runtime_verified_share_24h": 5,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 115469,
- "head": "25b6b91400f2a028f66859a939b65bca3da2f61b",
+ "spent_ms": 146667,
+ "head": "4108e8d840ad628356968167765bfec553dbd931",
  "job_status": "success",
- "ts": "2026-10-09T14:56:04Z"
+ "ts": "2026-10-09T16:06:36Z"
 }
