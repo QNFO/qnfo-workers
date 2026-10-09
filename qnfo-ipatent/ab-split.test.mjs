@@ -2,6 +2,7 @@
 // to arm 1 (default page, counted "/") or arm 2 (302 to ?v=2, counted "/?v=2") by the ipatent_ab cookie; the cookie keeps
 // the arm; crawlers, HEAD, explicit ?v= and share 0 keep the old behaviour; other query parameters survive the redirect.
 // Run: node qnfo-ipatent/ab-split.test.mjs   (prints "N passed, 0 failed")
+import { versionAtLeast } from "../scripts/version-at-least.mjs";
 const mod = await import("./worker.js");
 const W = mod.default, { abArm, abShare } = mod;
 let passed = 0, failed = 0;
@@ -55,7 +56,7 @@ await Promise.all(waits);
 ok(views.join(",") === "/?v=2,/,/", "views are counted per arm: " + views.join(","), views);
 r = await W.fetch(req(U + "health"), env, ctx);
 const h = await r.json();
-ok(h.capabilities.includes("ab-split-v2") && /^3\.(1[5-9]|[2-9]\d)\./.test(h.version), "health names ab-split-v2", h.version);
+ok(h.capabilities.includes("ab-split-v2") && versionAtLeast(h.version, "3.15.0"), "health names ab-split-v2", h.version);
 
 console.log(passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);
