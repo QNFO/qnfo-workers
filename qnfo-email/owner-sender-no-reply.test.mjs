@@ -13,9 +13,10 @@ const { isOwnerSender, isHandoffNoticeReply, enqueueHumanReply, enqueueHandoff, 
 
 const fake = () => {
   const calls = { prepare: [], send: [] };
-  const stmt = { bind: () => stmt, first: async () => null, run: async () => ({ meta: { last_row_id: 1 } }) };
+  // NOTICE-REPLY-1: only a sender in contact_ledger gets an owner notice, so the fake knows the realHuman correspondent.
+  const mk = (q) => { const s = { bind: () => s, first: async () => (/contact_ledger/.test(q) ? { v: 1 } : null), run: async () => ({ meta: { last_row_id: 1 } }) }; return s; };
   const env = {
-    AUDIT_DB: { prepare: (q) => { calls.prepare.push(q); return stmt; } },
+    AUDIT_DB: { prepare: (q) => { calls.prepare.push(q); return mk(q); } },
     SEND_EMAIL: { send: async (m) => { calls.send.push(m); return { ok: true }; } },
   };
   return { env, calls };
