@@ -8,12 +8,16 @@
 --                                before the autonomy-first gate (2026-10-08), so it decays as they leave the window.
 --   blocker_surface_coverage_7d = share of blocker_redteam rows of 7 days whose evidence names the surfaces it tested with a
 --                                "surfaces:" line (section 3/14: a blocker report lists every surface tested). Target 1.
---   Both read n/a-safe values (0 and 1) when there is nothing to judge. Refreshed with the other doctrine metrics on every
---   open_agent_issues write (same pattern as migrations/2026-10-08-autonomy-first.sql), so no new cron or session is needed.
+--   Both read n/a-safe values (0 and 1) when there is nothing to judge. Refreshed hourly by the D1 trigger doctrine_rev3_tick
+--   on the first fleet_tick row of each hour (same pattern as doctrine_rev4_tick), so no new cron or session is needed.
+--   Fix 2026-10-09 (agent_issues #2210): the first version hung two triggers off every open_agent_issues write to
+--   metric_registry; that write already runs inside cloud_ops_events trigger chains, so the runner's depth canary failed
+--   ("triggers nested too deep") and dropped them, and both metrics froze at their apply-time reading. fleet_tick sits at the
+--   top of its own chain.
 --   Re-applying this file is a no-op (IF NOT EXISTS / INSERT OR IGNORE / WHERE NOT EXISTS).
 -- APPLY-BY: ci
 -- DB: qnfo-audit
--- Rollback: DROP TRIGGER IF EXISTS metric_doctrine_rev3_au; DROP TRIGGER IF EXISTS metric_doctrine_rev3_ai; DROP VIEW IF EXISTS v_doctrine_rev3_blockers; DELETE FROM analytics_metric_triggers WHERE metric_key IN ('blocker_survival_rate_7d', 'blocker_surface_coverage_7d'); DELETE FROM metric_registry WHERE metric IN ('blocker_survival_rate_7d', 'blocker_surface_coverage_7d');
+-- Rollback: DROP TRIGGER IF EXISTS doctrine_rev3_tick; DROP TRIGGER IF EXISTS metric_doctrine_rev3_au; DROP TRIGGER IF EXISTS metric_doctrine_rev3_ai; DROP VIEW IF EXISTS v_doctrine_rev3_blockers; DELETE FROM analytics_metric_triggers WHERE metric_key IN ('blocker_survival_rate_7d', 'blocker_surface_coverage_7d'); DELETE FROM metric_registry WHERE metric IN ('blocker_survival_rate_7d', 'blocker_surface_coverage_7d');
 
 CREATE VIEW IF NOT EXISTS v_doctrine_rev3_blockers AS
 SELECT
@@ -25,14 +29,14 @@ SELECT
 INSERT OR IGNORE INTO metric_registry (metric, layer, kind, formula, source_of_truth, baseline, target, owner, disposition_actor, refresh_cadence, warning_band, kill_band, last_value, last_refreshed, state, refresh_class) VALUES
  ('blocker_survival_rate_7d', 'operational', 'target',
   'v_doctrine_rev3_blockers: owner_decisions_7d (cards the gate reads fleet, not rerouted) / (cards_7d + redteamed_7d); 0 when both are 0. Doctrine rev 3 section 15 "blocker-survival rate".',
-  'qnfo-audit.v_doctrine_rev3_blockers (DOCTRINE-REV3-METRICS-1, migrations/2026-10-09-doctrine-rev3-metrics.sql), refreshed by D1 triggers metric_doctrine_rev3_au/_ai on every open_agent_issues write',
+  'qnfo-audit.v_doctrine_rev3_blockers (DOCTRINE-REV3-METRICS-1, migrations/2026-10-09-doctrine-rev3-metrics.sql), refreshed hourly by D1 trigger doctrine_rev3_tick on fleet_tick',
   'first reading at apply', '0', 'qnfo-fleet-control',
   'trigger gt 0.25 -> one METRIC-TRIGGER issue: red-team the newest owner cards (blocker_redteam row with a surfaces: line) or reroute them', 'hourly', '> 0.10', '> 0.25',
   CAST((SELECT CASE WHEN cards_7d + redteamed_7d = 0 THEN 0 ELSE ROUND(1.0 * owner_decisions_7d / (cards_7d + redteamed_7d), 3) END FROM v_doctrine_rev3_blockers) AS TEXT),
   strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'MEASURED', 'computed'),
  ('blocker_surface_coverage_7d', 'operational', 'guard',
   'v_doctrine_rev3_blockers: redteamed_with_surfaces_7d / redteamed_7d; 1 when no blocker was red-teamed. Doctrine rev 3 section 15 "surface-coverage" (proxy: the report names its surfaces).',
-  'qnfo-audit.v_doctrine_rev3_blockers (DOCTRINE-REV3-METRICS-1, migrations/2026-10-09-doctrine-rev3-metrics.sql), refreshed by D1 triggers metric_doctrine_rev3_au/_ai on every open_agent_issues write',
+  'qnfo-audit.v_doctrine_rev3_blockers (DOCTRINE-REV3-METRICS-1, migrations/2026-10-09-doctrine-rev3-metrics.sql), refreshed hourly by D1 trigger doctrine_rev3_tick on fleet_tick',
   'first reading at apply', '1', 'qnfo-fleet-control',
   'trigger lt 0.8 -> one METRIC-TRIGGER issue: writers of blocker_redteam add a surfaces: line to evidence', 'hourly', '< 0.95', '< 0.8',
   CAST((SELECT CASE WHEN redteamed_7d = 0 THEN 1 ELSE ROUND(1.0 * redteamed_with_surfaces_7d / redteamed_7d, 3) END FROM v_doctrine_rev3_blockers) AS TEXT),
@@ -50,19 +54,8 @@ SELECT 'blocker_surface_coverage_7d', 'Doctrine breach: blocker reports do not n
   'qnfo-fleet-control', 'agent_issues', 72, 1, 'DOCTRINE-REV3-METRICS-1 (migrations/2026-10-09-doctrine-rev3-metrics.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'blocker_surface_coverage_7d');
 
-CREATE TRIGGER IF NOT EXISTS metric_doctrine_rev3_au AFTER UPDATE ON metric_registry
-WHEN NEW.metric = 'open_agent_issues'
-BEGIN
-  UPDATE metric_registry SET last_value = CAST((SELECT CASE WHEN cards_7d + redteamed_7d = 0 THEN 0 ELSE ROUND(1.0 * owner_decisions_7d / (cards_7d + redteamed_7d), 3) END FROM v_doctrine_rev3_blockers) AS TEXT),
-      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
-  WHERE metric = 'blocker_survival_rate_7d';
-  UPDATE metric_registry SET last_value = CAST((SELECT CASE WHEN redteamed_7d = 0 THEN 1 ELSE ROUND(1.0 * redteamed_with_surfaces_7d / redteamed_7d, 3) END FROM v_doctrine_rev3_blockers) AS TEXT),
-      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
-  WHERE metric = 'blocker_surface_coverage_7d';
-END;
-
-CREATE TRIGGER IF NOT EXISTS metric_doctrine_rev3_ai AFTER INSERT ON metric_registry
-WHEN NEW.metric = 'open_agent_issues'
+CREATE TRIGGER IF NOT EXISTS doctrine_rev3_tick AFTER INSERT ON fleet_tick
+WHEN strftime('%M', 'now') < '10'
 BEGIN
   UPDATE metric_registry SET last_value = CAST((SELECT CASE WHEN cards_7d + redteamed_7d = 0 THEN 0 ELSE ROUND(1.0 * owner_decisions_7d / (cards_7d + redteamed_7d), 3) END FROM v_doctrine_rev3_blockers) AS TEXT),
       last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'

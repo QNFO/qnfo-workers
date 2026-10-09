@@ -31,6 +31,15 @@ because each one was broken at least once; the linked issue holds the evidence.
   Log a decision's `predicted_outcome`, `reach_gain` and `surfaces_tested` in `decision_log` and set `outcome_matched` when
   the result is known (metrics `prediction_logged_share_7d`, `prediction_miss_rate_7d`); `continuity_snapshots` and
   `continuity_snapshot_age_h` prove qnfo-audit can be rebuilt from two providers.
+- Revision 5 (2026-10-09, same day) restructures the text into five parts and adds Part I: the tick (section 1), the default
+  action (2), the backlog as driver (3), the executor roster (4) and no user routing (5); its immutables are section 6 (the
+  only interrupt gate) and section 9 (security, privacy and the alignment floor, now in the owner's words). Readings (a)-(d)
+  and (f)-(h) carry over renumbered; (i)-(l) are new: section 16 removal reaches caps, guards and probes only by migration
+  (RULE-8-RETIRED-1) and never the section 9 limits; manufactured work runs on the cheapest model at a breached cap
+  (BUDGET-SOFT-ROUTE-1); a decision taken for the owner never covers the owner's accounts, money, legal or signing acts;
+  section 12's permission model is the fleet's loops', and a session's harness keeps its own. Section 24 headlines:
+  `tick_completion_24h`, `initiation_rate_7d`, `owner_dispatch_7d` (DOCTRINE-HEADLINE-1, PR 847) and `mttr_h_7d`; builders
+  TICK-SEQUENCE-LEDGER-1, BACKLOG-DRIVER-1, EXECUTOR-ROSTER-1 (migrations/2026-10-09-12-doctrine-rev5.sql).
 
 ## Autonomy-first protocol (AUTONOMY-FIRST-1)
 - Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
