@@ -1,50 +1,18 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@7b044424bfb4",
- "due": 5,
- "pass": 5,
- "fail": 0,
+ "verifier": "remediation-consumer@507424c341a5",
+ "due": 1,
+ "pass": 0,
+ "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ipatent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "class": "TWIN-MCP-OAUTH-1",
+   "issue_id": 1817,
+   "verdict": "fail",
+   "expected": "connected",
+   "observed": "pending: no access token in personal-life oauth_tokens yet",
    "written": true
   }
  ],
@@ -71,13 +39,12 @@
   "http",
   "runner-https"
  ],
- "https": 5,
- "runtime_verified_share_24h": 6.9,
+ "runtime_verified_share_24h": 6.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 18112,
- "head": "7b044424bfb48cc55a81492f7cc29c2a080050ee",
+ "spent_ms": 6816,
+ "head": "507424c341a5445f5938d58aa3265a3c27ecc079",
  "job_status": "success",
- "ts": "2026-10-09T07:45:00Z"
+ "ts": "2026-10-09T07:50:33Z"
 }
