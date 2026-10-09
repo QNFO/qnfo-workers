@@ -31,6 +31,12 @@ send_email = [
 ]
 
 
+# Q08-FORECAST-PROMOTE-1 (owner directive 2026-10-09): queue each published forecast (only forecasts) for qnfo-social's
+# cross-post. "0" stops it; essays stay held by Q08_SOCIAL_QUEUE (Q08-PERSONAL-CHANNEL-HOLD-1).
+[vars]
+Q08_SOCIAL_FORECASTS = "1"
+Q08_SOCIAL_ESSAYS = "1"
+
 [observability]
 enabled = true
 head_sampling_rate = 1

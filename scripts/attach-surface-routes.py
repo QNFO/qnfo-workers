@@ -63,6 +63,30 @@ for _h in SPARE_TARGET:
     HOSTS.append((_h[4:] if _h.startswith("www.") else _h, _h))
     SERVICE_BY_HOST[_h] = "qnfo-lifecycle"
 DNS_CREATE = set(SPARE_TARGET)
+# SPARE-DOMAINS-ORDER-1 (2026-10-09, agent_issues 2077): the run of 2026-10-09 09:43Z spent its whole 15 minutes on qwav.org and
+# www.qwav.org (proxy, detach the Pages binding, 42 failed /health reads each, roll back) and never reached the nine spare
+# hosts behind them, which are the ones still broken (ipatent.me and empoweringchange.today fail TLS). The two qwav.org hosts
+# go last, and are skipped for 48 hours after their last result was a failed, rolled-back verification, so a run neither
+# detaches the live qwav Pages binding for minutes nor blocks the queue; the skip is recorded in the result, not silent.
+_LAST = {}
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ci-status", "attach-surface-routes.json")) as _f:
+        _LAST = json.load(_f)
+except Exception:
+    _LAST = {}
+_QWAV_ORG = [x for x in HOSTS if x[1] in ("qwav.org", "www.qwav.org")]
+HOSTS = [x for x in HOSTS if x not in _QWAV_ORG] + _QWAV_ORG
+
+
+def recently_failed(host):
+    h = (_LAST.get("hosts") or {}).get(host) or {}
+    if h.get("verified") is not False or not h.get("rolled_back"):
+        return False
+    try:
+        age = time.time() - time.mktime(time.strptime(str(_LAST.get("ts"))[:19], "%Y-%m-%dT%H:%M:%S"))
+    except Exception:
+        return False
+    return age < 48 * 3600
 LIFECYCLE_HEALTH = "https://qnfo-lifecycle.q08.workers.dev/health"
 LIFECYCLE_MIN = (1, 10)
 
@@ -336,6 +360,10 @@ def main():
     ok = True
     lifecycle_ready = None
     for zone_name, host in HOSTS:
+        if host in ("qwav.org", "www.qwav.org") and recently_failed(host):
+            RESULT["hosts"][host] = {"zone": zone_name, "route_id": None, "status": "skipped", "detail": "failed verification and rolled back within 48h (SPARE-DOMAINS-ORDER-1); see agent_issues QWAV-ORG-GATEWAY-VERIFY-1"}
+            ok = False
+            continue
         if host in SPARE_TARGET:
             if lifecycle_ready is None:
                 lifecycle_ready = wait_lifecycle()
