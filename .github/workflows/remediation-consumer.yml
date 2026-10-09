@@ -127,6 +127,15 @@ jobs:
         run: |
           python3 scripts/claim_reaper.py --selftest && python3 scripts/claim_reaper.py
 
+      # COST-LEDGER-DAILY-1 (owner request 2026-10-09: realistic budgets from actual usage across all billing, projected from
+      # the last 7-10 days): writes cost_daily for Workers AI, AI Gateway per provider, the Cloudflare plan and the owner's
+      # stated direct spend; v_cost_run_rate projects them. Never fails the job.
+      - name: Write the daily cost ledger
+        continue-on-error: true
+        timeout-minutes: 4
+        run: |
+          python3 scripts/cost_ledger.py --selftest && python3 scripts/cost_ledger.py
+
       # CONTINUITY-SNAPSHOT-1 (doctrine revision 4 section 14 resurrection): D1 Time Travel bookmark plus a logical snapshot of
       # the qnfo-audit state tables to R2 (all tables, private) and, as a second provider, the public-safe subset (registers
       # and the issue ledger without personal issues, owner cards, ops_config or claims; this repository is public) as an
