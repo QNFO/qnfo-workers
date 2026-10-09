@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-09 07:39:04",
+  "audited_at": "2026-10-09 08:15:17",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -453,7 +453,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.8.0-reentry-rate",
+        "version": "1.8.1-corpus-rate",
         "worker": "idea-hub"
       },
       {
@@ -684,9 +684,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.8.0-reentry-rate",
+      "before": "1.8.1-corpus-rate",
       "http": 200,
-      "live": "1.8.0-reentry-rate",
+      "live": "1.8.1-corpus-rate",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
