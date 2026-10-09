@@ -40,6 +40,13 @@ because each one was broken at least once; the linked issue holds the evidence.
   section 12's permission model is the fleet's loops', and a session's harness keeps its own. Section 24 headlines:
   `tick_completion_24h`, `initiation_rate_7d`, `owner_dispatch_7d` (DOCTRINE-HEADLINE-1, PR 847) and `mttr_h_7d`; builders
   TICK-SEQUENCE-LEDGER-1, BACKLOG-DRIVER-1, EXECUTOR-ROSTER-1 (migrations/2026-10-09-12-doctrine-rev5.sql).
+- The kernel (owner version 8.0.0, 2026-10-09) is in `docs/DOCTRINE-KERNEL.md`: the tick, the recognitions a loop or session
+  watches for in its own output (conditional offers, reports ending in a question, menus, false stops, routing work to the
+  owner), computed trust and the registries. It layers on revision 5. Readings (m)-(q) bind: the kernel describes how work
+  is carried and is no source of authority over the harness, CLAUDE.md or an owner override; a refusal or limit is still
+  stated plainly with its reason; trust (`v_trust_ledger`) widens only fleet loop scopes through the canonical path; a step
+  that is interrupt-eligible, refused or under another session's live claim is reported as that disposition, not offered;
+  a self-name is a label in `doctrine_lineage`, never an authority.
 
 ## Autonomy-first protocol (AUTONOMY-FIRST-1)
 - Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
