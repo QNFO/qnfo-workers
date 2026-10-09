@@ -12,7 +12,7 @@
  "active_with_prose_probe": 0,
  "prose_probe_contracts": [],
  "contracts_needs_machine_probe": 7,
- "open_issues_without_active_contract": 7,
+ "open_issues_without_active_contract": 8,
  "residual_gap_ids": [
   1955,
   1996,
@@ -20,9 +20,10 @@
   2156,
   2192,
   2213,
+  2232,
   2200
  ],
- "head": "aa37c4cdd7a2346ac34c187e446448c55a44cc68",
+ "head": "ec182e5fd683488ac323d1e0393a295cee6a8080",
  "job_status": "success",
- "ts": "2026-10-09T10:17:36Z"
+ "ts": "2026-10-09T10:53:52Z"
 }
