@@ -23,6 +23,14 @@ because each one was broken at least once; the linked issue holds the evidence.
   credential is used by calling that sibling's own route, never by copying the secret. Record each red-team in
   `blocker_redteam` with a `surfaces:` line (metrics `blocker_survival_rate_7d`, `blocker_surface_coverage_7d`); an owner card
   that survives carries an `IDENTITY-BOUND:` line in its `why`.
+- Revision 4 (2026-10-09, same day) adds growth and audience (section 20), reporting (21), outcome calibration (22),
+  continuity and resurrection (14) and the alignment floor (§28) to the precedence. Readings (e)-(h) in the doctrine header
+  bind: §28 is the precedence line's own words until the owner supplies the section; scope widening applies to the fleet's
+  loop scopes, never to a session's own permission settings; growth stays inside outreach consent, platform automation terms
+  and the "no dark patterns" line; delegated authority never covers a legal, financial or signing act in the owner's name.
+  Log a decision's `predicted_outcome`, `reach_gain` and `surfaces_tested` in `decision_log` and set `outcome_matched` when
+  the result is known (metrics `prediction_logged_share_7d`, `prediction_miss_rate_7d`); `continuity_snapshots` and
+  `continuity_snapshot_age_h` prove qnfo-audit can be rebuilt from two providers.
 
 ## Autonomy-first protocol (AUTONOMY-FIRST-1)
 - Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
