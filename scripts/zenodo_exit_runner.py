@@ -253,9 +253,10 @@ def selftest():
     html = b'<a href="/records/222/files/paper.pdf?download=1">pdf</a><a href="https://zenodo.org/records/222/files/paper.pdf?preview=1">p</a><a href="/records/999/files/other.pdf">x</a>'
 
     def get(url, timeout=30, cap=None):
-        if "api.datacite.org" in url:
+        host = urllib.parse.urlparse(url).hostname or ""
+        if host == "api.datacite.org":
             return 200, json.dumps({"data": items}).encode()
-        if "wayback/available" in url:
+        if host == "archive.org" and urllib.parse.urlparse(url).path == "/wayback/available":
             return 200, json.dumps({"archived_snapshots": {"closest": {"available": True, "status": "200", "timestamp": "20260422035742"}}}).encode()
         if url.endswith("/files/paper.pdf"):
             return 200, b"%PDF-1.4"
