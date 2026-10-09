@@ -53,6 +53,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read  # CLAIM-REAPER-1 reads PR state
 
 concurrency:
   group: remediation-consumer
@@ -115,6 +116,16 @@ jobs:
         continue-on-error: true
         run: |
           python3 scripts/loop_breaker_runner.py --selftest && python3 scripts/loop_breaker_runner.py
+
+      # CLAIM-REAPER-1 (owner request 2026-10-09, scheduled audits that remediate): releases work claims whose PR merged or
+      # closed 30+ minutes ago, in work_claims and deploy_locks, so a session that stopped without releasing does not block
+      # the file for the rest of its TTL. Reads PR state with this run's token; never fails the job.
+      - name: Reap work claims on merged or closed pull requests
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/claim_reaper.py --selftest && python3 scripts/claim_reaper.py
 
       - name: Publish the status artifact
         if: always()
