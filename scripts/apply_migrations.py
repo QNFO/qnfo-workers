@@ -223,6 +223,36 @@ def cadence_rejected(value):
         con.close()
 
 
+# D1-COMPOUND-LIMIT-1 (2026-10-09): D1 refuses a compound SELECT of more than 5 terms (UNION / UNION ALL / INTERSECT /
+# EXCEPT at one level), far below SQLite's default 500: migration 2026-10-09-09 stopped at a 7-term UNION ALL. A multi-row
+# VALUES list is not limited the same way (a 7-row VALUES insert applied in the same file).
+COMPOUND_MAX_TERMS = 5
+COMPOUND_OP = re.compile(r"\b(UNION(\s+ALL)?|INTERSECT|EXCEPT)\b", re.I)
+
+
+def compound_terms(sql):
+    """Largest number of terms joined by compound operators at one parenthesis level, ignoring string literals."""
+    text = re.sub(r"'(?:[^']|'')*'", "''", sql)
+    counts, stack, depth_id = {}, [0], 0
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "(":
+            depth_id += 1
+            stack.append(depth_id)
+        elif ch == ")":
+            if len(stack) > 1:
+                stack.pop()
+        else:
+            m = COMPOUND_OP.match(text, i)
+            if m and (i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")):
+                counts[stack[-1]] = counts.get(stack[-1], 0) + 1
+                i = m.end()
+                continue
+        i += 1
+    return (max(counts.values()) + 1) if counts else 1
+
+
 def plan(path, text):
     """Validate one file. Returns (opted_in, problems, info)."""
     lines = header(text)
@@ -246,6 +276,11 @@ def plan(path, text):
             if len(lit.encode("utf-8")) > LIKE_MAX_BYTES:
                 problems.append("LIKE/GLOB pattern of " + str(len(lit.encode("utf-8"))) + " bytes (D1 rejects over "
                                 + str(LIKE_MAX_BYTES) + "; use instr()): '" + lit[:60] + "'")
+    for s in stmts:
+        worst = compound_terms(body(s))
+        if worst > COMPOUND_MAX_TERMS:
+            problems.append("compound SELECT of " + str(worst) + " terms (D1 rejects over " + str(COMPOUND_MAX_TERMS)
+                            + ": 'too many terms in compound SELECT'; split it into several INSERT ... SELECT statements or a VALUES list)")
     for s in stmts:
         for cad in metric_cadences(body(s)):
             if cadence_rejected(cad):
