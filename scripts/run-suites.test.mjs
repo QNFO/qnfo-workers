@@ -31,7 +31,7 @@ for (const d of SHARED) {
 s = select(all, []);
 ok(s.suites.length === 0 && /no worker directory/.test(s.reason), "no change runs nothing");
 s = select(all, ["docs"]);
-ok(s.suites.length === 0, "a docs-only change runs no worker suite");
+ok(s.suites.every((x) => x.startsWith("docs/")), "a docs-only change runs only the docs suites (docs/doctrine-readings.test.mjs since #853), never a worker suite", s.suites);
 
 const fc = readFileSync(join(root, "qnfo-fleet-control", "worker.js"), "utf8");
 const m = /var TP_CONTROL_PLANE = (\[[^\]]*\]);/.exec(fc);
