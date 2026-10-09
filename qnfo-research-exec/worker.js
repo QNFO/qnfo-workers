@@ -13,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.11.0-citation-gate"; /* 0.11.0 CITATION-EXISTENCE-GATE-1 (agent_issues 2052, pillar research): publishStageV2 resolves every arXiv id, DOI and link before the Zenodo deposit; a dead or mismatched citation holds the queue row with the reason, a lookup error leaves it queued; ops_config research_citation_gate = enforce (default) | measure | off. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ /* 0.10.3 INHOUSE-PUBLISH-2 (#2137): publishToZenodo reads ops_config by key; the 0.10.0 column query threw on every publish. */ // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.11.1-lean-ensemble"; /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ /* 0.11.0 CITATION-EXISTENCE-GATE-1 (agent_issues 2052, pillar research): publishStageV2 resolves every arXiv id, DOI and link before the Zenodo deposit; a dead or mismatched citation holds the queue row with the reason, a lookup error leaves it queued; ops_config research_citation_gate = enforce (default) | measure | off. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ /* 0.10.3 INHOUSE-PUBLISH-2 (#2137): publishToZenodo reads ops_config by key; the 0.10.0 column query threw on every publish. */ // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1719,6 +1719,24 @@ var WRITER_FALLBACK_MODELS = [
   "@cf/zai-org/glm-5.3"
 ];
 var MIN_LEGS = 2;
+// LEAN-ENSEMBLE-1 (0.11.1, agent_issues 2118/1795, pillar cost; BUDGET-SOFT-ROUTE-1 "one leg instead of an ensemble" at a
+// breached ai_spend cap): legs 1 and 2 of WRITER_MODELS are the same model family (glm-5.3-flash), so the third leg adds cost
+// and little independent signal (docs/ENSEMBLE-POLICY.md: correlated errors). While any fleet_budget ai_spend cap is
+// breached, the ensemble runs the two disjoint-family legs (gpt-oss-120b, glm-5.3-flash) and needs both; throughput is
+// unchanged (never fewer papers). ops_config research_lean_ensemble = off restores three legs without a deploy. An
+// unreadable fleet_budget reads as breached, as in idea-hub (lean is the safe side of a D1 fault).
+async function leanEnsemble(env) {
+  try {
+    var off = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_lean_ensemble'").first();
+    if (off && String(off.value).trim().toLowerCase() === "off") return false;
+  } catch (e) {}
+  try {
+    var b = await env.QNFO_AUDIT.prepare("SELECT COUNT(*) AS n FROM fleet_budget WHERE node_class LIKE 'ai_spend:%' AND current > cap").first();
+    return !!(b && Number(b.n) > 0);
+  } catch (e) {
+    return true;
+  }
+}
 var MIN_PAPER_CHARS = 8e3;
 var MIN_REFS = 8;
 var MAX_REVIEW_CYCLES = 2;
@@ -2294,7 +2312,9 @@ async function stageEnsemble(env, row) {
   // Writer legs run at low reasoning effort (REASONING-EFFORT-LOW-1): at the default (maximum) effort the 8192-token
   // budget went to reasoning and 2 of 3 primary legs routinely came back under 4000 chars.
   const gfp = (await sha256hex(grounding)).slice(0, 16);
-  const legs = await Promise.all(WRITER_MODELS.map(async function(m, i) {
+  const lean = await leanEnsemble(env);
+  const writers = lean ? WRITER_MODELS.slice(0, 2) : WRITER_MODELS;
+  const legs = await Promise.all(writers.map(async function(m, i) {
     let draft = await aiText(env, m, shared, 3e4, "low");
     let via = "workers-ai";
     if (!draft || draft.length < 4e3) {
@@ -2311,9 +2331,9 @@ async function stageEnsemble(env, row) {
   const okLegs = legs.filter(function(l) {
     return l.len >= 4e3;
   }).length;
-  if (okLegs < 3) {
-    await logEvent(env, "ensemble-retry", "primary legs " + okLegs + "/3; retrying with gwCall+fallback");
-    const fallbackLegs = await Promise.all([0, 1, 2].map(async function(fi) {
+  if (okLegs < writers.length) {
+    await logEvent(env, "ensemble-retry", "primary legs " + okLegs + "/" + writers.length + (lean ? " (lean)" : "") + "; retrying with gwCall+fallback");
+    const fallbackLegs = await Promise.all(writers.map(function(_, k) { return k; }).map(async function(fi) {
       const existing = await r2Get(env, String(row.id) + "/draft-" + fi + ".md");
       const existingFp = existing ? String(await r2Get(env, String(row.id) + "/draft-" + fi + ".fp")).trim() : "";
       if (existing && existing.length >= 4e3 && existingFp === gfp) return { i: fi, len: existing.length, via: "cached" };
@@ -2335,14 +2355,14 @@ async function stageEnsemble(env, row) {
       return l.len >= 4e3;
     }).length;
     if (okFallback < MIN_LEGS) {
-      await markError(env, row, "ensemble: only " + okFallback + "/3 fallback legs produced drafts (require >= " + MIN_LEGS + ")");
+      await markError(env, row, "ensemble: only " + okFallback + "/" + writers.length + " fallback legs produced drafts (require >= " + MIN_LEGS + ")");
       return { ok: false, stage: "ensemble" };
     }
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='reconcile' WHERE id=?").bind(row.id).run();
-    return { ok: true, stage: "ensemble->reconcile", legs: fallbackLegs, via: "fallback" };
+    return { ok: true, stage: "ensemble->reconcile", legs: fallbackLegs, via: "fallback", lean };
   }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='reconcile' WHERE id=?").bind(row.id).run();
-  return { ok: true, stage: "ensemble->reconcile", legs };
+  return { ok: true, stage: "ensemble->reconcile", legs, lean };
 }
 __name(stageEnsemble, "stageEnsemble");
 __name2(stageEnsemble, "stageEnsemble");
@@ -2352,9 +2372,15 @@ __name2222(stageEnsemble, "stageEnsemble");
 async function stageReconcile(env, row) {
   __AI_ATTR_STAGE = "reconcile";
   const parts = [];
+  // LEAN-ENSEMBLE-1: a lean run writes two drafts, so a draft-2 left by an earlier attempt on another grounding must not
+  // join. A draft joins only when its grounding fingerprint (draft-N.fp) matches draft-0's; a draft with no sidecar is kept.
+  const fp0 = String(await r2Get(env, String(row.id) + "/draft-0.fp") || "").trim();
   for (let i = 0; i < 3; i++) {
     const d = await r2Get(env, String(row.id) + "/draft-" + i + ".md");
-    if (d) parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d.slice(0, 24e3));
+    if (!d) continue;
+    const fpi = String(await r2Get(env, String(row.id) + "/draft-" + i + ".fp") || "").trim();
+    if (i > 0 && fp0 && fpi && fpi !== fp0) continue;
+    parts.push("=== WRITER " + String.fromCharCode(97 + i) + " DRAFT ===\n" + d.slice(0, 24e3));
   }
   if (parts.length < 1) {
     await markError(env, row, "reconcile: drafts missing");
