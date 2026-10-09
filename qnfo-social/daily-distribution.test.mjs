@@ -62,6 +62,8 @@ ok(li.indexOf("First post.") === 0 && li.indexOf("Second post.") > 0 && li.endsW
 const ma = mod.channelText("mastodon", ["First post with enough words to be a sentence. https://papers.qnfo.org/papers/x/", "Second post."], "https://papers.qnfo.org/papers/x/", "T");
 ok(Array.from(ma).length <= 280 && ma.indexOf(mod.SUBSCRIBE_LINE) < 0, "Mastodon text is the 280-character pick without the subscribe line");
 
+// The scenarios below were written for the pre-Q08-OPEN-1 caps; pin them through the override the drain reads.
+db.exec("INSERT OR REPLACE INTO pipeline_flags (key, value) VALUES ('social_channel_caps', '{\"linkedin\":3,\"mastodon\":2,\"twitter\":2}');");
 // ---------- run 1: LinkedIn has room (2 cross-posts of 3), the mirrors are at their cap ----------
 let r = await mod.drainChannels(env);
 ok(r.posted === 1 && /^posted:queued:jps-metric:bp1$/.test(r.channels.linkedin), "run 1: LinkedIn gets the oldest queued selected row (jps-metric) through the Buffer queue: " + JSON.stringify(r.channels));
@@ -102,9 +104,9 @@ const bp2 = await mod.bufferPost(env, "New slug. https://papers.qnfo.org/papers/
 ok(bp2.results.filter((x) => x.post_id).length === 3 && db.prepare("SELECT COUNT(*) AS n FROM social_media_posts WHERE project_id='new-one'").get().n === 3, "bufferPost still posts a new slug to all three and records each in the channel ledger");
 
 // ---------- caps and the pause flag ----------
-db.exec("INSERT INTO pipeline_flags (key, value) VALUES ('social_channel_caps', '{\"linkedin\":0,\"mastodon\":9,\"twitter\":\"x\"}');");
+db.exec("INSERT OR REPLACE INTO pipeline_flags (key, value) VALUES ('social_channel_caps', '{\"linkedin\":0,\"mastodon\":9,\"twitter\":\"x\"}');");
 const caps = await mod.channelCaps(env);
-ok(caps.linkedin === 0 && caps.mastodon === 7 && caps.twitter === 2, "pipeline_flags.social_channel_caps overrides per channel, clamped to 0..7, bad values ignored: " + JSON.stringify(caps));
+ok(caps.linkedin === 0 && caps.mastodon === 9 && caps.twitter === 10, "pipeline_flags.social_channel_caps overrides per channel, clamped to 0..14, bad values ignored: " + JSON.stringify(caps));
 r = await mod.drainChannels(env);
 ok(r.channels.linkedin === "held:cap-0", "a cap of 0 holds the channel");
 db.exec("DELETE FROM pipeline_flags; INSERT INTO pipeline_flags (key, value) VALUES ('social_paused', '1');");
@@ -117,7 +119,7 @@ ok((await mod.drainChannels({ DB: env.DB })).skipped === "no BUFFER_TOKEN", "no 
 ok(mod.channelsRunStatus({ posted: 0, channels: { linkedin: "held:weekly-cap(3/3)" } }) === "ok" && mod.channelsRunStatus({ skipped: "paused", channels: {} }) === "skipped" && mod.channelsRunStatus({ error: "x" }) === "error" && mod.channelsRunStatus({ channels: { linkedin: "error:buffer gql 500(x)" } }) === "degraded", "channelsRunStatus maps held to ok, paused to skipped, a Buffer error to degraded");
 const tick = src.slice(src.indexOf("await recordSocialRun(env, 'drain'"), src.indexOf("await retractDeadLinks(env)"));
 ok(/drainChannels\(env\)/.test(tick) && /recordSocialRun\(env, 'channels'/.test(tick), "the 2-hourly tick runs the channel drain after the Bluesky drains and records social-channels-<day>");
-ok(mod.CHANNEL_WEEKLY_CAP.linkedin === 3 && mod.CHANNEL_WEEKLY_CAP.mastodon === 2 && mod.CHANNEL_WEEKLY_CAP.twitter === 2, "default caps are STRATEGY s4: LinkedIn 3, Mastodon 2, X 2");
+ok(mod.CHANNEL_WEEKLY_CAP.linkedin === 5 && mod.CHANNEL_WEEKLY_CAP.mastodon === 10 && mod.CHANNEL_WEEKLY_CAP.twitter === 10, "default caps are LinkedIn 5, Mastodon 10, X 10 (Q08-OPEN-1)");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

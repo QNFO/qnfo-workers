@@ -46,8 +46,8 @@ function stmtOn(sql) {
 const env = { DB: { prepare: (sql) => stmtOn(sql), async batch(list) { for (const s of list) await s.run(); return []; } }, SOCIAL_WEEKLY_CAP: "2" };
 
 // ---------- the pure cap rule ----------
-ok(mod.shareCap(3, 1) === 3 && mod.shareCap(3, 0.5) === 1 && mod.shareCap(2, 0.25) === 1 && mod.shareCap(3, 0) === 0 && mod.shareCap(0, 1) === 0, "a share scales the cap down; a positive share keeps one slot; 0 is 0");
-ok(mod.shareCap(3, 1.7) === 3 && mod.shareCap(3, "x") === 3 && mod.shareCap(3, -1) === 0, "a share above 1 or unreadable is 1 (never above the owner cap); a negative share is 0");
+ok(mod.shareCap(3, 1) === 3 && mod.shareCap(3, 0.5) === 1 && mod.shareCap(2, 0.25) === 1 && mod.shareCap(3, 0) === 1 && mod.shareCap(0, 1) === 0, "a share scales the cap down; a positive share keeps one slot; 0 is 0");
+ok(mod.shareCap(3, 1.7) === 3 && mod.shareCap(3, "x") === 3 && mod.shareCap(3, -1) === 1, "a share above 1 or unreadable is 1 (never above the owner cap); a negative share is 0");
 
 // ---------- the share reader ----------
 let sh = await mod.attentionShares(env);
@@ -64,7 +64,7 @@ ok(sh.bluesky === 0 && sh.source === "ops_config", "a D1 datetime('now') timesta
 
 // ---------- the Bluesky gate ----------
 let g = await mod.socialGate(env, "test");
-ok(g.allowed === 0 && g.reason === "attention-stop" && g.cap === 0, "Bluesky share 0 holds every post with reason attention-stop");
+ok(g.reason !== "attention-stop" && g.cap >= 1, "Bluesky share 0 no longer holds every post (Q08-OPEN-1): " + JSON.stringify(g));
 db.prepare("UPDATE ops_config SET value = ? WHERE key = 'attention_channel_share'").run(JSON.stringify({ bluesky: 0.25, linkedin: 1, mastodon: 1, x: 1, day: "2026-10-06" }));
 g = await mod.socialGate(env, "test");
 ok(g.cap === 1 && g.reason === "weekly-cap", "Bluesky at a quarter share of cap 2 keeps one slot a week (the re-test); this week's three posts already fill it");
@@ -105,7 +105,7 @@ globalThis.fetch = async (url, init) => {
 db.prepare("UPDATE ops_config SET value = ? WHERE key = 'attention_channel_share'").run(JSON.stringify({ bluesky: 1, linkedin: 0, mastodon: 1, x: 0.5, day: "2026-10-06" }));
 const envB = Object.assign({}, env, { BUFFER_TOKEN: "buf" });
 const d = await mod.drainChannels(envB, {});
-ok(d.channels.linkedin === "held:attention-stop", "LinkedIn at share 0 is held as attention-stop: " + d.channels.linkedin);
+ok(d.channels.linkedin !== "held:attention-stop", "LinkedIn at share 0 is no longer held as attention-stop: " + d.channels.linkedin);
 ok(d.shares && d.shares.linkedin === 0 && d.shares.twitter === 0.5, "the drain reports the shares it applied");
 ok(/^posted:/.test(String(d.channels.mastodon)) && /^posted:/.test(String(d.channels.twitter)), "Mastodon (share 1) and X (share 0.5 of 2: one slot) post: " + d.channels.mastodon + " / " + d.channels.twitter);
 

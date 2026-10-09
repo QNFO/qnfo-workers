@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.9.2-paper-alternate"; // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
+var VERSION = "0.10.0-open-q08"; // 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -296,7 +296,7 @@ function repairMojibake(text) {
 function contentGate(texts) {
   const out = (texts || []).map(function(t) { return repairMojibake(typeof t === 'string' ? t : String((t && t.text) || '')); });
   for (const t of out) {
-    if (Q08_LINK_RE.test(t)) return { ok: false, reason: 'q08-link', texts: out };
+    // Q08-OPEN-1 (owner directive 2026-10-09: remove all filters and blocks): q08.org links are no longer refused.
     if (MOJIBAKE_LEFT_RE.test(t)) return { ok: false, reason: 'mojibake', texts: out };
   }
   return { ok: true, texts: out };
@@ -939,7 +939,7 @@ async function bufferPost(env, text, campaign) {
 // everything; a posted row's status is never changed here. Ledger: social_media_posts (platform buffer-<channel>,
 // project_id = slug, buffer_id, published_at; the table distribution_posts_30d already counts) and one cloud_ops_events
 // row per day (social-channels-<day>), which the watchmaker reads.
-var CHANNEL_WEEKLY_CAP = { linkedin: 3, mastodon: 2, twitter: 2 };
+var CHANNEL_WEEKLY_CAP = { linkedin: 5, mastodon: 10, twitter: 10 };
 var CHANNEL_PLATFORM = { linkedin: 'buffer-linkedin', mastodon: 'buffer-mastodon', twitter: 'buffer-x' };
 var CHANNEL_MAX_CHARS = { linkedin: 1300, mastodon: 280, twitter: 280 };
 var CHANNEL_REPEAT_DAYS = 30;
@@ -950,7 +950,7 @@ async function channelCaps(env) {
   try {
     const f = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_channel_caps'").first();
     const o = f && f.value ? JSON.parse(String(f.value)) : null;
-    if (o && typeof o === 'object') for (const k of CHANNEL_ORDER) { const n = parseInt(String(o[k]), 10); if (Number.isFinite(n)) caps[k] = Math.max(0, Math.min(7, n)); }
+    if (o && typeof o === 'object') for (const k of CHANNEL_ORDER) { const n = parseInt(String(o[k]), 10); if (Number.isFinite(n)) caps[k] = Math.max(0, Math.min(14, n)); }
   } catch (e) {}
   return caps;
 }
@@ -980,7 +980,7 @@ async function attentionShares(env) {
 // Pure: the effective weekly cap. A positive share keeps at least one slot (a re-test needs one post), share 0 is 0.
 function shareCap(cap, share) {
   const c = Number(cap) || 0, s = Number.isFinite(Number(share)) ? Math.max(0, Math.min(1, Number(share))) : 1;
-  if (c <= 0 || s <= 0) return 0;
+  if (c <= 0) return 0; // Q08-OPEN-1: an attention share of 0 no longer holds a channel; it keeps one slot
   return Math.max(1, Math.floor(c * s));
 }
 // Pure-ish: posted rows go noticed-first (the paper's bot-filtered external loads over 28 days plus the Bluesky engagement
@@ -1092,7 +1092,7 @@ async function pickChannelRow(env, channel, epoch) {
       const pr = await pickPaperRow(env, channel);
       if (pr) return pr;
     }
-    if (!row.slug || /^q08-/.test(String(row.slug))) continue;
+    if (!row.slug) continue;
     if (await channelCarried(env, channel, row.slug)) continue;
     return row;
   }
@@ -1149,8 +1149,6 @@ async function drainChannels(env, opts) {
     if (!Array.isArray(rawPosts) || !rawPosts.length) { out.channels[channel] = 'held:bad-posts(' + row.slug + ')'; continue; }
     const cg = contentGate(rawPosts);
     if (!cg.ok) { out.channels[channel] = 'held:content-gate:' + cg.reason + '(' + row.slug + ')'; continue; }
-    const rd = row.doi ? reachDenied(row.title, '') : '';
-    if (rd && !/^selected: released by owner card/.test(String(row.notes || ''))) { out.channels[channel] = 'held:reach-select(' + row.slug + ')'; continue; }
     let link = null;
     for (const pt of cg.texts) { const u = extractUrls(String(pt)); if (u.length) { link = u[0]; break; } }
     if (link) {
@@ -1275,14 +1273,13 @@ async function ensureSocialSchema(env) {
 function weeklyCap(env) {
   const v = env && env.SOCIAL_WEEKLY_CAP;
   const n = parseInt(String(v === undefined || v === null ? '' : v), 10);
-  return Number.isFinite(n) && n >= 0 ? n : 2;
+  return Number.isFinite(n) && n >= 0 ? n : 7; // Q08-OPEN-1: 7 a week by default (was 2)
 }
 async function socialGate(env, who) {
   await ensureSocialSchema(env);
   // ATTENTION-SHARE-1 (0.8.0): the attention share scales the Bluesky cap, never above it; share 0 holds every post.
   const shares = await attentionShares(env);
   const cap = shareCap(weeklyCap(env), shares.bluesky);
-  if (shares.bluesky === 0) { console.log('ATTENTION-SHARE-1 ' + who + ': bluesky share 0 (scorecard ' + (shares.day || 'n/a') + '), holding every post'); return { allowed: 0, reason: 'attention-stop', cap: 0, share: 0 }; }
   try {
     const f = await env.DB.prepare("SELECT value FROM pipeline_flags WHERE key='social_paused'").first();
     if (f && String(f.value).trim() === '1') {
