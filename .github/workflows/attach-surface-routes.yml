@@ -68,4 +68,5 @@ jobs:
           git config user.email "bot@qnfo.org"
           # ARTIFACT-PUSH-CONFLICT-1: a result artifact is a snapshot (latest wins); push_artifact.sh re-applies it onto
           # origin/main instead of rebasing, so a concurrent run cannot leave a merge conflict (run 37965468938, #863).
+          git add ci-status/attach-surface-routes.json
           bash scripts/push_artifact.sh "ci(attach-domain): record SURFACE-ROUTES-1 result [skip ci]" ci-status/attach-surface-routes.json
