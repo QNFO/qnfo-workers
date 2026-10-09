@@ -1,37 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@131fccc7226f",
- "due": 3,
- "pass": 2,
- "fail": 1,
+ "verifier": "remediation-consumer@1b10c373ff33",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "issue-2042",
-   "issue_id": 2042,
-   "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2210",
-   "issue_id": 2210,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by ci:apply-migrations, which owns it for 48h",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -55,13 +30,12 @@
   "http",
   "runner-https"
  ],
- "https": 1,
  "runtime_verified_share_24h": 6.7,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 9351,
- "head": "131fccc7226f97716b93c6cca43374bc8b33e467",
+ "spent_ms": 5190,
+ "head": "1b10c373ff33b723bf91cdb40decd066afbe6841",
  "job_status": "success",
- "ts": "2026-10-09T07:41:36Z"
+ "ts": "2026-10-09T07:42:25Z"
 }
