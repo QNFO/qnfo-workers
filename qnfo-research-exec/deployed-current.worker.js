@@ -13,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.10.5-revise-patch-parse"; /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ /* 0.10.3 INHOUSE-PUBLISH-2 (#2137): publishToZenodo reads ops_config by key; the 0.10.0 column query threw on every publish. */ // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.11.0-citation-gate"; /* 0.11.0 CITATION-EXISTENCE-GATE-1 (agent_issues 2052, pillar research): publishStageV2 resolves every arXiv id, DOI and link before the Zenodo deposit; a dead or mismatched citation holds the queue row with the reason, a lookup error leaves it queued; ops_config research_citation_gate = enforce (default) | measure | off. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ /* 0.10.3 INHOUSE-PUBLISH-2 (#2137): publishToZenodo reads ops_config by key; the 0.10.0 column query threw on every publish. */ // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -2827,6 +2827,230 @@ async function ensurePaperRow(env, row) {
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
   return paper ? { paper, slug, created: !own } : { error: "paper row not readable after write for slug " + slug };
 }
+// CITATION-EXISTENCE-GATE-1 (agent_issues 2052, pillar research): inlined from qnfo-research-exec/citation-gate.mjs (the offline suite
+// citation-gate.test.mjs tests that file; keep the two identical). Proves cited arXiv ids, DOIs and links exist and that a label agrees
+// with the title; it does NOT prove a source supports the claim around it.
+var CITATION_GATE = (function() {
+
+const ARXIV_NEW = "\\d{4}\\.\\d{4,5}";
+const ARXIV_OLD = "[a-z]+(?:-[a-z]+)?(?:\\.[A-Z]{2})?\\/\\d{7}";
+const ARXIV_RE = new RegExp("arxiv(?:\\.org\\/(?:abs|pdf)\\/|[:\\s]+(?:abs\\/)?)\\s*(" + ARXIV_NEW + "|" + ARXIV_OLD + ")(?:v\\d+)?", "gi");
+const DOI_RE = /(?:doi\.org\/|doi:\s*)(10\.\d{4,9}\/[^\s)\]>"']+)/gi;
+const URL_RE = /\bhttps?:\/\/[^\s)\]>"']+/gi;
+const STOP = new Set("with from that this have into over under about their there which where when what than then also only more most some such been being were will would could should between within without".split(" "));
+
+function words(s) {
+  return String(s).toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").split(/[^a-z]+/).filter((w) => w.length >= 4 && !STOP.has(w));
+}
+
+function labelOf(line, id) {
+  const lid = String(id).toLowerCase();
+  const re = /\[([^\]]*)\]\(([^)\s]+)\)/g;
+  let m;
+  while ((m = re.exec(line))) {
+    if (m[2].toLowerCase().includes(lid)) return stripIds(m[1]);
+  }
+  if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
+    const links = line.match(/\[[^\]]*\]\([^)\s]+\)/g) || [];
+    if (links.length <= 1) return stripIds(line.replace(/\[([^\]]*)\]\([^)\s]+\)/g, "$1"));
+  }
+  return "";
+}
+function stripIds(s) {
+  return s.replace(URL_RE, " ").replace(ARXIV_RE, " ").replace(/\bdoi:?\s*10\.\S+/gi, " ").replace(/\barxiv\b/gi, " ");
+}
+
+function titleAgrees(label, title) {
+  const lw = Array.from(new Set(words(label)));
+  const tw = Array.from(new Set(words(title)));
+  if (lw.length < 3 || tw.length < 2) return { judged: false, ok: true, score: null };
+  const lset = new Set(lw);
+  const hit = tw.filter((w) => lset.has(w)).length;
+  const score = hit / Math.min(lw.length, tw.length);
+  return { judged: true, ok: score >= 0.5, score: Math.round(score * 100) / 100 };
+}
+
+function extractRefs(md) {
+  const refs = [];
+  const seen = new Set();
+  const lines = String(md || "").split(/\r?\n/);
+  const push = (kind, id, line) => {
+    const key = kind + ":" + id.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    refs.push({ kind, id, line });
+  };
+  for (const line of lines) {
+    let m;
+    ARXIV_RE.lastIndex = 0;
+    while ((m = ARXIV_RE.exec(line))) push("arxiv", m[1], line);
+    DOI_RE.lastIndex = 0;
+    while ((m = DOI_RE.exec(line))) push("doi", m[1].replace(/[.,;]+$/, ""), line);
+    URL_RE.lastIndex = 0;
+    while ((m = URL_RE.exec(line))) {
+      const u = m[0].replace(/[.,;]+$/, "");
+      if (/arxiv\.org\/(?:abs|pdf)\//i.test(u) || /doi\.org\//i.test(u)) continue; // already an arxiv or doi ref
+      if (/^https?:\/\/(?:[a-z0-9-]+\.)*qnfo\.org(?:\/|$)/i.test(u)) continue; // the fleet's own pages are not citations
+      push("url", u, line);
+    }
+  }
+  return refs;
+}
+
+function entryTitle(entry) {
+  const m = entry.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return m ? m[1].replace(/\s+/g, " ").trim() : "";
+}
+
+async function lookupArxiv(ids, fetchFn) {
+  const out = {};
+  if (!ids.length) return out;
+  let res;
+  try {
+    res = await fetchFn("https://export.arxiv.org/api/query?max_results=" + ids.length + "&id_list=" + encodeURIComponent(ids.join(",")), { headers: { "User-Agent": "qnfo-citation-gate/1.0" } });
+  } catch (e) {
+    for (const id of ids) out[id] = { state: "error", note: String(e && e.message || e).slice(0, 120) };
+    return out;
+  }
+  if (!res.ok) {
+    for (const id of ids) out[id] = { state: "error", note: "arXiv API HTTP " + res.status };
+    return out;
+  }
+  const xml = await res.text();
+  const entries = xml.split(/<entry>/i).slice(1).map((e) => e.split(/<\/entry>/i)[0]);
+  const byId = {};
+  for (const e of entries) {
+    const idm = e.match(/<id>\s*https?:\/\/arxiv\.org\/(?:abs|api\/errors)\/?([^<\s]*)\s*<\/id>/i);
+    const isErr = /arxiv\.org\/api\/errors/i.test(e) || /^error$/i.test(entryTitle(e));
+    if (!idm || isErr) continue;
+    byId[idm[1].replace(/v\d+$/, "").toLowerCase()] = entryTitle(e);
+  }
+  for (const id of ids) {
+    const t = byId[id.toLowerCase()];
+    out[id] = t === undefined ? { state: "not-found" } : { state: "ok", title: t };
+  }
+  return out;
+}
+
+async function lookupDoi(doi, fetchFn) {
+  try {
+    const r = await fetchFn("https://doi.org/api/handles/" + doi.split("/").map(encodeURIComponent).join("/"), { headers: { "User-Agent": "qnfo-citation-gate/1.0" } });
+    if (r.status === 404) return { state: "not-found" };
+    if (!r.ok) return { state: "error", note: "doi.org HTTP " + r.status };
+    const j = await r.json();
+    if (j.responseCode === 100) return { state: "not-found" };
+    if (j.responseCode !== 1) return { state: "error", note: "handle responseCode " + j.responseCode };
+  } catch (e) {
+    return { state: "error", note: String(e && e.message || e).slice(0, 120) };
+  }
+  // Title from Crossref when the DOI is a Crossref one; DataCite DOIs (Zenodo) have no Crossref entry, so no title is judged.
+  try {
+    const c = await fetchFn("https://api.crossref.org/works/" + doi.split("/").map(encodeURIComponent).join("/"), { headers: { "User-Agent": "qnfo-citation-gate/1.0 (mailto:ops@qnfo.org)" } });
+    if (c.ok) {
+      const cj = await c.json();
+      const t = cj && cj.message && cj.message.title && cj.message.title[0];
+      if (t) return { state: "ok", title: String(t) };
+    }
+  } catch (e) { /* existence is already proven by the handle */ }
+  return { state: "ok" };
+}
+
+async function lookupUrl(url, fetchFn) {
+  try {
+    const r = await fetchFn(url, { method: "GET", redirect: "follow", headers: { "User-Agent": "qnfo-citation-gate/1.0" } });
+    if (r.status === 404 || r.status === 410) return { state: "not-found" };
+    if (r.ok) return { state: "ok" };
+    return { state: "error", note: "HTTP " + r.status }; // 403, 429 and 5xx prove nothing about the page
+  } catch (e) {
+    return { state: "error", note: String(e && e.message || e).slice(0, 120) };
+  }
+}
+
+async function citationGate(md, opts) {
+  const fetchFn = (opts && opts.fetch) || fetch;
+  const maxUrls = (opts && opts.maxUrls) || 40;
+  const refs = extractRefs(md);
+  const ax = refs.filter((r) => r.kind === "arxiv");
+  const arx = await lookupArxiv(ax.map((r) => r.id.replace(/v\d+$/, "")), fetchFn);
+  const failures = [];
+  const unverified = [];
+  const out = [];
+  const queue = refs.filter((r) => r.kind !== "arxiv");
+  const urls = queue.filter((r) => r.kind === "url");
+  const skipped = urls.slice(maxUrls); // recorded, never silently dropped
+  const work = queue.filter((r) => r.kind === "doi" || urls.indexOf(r) < maxUrls);
+  const done = {};
+  let next = 0;
+  async function worker() {
+    while (next < work.length) {
+      const r = work[next++];
+      done[r.kind + ":" + r.id] = r.kind === "doi" ? await lookupDoi(r.id, fetchFn) : await lookupUrl(r.id, fetchFn);
+    }
+  }
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  for (const r of refs) {
+    const res = r.kind === "arxiv" ? arx[r.id.replace(/v\d+$/, "")] : done[r.kind + ":" + r.id];
+    if (!res) { out.push({ kind: r.kind, id: r.id, status: "skipped-over-limit" }); continue; }
+    if (res.state === "not-found") {
+      const f = { kind: r.kind, id: r.id, status: "not-found" };
+      failures.push(f); out.push(f); continue;
+    }
+    if (res.state === "error") {
+      const u = { kind: r.kind, id: r.id, status: "unverified", note: res.note };
+      unverified.push(u); out.push(u); continue;
+    }
+    if (res.title) {
+      const t = titleAgrees(labelOf(r.line, r.id), res.title);
+      if (t.judged && !t.ok) {
+        const f = { kind: r.kind, id: r.id, status: "title-mismatch", title: res.title, score: t.score };
+        failures.push(f); out.push(f); continue;
+      }
+    }
+    out.push({ kind: r.kind, id: r.id, status: "ok", title: res.title || null });
+  }
+  return {
+    pass: failures.length === 0 && unverified.length === 0,
+    retry: failures.length === 0 && unverified.length > 0,
+    failures,
+    unverified,
+    skipped: skipped.map((r) => r.id),
+    refs: out,
+  };
+}
+
+function describeFailures(result) {
+  const parts = result.failures.map((f) => f.kind + " " + f.id + " " + f.status + (f.title ? " (resolves to: " + f.title + ")" : ""));
+  return "CITATION-EXISTENCE-GATE-1: " + (parts.join("; ") || "no failures");
+}
+
+return { citationGate: citationGate, describeFailures: describeFailures, extractRefs: extractRefs, titleAgrees: titleAgrees };
+})();
+async function citationGateStep(env, row, bodyMd) {
+  // ops_config research_citation_gate: 'enforce' (default) holds the queue row on a dead or mismatched citation; 'measure' logs only;
+  // 'off' skips. A lookup error (arXiv/DOI down, 403, 5xx) does not block (fail open, warn event). The papers row is never touched.
+  let mode = "enforce";
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_citation_gate'").first();
+    if (r && r.value) mode = String(r.value).toLowerCase();
+  } catch (e) {}
+  if (mode === "off") return { proceed: true };
+  let res;
+  try {
+    res = await CITATION_GATE.citationGate(String(bodyMd || ""), { fetch: fetch });
+  } catch (e) {
+    return { proceed: true, unverified: true, note: "citation gate threw: " + String(e && e.message || e).slice(0, 120) };
+  }
+  const summary = CITATION_GATE.describeFailures(res) + (res.unverified.length ? " | unverified: " + res.unverified.map(function(u) { return u.id; }).join(",") : "");
+  try {
+    await logEvent(env, "citation-gate", (String(row.id).slice(0, 8) + " " + summary).slice(0, 500), res.pass ? "ok" : (res.retry ? "warn" : "err"));
+  } catch (e) {}
+  if (res.pass || mode === "measure") return { proceed: true, result: res };
+  // Unverified-only (arXiv/DOI down, 403, 5xx) fails OPEN: a publish row is the queue head (status review, picked every tick), so a
+  // retry that never resolves (a host that always answers 403) would block every paper behind it, the QUEUE-SLA-1 poison-head failure.
+  // The warn event above records it; only a proven not-found or a title mismatch holds.
+  if (res.retry) return { proceed: true, unverified: true, note: summary };
+  return { proceed: false, retry: false, note: summary };
+}
 async function publishStageV2(env, row) {
   const prep = await ensurePaperRow(env, row);
   if (!prep.paper) {
@@ -2840,6 +3064,16 @@ async function publishStageV2(env, row) {
   if (row.source !== "remediation" && String(paper.body_md || "").trim().length < PUBLISH_FLOOR_CHARS) {
     await markError(env, row, "publish: body " + String(paper.body_md || "").trim().length + " chars < publish floor " + PUBLISH_FLOOR_CHARS);
     return { ok: false, stage: "publish" };
+  }
+  const cg = await citationGateStep(env, row, paper.body_md);
+  if (!cg.proceed) {
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='held', claimed_at=NULL, error=? WHERE id=?").bind(String(cg.note).slice(0, 300), row.id).run();
+    // A hold needs a recorded reason, a doer and a way out (ANTIFRAGILE-1): the issue names the fix and the release.
+    try {
+      const nowMs = Date.now();
+      await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-research-exec', 'remediation', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind("CITATION-HELD: research_queue " + String(row.id).slice(0, 8) + " (paper " + slug + ")", "CITATION-EXISTENCE-GATE-1 held the publish of research_queue row " + row.id + " before the Zenodo deposit: " + String(cg.note).slice(0, 600) + ". Doer: qnfo-research-exec revise path or a session: correct the citation in LIVING_PAPER.papers body_md (slug " + slug + ") using the arXiv API (export.arxiv.org) or doi.org to find the real source, then set research_queue.status back to 'review' (stage publish). Closing probe: the row is no longer held. Pillar research.", nowMs).run();
+    } catch (e) {}
+    return { ok: false, stage: "publish", held: true };
   }
   const artifacts = await collectArtifacts(env, String(row.id));
   const extras = artifacts.map(function(a) {
@@ -26104,6 +26338,7 @@ export {
   mathGate,
   parkPoisonRow,
   pseudoMathScan,
+  citationGateStep,
   RESEARCH_SHARED_PREAMBLE,
   stagePrompt,
   WRITER_PROMPT,
