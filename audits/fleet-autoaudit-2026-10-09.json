@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-09 12:04:46",
+  "audited_at": "2026-10-09 18:42:48",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -568,7 +568,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.11.0-citation-gate",
+        "version": "0.11.1-lean-ensemble",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1356,9 +1356,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.11.0-citation-gate",
+      "before": "0.11.1-lean-ensemble",
       "http": 200,
-      "live": "0.11.0-citation-gate",
+      "live": "0.11.1-lean-ensemble",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
