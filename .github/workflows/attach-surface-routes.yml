@@ -66,19 +66,6 @@ jobs:
           set -uo pipefail
           git config user.name "qnfo-selfheal-bot"
           git config user.email "bot@qnfo.org"
-          git add -A ci-status/
-          if git diff --cached --quiet; then
-            echo "nothing to commit"
-            exit 0
-          fi
-          git commit -m "ci(attach-domain): record SURFACE-ROUTES-1 result [skip ci]"
-          for i in 1 2 3 4 5; do
-            echo "commit-back attempt $i"
-            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
-              echo "PUSH_OK attempt $i"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "PUSH_FAILED after 5 attempts"
-          exit 1
+          # ARTIFACT-PUSH-CONFLICT-1: a result artifact is a snapshot (latest wins); push_artifact.sh re-applies it onto
+          # origin/main instead of rebasing, so a concurrent run cannot leave a merge conflict (run 37965468938, #863).
+          bash scripts/push_artifact.sh "ci(attach-domain): record SURFACE-ROUTES-1 result [skip ci]" ci-status/attach-surface-routes.json
