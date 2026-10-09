@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.9.1-cache-count"; // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
+var VERSION = "0.9.2-paper-alternate"; // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -1057,6 +1057,18 @@ function channelText(channel, posts, link, title) {
 }
 // Candidate rows for a channel: queued selected rows oldest first, then rows posted since the cadence epoch newest first;
 // q08 essays and anything the channel carried in CHANNEL_REPEAT_DAYS are skipped (the caller applies the content gates).
+// PROMOTE-ROUTE-2: true when the channel's latest published post carried a slug that is not a tracked paper (a curated thread).
+// No post yet, or any read error, is false: the original order (threads, then papers) stands.
+async function lastPostWasThread(env, channel) {
+  try {
+    const last = await env.DB.prepare("SELECT project_id FROM social_media_posts WHERE platform=?1 AND status='published' AND project_id IS NOT NULL ORDER BY published_at DESC LIMIT 1").bind(CHANNEL_PLATFORM[channel]).first();
+    if (!last || !last.project_id) return false;
+    const paper = await env.DB.prepare("SELECT 1 AS x FROM dissemination_tracker WHERE paper_slug=?1 LIMIT 1").bind(String(last.project_id)).first();
+    return !paper;
+  } catch (e) {
+    return false;
+  }
+}
 async function pickChannelRow(env, channel, epoch) {
   const rows = (await env.DB.prepare("SELECT id, slug, title, posts, status, doi, notes, flags, posted_at, post_uri FROM social_threads WHERE (status='queued' AND (COALESCE(flags,'') LIKE '%selected%' OR COALESCE(notes,'') LIKE 'selected%')) OR (status='posted' AND posted_at >= ?1 AND posted_at >= datetime('now','-60 days')) ORDER BY CASE WHEN status='queued' THEN 0 ELSE 1 END, CASE WHEN status='queued' THEN id ELSE 0 END ASC, posted_at DESC LIMIT 24").bind(epoch === '0' ? '2026-10-01 00:00:00' : epoch).all()).results || [];
   // ATTENTION-SHARE-1: noticed items first among the posted rows.
@@ -1066,6 +1078,14 @@ async function pickChannelRow(env, channel, epoch) {
   // attention share 0 (STOP since 2026-10-06) the 28 papers published 2026-09-30..10-06 reached no channel at all. Order:
   // queued curated threads first, then the newest queued paper not yet carried on this channel, then recycled posted threads.
   let paperTried = false;
+  // PROMOTE-ROUTE-2 (0.9.2): alternate. When the channel's last published post was a curated thread (not a paper), the next
+  // post is the newest unposted paper, so the backlog of papers starts moving at the next slot instead of after every queued
+  // thread (measured 2026-10-09: 5 threads queued at one a day, so papers would have waited until about 10-14).
+  if (await lastPostWasThread(env, channel)) {
+    paperTried = true;
+    const first = await pickPaperRow(env, channel);
+    if (first) return first;
+  }
   for (const row of ordered) {
     if (row.status !== 'queued' && !paperTried) {
       paperTried = true;
