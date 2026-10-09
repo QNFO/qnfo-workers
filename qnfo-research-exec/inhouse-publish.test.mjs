@@ -26,5 +26,18 @@ r = await fn({ QNFO_AUDIT: { prepare() { throw new Error("no such table: ops_con
 ok(r.inhouse === true && zenodoCalls === 0, "unreadable ops_config: in-house, never throws", r);
 r = await fn({ QNFO_AUDIT: mk([["zenodo_enabled", "1"]]), ZENODO_TOKEN: "t" }, "T", "A", "body", "d", {});
 ok(!r.inhouse && zenodoCalls === 1, "only zenodo_enabled = '1' reaches the Zenodo path", r);
+// INHOUSE-PUBLISH-3: every caller binds pub.doi and pub.record (publishStageV2, publishStage, the first-deposit leg); D1 refuses
+// undefined. The in-house result must carry each key the Zenodo result carries, with a bindable value.
+r = await fn({ QNFO_AUDIT: mk([["zenodo_enabled", "0"]]), ZENODO_TOKEN: "t" }, "T", "A", "body", "e", {});
+const keys = ["ok", "doi", "conceptdoi", "record"];
+ok(keys.every((k) => k in r && r[k] !== undefined), "the in-house result defines ok, doi, conceptdoi and record (null, never undefined)", r);
+// Only variables that receive publishToZenodo's result, read in the code that follows the call (3000 chars).
+const binds = [];
+for (const m of src.matchAll(/(?:const|var|let)\s+(\w+)\s*=\s*await publishToZenodo\(/g)) {
+  const v = m[1], tail = src.slice(m.index, m.index + 3000);
+  for (const b of tail.matchAll(/\.bind\(([^)]*)\)/g)) for (const x of b[1].matchAll(new RegExp("\\b" + v + "\\.([a-z]+)", "gi"))) binds.push(x[1]);
+}
+ok(binds.length >= 4 && binds.every((k) => keys.includes(k)), "every <result>.<field> a publishToZenodo caller binds is one the in-house result defines", [...new Set(binds)]);
+
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
