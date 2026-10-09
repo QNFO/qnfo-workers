@@ -28,5 +28,7 @@ m._LAST = last(old, False, True);  ok(m.recently_failed("qwav.org") is False, "o
 m._LAST = last(now, True, False);  ok(m.recently_failed("qwav.org") is False, "verified last time: not skipped")
 m._LAST = last(now, False, False); ok(m.recently_failed("qwav.org") is False, "unverified but not rolled back: not skipped")
 m._LAST = {};                      ok(m.recently_failed("qwav.org") is False, "no record: not skipped")
+st, loc = m.head_location("https://no-such-host.invalid/")
+ok(st == 0 and "unreachable" in str(loc), "a host that does not resolve returns (0, unreachable) instead of raising: %r" % ((st, loc),))
 print("%d failed" % fail if fail else "all passed")
 sys.exit(1 if fail else 0)
