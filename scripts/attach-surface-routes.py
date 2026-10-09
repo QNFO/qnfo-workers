@@ -209,6 +209,10 @@ def head_location(url):
             return resp.status, None
     except urllib.error.HTTPError as e:
         return e.code, e.headers.get("Location")
+    except (urllib.error.URLError, OSError) as e:
+        # SPARE-DOMAINS-DNS-1: a host that does not resolve yet (new DNS record, ipatent.me) is "not verified", never a crash
+        # that aborts the run for every host after it.
+        return 0, "unreachable: %s" % str(e)[:80]
 
 
 def attach(zone_name, host, zones):
