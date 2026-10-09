@@ -13,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.10.4-inhouse-publish-record"; /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ /* 0.10.3 INHOUSE-PUBLISH-2 (#2137): publishToZenodo reads ops_config by key; the 0.10.0 column query threw on every publish. */ // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.10.5-revise-patch-parse"; /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ /* 0.10.3 INHOUSE-PUBLISH-2 (#2137): publishToZenodo reads ops_config by key; the 0.10.0 column query threw on every publish. */ // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -594,16 +594,16 @@ async function publishStage(env, row) {
     await markError(env, row, "zenodo: " + pub.error);
     return { ok: false, stage: "publish" };
   }
-  await env.LIVING_PAPER.prepare("UPDATE papers SET doi=?1, zenodo_doi=?1, status='published', zenodo_url=?2, updated_at=datetime('now') WHERE slug=?3").bind(pub.doi, pub.record, slug).run();
+  await env.LIVING_PAPER.prepare("UPDATE papers SET doi=?1, zenodo_doi=?1, status='published', zenodo_url=?2, updated_at=datetime('now') WHERE slug=?3").bind(pub.doi || null, pub.record || null, slug).run();
   try {
     await env.MIRROR.put("papers/" + slug + ".md", paper.body_md);
   } catch (e) {
   }
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), slug, pub.doi, paper.title, "bluesky", "queued", "auto", 0, pub.record, "https://papers.qnfo.org/papers/" + slug + "/").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), slug, pub.doi || null, paper.title, "bluesky", "queued", "auto", 0, pub.record || null, "https://papers.qnfo.org/papers/" + slug + "/").run();
   } catch (e) {
   }
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=?, published_at=? WHERE id=?").bind(pub.doi, nowIso(), row.id).run();
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=?, published_at=? WHERE id=?").bind(pub.doi || null, nowIso(), row.id).run();
   return { ok: true, stage: "publish->published", doi: pub.doi, slug };
 }
 __name(publishStage, "publishStage");
@@ -2030,15 +2030,40 @@ var REVISE_PROMPT = stagePrompt("REVISE", "FIXES (JSON):\n");
 // size class as the review JSON that succeeds) and applies each edit only where its excerpt occurs exactly once, so a
 // hallucinated excerpt changes nothing. The full rewrite stays as the fallback when no edit applies.
 var REVISE_PATCH_PROMPT = stagePrompt("REVISE_PATCH", "FIXES (JSON):\n");
-function applyRevisePatch(paper, raw) {
-  let edits = [];
-  try {
-    const t = String(raw || "");
-    const a = t.indexOf("["), b = t.lastIndexOf("]");
-    if (a >= 0 && b > a) edits = JSON.parse(t.slice(a, b + 1));
-  } catch (e) {
-    edits = [];
+// REVISE-PATCH-PARSE-1 (0.10.4, agent_issues 2211): the patch array was one JSON.parse of the text between the first "[" and
+// the last "]", so a LaTeX backslash in a replace text (the prompt asks for $\alpha$; "\a" is not a JSON escape), a cited
+// "[12]" before the array or a truncated tail lost every edit (14 of 335 calls in 7 days proposed 0 from long output). Code
+// fences are stripped, a backslash that is not a JSON escape is doubled (\b \f \n \r \t before a lowercase letter are LaTeX:
+// \beta, \frac, \nu, \rho, \theta), and when the array still does not parse each {"find","replace"} object is read on its own.
+// The exact-once find check below still guards every edit.
+function repairJsonBackslashes(t) {
+  return String(t).replace(/\\(u[0-9a-fA-F]{4}|["\\\/]|[bfnrt](?![a-z])|)/g, function(m, esc) { return esc ? m : "\\\\"; });
+}
+function parsePatchEdits(raw) {
+  const t = String(raw || "").replace(/```(?:json)?/gi, "");
+  const tryParse = function(x) {
+    try { return JSON.parse(repairJsonBackslashes(x)); } catch (e) {}
+    try { return JSON.parse(x); } catch (e) {}
+    return null;
+  };
+  const b = t.lastIndexOf("]");
+  let a = t.search(/\[\s*\{/);
+  if (a < 0) a = t.indexOf("[");
+  if (a >= 0 && b > a) {
+    const whole = tryParse(t.slice(a, b + 1));
+    if (Array.isArray(whole)) return whole;
   }
+  const out = [];
+  const re = /\{\s*"find"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"replace"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g;
+  let m;
+  while ((m = re.exec(t)) && out.length < 16) {
+    const f = tryParse('"' + m[1] + '"'), r = tryParse('"' + m[2] + '"');
+    if (typeof f === "string" && typeof r === "string") out.push({ find: f, replace: r });
+  }
+  return out;
+}
+function applyRevisePatch(paper, raw) {
+  let edits = parsePatchEdits(raw);
   if (!Array.isArray(edits)) edits = [];
   let out = String(paper || "");
   let applied = 0;
@@ -2825,13 +2850,13 @@ async function publishStageV2(env, row) {
     await markError(env, row, "zenodo: " + pub.error);
     return { ok: false, stage: "publish" };
   }
-  await env.LIVING_PAPER.prepare("UPDATE papers SET doi=?1, zenodo_doi=?1, status='published', zenodo_url=?2, updated_at=datetime('now') WHERE slug=?3").bind(pub.doi, pub.record, slug).run();
+  await env.LIVING_PAPER.prepare("UPDATE papers SET doi=?1, zenodo_doi=?1, status='published', zenodo_url=?2, updated_at=datetime('now') WHERE slug=?3").bind(pub.doi || null, pub.record || null, slug).run();
   try {
     await env.MIRROR.put("papers/" + slug + ".md", paper.body_md);
   } catch (e) {
   }
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), slug, pub.doi, paper.title, "bluesky", "queued", "auto", 0, pub.record, "https://papers.qnfo.org/papers/" + slug + "/").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), slug, pub.doi || null, paper.title, "bluesky", "queued", "auto", 0, pub.record || null, "https://papers.qnfo.org/papers/" + slug + "/").run();
   } catch (e) {
   }
   const ghFiles = artifacts.map(function(a) {
@@ -2839,7 +2864,7 @@ async function publishStageV2(env, row) {
   });
   const ghr = await pushArtifactsToGitHub(env, slug, ghFiles);
   await logEvent(env, "github", JSON.stringify(ghr).slice(0, 500), ghr.ok ? "ok" : "error");
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=?, published_at=?, error=NULL WHERE id=?").bind(pub.doi, nowIso(), row.id).run();
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=?, published_at=?, error=NULL WHERE id=?").bind(pub.doi || null, nowIso(), row.id).run();
   return { ok: true, stage: "publish->published", doi: pub.doi, slug, github: ghr };
 }
 __name(publishStageV2, "publishStageV2");
