@@ -91,6 +91,13 @@ jobs:
           python3 scripts/remediation-consumer.py | tee /tmp/remediation-consumer.json
           echo "--- consumer output above ---"
 
+      # SE-RUNNER-SURFACE-1 (doctrine revision 3 section 3): StackExchange answers keyless from the runner, not from
+      # Cloudflare's shared egress, so the mention radar's StackExchange source runs here. Never fails the job.
+      - name: Read StackExchange mentions from the runner
+        continue-on-error: true
+        run: |
+          python3 scripts/se_mentions_runner.py --selftest && python3 scripts/se_mentions_runner.py
+
       - name: Publish the status artifact
         if: always()
         run: |
