@@ -185,7 +185,7 @@ def main(d1=None, plane=None, get=http_get, put=r2_put, now=time.time):
     meta = {r["doi"]: r["meta"] for r in rows}
     todo = d1("SELECT doi, recid FROM zenodo_exit_ledger WHERE meta_key IS NULL AND recid <> '' ORDER BY doi LIMIT ?1", [META_PER_RUN])
     for r in todo:
-        if left() < 60:
+        if left() < max(90, BUDGET_S // 2):  # the Internet Archive pass below keeps half the budget every run
             break
         doi, recid = r.get("doi"), r.get("recid")
         if doi not in meta:
