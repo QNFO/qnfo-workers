@@ -226,5 +226,11 @@ with contextlib.redirect_stdout(buf):
 lines = [json.loads(l) for l in buf.getvalue().splitlines() if l.strip()]
 ok(rc == 0 and len(calls) == n1 and lines and all("skipped" in l or l.get("ok") for l in lines), "--check passes the repository's migrations without touching D1", [l for l in lines if not ("skipped" in l or l.get("ok"))][:3])
 
+# BACKUP-CREATES-1 (#856): a backup the file creates itself counts even when no statement is destructive.
+mk_hdr = "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- BACKUP: bak_x\n-- Rollback: DELETE FROM t;\n"
+_, _, info_a = M.plan("migrations/a.sql", mk_hdr + "CREATE TABLE IF NOT EXISTS bak_x AS SELECT 1 AS a;\nUPDATE t SET a = 1;\n")
+_, _, info_b = M.plan("migrations/b.sql", mk_hdr + "UPDATE t SET a = 1;\n")
+ok(info_a["creates_backup"] is True and info_b["creates_backup"] is False, "backup created by the file is recognised without a destructive statement", (info_a, info_b))
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

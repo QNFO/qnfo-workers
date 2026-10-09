@@ -293,8 +293,10 @@ def plan(path, text):
     if backup and not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", backup):
         problems.append("BACKUP must name one table")
     creates = False
-    if backup and destructive:
-        first = next(i for i, s in enumerate(stmts) if DESTRUCTIVE.match(body(s)))
+    if backup:
+        # BACKUP-CREATES-1: a file that creates its backup before any destructive statement (or has none, e.g. an UPDATE
+        # whose Rollback line restores from the backup) must not demand the table already exist (#856).
+        first = next((i for i, s in enumerate(stmts) if DESTRUCTIVE.match(body(s))), len(stmts))
         mk = re.compile(r"^\s*CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?\"?" + re.escape(backup) + r"\"?\s+AS\s+SELECT\b", re.I)
         creates = any(mk.match(body(s)) for s in stmts[:first])
     return True, problems, {"db": db, "statements": len(stmts), "destructive": len(destructive), "backup": backup, "creates_backup": creates}
