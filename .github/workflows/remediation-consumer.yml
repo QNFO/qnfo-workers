@@ -109,6 +109,13 @@ jobs:
         run: |
           python3 scripts/zenodo_exit_runner.py --selftest && python3 scripts/zenodo_exit_runner.py
 
+      # LOOP-BREAKER-1 and DOCTRINE-AUDIT-1 (agent_issues 2183, 2181): files repeated-failure and weekly doctrine-audit issues
+      # at depth 0 (a fleet_tick trigger would nest the issue triggers past D1's limit). Deterministic; never fails the job.
+      - name: File loop-breaker and doctrine-audit issues
+        continue-on-error: true
+        run: |
+          python3 scripts/loop_breaker_runner.py --selftest && python3 scripts/loop_breaker_runner.py
+
       - name: Publish the status artifact
         if: always()
         run: |
