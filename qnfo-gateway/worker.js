@@ -1,4 +1,4 @@
-var VERSION="3.11.3-math-residue-3"; /* 3.11.3 MATH-RESIDUE-3 (3.11.2 + script-l, emphasis, sign, comma subscripts, link parentheses) (2026-10-06, agent_issues 2023, pillar reach): the typesetter catches three shapes the 22 real render defects left: a word opening with "(" whose script follows its closer ("(p/p_th)^(d/2)", "(\u22121)^{2s}", "(p+1)p^{n\u22121}") keeps the "(", script-l is a subscript base ("\\u2113_P"), an emphasis opened before a word and closed inside it stays emphasis, sign and sgn are functions, a comma subscript with no space ("t_Q,total") is one subscript, a link target may hold balanced parentheses, a run takes back its first word's "(" when that balances it ("(1 - p^{-s})^{-1}"), and a unit power ("1 dm^3") is math; Latin h-bar converts to \\hbar inside a run but never anchors one. scripts/math-corpus-check.mjs over 469 pages: defect pages 22 -> 12, 0 KaTeX failures, 0 prose words lost, visible raw "*" 156 -> 140, raw x_y 2847 -> 2805. 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
+var VERSION="3.12.0-open-data-1"; /* 3.12.0 OPEN-DATA-1 (2026-10-09, pillar reach): OAI-PMH 2.0 at /oai, open JSON API (/api/papers, /api/papers/<slug>, /feed.json), /openapi.json, and 270 deleted Zenodo DOIs (410 Gone, no DataCite record) are no longer shown, cited or exported as live. 3.11.3 MATH-RESIDUE-3 (3.11.2 + script-l, emphasis, sign, comma subscripts, link parentheses) (2026-10-06, agent_issues 2023, pillar reach): the typesetter catches three shapes the 22 real render defects left: a word opening with "(" whose script follows its closer ("(p/p_th)^(d/2)", "(\u22121)^{2s}", "(p+1)p^{n\u22121}") keeps the "(", script-l is a subscript base ("\\u2113_P"), an emphasis opened before a word and closed inside it stays emphasis, sign and sgn are functions, a comma subscript with no space ("t_Q,total") is one subscript, a link target may hold balanced parentheses, a run takes back its first word's "(" when that balances it ("(1 - p^{-s})^{-1}"), and a unit power ("1 dm^3") is math; Latin h-bar converts to \\hbar inside a run but never anchors one. scripts/math-corpus-check.mjs over 469 pages: defect pages 22 -> 12, 0 KaTeX failures, 0 prose words lost, visible raw "*" 156 -> 140, raw x_y 2847 -> 2805. 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -1712,7 +1712,7 @@ function paperLicenseUrl(lic) {
 function buildPaperJsonLd(paper) {
   const title = displayTitle(paper.title) || "Untitled";
   const slug = paper.slug || "";
-  const doi = paper.doi || "";
+  const doi = lpDoi(paper.doi) || "";
   const abs = (paper.abstract || "").slice(0, 3e3);
   const authors = paperAuthors(paper);
   // PAPER-PAGE-SEO-1 (2026-10-01): tie the owner's byline to the owner's ORCID iD so scholarly indexes
@@ -2519,6 +2519,7 @@ async function handleLlmsTxt(env) {
     const res = await env.LIVING_PAPER.prepare("SELECT slug,title,doi,abstract,created_at FROM papers WHERE slug IS NOT NULL AND status IN ('published','distributed','external_preprint') ORDER BY created_at DESC LIMIT 200").all();
     const base = "https://papers.qnfo.org";
     let body = "# QNFO Papers\n\n> Open-science research across p-adic mathematics, ultrametric geometry, topological quantum computation.\n\n## Site\n\n- [About QNFO](https://qnfo.org/about)\n- [Work with me: assessments, reviews, talks, collaboration and roles](https://qnfo.org/work-with-me)\n\n## Papers\n\n";
+    body += "\n## Open data\n\n- [OAI-PMH 2.0](" + base + "/oai?verb=Identify)\n- [JSON API](" + base + "/api/papers)\n- [OpenAPI](" + base + "/openapi.json)\n- [JSON Feed](" + base + "/feed.json)\n\n## Papers\n\n";
     body += res.results.map((p) => "- [" + displayTitle(p.title) + "](" + base + "/papers/" + encodeURIComponent(p.slug) + ")" + (lpDoi(p.doi) ? " (DOI: " + lpDoi(p.doi) + ")" : "")).join("\n");
     return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   } catch (e) {
@@ -2573,6 +2574,232 @@ __name2222222(handleRss, "handleRss");
 __name22222222(handleRss, "handleRss");
 __name222222222(handleRss, "handleRss");
 __name2222222222(handleRss, "handleRss");
+
+// OPEN-DATA-1 (3.12.0, 2026-10-09, pillar reach): open data exchange for papers.qnfo.org. Adds an OAI-PMH 2.0 endpoint
+// (/oai, oai_dc, stateless resumption tokens), an open JSON API (/api/papers, /api/papers/<slug>, /feed.json) with an
+// OpenAPI 3.1 description (/openapi.json), and DEAD_DOIS: 270 Zenodo DOIs that answer 410 Gone and have no DataCite
+// record (measured 2026-10-09 by scripts/doi-liveness.py) are no longer printed as links, sent to Scholar as citation_doi,
+// or put in JSON-LD, the API or OAI records. A dead identifier is never presented as live.
+var DEAD_DOIS = new Set(["10.5281/zenodo.15708823", "10.5281/zenodo.15718390", "10.5281/zenodo.16731814", "10.5281/zenodo.16731979", "10.5281/zenodo.16745024", "10.5281/zenodo.17074726", "10.5281/zenodo.17112099", "10.5281/zenodo.17113075", "10.5281/zenodo.17123952", "10.5281/zenodo.17167099", "10.5281/zenodo.17171021", "10.5281/zenodo.17216192", "10.5281/zenodo.17218734", "10.5281/zenodo.17219876", "10.5281/zenodo.17229528", "10.5281/zenodo.17246839", "10.5281/zenodo.17285615", "10.5281/zenodo.17340253", "10.5281/zenodo.17499279", "10.5281/zenodo.17686443", "10.5281/zenodo.17687207", "10.5281/zenodo.17709214", "10.5281/zenodo.17727562", "10.5281/zenodo.17762911", "10.5281/zenodo.17782622", "10.5281/zenodo.17955898", "10.5281/zenodo.18000790", "10.5281/zenodo.18221366", "10.5281/zenodo.18477566", "10.5281/zenodo.18629520", "10.5281/zenodo.18840801", "10.5281/zenodo.19128964", "10.5281/zenodo.19382733", "10.5281/zenodo.19925320", "10.5281/zenodo.20036379", "10.5281/zenodo.20095902", "10.5281/zenodo.20097568", "10.5281/zenodo.20099394", "10.5281/zenodo.20108536", "10.5281/zenodo.20119700", "10.5281/zenodo.20120042", "10.5281/zenodo.20570212", "10.5281/zenodo.21017162", "10.5281/zenodo.21120286", "10.5281/zenodo.21120469", "10.5281/zenodo.21193487", "10.5281/zenodo.21205100", "10.5281/zenodo.21206272", "10.5281/zenodo.21206278", "10.5281/zenodo.21208346", "10.5281/zenodo.21299211", "10.5281/zenodo.21299278", "10.5281/zenodo.21304627", "10.5281/zenodo.21304629", "10.5281/zenodo.21304631", "10.5281/zenodo.21335853", "10.5281/zenodo.21336045", "10.5281/zenodo.21336081", "10.5281/zenodo.21356016", "10.5281/zenodo.21428825", "10.5281/zenodo.21428827", "10.5281/zenodo.21436808", "10.5281/zenodo.21440671", "10.5281/zenodo.21440894", "10.5281/zenodo.21441847", "10.5281/zenodo.21451776", "10.5281/zenodo.21458373", "10.5281/zenodo.21470438", "10.5281/zenodo.21473899", "10.5281/zenodo.21480126", "10.5281/zenodo.21480756", "10.5281/zenodo.21481126", "10.5281/zenodo.21484345", "10.5281/zenodo.21485556", "10.5281/zenodo.21486206", "10.5281/zenodo.21486780", "10.5281/zenodo.21491676", "10.5281/zenodo.21498218", "10.5281/zenodo.21505993", "10.5281/zenodo.21511271", "10.5281/zenodo.21515789", "10.5281/zenodo.21515894", "10.5281/zenodo.21535017", "10.5281/zenodo.21535491", "10.5281/zenodo.21566035", "10.5281/zenodo.21574555", "10.5281/zenodo.21590155", "10.5281/zenodo.21595214", "10.5281/zenodo.21600628", "10.5281/zenodo.21600741", "10.5281/zenodo.21601112", "10.5281/zenodo.21603374", "10.5281/zenodo.21609223", "10.5281/zenodo.21623218", "10.5281/zenodo.21628383", "10.5281/zenodo.21637028", "10.5281/zenodo.21645350", "10.5281/zenodo.21647362", "10.5281/zenodo.21664651", "10.5281/zenodo.21672990", "10.5281/zenodo.21686727", "10.5281/zenodo.21691415", "10.5281/zenodo.21698978", "10.5281/zenodo.21705076", "10.5281/zenodo.21705220", "10.5281/zenodo.21713202", "10.5281/zenodo.21716180", "10.5281/zenodo.21722389", "10.5281/zenodo.21722393", "10.5281/zenodo.21722395", "10.5281/zenodo.21736091", "10.5281/zenodo.21736173", "10.5281/zenodo.21736327", "10.5281/zenodo.21747228", "10.5281/zenodo.21748299", "10.5281/zenodo.21748713", "10.5281/zenodo.21749060", "10.5281/zenodo.21754072", "10.5281/zenodo.21754148", "10.5281/zenodo.21754151", "10.5281/zenodo.21754154", "10.5281/zenodo.21756190", "10.5281/zenodo.21758752", "10.5281/zenodo.21768757", "10.5281/zenodo.21768784", "10.5281/zenodo.21780909", "10.5281/zenodo.21782835", "10.5281/zenodo.21785893", "10.5281/zenodo.21786603", "10.5281/zenodo.21791213", "10.5281/zenodo.21791457", "10.5281/zenodo.21803677", "10.5281/zenodo.21804073", "10.5281/zenodo.21821767", "10.5281/zenodo.21878977", "10.5281/zenodo.21879231", "10.5281/zenodo.21880064", "10.5281/zenodo.21880104", "10.5281/zenodo.21901664", "10.5281/zenodo.21901984", "10.5281/zenodo.21902891", "10.5281/zenodo.21916939", "10.5281/zenodo.21916970", "10.5281/zenodo.21918838", "10.5281/zenodo.21920604", "10.5281/zenodo.21922589", "10.5281/zenodo.21929902", "10.5281/zenodo.21936076", "10.5281/zenodo.21945415", "10.5281/zenodo.21962450", "10.5281/zenodo.21964104", "10.5281/zenodo.21964453", "10.5281/zenodo.21964598", "10.5281/zenodo.21964674", "10.5281/zenodo.21964824", "10.5281/zenodo.21965332", "10.5281/zenodo.21974194", "10.5281/zenodo.21975507", "10.5281/zenodo.21978750", "10.5281/zenodo.21978952", "10.5281/zenodo.21978999", "10.5281/zenodo.21979032", "10.5281/zenodo.21979060", "10.5281/zenodo.21984929", "10.5281/zenodo.21991953", "10.5281/zenodo.21992125", "10.5281/zenodo.21992214", "10.5281/zenodo.21993122", "10.5281/zenodo.21993240", "10.5281/zenodo.21993254", "10.5281/zenodo.22010489", "10.5281/zenodo.22012694", "10.5281/zenodo.22018102", "10.5281/zenodo.22024240", "10.5281/zenodo.22024856", "10.5281/zenodo.22025544", "10.5281/zenodo.22026592", "10.5281/zenodo.22030896", "10.5281/zenodo.22034455", "10.5281/zenodo.22035210", "10.5281/zenodo.22043966", "10.5281/zenodo.22046458", "10.5281/zenodo.22073477", "10.5281/zenodo.22076806", "10.5281/zenodo.22076816", "10.5281/zenodo.22109455", "10.5281/zenodo.22114495", "10.5281/zenodo.22124744", "10.5281/zenodo.22133122", "10.5281/zenodo.22142794", "10.5281/zenodo.22144215", "10.5281/zenodo.22150472", "10.5281/zenodo.22152967", "10.5281/zenodo.22160404", "10.5281/zenodo.22238755", "10.5281/zenodo.22261547", "10.5281/zenodo.22283716", "10.5281/zenodo.22283727", "10.5281/zenodo.22283869", "10.5281/zenodo.22283879", "10.5281/zenodo.22290226", "10.5281/zenodo.22335679", "10.5281/zenodo.22556023", "10.5281/zenodo.22732639", "10.5281/zenodo.22737379", "10.5281/zenodo.22737538", "10.5281/zenodo.22737734", "10.5281/zenodo.22738133", "10.5281/zenodo.22738155", "10.5281/zenodo.22738231", "10.5281/zenodo.22739626", "10.5281/zenodo.22739633", "10.5281/zenodo.22741636", "10.5281/zenodo.22741799", "10.5281/zenodo.22749402", "10.5281/zenodo.22749408", "10.5281/zenodo.22749432", "10.5281/zenodo.22749589", "10.5281/zenodo.22749608", "10.5281/zenodo.22749793", "10.5281/zenodo.22749803", "10.5281/zenodo.22753022", "10.5281/zenodo.22753039", "10.5281/zenodo.22753170", "10.5281/zenodo.22756824", "10.5281/zenodo.22756835", "10.5281/zenodo.22757008", "10.5281/zenodo.22757213", "10.5281/zenodo.22757216", "10.5281/zenodo.22757783", "10.5281/zenodo.22758004", "10.5281/zenodo.22758173", "10.5281/zenodo.22758314", "10.5281/zenodo.22758388", "10.5281/zenodo.22758467", "10.5281/zenodo.22758570", "10.5281/zenodo.22758642", "10.5281/zenodo.22758712", "10.5281/zenodo.22758789", "10.5281/zenodo.22764745", "10.5281/zenodo.23076161", "10.5281/zenodo.23079905", "10.5281/zenodo.23086421", "10.5281/zenodo.23087164", "10.5281/zenodo.23093675", "10.5281/zenodo.23097730", "10.5281/zenodo.23100544", "10.5281/zenodo.23101549", "10.5281/zenodo.23104598", "10.5281/zenodo.23105375", "10.5281/zenodo.23107746", "10.5281/zenodo.23109561", "10.5281/zenodo.23110411", "10.5281/zenodo.23114192", "10.5281/zenodo.23116197", "10.5281/zenodo.23120230", "10.5281/zenodo.23122792", "10.5281/zenodo.23125602", "10.5281/zenodo.23128562", "10.5281/zenodo.23129275", "10.5281/zenodo.23130193", "10.5281/zenodo.23131119", "10.5281/zenodo.23133404", "10.5281/zenodo.23135396", "10.5281/zenodo.23159238", "10.5281/zenodo.23161483", "10.5281/zenodo.23169727", "10.5281/zenodo.23170193", "10.5281/zenodo.23196360", "10.5281/zenodo.23198862"]);
+var OAI_PAGE = 100;
+function oaiStamp(s) {
+  const t = String(s || "").trim();
+  if (!t) return "1970-01-01T00:00:00Z";
+  const d = new Date(/T/.test(t) ? t : t.replace(" ", "T") + "Z");
+  return isNaN(d) ? "1970-01-01T00:00:00Z" : d.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+function oaiArg(v) {
+  if (!v) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v + " 00:00:00";
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(v)) return v.slice(0, 10) + " " + v.slice(11, 19);
+  return false;
+}
+function paperKeywords(p) {
+  const raw = p.keywords || "";
+  try {
+    const j = JSON.parse(raw);
+    if (Array.isArray(j)) return j.map(String).filter(Boolean);
+  } catch (e) {
+  }
+  return String(raw).split(/[,;]/).map((x) => x.trim()).filter(Boolean);
+}
+function paperSpdx(lic) {
+  const l = String(lic || "").toLowerCase().replace(/[^a-z0-9.]+/g, "-");
+  if (/^cc-by-4/.test(l)) return "CC-BY-4.0";
+  if (/^cc-by-nc-sa-4/.test(l)) return "CC-BY-NC-SA-4.0";
+  return null;
+}
+function openRecord(p) {
+  const doi = lpDoi(p.doi);
+  return {
+    id: "oai:papers.qnfo.org:" + p.slug,
+    slug: p.slug,
+    title: displayTitle(p.title),
+    authors: paperAuthors(p),
+    abstract: p.abstract || "",
+    date: String(p.created_at || "").slice(0, 10),
+    modified: oaiStamp(p.updated_at || p.created_at),
+    version: String(p.version || "").replace(/^v/i, "") || null,
+    language: p.language || "en",
+    keywords: paperKeywords(p),
+    doi: doi,
+    doi_url: doi ? "https://doi.org/" + doi : null,
+    url: "https://papers.qnfo.org/papers/" + p.slug,
+    license_url: paperLicenseUrl(p.license),
+    license_spdx: paperSpdx(p.license)
+  };
+}
+var OPEN_COLS = "slug,title,authors,abstract,created_at,updated_at,doi,version,language,keywords,license";
+var OPEN_WHERE = "slug IS NOT NULL AND status IN ('published','distributed','external_preprint')";
+function oaiXml(body, reqAttrs) {
+  const now = (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
+  return new Response('<?xml version="1.0" encoding="UTF-8"?>\n<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd">\n<responseDate>' + now + "</responseDate>\n<request" + (reqAttrs || "") + ">https://papers.qnfo.org/oai</request>\n" + body + "\n</OAI-PMH>\n", { headers: { "Content-Type": "text/xml; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300" } });
+}
+function oaiError(code, msg, attrs) {
+  return oaiXml('<error code="' + code + '">' + xmlEscape(msg) + "</error>", attrs);
+}
+function oaiHeader(r) {
+  return "<header><identifier>" + xmlEscape(r.id) + "</identifier><datestamp>" + r.modified + "</datestamp><setSpec>papers</setSpec></header>";
+}
+function oaiDc(r) {
+  const f = (tag, v) => v ? "<dc:" + tag + ">" + xmlEscape(v) + "</dc:" + tag + ">" : "";
+  return '<metadata><oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">' + f("title", r.title) + r.authors.map((a) => f("creator", a)).join("") + r.keywords.map((k) => f("subject", k)).join("") + f("description", r.abstract.slice(0, 3e3)) + f("publisher", "QNFO") + f("date", r.date) + f("type", "Text") + f("format", "text/html") + f("identifier", r.url) + f("identifier", r.doi_url) + f("language", r.language) + f("rights", r.license_url) + "</oai_dc:dc></metadata>";
+}
+async function handleOai(request, env) {
+  const u = new URL(request.url);
+  const q = {};
+  const dup = [];
+  for (const [k, v] of u.searchParams) {
+    if (k in q) dup.push(k);
+    q[k] = v;
+  }
+  const attrsOf = (keys) => keys.filter((k) => q[k] !== void 0).map((k) => " " + k + '="' + escAttr(q[k]) + '"').join("");
+  const verb = q.verb;
+  const known = ["Identify", "ListMetadataFormats", "ListSets", "ListIdentifiers", "ListRecords", "GetRecord"];
+  if (!verb || known.indexOf(verb) < 0) return oaiError("badVerb", "Illegal or missing verb", "");
+  const reqA = attrsOf(["verb", "identifier", "metadataPrefix", "from", "until", "set", "resumptionToken"]);
+  const allowed = { Identify: ["verb"], ListMetadataFormats: ["verb", "identifier"], ListSets: ["verb", "resumptionToken"], GetRecord: ["verb", "identifier", "metadataPrefix"], ListIdentifiers: ["verb", "from", "until", "set", "metadataPrefix", "resumptionToken"], ListRecords: ["verb", "from", "until", "set", "metadataPrefix", "resumptionToken"] }[verb];
+  if (dup.length || Object.keys(q).some((k) => allowed.indexOf(k) < 0)) return oaiError("badArgument", "Illegal, repeated or unsupported argument", reqA);
+  if (verb === "Identify") {
+    let earliest = "1970-01-01T00:00:00Z";
+    try {
+      const r = await env.LIVING_PAPER.prepare("SELECT MIN(created_at) m FROM papers WHERE " + OPEN_WHERE).first();
+      if (r && r.m) earliest = oaiStamp(r.m);
+    } catch (e) {
+    }
+    return oaiXml("<Identify><repositoryName>QNFO Papers</repositoryName><baseURL>https://papers.qnfo.org/oai</baseURL><protocolVersion>2.0</protocolVersion><adminEmail>papers@qnfo.org</adminEmail><earliestDatestamp>" + earliest + "</earliestDatestamp><deletedRecord>no</deletedRecord><granularity>YYYY-MM-DDThh:mm:ssZ</granularity></Identify>", reqA);
+  }
+  if (verb === "ListMetadataFormats") {
+    if (q.identifier) {
+      const row = await env.LIVING_PAPER.prepare("SELECT slug FROM papers WHERE " + OPEN_WHERE + " AND slug = ?").bind(q.identifier.replace(/^oai:papers\.qnfo\.org:/, "")).first();
+      if (!row) return oaiError("idDoesNotExist", "No such identifier", reqA);
+    }
+    return oaiXml("<ListMetadataFormats><metadataFormat><metadataPrefix>oai_dc</metadataPrefix><schema>http://www.openarchives.org/OAI/2.0/oai_dc.xsd</schema><metadataNamespace>http://www.openarchives.org/OAI/2.0/oai_dc/</metadataNamespace></metadataFormat></ListMetadataFormats>", reqA);
+  }
+  if (verb === "ListSets") {
+    if (q.resumptionToken) return oaiError("badResumptionToken", "No resumption tokens for ListSets", reqA);
+    return oaiXml("<ListSets><set><setSpec>papers</setSpec><setName>All QNFO papers</setName></set></ListSets>", reqA);
+  }
+  if (verb === "GetRecord") {
+    if (!q.identifier || !q.metadataPrefix) return oaiError("badArgument", "identifier and metadataPrefix are required", reqA);
+    if (q.metadataPrefix !== "oai_dc") return oaiError("cannotDisseminateFormat", "Only oai_dc is supported", reqA);
+    const row = await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + " FROM papers WHERE " + OPEN_WHERE + " AND slug = ?").bind(q.identifier.replace(/^oai:papers\.qnfo\.org:/, "")).first();
+    if (!row || q.identifier.indexOf("oai:papers.qnfo.org:") !== 0) return oaiError("idDoesNotExist", "No such identifier", reqA);
+    const r = openRecord(row);
+    return oaiXml("<GetRecord><record>" + oaiHeader(r) + oaiDc(r) + "</record></GetRecord>", reqA);
+  }
+  let from = q.from, until = q.until, prefix = q.metadataPrefix, offset = 0;
+  if (q.resumptionToken) {
+    if (from !== void 0 || until !== void 0 || prefix !== void 0 || q.set !== void 0) return oaiError("badArgument", "resumptionToken is exclusive", reqA);
+    let t;
+    try {
+      t = JSON.parse(atob(q.resumptionToken.replace(/-/g, "+").replace(/_/g, "/")));
+    } catch (e) {
+      return oaiError("badResumptionToken", "Invalid resumptionToken", reqA);
+    }
+    if (!t || !Number.isInteger(t.o) || t.o < 0) return oaiError("badResumptionToken", "Invalid resumptionToken", reqA);
+    offset = t.o;
+    from = t.f || void 0;
+    until = t.u || void 0;
+    prefix = t.p;
+  } else if (!prefix) return oaiError("badArgument", "metadataPrefix is required", reqA);
+  if (prefix !== "oai_dc") return oaiError("cannotDisseminateFormat", "Only oai_dc is supported", reqA);
+  if (q.set !== void 0 && q.set !== "papers") return oaiError("noRecordsMatch", "Unknown set", reqA);
+  const f = from !== void 0 ? oaiArg(from) : null, t2 = until !== void 0 ? oaiArg(until) : null;
+  if (f === false || t2 === false || from !== void 0 && until !== void 0 && from.length !== until.length) return oaiError("badArgument", "from/until must be YYYY-MM-DD or YYYY-MM-DDThh:mm:ssZ, with equal granularity", reqA);
+  const dateExpr = "COALESCE(NULLIF(updated_at,''),created_at)";
+  const where = [OPEN_WHERE];
+  const binds = [];
+  if (f) {
+    where.push(dateExpr + " >= ?");
+    binds.push(f);
+  }
+  if (t2) {
+    where.push(dateExpr + " <= ?");
+    binds.push(until.length === 10 ? until + " 23:59:59" : t2);
+  }
+  const rows = await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + " FROM papers WHERE " + where.join(" AND ") + " ORDER BY " + dateExpr + ", slug LIMIT ? OFFSET ?").bind(...binds, OAI_PAGE + 1, offset).all();
+  const list = rows.results || [];
+  if (!list.length) return oaiError("noRecordsMatch", "No records match", reqA);
+  const more = list.length > OAI_PAGE;
+  const recs = list.slice(0, OAI_PAGE).map(openRecord);
+  let tok = "";
+  if (more) {
+    const raw = btoa(JSON.stringify({ o: offset + OAI_PAGE, f: from || "", u: until || "", p: prefix })).replace(/\+/g, "-").replace(/\//g, "_");
+    tok = '<resumptionToken completeListSize="' + (await env.LIVING_PAPER.prepare("SELECT COUNT(*) n FROM papers WHERE " + where.join(" AND ")).bind(...binds).first()).n + '" cursor="' + offset + '">' + raw + "</resumptionToken>";
+  } else if (offset > 0) tok = '<resumptionToken cursor="' + offset + '"></resumptionToken>';
+  const body = verb === "ListIdentifiers" ? "<ListIdentifiers>" + recs.map(oaiHeader).join("") + tok + "</ListIdentifiers>" : "<ListRecords>" + recs.map((r) => "<record>" + oaiHeader(r) + oaiDc(r) + "</record>").join("") + tok + "</ListRecords>";
+  return oaiXml(body, reqA);
+}
+function openJson(data, status, extra) {
+  return new Response(JSON.stringify(data, null, 2), { status: status || 200, headers: Object.assign({ "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300" }, extra || {}) });
+}
+function dataciteOf(r, p) {
+  return {
+    schemaVersion: "http://datacite.org/schema/kernel-4",
+    identifiers: [{ identifier: r.url, identifierType: "URL" }].concat(r.doi ? [{ identifier: r.doi, identifierType: "DOI" }] : []),
+    creators: r.authors.map((n) => String(n).indexOf("Quni-Gudzinas") >= 0 ? { name: n, nameType: "Personal", nameIdentifiers: [{ nameIdentifier: "https://orcid.org/" + OWNER_ORCID, nameIdentifierScheme: "ORCID", schemeUri: "https://orcid.org" }] } : { name: n }),
+    titles: [{ title: r.title }],
+    publisher: "QNFO",
+    publicationYear: r.date.slice(0, 4),
+    resourceType: { resourceTypeGeneral: "Text", resourceType: "ScholarlyArticle" },
+    subjects: r.keywords.map((k) => ({ subject: k })),
+    dates: [{ date: r.date, dateType: "Issued" }, { date: r.modified.slice(0, 10), dateType: "Updated" }],
+    language: r.language,
+    version: r.version,
+    rightsList: [Object.assign({ rightsUri: r.license_url }, r.license_spdx ? { rightsIdentifier: r.license_spdx, rightsIdentifierScheme: "SPDX", schemeUri: "https://spdx.org/licenses/" } : {})],
+    descriptions: r.abstract ? [{ description: r.abstract.slice(0, 3e3), descriptionType: "Abstract" }] : [],
+    formats: ["text/html"]
+  };
+}
+async function handleOpenData(request, env, p) {
+  const u = new URL(request.url);
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Access-Control-Max-Age": "86400" } });
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  try {
+    if (p === "/oai") return await handleOai(request, env);
+    if (p === "/openapi.json") return openJson(OPENAPI_DOC);
+    if (p === "/api/papers" || p === "/feed.json") {
+      const limit = Math.max(1, Math.min(200, parseInt(u.searchParams.get("limit") || (p === "/feed.json" ? "50" : "50"), 10) || 50));
+      const offset = Math.max(0, parseInt(u.searchParams.get("offset") || "0", 10) || 0);
+      const since = oaiArg(u.searchParams.get("since") || "");
+      if (since === false) return openJson({ error: "since must be YYYY-MM-DD or YYYY-MM-DDThh:mm:ssZ" }, 400);
+      const dateExpr = "COALESCE(NULLIF(updated_at,''),created_at)";
+      const where = OPEN_WHERE + (since ? " AND " + dateExpr + " >= ?" : "");
+      const binds = since ? [since] : [];
+      const total = (await env.LIVING_PAPER.prepare("SELECT COUNT(*) n FROM papers WHERE " + where).bind(...binds).first()).n;
+      const rows = (await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + " FROM papers WHERE " + where + " ORDER BY created_at DESC, slug LIMIT ? OFFSET ?").bind(...binds, limit, offset).all()).results || [];
+      const recs = rows.map(openRecord);
+      if (p === "/feed.json") return openJson({ version: "https://jsonfeed.org/version/1.1", title: "QNFO Papers", home_page_url: "https://papers.qnfo.org/papers", feed_url: "https://papers.qnfo.org/feed.json", language: "en", authors: [{ name: "Rowan Brad Quni-Gudzinas", url: "https://orcid.org/" + OWNER_ORCID }], items: recs.map((r) => ({ id: r.url, url: r.url, title: r.title, summary: r.abstract.slice(0, 600), date_published: r.date + "T00:00:00Z", date_modified: r.modified, tags: r.keywords, external_url: r.doi_url || void 0 })) }, 200, { "Content-Type": "application/feed+json; charset=utf-8" });
+      return openJson({ total, limit, offset, next: offset + limit < total ? "https://papers.qnfo.org/api/papers?limit=" + limit + "&offset=" + (offset + limit) + (since ? "&since=" + encodeURIComponent(u.searchParams.get("since")) : "") : null, license_note: "Metadata is CC0 1.0; each paper carries its own license_url.", items: recs });
+    }
+    if (p.indexOf("/api/papers/") === 0) {
+      const slug = decodeURIComponent(p.slice(12));
+      const row = await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + " FROM papers WHERE " + OPEN_WHERE + " AND slug = ?").bind(slug).first();
+      if (!row) return openJson({ error: "not found" }, 404);
+      const r = openRecord(row);
+      return openJson(Object.assign({}, r, { datacite: dataciteOf(r, row) }));
+    }
+  } catch (e) {
+    return openJson({ error: "open data endpoint failed", detail: String(e && e.message || e).slice(0, 200) }, 500, { "Cache-Control": "no-store" });
+  }
+  return null;
+}
+var OPENAPI_DOC = {
+  openapi: "3.1.0",
+  info: { title: "QNFO Papers open data API", version: "1.0.0", description: "Read-only, CORS-open metadata for the papers published at papers.qnfo.org. Metadata is CC0 1.0; each paper carries its own license_url. Also served: OAI-PMH 2.0 at /oai (oai_dc).", license: { name: "CC0-1.0", url: "https://creativecommons.org/publicdomain/zero/1.0/" }, contact: { name: "QNFO", url: "https://qnfo.org" } },
+  servers: [{ url: "https://papers.qnfo.org" }],
+  paths: {
+    "/api/papers": { get: { summary: "List papers, newest first", parameters: [{ name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 200, default: 50 } }, { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } }, { name: "since", in: "query", description: "Only papers modified at or after this date (YYYY-MM-DD or YYYY-MM-DDThh:mm:ssZ).", schema: { type: "string" } }], responses: { "200": { description: "A page of papers", content: { "application/json": { schema: { $ref: "#/components/schemas/PaperList" } } } } } } },
+    "/api/papers/{slug}": { get: { summary: "One paper with DataCite-style metadata", parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }], responses: { "200": { description: "The paper", content: { "application/json": { schema: { $ref: "#/components/schemas/Paper" } } } }, "404": { description: "No such paper" } } } },
+    "/feed.json": { get: { summary: "JSON Feed 1.1 of the newest papers", responses: { "200": { description: "JSON Feed", content: { "application/feed+json": { schema: { type: "object" } } } } } } },
+    "/oai": { get: { summary: "OAI-PMH 2.0 (Identify, ListMetadataFormats, ListSets, ListIdentifiers, ListRecords, GetRecord; oai_dc)", parameters: [{ name: "verb", in: "query", required: true, schema: { type: "string", enum: ["Identify", "ListMetadataFormats", "ListSets", "ListIdentifiers", "ListRecords", "GetRecord"] } }, { name: "metadataPrefix", in: "query", schema: { type: "string", enum: ["oai_dc"] } }, { name: "identifier", in: "query", schema: { type: "string" } }, { name: "from", in: "query", schema: { type: "string" } }, { name: "until", in: "query", schema: { type: "string" } }, { name: "set", in: "query", schema: { type: "string", enum: ["papers"] } }, { name: "resumptionToken", in: "query", schema: { type: "string" } }], responses: { "200": { description: "OAI-PMH XML (errors are returned in-band as <error>)", content: { "text/xml": { schema: { type: "string" } } } } } } }
+  },
+  components: { schemas: {
+    Paper: { type: "object", properties: { id: { type: "string", description: "OAI identifier" }, slug: { type: "string" }, title: { type: "string" }, authors: { type: "array", items: { type: "string" } }, abstract: { type: "string" }, date: { type: "string", format: "date" }, modified: { type: "string", format: "date-time" }, version: { type: ["string", "null"] }, language: { type: "string" }, keywords: { type: "array", items: { type: "string" } }, doi: { type: ["string", "null"], description: "Only a DOI that currently resolves; deleted DOIs are omitted." }, doi_url: { type: ["string", "null"] }, url: { type: "string", format: "uri" }, license_url: { type: "string", format: "uri" }, license_spdx: { type: ["string", "null"] }, datacite: { type: "object" } } },
+    PaperList: { type: "object", properties: { total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" }, next: { type: ["string", "null"] }, items: { type: "array", items: { $ref: "#/components/schemas/Paper" } } } }
+  } }
+};
 function health() {
   return json({ status: "ok", worker: "qnfo-gateway", version: VERSION, capabilities: ["papers-site", "paper-pages", "living-paper-reader", "paper-context-api", "graph-api", "ask-a-paper", "legal-pages", "work-with-me-page"], limitations: ["paper pages ask through ask.qwav.tech /api/ask (qnfo-ai-search 2.1+, the paper pinned as source [1], capped per address); without JavaScript the page is the full static paper", "GET /api/paper-context/<slug> matches qnfo-graph nodes on title terms (two terms, or one of 6+ letters), so a paper outside the graph shows an empty Context tab; versions are papers whose normalized titles match", "qnfo.org/work-with-me has no form: each offer is a mailto to rowan.quni@qnfo.org whose subject starts with [work-with-me:<offer>], counted by qnfo-fleet-dashboard", "Ask-a-paper (POST /api/ask) uses one model (llama-3.3-70b-instruct-fp8-fast) with a 1200-token cap and only the first 6000 characters of the named paper", "Ask-a-paper allows 10 questions per address per hour and 300 per day in total, questions up to 1000 characters; duplicate, kg-backfill and quarantined papers are excluded", "graph-api reads are public; /query and /sync need the sync token"] });
 }
@@ -3325,7 +3552,7 @@ function lpDoc(o) {
 // printed as dead doi.org links and sent to Scholar as citation_doi. Only a real DOI (10.<registrant>/<suffix>) is used.
 function lpDoi(d) {
   const x = String(d || "").trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "");
-  return /^10\.\d{4,9}\/\S+$/.test(x) ? x : null;
+  return /^10\.\d{4,9}\/\S+$/.test(x) && !DEAD_DOIS.has(x.toLowerCase()) ? x : null;
 }
 function lpDate(s) {
   const d = String(s || "").slice(0, 10);
@@ -3727,6 +3954,10 @@ var gateway_worker_default = {
     if ((host === "qnfo.org" || host === "www.qnfo.org") && (p === "/legal" || p.indexOf("/legal/") === 0 || p === "/license")) return new Response(null, { status: 301, headers: { Location: "https://legal.qnfo.org" + legalRedirectPath(p) } });
     if (host === "legal.qnfo.org") return handleLegal(p, env);
     if (host === "papers.qnfo.org" || host === "qnfo-publications.pages.dev") {
+      if (p === "/oai" || p === "/openapi.json" || p === "/feed.json" || p.indexOf("/api/papers") === 0 && p !== "/api/paper-context") {
+        const od = await handleOpenData(request, env, p);
+        if (od) return od;
+      }
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
       if (p === "/api/unsubscribe" && (method === "GET" || method === "POST")) return handleUnsubscribeProxy(request, env);
