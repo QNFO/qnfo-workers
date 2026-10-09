@@ -17,6 +17,12 @@ because each one was broken at least once; the linked issue holds the evidence.
   issue only with `issue_triage.close_evidence`, supersede it with the successor's id, or leave it open. Record a capability
   the fleet gains in `capability_ledger`. Building a reversible path never means constructing authority to act as the owner
   in a legal, financial or signing act; the harness checks and the secret lock still hold.
+- Revision 3 (2026-10-09) adds section 3 (red-team a blocker across every surface before handing it to the owner) and section
+  18 (fleet delegation). Its readings (c) and (d) in the doctrine header bind: a surface is another path to a missing or
+  broken capability, never a second try at something a permission check, policy or classifier refused; a sibling's
+  credential is used by calling that sibling's own route, never by copying the secret. Record each red-team in
+  `blocker_redteam` with a `surfaces:` line (metrics `blocker_survival_rate_7d`, `blocker_surface_coverage_7d`); an owner card
+  that survives carries an `IDENTITY-BOUND:` line in its `why`.
 
 ## Autonomy-first protocol (AUTONOMY-FIRST-1)
 - Owner directive 2026-10-08: "Implement autonomy-first protocol system/fleet-wide and in all Claude operations." It
