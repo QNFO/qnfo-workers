@@ -40,7 +40,7 @@ globalThis.fetch = async () => { throw new Error("offline test"); };
 const cronWaits = [];
 await w.scheduled({ cron: "0 */2 * * *" }, env, { waitUntil: (p) => cronWaits.push(p) });
 await Promise.all(cronWaits);
-check("after the generation cron, q08 writes its five registry values and the stall metric (#2034)", writes.sort().join(",") === "q08_confirmed_subscribers=0,q08_gate_pass_rate_7d=0.333,q08_hours_since_last_piece=0,q08_human_reads_7d=1,q08_neurons_per_published_piece_7d=9000,q08_verified_votes_7d=0", writes);
+check("after the generation cron, q08 writes its registry values, the stall metric (#2034) and the forecast overdue count (Q08-FORECAST-1)", writes.sort().join(",") === "q08_confirmed_subscribers=0,q08_forecasts_overdue_open=0,q08_gate_pass_rate_7d=0.333,q08_hours_since_last_piece=0,q08_human_reads_7d=1,q08_neurons_per_published_piece_7d=9000,q08_verified_votes_7d=0", writes);
 // Q08-SELF-TUNE-1: the compose temperature comes from ops_config, clamped; anything unreadable keeps 0.65.
 const src = (await import("node:fs")).readFileSync(join(dirname(fileURLToPath(import.meta.url)), "worker.js"), "utf8");
 const pt = new Function(src.slice(src.indexOf("var TEMP_KEY"), src.indexOf("async function composeTemperature")) + "; return parseTemperature;")();
