@@ -162,8 +162,12 @@ def main(d1=None, plane=None, get=http_get, put=r2_put, now=time.time):
         print(json.dumps({"zenodo_exit": "datacite-failed", "error": str(e)[:200]}))
         return 0
     stats["datacite"] = len(rows)
-    for i in range(0, len(rows), 40):
-        d1(upsert_sql(rows[i:i + 40]))
+    try:
+        for i in range(0, len(rows), 40):
+            d1(upsert_sql(rows[i:i + 40]))
+    except Exception as e:  # noqa: BLE001
+        print(json.dumps({"zenodo_exit": "ledger-upsert-failed", "error": str(e)[:300]}))
+        return 0
     try:
         best = inhouse_map(plane)
     except Exception as e:  # noqa: BLE001
