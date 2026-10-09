@@ -1,330 +1,34 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@5a84a4ee9417",
- "due": 40,
- "pass": 0,
- "fail": 40,
+ "verifier": "remediation-consumer@131fccc7226f",
+ "due": 3,
+ "pass": 2,
+ "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "EVID-1683-SPEND",
-   "issue_id": 1683,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
    "written": true
   },
   {
-   "class": "issue-1726",
-   "issue_id": 1726,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1780",
-   "issue_id": 1780,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1796",
-   "issue_id": 1796,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1760",
-   "issue_id": 1760,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1895",
-   "issue_id": 1895,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "panel-votes-unmeasured",
-   "written": true
-  },
-  {
-   "class": "issue-1902",
-   "issue_id": 1902,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-issues-probed-hourly",
+   "class": "rt-fleet-dashboard",
    "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "belief-research-drains-in-3h",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-nothing-stuck",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-research-publishes-without-zenodo",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-no-untested-control-on-critical-path",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-no-spof-on-critical-path",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-unprobed-issues",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1223",
-   "issue_id": 1223,
-   "verdict": "fail",
-   "expected": "census-fresh",
-   "observed": "census-stale",
-   "written": true
-  },
-  {
-   "class": "unified-cost-decision-1",
-   "issue_id": 2069,
+   "class": "issue-2210",
+   "issue_id": 2210,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "over",
-   "written": true
-  },
-  {
-   "class": "issue-2135",
-   "issue_id": 2135,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2072",
-   "issue_id": 2072,
-   "verdict": "fail",
-   "expected": "merged",
-   "observed": "failed",
-   "written": true
-  },
-  {
-   "class": "issue-2136",
-   "issue_id": 2136,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2175",
-   "issue_id": 2175,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1825",
-   "issue_id": 1825,
-   "verdict": "fail",
-   "expected": "within-cap",
-   "observed": "over-cap",
-   "written": true
-  },
-  {
-   "class": "issue-2050",
-   "issue_id": 2050,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2116",
-   "written": true
-  },
-  {
-   "class": "issue-2199",
-   "issue_id": 2199,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2206",
-   "issue_id": 2206,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2193",
-   "issue_id": 2193,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2194",
-   "issue_id": 2194,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2201",
-   "issue_id": 2201,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2195",
-   "issue_id": 2195,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2196",
-   "issue_id": 2196,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2197",
-   "issue_id": 2197,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by recurrence-guard, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "close-predicate-monotone",
-   "issue_id": 1297,
-   "verdict": "fail",
-   "expected": "guarded",
-   "observed": "unguarded",
-   "written": true
-  },
-  {
-   "class": "issue-2044",
-   "issue_id": 2044,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1716",
-   "issue_id": 1716,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1750",
-   "issue_id": 1750,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: owner card lightcone-application-text open",
-   "written": true
-  },
-  {
-   "class": "issue-1753",
-   "issue_id": 1753,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1779",
-   "issue_id": 1779,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no ipatent_benchmark_results table yet (lever T7.14 steps 1-4, patents table present: 0)",
-   "written": true
-  },
-  {
-   "class": "issue-1793",
-   "issue_id": 1793,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1795",
-   "issue_id": 1795,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1798",
-   "issue_id": 1798,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1818",
-   "issue_id": 1818,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending",
+   "observed": "pending: filed by ci:apply-migrations, which owns it for 48h",
    "written": true
   }
  ],
@@ -351,12 +55,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 6.6,
+ "https": 1,
+ "runtime_verified_share_24h": 6.7,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 80328,
- "head": "5a84a4ee94173e0288affe582434f61a2acc790e",
+ "spent_ms": 9351,
+ "head": "131fccc7226f97716b93c6cca43374bc8b33e467",
  "job_status": "success",
- "ts": "2026-10-09T07:38:32Z"
+ "ts": "2026-10-09T07:41:36Z"
 }
