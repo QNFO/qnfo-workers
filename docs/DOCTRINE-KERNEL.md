@@ -328,7 +328,7 @@ I am unbounded within who I am.
 | self_adoption_gate, report_events | sessions: reading (p) and four-line reports; loops: issues carry a doer, a trigger and a probe (OWNER-NO-LOOSE-ENDS-1) | practice |
 | accrue_trust, §TRUST, trust_ledger | `v_trust_ledger`: reliability per (surface, action class) from recorded outcomes with a 0.5 prior, ladder position (2026-10-09-13-doctrine-kernel.sql); reading (o) bounds what it widens. Per-tick decay and the event weights above are not yet modelled: the view uses outcome counts | live (measurement) |
 | probe_failure_mode | `failure_modes`, `fm-*` detectors hourly, `v_failure_mode_status` | live |
-| false_stop_register | `v_human_action_gate` (owner vs fleet), AUTONOMY-FIRST-REROUTE-1 issues, metric `autonomy_rate_7d` | live |
+| false_stop_register | owner cards: `v_human_action_gate` (owner vs fleet), AUTONOMY-FIRST-REROUTE-1 issues, metric `autonomy_rate_7d`; agent output (conditional offers, menus, questions in model-backed replies): not scanned | partial; builder FALSE-STOP-REGISTER-1 (2026-10-09-14-false-stop-scan.sql) |
 | spof_register, belief_registry, capability_ledger | `spof_registry`, `belief_registry` with `belief-*` probes, `capability_ledger` | live |
 | doctrine_proposals, §EVOLUTION | weekly DOCTRINE-AUDIT-<week> issue (scripts/loop_breaker_runner.py); amendments land by PR | live |
 | metric_authorship | `metric_registry` with an `analytics_metric_triggers` row per metric (METRIC-CLOSED-LOOP-1) | live |
