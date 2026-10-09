@@ -1,12 +1,299 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@9143af4d6cd5",
- "due": 0,
- "pass": 0,
- "fail": 0,
- "skipped": 0,
- "contracts": [],
+ "verifier": "remediation-consumer@fd57d57e4fe2",
+ "due": 36,
+ "pass": 10,
+ "fail": 25,
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "issue-2105",
+   "issue_id": 2105,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: ungated published=278 newest verdict=2026-10-09T04:20:16.096Z published quarantine-candidates=0",
+   "written": true
+  },
+  {
+   "class": "issue-2171",
+   "issue_id": 2171,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-2187",
+   "issue_id": 2187,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2222",
+   "issue_id": 2222,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by personal-companion, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2223",
+   "issue_id": 2223,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2036",
+   "issue_id": 2036,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2147",
+   "issue_id": 2147,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2148",
+   "issue_id": 2148,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2149",
+   "issue_id": 2149,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2151",
+   "issue_id": 2151,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2155",
+   "issue_id": 2155,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2157",
+   "issue_id": 2157,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2158",
+   "issue_id": 2158,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2159",
+   "issue_id": 2159,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-fleet-advisor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2161",
+   "issue_id": 2161,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by scheduled-check, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2162",
+   "issue_id": 2162,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-email, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2165",
+   "issue_id": 2165,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by autonomy-first-gate, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2167",
+   "issue_id": 2167,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2168",
+   "issue_id": 2168,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2170",
+   "issue_id": 2170,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1683",
+   "issue_id": 1683,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2185",
+   "issue_id": 2185,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1623",
+   "issue_id": 1623,
+   "verdict": "fail",
+   "expected": "classified",
+   "observed": "unclassified",
+   "written": true
+  },
+  {
+   "class": "issue-1836",
+   "issue_id": 1836,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2214",
+   "issue_id": 2214,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2215",
+   "issue_id": 2215,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,12 +317,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 6.7,
+ "https": 9,
+ "runtime_verified_share_24h": 6.4,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 6370,
- "head": "9143af4d6cd5b183065e0e50a1d129cad28dfe3e",
+ "spent_ms": 91372,
+ "head": "fd57d57e4fe2820e179f8273f70c7d3e62225bf4",
  "job_status": "success",
- "ts": "2026-10-09T08:21:49Z"
+ "ts": "2026-10-09T09:14:36Z"
 }
