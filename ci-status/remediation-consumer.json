@@ -1,21 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@507424c341a5",
- "due": 1,
+ "verifier": "remediation-consumer@9143af4d6cd5",
+ "due": 0,
  "pass": 0,
- "fail": 1,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
-   "verdict": "fail",
-   "expected": "connected",
-   "observed": "pending: no access token in personal-life oauth_tokens yet",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -39,12 +30,12 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 6.8,
+ "runtime_verified_share_24h": 6.7,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 6816,
- "head": "507424c341a5445f5938d58aa3265a3c27ecc079",
+ "spent_ms": 6370,
+ "head": "9143af4d6cd5b183065e0e50a1d129cad28dfe3e",
  "job_status": "success",
- "ts": "2026-10-09T07:50:33Z"
+ "ts": "2026-10-09T08:21:49Z"
 }
