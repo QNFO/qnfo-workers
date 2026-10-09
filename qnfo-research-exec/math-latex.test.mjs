@@ -25,7 +25,9 @@ assert.equal(pseudoMathScan("Text\n┌──┐\n└──┘\n").count, 2, "box
 assert.ok(pseudoMathScan(plain).samples.length > 0, "samples are returned for the fix text");
 
 // 2. every prompt that writes paper text carries the rule
-const block = (name) => { const a = src.indexOf("var " + name + " = ["); return src.slice(a, src.indexOf("].join(", a)); };
+// PROMPT-CACHE-PREFIX-1 (#2116): the task instructions live in RESEARCH_SHARED_PREAMBLE under "### TASK <NAME>" headings.
+const pre = (() => { const a = src.indexOf("var RESEARCH_SHARED_PREAMBLE = ["); return src.slice(a, src.indexOf("].join(", a)); })();
+const block = (name) => { const tag = "### TASK " + name.replace(/_PROMPT$/, ""); const a = pre.indexOf('"' + tag + '"'); assert.ok(a >= 0, tag + " present"); const b = pre.indexOf('"### TASK ', a + tag.length + 2); return pre.slice(a, b < 0 ? undefined : b); };
 for (const name of ["WRITER_PROMPT", "RECONCILE_PROMPT", "REVISE_PROMPT"]) assert.ok(/MATH_RULE/.test(block(name)), name + " carries MATH_RULE");
 assert.ok(/LaTeX/.test(block("REVISE_PATCH_PROMPT")), "REVISE_PATCH_PROMPT asks for LaTeX in replacements");
 

@@ -13,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.10.0-parallel"; // 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.10.2-prompt-prefix"; // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1942,7 +1942,8 @@ function pseudoMathScan(md) {
 function mathLatexFix(scan) {
   return { id: "gate-math-latex", severity: "HARD", claim: scan.count + " plain-text math tokens outside $...$", reason: "MATH-LATEX-2: math written as Unicode super/subscripts, Unicode operators or bare ^ and _ is not typeset on papers.qnfo.org. Examples: " + scan.samples.map(function(s) { return "\u00ab" + s + "\u00bb"; }).join(" "), fix: "Rewrite each such expression in LaTeX inside $...$ (inline) or $$...$$ (display), for example 10\u207b\u2074 -> $10^{-4}$, T\u2081 -> $T_1$, \u2248 -> $\\approx$, d^3 -> $d^3$. Change only the notation, not the values." };
 }
-var WRITER_PROMPT = [
+var RESEARCH_SHARED_PREAMBLE = [
+  "### TASK WRITER",
   "You are one of three independent research writers producing a full-length preprint for open publication. All three writers receive the SAME input block; write independently and do not imitate a template beyond the required structure.",
   "Requirements:",
   "- Output ONLY the paper markdown, starting directly with '# <Title>'.",
@@ -1958,9 +1959,7 @@ var WRITER_PROMPT = [
   "- No meta-commentary about writing, authorship, or AI. No 'Let me', no thinking text, no placeholder text, no '[to verify]' markers. Every quantitative claim is either computed here or explicitly labeled a projection with stated assumptions.",
   "- Write for an adjacent-field expert; define jargon once.",
   MATH_RULE,
-  "INPUT BLOCK:"
-].join("\n");
-var RECONCILE_PROMPT = [
+  "### TASK RECONCILE",
   "You are the reconciling editor. Two or three independent writers produced drafts on the same input block. Produce the SINGLE reconciled preprint.",
   "Steps:",
   "1. Read all available drafts. Extract every substantive claim (numbered C1..Cn) and attribute each to source drafts (A/B/C) with agreement status: CONVERGENT (>=2 drafts, same substance), DIVERGENT (conflicting), or SINGLE (one draft only).",
@@ -1972,9 +1971,7 @@ var RECONCILE_PROMPT = [
   "7. Appendix B: the claim table (C1..Cn, source drafts, agreement status).",
   "8. Output ONLY the paper markdown. No meta-commentary.",
   "9. " + MATH_RULE.slice(2) + " Convert any plain-text or Unicode math taken from the drafts.",
-  "DRAFTS:"
-].join("\n");
-var REVIEW_PROMPT = [
+  "### TASK REVIEW",
   "You are an adversarial reviewer. Audit this preprint for publication readiness. Output STRICT JSON only:",
   '{"verdict":"pass"|"revise","hard":[{"id":string,"severity":"HARD","claim":string,"reason":string,"fix":string}],"soft":[{"id":string,"severity":"SOFT","claim":string,"reason":string,"fix":string}]}',
   "Audit dimensions:",
@@ -1986,27 +1983,41 @@ var REVIEW_PROMPT = [
   "6. Depth: superficial literature treatment, unexplained jargon, unstated limitations = SOFT.",
   "7. Divergence honesty: Appendix A present when drafts diverged = SOFT if missing.",
   'verdict = "revise" iff hard is non-empty. Do not pad hard with soft issues.',
-  "PAPER:"
-].join("\n");
-var REVISE_PROMPT = [
+  "### TASK REVISE",
   "You are the revising author. Apply the reviewer's HARD fixes to the paper. Return ONLY the full revised paper markdown with the same required structure and headings.",
   "For each fix: correct the quantitative claim using the computed value, remove or move-to-Discussion-as-explicitly-labeled-hypothesis unverifiable claims, replace invented references with bibliography entries (or remove the sentence), fix structure and length. Do not add new unsupported claims. Output ONLY the paper.",
   MATH_RULE,
-  "FIXES (JSON):"
+  "### TASK REVISE_PATCH",
+  "You are the revising author. Resolve each HARD fix below by editing the paper in place.",
+  'Return ONLY a JSON array, no prose and no code fence: [{"find":"<exact verbatim excerpt of the PAPER, 40 to 800 characters, occurring once>","replace":"<corrected text>"}].',
+  "Copy each find excerpt character for character from the PAPER. Use at most 8 edits. To remove a sentence, replace it with an empty string.",
+  "Every replace text writes its mathematics in LaTeX inside $...$ (inline) or $$...$$ (display), never as Unicode superscripts, subscripts or operators.",
+  "### TASK VERIFY_EXTRACT",
+  "Extract every QUANTITATIVE claim from this paper that can be independently computed. Output STRICT JSON array:",
+  '[{"id":"Q1","statement":"...","inputs":"named numbers with values","formula":"math in plain text"}]',
+  "Include only claims whose inputs and formula are stated in the paper. If none, output [].",
+  "### TASK VERIFY_GEN",
+  "Write ONE self-contained Python 3 script (stdlib only: math, fractions) that independently computes each claim from its stated inputs and prints for each:",
+  "CLAIM <id>: computed=<value> expected=<value-or-none> match=yes|no",
+  "Use math.isclose(rel_tol=1e-6) when comparing floats. Compute from the stated inputs and formula; do NOT copy the paper's answer as the computation - the script must reproduce the derivation. Print a final line 'VERIFICATION SUMMARY: N claims, M match, K mismatch'.",
+  "Output the script inside a single python fenced block, nothing else."
 ].join("\n");
+
+function stagePrompt(name, body) {
+  return RESEARCH_SHARED_PREAMBLE + "\n\n=== TASK: " + name + " ===\nDo ONLY task " + name + " from the instructions above and output exactly what that task asks for.\n" + body;
+}
+
+var WRITER_PROMPT = stagePrompt("WRITER", "INPUT BLOCK:\n");
+var RECONCILE_PROMPT = stagePrompt("RECONCILE", "DRAFTS:\n");
+var REVIEW_PROMPT = stagePrompt("REVIEW", "PAPER:\n");
+var REVISE_PROMPT = stagePrompt("REVISE", "FIXES (JSON):\n");
 // REVISE-PATCH-1 (2026-10-01, #1620/#1504): a revise asked for the WHOLE paper back even when the reviewer raised one
 // short HARD fix (row 5435c847: 22729-char paper, 124-char fixes). A full rewrite is 6-9k content tokens on top of the
 // reasoning: at max_tokens 8192 the reasoning model returned 0 chars, and at 32768 Workers AI ended the call with
 // "3046: Request timeout" (both attempts, 11:27Z). Patch mode asks only for exact find/replace edits (short output, same
 // size class as the review JSON that succeeds) and applies each edit only where its excerpt occurs exactly once, so a
 // hallucinated excerpt changes nothing. The full rewrite stays as the fallback when no edit applies.
-var REVISE_PATCH_PROMPT = [
-  "You are the revising author. Resolve each HARD fix below by editing the paper in place.",
-  'Return ONLY a JSON array, no prose and no code fence: [{"find":"<exact verbatim excerpt of the PAPER, 40 to 800 characters, occurring once>","replace":"<corrected text>"}].',
-  "Copy each find excerpt character for character from the PAPER. Use at most 8 edits. To remove a sentence, replace it with an empty string.",
-  "Every replace text writes its mathematics in LaTeX inside $...$ (inline) or $$...$$ (display), never as Unicode superscripts, subscripts or operators.",
-  "FIXES (JSON):"
-].join("\n");
+var REVISE_PATCH_PROMPT = stagePrompt("REVISE_PATCH", "FIXES (JSON):\n");
 function applyRevisePatch(paper, raw) {
   let edits = [];
   try {
@@ -2028,19 +2039,8 @@ function applyRevisePatch(paper, raw) {
   }
   return { text: out, applied, proposed: edits.length };
 }
-var VERIFY_EXTRACT_PROMPT = [
-  "Extract every QUANTITATIVE claim from this paper that can be independently computed. Output STRICT JSON array:",
-  '[{"id":"Q1","statement":"...","inputs":"named numbers with values","formula":"math in plain text"}]',
-  "Include only claims whose inputs and formula are stated in the paper. If none, output [].",
-  "PAPER:"
-].join("\n");
-var VERIFY_GEN_PROMPT = [
-  "Write ONE self-contained Python 3 script (stdlib only: math, fractions) that independently computes each claim from its stated inputs and prints for each:",
-  "CLAIM <id>: computed=<value> expected=<value-or-none> match=yes|no",
-  "Use math.isclose(rel_tol=1e-6) when comparing floats. Compute from the stated inputs and formula; do NOT copy the paper's answer as the computation - the script must reproduce the derivation. Print a final line 'VERIFICATION SUMMARY: N claims, M match, K mismatch'.",
-  "Output the script inside a single python fenced block, nothing else.",
-  "CLAIMS (JSON):"
-].join("\n");
+var VERIFY_EXTRACT_PROMPT = stagePrompt("VERIFY_EXTRACT", "PAPER:\n");
+var VERIFY_GEN_PROMPT = stagePrompt("VERIFY_GEN", "CLAIMS (JSON):\n");
 var GROUND_STOP = new Set("a an and are as at be by can could do does for from has have how in into is it its of on or that the their these this those to via what when where which while who why will with within without would we our us you your re entry reentry address addresses addressing question questions two three work paper papers study studies approach approaches framework frameworks model models theory theories result results show shows new novel use using used possible all any each every cannot uniquely unique determine determines determined classify classifies classification general generally specific based toward towards between among more most less such other also only whether".split(" "));
 var ARXIV_SPACING_MS = 3e3;
 // Phrases are runs of adjacent content words (2-3 words; longer runs give sliding pairs); words are the content words.
@@ -26067,6 +26067,15 @@ export {
   mathGate,
   parkPoisonRow,
   pseudoMathScan,
+  RESEARCH_SHARED_PREAMBLE,
+  stagePrompt,
+  WRITER_PROMPT,
+  RECONCILE_PROMPT,
+  REVIEW_PROMPT,
+  REVISE_PROMPT,
+  REVISE_PATCH_PROMPT,
+  VERIFY_EXTRACT_PROMPT,
+  VERIFY_GEN_PROMPT,
   reclaimStaleResearching,
   seedRelatedLinks,
   stageGround,
