@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.14.0-guided-flow"; // 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.15.0-ab-split"; // 3.15.0 AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): a human GET / without a v parameter is assigned once to arm 1 (default page) or arm 2 (302 to ?v=2) by the cookie ipatent_ab (arm number only, 30 days; share = qnfo-audit ops_config ipatent_v2_share, cached 5 min, "0" turns it off without a deploy; env IPATENT_V2_SHARE overrides), so both variants get human traffic and step 2 can compare drafts per visit; crawlers, HEAD and an explicit ?v= are unchanged. 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -59,6 +59,54 @@ function pageSource(request) {
   return "referral";
 }
 __name(pageSource, "pageSource");
+// AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): nothing linked to ?v=2, so in
+// its first day it had 1 crawler view and 0 human views against 70 human views of "/", and the 7-day comparison could
+// never measure anything. A human GET / without a v parameter is now assigned to an arm once (cookie ipatent_ab, the arm
+// number only, no identifier, 30 days): arm 2 is redirected to the same URL with v=2 (counted as "/?v=2"), arm 1 is served
+// the default page (counted as "/"). Crawlers, HEAD, an explicit ?v=1 or ?v=2 and a share of 0 keep today's behaviour.
+// The arm-2 share is qnfo-audit ops_config ipatent_v2_share (0..1, read through AUDIT, cached 5 minutes per isolate), so
+// "0" turns the split off without a deploy; env IPATENT_V2_SHARE overrides it; no row, no binding or a failed read is 0.
+var AB_COOKIE = "ipatent_ab";
+var AB_CACHE_MS = 3e5;
+var _abShareCache = { at: 0, v: 0 };
+function abClamp(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null;
+}
+async function abShare(env, now) {
+  const fromEnv = abClamp(env && env.IPATENT_V2_SHARE);
+  if (fromEnv !== null) return fromEnv;
+  if (!env || !env.AUDIT) return 0;
+  const t = now || Date.now();
+  if (_abShareCache.at && t - _abShareCache.at < AB_CACHE_MS) return _abShareCache.v;
+  let v = 0;
+  try {
+    const row = await env.AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'ipatent_v2_share'").first();
+    v = abClamp(row && row.value) || 0;
+  } catch (e) { v = 0; }
+  _abShareCache = { at: t, v };
+  return v;
+}
+function abCookieArm(request) {
+  const m = /(?:^|;\s*)ipatent_ab=([12])(?:;|$)/.exec(request.headers.get("Cookie") || "");
+  return m ? m[1] : null;
+}
+async function abArm(request, url, env, rnd) {
+  if (request.method !== "GET" || url.searchParams.has("v")) return null;
+  if (pageSource(request) === "crawler") return null;
+  const share = await abShare(env);
+  if (share <= 0) return null;
+  let arm = abCookieArm(request), fresh = false;
+  if (!arm) { arm = (rnd || Math.random)() < share ? "2" : "1"; fresh = true; }
+  const cookie = fresh ? AB_COOKIE + "=" + arm + "; Path=/; Max-Age=2592000; SameSite=Lax; Secure" : null;
+  if (arm === "2") {
+    const to = new URL(url.toString());
+    to.searchParams.set("v", "2");
+    return { arm, cookie, redirect: to.pathname + to.search };
+  }
+  return { arm, cookie, redirect: null };
+}
 async function countPageView(env, path, source) {
   if (!env.IPATENT_DB) return;
   try {
@@ -2549,8 +2597,8 @@ var qnfo_ipatent_default = {
           status: "ok",
           worker: "qnfo-ipatent",
           version: VERSION,
-          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics", "usage-topics", "support-map", "completeness-meter", "guided-flow-v2", "subscribe", "llms-txt"],
-          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token", "searches and drafts are counted per day by broad topic only (usage_counts); their text is never stored (IPATENT-USAGE-1)", "page metrics are daily counts by source class only (no IP, user agent or cookie); crawler detection is a user-agent heuristic", "the support map is a lexical check of claim wording against numbered paragraphs, not a legal opinion", "at most 150 drafts in 24 hours across all users"],
+          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics", "usage-topics", "support-map", "completeness-meter", "guided-flow-v2", "ab-split-v2", "subscribe", "llms-txt"],
+          limitations: ["POST /api/draft allows 20 submissions per IP per hour", "a human visit to / is assigned once to the default page or the ?v=2 guided flow (cookie ipatent_ab holds only the arm number, 30 days; share = ops_config ipatent_v2_share, 0 turns it off) so both variants can be measured (AB-SPLIT-V2-1)", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token", "searches and drafts are counted per day by broad topic only (usage_counts); their text is never stored (IPATENT-USAGE-1)", "page metrics are daily counts by source class only (no IP, user agent or cookie); crawler detection is a user-agent heuristic", "the support map is a lexical check of claim wording against numbered paragraphs, not a legal opinion", "at most 150 drafts in 24 hours across all users"],
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
             r2: !!env.IPATENT_R2 ? "ipatent" : null,
@@ -2562,8 +2610,16 @@ var qnfo_ipatent_default = {
       const isRead = request.method === "GET" || request.method === "HEAD";
       if (path === "/" && isRead) {
         // GUIDED-FLOW-1: the ?v=2 variant is counted under its own path so the two variants can be compared (#2049 step 2).
+        const ab = await abArm(request, url, env);
+        if (ab && ab.redirect) {
+          const rh = corsHeaders({ "Location": ab.redirect, "Cache-Control": "no-store", "Vary": "Cookie" });
+          if (ab.cookie) rh["Set-Cookie"] = ab.cookie;
+          return new Response(null, { status: 302, headers: rh });
+        }
         if (request.method === "GET") ctx?.waitUntil?.(countPageView(env, url.searchParams.get("v") === "2" ? "/?v=2" : "/", pageSource(request)));
-        return html(LANDING_HTML);
+        const page = html(LANDING_HTML);
+        if (ab) { page.headers.set("Vary", "Cookie"); page.headers.set("Cache-Control", "no-store"); if (ab.cookie) page.headers.set("Set-Cookie", ab.cookie); }
+        return page;
       }
       if ((path === "/example" || path === "/example/") && isRead) {
         if (request.method === "GET") ctx?.waitUntil?.(countPageView(env, "/example", pageSource(request)));
@@ -2644,6 +2700,8 @@ var qnfo_ipatent_default = {
   }
 };
 export {
-  qnfo_ipatent_default as default
+  qnfo_ipatent_default as default,
+  abArm,
+  abShare
 };
 //# sourceMappingURL=worker.js.map
