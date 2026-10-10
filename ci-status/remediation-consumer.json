@@ -1,26 +1,112 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@dcb817bd8a55",
+ "verifier": "remediation-consumer@cbfa7565f6b4",
  "due": 40,
- "pass": 4,
- "fail": 36,
- "skipped": 0,
+ "pass": 10,
+ "fail": 29,
+ "skipped": 1,
  "contracts": [
   {
-   "class": "issue-1875",
-   "issue_id": 1875,
+   "class": "issue-2105",
+   "issue_id": 2105,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "pending: ungated published=211 newest verdict=2026-10-10T04:20:12.660Z published quarantine-candidates=0",
    "written": true
   },
   {
-   "class": "issue-1876",
-   "issue_id": 1876,
+   "class": "issue-2171",
+   "issue_id": 2171,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "a task created after the deploy ended superseded",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-2187",
+   "issue_id": 2187,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
@@ -188,7 +274,7 @@
    "issue_id": 2011,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: fleet_ai_run_rate_30d_usd 53.7, workers_ai_cost_30d_usd 62.15 (needs <= 40 on 14 days and <= 25)",
+   "observed": "pending: fleet_ai_run_rate_30d_usd 53.7, workers_ai_cost_30d_usd 62.24 (needs <= 40 on 14 days and <= 25)",
    "written": true
   },
   {
@@ -238,94 +324,6 @@
    "expected": "1",
    "observed": "0",
    "written": true
-  },
-  {
-   "class": "issue-2033",
-   "issue_id": 2033,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2141",
-   "issue_id": 2141,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-migration-unapplied",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-trigger-depth",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1683",
-   "issue_id": 1683,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2144",
-   "issue_id": 2144,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "fm-companion-publish-stall",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2145",
-   "issue_id": 2145,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2149",
-   "issue_id": 2149,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "fm-host-census-stale",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-social-channel-drain-silent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
   }
  ],
  "trusted_transports": [
@@ -351,12 +349,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 3.9,
+ "https": 9,
+ "runtime_verified_share_24h": 3.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 140315,
- "head": "dcb817bd8a5581c9987547265f8cfed7e2ed645c",
+ "spent_ms": 95221,
+ "head": "cbfa7565f6b4e85a5bc13f70f70b29a3af657418",
  "job_status": "success",
- "ts": "2026-10-10T14:54:01Z"
+ "ts": "2026-10-10T16:03:10Z"
 }
