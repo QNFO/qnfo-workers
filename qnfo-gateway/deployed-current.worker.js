@@ -1,4 +1,4 @@
-var VERSION="3.12.0-open-data-1"; /* 3.12.0 OPEN-DATA-1 (2026-10-09, pillar reach): OAI-PMH 2.0 at /oai, open JSON API (/api/papers, /api/papers/<slug>, /feed.json), /openapi.json, and 270 deleted Zenodo DOIs (410 Gone, no DataCite record) are no longer shown, cited or exported as live. 3.11.3 MATH-RESIDUE-3 (3.11.2 + script-l, emphasis, sign, comma subscripts, link parentheses) (2026-10-06, agent_issues 2023, pillar reach): the typesetter catches three shapes the 22 real render defects left: a word opening with "(" whose script follows its closer ("(p/p_th)^(d/2)", "(\u22121)^{2s}", "(p+1)p^{n\u22121}") keeps the "(", script-l is a subscript base ("\\u2113_P"), an emphasis opened before a word and closed inside it stays emphasis, sign and sgn are functions, a comma subscript with no space ("t_Q,total") is one subscript, a link target may hold balanced parentheses, a run takes back its first word's "(" when that balances it ("(1 - p^{-s})^{-1}"), and a unit power ("1 dm^3") is math; Latin h-bar converts to \\hbar inside a run but never anchors one. scripts/math-corpus-check.mjs over 469 pages: defect pages 22 -> 12, 0 KaTeX failures, 0 prose words lost, visible raw "*" 156 -> 140, raw x_y 2847 -> 2805. 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
+var VERSION="3.13.0-ask-ground"; /* 3.13.0 ASK-GROUND-1 (2026-10-10, pillar core, owner directive: answers verifiable against supplied text, fail closed): POST /api/ask returns 400 no_source without a slug and 404 no_source for an unknown or unpublished slug and makes no model call (it used to send an empty paper and answer from memory); it supplies up to 36000 characters of the paper (was 6000) and says when the text is cut; the prompt is process-only (answer only from the paper text, name what it does not cover) and every sentence of the answer carrying a DOI, link, author citation or figure absent from the paper text is removed. Tests: ask-ground.test.mjs. 3.12.0 OPEN-DATA-1 (2026-10-09, pillar reach): OAI-PMH 2.0 at /oai, open JSON API (/api/papers, /api/papers/<slug>, /feed.json), /openapi.json, and 270 deleted Zenodo DOIs (410 Gone, no DataCite record) are no longer shown, cited or exported as live. 3.11.3 MATH-RESIDUE-3 (3.11.2 + script-l, emphasis, sign, comma subscripts, link parentheses) (2026-10-06, agent_issues 2023, pillar reach): the typesetter catches three shapes the 22 real render defects left: a word opening with "(" whose script follows its closer ("(p/p_th)^(d/2)", "(\u22121)^{2s}", "(p+1)p^{n\u22121}") keeps the "(", script-l is a subscript base ("\\u2113_P"), an emphasis opened before a word and closed inside it stays emphasis, sign and sgn are functions, a comma subscript with no space ("t_Q,total") is one subscript, a link target may hold balanced parentheses, a run takes back its first word's "(" when that balances it ("(1 - p^{-s})^{-1}"), and a unit power ("1 dm^3") is math; Latin h-bar converts to \\hbar inside a run but never anchors one. scripts/math-corpus-check.mjs over 469 pages: defect pages 22 -> 12, 0 KaTeX failures, 0 prose words lost, visible raw "*" 156 -> 140, raw x_y 2847 -> 2805. 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -2925,39 +2925,101 @@ async function askRatePrune(env) {
   } catch (e) {
   }
 }
+// ---- ASK-GROUND-BEGIN: ASK-GROUND-1 (owner directive 2026-10-10): /api/ask answers only from the supplied paper text ----
+var ASK_PAPER_MAX = 36000;
+var ASK_NO_SOURCE = "No paper text was supplied for this question, so no answer is given.";
+function askGroundNums(text) {
+  var set = new Set();
+  (String(text || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) { set.add(n.replace(/,/g, "").replace(/\.0+$/, "")); });
+  return set;
+}
+// Problems in one sentence of the answer: identifiers, links, citations and figures that the supplied text does not contain.
+function askSentenceProblems(sent, gl, gnums) {
+  var out = [];
+  var s = String(sent).replace(/`[^`]*`/g, " ").replace(/\$\$[\s\S]*?\$\$/g, " ").replace(/\$[^$\n]+\$/g, " ");
+  (s.match(/\b10\.\d{4,9}\/[^\s"<>)\]]+/g) || []).forEach(function (d) { d = d.replace(/[.,;:]+$/, "").toLowerCase(); if (gl.indexOf(d) < 0) out.push("doi: " + d); });
+  (s.match(/https?:\/\/[^\s)<>\]"]+/gi) || []).forEach(function (u) { var k = u.toLowerCase().replace(/[.,;:)\]]+$/, "").replace(/\/+$/, ""); if (gl.indexOf(k) < 0) out.push("link: " + u); });
+  if (/\bet al\b/i.test(s) && gl.indexOf("et al") < 0) out.push("author citation: et al");
+  var body = s.replace(/^\s*(?:[-*+]\s+|\d{1,2}[.)]\s+)/, " ").replace(/10\.\d{4,9}\/\S+/g, " ").replace(/https?:\/\/\S+/gi, " ");
+  var re = /(\$?)(\d[\d,]*(?:\.\d+)?)(\s*(?:%|percent|[a-z]{2,}\b)?)/gi, m;
+  while ((m = re.exec(body))) {
+    var num = m[2].replace(/,/g, "").replace(/\.0+$/, "");
+    if (gnums.has(num)) continue;
+    if (/^\d{1,2}$/.test(num) && Number(num) <= 10 && !m[1] && !/^(%|percent)$/i.test((m[3] || "").trim())) continue;
+    out.push("figure: " + (m[1] + m[2] + " " + (m[3] || "")).trim());
+  }
+  return out;
+}
+// Removes every sentence with an identifier, link, citation or figure absent from `ground`. Returns { text, removed }.
+function askGroundAnswer(text, ground) {
+  var gl = String(ground || "").toLowerCase(), gnums = askGroundNums(ground), removed = 0;
+  var parts = String(text || "").split(/(```[\s\S]*?```)/);
+  for (var pi = 0; pi < parts.length; pi++) {
+    if (/^```/.test(parts[pi])) continue;
+    var lines = parts[pi].split("\n");
+    for (var li = 0; li < lines.length; li++) {
+      if (!lines[li].trim()) continue;
+      var lead = (lines[li].match(/^\s*(?:[-*+]\s+|\d{1,2}[.)]\s+|>\s*)?/) || [""])[0];
+      var kept = [];
+      lines[li].slice(lead.length).split(/(?<=[.!?])\s+(?=[A-Z0-9"'(\[*_])/).forEach(function (sn) {
+        if (askSentenceProblems(sn, gl, gnums).length) removed++; else kept.push(sn);
+      });
+      lines[li] = kept.length ? lead + kept.join(" ") : "";
+    }
+    parts[pi] = lines.join("\n").replace(/\n{3,}/g, "\n\n");
+  }
+  var out = parts.join("").trim();
+  if (removed) out += "\n\n_" + removed + " statement" + (removed === 1 ? "" : "s") + " removed: each carried a DOI, link, author citation or figure that is not in the paper text._";
+  return { text: out, removed: removed };
+}
+function askSystemPrompt(paperTitle) {
+  return 'You answer questions about one paper titled "' + paperTitle + '". The only source is the PAPER TEXT in the user message. '
+    + "Rules: (1) State only what the paper text states or what follows directly from it; quote or paraphrase it closely. "
+    + "(2) Your memory is not a source: add no names, dates, figures, citations, identifiers or links that are not in the paper text. "
+    + "(3) When the paper text does not cover the question, or covers it only in part, say exactly which part it does not cover. "
+    + "(4) If the supplied text is cut off, say that the answer is limited to the text supplied. Output the answer only.";
+}
 async function handleAskAI(request, env) {
   if (!env.AI) return json({ error: "AI binding not configured" }, 503);
   const body = await request.json().catch(() => ({}));
   const { slug, question } = body;
   if (!question || typeof question !== "string" || !question.trim()) return json({ error: "Missing question" }, 400);
   if (question.length > ASK_QUESTION_MAX) return json({ error: "Question too long (max " + ASK_QUESTION_MAX + " characters)" }, 413);
+  // ASK-GROUND-1: no paper, no answer. A missing or unknown slug used to send an empty "Paper content:" to the model, which then
+  // answered from memory. It now returns a no-source response and makes no model call (and spends no rate-limit budget).
+  if (!slug || typeof slug !== "string" || !slug.trim()) return json({ error: "no_source", answer: null, grounded: false, message: "A paper slug is required; this endpoint answers only from the text of one published paper." }, 400);
   const limited = await askRateCheck(request, env);
   if (limited) return limited;
   try {
-    let paperTitle = "", paperBody = "";
-    if (slug) {
-      const paper = await env.LIVING_PAPER.prepare("SELECT title,body_md,abstract FROM papers WHERE slug = ? AND status IN ('published','distributed','external_preprint') LIMIT 1").bind(slug).first();
-      if (paper) {
-        paperTitle = paper.title || "";
-        paperBody = (stripFrontmatter(paper.body_md) || paper.abstract || "").slice(0, 6e3);
-      }
+    let paperTitle = "", paperBody = "", truncated = false;
+    const paper = await env.LIVING_PAPER.prepare("SELECT title,body_md,abstract FROM papers WHERE slug = ? AND status IN ('published','distributed','external_preprint') LIMIT 1").bind(slug).first();
+    if (paper) {
+      paperTitle = paper.title || "";
+      const full = stripFrontmatter(paper.body_md) || paper.abstract || "";
+      paperBody = full.slice(0, ASK_PAPER_MAX);
+      truncated = full.length > ASK_PAPER_MAX;
     }
+    if (!paperBody.trim()) return json({ error: "no_source", answer: null, grounded: false, slug, message: "No published paper text was found for this slug, so no answer is given." }, 404);
     // ASK-MODEL-1 (3.8.4): glm-5.3-flash is a reasoning model; within 2048 tokens it often returned no answer at all
     // (measured on ask.qwav.tech, ASK-LOOP-1 2.0.2). Same non-reasoning model as ask.qwav.tech's champion; any <think>
     // block is removed. Paper pages ask through ask.qwav.tech; this route stays for API callers.
     const result = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
       messages: [
-        { role: "system", content: 'You are a research assistant for a QNFO paper titled "' + paperTitle + '". Answer from the paper content; say plainly when it does not cover the question.' },
-        { role: "user", content: question + "\n\nPaper content: " + paperBody }
+        { role: "system", content: askSystemPrompt(paperTitle) },
+        { role: "user", content: "QUESTION: " + question + "\n\nPAPER TEXT" + (truncated ? " (first " + ASK_PAPER_MAX + " characters of a longer paper)" : "") + ":\n" + paperBody }
       ],
-      max_tokens: 1200
+      max_tokens: 1200,
+      temperature: 0.1
     });
-    const text = String(result && (result.response || (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content)) || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-    return json({ answer: text || "No response generated.", slug: slug || null, model: "llama-3.3-70b-instruct-fp8-fast" });
+    const raw = String(result && (result.response || (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content)) || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    if (!raw) return json({ error: "The model returned no answer; try again later." }, 502);
+    const g = askGroundAnswer(raw, paperTitle + "\n" + question + "\n" + paperBody);
+    return json({ answer: g.text || "No part of the generated answer could be matched to the paper text, so no answer is given.", slug, grounded: true, removed_statements: g.removed, source_chars: paperBody.length, source_truncated: truncated, model: "llama-3.3-70b-instruct-fp8-fast" });
   } catch (e) {
     return json({ error: "The model call failed; try again later." }, 502);
   }
 }
+// ---- ASK-GROUND-END ----
 __name(handleAskAI, "handleAskAI");
 __name2(handleAskAI, "handleAskAI");
 __name22(handleAskAI, "handleAskAI");
