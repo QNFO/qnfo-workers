@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.9-no-zenodo-doi"; // 1.1.8 DIGEST-LINKS-UTM-1 (2026-10-06, pillar reach; transformation lever T7.10): every paper link in the
+var VERSION = "1.1.9-doi-scrub"; // 1.1.8 DIGEST-LINKS-UTM-1 (2026-10-06, pillar reach; transformation lever T7.10): every paper link in the
 // weekly digest carries utm_source=digest&utm_medium=email&utm_campaign=<slug> and the confirmation mail's corpus link
 // utm_source=confirm&utm_medium=email&utm_campaign=corpus, so a digest read becomes a measured visit once qnfo-gateway 3.10.0
 // (UTM-CLICK-LEDGER-1, T7.9) counts tagged page loads into reach_signals source utm (channel digest, campaign slug). No

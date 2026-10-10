@@ -14982,7 +14982,7 @@ function renderFullHTML(md, opts) {
 __name(renderFullHTML, "renderFullHTML");
 
 // worker.js
-var VERSION = "1.1.1-no-zenodo-doi"; // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
+var VERSION = "1.1.1-doi-scrub"; // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
