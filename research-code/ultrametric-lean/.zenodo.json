@@ -1,7 +1,0 @@
-{
-  "title": "ultrametric-lean: machine-checked ultrametric confinement and unique decoding",
-  "upload_type": "software",
-  "creators": [{"name": "Quni-Gudzinas, Rowan Brad"}],
-  "related_identifiers": [{"identifier": "10.5281/zenodo.22073477", "relation": "isSupplementTo", "scheme": "doi"}],
-  "keywords": ["Lean 4", "formal verification", "ultrametric", "quantum error correction"]
-}

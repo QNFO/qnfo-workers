@@ -72,7 +72,6 @@ platform norms forbid automation (STRATEGY 4) or because the session was refused
 | Cold email to tool builders | appendix C, at most 15 people with a public repository in the field, under the consent rules | **owner (*refused*)**: the session's attempt to have qnfo-outreach mine and mail this audience was refused as a real-world transaction | owner decides | not started |
 | Hacker News | "Show HN" (appendix B) | **owner** (HN is manual by policy) | Tue to Thu, 14:00 to 16:00 UTC | drafted |
 | Reddit, LessWrong | not used: self-promotion rules and fit | none | none | skipped |
-| Zenodo | add "read online" (`isVariantFormOf`, the paper's papers.qnfo.org URL) to each record's related identifiers. This is a metadata edit with no new DOI, and it reaches the largest existing audience (Zenodo views) | **owner decision** (mass edit of scholarly records) | after approval | proposed |
 | ORCID, LinkedIn profile, Google Scholar, ResearchGate, SSRN | add papers.qnfo.org as the website | owner (sign-in only; standing decision: not re-asked) | optional | n/a |
 | arXiv | not pursued (endorsement policy; STRATEGY 5) | none | none | n/a |
 | AI assistants | llms.txt already lists every paper | automatic | live | done |
@@ -135,7 +134,7 @@ Title: `Show HN: Living papers – research papers with a contents rail, referen
 URL: `https://papers.qnfo.org/reading`
 
 Text:
-> I publish my research as preprints (450 so far, most with Zenodo DOIs) and found that nobody, including me, reads a PDF
+> I publish my research as preprints (450 so far) and found that nobody, including me, reads a PDF
 > on a screen comfortably. So every paper on papers.qnfo.org now opens as a "living paper": the text is unchanged, but the page
 > gives you a contents rail with reading progress, typeset maths, hover previews for references, the paper's versions and
 > related work, and an Ask panel that answers from the paper and cites what it used.

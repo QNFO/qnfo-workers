@@ -33,7 +33,7 @@ the start of the grant); live testbed: https://papers.qnfo.org
 > corrupted by encoding faults, and links rot, silently. This project builds a small, open toolkit that any repository or
 > self-hosted publisher can run: (1) a provenance manifest per work that binds identifier, version, content hash and licence;
 > (2) a drift verifier that recomputes hashes across the registry, landing page, files and mirrors and reports every
-> mismatch; (3) a metadata consistency linter for DataCite/Zenodo records, citation meta tags, JSON-LD and FAIR Signposting
+> mismatch; (3) a metadata consistency linter for DataCite records, citation meta tags, JSON-LD and FAIR Signposting
 > links; (4) a CI action that blocks publishing a release that fails these checks. It is developed and validated on a live
 > archive of several hundred openly licensed preprints, and released under Apache-2.0 with documentation.
 
@@ -45,7 +45,7 @@ the start of the grant); live testbed: https://papers.qnfo.org
 >
 > 1. Provenance manifest specification and reference implementation (80 h, EUR 4,800). A small JSON schema per work:
 >    persistent identifier, concept and version identifiers, content hashes for every file (SHA-256 plus an optional IPFS CID),
->    licence, and the chain of versions. Generator for DataCite/Zenodo records and for static landing pages.
+>    licence, and the chain of versions. Generator for DataCite records and for static landing pages.
 > 2. Drift verifier (140 h, EUR 8,400). Fetches the registry record, the landing page, the files and any mirrors; normalises
 >    them (canonical text form, so formatting-only changes do not count as drift); recomputes hashes; reports identifier
 >    mismatches, version mismatches, encoding corruption (e.g. double-encoded UTF-8), dead or redirected links, and licence
@@ -64,7 +64,7 @@ the start of the grant); live testbed: https://papers.qnfo.org
 
 **Comparison with existing efforts** (max 4000 characters)
 
-> Persistent identifier services (DataCite, Crossref, Zenodo) mint and resolve identifiers and keep version chains, but they
+> Persistent identifier services (DataCite, Crossref) mint and resolve identifiers and keep version chains, but they
 > do not verify that the content and metadata seen at the landing page, in the files and in mirrors still match the
 > registered record. Crossmark shows update and retraction status for Crossref DOIs, but most preprint and repository DOIs
 > are DataCite DOIs, and Crossmark does not check content integrity.
@@ -92,7 +92,7 @@ the start of the grant); live testbed: https://papers.qnfo.org
 >   The false-positive rate will be measured and reported.
 > - Legitimate change versus drift: works are revised. The manifest must separate a new version (expected, linked by the
 >   version chain) from an unrecorded change to an existing version.
-> - Concept versus version identifiers: Zenodo and DataCite distinguish them, and pages often cite one while the files belong
+> - Concept versus version identifiers: DataCite distinguishes them, and pages often cite one while the files belong
 >   to the other. The checker must resolve both and report which one a page claims.
 > - Reproducible builds of publication files: PDFs embed creation dates and tool versions. Deterministic build settings, or
 >   hashing a canonical text layer, are needed so a rebuilt file verifies.
@@ -103,7 +103,7 @@ the start of the grant); live testbed: https://papers.qnfo.org
 
 **Ecosystem and engagement** (max 2000 characters)
 
-> Users: maintainers of institutional and community repositories (InvenioRDM, which Zenodo runs on, is open source),
+> Users: maintainers of institutional and community repositories (InvenioRDM is open source),
 > self-hosted publishers of preprints and reports, and research software engineers who publish with DOIs. Engagement:
 > releases on a public forge under Apache-2.0; a reusable CI action; an issue and discussion space; a short report of the
 > validation results; and direct outreach to InvenioRDM and FAIR Signposting implementers with concrete findings, offering
@@ -116,9 +116,9 @@ the start of the grant); live testbed: https://papers.qnfo.org
 > research portfolio and worked on the national long-distance passenger travel forecasting model. At AARP's Public Policy
 > Institute I led the Livability Index, which integrates 50+ data sources and is published and versioned as a public data
 > product. For the past two years I have built and operated an open publishing system on Cloudflare Workers (databases,
-> object storage, scheduled jobs) that deposits preprints on Zenodo with DOIs and serves them at papers.qnfo.org. The
+> object storage, scheduled jobs) that publishes preprints and serves them at papers.qnfo.org. The
 > integrity gates that system already runs (duplicate titles, encoding faults, version and identifier convergence) are the
-> starting point for this toolkit. Published method work: The Universal Ignorance Audit (10.5281/zenodo.21901984).
+> starting point for this toolkit. Published method work: The Universal Ignorance Audit.
 
 **Does (or did) the project have other funding sources?** (max 1000 characters)
 

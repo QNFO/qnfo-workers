@@ -47,10 +47,7 @@ const sel = W.reachEligible("Operating the Quniverse Fleet", "", "10.5281/zenodo
 ok(sel.ok && /selected work 7/.test(sel.reason), "a selected work is eligible whatever its title", sel);
 ok(W.reachEligible("Universal ontology of things", "", "10.5281/zenodo.21901984").ok, "selection wins over a deny term");
 
-// STRATEGY 2.4 table == REACH_SELECTED
-const sec = strategy.slice(strategy.indexOf("### 2.4 Selected works"), strategy.indexOf("### 2.4a"));
-const tableDois = [...sec.matchAll(/\|\s*(\d)\s*\|[^|]*\|\s*(10\.5281\/zenodo\.\d+)\s*\|/g)].map((m) => m[1] + ":" + m[2]);
-ok(tableDois.length === 7 && JSON.stringify(tableDois) === JSON.stringify(W.REACH_SELECTED.map((w) => w.n + ":" + w.doi)), "REACH_SELECTED equals the STRATEGY.md 2.4 table", tableDois);
+// (NOZ-DOI-1: STRATEGY 2.4 no longer lists identifiers, so the table-vs-worker comparison was retired.)
 
 // pickRefill
 const D = (n) => W.REACH_SELECTED[n - 1].doi;

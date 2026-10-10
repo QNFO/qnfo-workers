@@ -109,7 +109,7 @@ jobs:
           names = sorted(b.get('name') for b in res.get('bindings', []))
           expected = {'AI', 'GITHUB_TOKEN', 'GRAPH_DB', 'LIVING_PAPER', 'MIRROR', 'PDF_SVC',
                       'PILOT_TOKEN', 'QNFO_AUDIT', 'RESEARCH_HALT', 'ROUTER_TOKEN',
-                      'ZENODO_TOKEN', 'QNFO_AI'}
+                      'QNFO_AI'}
           print('live_binding_names=' + json.dumps(names))
           missing = sorted(expected - set(names))
           if missing:

@@ -17,19 +17,19 @@ for the program.
 
 | Fact | Value | Source |
 |---|---|---|
-| Zenodo records with a code companion | 0 of 575 | `zenodo_stats`, `paper_index` |
+| Published records with a code companion | 0 of 575 | `paper_index` |
 | Graded public QNFO repositories / stars on them | 35 / 3 in total (three repositories with one star each) | `portfolio_repos` |
 | Installable packages (PyPI, npm) / software DOIs | 0 / 0 | repositories' contents; no `pyproject.toml` or `package.json` with a release |
 | Demo repositories | 8, all HTML pages (QWAV demos), no library underneath | `portfolio_repos` tier demo |
-| Papers by field (title keywords): n, mean downloads, mean views | AI and epistemics 33, 232, 82.8; quantum 133, 151, 44.9; mathematics 92, 107, 33.5; other physics and philosophy 317, 118, 94.6 | `zenodo_stats` |
-| Most-downloaded record | *AGENTIC COLLAPSE* (10.5281/zenodo.18133065): 3,251 downloads, 83 views | `zenodo_stats` |
-| Corpus mean downloads per view | 3.13 (Agentic Collapse: 39) | `zenodo_stats` |
+| Papers by field (title keywords): n, mean downloads, mean views | AI and epistemics 33, 232, 82.8; quantum 133, 151, 44.9; mathematics 92, 107, 33.5; other physics and philosophy 317, 118, 94.6 | `paper_index` |
+| Most-downloaded record | *AGENTIC COLLAPSE*: 3,251 downloads, 83 views | `paper_index` |
+| Corpus mean downloads per view | 3.13 (Agentic Collapse: 39) | `paper_index` |
 | Arxiv intake query terms | quantum, ultrametric, p-adic, energy only; no AI or formal-methods term | `qnfo-cloud-ops` `RESEARCH_SCAN_QUERY` |
 | `idea_topic_concentration_30d` | 0.596 against a target of <= 0.50, in breach | `metric_registry`, `v_metric_trigger_state` |
 | Licence of every QNFO repository, code included | QNFO-ULA v2.0 = CC BY-NC-SA 4.0 plus supplemental terms; v2.1 (drafted, `docs/license/`) gives code its own Software Terms | `QNFO/license` |
 
 **Read the download numbers with care.** The Agentic Collapse record carries 80 files, and its downloads-per-view ratio
-(39) is twelve times the corpus mean. Zenodo counts file downloads, so per-file fetches by harvesters and crawlers
+(39) is twelve times the corpus mean. Download counters count file downloads, so per-file fetches by harvesters and crawlers
 plausibly account for most of that figure. Views are the better human signal, and on views AI and epistemics still lead
 quantum (82.8 against 44.9 per paper). Without that one record, the AI mean is 138 downloads, below quantum. The
 honest claim is "AI work draws more human views per paper", not "AI papers are downloaded more". The owner reports a
@@ -39,8 +39,8 @@ That is a measurement gap of the kind #1754 found, and it is listed in section 8
 ## 2. Why code, and the strongest case against it
 
 Why it should work:
-- A library is used, not only read. Every `pip install`, import and CI run is a returning user, and `CITATION.cff` plus a
-  Zenodo software DOI turn use into citations that point back at the paper.
+- A library is used, not only read. Every `pip install`, import and CI run is a returning user, and `CITATION.cff` turns
+  use into citations that point back at the paper.
 - Developer channels (GitHub search and topics, PyPI, Hacker News, the Lean community, awesome-lists) are audiences QNFO
   does not reach today. STRATEGY-1 section 3 already names the AI-for-science and engineering audiences; they read code.
 - Reproduction is a credibility event in its own right. STRATEGY-1's review gate counts credibility events, and a
@@ -71,7 +71,7 @@ The strongest case against:
 
 ## 3. What was built (research-code/, tested in CI by .github/workflows/research-code.yml)
 
-### 3.1 agentic-collapse (AI; companion to 10.5281/zenodo.18133065)
+### 3.1 agentic-collapse (AI; paper companion)
 
 A dependency-free Python reference implementation of the paper's time-delayed stochastic system (phi, psi, U),
 Euler-Maruyama with a rolling delay buffer and the Popperian Guillotine. It adds Monte Carlo collapse probabilities with
@@ -94,7 +94,7 @@ Filed as `AGENTIC-COLLAPSE-REPRO-1` (high): a v2 through the errata path that st
 section 4 with the library and says which conclusions hold. It is the corpus's most-downloaded record, so it is also its
 largest credibility exposure.
 
-### 3.2 ignorance-audit (metascience; companion to 10.5281/zenodo.21901984 and 10.5281/zenodo.22026592)
+### 3.2 ignorance-audit (metascience; paper companion)
 
 The Universal Ignorance Audit v0.3 as a library: the fifteen questions, verbatim and checked against the paper text, in
 five phases. The administration protocol becomes machine checks: a target is stated, every question is answered, an
@@ -105,7 +105,7 @@ finds that a baseline verifier misses, per error category, with precision where 
 This is the library that serves the accepted conference paper on ignorance auditing, and the one STRATEGY-1 calls "a
 method others can use".
 
-### 3.3 ultrametric-lean (mathematics and formal verification; for 10.5281/zenodo.22073477)
+### 3.3 ultrametric-lean (mathematics and formal verification; paper companion)
 
 Lean 4 proofs with no Mathlib dependency, so the whole check runs in seconds:
 - the isosceles property;
@@ -124,7 +124,7 @@ Four tracks, led by the fields where the evidence is strongest. Each item names 
 
 | Track | What | Next items, in order |
 |---|---|---|
-| A. Paper companions | one library per flagship that reproduces or tests a numbered claim, linked both ways (Zenodo `isSupplementTo` / `isSupplementedBy`) | agentic-collapse (done; v2 paper next); a JPCUB measurement harness for 10.5281/zenodo.21637028 and the LLM extension 10.5281/zenodo.21945415 (joules per correct answer from a power trace and a verifier: the lead pillar's missing tool); the QCA toy model for 10.5281/zenodo.22012694, the corpus's second most-downloaded record |
+| A. Paper companions | one library per flagship that reproduces or tests a numbered claim, linked both ways (paper to library and library to paper) | agentic-collapse (done; v2 paper next); a JPCUB measurement harness and the LLM extension (joules per correct answer from a power trace and a verifier: the lead pillar's missing tool); the QCA toy model, the corpus's second most-downloaded record |
 | B. Standalone tools | methods others can use without reading the paper | ignorance-audit (done); an "audit my AI-assisted paper" CLI that runs ignorance-audit plus claim, test and status extraction over a PDF; the fleet's coordination primitives (lease, work claim, remediation contract) as a small library for anyone running autonomous agents |
 | C. Formal verification | Lean 4, Mathlib-compatible where possible | ultrametric-lean (done); port to Mathlib `IsUltrametricDist`; formalize the JPCUB anti-gaming definitions (a metric definition is where formal methods catch loopholes); state, and where possible prove, the QEC-Darwinism trade-off |
 | D. AI research about AI research | the corpus as data | a dataset and paper on the reproducibility of AI-assisted research, built from the companions' results (3.1 is the first data point), the errata ledger and the review ledgers; an autoformalization benchmark: what share of the corpus's mathematical claims a model can state in Lean, and how many then build |
@@ -141,7 +141,7 @@ SIGNAL-INTAKE-SOURCES-1 and the idea-hub diversity hold). Outreach criteria are 
 2. Tests run in CI on every change (`.github/workflows/research-code.yml`), offline, with a pinned toolchain.
 3. The README carries the three STRATEGY-1 lines: **claim**, **test**, **status**, and a table of what the paper states
    versus what the library assumes. Any disagreement with the paper is a pinned test and an `agent_issues` row.
-4. `CITATION.cff` (the paper as preferred citation), `.zenodo.json` (the paper as `isSupplementTo`), the QNFO-ULA v2.1
+4. `CITATION.cff` (the paper as preferred citation), the QNFO-ULA v2.1
    `LICENSE`, an SPDX header in every source file (`LicenseRef-QNFO-ULA-2.1`, Appendix C), and the words
    "source-available", never "open source" (section 12.8).
 5. No network access, no secret and no model provider inside the library. A model, if needed, is a function the user
@@ -171,8 +171,7 @@ Guards: no library may be counted as public while its CI is red, and the program
 - `code-repos-create`: create the three public repositories. The build session's GitHub integration was refused
   organisation repository creation (HTTP 403), and routing creation through another credential was deliberately not
   done.
-- `code-release-pypi-zenodo`: switch the repositories on in Zenodo's GitHub settings (software DOIs on release), and add
-  PyPI trusted publishers (installable packages). Both are account-level.
+- `code-release-pypi`: add PyPI trusted publishers (installable packages). This is account-level.
 - Decided 2026-10-06: code stays under the QNFO-ULA, updated for software. Post v2.1 by copying
   `docs/license/for-QNFO-license/` to `QNFO/license` (the session was refused write access there). Four choices in it are
   the Licensor's and are listed in `docs/license/README.md`. Post v2.1 before the library repositories go public, so

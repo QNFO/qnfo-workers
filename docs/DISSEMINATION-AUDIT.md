@@ -13,18 +13,18 @@ checklist against FAIR, OAI-PMH 2.0, schema.org, Google Scholar inclusion rules 
 | Author identity (ORCID) | JSON-LD `sameAs` for the owner | also in the DataCite block; ROR is not linked (no registered organisation) |
 | Software citation | none | `CITATION.cff`, `codemeta.json` at the repository root |
 | Discovery | sitemap, RSS, llms.txt, IndexNow | llms.txt lists the open-data endpoints |
-| Identifier honesty | 270 deleted Zenodo DOIs printed as live links, in `citation_doi` and JSON-LD | DEAD_DOIS filter: never shown, cited or exported |
+| Identifier honesty | dead DOIs printed as live links, in `citation_doi` and JSON-LD | DEAD_DOIS filter: never shown, cited or exported (the external DOI deposit path was removed 2026-10-10) |
 
 ## Measured: the DOI problem
 
-Of 441 paper pages that advertised a DOI, 279 had no DataCite record. For those, Zenodo's record API was queried: 270
-answered 410 Gone (deleted), 4 resolve (kept), 1 is a non-Zenodo preprint DOI (kept), 2 timed out (kept, unverified).
-`scripts/doi-liveness.py` reproduces the measurement. The filter is conservative: only a DOI with both a Zenodo 410 and
+Of 441 paper pages that advertised a DOI, 279 had no DataCite record. For those, the registry's record API was queried: 270
+answered 410 Gone (deleted), 4 resolve (kept), 1 is a third-party preprint DOI (kept), 2 timed out (kept, unverified).
+The measurement script was retired 2026-10-10 with the external DOI path. The filter is conservative: only a DOI with both a 410 from the registry and
 no DataCite record is hidden.
 
 ## Failure modes (adversarial)
 
-1. The dead list is embedded in the worker. A DOI that Zenodo restores stays hidden until the list is regenerated.
+1. The dead list is embedded in the worker. A DOI that the registry restores stays hidden until the list is regenerated.
    Because hidden DOIs disappear from the pages, the script cannot re-check them from the live site; re-check from the
    list itself. Owner: follow-up issue (move the list to D1 with a weekly re-check).
 2. `oai_dc` carries only Dublin Core. Harvesters that want DataCite or JATS get the JSON API only.

@@ -12,10 +12,7 @@ let failed = 0, passed = 0;
 function ok(c, m) { if (c) passed++; else { failed++; console.log("FAIL " + m); } }
 
 const SELECTED = ["10.5281/zenodo.21637028", "10.5281/zenodo.22261547", "10.5281/zenodo.21821767", "10.5281/zenodo.21945415", "10.5281/zenodo.21901984", "10.5281/zenodo.22026592", "10.5281/zenodo.23079905"];
-// STRATEGY s2.4 is the source of the list: every DOI there must be in the worker, and only those.
-const strategy = readFileSync(join(here, "..", "docs", "STRATEGY.md"), "utf8");
-const s24 = strategy.split("### 2.4 Selected works")[1].split("\n### ")[0];
-ok(JSON.stringify((s24.match(/10\.5281\/zenodo\.\d+/g) || []).sort()) === JSON.stringify(SELECTED.slice().sort()), "the test list equals STRATEGY s2.4");
+// (NOZ-DOI-1: STRATEGY s2.4 no longer lists identifiers, so the table-vs-worker comparison was retired.)
 
 // ---- stubs
 let inserts = [], flagshipThrows = false, fetched = [];

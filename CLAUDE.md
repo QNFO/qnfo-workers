@@ -336,7 +336,7 @@ because each one was broken at least once; the linked issue holds the evidence.
   pull requests for the thing you are about to build, immediately before building it (a watchmaker index was built twice;
   PR 345 closed unmerged). State what is true from a read made in this session ("never proven live" was said of the code
   loop hours after it delivered a merged PR). Before treating an off-target metric as a real gap, check that it is measured
-  (zenodo_versions_per_flagship read 1 while the true minimum was 3: two flagships were unmeasured, #1754). An action the
+  (a flagship-version metric read 1 while the true minimum was 3: two flagships were unmeasured, #1754). An action the
   session is refused is handed to the owner with the reason, not retried.
 
 ## Writing that outsiders read (ENSEMBLE-POLICY-1)

@@ -93,7 +93,7 @@ Roadmap coverage by VSM system: S1 19, S2 4, S3 24, S3* 5, S4 7, S5 14. By OODA 
 | RM-BESPOKE-REPORTS-1 | owner-decision | S5 / decide | owner | Bespoke research reports offered through warm outreach replies (12 replied). Decided 2026-10-01 (docs/STRATEGY.md section 7): becomes the JPCUB assessment offer (measurement for a platform or data centre), opened through warm replies | docs/BUSINESS-PLAN.md Phase B.3 |
 | RM-BUFFER-MULTICHANNEL-1 | owner-decision | S5 / decide | owner | Decide multi-channel distribution (LinkedIn/X/Mastodon via Buffer, BUFFER_TOKEN unprovisioned) vs own-pages-only rule. Decided 2026-10-01 (docs/STRATEGY.md sections 4-5): multi-channel distribution via Buffer in the owner's voice as gated T1; LinkedIn (primary) is drafted automatically and published after the owner's one-tap approval (LinkedIn API Terms 3.1), Mastodon, Threads and X post automatically inside the gates; live once the owner connects LinkedIn in Buffer | docs/AUTONOMOUS-RESEARCH-PIPELINE.md s4 vs BUSINESS-PLAN standing rule 'no social media' |
 | RM-SEO-INDEXNOW-JSONLD-1 | gate-verify | S1 / act | qnfo-research-exec | Verify IndexNow ping per publication and Schema.org ScholarlyArticle JSON-LD on every paper page | docs/AUTONOMOUS-RESEARCH-PIPELINE.md s4 (T6) |
-| RM-CITATION-TRACKING-ALL-DOIS-1 | partial | S4 / observe | qnfo-paper-indexer | Daily Crossref/OpenAlex/Zenodo impact collection for all 217 DOIs feeding impact_scores | docs/AUTONOMOUS-RESEARCH-PIPELINE.md s5; citation_stats 3,604 rows, impact_scores 81 |
+| RM-CITATION-TRACKING-ALL-DOIS-1 | partial | S4 / observe | qnfo-paper-indexer | Daily Crossref/OpenAlex impact collection feeding impact_scores | docs/AUTONOMOUS-RESEARCH-PIPELINE.md s5; citation_stats 3,604 rows, impact_scores 81 |
 | RM-IDEA-STREAM-UI-1 | not-built | S1 / act | idea-hub | Public read-only real-time idea stream UI (QNFO idea/chat development) linked from qnfo.org | owner request 2026-08-28 (audits/2026-10-01-master-build-out-backlog-v2.md s2.6) |
 
 ### 2.5 Research products and the original program visions
@@ -111,7 +111,7 @@ Roadmap coverage by VSM system: S1 19, S2 4, S3 24, S3* 5, S4 7, S5 14. By OODA 
 | RM-VISION-COMPUTE-CLOUD-1 | not-built | S1 / act | qnfo-containers-pilot | QWAV compute cloud: browser-run ultrametric embeddings, p-adic valuations, LoF reductions | tasks GH-P3-089 |
 | RM-VISION-AGENT-SWARM-1 | partial | S1 / act | qnfo-research-exec | Agent swarm: Explorer/Synthesizer/Verifier/Publisher/Curator role agents running 24/7 | tasks GH-P3-090; #1638 QACP unbuilt |
 | RM-VISION-UNIFIED-PLATFORM-1 | partial | S5 / decide | owner | qnfo.org as the unified AI-native research platform integrating the 11 visions | tasks GH-P3-091 |
-| RM-QUALITY-REVISION-WAVE-1 | partial | S1 / act | qnfo-paper-reviser | Revise/expand all research papers with ensembles, iterations and feedback loops (zenodo_versions_per_flagship 1 vs >= 2) | kaizen kc-20260908-quality-revision-wave (user directive); #1621 |
+| RM-QUALITY-REVISION-WAVE-1 | partial | S1 / act | qnfo-paper-reviser | Revise/expand all research papers with ensembles, iterations and feedback loops (flagship version count 1 vs >= 2) | kaizen kc-20260908-quality-revision-wave (user directive); #1621 |
 | RM-RESEARCH-BROWSER-QUEUES-1 | not-built | S2 / act | qnfo-research-exec | Research pipeline v0.1 on Queues + Browser Run (rendered-source grounding) | tasks GH-HND-096 |
 | RM-RADAR-WORKFLOWS-PILOT-1 | not-built | S2 / act | radar-hub | Workflows pilot on conference-radar / research-daily-brief | handoff 28852 (OPS.008 Phase 2) |
 | RM-ADAPTIVE-SUGGESTIONS-1 | owner-decision | S4 / orient | owner | Adaptive suggestion engine wave 1: suggestion-event logging + bandit (awaiting owner pick). Decided 2026-10-01 (docs/STRATEGY.md section 6.4): adopted as the weekly distribution bandit (Thompson sampling over topic x format x time slot, rewarded by engaged sessions and subscriptions attributed through UTM) | handoffs 28929/28930 |
@@ -171,9 +171,9 @@ Each ledger entry in the paper names a remedy that became a standing gate. Statu
 
 | Entry | Remedy / gate | Status | Evidence |
 |---|---|---|---|
-| A1 | Transcript sweep before publish; fixes ship as new Zenodo versions | enforced-unverified | Needs a periodic sweep of published bodies to prove the gate holds. |
+| A1 | Transcript sweep before publish; fixes ship as new versions | enforced-unverified | Needs a periodic sweep of published bodies to prove the gate holds. |
 | A2 | Canonical link in public description and related identifiers | violated | fleet_improvements 1573: publishV2 triples the funnel link and drops keywords. |
-| A3 | DB and deposit converge on one version string | violated | task_dod 385: 60 url-id != doi-id, 24 doi != zenodo_doi. |
+| A3 | DB and deposit converge on one version string | violated | task_dod 385: 60 url-id != doi-id. |
 | B1 | Units audit before any cost escalation | violated-remediated | 2026-09-30: dashboard burn used credit-netted amount_due ($0.00); workers_ai_cost_30d_usd was hand-set 15.6 vs ~58 measured. Fixed in #156/#161. |
 | B2 | Gate metrics computed from sources at evaluation time | violated-remediated | impact_thresholds stored OPEN while measured MET (fixed #156); #1615 still open. |
 | B3 | Per-day estimates re-derived before compliance breach | enforced-unverified |  |
@@ -256,7 +256,7 @@ Each ledger entry in the paper names a remedy that became a standing gate. Statu
 - **observability**: #938 PERSONAL-TELEMETRY-PLANES-INERT; #1223 WORKER-LOGS-SAMPLED-ERROR-VISIBILITY-1; #1504 RESEARCH-REVISE-ABORT-1; #1543 TOOL-ERROR-RATE-web_fetch-1; #1618 WORKER-CENSUS-VERDICT-SATURATED-1; #1625 UNIFIED-OPEN-ISSUES-UNCONSUMED-1; #1626 METRIC-REGISTRY-UNDEFINED-DEFS-1; #1628 CAPABILITY-CONTRACT-CONFORMANCE-UNMEASURED-1; #1634 METRIC-TRIGGER-ACTION-LOOP-INERT-1; #1635 DISPATCH-HANDLER-CAPABILITY-UNVERIFIED-1; #1641 EXTERNAL-MENTION-MONITOR-EMPTY-1; #1642 VENUE-RADAR-DORMANT-1; #1645 EXPERIMENTS-FRAMEWORK-INERT-1; #1648 IPATENT-APP-ZERO-DATA-1; #1650 PORTFOLIO-PIPELINE-RUNS-INERT-1; #1652 FLEET-AGENTS-REGISTRY-STALE-1; #1653 RADAR-FAMILY-DORMANT-1; #1654 SIGNALS-TRIAGE-GAP-1; #1655 REPORT-CARD-INPUTS-STALE-1; #1657 CMS-CONTENT-TABLE-DEAD-1; #1658 WORKER-OUTPUT-CONTRACTS-STALE-1; #1660 FLEET-TASK-ENGINE-PARTIAL-COVERAGE-1; #1664 TOOL-ERROR-RATE-shell_exec-1; #1675 CAPABILITY-PRODUCT-LOOP-INCOMPLETE-1
 - **optimization**: #1163 Q08-CURATED-ARTICLE-UNPUBLISHED-20260926
 - **procedure**: #1118 OPS-PUBLICATION-PROCEDURE-GAP-20260926; #1152 DISSEMINATION-CHANNEL-CARRIES-Q08-NOT-PAPERS-1
-- **publication**: #1091 DLF-ZENODO-PUBLISH-BLOCKED-1; #1621 ZENODO-VERSIONS-PER-FLAGSHIP-1
+- **publication**: #1091 DLF-EXTERNAL-PUBLISH-BLOCKED-1; #1621 FLAGSHIP-VERSIONS-1
 - **reliability**: #935 PERSONAL-MEMORY-MAINTAIN-NOOP-POST-909; #1189 RESEARCH-QUEUE-TRANSIENT-EXPRESS-ABORT-MISLEADING-OK-1; #1271 OPS-AGENT-TOOLS-EMPTY-500-1 (fix deployed 2026-09-30, qnfo-ops 2.38.13); #1468 CLOUD-OPS-BINDINGS-MISSING-1; #1512 PERSONAL-VAULT-INDEXER-ERROR-SURGE-1; #1531 OPS-OUTPUT-CAP-CLAMP-1; #1624 OPS-JOBS-CANCELLED-DOMINANT-1; #1637 DEVICE-PLANE-FROZEN-1; #1639 NOTES-INTAKE-STOPPED-1; #1640 SELF-EVOLUTION-LOOP-STOPPED-1; #1649 PERSONAL-PLANE-EMPTY-TABLES-1; #1670 Q08-STUCK-RUN-ROWS-1
 - **remediation**: #1285 ACT-HALF-UNVERIFIED-PREDICATE-WEAK-1
 - **research**: #1620 RESEARCH-QUEUE-PUBLISH-STALL-22D-1; #1622 RESEARCH-PLANS-TABLE-EMPTY-1
