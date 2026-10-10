@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.10.0-open-q08"; // 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
+var VERSION = "0.11.0-grounding"; // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -532,12 +532,78 @@ function describeShape(o) {
   } catch (e) { return 'unreadable'; }
 }
 
+// ---- SOCIAL-GROUND-1 (0.11.0): mechanical grounding check, ported from q08-signal-engine Q08-VERIFY-1 ----
+var GROUND_LEAD = new Set(["the","a","an","in","on","at","when","if","but","and","so","as","that","this","these","those","it","its","each","every","most","some","no","for","with","without","before","after","once","while","because","since","what","where","who","why","how","then","there","here","not","only","even","still","yet","or","nor","by","from","to","of","their","his","her","our","your","one","two","three","such","both","many","any","all","i","we","you","he","she","they","my","whether","although","though","until","unless","instead","perhaps","suppose","imagine","consider","now","today","later","earlier","first","second","third","finally","meanwhile","however","which","whose","than","also","just","another","other","either","neither","same","more","less","few","several","can","could","may","might","would","will","do","does","is","are","was","were","be","read","check","see","open","access","link","paper","thread"]);
+var GROUND_OK = new Set(["doi","zenodo","bluesky","arxiv","open access","json","html"]);
+function groundWords(text) {
+  var set = new Set();
+  String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function(w) {
+    w = w.replace(/[.'-]+$/, ""); set.add(w); set.add(w.replace(/'s$/, "")); if (w.length > 3 && w.charAt(w.length - 1) === "s") set.add(w.slice(0, -1)); else set.add(w + "s"); return "";
+  });
+  return set;
+}
+function groundNumbers(text) {
+  var set = new Set(); (String(text || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function(n) { set.add(n.replace(/,/g, "").replace(/\.0+$/, "")); }); return set;
+}
+// Names, years and figures in `text` that `ground` does not contain. Links and hashtags are removed first (links are checked by
+// the link gates). Returns problem strings; [] means every one is grounded.
+function groundingProblems(text, ground) {
+  var body = String(text || "").replace(/https?:\/\/\S+|\b(?:www\.)?[a-z0-9.-]+\.(?:org|com|net|io)\/\S*/gi, " ").replace(/#\w+/g, " ");
+  var words = groundWords(ground), nums = groundNumbers(ground), out = [], seen = {};
+  function add(kind, v) { var k = kind + v.toLowerCase(); if (seen[k]) return; seen[k] = 1; out.push(kind + ": " + v); }
+  var nre = /\$?\d[\d,]*(?:\.\d+)?\s*(%|percent|days?|weeks?|months?|quarters?|years?|hours?)?/gi, m;
+  while ((m = nre.exec(body))) {
+    var raw = m[0], plain = raw.replace(/[$,\s]/g, "").replace(/(%|percent|days?|weeks?|months?|quarters?|years?|hours?)$/i, "");
+    var num = plain.replace(/\.$/, "");
+    if (!num || nums.has(num) || nums.has(num.replace(/\.0+$/, ""))) continue;
+    var unit = (m[1] || "").toLowerCase();
+    if (!unit && /^\d$/.test(num) && raw.indexOf("$") < 0) continue; // a bare single digit is a word, not a claim
+    var isYear = /^(1[0-9]|20)\d\d$/.test(num) && !unit;
+    add(isYear ? "year not in the source" : "figure not in the source", raw.trim());
+  }
+  body.split(/(?<=[.!?:;—])\s+|\n+/).forEach(function(sent) {
+    var toks = sent.match(/[A-Za-z0-9][A-Za-z0-9&'.’-]*|[,;]/g) || [];
+    var i = 0;
+    while (i < toks.length) {
+      var t = toks[i];
+      if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t) && toks[i + 1] && !/^[A-Z]/.test(toks[i + 1])) { i++; continue; }
+      var j = i, phrase = [];
+      while (j < toks.length && /^[A-Z][A-Za-z0-9&'.’-]*$/.test(toks[j])) { phrase.push(toks[j]); j++; if (toks[j] && /^(of|the|and|for|de|von|van|del|la)$/i.test(toks[j]) && toks[j + 1] && /^[A-Z]/.test(toks[j + 1])) { phrase.push(toks[j]); j++; } }
+      var lead = 0; while (lead < phrase.length - 1 && GROUND_LEAD.has(phrase[lead].toLowerCase().replace(/[^a-z]/g, ""))) lead++;
+      var core = phrase.slice(lead);
+      if (core.length && !(core.length === 1 && i === 0 && lead === 0) && !(core.length === 1 && GROUND_LEAD.has(core[0].toLowerCase()))) {
+        var joined = core.join(" ").replace(/’/g, "'");
+        var low = joined.toLowerCase().replace(/[^a-z0-9'\- ]/g, " ").replace(/\s+/g, " ").trim();
+        if (low && !GROUND_OK.has(low)) {
+          var miss = low.split(" ").filter(function(w) { return w && !GROUND_OK.has(w) && !GROUND_LEAD.has(w) && !words.has(w) && !words.has(w.replace(/'s$/, "")) && !(w.indexOf("-") > 0 && w.split("-").every(function (x) { return !x || words.has(x); })) && !/^\d+$/.test(w); });
+          if (miss.length) add("name not in the source", joined);
+        }
+      }
+      i = Math.max(j, i + 1);
+    }
+  });
+  return out.slice(0, 14);
+}
+// Per-post issues ({post, issue}) for a thread written from title + abstract (+ the author and DOI the prompt supplies).
+function threadGroundingIssues(title, abstract, posts, doi) {
+  var ground = [title, SOCIAL_AUTHOR, abstract, doi ? "https://doi.org/" + doi : ""].join("\n");
+  var issues = [];
+  (posts || []).forEach(function(p, i) {
+    groundingProblems(typeof p === "string" ? p : (p && p.text) || "", ground).forEach(function(x) { issues.push({ post: i + 1, issue: x }); });
+  });
+  return issues;
+}
 // Returns: [] = checked and faithful; [{post,issue},...] = problems found;
 // null = CHECKER UNAVAILABLE (fail-closed - callers must NOT auto-queue).
 async function checkThread(env, title, abstract, posts, doi) {
+  // SOCIAL-GROUND-1: the mechanical check runs first and needs no model. A name, year or figure that the source text does not
+  // contain is an issue; the list goes to the repair pass exactly like a checker finding. No checker verdict can override it.
+  const groundIssues = threadGroundingIssues(title, abstract, posts, doi);
+  if (groundIssues.length) return groundIssues;
   const base = [
     "Given a paper (title + abstract = ground truth) and a social media thread (candidate), list every claim in the thread that is NOT supported by the title or abstract.",
     "Check for: invented numbers, invented statistics, invented findings, overclaiming, misattribution, unsupported claims of being 'new' or 'first'.",
+    "Your own knowledge does not count as support, even if you are sure a claim is true: a name, number, date, method, result or benefit that the title or abstract does not state is unsupported, and hedged wording (could, might, may) does not excuse it.",
     "Ignore style: questions, hooks, calls to action, links, and generic phrases like 'read the paper'.",
     "The author's name and the paper link in PAPER are ground truth: naming the author or giving the link is never an issue.",
     "Output ONLY a JSON array of issues, e.g. [{\"post\": 2, \"issue\": \"...\"}]. Output [] if the thread is fully faithful.",
@@ -658,9 +724,10 @@ function composePrompt(doi, title, abstract) {
     "Rules:",
     "1. Post 1: a hook stating the core claim or a provocative question (why a reader should care).",
     "2. Post 2: the claim in plain language, faithful to the abstract (never invent or overclaim).",
-    "3. Post 3: why/how it matters, in accessible terms.",
-    "4. Post 4: how a reader can check it (falsifiability / open access) - invite scrutiny.",
+    "3. Post 3: why it matters, in accessible terms, using only what the abstract says about its significance; if the abstract states none, say which question the paper addresses.",
+    "4. Post 4: how a reader can check it, using only what the abstract and the paper link provide; claim no dataset, code, test or result the abstract does not mention - invite scrutiny.",
     "5. Post 5: name the author (" + SOCIAL_AUTHOR + ") by name, give the paper link as a full URL: https://doi.org/" + doi + ", then an open discussion question.",
+    "GROUNDING RULE: every name, number, date, method and result must be stated in the title or abstract below. Your own knowledge is not a source. Add no background, comparison, example or forecast of your own, and state results no more strongly than the abstract does.",
     "Each post under 280 characters. No exclamation marks. No marketing hype. No invented numbers.",
     "Never call the paper new, first, novel or recent: the abstract is the only source.",
     "Links must be full URLs (https://...). Never write a bare DOI.",
@@ -2648,7 +2715,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
+export { threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
