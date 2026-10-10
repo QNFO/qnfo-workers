@@ -44,7 +44,7 @@ check("publicHttpsUrl refuses private hosts", !F.publicHttpsUrl("https://localho
 check("judge verdict parses and normalises", F.parseJudgeVerdict('<think>x</think>{"outcome":"YES","basis":"1: the fork exists"}').outcome === "yes" && F.parseJudgeVerdict("no json") === null && F.parseJudgeVerdict('{"outcome":"maybe"}') === null);
 check("two agreeing judges settle; a split or an unclear does not", F.aggregateJudges([{ outcome: "yes", basis: "a" }, { outcome: "yes", basis: "b" }]).outcome === "yes" && F.aggregateJudges([{ outcome: "yes" }, { outcome: "no" }]).outcome === "unclear" && F.aggregateJudges([{ outcome: "unclear" }, { outcome: "unclear" }]).outcome === "unclear" && F.aggregateJudges([{ outcome: "yes" }, null]).outcome === "unclear");
 check("forecast cap parses 0..10 and defaults to 3", F.parseForecastCap("0") === 0 && F.parseForecastCap("7") === 7 && F.parseForecastCap("99") === 10 && F.parseForecastCap("x") === 3 && F.parseForecastCap(undefined) === 3);
-check("the directive keeps the FACTS rule and forbids invented projections", /FACTS \(hard, non-negotiable\)/.test(F.FORECAST_DIRECTIVE) && /Never state a projected quantity/.test(F.FORECAST_DIRECTIVE) && /at least as probable as each alternative/.test(F.FORECAST_DIRECTIVE));
+check("the directive keeps the FACTS rule and forbids invented projections", /FACTS \(hard, non-negotiable, and checked\)/.test(F.FORECAST_DIRECTIVE) && /Never state a projected quantity/.test(F.FORECAST_DIRECTIVE) && /at least as probable as each alternative/.test(F.FORECAST_DIRECTIVE));
 
 // ---- handlers over in-memory SQLite --------------------------------------------------------------------------------
 const db = new DatabaseSync(":memory:");
@@ -57,6 +57,8 @@ CREATE TABLE q08_feedback (id INTEGER PRIMARY KEY, slug TEXT, signal TEXT, ip_ke
 CREATE TABLE subscribers (email TEXT, status TEXT, token TEXT, created_at TEXT, confirmed_at TEXT);`);
 const nowIso = new Date().toISOString();
 for (let i = 1; i <= 3; i++) db.prepare("INSERT INTO published_pieces (id, signal_id, slug, title, body_md, core_concept, signal_source, published_at, sources_json) VALUES (?,?,?,?,?,?,?,?,?)").run("p" + i, "sig" + i, "essay-" + i, "A clearinghouse that paid itself first " + i, "The maintainers of a widely used library priced their own risk. ".repeat(40), "Self-priced risk", "hn:" + (100 + i), new Date(Date.now() - i * 36e5).toISOString(), "[]");
+db.exec("CREATE TABLE IF NOT EXISTS q08_audits (slug TEXT PRIMARY KEY, verdict TEXT, stage TEXT, models TEXT, unsupported_json TEXT, checked_at TEXT)");
+for (let i = 1; i <= 3; i++) db.prepare("INSERT INTO q08_audits (slug, verdict, stage, checked_at) VALUES (?, 'pass', 'publish', ?)").run("essay-" + i, nowIso);
 db.prepare("INSERT INTO signal_log (id, source, source_id, title, url, friction_point, status, processed_at) VALUES ('sg1','hn','hn:101','t','u','Maintainers argue the vendor will rewrite the library and cut them out of the roadmap.','published',?)").run(nowIso);
 const shim = { prepare: (sql) => { let a = []; const st = { bind: (...x) => { a = x; return st; }, run: async () => { const r = db.prepare(sql).run(...a); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }, first: async () => db.prepare(sql).get(...a) || null, all: async () => ({ results: db.prepare(sql).all(...a) }) }; return st; } };
 const social = [];
@@ -78,11 +80,13 @@ const mkDraft = (o) => {
   return body + (o.omitJson ? "" : "\nFORECAST-JSON: " + JSON.stringify(f)) + "\nworth your time: yes - it commits to a claim a reader can check.";
 };
 let draft = () => mkDraft();
+let factAnswer = '{"unsupported":[],"verdict":"pass"}';
 let readerQueue = []; let judgeAnswer = '{"outcome":"yes","basis":"1: a successor repository exists"}';
 const aiCalls = [];
 const AI = { run: async (model, input) => {
   const c = input.messages[0].content; aiCalls.push(c.slice(0, 40));
   if (/You settle forecasts for a publication/.test(c)) return { response: judgeAnswer };
+  if (/strict fact-checker/.test(c)) return { response: factAnswer };
   if (/busy, intelligent reader/.test(c)) return { response: readerQueue.length ? readerQueue.shift() : '{"would_read_to_end":true,"score":5,"slop_tells":[],"fix":"none"}' };
   return { response: draft() };
 } };
