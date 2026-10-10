@@ -101,7 +101,7 @@ function mk(extra = {}) {
   iss.run(1712, "POST-ID-UTM-1: every post stores its platform id", "high", "open", "dissemination");
   iss.run(1726, "CODE-LOOP-ON-CLAUDE-1: defect repair still runs as sessions", "high", "open", "governance");
   iss.run(1283, "mixed-type-timestamp: timestamps stored as text and numbers", "medium", "open", "reliability");
-  iss.run(1732, "ZENODO-METADATA-EDITS-1 backfill: one creator identity", "medium", "open", "reliability");
+  iss.run(1732, "OSF-METADATA-EDITS-1 backfill: one creator identity", "medium", "open", "reliability");
   iss.run(1764, "IMPACT-FAILCLOSED-1: SECRET-WEAKNESS-TITLE", "high", "open", "security");
   iss.run(1700, "an issue that is already closed", "high", "closed", "reliability");
   const rc = db.prepare("INSERT INTO remediation_contracts (class, issue_id, status, last_verdict, attempts, max_attempts, escalate_to, next_due_at) VALUES (?, ?, 'active', ?, ?, ?, ?, ?)");
@@ -192,7 +192,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); }
   ok(/Close themselves \(1\)[^]*#1712 \(dissemination\) - issue-1712: last probe fail, attempt 2 of 3, next 2026-10-02 15:00 UTC/.test(j.text), "F4 an issue with a live contract closes itself, with its next probe");
   ok(/Blocked \(2\)[^]*#1726 \(governance\) - issue-1726: its probe is still failing past its attempt budget \(3 attempts, budget 3\); escalated to qnfo-ops/.test(j.text) && /#1283 \(reliability\) - mixed-type-timestamp: its contract escalates to you/.test(j.text), "F5 blocked issues say what blocks them");
   ok(/No self-closing probe \(2\)[^]*#1764 \(security\)[^]*#1732 \(reliability\)/.test(j.text) && !/#1700/.test(j.text), "F6 issues with no contract are listed; closed ones are not");
-  ok(!/POST-ID-UTM|CODE-LOOP|ZENODO|SECRET-WEAKNESS-TITLE/.test(j.text) && /Titles are shown to the signed-in owner/.test(j.text), "F6b the public reads issues by number and category only (owner notes and security titles stay private)");
+  ok(!/POST-ID-UTM|CODE-LOOP|OSF-METADATA|SECRET-WEAKNESS-TITLE/.test(j.text) && /Titles are shown to the signed-in owner/.test(j.text), "F6b the public reads issues by number and category only (owner notes and security titles stay private)");
   const jh = await (await cmd(env, "fix all the issues", T)).json();
   ok(jh.text.includes("#1712 POST-ID-UTM-1: every post stores its platform id - issue-1712") && jh.text.includes("#1764 IMPACT-FAILCLOSED-1: SECRET-WEAKNESS-TITLE") && !/Titles are shown/.test(jh.text), "F6c the owner reads the titles");
   const n1 = db.prepare("SELECT (SELECT COUNT(*) FROM agent_issues) a, (SELECT COUNT(*) FROM intents) i, (SELECT COUNT(*) FROM human_responses) r").get();

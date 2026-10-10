@@ -9,7 +9,7 @@
 // INBOUND-SLA-1: the inbound SLA step counts when its runner is stalled, disabled or not yet run after its first due date,
 // or when a human inbound message is older than 72h with no fleet action (a decision row or sent_at is one).
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops read their run records (social ledgers by meta.last_ok,
-// stale zenodo_stats and job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
+// stale job-market handoffs count, an error run proves nothing, a weekend is not a weekday job's stall).
 // WORK-WITH-ME-METRIC-1: the work-with-me contacts op reads its own reach_signals rows (stalled after 48h, never ran).
 // GRANT-FOLLOWUP-HONEST-1: a grant-followup run that left a mailbox unread is dated as a run and counted with its reason
 // (gmail_pass_unset, errors) until a full read; only no run at all reads "never ran".
@@ -45,7 +45,6 @@ CREATE TABLE code_tasks (id TEXT PRIMARY KEY, status TEXT, updated_at TEXT, merg
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT);
 CREATE TABLE errata_watch (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE social_channels (channel_id TEXT PRIMARY KEY, service TEXT, name TEXT, connected INTEGER, checked_at TEXT, checked_day TEXT);
-CREATE TABLE zenodo_stats (doi TEXT PRIMARY KEY, downloads INTEGER, views INTEGER, fetched_at TEXT, updated_at TEXT);
 CREATE TABLE handoffs (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, project_id TEXT NOT NULL, timestamp TEXT NOT NULL, claim_sheet TEXT);
 CREATE TABLE events_radar (slug TEXT PRIMARY KEY, scanned_at TEXT);
 CREATE TABLE reach_signals (date TEXT NOT NULL, source TEXT NOT NULL, channel TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL, quality TEXT, collected_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (date, source, channel, entity_type, entity_id, metric));
@@ -106,7 +105,6 @@ socialRow("learner-update", "2026-10-05", "ok", 25);   // SOCIAL-DISTRIBUTION-LE
 db.prepare("INSERT INTO social_channels (channel_id, service, connected, checked_at, checked_day) VALUES ('chL', 'linkedin', 1, ?, '2026-10-06')").run(ago(7));
 db.prepare("INSERT INTO metric_registry (metric, layer, kind, source_of_truth, disposition_actor, refresh_cadence, last_value, last_refreshed, state) VALUES ('paper_render_defect_pages', 'product', 'guard', 's', 'a', 'daily', '0', ?, 'ok')").run(ago(2));   // RENDER-HEALTH-1
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-engagement-e1', ?, 'ok')").run(ago(3));
-db.prepare("INSERT INTO zenodo_stats (doi, updated_at) VALUES ('10.5281/zenodo.1', '2026-10-04 07:03:00')").run();   // Sunday's run, space format
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-email-triage-t1', ?, 'ok')").run(ago(20));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('mention-radar-2026-10-05', ?, 'mention-radar', 'radar-hub', 'degraded')").run(ago(23.5));
 db.prepare("INSERT INTO cloud_ops_events (id, ts, status) VALUES ('jr-radar-r1', ?, 'ok')").run(ago(24.5));
@@ -332,11 +330,11 @@ m = await api.watchmakerMeasure(env, NOW);
 ok(!op(m, "grant-followup").counted && /^ok, last run 4h ago$/.test(op(m, "grant-followup").state) && m.index === 0, "a fresh full grant-followup run clears the op, earlier degraded runs included");
 
 // REACH-LOOPS-WATCH-1: the delegated identity and reach loops.
-const REACH = ["social-profile-sync", "social-posting", "social-scan", "buffer-channel-audit", "social-engagement", "social-learner", "engagement-feed", "zenodo-stats", "email-triage", "mention-radar", "cloud-ops-radar", "job-market-watch", "events-radar"];
+const REACH = ["social-profile-sync", "social-posting", "social-scan", "buffer-channel-audit", "social-engagement", "social-learner", "engagement-feed", "email-triage", "mention-radar", "cloud-ops-radar", "job-market-watch", "events-radar"];
 m = await api.watchmakerMeasure(env, NOW);
 ok(REACH.every((k) => op(m, k) && op(m, k).state.startsWith("ok")) && m.index === 0, "every reach loop is listed and reads fresh (" + REACH.filter((k) => !op(m, k) || !op(m, k).state.startsWith("ok")).join(",") + ")");
-ok(op(m, "social-posting").runner === "cron:qnfo-social" && op(m, "job-market-watch").runner === "cron:radar-hub" && op(m, "zenodo-stats").runner === "cron:qnfo-cloud-ops", "each loop names its Cloudflare runner");
-ok(op(m, "job-market-watch").age_h === 25 && op(m, "zenodo-stats").age_h === 49, "job-market reads the handoffs id range (not a session note) and zenodo-stats reads space-format UTC");
+ok(op(m, "social-posting").runner === "cron:qnfo-social" && op(m, "job-market-watch").runner === "cron:radar-hub", "each loop names its Cloudflare runner");
+ok(op(m, "job-market-watch").age_h === 25, "job-market reads the handoffs id range (not a session note)");
 // A failed tick after a good one: status error, but meta.last_ok still proves the last completed run.
 socialRow("profile-sync", "2026-10-06", "error", 1, 0.2);
 m = await api.watchmakerMeasure(env, NOW);
@@ -368,12 +366,10 @@ db.exec("UPDATE cloud_ops_events SET status = 'error' WHERE id = 'mention-radar-
 m = await api.watchmakerMeasure(env, NOW);
 ok(op(m, "mention-radar").counted && op(m, "mention-radar").state === "never ran", "a mention-radar run whose every source failed does not prove the radar");
 db.exec("UPDATE cloud_ops_events SET status = 'degraded' WHERE id = 'mention-radar-2026-10-05'");
-// Stale data: zenodo_stats frozen at 2026-08-29 (the 403 era) and the job market at 2026-09-08 both count.
-db.exec("UPDATE zenodo_stats SET updated_at = '2026-08-29 07:04:24'");
+// Stale data: the job market silent since 2026-09-08 counts.
 db.exec("UPDATE handoffs SET timestamp = '2026-09-08T09:31:27.810Z' WHERE project_id = 'job-market-watch-workflow-2026-10-05'");
 m = await api.watchmakerMeasure(env, NOW);
-ok(op(m, "zenodo-stats").counted && /cadence 168h/.test(op(m, "zenodo-stats").state) && op(m, "job-market-watch").counted && m.index === 2, "zenodo-stats frozen since 2026-08-29 and the job market silent since 2026-09-08 count as stalled");
-db.exec("UPDATE zenodo_stats SET updated_at = '2026-10-04 07:03:00'");
+ok(op(m, "job-market-watch").counted && /cadence 168h/.test(op(m, "job-market-watch").state) && m.index === 1, "the job market silent since 2026-09-08 counts as stalled");
 db.prepare("UPDATE handoffs SET timestamp = ? WHERE project_id = 'job-market-watch-workflow-2026-10-05'").run(ago(25));
 // Weekday-only jobs: the weekend is not a stall, a missed Monday is.
 const MON = Date.parse("2026-10-05T07:05:00Z");

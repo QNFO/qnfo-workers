@@ -8,7 +8,6 @@ export const FLEET = [
   "jnl-referee",
   "jnl-reviser",
   "jnl-watch",
-  "jnl-zenodo",
   "job-market-watch",
   "obsidian-writer",
   "osf-integrity-check",

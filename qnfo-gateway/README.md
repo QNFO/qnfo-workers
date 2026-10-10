@@ -13,7 +13,7 @@ time). CORE worker — do NOT deprecate. No /health route yet (F3 probe worklist
 
 **qnfo.org/work-with-me (WORK-WITH-ME-1, 3.7.27, pillar reach):** the offers page (JPCUB assessment, review of an AI
 research or agent operation, talks and workshops, research collaboration, roles), in the owner's first person and from the
-published record only (the CV at doi:10.5281/zenodo.23082080, the selected works, 44 deployed workers). No form: each offer
+published record only (the CV, the selected works, 44 deployed workers). No form: each offer
 is a mailto to rowan.quni@qnfo.org whose subject starts `[work-with-me:<offer>]`, which qnfo-fleet-dashboard
 WORK-WITH-ME-METRIC-1 counts. Linked from the home page (nav, byline, first card, footer), /about, the sitemap and llms.txt;
 `/contact` redirects to it. Offline suite: `work-with-me.test.mjs` (deploy-gate).

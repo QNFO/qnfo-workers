@@ -23,7 +23,7 @@ CREATE TABLE ai_spend_ledger (day TEXT NOT NULL, provider TEXT NOT NULL, caller 
 const d1 = { prepare(sql0) { const order = []; const sql = sql0.replace(/\?(\d+)/g, (m, n) => { order.push(Number(n) - 1); return "?"; }); let a = []; const st = { bind(...x) { x = x.map((v) => (v === undefined ? null : v)); a = order.length ? order.map((i) => x[i]) : x; return st; }, async all() { return { results: db.prepare(sql).all(...a) }; }, async first() { return db.prepare(sql).get(...a) ?? null; }, async run() { const r = db.prepare(sql).run(...a); return { meta: { changes: Number(r.changes) } }; } }; return st; }, async batch(list) { for (const s of list) await s.run(); return []; } };
 
 const PAPERS = [];
-for (let i = 0; i < 9; i++) PAPERS.push({ slug: "paper-" + i, title: "Paper number " + i, abstract: "Abstract of paper " + i + " about ultrametric scaling. " + "It counts the levels a self-similar hierarchy needs across scales. ".repeat(4), doi: "10.5281/zenodo." + i, version: "1.0.0", created_at: "2026-10-0" + (i % 9 + 1) + " 10:00:00", body_md: "---\nfront: matter\n---\n# Section\n\nBody text of paper " + i + "." });
+for (let i = 0; i < 9; i++) PAPERS.push({ slug: "paper-" + i, title: "Paper number " + i, abstract: "Abstract of paper " + i + " about ultrametric scaling. " + "It counts the levels a self-similar hierarchy needs across scales. ".repeat(4), doi: "10.1234/qnfo." + i, version: "1.0.0", created_at: "2026-10-0" + (i % 9 + 1) + " 10:00:00", body_md: "---\nfront: matter\n---\n# Section\n\nBody text of paper " + i + "." });
 const state = { failUpload: new Set(), uploads: [] };
 async function fakeFetch(url) {
   const u = new URL(String(url));
@@ -74,7 +74,7 @@ ok(r.uploaded === api.CORPUS_SYNC_PER_RUN && state.uploads.length === api.CORPUS
 ok(state.uploads[0].key === "paper-8.md" && state.uploads[1].key === "paper-7.md", "newest papers first", state.uploads.map((u) => u.key));
 const first = state.uploads[0];
 ok(/^# Paper number 8\n\n## Abstract\n\nAbstract of paper 8/.test(first.text) && /Body text of paper 8/.test(first.text) && !/front: matter/.test(first.text), "the uploaded document carries title, abstract and body without front matter", first.text.slice(0, 120));
-ok(first.meta && first.meta.slug === "paper-8" && first.meta.doi === "10.5281/zenodo.8" && first.meta.source === "papers.qnfo.org", "upload metadata names slug, DOI and source", first.meta);
+ok(first.meta && first.meta.slug === "paper-8" && first.meta.doi === "10.1234/qnfo.8" && first.meta.source === "papers.qnfo.org", "upload metadata names slug, DOI and source", first.meta);
 ok(led().length === api.CORPUS_SYNC_PER_RUN && led().every((x) => x.status === "uploaded" && x.source_version === "1.0.0"), "each upload is recorded with its version", led());
 
 // 3. Next tick: only the rest; then nothing is due.

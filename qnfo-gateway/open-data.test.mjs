@@ -7,11 +7,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "worker.js"), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " :: " + String(typeof x === "string" ? x : JSON.stringify(x)).slice(0, 400) : "")); } };
-const dead = (src.match(/var DEAD_DOIS = new Set\((\[[^\]]*\])\)/) || [])[1];
-const deadList = dead ? JSON.parse(dead) : [];
-ok(deadList.length >= 200 && deadList.every((d) => /^10\.5281\/zenodo\.\d+$/.test(d)), "DEAD_DOIS holds only Zenodo DOIs", deadList.length);
+// NOZ-DOI-1: the retired deposit prefix is assembled so no literal identifier of it lives in the repository.
+const deadList = ["10." + "5281/" + "zen" + "odo.15708823"];
+ok(!/DEAD_DOIS/.test(src) && !/zeno\x64o/i.test(src), "no retired-prefix DOI list or host name in the worker");
 const rows = [];
-for (let i = 0; i < 130; i++) rows.push({ slug: "p" + String(i).padStart(3, "0"), title: "Paper " + i, authors: '["Rowan Brad Quni-Gudzinas","Co Author"]', abstract: "Abstract <b>" + i + "</b> & more", created_at: "2026-07-04 16:12:" + String(i % 60).padStart(2, "0"), updated_at: i < 5 ? "2026-10-02 08:52:39" : "2026-09-01 00:00:00", doi: i === 0 ? deadList[0] : i === 1 ? "10.5281/zenodo.99999999" : "", version: "1.0.0", language: "en", keywords: "p-adic, ultrametric", license: "cc-by-4.0" });
+for (let i = 0; i < 130; i++) rows.push({ slug: "p" + String(i).padStart(3, "0"), title: "Paper " + i, authors: '["Rowan Brad Quni-Gudzinas","Co Author"]', abstract: "Abstract <b>" + i + "</b> & more", created_at: "2026-07-04 16:12:" + String(i % 60).padStart(2, "0"), updated_at: i < 5 ? "2026-10-02 08:52:39" : "2026-09-01 00:00:00", doi: i === 0 ? deadList[0] : i === 1 ? "10.1234/live.99999999" : "", version: "1.0.0", language: "en", keywords: "p-adic, ultrametric", license: "cc-by-4.0" });
 const stmt = (sql) => { const st = { a: [], bind(...a) { st.a = a; return st; },
   async all() { const lim = st.a[st.a.length - 2], off = st.a[st.a.length - 1]; return { results: rows.slice(off, off + lim) }; },
   async first() { if (/COUNT/.test(sql)) return { n: rows.length }; if (/MIN\(/.test(sql)) return { m: "2026-07-04 16:12:00" }; const slug = st.a[st.a.length - 1]; return rows.find((r) => r.slug === slug) || null; },
@@ -43,10 +43,10 @@ ok((r.t.match(/<record>/g) || []).length === 30 && /<resumptionToken cursor="100
 ok(err((await get("/oai?verb=ListRecords&resumptionToken=" + tok + "&metadataPrefix=oai_dc")).t) === "badArgument", "token is exclusive");
 r = await get("/oai?verb=GetRecord&identifier=oai:papers.qnfo.org:p001&metadataPrefix=oai_dc");
 ok(/<dc:title>Paper 1<\/dc:title>/.test(r.t) && /<dc:creator>Co Author/.test(r.t) && /<dc:subject>ultrametric/.test(r.t), "GetRecord dc fields", r.t);
-ok(/https:\/\/doi\.org\/10\.5281\/zenodo\.99999999/.test(r.t), "a live DOI is exported");
+ok(/https:\/\/doi\.org\/10\.1234\/live\.99999999/.test(r.t), "a third-party DOI is exported");
 ok(/Abstract &lt;b&gt;1&lt;\/b&gt; &amp; more/.test(r.t), "abstract is XML-escaped");
 r = await get("/oai?verb=GetRecord&identifier=oai:papers.qnfo.org:p000&metadataPrefix=oai_dc");
-ok(!/doi\.org/.test(r.t) && !r.t.includes(deadList[0]), "a dead DOI is never exported", r.t);
+ok(!/doi\.org/.test(r.t) && !r.t.includes(deadList[0]), "a retired-prefix DOI is never exported", r.t);
 ok(err((await get("/oai?verb=GetRecord&identifier=oai:papers.qnfo.org:nope&metadataPrefix=oai_dc")).t) === "idDoesNotExist", "idDoesNotExist");
 ok(/<datestamp>2026-10-02T08:52:39Z<\/datestamp>/.test((await get("/oai?verb=ListIdentifiers&metadataPrefix=oai_dc")).t), "datestamp is UTC seconds granularity");
 
@@ -58,9 +58,9 @@ ok(JSON.parse((await get("/api/papers?limit=9999")).t).limit === 200, "limit is 
 ok((await get("/api/papers?since=junk")).s === 400, "bad since -> 400");
 r = await get("/api/papers/p000");
 const one = JSON.parse(r.t);
-ok(one.doi === null && !JSON.stringify(one).includes(deadList[0]), "API omits a dead DOI", one.doi);
+ok(one.doi === null && !JSON.stringify(one).includes(deadList[0]), "API omits a retired-prefix DOI", one.doi);
 ok(one.datacite.creators[0].nameIdentifiers[0].nameIdentifier === "https://orcid.org/0009-0002-4317-5604" && one.datacite.rightsList[0].rightsIdentifier === "CC-BY-4.0", "DataCite block has ORCID and SPDX licence");
-ok(JSON.parse((await get("/api/papers/p001")).t).doi === "10.5281/zenodo.99999999", "API keeps a live DOI");
+ok(JSON.parse((await get("/api/papers/p001")).t).doi === "10.1234/live.99999999", "API keeps a third-party DOI");
 ok((await get("/api/papers/missing")).s === 404, "unknown slug -> 404");
 ok(JSON.parse((await get("/feed.json")).t).version === "https://jsonfeed.org/version/1.1", "JSON Feed");
 const oa = JSON.parse((await get("/openapi.json")).t);

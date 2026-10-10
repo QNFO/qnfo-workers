@@ -37,8 +37,6 @@ const API = {
   "api.github.com/users/rwnq8": { name: "Rowan Brad Quni-Gudzinas", bio: "Quantum Computing Architect; 649+ Publications; Patent Portfolio" },
   "api.github.com/orgs/QNFO": { description: "Open, auditable research infrastructure" },
   "pub.orcid.org/v3.0/0009-0002-4317-5604/person": { name: { "given-names": { value: "Rowan Brad" }, "family-name": { value: "Quni-Gudzinas" } }, biography: { content: "Builder." }, "other-names": { "other-name": [{ content: "Brad Gudzinas" }] } },
-  "zenodo.org/api/records": { hits: { total: 940 } },
-  "zenodo.org/api/records/21806274": { metadata: { version: "v3.12" }, stats: { views: 100, unique_views: 90, downloads: 7 } },
   "mstdn.science/api/v1/accounts/lookup": null
 };
 const fetchStub = async (url) => {
@@ -50,7 +48,7 @@ const fetchStub = async (url) => {
 };
 const writes = [];
 const events = new Map();
-const prevScore = JSON.stringify({ bluesky_followers: 42, zenodo_records_orcid: 939, openalex: { citations: 2 }, portfolio_record: { views: 90 } });
+const prevScore = JSON.stringify({ bluesky_followers: 42, openalex: { citations: 2 } });
 const D1 = { prepare(sql) { return { args: [], bind(...a) { this.args = a; return this; },
   async first() { if (/FROM owner_docs/.test(sql)) return { body_md: DOC, updated_at: "2026-10-01" };
     if (/FROM citation_stats/.test(sql)) return { dois: 63, cites: 3, cited: 2 };
@@ -95,8 +93,8 @@ const sc = JSON.parse(scJson || "{}");
 const act = JSON.parse(actJson || "{}");
 ok(runDate === "2026-10-01" && session === "qnfo-fleet-dashboard/test", "run date and session stamp");
 ok(/kind='identity-weekly'|'identity-weekly'/.test(row ? row.sql : ""), "kind identity-weekly");
-ok(sc.bluesky_followers === 50 && sc.zenodo_records_orcid === 940 && sc.openalex.citations === 3, "metrics from the APIs and D1");
-ok(sc.deltas.bluesky_followers === 8 && sc.deltas.zenodo_records_orcid === 1 && sc.deltas.openalex_citations === 1 && sc.deltas.portfolio_views === 10, "deltas against the previous run");
+ok(sc.bluesky_followers === 50 && sc.openalex.citations === 3 && !("portfolio_record" in sc), "metrics from the APIs and D1");
+ok(sc.deltas.bluesky_followers === 8 && sc.deltas.openalex_citations === 1, "deltas against the previous run");
 ok(act.gaps.length === 1 && /mastodon/.test(act.gaps[0]), "a failed source is a gap, not a number");
 ok(sc.mastodon_followers === undefined, "no number invented for the failed source");
 const gh = act.profiles.find((p) => p.platform === "github rwnq8");
