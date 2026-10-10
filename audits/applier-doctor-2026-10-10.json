@@ -2,7 +2,7 @@
  "counts": {
   "already-applied": 70,
   "error": 1,
-  "undetermined": 4
+  "undetermined": 3
  },
  "errored": [
   "scripts/applier-classify-unmasked-patch.py"
@@ -610,20 +610,6 @@
   },
   {
    "changed_files": [],
-   "declared_signals": [
-    "TERMINAL-RESCUE-1",
-    "recover_count < 3",
-    "terminal_rearms=terminal_rearms+1"
-   ],
-   "rc": 1,
-   "script": "scripts/research-exec-terminal-rescue-patch.py",
-   "tail": [
-    "::error file=qnfo-research-exec/worker.js::RESCUE-ANCHOR-MISSING-1 D1 markError terminal UPDATE not found"
-   ],
-   "verdict": "undetermined"
-  },
-  {
-   "changed_files": [],
    "rc": 0,
    "script": "scripts/router-transport-failover-patch.py",
    "tail": [
@@ -704,7 +690,7 @@
    "rc": 0,
    "script": "scripts/stale-gate-failclosed-patch.py",
    "tail": [
-    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 719302}"
+    "{\"ok\": true, \"already_patched\": true, \"marker\": \"STALE-GATE-FAILCLOSED-1\", \"bytes\": 716119}"
    ],
    "verdict": "already-applied"
   },
@@ -791,12 +777,11 @@
  ],
  "stale_anchor": [],
  "superseded": [],
- "total": 75,
- "ts": "2026-10-10T08:41:53.835Z",
+ "total": 74,
+ "ts": "2026-10-10T08:58:22.723Z",
  "undetermined": [
   "scripts/dashboard-agissue-undercount-patch.py",
   "scripts/math-sym-escape-patch.py",
-  "scripts/outreach-cap-status-1-patch.py",
-  "scripts/research-exec-terminal-rescue-patch.py"
+  "scripts/outreach-cap-status-1-patch.py"
  ]
 }
