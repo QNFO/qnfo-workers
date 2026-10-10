@@ -4,7 +4,7 @@
 // PRECONDITION: env.AI (Workers AI), env.AUDIT (D1 jnl-audit), env.STATE (KV jnl-state), env.JNL_TOKEN secret.
 // POSTCONDITION: jnl_reviews/jnl_decisions/jnl_review_log rows reflect the review outcome.
 
-var VERSION = "0.9.1";
+var VERSION = "0.9.2"; // 0.9.2 JNL-GROUND-1 (owner directive 2026-10-10): reviewer prompt forbids external citations/facts; score_novelty is neutral (5) unless related work is supplied in the input
 var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct"; // 2026-09-08 model audit: gpt-oss-120b (128k ctx, reasoning, $0.75/M out) primary; llama-4-scout stays as long-ctx fc fallback
 var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
 var FETCH_TIMEOUT_MS = 20000;
@@ -215,6 +215,10 @@ function num(v, dflt) {
   return Number.isFinite(n) ? n : dflt;
 }
 function clampScore(v) { return Math.max(1, Math.min(10, Math.round(num(v, 5)))); }
+// JNL-GROUND-1: a novelty score needs related work to compare against; the record text is all a reviewer is given, so any
+// score the model returns without supplied related work comes from its memory and is replaced by the neutral 5.
+var NOVELTY_NEUTRAL = 5;
+function noveltyScore(p, relatedSupplied) { return relatedSupplied ? clampScore(p && p.score_novelty) : NOVELTY_NEUTRAL; }
 function arrOf(v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === "string" && x.trim(); }).map(function (x) { return x.trim(); }) : []; }
 
 async function aiRun(env, model, sys, usr) {
@@ -224,8 +228,9 @@ async function aiRun(env, model, sys, usr) {
 
 function reviewerSystem(role) {
   return "You are " + role + " for an open AI-reviewed journal that overlays Zenodo (no gatekeeping; content judged on merit). " +
-    "You review ONLY the provided record content. Never fabricate quotes, citations, or external facts; quote only text present in the input and mark recalled items as uncertain. " +
-    "Be fair to non-traditional and interdisciplinary work: judge internal consistency, clarity, evidence quality, novelty of framing, reproducibility, and honesty, not conformity to one field. " +
+    "You review ONLY the provided record content, and every statement you write must be checkable against it. Use no external citation, source, fact, name, date or figure: you may quote or paraphrase only text present in the input, and anything you cannot point to in the input is left out, never recalled or guessed. " +
+    "Be fair to non-traditional and interdisciplinary work: judge internal consistency, clarity, evidence quality, reproducibility, and honesty, not conformity to one field. " +
+    "score_novelty is judged only against related work supplied in the input; when the input supplies none, you have no basis for it and must return 5. " +
     "Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: " +
     "score_soundness (integer 1-10), score_novelty (integer 1-10), score_clarity (integer 1-10), score_reproducibility (integer 1-10), " +
     "strengths (array of strings), weaknesses (array of strings), fatal_flaws (array of strings; empty array if none), " +
@@ -260,7 +265,8 @@ function decisionFrom(parsedList, basis) {
   for (var i = 0; i < parsedList.length; i++) {
     var p = parsedList[i];
     if (!p) continue;
-    var sc = (clampScore(p.score_soundness) + clampScore(p.score_novelty) + clampScore(p.score_clarity) + clampScore(p.score_reproducibility)) / 4;
+    // novelty has no supplied related work to be judged against, so it is not part of the decision mean (JNL-GROUND-1)
+    var sc = (clampScore(p.score_soundness) + clampScore(p.score_clarity) + clampScore(p.score_reproducibility)) / 3;
     avgs.push(sc);
     if (arrOf(p.fatal_flaws).length) { fatal = true; var ff = arrOf(p.fatal_flaws); for (var fj = 0; fj < ff.length; fj++) fatalTexts.push(String(ff[fj])); }
     if (String(p.confidence || "") === "low") anyLowConfidence = true;
@@ -302,7 +308,7 @@ function buildReport(rec, parsedList, dec, modelsUsed, basis) {
     var p = parsedList[i];
     if (!p) continue;
     lines.push("## Reviewer " + (i + 1) + " (" + (modelsUsed[i] || "model") + ")");
-    lines.push("- Soundness " + clampScore(p.score_soundness) + " | Novelty " + clampScore(p.score_novelty) + " | Clarity " + clampScore(p.score_clarity) + " | Reproducibility " + clampScore(p.score_reproducibility) + " | Confidence " + (p.confidence || "n/a"));
+    lines.push("- Soundness " + clampScore(p.score_soundness) + " | Novelty " + noveltyScore(p, false) + " (neutral: no related work supplied; not in the mean)" + " | Clarity " + clampScore(p.score_clarity) + " | Reproducibility " + clampScore(p.score_reproducibility) + " | Confidence " + (p.confidence || "n/a"));
     lines.push("- Verdict requested: " + (p.verdict || "n/a"));
     if (arrOf(p.strengths).length) { lines.push("- Strengths:"); arrOf(p.strengths).forEach(function (x) { lines.push("  - " + x.slice(0, 400)); }); }
     if (arrOf(p.weaknesses).length) { lines.push("- Weaknesses:"); arrOf(p.weaknesses).forEach(function (x) { lines.push("  - " + x.slice(0, 400)); }); }
@@ -353,7 +359,7 @@ async function runReview(env, recid, manual) {
   if (specPath.used) report = report + specAckReportSection(specPath, NL);
   var p0 = parsedList[0] || {};
   var sound = Math.round(parsedList.map(function (p) { return clampScore(p.score_soundness); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
-  var novel = Math.round(parsedList.map(function (p) { return clampScore(p.score_novelty); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
+  var novel = Math.round(parsedList.map(function (p) { return noveltyScore(p, false); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
   var clar = Math.round(parsedList.map(function (p) { return clampScore(p.score_clarity); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
   var repro = Math.round(parsedList.map(function (p) { return clampScore(p.score_reproducibility); }).reduce(function (a, b) { return a + b; }, 0) / parsedList.length);
   var fatalCount = parsedList.map(function (p) { return arrOf(p.fatal_flaws).length; }).reduce(function (a, b) { return a + b; }, 0);
@@ -874,4 +880,5 @@ async function citationSample(env, n) {
 }
 var SPECULATIVE_RE = /speculative|no (empirical|experimental|direct) (evidence|validation|test|support)|lacks (empirical|experimental) evidence|lack[s]? .{0,24}empirical (evidence|validation)|unfalsifiable|not (empirically|experimentally) (tested|validated|verified)|no (data|measurements?) (supporting|to support)/;
 export { index_default as default };
+export var __ground = { reviewerSystem: reviewerSystem, noveltyScore: noveltyScore, decisionFrom: decisionFrom };
 

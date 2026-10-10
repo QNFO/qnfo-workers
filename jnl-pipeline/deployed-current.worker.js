@@ -12,7 +12,7 @@ var jnlWatchMod = (function() {
   var COMMUNITY_ID = "87f14e85-7156-4146-84e9-9e3a11e29c1d";
   var COMMUNITY = `https://zenodo.org/api/communities/${COMMUNITY_ID}/records`;
   var CURSOR_KEY = "cursor:lastModified";
-  var VERSION = "0.1.10-ai-attribution";
+  var VERSION = "0.1.11-ground";
   var PAGE_SIZE = 25;
   var MAX_PAGES = 40;
   var UA = "jnl-watch/0.1.9 (QNFO AI-referee overlay for Zenodo community aiscience)";
@@ -281,7 +281,7 @@ var jnlWatchMod = (function() {
 var jnlRefereeMod = (function() {
   var __defProp22 = Object.defineProperty;
   var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-  var VERSION = "0.9.1";
+  var VERSION = "0.9.2"; // 0.9.2 JNL-GROUND-1 (owner directive 2026-10-10): reviewer prompt forbids external citations/facts; score_novelty is neutral (5) unless related work is supplied in the input
   var MODELS_DEFAULT = "@cf/openai/gpt-oss-120b,@cf/moonshotai/kimi-k2.6";
   var UA = "jnl-referee/0.1.0 (QNFO AI-referee overlay; open-science)";
   var FETCH_TIMEOUT_MS = 2e4;
@@ -583,7 +583,7 @@ var jnlRefereeMod = (function() {
   __name2(aiRun, "aiRun");
   __name22(aiRun, "aiRun");
   function reviewerSystem(role) {
-    return "You are " + role + ' for an open AI-reviewed journal that overlays Zenodo (no gatekeeping; content judged on merit). You review ONLY the provided record content. Never fabricate quotes, citations, or external facts; quote only text present in the input and mark recalled items as uncertain. Be fair to non-traditional and interdisciplinary work: judge internal consistency, clarity, evidence quality, novelty of framing, reproducibility, and honesty, not conformity to one field. Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: score_soundness (integer 1-10), score_novelty (integer 1-10), score_clarity (integer 1-10), score_reproducibility (integer 1-10), strengths (array of strings), weaknesses (array of strings), fatal_flaws (array of strings; empty array if none), disconfirming_evidence (array of strings; empty if none found), limitations_of_review (array of strings), confidence ("high"|"medium"|"low" with reason inside rationale), verdict ("PUBLISH"|"REVISE"|"REJECT"), rationale (string).';
+    return "You are " + role + ' for an open AI-reviewed journal that overlays Zenodo (no gatekeeping; content judged on merit). You review ONLY the provided record content, and every statement you write must be checkable against it. Use no external citation, source, fact, name, date or figure: you may quote or paraphrase only text present in the input, and anything you cannot point to in the input is left out, never recalled or guessed. Be fair to non-traditional and interdisciplinary work: judge internal consistency, clarity, evidence quality, reproducibility, and honesty, not conformity to one field. score_novelty is judged only against related work supplied in the input; when the input supplies none, you have no basis for it and must return 5. Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: score_soundness (integer 1-10), score_novelty (integer 1-10), score_clarity (integer 1-10), score_reproducibility (integer 1-10), strengths (array of strings), weaknesses (array of strings), fatal_flaws (array of strings; empty array if none), disconfirming_evidence (array of strings; empty if none found), limitations_of_review (array of strings), confidence ("high"|"medium"|"low" with reason inside rationale), verdict ("PUBLISH"|"REVISE"|"REJECT"), rationale (string).';
   }
   __name(reviewerSystem, "reviewerSystem");
   __name2(reviewerSystem, "reviewerSystem");
@@ -609,7 +609,8 @@ var jnlRefereeMod = (function() {
     for (var i = 0; i < parsedList.length; i++) {
       var p = parsedList[i];
       if (!p) continue;
-      var sc = (clampScore(p.score_soundness) + clampScore(p.score_novelty) + clampScore(p.score_clarity) + clampScore(p.score_reproducibility)) / 4;
+      // novelty has no supplied related work to be judged against, so it is not part of the decision mean (JNL-GROUND-1)
+      var sc = (clampScore(p.score_soundness) + clampScore(p.score_clarity) + clampScore(p.score_reproducibility)) / 3;
       avgs.push(sc);
       if (arrOf(p.fatal_flaws).length) {
         fatal = true;
@@ -657,7 +658,7 @@ var jnlRefereeMod = (function() {
       var p = parsedList[i];
       if (!p) continue;
       lines.push("## Reviewer " + (i + 1) + " (" + (modelsUsed[i] || "model") + ")");
-      lines.push("- Soundness " + clampScore(p.score_soundness) + " | Novelty " + clampScore(p.score_novelty) + " | Clarity " + clampScore(p.score_clarity) + " | Reproducibility " + clampScore(p.score_reproducibility) + " | Confidence " + (p.confidence || "n/a"));
+      lines.push("- Soundness " + clampScore(p.score_soundness) + " | Novelty 5 (neutral: no related work supplied; not in the mean)" + " | Clarity " + clampScore(p.score_clarity) + " | Reproducibility " + clampScore(p.score_reproducibility) + " | Confidence " + (p.confidence || "n/a"));
       lines.push("- Verdict requested: " + (p.verdict || "n/a"));
       if (arrOf(p.strengths).length) {
         lines.push("- Strengths:");
@@ -739,11 +740,7 @@ var jnlRefereeMod = (function() {
     }).reduce(function(a, b) {
       return a + b;
     }, 0) / parsedList.length);
-    var novel = Math.round(parsedList.map(function(p) {
-      return clampScore(p.score_novelty);
-    }).reduce(function(a, b) {
-      return a + b;
-    }, 0) / parsedList.length);
+    var novel = 5; // JNL-GROUND-1: neutral without supplied related work
     var clar = Math.round(parsedList.map(function(p) {
       return clampScore(p.score_clarity);
     }).reduce(function(a, b) {
