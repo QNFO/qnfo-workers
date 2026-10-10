@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-10 07:43:16",
+  "audited_at": "2026-10-10 08:20:23",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -453,7 +453,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.8.1-corpus-rate",
+        "version": "1.8.2-no-topic-seed",
         "worker": "idea-hub"
       },
       {
@@ -468,7 +468,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.10.1",
+        "version": "0.10.2",
         "worker": "q08-signal-engine"
       },
       {
@@ -483,7 +483,7 @@
       },
       {
         "dir": "qnfo-ai-search",
-        "version": "2.3.0-budget-soft",
+        "version": "2.4.0-ask-ground",
         "worker": "qnfo-ai-search"
       },
       {
@@ -523,7 +523,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.12.0-open-data-1",
+        "version": "3.13.0-ask-ground",
         "worker": "qnfo-gateway"
       },
       {
@@ -684,9 +684,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.8.1-corpus-rate",
+      "before": "1.8.2-no-topic-seed",
       "http": 200,
-      "live": "1.8.1-corpus-rate",
+      "live": "1.8.2-no-topic-seed",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -844,9 +844,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.10.1",
+      "before": "0.10.2",
       "http": 200,
-      "live": "0.10.1",
+      "live": "0.10.2",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -892,9 +892,9 @@
       "worker": "qnfo-ai-calibration"
     },
     "qnfo-ai-search": {
-      "before": "2.3.0-budget-soft",
+      "before": "2.4.0-ask-ground",
       "http": 200,
-      "live": "2.3.0-budget-soft",
+      "live": "2.4.0-ask-ground",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai-search"
@@ -1172,9 +1172,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.12.0-open-data-1",
+      "before": "3.13.0-ask-ground",
       "http": 200,
-      "live": "3.12.0-open-data-1",
+      "live": "3.13.0-ask-ground",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
