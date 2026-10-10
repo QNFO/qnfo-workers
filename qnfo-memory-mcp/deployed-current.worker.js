@@ -4,7 +4,9 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var PROTOCOL_VERSION = "2024-11-05";
 var SERVER_NAME = "qnfo-memory-mcp";
-var VERSION = "2.0.5-capability-contract";
+var VERSION = "2.0.6-doi-scrub";
+// NOZ-DOI-1: Zenodo DOIs are dead (account blocked) and are never returned; third-party DOIs pass through.
+function nozDoi(d) { return d && !/10\.5281\/|zenodo/i.test(String(d)) ? d : null; }
 var SERVER_VERSION = VERSION;
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var TOOLS = [
@@ -96,7 +98,7 @@ async function tool_search_papers_enriched(args, env) {
       slug,
       title: m.metadata?.title || paper?.title || null,
       score: m.score,
-      doi: paper?.doi || null,
+      doi: nozDoi(paper?.doi),
       authors: paper?.authors || null,
       abstract: paper?.abstract || null,
       body,
@@ -111,9 +113,9 @@ async function tool_resolve_paper_id(args, env) {
   if (!id) return { content: [{ type: "text", text: JSON.stringify({ error: "id required" }) }], isError: true };
   const out = { input: id };
   const paper = await env.LIVING_PAPER.prepare(
-    "SELECT slug, title, doi, zenodo_doi, identifier, identifier_type, id, status, r2_key FROM papers WHERE slug = ?1 OR doi = ?2 OR zenodo_doi = ?3 OR identifier = ?4 LIMIT 5"
-  ).bind(id, id, id, id).all().catch(() => null);
-  if (paper?.results?.length) out.papers = paper.results;
+    "SELECT slug, title, doi, identifier, identifier_type, id, status, r2_key FROM papers WHERE slug = ?1 OR doi = ?2 OR identifier = ?3 LIMIT 5"
+  ).bind(id, id, id).all().catch(() => null);
+  if (paper?.results?.length) out.papers = paper.results.map((r) => ({ ...r, doi: nozDoi(r.doi) }));
   const node = await env.GRAPH_DB.prepare(
     "SELECT id, label, name, properties FROM nodes WHERE id = ?1 OR name = ?2 LIMIT 5"
   ).bind(id, id).all().catch(() => null);
@@ -287,7 +289,7 @@ async function tool_get_paper_context(args, env) {
   return { content: [{ type: "text", text: JSON.stringify({
     slug: paper.slug,
     title: paper.title,
-    doi: paper.doi,
+    doi: nozDoi(paper.doi),
     authors: paper.authors,
     abstract: paper.abstract,
     body,
