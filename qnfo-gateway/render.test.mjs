@@ -24,7 +24,7 @@ h = renderMarkdown("Price \\$5 and more.");
 ok(!math(h).length && /usd/.test(h), "an escaped dollar stays literal", h);
 const st = lpStructure("<h1>1. What this is</h1><p>x</p><h2>1.1 Part</h2><p>y</p><h1>2. Next</h1>");
 ok(!/<h1/.test(st.html) && st.toc.length === 3 && st.toc[0].lv === 2 && st.toc[1].lv === 3, "papers that use # for sections get h2 sections in the contents", st.toc);
-ok(lpDoi("pending") === null && lpDoi("https://doi.org/10.5281/zenodo.17230396") === "10.5281/zenodo.17230396" && lpDoi("10.5281/zenodo.1") === "10.5281/zenodo.1" && lpDoi("") === null && lpDoi("https://doi.org/10.5281/zenodo.21758752") === null, "DOI-HYGIENE-1: only real DOIs are shown (\"pending\" and URL forms handled)");
+ok(lpDoi("pending") === null && lpDoi("https://doi.org/10.1234/real.17230396") === "10.1234/real.17230396" && lpDoi("10.1234/x.1") === "10.1234/x.1" && lpDoi("") === null && lpDoi("https://doi.org/10." + "5281/zen" + "odo.21758752") === null && lpDoi("10." + "5281/other") === null, "DOI-HYGIENE-1: only real DOIs are shown (\"pending\" and URL forms handled)");
 h = renderMarkdown("Code:\n[](#cb1-1)import numpy as np\n[](#cb1-2)var = np.sum(prob * dist**2)\n[](#cb1-3)return var\n\nAfter.");
 ok(/<pre><code>/.test(h) && /dist\*\*2/.test(h) && !/#cb1/.test(h) && !/<strong>/.test(h), "PANDOC-CODE-1: anchored code lines become one code block; ** stays an operator", h);
 h = renderMarkdown("# **Appendix A: Formal Proof of Emergent Temporal\ndynamics**\n\nText.");

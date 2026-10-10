@@ -28,9 +28,9 @@ Source URLs: `distinctiontheory.org/about` + `/papers/fds-core` (both HTTP 200).
 
 - **Identity:** Yining Wu, Independent Researcher, `yining.wu@alumni.upenn.edu`,
   ORCID `0009-0009-4991-4501`.
-- **Work:** *Distinction Theory: A General Theory of Finite Systems* (DOI 10.5281/zenodo.20130174)
+- **Work:** *Distinction Theory: A General Theory of Finite Systems*
   and **FDS-0** *Active Finite Distinction Systems: A Formal Core for Boundary Maintenance under
-  Finite Capacity* (DOI 10.5281/zenodo.20158923, 2026-05-12). CC-BY-4.0.
+  Finite Capacity* (2026-05-12). CC-BY-4.0.
 - **Alignment:** the user's DLF thread (existence-as-realizability, filter R, Landauer/JPCUB energy
   axis) is adjacent to FDS's "capacity deficit / boundary maintenance / invariant-supported
   persistence".
@@ -51,7 +51,7 @@ campaign_id=c-interview-academic  kind=interview  status=sent  sent_at=2026-09-1
 message_id=NULL                   created_at=2026-09-15 11:00:39
 subject="Three questions on energy accounting in quantum computing research"
 body="Hi Yining Wu - the QNFO/QWAV open research group runs a public benchmark of computational
-      energy cost (Zenodo DOIs, reproduction scripts). Your finite-systems work is adjacent. ..."
+      energy cost (reproduction scripts). Your finite-systems work is adjacent. ..."
 ```
 
 Personalisation is correct: `{{name}}`→"Yining Wu", `{{topic}}`→"finite-systems" (first tag).

@@ -16,7 +16,6 @@ automate distribution across all channels, maximise reach and prestige, and mana
 | Bluesky (owner's personal account) | 42 followers, 1,403 posts; last 10 posts 0 likes, 1 repost; 7 of 10 carried a mis-encoded dash; most were off-topic q08 essays | public AppView API |
 | Cold email | 318 sent, 13 replies (4.1%); one fixed subject, no opt-out, fake `Re:` follow-up | `outreach_log`, `qnfo-cloud-ops` |
 | External citations | 2 (OpenAlex, 63 DOIs) | `citation_stats` |
-| Zenodo | 8,178 downloads vs 2,871 views on tracked DOIs; downloads run about 7x views on top papers, which indicates automated downloads | `citation_stats` |
 | Subscribers | 1 confirmed, 2 unconfirmed | `subscribers` |
 | Revenue and cost | $0 revenue. Gateway-metered AI about $173/7d against the $150/30d unified-billing cap (#1683; BYOK providers bypass it). Total fleet cost about $725/month on 2026-09-26: Cloudflare plan about $200, direct DeepSeek/Anthropic keys about $400-500 with no limit or visibility, AI Gateway about $110-170 | business plan, backlog, `objectives.cost-ceiling` |
 | Analytics | GA4 `G-LV7RHRVW6R` collected, never read; engagement stored but never acted on; posts not joinable to their results | outreach/analytics audit |
@@ -75,21 +74,21 @@ application numbers, "clearance-eligible", unlinked media features, shifting pub
 **Breadth and code (CODE-REACH-1, 1.10, owner direction 2026-10-06).** The research line is not quantum-only: AI agents and
 their epistemics, AI research about AI research (metascience of AI-assisted science), systems, and mathematics with formal
 verification are in scope. Measured 2026-10-06, AI and epistemics papers draw 83 human views each against 45 for quantum
-(`zenodo_stats`). Every pillar ships code where a claim can be run or proved: paper companions that reproduce or test a
+(`paper_index`). Every pillar ships code where a claim can be run or proved: paper companions that reproduce or test a
 numbered claim, standalone tools, and Lean 4 formalizations, each tested in CI and carrying claim, test and status
 (`docs/CODE-REACH-PROGRAM.md`, `research-code/`). A companion that finds its paper wrong goes to the errata path the same
 day (first case: `AGENTIC-COLLAPSE-REPRO-1`).
 
 ### 2.4 Selected works (the only papers outreach and headlines lead with)
-| # | Work | DOI | Why it leads |
+| # | Work | Where | Why it leads |
 |---|---|---|---|
-| 1 | The Joules-per-Solution Metric: Definition, Measurement Protocol, and Anti-Gaming Provisions | 10.5281/zenodo.21637028 | the standard itself |
-| 2 | Error Correction Is a Landauer Machine: The Thermodynamic Floor of QEC Overhead | 10.5281/zenodo.22261547 | most-viewed of the top papers; crisp claim |
-| 3 | JPCUB Competitive Landscape v2.0 (17 platforms) | 10.5281/zenodo.21821767 | the comparison people share |
-| 4 | Joules-per-Solution for Stochastic and Agentic Inference (LLMs) | 10.5281/zenodo.21945415 | bridges quantum and AI audiences |
-| 5 | The Universal Ignorance Audit | 10.5281/zenodo.21901984 | method others can use |
-| 6 | Epistemic Legibility in AI-Assisted Science | 10.5281/zenodo.22026592 | governance angle for the AI-for-science audience |
-| 7 | Operating the Quniverse Fleet: Objectives, Successes, Failures, Roadmap | 10.5281/zenodo.23079905 | the practice story; honest failure ledger |
+| 1 | The Joules-per-Solution Metric: Definition, Measurement Protocol, and Anti-Gaming Provisions | papers.qnfo.org | the standard itself |
+| 2 | Error Correction Is a Landauer Machine: The Thermodynamic Floor of QEC Overhead | papers.qnfo.org | most-viewed of the top papers; crisp claim |
+| 3 | JPCUB Competitive Landscape v2.0 (17 platforms) | papers.qnfo.org | the comparison people share |
+| 4 | Joules-per-Solution for Stochastic and Agentic Inference (LLMs) | papers.qnfo.org | bridges quantum and AI audiences |
+| 5 | The Universal Ignorance Audit | papers.qnfo.org | method others can use |
+| 6 | Epistemic Legibility in AI-Assisted Science | papers.qnfo.org | governance angle for the AI-for-science audience |
+| 7 | Operating the Quniverse Fleet: Objectives, Successes, Failures, Roadmap | papers.qnfo.org | the practice story; honest failure ledger |
 
 ### 2.4a Flagship tool (owner direction 2026-10-02: "iPatent is an excellent marquee for QNFO")
 iPatent (ipatent.qnfo.org) is the one QNFO tool that outreach and headlines lead with, beside the selected works. It is
@@ -105,7 +104,7 @@ the funding strategy's own "volume trap" warning applies.
 
 ### 2.5 Visual and editorial
 - Design system: QDS-1, `qnfo-web-unified/README.md` (one stylesheet at qnfo.org/qds.css; Newsreader + Familjen Grotesk; accent by brand: QNFO teal, QWAV indigo, q08 rust; light and dark). Owner decision 2026-10-02, superseding the 2026-08-31 paper-and-ink system.
-- Licence (LICENSE-ONE-1, decided 2026-10-02 at the owner's request): every QNFO paper is released under QNFO-ULA v2.0 (https://legal.qnfo.org/: CC BY-NC-SA 4.0 plus the QNFO supplemental terms). Zenodo deposits declare `cc-by-nc-sa-4.0` and carry a LICENSE file naming `LicenseRef-QNFO-ULA-2.0`; a paper's JSON-LD names its own recorded licence. Code: QNFO-ULA v2.1 adds Software Terms (section 12) because Creative Commons licences are not written for software; same tenets, source-available, never called open source (`docs/license/`, posted on `QNFO/license` by the owner). Versions already released under CC BY 4.0 (48 rows on 2026-10-02) keep that grant, which cannot be withdrawn.
+- Licence (LICENSE-ONE-1, decided 2026-10-02 at the owner's request): every QNFO paper is released under QNFO-ULA v2.0 (https://legal.qnfo.org/: CC BY-NC-SA 4.0 plus the QNFO supplemental terms). Published records declare `cc-by-nc-sa-4.0` and carry a LICENSE file naming `LicenseRef-QNFO-ULA-2.0`; a paper's JSON-LD names its own recorded licence. Code: QNFO-ULA v2.1 adds Software Terms (section 12) because Creative Commons licences are not written for software; same tenets, source-available, never called open source (`docs/license/`, posted on `QNFO/license` by the owner). Versions already released under CC BY 4.0 (48 rows on 2026-10-02) keep that grant, which cannot be withdrawn.
 - Every public page: title, description, canonical, viewport, OpenGraph + Twitter card, JSON-LD (Person with ORCID `sameAs`
   on profile pages, ScholarlyArticle with author ORCID on paper pages), GA4 and the Cloudflare beacon, subscribe CTA.
 - No internal jargon on public pages (worker counts, guard names, ticket tags).
@@ -145,8 +144,8 @@ the funding strategy's own "volume trap" warning applies.
 | arXiv | prestige and discoverability for works 1, 2, 4 | Rowan | as ready | submitted by hand; since 2026-01-21 a new author needs a **personal endorsement from an established arXiv author in the field**, so ask one warm contact individually (never a mass request) | prepare packages |
 | Conferences / workshops | credibility events | Rowan | per deadline | owner submits; fleet tracks deadlines (radar-hub) | track |
 | Hacker News, LessWrong, Reddit | high-reach communities | Rowan | occasional | **manual only**: their norms penalise automated posting | owner posts when a work fits |
-| Google Scholar | where citations are counted | Rowan | continuous | **Zenodo is not indexed by Scholar**; papers.qnfo.org paper pages are the way in. They need `citation_title`, one `citation_author` per author, `citation_publication_date`, and an absolute `citation_pdf_url` in the same directory (searchable PDF, 5 MB max), reachable within 10 links of the home page, not blocked by robots or bot challenges | citation tags present; `citation_pdf_url` missing |
-| ORCID | scholarly identity | Rowan | on change | owner adds the selected works with ORCID "Search & link" (DataCite). DataCite auto-update is **not** enabled: it would add every DOI and repeat the volume problem | owner action |
+| Google Scholar | where citations are counted | Rowan | continuous | papers.qnfo.org paper pages are the way in. They need `citation_title`, one `citation_author` per author, `citation_publication_date`, and an absolute `citation_pdf_url` in the same directory (searchable PDF, 5 MB max), reachable within 10 links of the home page, not blocked by robots or bot challenges | citation tags present; `citation_pdf_url` missing |
+| ORCID | scholarly identity | Rowan | on change | owner adds the selected works with ORCID "Search & link" (DataCite). DataCite auto-update is **not** enabled: it would add every work and repeat the volume problem | owner action |
 
 Posting rules that apply to every social channel: native text first, one link (UTM-tagged), no hashtag walls, no engagement
 bait, no following/liking automation, and never more than the cadence above.
@@ -156,8 +155,7 @@ Channel facts verified 2026-10-01 (re-check before relying on them): LinkedIn AP
 (learn.microsoft.com/en-us/linkedin/marketing/community-management/members/post-statistics); "Share on LinkedIn" tokens last
 60 days with no self-serve refresh; Buffer API and limits (developers.buffer.com/guides/api-limits.md, post-metrics.md);
 Bluesky bot guidance (docs.bsky.app/docs/starter-templates/bots); X pricing (docs.x.com/x-api/getting-started/pricing);
-Threads insights (developers.facebook.com/docs/threads/insights); Zenodo not in Google Scholar
-(support.zenodo.org, "Is Zenodo indexed by Google Scholar"); Scholar inclusion (scholar.google.com/intl/en/scholar/inclusion.html);
+Threads insights (developers.facebook.com/docs/threads/insights); Scholar inclusion (scholar.google.com/intl/en/scholar/inclusion.html);
 arXiv endorsement policy (blog.arxiv.org/2026/01/21/attention-authors-updated-endorsement-policy/). Substack and Medium have
 no usable posting API.
 
@@ -210,7 +208,7 @@ resolution. Standing decisions:
   USPTO fees. Public copy makes no patent claim; where a form asks, "13 US provisional patent applications (2025)".
 - Empowering Change is shown as a prior nonprofit (2023-2024), not a current entity, so leads that need an active
   501(c)(3) stay off the shortlist.
-- CV facts: QNFO since 2024 (OSF, ORCID, Zenodo agree); public email rowan.quni@qnfo.org; PMP and AICP shown with the
+- CV facts: QNFO since 2024 (OSF, ORCID agree); public email rowan.quni@qnfo.org; PMP and AICP shown with the
   year earned and never called active; Amsterdam; no work-authorization line in the public CV.
 - Profile fields that only the owner's own sign-in can edit (LinkedIn profile, ORCID, Google Scholar, ResearchGate, SSRN,
   the X profile, Facebook) stay as they are; posting through Buffer is section 4. Reach is measured with Cloudflare Web
@@ -272,7 +270,6 @@ message; suppression list honoured by both engines; one honest follow-up (`Follo
 | LinkedIn / X / Mastodon via Buffer | post reach and engagement | Buffer API, personal key (token present); Buffer marks its metrics "experimental" and gives only basic LinkedIn-profile metrics. LinkedIn's own member post analytics (`r_member_postAnalytics`) are limited to registered organisations, so **UTM clicks into GA4 are the reliable LinkedIn signal** | channels not connected |
 | Threads | views, likes, replies, reposts, quotes per post | Threads insights API (free) | not connected |
 | Bluesky | likes, reposts, replies, quotes (no views); mentions via `searchPosts` | AT Protocol (have) | last 30 posts only; extend and add mention search |
-| Zenodo | views, downloads (bot-skewed) | public API (have) | use views; flag download/view ratio over 3 |
 | OpenAlex / Crossref / DataCite | citations | public APIs (have) | 50 newest DOIs only; cover the selected works always |
 | Email | replies, opt-outs, bounces, positive replies | qnfo-email inbound (have) | bounces and replies not written to `funnel_daily` |
 | Subscribers | confirmations and unsubscribes | D1 (have) | two lists (QNFO, q08); count both, report separately |
@@ -412,15 +409,15 @@ Done items have live evidence in `qnfo-audit.issue_triage.close_evidence`; open 
 | Harmful streams paused, consent fixes, q08 off the owner's channels | done | qnfo-outreach 0.3.5, qnfo-cloud-ops 1.16.3, q08 hold trigger dropped; `external_sends_enabled=1` |
 | Shared outreach cap, 8/day and 3/day per domain (#1718) | done | 7-day window: max 8/day, max 3/domain across both engines |
 | Paper pages: author of record, Scholar tags, PDF | done | gateway 3.7.23; `citation_author` = Rowan Brad Quni-Gudzinas on placeholder-author papers |
-| qnfo.org identity and selected works | done | home page: `id="selected-works"`, 7 DOIs, ORCID, JSON-LD, no QWAV links |
-| Research publishing restarted (#1620, #1728) | done | Zenodo DOIs 10.5281/zenodo.23086421 and .23087164 published 2026-10-01 |
+| qnfo.org identity and selected works | done | home page: `id="selected-works"`, 7 works, ORCID, JSON-LD, no QWAV links |
+| Research publishing restarted (#1620, #1728) | done | two papers published 2026-10-01 |
 | External-mention radar (#1641) | done | radar-hub 1.1.1; `external_mentions` 0 -> 2; `reach_signals` source `mention-radar` |
 | Daily portfolio run and owner page on Cloudflare | done | `portfolio_runs` daily rows from qnfo-fleet-dashboard; no claude.ai Routine enabled |
 | Outreach resumed under consent rules (#1710) | live, open | first post-resume send (2026-10-02; today's cap was spent before the pause) carries the opt-out line |
 | Post ids and UTM on every post (#1712) | live, open | 138 of 141 historical posts backfilled; next post (~2026-10-08, weekly cap) stores `post_uri` and a UTM link |
 | Engagement collection (#1647) | live, open | qnfo-social daily 07:00Z collector writes `social_engagements` on 2026-10-02 |
 | LinkedIn through Buffer (#1713) | live, open | qnfo-social 0.7.25: `social_channels` shows LinkedIn connected (daily audit) and the next post carries a `buffer:` LinkedIn id |
-| Reach scorecard, 5+ sources for 7 days (#1711) | live, open | 6 Cloudflare-native and public sources (cf-rum, zenodo, openalex, email, subscribers, mention-radar); closes after 7 consecutive days with 5+, about 2026-10-07; no owner grant needed |
+| Reach scorecard, 5+ sources for 7 days (#1711) | live, open | 6 Cloudflare-native and public sources (cf-rum, openalex, email, subscribers, mention-radar); closes after 7 consecutive days with 5+, about 2026-10-07; no owner grant needed |
 | AI spend under cap (#1683) | partial | qnfo-ai 5.30.0 governor caps router spend at $60/30d (`GET /spend`); account-wide $448/30d is mostly the owner's desktop client on the BYOK DeepSeek key: owner decision (route it through qnfo-ai or add a gateway rate limit) |
 | q08 keep-or-retire (#1716) | scheduled | decision on 2026-10-31 from bot-filtered human reads |
 

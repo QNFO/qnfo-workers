@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.8-capability-contract";
+var VERSION = "1.3.9-no-topic-tags"; /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -302,6 +302,13 @@ function ensureSchema(env) {
 __name(ensureSchema, "ensureSchema");
 __name2(ensureSchema, "ensureSchema");
 async function triageAI(env, desire) {
+  let knownTags = "";
+  try {
+    const kt = await env.D1.prepare("SELECT cluster_key, COUNT(*) n FROM research_candidates WHERE cluster_key IS NOT NULL AND cluster_key != '' GROUP BY cluster_key ORDER BY n DESC LIMIT 12").all();
+    const tags = (kt && kt.results || []).map((r) => String(r.cluster_key)).filter(Boolean);
+    knownTags = "\nKNOWN TAGS: " + (tags.length ? tags.join(", ") : "(none yet)");
+  } catch (e) {
+  }
   try {
     const r = await env.QNFO_AI.fetch(ROUTER + "/v1/chat/completions", {
       method: "POST",
@@ -309,7 +316,7 @@ async function triageAI(env, desire) {
       body: JSON.stringify({
         model: TRIAGE_MODEL,
         messages: [
-          { role: "system", content: 'You are the QNFO idea-triage evaluator for an autonomous research pipeline. Evaluate the user idea. Reply with STRICT JSON only: {"is_noise":bool,"question":"normalized research question, max 140 chars","cluster_key":"short program tag: jpcub|ultrametric|qwav|platform|other","technical_merit":0-100,"impact_potential":0-100,"novelty":0-100,"feasibility":0-100}. technical_merit: scientific substance, precision, testability. impact_potential: likelihood to yield citable publications and visibility. novelty: distance from well-known results. feasibility: realistic for autonomous research in the QNFO program (quantum information, energy benchmarks, ultrametric physics, knowledge infrastructure). is_noise=true ONLY for agent tool-call instructions, meta-prompts, pipeline probes, or non-research chatter.' },
+          { role: "system", content: 'You are the QNFO idea-triage evaluator for an autonomous research pipeline. Evaluate the user idea using only the text it contains. Reply with STRICT JSON only: {"is_noise":bool,"question":"normalized research question, max 140 chars","cluster_key":"short lowercase program tag","technical_merit":0-100,"impact_potential":0-100,"novelty":0-100,"feasibility":0-100}. cluster_key: reuse one of the KNOWN TAGS below when the idea belongs to that program; otherwise coin one short lowercase tag (letters, digits, hyphen) from the idea\'s own wording; use other only when nothing fits. technical_merit: scientific substance, precision, testability. impact_potential: likelihood to yield citable publications and visibility. novelty: distance from results established in the idea\'s own field. feasibility: realistic for autonomous, in-silico research by the pipeline (derivation, simulation, formal analysis). is_noise=true ONLY for agent tool-call instructions, meta-prompts, pipeline probes, or non-research chatter.' + knownTags },
           { role: "user", content: clamp(desire, 1e3) }
         ],
         max_tokens: 300

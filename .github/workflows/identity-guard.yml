@@ -30,11 +30,9 @@ jobs:
         run: python3 scripts/identity-guard.py .
 
       # Offline suites for the identity changes that ride the canonical deploy (node:sqlite needs Node 22):
-      # ZENODO-VERSION-REQUESTS-1 / ZENODO-METADATA-EDITS-1 (qnfo-research-exec) and PROFILE-SYNC-1 (qnfo-social).
+      # PROFILE-SYNC-1 (qnfo-social).
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Zenodo queue offline suite (qnfo-research-exec)
-        run: node qnfo-research-exec/zenodo-version-requests.test.mjs
       - name: Bluesky profile sync offline suite (qnfo-social)
         run: node qnfo-social/profile-sync.test.mjs

@@ -4,15 +4,15 @@
 # Non-commercial use only; commercial use requires a separate agreement.
 """The instrument: five phases, fifteen questions and the administration protocol.
 
-Question text is verbatim from The Universal Ignorance Audit v0.3, section 3 (`targets` is abridged) (Rowan Brad Quni-Gudzinas,
-DOI 10.5281/zenodo.21901984). INSTRUMENT_VERSION names the paper version the text comes from.
+Question text is verbatim from The Universal Ignorance Audit v0.3, section 3 (`targets` is abridged) (Rowan Brad Quni-Gudzinas).
+INSTRUMENT_VERSION names the paper version the text comes from.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Tuple
 
-INSTRUMENT_VERSION = "UIA v0.3 (10.5281/zenodo.21901984)"
+INSTRUMENT_VERSION = "UIA v0.3"
 
 
 @dataclass(frozen=True)

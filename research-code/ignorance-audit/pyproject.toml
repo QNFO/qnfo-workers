@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 [project.urls]
-Paper = "https://doi.org/10.5281/zenodo.21901984"
+Paper = "https://papers.qnfo.org/"
 
 [project.scripts]
 ignorance-audit = "ignorance_audit.cli:main"

@@ -5,21 +5,21 @@
 
 User Prompt (any client: DeepChat/ChatBox/SannaBot/Android)
 → qnfo-ops (ops-exec v2.27.0) [server-side tool loop, no client handoff]
-→ Fleet service bindings → D1/R2/KV/Vectorize/Zenodo/GitHub
+→ Fleet service bindings → D1/R2/KV/Vectorize/GitHub
 
 ## Implemented Use Cases (All Autonomous, All Server-Side, All Cloudflare)
 
 ### UC-1: Research Paper Generation
 Trigger: User prompt or idea intake (idea-hub, signal-loop)
-Chain: idea → research_queue → ground → ensemble (3 AI legs) → reconcile → review → verify → publish → Zenodo DOI
+Chain: idea → research_queue → ground → ensemble (3 AI legs) → reconcile → review → verify → publish
 Workers: idea-hub, qnfo-research-exec, qnfo-containers-pilot, qnfo-paper-indexer
 SLA: 4-6 hours end-to-end | Gate: QUALITY-GATE-1
 
 ### UC-2: Paper Revision (Adversarial Audit)
 Trigger: Cron 37 */4 * * * or manual /run/scan
-Chain: papers (published, 1 version) → adversarial audit → low-severity fixes → version_queue → drainV2 → Zenodo v2
+Chain: papers (published, 1 version) → adversarial audit → low-severity fixes → version_queue → drainV2 → v2
 Workers: qnfo-paper-reviser, qnfo-research-exec
-Gate: REVISION-ALL-PUBLICATIONS-1 (>=2 Zenodo versions per paper)
+Gate: REVISION-ALL-PUBLICATIONS-1 (>=2 versions per paper)
 
 ### UC-3: Fleet Self-Healing
 Trigger: fleet-control cron */20 * * * * or fleet-dashboard action board

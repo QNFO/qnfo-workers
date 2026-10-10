@@ -16,7 +16,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 
 {
   const lines = guest.split("\n");
-  const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "3.0.12-math-browser-metric";')), lines.indexOf("export { worker_default as default };"));
+  const body = lines.slice(lines.findIndex((l) => l.startsWith('var VERSION = "')), lines.indexOf("export { worker_default as default };"));
   // CONTROL-DISPOSITION (2026-10-08, doctrine section 13, REPLACE): line-by-line identity proved the fold copied the member
   // unchanged (INDEXER-FOLD-1), but the original directory is frozen (FOLDED), so the check then blocked every later fix to
   // the member (#1815 failed on it). The member keeps its structure: every function the guest declared is still declared in

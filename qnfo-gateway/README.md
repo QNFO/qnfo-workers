@@ -13,7 +13,15 @@ time). CORE worker — do NOT deprecate. No /health route yet (F3 probe worklist
 
 **qnfo.org/work-with-me (WORK-WITH-ME-1, 3.7.27, pillar reach):** the offers page (JPCUB assessment, review of an AI
 research or agent operation, talks and workshops, research collaboration, roles), in the owner's first person and from the
-published record only (the CV at doi:10.5281/zenodo.23082080, the selected works, 44 deployed workers). No form: each offer
+published record only (the CV, the selected works, 44 deployed workers). No form: each offer
 is a mailto to rowan.quni@qnfo.org whose subject starts `[work-with-me:<offer>]`, which qnfo-fleet-dashboard
 WORK-WITH-ME-METRIC-1 counts. Linked from the home page (nav, byline, first card, footer), /about, the sitemap and llms.txt;
 `/contact` redirects to it. Offline suite: `work-with-me.test.mjs` (deploy-gate).
+
+## POST /api/ask is grounded (ASK-GROUND-1, 3.13.0)
+
+Owner directive 2026-10-10. The route answers only from the text of one published paper. A missing slug returns 400 `no_source`;
+an unknown or unpublished slug returns 404 `no_source`; neither calls the model. Up to 36000 characters of the paper are supplied
+(`source_truncated` says when the paper is longer). The prompt is process-only, and every sentence of the answer that carries a
+DOI, link, author citation or figure absent from the paper text is removed (`removed_statements` counts them). Suite:
+`node qnfo-gateway/ask-ground.test.mjs`.

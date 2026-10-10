@@ -1,7 +1,0 @@
-{
-  "title": "agentic-collapse: reference implementation of the Agentic Collapse model",
-  "upload_type": "software",
-  "creators": [{"name": "Quni-Gudzinas, Rowan Brad"}],
-  "related_identifiers": [{"identifier": "10.5281/zenodo.18133065", "relation": "isSupplementTo", "scheme": "doi"}],
-  "keywords": ["autonomous agents", "AI safety", "reproducibility", "delay differential equations"]
-}

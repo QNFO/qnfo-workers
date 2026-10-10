@@ -38,7 +38,7 @@ daily brief) and executed by the interactive agent. The 'scheduled-runner' owner
 honest by qnfo-register-guard (relabeled to 'agent' when no executor is cited)."**
 
 ## Deprecation candidates (no /health probe -> cannot self-monitor; FLEET-PROBE-COVERAGE-1)
-jnl-zenodo, jnl-reviser, qnfo-code-agent, qnfo-code-orchestrator, qnfo-containers-pilot,
+jnl-reviser, qnfo-code-agent, qnfo-code-orchestrator, qnfo-containers-pilot,
 qnfo-container-executor, qnfo-agent-orchestrator, qnfo-agent-ws, qnfo-proof, qnfo-idea-factory,
 qnfo-ipatent, qnfo-email, qnfo-ai-search, personal-life-search, obsidian-writer
 

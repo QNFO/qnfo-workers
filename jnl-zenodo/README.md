@@ -1,9 +1,3 @@
-# jnl-zenodo
+# Retired journal deposit stage
 
-> Self-doc header (FLEET-SELF-DOC-1)
-> Purpose: Journal pipeline Zenodo submission stage
-> Canonical source: this directory (QNFO/qnfo-workers)
-> Version: worker.js VERSION + /health (see fleet-drift scan)
-
-Deployed-current discipline: deployed-current.worker.js mirrors the live bundle;
-regenerate via: wrangler deploy --dry-run --outdir dist && cp dist/worker.js deployed-current.worker.js
+Retired and inert (NOZ-DOI-1, 2026-10-10). The external deposit integration this stage implemented is gone; the worker has no bindings and no outbound calls, and answers `/health` only.

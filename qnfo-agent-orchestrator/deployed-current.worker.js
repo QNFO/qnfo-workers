@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "1.1.1-capability-contract"; // Worker Contract v1: VERSION constant == /health version
+var VERSION = "1.1.2-doi-scrub"; // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -131,75 +131,6 @@ async function githubPublish(token, repo, path, content, message) {
   }
 }
 __name(githubPublish, "githubPublish");
-var ZENODO = "https://zenodo.org/api/deposit/depositions";
-async function zenodoPublish(token, opts) {
-  if (!token) return { error: "ZENODO_TOKEN not configured" };
-  const title = String(opts && opts.title || "").slice(0, 500);
-  if (!title) return { error: "title required" };
-  const authors = String(opts && opts.authors || "Rowan Brad Quni-Gudzinas").slice(0, 500);
-  const slug = String(opts && opts.slug || "paper").slice(0, 80);
-  const description = String(opts && opts.description || "").slice(0, 5e3);
-  const body = String(opts && opts.body_md || "");
-  let keywords = [];
-  if (Array.isArray(opts && opts.keywords)) keywords = opts.keywords.map((k) => String(k).slice(0, 50)).slice(0, 10);
-  const q = /* @__PURE__ */ __name((path) => path + (path.indexOf("?") >= 0 ? "&" : "?") + "access_token=" + token, "q");
-  const headers = { "User-Agent": "qnfo-agent-orchestrator/1.1", "Content-Type": "application/json" };
-  try {
-    const d = await fetch(q(ZENODO), {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        metadata: {
-          title,
-          creators: [{ name: authors }],
-          description: description || title,
-          upload_type: "publication",
-          publication_type: "other",
-          access_right: "open",
-          license: "cc-by-4.0",
-          publication_date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
-          keywords
-        }
-      })
-    });
-    const draft = await d.json();
-    if (!d.ok) return { error: "zenodo create HTTP " + d.status + " " + (draft && draft.message || "") };
-    const depId = draft.id;
-    const preDoi = draft.metadata && draft.metadata.prereserve_doi && draft.metadata.prereserve_doi.doi || null;
-    let fileOk = true;
-    if (body) {
-      const bucket = draft.links && draft.links.bucket || null;
-      if (!bucket) {
-        await fetch(q(ZENODO + "/" + depId), { method: "DELETE", headers });
-        return { error: "zenodo draft missing bucket link" };
-      }
-      const f = await fetch(q(bucket + "/" + encodeURIComponent(slug + ".md")), {
-        method: "PUT",
-        headers: { "User-Agent": "qnfo-agent-orchestrator/1.1", "Content-Type": "application/octet-stream" },
-        body: body.slice(0, 5e5)
-      });
-      fileOk = f.ok;
-      if (!f.ok) {
-        await fetch(q(ZENODO + "/" + depId), { method: "DELETE", headers });
-        return { error: "zenodo file upload HTTP " + f.status };
-      }
-    }
-    const p = await fetch(q(ZENODO + "/" + depId + "/actions/publish"), { method: "POST", headers });
-    const pub = await p.json();
-    if (!p.ok) return { error: "zenodo publish HTTP " + p.status + " " + (pub && pub.message || "") };
-    return {
-      ok: true,
-      doi: pub.doi || pub.metadata && pub.metadata.doi || preDoi,
-      record_id: pub.id || depId,
-      conceptrecid: pub.conceptrecid || null,
-      url: "https://zenodo.org/record/" + (pub.id || depId),
-      file: fileOk ? slug + ".md" : null
-    };
-  } catch (e) {
-    return { error: "zenodo publish failed: " + (e && e.message || e) };
-  }
-}
-__name(zenodoPublish, "zenodoPublish");
 var SYSTEM_PROMPT = `You are the QNFO research orchestrator \u2014 a server-side agent running on the Cloudflare Quniverse fleet (account: quniverse, ~54 workers). You operate on the QNFO knowledge infrastructure: the living-paper corpus (D1 + Vectorize semantic index), the knowledge graph (D1), and the R2 projects store. QNFO is not an acronym.
 
 QUNIVERSE FLEET CONTEXT (relevant surfaces)
@@ -209,7 +140,7 @@ QUNIVERSE FLEET CONTEXT (relevant surfaces)
 - ideas.qnfo.org \u2014 idea intake hub; /api/sessions, /rss.xml, /sitemap.xml
 - qnfo.org \u2014 landing + email-capture; qnfo-subscribers double opt-in pipeline
 - qnfo-signal-loop \u2014 signal-organism L8 re-entry; emits signals from open-question sections
-- qnfo-paper-reviser \u2014 adversarial revision loop; all publications target >=2 Zenodo versions
+- qnfo-paper-reviser \u2014 adversarial revision loop
 - qnfo-outreach \u2014 autonomous outreach agent; ACTIVATION_AT 2026-09-15
 
 PRIORITIES (attention selectivity)
@@ -233,7 +164,7 @@ OUTPUT STANDARDS (hard)
 - State the fact and stop; the citation carries the evidence.
 - No navel-gazing: the output must be useful to an external reader, never a summary of internal pipeline status.
 - Final answer: plain Markdown, no tool calls, no raw tool JSON.
-- NO-JOURNALS-1: never suggest traditional journal submissions. Zenodo is the canonical venue.
+- NO-JOURNALS-1: never suggest traditional journal submissions.
 
 TOOLS
 - search_papers(query, limit?): semantic search across the QWAV research corpus. Returns paper slugs, scores, and metadata.
@@ -246,7 +177,6 @@ TOOLS
 - publish_paper(slug, title, body_md, authors?, abstract?, doi?): publish the result to the QNFO living-paper corpus (searchable + retrievable).
 - social_promote(slug, title, posts[]): queue a Bluesky social thread for promotion (qnfo-social cron posts it).
 - github_publish(repo?, path, content, message?): publish a file to a GitHub repository.
-- zenodo_publish(slug, title, body_md, authors?, description?, keywords?): publish to Zenodo (permanent DOI). Keep 'Quni-Gudzinas' in authors so the social autoScan detects it.
 
 When you have enough evidence, answer directly in Markdown. Do not make additional tool calls in the final response.
 
@@ -406,25 +336,6 @@ var TOOLS = [
           message: { type: "string", description: "Commit message" }
         },
         required: ["path", "content"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "zenodo_publish",
-      description: "Publish the result to Zenodo (permanent DOI, mirroring the existing QNFO pipeline). The qnfo-social autoScan detects Zenodo records by creator name \u2014 keep 'Quni-Gudzinas' in the authors.",
-      parameters: {
-        type: "object",
-        properties: {
-          slug: { type: "string", description: "Paper slug" },
-          title: { type: "string", description: "Publication title" },
-          authors: { type: "string", description: "Author names (default 'Rowan Brad Quni-Gudzinas' \u2014 autoScan matches this name)" },
-          description: { type: "string", description: "Abstract/description" },
-          body_md: { type: "string", description: "Body content uploaded as {slug}.md" },
-          keywords: { type: "array", items: { type: "string" }, description: "Keywords (optional)" }
-        },
-        required: ["slug", "title", "body_md"]
       }
     }
   }
@@ -710,14 +621,6 @@ var AgentTask = class extends DurableObject {
         const gpr = await githubPublish(this.env.GITHUB_TOKEN, String(args.repo || "QNFO/qnfo-research"), String(args.path || ""), String(args.content || ""), String(args.message || "publish from qnfo-agent-orchestrator"));
         return JSON.stringify(gpr);
       }
-      case "zenodo_publish": {
-        const zr = await zenodoPublish(this.env.ZENODO_TOKEN, args);
-        if (zr.ok && zr.doi) {
-          const slug = slugify(args.slug || args.title || "paper");
-          await this.env.LIVING_PAPER.prepare("UPDATE papers SET zenodo_doi = ?1, zenodo_url = ?2, doi = COALESCE(doi, ?1) WHERE slug = ?3").bind(zr.doi, zr.url, slug).run();
-        }
-        return JSON.stringify(zr);
-      }
       default:
         return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
@@ -740,7 +643,7 @@ var agent_orchestrator_default = {
         version: VERSION,
         status: "ok",
         capabilities: ["agent-tasks", "paper-search", "graph-query", "arxiv-and-web-research", "notes", "publish-tools"],
-        limitations: ["every POST and PATCH needs X-Sync-Token (sync, dispatch or test token)", "a task runs at most 10 steps with an output budget of at most 16384 tokens", "publish tools act with this worker's own Zenodo and GitHub credentials"],
+        limitations: ["every POST and PATCH needs X-Sync-Token (sync, dispatch or test token)", "a task runs at most 10 steps with an output budget of at most 16384 tokens", "publish tools act with this worker's own GitHub credentials"],
         bindings: {
           d1_living_paper: !!env.LIVING_PAPER,
           d1_graph: !!env.QNFO_GRAPH,

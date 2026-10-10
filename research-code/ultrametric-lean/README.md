@@ -2,7 +2,7 @@
 
 Machine-checked proofs, in Lean 4 with no dependencies beyond the toolchain, of the ultrametric facts the QNFO
 ultrametric programme relies on (for example *The Ultrametric Program: One Structural Object Across Seven Research
-Domains, and Its Falsifiable Tests*, [10.5281/zenodo.22073477](https://doi.org/10.5281/zenodo.22073477), and the
+Domains, and Its Falsifiable Tests*, papers.qnfo.org, and the
 QEC-Darwinism work in `QNFO/qec-darwinism-ultrametric`).
 
 | Theorem | Statement |

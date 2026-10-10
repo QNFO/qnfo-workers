@@ -32,7 +32,7 @@ This section resolves the contradiction below between "Monday = autonomous outre
   Apart from qnfo-email `/stats`, it calls `/outreach/replies`, `/outreach/followup`, `/scan` and `/outreach/weekly`,
   which qnfo-email (`qnfo-email/worker.js`) does not implement; qnfo-email answers an unknown GET with its route list, so
   replies, follow-ups and scan come back empty. The cadence path sends nothing externally and writes a `cadence_runs` row.
-- The v0.3.2/v0.3.3 Monday send wave (Zenodo scan, arXiv researcher scan, send from rowan.quni@qnfo.org, cap 5/day) is
+- The v0.3.2/v0.3.3 Monday send wave (arXiv researcher scan, send from rowan.quni@qnfo.org, cap 5/day) is
   not in the current code. It is kept below as history.
 - Outreach policy for the fleet (caps 8/day in total and 3/day per domain, consent rules, kill switch) is
   docs/STRATEGY.md section 5. Cold email is sent by qnfo-outreach and the qnfo-cloud-ops outreach job, not by this worker.
@@ -44,7 +44,7 @@ Runs the QNFO email + outreach cadence every 3 hours WITHOUT local Windows DeepC
 ## What it does (per run)
 **v0.3.3 additions (RED-TEAM blockers, R3):** author-bound email verification (role/journal blocklist + name-token match on first author, \\email{}/mailto: macros, .tex-focused), dedup status IN (sent,replied), per-paper try/catch, honest subject (no fake Re:), AI draft anchored to server-side facts only, e-print pacing/retry, atomic run-lock claim. First autonomous Monday wave: 2026-09-07 (receipt to alerts@).
 
-**v0.3.2 additions (red-team C1-C6), history only, not in the current code (see Current state):** Monday = autonomous outreach SEND wave: Zenodo scan (Quni-Gudzinas, 90d) -> physics paper select -> arXiv researcher scan (3s pacing, 429 retry) -> email verification via arXiv source tarball -> D1 dedup -> Workers AI draft (academic template) -> send from rowan.quni@qnfo.org (cap 5/day). SKIPPED list with reasons for unverified/already-contacted. Marker case fix, classifyRegex tightening, audit_d1 real probe, run-lock, paginated followup count.
+**v0.3.2 additions (red-team C1-C6), history only, not in the current code (see Current state):** Monday = autonomous outreach SEND wave: physics paper select -> arXiv researcher scan (3s pacing, 429 retry) -> email verification via arXiv source tarball -> D1 dedup -> Workers AI draft (academic template) -> send from rowan.quni@qnfo.org (cap 5/day). SKIPPED list with reasons for unverified/already-contacted. Marker case fix, classifyRegex tightening, audit_d1 real probe, run-lock, paginated followup count.
 - Inbox check across all qnfo.org domains (via qnfo-email service binding)
 - Outreach reply detection + classification (taxonomy: positive/critical/dismissive/read-later/collaboration)
 - Follow-up readiness count (>14d silent; 0 eligible per NO-FOLLOW-UP-DEFAULT-1)

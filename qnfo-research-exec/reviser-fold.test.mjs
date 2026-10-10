@@ -18,7 +18,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 {
   const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.every((l) => /^var VERSION = |^export \{|^  worker_default as default,|^  recordFlaggedErrata|^\};|^\/\/# sourceMappingURL/.test(l)) && missing.some((l) => l.startsWith("var VERSION = ")), "every reviser line is in the host except its VERSION line and its export block", missing.map((l) => l.slice(0, 60)));
-  ok(versionAtLeast(mod.__hv, "0.9.64") && mod.__mv === "1.2.8-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.9.64+, member 1.2.8-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok(versionAtLeast(mod.__hv, "0.9.64") && versionAtLeast(mod.__mv, "1.3.0") && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.9.64+, member 1.2.8-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
 }
 
 // cadence
@@ -66,7 +66,7 @@ const mkEnv = () => ({ LIVING_PAPER: mkDb("living"), QNFO_AUDIT: mkDb("audit"), 
   const host = "https://qnfo-research-exec.q08.workers.dev";
   const h = await mod.default.fetch(new Request(host + "/reviser/health"), mkEnv(), {});
   const hj = await h.json();
-  ok(h.status === 200 && hj.worker === "qnfo-paper-reviser" && hj.version === "1.2.8-folded", "GET /reviser/health answers as the member", hj);
+  ok(h.status === 200 && hj.worker === "qnfo-paper-reviser" && versionAtLeast(hj.version, "1.3.0"), "GET /reviser/health answers as the member", hj);
   const props = { caller: "qnfo-fleet-dashboard", member: "qnfo-paper-reviser" };
   const st = await mod.default.fetch(new Request("https://internal/run/status"), mkEnv(), { props });
   const sj = await st.json();

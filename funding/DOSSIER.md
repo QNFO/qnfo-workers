@@ -29,13 +29,13 @@ QNFO is open, public-interest research with a funding target: funded by grants f
 
 ## 1. Who we are (one paragraph)
 
-QNFO is a two-year-old, solo-run research imprint (one researcher with an AI-assisted pipeline) that has produced an open, DOI-registered corpus of approximately 1,000 method papers (August 2026 count; dated) across seven program areas: ultrametric physics, laws of form, information physics, paradigm engineering, consilience, platform engineering, and demos. The platform runs on open infrastructure (Cloudflare Workers/D1/R2/Vectorize) with a documented audit discipline — citation audits, post-publication adversarial review, and ignorance auditing — and a prior IPFS/decentralized deployment history. JPCUB, the energy-benchmarking initiative, is the lead pillar; QWAV is a parked commercial label and is not used here. (Changed 2026-10-01, STRATEGY-1 sections 2.1 and 2.3; v2 called QWAV "the companion program for quantum computing theory".)
+QNFO is a two-year-old, solo-run research imprint (one researcher with an AI-assisted pipeline) that has produced an open corpus of approximately 1,000 method papers (August 2026 count; dated) across seven program areas: ultrametric physics, laws of form, information physics, paradigm engineering, consilience, platform engineering, and demos. The platform runs on open infrastructure (Cloudflare Workers/D1/R2/Vectorize) with a documented audit discipline — citation audits, post-publication adversarial review, and ignorance auditing — and a prior IPFS/decentralized deployment history. JPCUB, the energy-benchmarking initiative, is the lead pillar; QWAV is a parked commercial label and is not used here. (Changed 2026-10-01, STRATEGY-1 sections 2.1 and 2.3; v2 called QWAV "the companion program for quantum computing theory".)
 
 ## 2. The problem we solve
 
 Two converging gaps:
 
-1. **AI-assisted research lacks auditability.** High-volume AI-assisted knowledge production is untrustworthy without systematic verification. QNFO's published methodology (Universal Ignorance Audit, DOI 10.5281/zenodo.21901984; pipeline lessons, DOI 10.5281/zenodo.21901983) makes not-knowing and AI involvement legible, auditable, and reproducible — turning "AI slop" risk into a quality signal.
+1. **AI-assisted research lacks auditability.** High-volume AI-assisted knowledge production is untrustworthy without systematic verification. QNFO's published methodology (Universal Ignorance Audit; pipeline lessons) makes not-knowing and AI involvement legible, auditable, and reproducible — turning "AI slop" risk into a quality signal.
 2. **Research velocity is bottlenecked by process, not intelligence.** Traditional cycles take too long; LLMs with appropriate protocols/processes/guardrails compress them dramatically. The QNFO knowledge graph (API-accessible, RAG + database + graph combined) is the structured layer that lets any LLM — or any researcher — tap into the corpus or the initial full research pipeline.
 
 ## 3. The ask
@@ -48,15 +48,15 @@ Two converging gaps:
 
 ## 4. Track record (verifiable evidence)
 
-| Evidence | DOI / URL | Status |
+| Evidence | Where | Status |
 |---|---|---|
-| Universal Ignorance Audit (method paper) | 10.5281/zenodo.21901984 | published, live |
-| AI-assisted pipeline lessons (method paper) | 10.5281/zenodo.21901983 | published, live |
-| Funding strategy (this campaign's basis) | 10.5281/zenodo.21922589 | published, live |
-| JPCUB strategy (QWAV Strategy v2.4.1) | 10.5281/zenodo.21905166 | published, live |
-| JPCUB protocol P0 | 10.5281/zenodo.21637028 | published, live |
-| JPCUB competitive landscape v2.0 (17 platforms) | 10.5281/zenodo.21821767 | published, live |
-| Qudit advantage analysis | 10.5281/zenodo.21880104 | published, live |
+| Universal Ignorance Audit (method paper) | papers.qnfo.org | published, live |
+| AI-assisted pipeline lessons (method paper) | papers.qnfo.org | published, live |
+| Funding strategy (this campaign's basis) | papers.qnfo.org | published, live |
+| JPCUB strategy (QWAV Strategy v2.4.1) | papers.qnfo.org | published, live |
+| JPCUB protocol P0 | papers.qnfo.org | published, live |
+| JPCUB competitive landscape v2.0 (17 platforms) | papers.qnfo.org | published, live |
+| Qudit advantage analysis | papers.qnfo.org | published, live |
 | Open corpus | papers.qnfo.org (D1 living-paper + Vectorize + KG) | ~1,000 papers (August 2026 count; dated) |
 | Knowledge graph | query_graph live (8,270+ nodes, 1,619 Paper nodes; August 2026 counts, dated) | API-accessible |
 | GitHub org | github.com/QNFO | public |

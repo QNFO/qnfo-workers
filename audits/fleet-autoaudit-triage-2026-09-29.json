@@ -27,7 +27,7 @@
   },
   "genuine_declared_worker_absent": [
     "audit-hub", "companion-hub", "errata-hub", "errata-orchestrator->qnfo-errata-orchestrator", "events-radar",
-    "jnl-pipeline", "jnl-referee", "jnl-reviser", "jnl-watch", "jnl-zenodo",
+    "jnl-pipeline", "jnl-referee", "jnl-reviser", "jnl-watch", "jnl-deposit",
     "notes-intake", "obsidian-writer", "osf-integrity-check", "paper-hub", "personal-events-radar",
     "qnfo-agent-ws", "qnfo-artifact-agent", "qnfo-artifacts", "qnfo-auditor", "qnfo-autopilot",
     "qnfo-blank-audit", "qnfo-calendar-intake", "qnfo-chameleon", "qnfo-chat-canary", "qnfo-citation-watch",

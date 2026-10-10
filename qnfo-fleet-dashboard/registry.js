@@ -486,7 +486,7 @@ export const REGISTRY = {
   },
   {
    "name": "publish",
-   "label": "Publication (reviser -> versions -> Zenodo)",
+   "label": "Publication (reviser -> new versions)",
    "stages": [
     "qnfo-paper-reviser",
     "qnfo-research-exec"

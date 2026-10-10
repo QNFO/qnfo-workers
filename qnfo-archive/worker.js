@@ -1,5 +1,5 @@
 const QNFO_VERSION = "qnfo-archive/fabric-20260910";
-var VERSION = "1.2.2-internal-search";
+var VERSION = "1.2.3-doi-scrub";
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -106,7 +106,7 @@ var worker_default = {
 async function seedKGFromD1(env, dryRun) {
   if (dryRun === void 0) dryRun = false;
   var papers = await env.LIVING_PAPER.prepare(
-    "SELECT pi.slug, pi.kg_id, pi.vectorize_id, pi.doi, pi.zenodo_url, pi.papers_server_url, p.title, p.authors, p.status, p.created_at FROM paper_ids pi LEFT JOIN papers p ON pi.slug = p.slug WHERE pi.slug IS NOT NULL AND pi.kg_id IS NOT NULL"
+    "SELECT pi.slug, pi.kg_id, pi.vectorize_id, pi.doi, pi.papers_server_url, p.title, p.authors, p.status, p.created_at FROM paper_ids pi LEFT JOIN papers p ON pi.slug = p.slug WHERE pi.slug IS NOT NULL AND pi.kg_id IS NOT NULL"
   ).all();
   var paperRows = papers.results || [];
   var missing = [];
@@ -125,11 +125,10 @@ async function seedKGFromD1(env, dryRun) {
         label: "Paper",
         properties: {
           slug: p.slug,
-          doi: p.doi || "",
+          doi: /10\.5281\//.test(p.doi || "") ? "" : p.doi || "",
           authors: p.authors || "",
           status: p.status || "published",
           vectorize_id: p.vectorize_id,
-          zenodo_url: p.zenodo_url || "",
           distribution_status: "published",
           last_active: p.created_at || (/* @__PURE__ */ new Date()).toISOString()
         }

@@ -3,6 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { DurableObject } from "cloudflare:workers";
+var VERSION = "1.0.1-doi-scrub";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var ARXIV_API = "https://export.arxiv.org/api/query";
@@ -117,74 +118,6 @@ async function githubPublish(token, repo, path, content, message) {
     return { error: "github publish failed: " + (e && e.message || e) };
   }
 }
-var ZENODO = "https://zenodo.org/api/deposit/depositions";
-async function zenodoPublish(token, opts) {
-  if (!token) return { error: "ZENODO_TOKEN not configured" };
-  const title = String((opts && opts.title) || "").slice(0, 500);
-  if (!title) return { error: "title required" };
-  const authors = String((opts && opts.authors) || "Rowan Brad Quni-Gudzinas").slice(0, 500);
-  const slug = String((opts && opts.slug) || "paper").slice(0, 80);
-  const description = String((opts && opts.description) || "").slice(0, 5000);
-  const body = String((opts && opts.body_md) || "");
-  let keywords = [];
-  if (Array.isArray(opts && opts.keywords)) keywords = opts.keywords.map((k) => String(k).slice(0, 50)).slice(0, 10);
-  const q = (path) => path + (path.indexOf("?") >= 0 ? "&" : "?") + "access_token=" + token;
-  const headers = { "User-Agent": "qnfo-agent-orchestrator/1.1", "Content-Type": "application/json" };
-  try {
-    const d = await fetch(q(ZENODO), {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        metadata: {
-          title,
-          creators: [{ name: authors }],
-          description: description || title,
-          upload_type: "publication",
-          publication_type: "other",
-          access_right: "open",
-          license: "cc-by-4.0",
-          publication_date: new Date().toISOString().slice(0, 10),
-          keywords
-        }
-      })
-    });
-    const draft = await d.json();
-    if (!d.ok) return { error: "zenodo create HTTP " + d.status + " " + ((draft && draft.message) || "") };
-    const depId = draft.id;
-    const preDoi = (draft.metadata && draft.metadata.prereserve_doi && draft.metadata.prereserve_doi.doi) || null;
-    let fileOk = true;
-    if (body) {
-      const bucket = (draft.links && draft.links.bucket) || null;
-      if (!bucket) {
-        await fetch(q(ZENODO + "/" + depId), { method: "DELETE", headers });
-        return { error: "zenodo draft missing bucket link" };
-      }
-      const f = await fetch(q(bucket + "/" + encodeURIComponent(slug + ".md")), {
-        method: "PUT",
-        headers: { "User-Agent": "qnfo-agent-orchestrator/1.1", "Content-Type": "application/octet-stream" },
-        body: body.slice(0, 500000)
-      });
-      fileOk = f.ok;
-      if (!f.ok) {
-        await fetch(q(ZENODO + "/" + depId), { method: "DELETE", headers });
-        return { error: "zenodo file upload HTTP " + f.status };
-      }
-    }
-    const p = await fetch(q(ZENODO + "/" + depId + "/actions/publish"), { method: "POST", headers });
-    const pub = await p.json();
-    if (!p.ok) return { error: "zenodo publish HTTP " + p.status + " " + ((pub && pub.message) || "") };
-    return {
-      ok: true,
-      doi: pub.doi || (pub.metadata && pub.metadata.doi) || preDoi,
-      record_id: pub.id || depId,
-      conceptrecid: pub.conceptrecid || null,
-      url: "https://zenodo.org/record/" + (pub.id || depId),
-      file: fileOk ? slug + ".md" : null
-    };
-  } catch (e) {
-    return { error: "zenodo publish failed: " + (e && e.message || e) };
-  }
-}
 var SYSTEM_PROMPT = `You are a research assistant operating on the QNFO knowledge infrastructure: the living-paper corpus (D1 + Vectorize semantic index), the knowledge graph (D1), and the R2 projects store.
 
 PRIORITIES (attention selectivity)
@@ -219,7 +152,6 @@ TOOLS
 - publish_paper(slug, title, body_md, authors?, abstract?, doi?): publish the result to the QNFO living-paper corpus (searchable + retrievable).
 - social_promote(slug, title, posts[]): queue a Bluesky social thread for promotion (qnfo-social cron posts it).
 - github_publish(repo?, path, content, message?): publish a file to a GitHub repository.
-- zenodo_publish(slug, title, body_md, authors?, description?, keywords?): publish to Zenodo (permanent DOI). Keep 'Quni-Gudzinas' in authors so the social autoScan detects it.
 
 When you have enough evidence, answer directly in Markdown. Do not make additional tool calls in the final response.
 
@@ -382,27 +314,6 @@ var TOOLS = [
           message: { type: "string", description: "Commit message" }
         },
         required: ["path", "content"]
-      }
-    }
-  }
-
-,
-  {
-    type: "function",
-    function: {
-      name: "zenodo_publish",
-      description: "Publish the result to Zenodo (permanent DOI, mirroring the existing QNFO pipeline). The qnfo-social autoScan detects Zenodo records by creator name — keep 'Quni-Gudzinas' in the authors.",
-      parameters: {
-        type: "object",
-        properties: {
-          slug: { type: "string", description: "Paper slug" },
-          title: { type: "string", description: "Publication title" },
-          authors: { type: "string", description: "Author names (default 'Rowan Brad Quni-Gudzinas' — autoScan matches this name)" },
-          description: { type: "string", description: "Abstract/description" },
-          body_md: { type: "string", description: "Body content uploaded as {slug}.md" },
-          keywords: { type: "array", items: { type: "string" }, description: "Keywords (optional)" }
-        },
-        required: ["slug", "title", "body_md"]
       }
     }
   }
@@ -685,14 +596,6 @@ var AgentTask = class extends DurableObject {
       case "github_publish": {
         const gpr = await githubPublish(this.env.GITHUB_TOKEN, String(args.repo || "QNFO/qnfo-research"), String(args.path || ""), String(args.content || ""), String(args.message || "publish from qnfo-agent-orchestrator"));
         return JSON.stringify(gpr);
-      }
-      case "zenodo_publish": {
-        const zr = await zenodoPublish(this.env.ZENODO_TOKEN, args);
-        if (zr.ok && zr.doi) {
-          const slug = slugify(args.slug || args.title || "paper");
-          await this.env.LIVING_PAPER.prepare("UPDATE papers SET zenodo_doi = ?1, zenodo_url = ?2, doi = COALESCE(doi, ?1) WHERE slug = ?3").bind(zr.doi, zr.url, slug).run();
-        }
-        return JSON.stringify(zr);
       }
       default:
         return JSON.stringify({ error: `Unknown tool: ${name}` });

@@ -24,14 +24,14 @@ it, not peers.
 
 The Quniverse is an **autonomous research-operations system that runs entirely on Cloudflare**: a fleet of Workers,
 D1 databases, R2 buckets, Vectorize indexes, Durable Objects, Queues, Workflows, a Container and an AI Gateway, with
-no server, no laptop and no human on the critical path. It researches, writes, reviews, publishes (Zenodo DOIs),
+no server, no laptop and no human on the critical path. It researches, writes, reviews, publishes,
 indexes, distributes and promotes research under the QNFO imprint, runs the owner's personal utility layer (email,
 calendar, personal twin), and operates, audits, heals and improves itself. Its evidence of life is in D1, not in
 anyone's memory.
 
 | Plane | What it does today | Live components (2026-10-01) |
 |---|---|---|
-| Research pipeline | idea intake, grounding, 3-leg ensemble drafting, review, adversarial revision, Zenodo publish, PDF, knowledge graph, citation impact | qnfo-research-exec, qnfo-paper-indexer, qnfo-paper-reviser, qnfo-pdf, idea-hub, qnfo-archive, errata-hub, radar-hub, qnfo-venue-radar, qnfo-signal-loop, qnfo-agent-orchestrator |
+| Research pipeline | idea intake, grounding, 3-leg ensemble drafting, review, adversarial revision, publish, PDF, knowledge graph, citation impact | qnfo-research-exec, qnfo-paper-indexer, qnfo-paper-reviser, qnfo-pdf, idea-hub, qnfo-archive, errata-hub, radar-hub, qnfo-venue-radar, qnfo-signal-loop, qnfo-agent-orchestrator |
 | Reach and distribution | qnfo.org and papers.qnfo.org, subscriber capture and digest, Bluesky and Buffer posting, outreach, q08 essays, ipatent tool | qnfo-gateway, qnfo-subscribers, qnfo-social, qnfo-outreach, qnfo-email-orchestrator, q08-signal-engine, qnfo-ipatent, qnfo-cloud-ops |
 | AI routing | cost-laddered model router, ensembles, RAG over the corpus, model health probes and calibration | qnfo-ai, ai-health-prober, qnfo-ai-calibration, qnfo-ai-search, qnfo-intent-orchestrator |
 | Governance kernel | canonical deploy, locks and ledgers, drift scan, self-heal, measured autonomy scores, issue triage and remediation contracts, evolve loop, charter loop | qnfo-ops, qnfo-deploy-guard, qnfo-fleet-control, qnfo-autonomy-scorer, qnfo-fleet-dashboard, fleet-exec, qnfo-backlog-exec, qnfo-kaizen, qnfo-observability, qnfo-lifecycle |
@@ -41,7 +41,7 @@ anyone's memory.
 Footprint on 2026-10-01: 44 live Workers (cap 30, target 24), 69 cron schedules (cap 50), 10 D1 databases (`qnfo-audit`
 alone has about 296 tables and 234 MB), 9 Vectorize indexes, 19 R2 buckets, 4 KV namespaces, 2 Queues, 5 Durable Object
 classes, 7 Pages projects, 12 zones, 1 AI Gateway. The repository holds 105 worker directories, of which 60 are not
-deployed, 6 are folded and 3 retired. Output: 451 full reports all-time, 219 Zenodo DOIs, 10 full reports in the last
+deployed, 6 are folded and 3 retired. Output: 451 full reports all-time, 10 full reports in the last
 30 days, 139 posts in 30 days. Audience: 1 confirmed subscriber, 2 external citations, 5,930 pageviews in 30 days.
 Cost: about $725 a month in total, of which about $450 is AI spend across four providers, against a $150 unified-billing
 cap that the direct-provider keys bypass. Revenue: $0.
@@ -138,8 +138,8 @@ roadmap item names one. The keys are the contract: `scripts/charter-guard.py` fa
 |---|---|---|---|---|
 | `core` | Smallest verified core | mission | worker_count, drift_total, probe_coverage_pct, deploy_freshness_h, cron_compliance, guard_rcs | core, gate |
 | `autonomy` | Human as override, never dependency | objective-function | open_agent_issues, fleet_context_tokens, portfolio_hygiene (synthetic: last portfolio sync, target >= 0.9), capability_contract_conformance (goal 41, target >= 1.0), autonomy composite | autonomy, governance, observability |
-| `research` | Research that is read and cited | return-on-spend | publications_30d, full_reports_live_30d, zenodo_versions_per_flagship, indexed_surface | research-product |
-| `reach` | Credible reach | return-on-spend | distribution_posts_30d, subscribers_growth_monthly, pageviews_30d, referral_30d, external_impact_per_dollar, zenodo_views_total | impact, web |
+| `research` | Research that is read and cited | return-on-spend | publications_30d, full_reports_live_30d, indexed_surface | research-product |
+| `reach` | Credible reach | return-on-spend | distribution_posts_30d, subscribers_growth_monthly, pageviews_30d, referral_30d, external_impact_per_dollar | impact, web |
 | `cost` | Cost that returns | cost-ceiling | cost_usd_30d, workers_ai_cost_30d_usd, gateway_cap_30d_usd, cost_per_successful_task_by_class, workers_ai_attribution_coverage_pct, energy_efficiency (goal 43, compute proxy, target >= 0.8), unmanaged_direct_spend_share (goal 57, target <= 0.5) | cost |
 | `security` | A trust boundary that holds | mission | security_open_issues (synthetic: open SEC-* or category `security` issues, target 0) | security |
 | `personal` | Personal utility layer | mission | personal_mvp_serving (synthetic: qnfo-email, personal-api, calendar-api serving, target 3 of 3; outside the research P&L) | personal |
@@ -150,10 +150,10 @@ roadmap item names one. The keys are the contract: `scripts/charter-guard.py` fa
 - **For the owner:** a research practice that keeps producing, publishing and promoting without daily attention; a
   personal utility layer at near-zero marginal cost; one place (fleet.qnfo.org, this charter, `GET /charter`) that says
   truthfully what the system is doing and costing; a bounded list of owner-only actions.
-- **For readers and researchers:** open, DOI-registered, versioned work under one author identity, with a public failure
+- **For readers and researchers:** open, versioned work under one author identity, with a public failure
   ledger, reproducible claims (blue sky), and a research oracle over the corpus.
 - **For the field:** a working, measured example of an autonomous research system on commodity edge infrastructure,
-  including what it costs, what it delivers and where it fails (the fleet-lessons paper, DOI 10.5281/zenodo.23079905).
+  including what it costs, what it delivers and where it fails (the fleet-lessons paper).
 - **For funders and clients:** the JPCUB energy-honesty standard and the ignorance-audit method as things others can use;
   paid assessments as the first revenue line that matches the lead pillar (STRATEGY-1 s7, s8).
 
@@ -211,8 +211,8 @@ the structural facts that do not change from one tick to the next.
   rotation is identity-bound and deferred (`SEC-EXPOSED-CREDENTIALS-UNROTATED-1`).
 - **Concurrent-session drift.** Several agent sessions change the fleet at once with shared credentials; the locks and
   guards exist because each class of collision has happened at least once.
-- **Platform and policy change.** LinkedIn forbids automated posting; arXiv requires endorsement; Zenodo is not in
-  Google Scholar. Distribution assumptions must be re-verified, not remembered.
+- **Platform and policy change.** LinkedIn forbids automated posting; arXiv requires endorsement; Google Scholar
+  indexes only pages that meet its inclusion rules. Distribution assumptions must be re-verified, not remembered.
 - **Reputation spent by automation.** Mis-encoded posts, fake `Re:` follow-ups and off-topic essays on the owner's
   accounts already cost credibility once; owner-voice gates (STRATEGY-1 s5) must hold.
 
@@ -226,7 +226,7 @@ the loop closes it with evidence when it serves again. The list is `CHARTER_MVP`
 |---|---|---|
 | core | qnfo-ops, qnfo-deploy-guard, qnfo-ai, qnfo-tools-mcp, qnfo-memory-mcp | a merge to main deploys through `/ops/deploy` with a ledger row; a model call routes through the ladder; an MCP client lists tools and memories |
 | autonomy | qnfo-fleet-control, qnfo-autonomy-scorer, qnfo-fleet-dashboard, fleet-exec | drift is detected and healed within one hourly cycle; every autonomy dimension is rescored daily; fleet.qnfo.org renders live counts; D1-defined tasks run on schedule |
-| research | qnfo-research-exec, qnfo-paper-indexer, qnfo-paper-reviser | a queued idea becomes a Zenodo DOI with a PDF and a KG entry; every flagship has >= 2 versions; the index and citation stats refresh daily |
+| research | qnfo-research-exec, qnfo-paper-indexer, qnfo-paper-reviser | a queued idea becomes a published paper with a PDF and a KG entry; the index and citation stats refresh daily |
 | reach | qnfo-gateway, qnfo-subscribers, qnfo-social | qnfo.org and papers.qnfo.org serve; a subscription completes double opt-in; every publication emits at least one post inside the cadence caps |
 | personal | qnfo-email, personal-api, calendar-api | an owner command by email is executed and acknowledged; the morning brief and calendar publish on schedule |
 
@@ -253,7 +253,7 @@ loop closed at every stage. Each item below is a direction with a measurable end
   main protected by GitHub-enforced required checks.
 - **One MCP** (tools, memory, skills, search) and one AI router with unified billing; every Workers AI call attributed
   to a worker; per-provider throttles; prefix caching; the draft-verify ladder on every paid path.
-- **A closed reach loop.** `reach_signals` fed by RUM, GA4, Search Console, Buffer, Bluesky, Threads, Zenodo, OpenAlex
+- **A closed reach loop.** `reach_signals` fed by RUM, GA4, Search Console, Buffer, Bluesky, Threads, OpenAlex
   and email; UTM on every link; a bandit over topic, format and slot; a weekly search loop; owner-voice gates on
   every outgoing item.
 - **A trust boundary.** Secrets Store with scripted rotation, Cloudflare Access on admin routes, WAF and rate limits on
@@ -500,7 +500,7 @@ _Generated by qnfo-fleet-control CHARTER-LOOP-1 at 2026-10-10T03:00:13.836Z (cha
 | qnfo-autonomy-scorer | autonomy | measured VSM/OODA autonomy scores and survival state | yes (FOLDED:qnfo-observability/SYNC) | 1.4.3-escalate-recurrence |
 | qnfo-fleet-dashboard | autonomy | the owner surface (fleet.qnfo.org) and probe coverage | yes (SYNC) | 1.28.0-budget-write |
 | fleet-exec | autonomy | D1-defined task engine and cron dispatcher | yes (FOLDED:qnfo-code-orchestrator/SYNC) | 0.9.0-fleet-tick |
-| qnfo-research-exec | research | research queue -> publish (Zenodo DOI, PDF, KG) | yes (SYNC) | 0.11.1-lean-ensemble |
+| qnfo-research-exec | research | research queue -> publish (PDF, KG) | yes (SYNC) | 0.11.1-lean-ensemble |
 | qnfo-paper-indexer | research | corpus index, versions, citation impact | yes (FOLDED:qnfo-infra/SYNC) | 1.3.2-codeagent |
 | qnfo-paper-reviser | research | adversarial revision loop | **NO** (NOT_DEPLOYED) |  |
 | qnfo-gateway | reach | qnfo.org and papers.qnfo.org, the home of record | yes (SYNC) | 3.12.0-open-data-1 |
@@ -516,12 +516,10 @@ _Generated by qnfo-fleet-control CHARTER-LOOP-1 at 2026-10-10T03:00:13.836Z (cha
 
 - full_reports_live_30d = 57 (target >=2 by 2026-10-25, then >=1/month)
 - workers_ai_cost_30d_usd = 60.53 (target <= 95)
-- zenodo_versions_per_flagship = 2 (target >=2 per flagship)
 - gateway_cap_30d_usd = 150 (target <=150)
 - external_impact_per_dollar = 0.0093 (target <= 0.012 cost per impact unit)
 - publications_30d = 57 (target >=2/30d)
 - distribution_posts_30d = 133 (target >=1/day via qnfo-social)
-- zenodo_views_total = 41774 (target >= 41000 integrity floor)
 - pageviews_30d = 6830 (target >= 5500)
 - indexed_surface = 502 (target >= 455)
 - referral_30d = 200 (target >= 100)
@@ -550,7 +548,6 @@ _Generated by qnfo-fleet-control CHARTER-LOOP-1 at 2026-10-10T03:00:13.836Z (cha
 
 **Opportunities (highest-leverage open roadmap items)**
 
-- RM-CITATION-TRACKING-ALL-DOIS-1 [reach, partial]: Daily Crossref/OpenAlex/Zenodo impact collection for all 217 DOIs feeding impact_scores
 - RM-COST-FREE-FIRST-PARITY-1 [cost, partial]: Audit every AI-calling worker for one cost policy per path (streaming vs non-streaming, cron vs manual, agent 
 - RM-COST-L6-DRAFT-VERIFY-1 [cost, partial]: L6 formal draft-verify pipeline (free draft, paid verify/repair) beyond the code class
 - RM-COST-PER-TASK-ALL-PATHS-1 [cost, partial]: Cost per successful task by class across every AI path (research ensemble, q08, kaizen, calibration), not only
@@ -583,7 +580,6 @@ _Generated by qnfo-fleet-control CHARTER-LOOP-1 at 2026-10-10T03:00:13.836Z (cha
 
 Top of the queue (priority = pillar weight x status weight):
 
-- H1 RM-CITATION-TRACKING-ALL-DOIS-1 [reach, partial] Daily Crossref/OpenAlex/Zenodo impact collection for all 217 DOIs feeding impact_scores
 - H1 RM-COST-FREE-FIRST-PARITY-1 [cost, partial] Audit every AI-calling worker for one cost policy per path (streaming vs non-streaming, cron vs manual, agent 
 - H1 RM-COST-L6-DRAFT-VERIFY-1 [cost, partial] L6 formal draft-verify pipeline (free draft, paid verify/repair) beyond the code class
 - H1 RM-COST-PER-TASK-ALL-PATHS-1 [cost, partial] Cost per successful task by class across every AI path (research ensemble, q08, kaizen, calibration), not only

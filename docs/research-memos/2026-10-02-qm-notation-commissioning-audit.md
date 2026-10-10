@@ -120,14 +120,14 @@ Translation status means one of three things:
 
 Checked on 2026-10-02 in `qnfo-audit.paper_index` and in the public `qnfo-corpus` AI Search instance.
 - `finite-distinction-quantum-mechanics`, `measurement-as-hierarchical-distinction`, `distinction-lattice-framework`: **absent**. The nearest search hits were unrelated.
-- `quantum-laws-of-form-superposition-as-re-entry-measurement-as-distinction`: **absent** under that slug. The nearest match is `quantum-laws-of-form` (DOI 10.5281/zenodo.21206074), a consolidation that lists seven open problem categories.
+- `quantum-laws-of-form-superposition-as-re-entry-measurement-as-distinction`: **absent** under that slug. The nearest match is `quantum-laws-of-form`, a consolidation that lists seven open problem categories.
 - `QNFO.SLB.001`: registered to QNFO/laws-of-form (`docs/PORTFOLIO.md`). This session cannot read that repository, so it was **not checked**.
 - **Relevant corpus finding.** The `cancellation-rule` paper concedes that the M-property ("a boundary encodes measurement") "was never formally justified" and "is NOT forced by the calculus" (§4.1). It also says the rules fire the same way with or without measurement semantics (§5.2).
   - Under criterion (1), "measurement as distinction" is therefore a later assignment (A or R), not a designed category of Spencer-Brown's notation.
   - §5.2 is exactly the signature of epistemic plurality: the semantics can be swapped without changing any derivation.
   - The paper's claim that Laws of Form is "uniquely suited" because its three outcomes match measurement is a re-description. In quantum mechanics, oscillation is not a measurement outcome. Confidence: medium-low.
 - `s10-observer` concludes that its framework "is not empirically distinguishable from RQM or QBism", which is consistent with E.
-- **Hygiene.** `cancellation-rule.md` carries two DOIs: 10.5281/zenodo.21470438 in the index header and 10.5281/zenodo.21469392 in the body. `s10-observer` cites the latter. Not resolved here.
+- **Hygiene.** `cancellation-rule.md` carries two different identifiers, one in the index header and one in the body. `s10-observer` cites the latter. Not resolved here.
 
 ## References (verified 2026-10-02)
 

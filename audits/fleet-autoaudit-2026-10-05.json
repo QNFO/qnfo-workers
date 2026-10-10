@@ -83,7 +83,7 @@
       "jnl-referee",
       "jnl-reviser",
       "jnl-watch",
-      "jnl-zenodo",
+      "jnl-deposit",
       "memory-mcp",
       "notes-intake",
       "obsidian-writer",
@@ -176,8 +176,8 @@
         "worker": "jnl-watch"
       },
       {
-        "dir": "jnl-zenodo",
-        "worker": "jnl-zenodo"
+        "dir": "jnl-deposit",
+        "worker": "jnl-deposit"
       },
       {
         "dir": "memory-mcp",
@@ -725,13 +725,13 @@
       "note": "NOT_DEPLOYED",
       "worker": "jnl-watch"
     },
-    "jnl-zenodo": {
+    "jnl-deposit": {
       "before": null,
       "http": 404,
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
-      "worker": "jnl-zenodo"
+      "worker": "jnl-deposit"
     },
     "machine-readability": {
       "before": null,

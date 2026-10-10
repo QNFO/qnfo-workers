@@ -4,7 +4,7 @@
 # Non-commercial use only; commercial use requires a separate agreement.
 """The Agentic Collapse model: a time-delayed stochastic system (phi, psi, U).
 
-Equations are those of Sections 2.2 to 2.6 of the paper (DOI 10.5281/zenodo.18133065):
+Equations are those of Sections 2.2 to 2.6 of the paper:
 
     d phi = ( alpha*phi*(1-phi) - gamma*(phi(t) - psi(t - tau)) ) dt + sigma_phi dW
     beta_eff = beta / (1 + k*phi)

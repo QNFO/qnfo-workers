@@ -141,7 +141,7 @@ CORRECTED_CRONS = [
     "0 15 * * 6",      # weekly            (ISO 5   -> CF 6)
     "0 4 * * 1",       # weekly-ops        (ISO 7   -> CF 1)
     "0 6 * * 2",       # portfolio-sync    (ISO 1   -> CF 2)
-    "0 7 * * 1",       # zenodo-stats      (ISO 7   -> CF 1)
+    "0 7 * * 1",       # external-stats    (ISO 7   -> CF 1)
     "0 6 * * 7",       # board-sync        (ISO 6   -> CF 7)
     "0 9 * * 2-6",     # outreach
     "0 9 3 9 *",       # nlnet (fixed date, unaffected)

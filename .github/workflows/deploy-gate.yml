@@ -478,8 +478,8 @@ jobs:
         run: node --no-warnings qnfo-deploy-guard/secret-only-ledger.test.mjs
 
       # REACH-LOOPS-WATCH-1: the delegated identity and reach loops record their runs on Cloudflare (WATCHMAKER_OPS reads
-      # them). qnfo-social SOCIAL-RUN-LEDGER-1; qnfo-cloud-ops EMAIL-TRIAGE-D1-1 (triage reads D1, no EMAIL_API_KEY) and
-      # ZENODO-UA-1 (honest User-Agent); radar-hub JOB-MARKET-INLINE-1, MENTION-RADAR-LEDGER-1, EVENTS-RADAR-CF-DOW-1.
+      # them). qnfo-social SOCIAL-RUN-LEDGER-1; qnfo-cloud-ops EMAIL-TRIAGE-D1-1 (triage reads D1, no EMAIL_API_KEY);
+      # radar-hub JOB-MARKET-INLINE-1, MENTION-RADAR-LEDGER-1, EVENTS-RADAR-CF-DOW-1.
       - name: SOCIAL-RUN-LEDGER-1 offline suite (qnfo-social)
         if: ${{ !cancelled() }}
         run: node qnfo-social/run-ledger.test.mjs
@@ -500,9 +500,6 @@ jobs:
       - name: REACH-SELECT-1 offline suite (qnfo-social)
         if: ${{ !cancelled() }}
         run: node qnfo-social/reach-select.test.mjs
-      - name: EMAIL-TRIAGE-D1-1 and ZENODO-UA-1 offline suite (qnfo-cloud-ops)
-        if: ${{ !cancelled() }}
-        run: node qnfo-cloud-ops/email-zenodo.test.mjs
       # GW-402-UNFUNDED-1 (qnfo-ai-calibration 1.2.9, #1992): a provider 402 (insufficient balance) is class unfunded: no
       # [gw-fail] issue, no degraded health row, ignored by the 24h reconcile, so MODEL-DEGRADED is not refiled for it.
       - name: GW-402-UNFUNDED-1 offline suite (qnfo-ai-calibration)
@@ -520,7 +517,7 @@ jobs:
         run: node qnfo-cloud-ops/worker-health.test.mjs
       # CRON-SINGLE-TRIGGER-1 (qnfo-cloud-ops 1.19.0): one 10-minute tick and an in-code due table fire exactly the slots
       # the 21 per-slot cron triggers fired, once each, in both daylight-saving states and with ticks lost; the second
-      # suite drives the real scheduled handler (tick, lookback, legacy trigger, ZENODO-CATCHUP-1).
+      # suite drives the real scheduled handler (tick, lookback, legacy trigger).
       - name: CRON-SINGLE-TRIGGER-1 offline suite (qnfo-cloud-ops)
         if: ${{ !cancelled() }}
         run: node qnfo-cloud-ops/single-trigger.test.mjs
@@ -535,9 +532,6 @@ jobs:
       - name: INDEXER-FOLD-1 offline suite (qnfo-infra 1.3.0)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-infra/indexer-fold.test.mjs
-      - name: ZENODO-CATCHUP-1 and tick handler offline suite (qnfo-cloud-ops)
-        if: ${{ !cancelled() }}
-        run: node --no-warnings qnfo-cloud-ops/zenodo-catchup.test.mjs
       # SIGNAL-INTAKE-1 (qnfo-cloud-ops 1.19.1): the research scan admits error-correction papers only with an energy
       # angle, and the daily job recomputes idea_topic_concentration_30d (#1947).
       - name: IDEA-TOPIC-1 offline suite (qnfo-cloud-ops)
@@ -641,7 +635,7 @@ jobs:
         run: node --no-warnings qnfo-email-orchestrator/send-retry.test.mjs
 
       # ERRATA-HUB-CRONS-UNDECLARED-1 + ERRATA-PUBLISH-GATE-1 (#1747): errata-hub's hourly members run, record a tick, and
-      # make no Zenodo call, store re-point or mail from the publish member while pipeline_flags.errata_publish_enabled is off.
+      # make no external deposit call, store re-point or mail from the publish member while pipeline_flags.errata_publish_enabled is off.
       - name: ERRATA-PUBLISH-GATE-1 offline suite (errata-hub)
         if: ${{ !cancelled() }}
         run: node errata-hub/errata-crons.test.mjs
@@ -691,12 +685,6 @@ jobs:
       - name: LATEX-ESCAPE-BACKSLASH-1 offline suite (qnfo-research-exec)
         if: ${{ !cancelled() }}
         run: node --no-warnings qnfo-research-exec/latex-escape.test.mjs
-      # ZENODO-READ-ONLINE-1 (qnfo-research-exec 0.9.61, #1907): kind='related' rows add the papers.qnfo.org page as an
-      # isVariantFormOf related identifier to the latest version of a record, idempotently; the probe closes the issue.
-      # RELATED-LEGACY-FIELDS-1 (0.9.63): the drain fills legacy upload_type / publication_type from resource_type before the PUT.
-      - name: ZENODO-READ-ONLINE-1 offline suite (qnfo-research-exec)
-        if: ${{ !cancelled() }}
-        run: node --no-warnings qnfo-research-exec/zenodo-related.test.mjs
       # AI-STAGE-ATTRIBUTION-1: research-exec Workers AI counters carry the pipeline stage; the AI call itself is unchanged.
       - name: AI-STAGE-ATTRIBUTION-1 offline suite (qnfo-research-exec)
         if: ${{ !cancelled() }}
