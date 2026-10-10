@@ -1,328 +1,330 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@27a2693ebe17",
+ "verifier": "remediation-consumer@42c6eb3d0743",
  "due": 40,
- "pass": 7,
- "fail": 32,
- "skipped": 1,
+ "pass": 6,
+ "fail": 34,
+ "skipped": 0,
  "contracts": [
   {
-   "class": "TWIN-MCP-OAUTH-1",
-   "issue_id": 1817,
-   "verdict": "fail",
-   "expected": "connected",
-   "observed": "pending: no access token in personal-life oauth_tokens yet",
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2227",
-   "issue_id": 2227,
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1873",
+   "issue_id": 1873,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2228",
-   "issue_id": 2228,
+   "class": "issue-1875",
+   "issue_id": 1875,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2230",
-   "issue_id": 2230,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2147",
-   "issue_id": 2147,
+   "class": "issue-1876",
+   "issue_id": 1876,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
+   "observed": "a task created after the deploy ended superseded",
    "written": true
   },
   {
-   "class": "issue-2148",
-   "issue_id": 2148,
+   "class": "issue-1898",
+   "issue_id": 1898,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
+   "observed": "pending: grant-followup has not read Gmail in 24h (\"gmail\":\"no-credential: GMAIL_PASS unset\"},\"gmail_)",
    "written": true
   },
   {
-   "class": "issue-2170",
-   "issue_id": 2170,
+   "class": "issue-1903",
+   "issue_id": 1903,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 0 of 20 metered iPatent drafts (code task on issue 1903)",
+   "written": true
+  },
+  {
+   "class": "issue-2237",
+   "issue_id": 2237,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2223",
-   "issue_id": 2223,
+   "class": "issue-2239",
+   "issue_id": 2239,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2240",
+   "issue_id": 2240,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by ci:apply-migrations, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-1905",
+   "issue_id": 1905,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no subscribers-send event yet (0 rows of any status)",
+   "written": true
+  },
+  {
+   "class": "issue-1951",
+   "issue_id": 1951,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "pending: no went answer with a name in calendar_feedback yet (owner action)",
+   "written": true
+  },
+  {
+   "class": "issue-1960",
+   "issue_id": 1960,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stuck code tasks: 10",
+   "written": true
+  },
+  {
+   "class": "issue-1885",
+   "issue_id": 1885,
+   "verdict": "fail",
+   "expected": "clean",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2207",
+   "issue_id": 2207,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2257",
+   "issue_id": 2257,
    "verdict": "fail",
    "expected": "ok",
    "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
    "written": true
   },
   {
-   "class": "issue-1623",
-   "issue_id": 1623,
+   "class": "issue-1952",
+   "issue_id": 1952,
    "verdict": "fail",
-   "expected": "classified",
-   "observed": "unclassified",
-   "written": true
-  },
-  {
-   "class": "issue-2214",
-   "issue_id": 2214,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2231",
-   "issue_id": 2231,
-   "verdict": "fail",
-   "expected": "8",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2233",
-   "issue_id": 2233,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2234",
-   "issue_id": 2234,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2235",
-   "issue_id": 2235,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 0 of 3 tables, false_stops_7d measured 0",
-   "written": true
-  },
-  {
-   "class": "issue-2241",
-   "issue_id": 2241,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2072",
-   "issue_id": 2072,
-   "verdict": "fail",
-   "expected": "merged",
-   "observed": "failed",
-   "written": true
-  },
-  {
-   "class": "issue-2221",
-   "issue_id": 2221,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1726",
-   "issue_id": 1726,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1780",
-   "issue_id": 1780,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2175",
-   "issue_id": 2175,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2258",
-   "issue_id": 2258,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2050",
-   "issue_id": 2050,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2116",
-   "written": true
-  },
-  {
-   "class": "issue-2199",
-   "issue_id": 2199,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2206",
-   "issue_id": 2206,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-1760",
-   "issue_id": 1760,
-   "verdict": "fail",
-   "expected": "ok",
+   "expected": "learning",
    "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-1796",
-   "issue_id": 1796,
+   "class": "issue-1953",
+   "issue_id": 1953,
    "verdict": "fail",
-   "expected": "0",
+   "expected": "answered",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1857",
+   "issue_id": 1857,
+   "verdict": "fail",
+   "expected": "done",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1978",
+   "issue_id": 1978,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2208",
+   "issue_id": 2208,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-1899",
+   "issue_id": 1899,
+   "verdict": "fail",
+   "expected": "verified",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2004",
+   "issue_id": 2004,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: code_task_success_rate_30d 0.26 (needs >= 0.6 on 14 days)",
+   "written": true
+  },
+  {
+   "class": "issue-2007",
+   "issue_id": 2007,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no anchor repair yet and the 14-day window after the 0.3.19 deploy is still open",
+   "written": true
+  },
+  {
+   "class": "issue-2008",
+   "issue_id": 2008,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no code task yet for issue 2008",
+   "written": true
+  },
+  {
+   "class": "issue-2010",
+   "issue_id": 2010,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: worker_count 28 (needs <= 24)",
+   "written": true
+  },
+  {
+   "class": "issue-2011",
+   "issue_id": 2011,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: fleet_ai_run_rate_30d_usd 53.7, workers_ai_cost_30d_usd 61.07 (needs <= 40 on 14 days and <= 25)",
+   "written": true
+  },
+  {
+   "class": "issue-2012",
+   "issue_id": 2012,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: breach_code_task_pct 12.5, needs-machine-probe contracts 9",
+   "written": true
+  },
+  {
+   "class": "issue-2015",
+   "issue_id": 2015,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: subscribers_growth_monthly 0, credibility_events_90d 0",
+   "written": true
+  },
+  {
+   "class": "issue-2014",
+   "issue_id": 2014,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: metric ops_tool_budget_bail_7d not registered yet (TP-6 lever 1 registers it with its trigger)",
+   "written": true
+  },
+  {
+   "class": "issue-2019",
+   "issue_id": 2019,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: lever T3.8 status session",
+   "written": true
+  },
+  {
+   "class": "issue-2025",
+   "issue_id": 2025,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "pending: 30-day window from 2026-10-06T06:30Z still open",
+   "written": true
+  },
+  {
+   "class": "issue-2022",
+   "issue_id": 2022,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2033",
+   "issue_id": 2033,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2141",
+   "issue_id": 2141,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-migration-unapplied",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-trigger-depth",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
    "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2193",
-   "issue_id": 2193,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2194",
-   "issue_id": 2194,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2195",
-   "issue_id": 2195,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2260",
-   "issue_id": 2260,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "research-terminal-2fdafacb",
-   "issue_id": 2260,
-   "verdict": "pass",
-   "expected": "parked+queue-moving",
-   "observed": "parked+queue-moving",
-   "written": true
-  },
-  {
-   "class": "issue-1965",
-   "issue_id": 1965,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "a stale PR was closed without a merge attempt",
-   "written": true
-  },
-  {
-   "class": "issue-2105",
-   "issue_id": 2105,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: ungated published=194 newest verdict=2026-10-10T04:20:12.660Z published quarantine-candidates=0",
-   "written": true
-  },
-  {
-   "class": "issue-2171",
-   "issue_id": 2171,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2187",
-   "issue_id": 2187,
-   "verdict": "probe-not-machine-executable",
-   "reason": "url-not-allowlisted"
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "issue-2042",
-   "issue_id": 2042,
-   "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
    "written": true
   }
  ],
@@ -349,13 +351,13 @@
   "http",
   "runner-https"
  ],
- "https": 4,
- "runtime_verified_share_24h": 4.2,
+ "https": 5,
+ "runtime_verified_share_24h": 4.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 132901,
- "head": "27a2693ebe17a5b276e378930e90dd520e0bcba7",
+ "spent_ms": 117976,
+ "head": "42c6eb3d0743fdcce2ad98e4f8925e4c42867e7b",
  "job_status": "success",
- "ts": "2026-10-10T04:24:29Z"
+ "ts": "2026-10-10T05:11:18Z"
 }
