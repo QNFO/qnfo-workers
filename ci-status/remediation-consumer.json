@@ -1,325 +1,23 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@301f9db5f7e5",
- "due": 40,
- "pass": 14,
- "fail": 25,
- "skipped": 1,
+ "verifier": "remediation-consumer@346c182c48ac",
+ "due": 2,
+ "pass": 2,
+ "fail": 0,
+ "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2044",
-   "issue_id": 2044,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1818",
-   "issue_id": 1818,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-1834",
-   "issue_id": 1834,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1838",
-   "issue_id": 1838,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1872",
-   "issue_id": 1872,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2287",
-   "issue_id": 2287,
+   "class": "issue-2139",
+   "issue_id": 2139,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-1794",
-   "issue_id": 1794,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1651",
-   "issue_id": 1651,
-   "verdict": "fail",
-   "expected": "tracked",
-   "observed": "stale",
-   "written": true
-  },
-  {
-   "class": "issue-1910",
-   "issue_id": 1910,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1881",
-   "issue_id": 1881,
-   "verdict": "fail",
-   "expected": "ingested",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "remediation-class-death",
-   "issue_id": 1200,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-nothing-stuck",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-no-untested-control-on-critical-path",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-no-spof-on-critical-path",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-unprobed-issues",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1873",
-   "issue_id": 1873,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2225",
-   "issue_id": 2225,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1875",
-   "issue_id": 1875,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1876",
-   "issue_id": 1876,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "a task created after the deploy ended superseded",
-   "written": true
-  },
-  {
-   "class": "issue-2105",
-   "issue_id": 2105,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: ungated published=212 newest verdict=2026-10-10T04:20:12.660Z published quarantine-candidates=0",
-   "written": true
-  },
-  {
-   "class": "issue-2171",
-   "issue_id": 2171,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2187",
-   "issue_id": 2187,
-   "verdict": "probe-not-machine-executable",
-   "reason": "url-not-allowlisted"
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "issue-2033",
-   "issue_id": 2033,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2141",
-   "issue_id": 2141,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-migration-unapplied",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1683",
-   "issue_id": 1683,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2042",
-   "issue_id": 2042,
-   "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
-   "written": true
-  },
-  {
-   "class": "fm-trigger-depth",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2144",
-   "issue_id": 2144,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "fm-companion-publish-stall",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2145",
-   "issue_id": 2145,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2149",
-   "issue_id": 2149,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "fm-host-census-stale",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-social-channel-drain-silent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
+   "class": "issue-2140",
+   "issue_id": 2140,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
@@ -349,15 +47,12 @@
   "http",
   "runner-https"
  ],
- "https": 7,
- "runtime_verified_share_24h": 3.8,
+ "runtime_verified_share_24h": 3.9,
  "host_census": {
-  "updated": 2130,
-  "hosts": 58,
-  "broken": 10
+  "skipped": "ran within 6h"
  },
- "spent_ms": 105062,
- "head": "301f9db5f7e5243ad581111cbc2be2b0166d76dc",
+ "spent_ms": 9202,
+ "head": "346c182c48ac8dc9b98a41dc25af3b337dba4b43",
  "job_status": "success",
- "ts": "2026-10-10T18:33:12Z"
+ "ts": "2026-10-10T18:54:20Z"
 }
