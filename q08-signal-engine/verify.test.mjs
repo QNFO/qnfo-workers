@@ -14,7 +14,8 @@ const check = (l, c, x) => { if (c) passes++; else { fails++; console.log("FAIL 
 // ---- the directives no longer ask for facts from memory ----------------------------------------------------------------------
 check("the essay directive forbids facts from memory and has no historical-precedent requirement", /Your own memory is NOT a source/.test(V.Q08_DIRECTIVE) && !/drawn from real, verifiable history/.test(V.Q08_DIRECTIVE) && !/HISTORY RHYMES/.test(V.Q08_DIRECTIVE) && !/guild\W?s forged marks/.test(V.Q08_DIRECTIVE) && /fact-checked/.test(V.Q08_DIRECTIVE));
 check("the forecast directive forbids borrowed cases", /Your memory is not a source/.test(V.FORECAST_DIRECTIVE) && !/Name a real, well-known case/.test(V.FORECAST_DIRECTIVE));
-check("the register exemplar is a labelled hypothetical", /hypothetical/i.test(V.REGISTER_EXEMPLAR) && !/early 1970s/.test(V.REGISTER_EXEMPLAR));
+check("the register exemplar is a style specification with no sample subject", /STYLE SPECIFICATION/.test(V.REGISTER_EXEMPLAR) && !/lender|freight|shipping|guild|197\d|rating/i.test(V.REGISTER_EXEMPLAR));
+check("no generative instruction names a stock example noun", !/guild|patent[- ]medicine|goldsmith|lender|hospital|logistics|shipping line|rating agenc|medieval/i.test(V.Q08_DIRECTIVE + V.FORECAST_DIRECTIVE + V.REGISTER_EXEMPLAR));
 
 // ---- deterministic grounding ---------------------------------------------------------------------------------------------------
 const source = "An AI model from Anthropic submitted a tip to police about an unsolved murder in Philadelphia. The tip was false, according to detectives, who said they spent 12 hours checking it. Commenters on Hacker News argued that nobody reviews machine-written tips before they reach an investigator.";

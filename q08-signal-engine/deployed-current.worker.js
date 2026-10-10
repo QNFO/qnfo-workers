@@ -380,7 +380,7 @@ var Q08_DIRECTIVE = [
   "",
   "OPENING: in one or two sentences name the incident, then pivot immediately to the system it reveals. The incident earns at most one paragraph; the reader should know within the first paragraph what universal dynamic is at stake, not merely what specific product broke. Never open on an aphorism or a general claim; never dwell on the incident.",
   "",
-  "CONCRETENESS FROM THE SOURCE: name the real things the SOURCE MATERIAL names \u2014 its products, people, organisations, figures and quotations, exactly as given. Elsewhere, be concrete by describing the mechanism step by step (who does what, which information is missing, where it breaks), never by adding named outside examples. When you want a second case, build a clearly labelled hypothetical that names no real person, company, product, date or number ('Suppose a regional lender…') and say it is hypothetical. A sentence without a specific referent is a sentence to rewrite; a specific referent that is not in the source material is a sentence to delete.",
+  "CONCRETENESS FROM THE SOURCE: name the real things the SOURCE MATERIAL names \u2014 its products, people, organisations, figures and quotations, exactly as given. Elsewhere, be concrete by describing the mechanism step by step (who does what, which information is missing, where it breaks), never by adding named outside examples. When you want a second case, build a clearly labelled hypothetical that names no real person, company, product, date or number (open it with 'Suppose' and describe parties only by their function) and say it is hypothetical. A sentence without a specific referent is a sentence to rewrite; a specific referent that is not in the source material is a sentence to delete.",
   "",
   "FACTS (hard, non-negotiable, and checked): every claim about the real world \u2014 an event, a date, a person, an organisation, a product, a law, a number, a price, a percentage, a count, an identifier, a quotation, a study, a historical episode \u2014 must be stated in the SOURCE MATERIAL you are given (the signal and the linked article text), verbatim or as a direct paraphrase. Your own memory is NOT a source: do not add historical precedents, case studies, statistics, dates, names of people or companies, laws, institutions, product details or 'studies show' from memory, however sure you are. If the source does not state it, delete it or turn it into labelled hypothetical reasoning with no real names. Every draft is fact-checked sentence by sentence against the source material by independent reviewers from other model families; a single unsupported claim means the piece is not published. A general honest sentence always beats a specific unsupported one. Before writing any name, date or number, ask: is this exact item in the source material? If not, do not write it.",
   "",
@@ -390,7 +390,7 @@ var Q08_DIRECTIVE = [
   "",
   "NO BORROWED HISTORY: do not cite historical episodes, past scandals, earlier industries, named laws, named institutions or named products that are not in the source material. A reader who checks must find every fact; the safest way to be checkable is to assert only what the source says and to reason openly about what follows from it. A metaphor ('it is like a telescope') is decorative and banned; reasoning from the stated facts to a general mechanism is the job.",
   "",
-  "CROSS-DOMAIN REASONING: the essay\u2019s spine is the universal system. Show that it is domain-independent by reasoning about how the same incentive, delay or information gap would play out in other kinds of settings (a lender, a hospital, a logistics network, a court), described generically as labelled hypotheticals with no real names, dates or figures. Breadth of reasoning is the point, not breadth of cited facts.",
+  "CROSS-DOMAIN REASONING: the essay\u2019s spine is the universal system. Show that it is domain-independent by reasoning about how the same incentive, delay or information gap would play out in other kinds of settings, chosen by the mechanism and not from a stock list, described generically as labelled hypotheticals with no real names, dates or figures. Breadth of reasoning is the point, not breadth of cited facts.",
   "",
   "ENDING: end at the point of maximum implication. A closing paragraph that describes a healed system is forbidden. If a fix exists, fold it into the argument; the final sentences leave the reader with the sharpest unresolved fact \u2014 not a summary, not a resolution, not a flourish.",
   "",
@@ -400,7 +400,7 @@ var Q08_DIRECTIVE = [
     "BANNED FRAMING (automatic rejection \u2014 the tells of a banal essay): 'illustrates a broader structural dynamic', 'exposes a structural dynamic', 'reveals a structural dynamic', 'a recurring institutional dynamic', 'a systemic failure in which', 'a structural gap between', 'what this reveals about', 'the deeper pattern', 'the broader lesson'. Never tell the reader what the essay 'reveals'; demonstrate it and stop. A sentence that announces the significance of the essay instead of adding a fact is a sentence to delete.",
     "SIGNIFICANCE ANNOUNCEMENT (banned): never write \"the incident illustrates / exposes / reveals / foregrounds / underscores a <noun phrase>\". Those verbs, applied to the incident, are the banality signature \u2014 they announce that the essay has a point instead of making it. State the causal chain directly: who does what to whom, and what breaks as a result. If a draft contains any of these verbs, rewrite the sentence as a mechanism.",
     "TITLE: name the mechanism, not the category. A good title names a specific causal process or its actors \u2014 e.g. 'The clearinghouse that paid itself first' or 'Why the map outlives the territory it describes'. Banned title shapes: the bare '[Adjective]-[Noun] [Preposition] [Abstract Noun]' stack ('Scale-Induced Professional Displacement'); 'The X of Y' ('The Incentive-Driven Misalignment of Threat Models'); 'X as Y' ('Formal Guarantees as Market Signal'); and any title opening with Structural, Systemic, Implicit, Opaque, Formal, Abstract, Externalized, Statistical or a similar nominalisation. If the title would work as a category label in a management deck, it is the wrong title.",
-  "PLAIN WORDING (this is what a reader judges first): write the way a sharp person explains something to a smart friend, not the way a paper abstracts it. Mix short sentences with long ones. Name who did what by what they are (the maintainers, the buyers, the vendor, the shipping line), never by role words: no 'the observer', 'the actor', 'the producer', 'the consumer', 'the proxy', 'the cue', 'the arrangement', 'the mechanism', 'the signal', 'the process'. A sentence that exists only to announce structure ('This same arrangement appears...', 'The mechanism works like this', 'The process therefore hinges on', 'not a quirk of a single product') is deleted. If you cannot picture a person doing the thing in a sentence, rewrite it. Say it once; do not restate a point in new abstract words.",
+  "PLAIN WORDING (this is what a reader judges first): write the way a sharp person explains something to a smart friend, not the way a paper abstracts it. Mix short sentences with long ones. Name who did what by what they are (the parties as the source describes them), never by role words: no 'the observer', 'the actor', 'the producer', 'the consumer', 'the proxy', 'the cue', 'the arrangement', 'the mechanism', 'the signal', 'the process'. A sentence that exists only to announce structure ('This same arrangement appears...', 'The mechanism works like this', 'The process therefore hinges on', 'not a quirk of a single product') is deleted. If you cannot picture a person doing the thing in a sentence, rewrite it. Say it once; do not restate a point in new abstract words.",
   "INTERNAL FIELDS: the SIGNAL block's field names and its signal_strength value are pipeline metadata, not facts about the world. Never mention them, never write 'signal strength', 'friction point' or 'core concept'. Open with what actually happened or was said, as one concrete event, in plain words.",
   "CONSTRAINTS (hard):",
   "- The structural claim must outlive the incident: dates may appear in the material, but the argument must not depend on them.",
@@ -412,13 +412,12 @@ var Q08_DIRECTIVE = [
 ].join("\n");
 
 var REGISTER_EXEMPLAR = [
-  "# A grade that stopped meaning what it said",
-  "",
-  "Suppose a company that scores borrowers changes who pays for the score: first the lenders who read it, then the borrowers it rates. The letter grades look the same on the day of the switch. What has changed is who can take their business elsewhere. A scorer that grades a borrower too harshly loses that borrower to a competitor, and the fee with it. Lenders keep reading the grade as a judgement made on their behalf, and nothing on the page tells them the customer has changed. The scorer need not fake a single number. It only has to learn which answer keeps the client. (This is a hypothetical, named here to show a mechanism; it describes no real company.)",
-  "",
-  "# A freight office that priced its own risk",
-  "",
-  "Suppose a shipping line asks its own freight office to set the insurance premium on the cargo it carries. The office prices each consignment from the manifest, and the manifest is written by the same clerks who loaded the hold. Nobody falsifies a document; the incentive does the work. A consignment that is awkward to stow is written up as routine, because routine cargo clears faster. The premium falls, the line wins more contracts, and the losses surface only when a hull is opened in dry dock. The party who could measure the risk is the party paid to understate it. (A hypothetical, not a report of any real line.)",
+  "STYLE SPECIFICATION (a process and a register, not a sample to imitate and not a source of subjects):",
+  "1. Title: one plain sentence in sentence case that states a claim about a mechanism, naming the parties as the source names them.",
+  "2. Opening: one concrete event from the source in one or two sentences, then the question it raises.",
+  "3. Body: trace the mechanism as a chain of parties doing things, each step caused by the one before; say who gains, who loses, what information is missing and where it breaks. Every real-world fact comes from the source material; any extra case is a labelled hypothetical whose parties are described only by their function.",
+  "4. Voice: precise, unimpressed, short and long sentences mixed, no announcement of structure, no moral.",
+  "5. Ending: the sharpest unresolved fact, in one or two sentences."
 ].join("\n");
 
 // Only a reader-proven structure that is ALSO in-register may serve as an exemplar.
@@ -761,7 +760,6 @@ var TITLE_COLON_RE = /: the (hidden|invisible|unseen|silent|quiet) /i;
 var BANNED_H2_RE = /^#+\s+(how the flaw manifests|cascading failures|a minimal (alternative|framework|approach)|connections across disciplines|echoes from the past|a path forward|the lens restored|lessons for the future|the pattern across disciplines|unexpected parallels|the broader lesson)\b/i;
 var FORMULA_H2_RE = /^#+\s+the (hidden|invisible|unseen|unspoken|silent|quiet) (lever|bottleneck|premise|flaw|cost|gear|engine|handoff|mismatch)\b/i;
 var STOCK_PROPS_RE = /\b(telescopes?|galileo|alchem|philosopher.s stone|sonar|aperture|aerospace redundancy)\b/i;
-var HISTORICAL_RE = /\b([0-9]+th century|\d{3,4}0s|19[0-9]{2}|18[0-9]{2}|1[0-7][0-9]{2}|medieval|renaissance|enlightenment|industrial revolution|gilded age|antiquity|ancient|roman|greek|victorian|edwardian|byzantine|feudal|dynast\w*|pharaoh|mesopotamia|bronze age|iron age|middle ages|mongol|ottoman|colonial|belle ?poque|preindustrial|great depression|south sea|tulip|dot-com|dotcom|hanseatic|medici|silk road|printing press|gutenberg|panic of|railway mania)\b/i;
 var SOFT_REGISTER_RE = /\b(expectation gap|collective anxiety|vibe|democratiz\w*|future-proof|self-sustaining|path forward|healthy ecosystem|walks farther|ecosystem of)\b/i;
 // ANTI-BANAL-1 (v0.7.16). The observed failure mode is not a weak argument but a
 // banal *register*: the stock framing sentence ("\u2026illustrates a broader structural
@@ -1142,7 +1140,7 @@ async function generate(env) {
   var recentStructures = (recentRows.results || []).map(function(r){ return r.structure_md; });
   // Compose
   var recentBodies = await env.DB.prepare("SELECT body_md FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 8").all().catch(function () { return { results: [] }; });
-  var banned = overusedPrecedents((recentBodies.results || []).map(function (r) { return r.body_md; }), 2);
+  var banned = []; // Q08-VERIFY-1: outside precedents are rejected by the grounding check, so no precedent is named to the writer
   var ownerNotes = await ownerDirectives(env);
   var article = await fetchArticleText(story.url);
   var prompt = buildPrompt(friction, fewShot, recentStructures, { banned: banned, ownerNotes: ownerNotes, article: article });
@@ -1303,7 +1301,7 @@ var FORECAST_DIRECTIVE = [
   "",
   "REGISTER: cold structural objectivity, plain words, a sharp person explaining something to a smart friend. Name actors by what they are, never by role words ('the observer', 'the actor', 'the mechanism'). No bullets, no tables, no '##' headers: continuous prose. No first person, no hedging words, no emotional vocabulary, no marketing register, no @handles. Never mention 'the essay', 'the signal' or any pipeline field. Open with what is happening now in one concrete sentence, then move forward in time.",
   "",
-  "REACH: the essay starts in technology, but the mechanism does not stop there. Follow it into the other systems it touches (regulation, labour, energy, finance, science, public institutions, other industries) wherever your scenario actually runs, and pick the main claim where the world, not only the tech press, will record the outcome.",
+  "REACH: the essay starts in technology, but the mechanism does not stop there. Follow it into whatever other systems the source itself says it touches, wherever your scenario actually runs, and pick the main claim where the world, not only the tech press, will record the outcome.",
   "",
   "LEADING INDICATORS: say which two to five things an outsider can watch, and what each would look like if your scenario is on track and if it is not.",
   "",
@@ -1423,7 +1421,7 @@ async function generateForecast(env, t0) {
   var signalText = String(sg && sg.friction_point || "").slice(0, 800);
   var recentF = await env.DB.prepare("SELECT claim FROM q08_forecasts ORDER BY id DESC LIMIT 6").all().catch(function () { return { results: [] }; });
   var recentBodies = await env.DB.prepare("SELECT body_md FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 8").all().catch(function () { return { results: [] }; });
-  var banned = overusedPrecedents((recentBodies.results || []).map(function (r) { return r.body_md; }), 2);
+  var banned = []; // Q08-VERIFY-1: outside precedents are rejected by the grounding check, so no precedent is named to the writer
   var prompt = buildForecastPrompt(src, signalText, { banned: banned, ownerNotes: await ownerDirectives(env), recent: (recentF.results || []).map(function (r) { return r.claim; }) });
   var topSig = ("q08-forecast:" + src.slug).slice(0, 80);
   var piece = null, problems = [];
