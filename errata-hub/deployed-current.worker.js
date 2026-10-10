@@ -1,12 +1,12 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.4.2-prompt-cache"; // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.5.0-ground"; // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
 var WATCH_VERSION = "0.2.4-internal-sweep";
-var RESPOND_VERSION = "0.4.3-judge";
+var RESPOND_VERSION = "0.5.0-ground";
 var PUBLISH_VERSION = "0.8.0-publish-gate";
 // ERRATA-HUB-CRONS-UNDECLARED-1 (2026-10-02, #1747, pillar research): wrangler.toml now declares the three hourly members
 // (watch :00, respond :15, publish :30). Every cron tick upserts qnfo-audit errata_watch key 'tick:<member>' with its
@@ -87,7 +87,7 @@ async function runCheck(env, mode) {
       cls = { errata: false, error: err.message };
     }
     if (cls && cls.errata) {
-      let doi = cls.paper_doi || null;
+      let doi = cls.paper_doi && ((e.subject || "") + " " + (e.body_text || "")).toLowerCase().indexOf(String(cls.paper_doi).toLowerCase()) >= 0 ? cls.paper_doi : null; /* ERRATA-GROUND-1: a DOI the model names must occur in the email */
       if (!doi) {
         const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/10\.5281\/zenodo\.\d+/);
         if (dm) doi = dm[0];
@@ -237,6 +237,68 @@ async function logJudge(env, queueId, j) {
     await env.WATCH_DB.prepare("INSERT INTO errata_judge_log (queue_id, model, pass, reason) VALUES (?,?,?,?)").bind(queueId, j.model, j.pass ? 1 : 0, j.reason || "").run();
   } catch (e) { console.error("errata_judge_log write failed: " + String(e && e.message || e).slice(0, 160)); }
 }
+// ACCURACY-GROUND-1 (owner directive 2026-10-10: published or sent text is 100% accurate; every claim verifiable against supplied
+// source text): deterministic check that the figures, years, links and capitalised names in generated text occur in the source
+// text the model was given. Returns problem strings; an empty list means every one was found. Same method as
+// q08-signal-engine groundingProblems (Q08-VERIFY-1). A model's own recollection is never a source.
+var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "zenodo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+function groundWordSet(text) {
+  var set = {};
+  String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
+    w = w.replace(/[.'-]+$/, ""); set[w] = 1; set[w.replace(/'s$/, "")] = 1; return "";
+  });
+  return set;
+}
+function ungroundedTerms(text, source, allow) {
+  var out = [], seen = {}, words = groundWordSet(source), nums = {};
+  var ok = {}; GROUND_ALLOW.concat(allow || []).forEach(function (a) { ok[String(a).toLowerCase()] = 1; });
+  (String(source || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) { nums[n.replace(/,/g, "").replace(/\.0+$/, "")] = 1; });
+  function add(kind, v) { var k = kind + v.toLowerCase(); if (!seen[k]) { seen[k] = 1; out.push(kind + ": " + v); } }
+  var body = String(text || "");
+  (body.match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) {
+    var c = n.replace(/,/g, "").replace(/\.0+$/, "");
+    if (!nums[c]) add("figure or year not in the source", n);
+  });
+  (body.match(/https?:\/\/[^\s)\]>"']+|\b10\.\d{4,9}\/[^\s)\]>"']+|\barxiv:\s*\d{4}\.\d{4,5}/gi) || []).forEach(function (u) {
+    var core = u.replace(/[.,;:]+$/, "").toLowerCase();
+    if (String(source || "").toLowerCase().indexOf(core) < 0) add("link or identifier not in the source", u);
+  });
+  body.split(/(?<=[.!?:;])\s+|\n+/).forEach(function (sent) {
+    var toks = sent.match(/[A-Za-z0-9][A-Za-z0-9&'.’-]*/g) || [];
+    for (var i = 1; i < toks.length; i++) {
+      var t = toks[i].replace(/’/g, "'").replace(/[.'-]+$/, "");
+      if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t)) continue;
+      var low = t.toLowerCase().replace(/'s$/, "");
+      if (ok[low] || words[low] || words[t.toLowerCase()]) continue;
+      add("name not in the source", t);
+    }
+  });
+  return out.slice(0, 14);
+}
+// ERRATA-GROUND-1 (owner directive 2026-10-10): a correction may state only what the errata email or the paper states. A
+// corrected reference (author, year, title, DOI, link) written from the model's memory is the failure this gate stops: any
+// name, year, figure, DOI or link in the clarification, acknowledgement or changelog that is in neither the email nor the paper
+// makes the draft high risk, and errata-publish never sends a high-risk draft (fail closed).
+function correctionGroundingProblems(corr, item, paper) {
+  var ground = [item && item.sender, item && item.subject, item && item.claim, paper && paper.title, paper && paper.body_md].join("\n");
+  var ver = corr && corr.version ? String(corr.version) : "";
+  var out = [];
+  ["clarification", "acknowledgement", "changelog"].forEach(function (k) {
+    var t = String(corr && corr[k] || "");
+    if (!t) return;
+    if (ver) t = t.split(ver).join(" ");
+    ungroundedTerms(t, ground).forEach(function (p) { out.push(k + " " + p); });
+  });
+  return out;
+}
+function enforceCorrectionGrounding(corr, item, paper) {
+  var probs = correctionGroundingProblems(corr, item, paper);
+  if (probs.length) {
+    corr.risk = "high";
+    corr.judge_note = "grounding FAIL (ERRATA-GROUND-1): " + probs.slice(0, 4).join("; ");
+  }
+  return probs;
+}
 async function draftCorrection(env, item, paper) {
   const prompt = [
     "You are QNFO's errata-implementation assistant. Given (1) an errata email and (2) a QNFO published paper (markdown), produce a SURGICAL, MINIMAL correction.",
@@ -245,6 +307,7 @@ async function draftCorrection(env, item, paper) {
     "1. Do NOT change any scientific result, equation, number, data, or conclusion.",
     "2. The correction is ONLY: (a) an attribution/clarification sentence correcting a mis-attribution or miscitation, (b) an acknowledgement sentence naming the correspondent, (c) a changelog entry with a version bump.",
     "3. Provide an EXACT verbatim sentence from the paper (copy-paste, no paraphrase) as the insertion anchor.",
+    "4. Every name, year, figure, title, DOI and link you write must be copied from the ERRATA EMAIL or the PAPER below; your own memory is not a source. A corrected reference is written only when the errata email or the paper supplies it; otherwise set risk to high and set clarification, anchor and acknowledgement to null.",
     "",
     "ERRATA EMAIL:",
     "From: " + (item.sender || ""),
@@ -254,7 +317,7 @@ async function draftCorrection(env, item, paper) {
     "PAPER (markdown):",
     (paper.body_md || "").slice(0, 9e3),
     "",
-    'Respond with JSON only: {"risk":"low|high","clarification":"<1-3 sentences>","anchor":"<exact verbatim sentence from the paper>","position":"after|before","acknowledgement":"<1 sentence naming the correspondent>","changelog":"<1 line>","version":"<new version label e.g. 1.1>"}'
+    'Respond with JSON only: {"risk":"low|high","clarification":"<1-3 sentences>","anchor":"<exact verbatim sentence from the paper>","position":"after|before","acknowledgement":"<1 sentence naming the correspondent>","changelog":"<1 line>","version":"<next version label, in the numbering scheme the paper already uses>"}'
   ].join("\n");
   const res = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }] }, { gateway: { id: "default" } });
   let text = "";
@@ -333,6 +396,7 @@ async function respondToItem(env, item) {
     return { error: "paper not found for " + item.paper_doi, item_id: item.id };
   }
   const corr = await draftCorrection(env, item, paper);
+  enforceCorrectionGrounding(corr, item, paper);
   if ((corr.risk || "high") === "low" && corr.clarification && corr.anchor) {
     const j = await judgeCorrection(env, item, paper, corr);
     await logJudge(env, item.id, j);

@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.2.7-flagged-errata"; // 1.2.7 REVISER-FLAGGED-DEADEND-1 (#1812): high findings become internal_errata rows (unconfirmed until a second model confirms); 1.2.6 LICENSE-ONE-1 (#517): new deposits under QNFO-ULA v2.0; 1.2.5 CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
+var VERSION = "1.3.0-ground"; // 1.3.0 REVISER-GROUND-1 (owner directive 2026-10-10): a low-severity edit must add no assertion (surface category, short, every name/figure/year/link and nearly every content word already in the paper); anything else is high and flagged, so bridge sentences are never auto-applied from memory; the audit prompt says so. // 1.2.7 REVISER-FLAGGED-DEADEND-1 (#1812): high findings become internal_errata rows (unconfirmed until a second model confirms); 1.2.6 LICENSE-ONE-1 (#517): new deposits under QNFO-ULA v2.0; 1.2.5 CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -219,11 +219,80 @@ async function verifySingleVersion(env, recId) {
   return { count, conceptrecid, latestDoi, uncertain: false };
 }
 __name(verifySingleVersion, "verifySingleVersion");
+// ACCURACY-GROUND-1 (owner directive 2026-10-10: published or sent text is 100% accurate; every claim verifiable against supplied
+// source text): deterministic check that the figures, years, links and capitalised names in generated text occur in the source
+// text the model was given. Returns problem strings; an empty list means every one was found. Same method as
+// q08-signal-engine groundingProblems (Q08-VERIFY-1). A model's own recollection is never a source.
+var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "zenodo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+function groundWordSet(text) {
+  var set = {};
+  String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
+    w = w.replace(/[.'-]+$/, ""); set[w] = 1; set[w.replace(/'s$/, "")] = 1; return "";
+  });
+  return set;
+}
+function ungroundedTerms(text, source, allow) {
+  var out = [], seen = {}, words = groundWordSet(source), nums = {};
+  var ok = {}; GROUND_ALLOW.concat(allow || []).forEach(function (a) { ok[String(a).toLowerCase()] = 1; });
+  (String(source || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) { nums[n.replace(/,/g, "").replace(/\.0+$/, "")] = 1; });
+  function add(kind, v) { var k = kind + v.toLowerCase(); if (!seen[k]) { seen[k] = 1; out.push(kind + ": " + v); } }
+  var body = String(text || "");
+  (body.match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) {
+    var c = n.replace(/,/g, "").replace(/\.0+$/, "");
+    if (!nums[c]) add("figure or year not in the source", n);
+  });
+  (body.match(/https?:\/\/[^\s)\]>"']+|\b10\.\d{4,9}\/[^\s)\]>"']+|\barxiv:\s*\d{4}\.\d{4,5}/gi) || []).forEach(function (u) {
+    var core = u.replace(/[.,;:]+$/, "").toLowerCase();
+    if (String(source || "").toLowerCase().indexOf(core) < 0) add("link or identifier not in the source", u);
+  });
+  body.split(/(?<=[.!?:;])\s+|\n+/).forEach(function (sent) {
+    var toks = sent.match(/[A-Za-z0-9][A-Za-z0-9&'.’-]*/g) || [];
+    for (var i = 1; i < toks.length; i++) {
+      var t = toks[i].replace(/’/g, "'").replace(/[.'-]+$/, "");
+      if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t)) continue;
+      var low = t.toLowerCase().replace(/'s$/, "");
+      if (ok[low] || words[low] || words[t.toLowerCase()]) continue;
+      add("name not in the source", t);
+    }
+  });
+  return out.slice(0, 14);
+}
+// REVISER-GROUND-1 (owner directive 2026-10-10): the auditor's "low" label is a claim, not a fact. An edit is auto-applied
+// only when it adds no assertion: its category is a surface category, its replacement is short, and every name, figure, year,
+// link and all but a couple of its content words already occur in the paper. Anything else (a bridge sentence, a new
+// comparison, a definition, an attribution) is treated as high severity, so it is flagged for a second model and never
+// written into a paper from the auditor's memory.
+var LOW_SAFE_CATEGORY_RE = /^(?:\d+\.?\s*)?(prose|format|formatting|typo|grammar|spelling|punctuation|meta|branded|changelog|missing-changelog)/i;
+function contentWordSet(text) {
+  var set = {};
+  String(text || "").toLowerCase().replace(/[a-z][a-z'-]{3,}/g, function (w) { set[w] = 1; return ""; });
+  return set;
+}
+function lowEditProblem(it, body) {
+  var cat = String(it && it.category || "").trim();
+  if (!LOW_SAFE_CATEGORY_RE.test(cat)) return "category '" + cat.slice(0, 40) + "' can assert content";
+  var loc = String(it && it.location || ""), fix = String(it && it.fix || "");
+  var delta = fix.indexOf(loc) >= 0 && loc ? fix.replace(loc, " ") : fix;
+  if (delta.length > 240) return "replacement adds " + delta.length + " characters";
+  var probs = ungroundedTerms(delta, body);
+  if (probs.length) return probs[0];
+  var known = contentWordSet(body + " " + loc), fresh = 0;
+  String(delta).toLowerCase().replace(/[a-z][a-z'-]{3,}/g, function (w) { if (!known[w]) fresh++; return ""; });
+  if (fresh > 2) return fresh + " content words are not in the paper";
+  return "";
+}
+function guardSeverity(issues, body) {
+  return (issues || []).map(function (it) {
+    if (!it || it.severity === "high") return it;
+    var why = lowEditProblem(it, body);
+    return why ? Object.assign({}, it, { severity: "high", demoted: "REVISER-GROUND-1: " + why }) : it;
+  });
+}
 function auditPrompt(paper) {
   return [
     "You are an ADVERSARIAL reviewer auditing a QNFO research preprint for concrete, correctable defects. You are hostile-but-honest: report ONLY issues that genuinely appear in the text; never invent issues.",
-    "Review categories: 1. overclaim/unsupported (a claim stated as fact without support, or a conclusion that does not follow). 2. missing-limitations (a quantitative/empirical claim with no scope or uncertainty disclosure). 3. terminology-isolation (domain terms with no cross-domain bridge). 4. citation/attribution (miscited reference or missing attribution). 5. prose (grammar, typos, unclear sentences). 6. meta/branded-language (meta-narration, virtue labels, internal gate/tool names). 7. literature-coverage (no engagement with prior/related work, or statements about the literature with no citations). 8. quantitative-justification (a quantitative or empirical claim with no computation, simulation, derivation, or citation support). 9. computational-verification (results presented without a reproducible computation artifact: code block, table, or explicit derivation).",
-    "Severity: 'low' = prose/format/terminology-bridge/missing-changelog (safe to auto-fix); 'high' = any change to a number, equation, data, result, conclusion, or attribution, OR a literature-coverage / quantitative-justification / computational-verification gap (these require a full revision cycle, never a surgical edit).",
+    "Review categories: 1. overclaim/unsupported (a claim stated as fact without support, or a conclusion that does not follow). 2. missing-limitations (a quantitative/empirical claim with no scope or uncertainty disclosure). 3. terminology-isolation (a term used without a definition anywhere in the paper). 4. citation/attribution (miscited reference or missing attribution). 5. prose (grammar, typos, unclear sentences). 6. meta/branded-language (meta-narration, virtue labels, internal gate/tool names). 7. literature-coverage (no engagement with prior/related work, or statements about the literature with no citations). 8. quantitative-justification (a quantitative or empirical claim with no computation, simulation, derivation, or citation support). 9. computational-verification (results presented without a reproducible computation artifact: code block, table, or explicit derivation).",
+    "Severity: 'low' = spelling, grammar, formatting or changelog edits only, whose replacement adds no assertion and uses words already in the paper (safe to auto-fix); 'high' = any change to a number, equation, data, result, conclusion, or attribution, ANY inserted or rewritten sentence that asserts a fact, relationship, comparison, definition or bridge between terms or fields, OR a literature-coverage / quantitative-justification / computational-verification gap (these require a full revision cycle, never a surgical edit). Every name, number, year and claim in a 'fix' must be quoted from, or directly derivable from, the paper text; you never add content from memory, and when no paper text supports a fix, report the issue as high with fix = ''.",
     "For each issue provide a SURGICAL edit: 'location' must be an EXACT verbatim substring copied from the paper; 'fix' is the replacement (for insertion, fix = location + inserted text; for deletion, fix = ''). If you cannot quote an exact substring, do NOT propose an edit.",
     "'confidence' is your probability (0 to 1) that the issue is real and would survive a second independent reviewer.",
     'Output JSON only: {"issues":[{"severity":"low|high","category":"...","location":"exact verbatim substring","fix":"replacement","reason":"1 sentence","confidence":0.0}]}. If no genuine issues, return {"issues":[]}.',
@@ -409,7 +478,7 @@ async function processPaper(env, paper, mode, runId) {
   } catch (e) {
     findings = { issues: [], auditError: e.message };
   }
-  const issues = findings.issues || [];
+  const issues = guardSeverity(findings.issues || [], paper.body_md || "");
   const high = issues.filter(function(i) {
     return i.severity === "high";
   });

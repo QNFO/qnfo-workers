@@ -11,3 +11,7 @@ Reviews Zenodo records from the `aiscience` community (or any recid), writes str
 - Honesty: overlay-only (never stores paper bodies, never writes to Zenodo); metadata-only reviews never get PUBLISH; every report discloses basis + reviewer limitations
 
 Deploy: `wrangler deploy` then set secret JNL_TOKEN. Requires existing D1 jnl-audit + KV jnl-state (see jnl-watch).
+
+## Accuracy (JNL-GROUND-1, 0.9.2, owner directive 2026-10-10)
+
+Reviewer prompts allow no external citation, source, fact, name, date or figure: a review may quote or paraphrase only the submitted text. `score_novelty` needs related work to compare against and the reviewer sees none, so it is recorded as the neutral 5 and left out of the decision mean (soundness, clarity and reproducibility). Suite: `ground.test.mjs`. The same change is in the bundled copy in `jnl-pipeline`. Both directories still carry their RETIRED marker (a charter decision, not changed here).

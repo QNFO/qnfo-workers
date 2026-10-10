@@ -13,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.11.2-prompt-prefix"; /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ /* 0.11.0 CITATION-EXISTENCE-GATE-1 (agent_issues 2052, pillar research): publishStageV2 resolves every arXiv id, DOI and link before the Zenodo deposit; a dead or mismatched citation holds the queue row with the reason, a lookup error leaves it queued; ops_config research_citation_gate = enforce (default) | measure | off. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ /* 0.10.3 INHOUSE-PUBLISH-2 (#2137): publishToZenodo reads ops_config by key; the 0.10.0 column query threw on every publish. */ // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.12.0-ground"; /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ /* 0.11.0 CITATION-EXISTENCE-GATE-1 (agent_issues 2052, pillar research): publishStageV2 resolves every arXiv id, DOI and link before the Zenodo deposit; a dead or mismatched citation holds the queue row with the reason, a lookup error leaves it queued; ops_config research_citation_gate = enforce (default) | measure | off. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ /* 0.10.3 INHOUSE-PUBLISH-2 (#2137): publishToZenodo reads ops_config by key; the 0.10.0 column query threw on every publish. */ // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -1980,7 +1980,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "- Required headings, in order: '# <Title>', '## Abstract', '## 1. Introduction', '## 2. Background and Related Work', '## 3. Methods', '## 4. Analysis', '## 5. Results', '## 6. Discussion', '## 7. Conclusion', '## References'.",
   "- Length: 15000-22000 characters. A serious paper, not a stub.",
   "- Abstract: 150-220 words summarizing problem, method, results, significance.",
-  "- Section 2 MUST discuss at least 8 works from the provided Bibliography, cited as [1], [2], ... in the bibliography's exact numbering, each with one or two sentences of substantive context (what they did, how it relates to your argument). Never a bare citation.",
+  "- Section 2 MUST discuss at least 8 works from the provided Bibliography, cited as [1], [2], ... in the bibliography's exact numbering, each with one or two sentences of substantive context. Every statement about what a cited work did, found, argued or used must be derivable from that entry's own supplied text (its title and summary in the Bibliography) and nothing else: your memory of a work is not a source. When an entry's summary is thin, say in one sentence that the summary supplied gives no further detail, and relate the work to your argument only through what the summary states. Never a bare citation, and never a finding, method, number, date or name that the entry does not state.",
   "- Section 4 (Analysis) MUST show explicit derivations: state every input number with its source, show every arithmetic step. No 'it can be shown' hand-waving.",
   "- Section 5 (Results): report ONLY numbers you actually computed in Section 4, or clearly-labeled projections with stated assumptions and uncertainty bounds. NEVER invent data, simulation results, or empirical measurements.",
   "- Derive at least one concrete numerical result with full arithmetic.",
@@ -1988,6 +1988,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "- References: list ONLY works from the provided Bibliography, in the same order, numbered [1]..[n]. Copy titles and identifiers EXACTLY from the bibliography. NEVER invent a reference. If the bibliography has fewer than 8 works, cite all of them and state the limitation in the Discussion.",
   "- No meta-commentary about writing, authorship, or AI. No 'Let me', no thinking text, no placeholder text, no '[to verify]' markers. Every quantitative claim is either computed here or explicitly labeled a projection with stated assumptions.",
   "- Write for an adjacent-field expert; define jargon once.",
+  "- Every claim about the world outside the paper (events, dates, people, organisations, numbers, findings of other works) must be stated in the INPUT BLOCK or the Bibliography entries, or computed in Section 4. Your memory is not a source: a claim with no supplied support is left out.",
   MATH_RULE,
   "### TASK RECONCILE",
   "You are the reconciling editor. Two or three independent writers produced drafts on the same input block. Produce the SINGLE reconciled preprint.",
@@ -1996,7 +1997,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "2. For DIVERGENT claims: report the conflict explicitly in '## Appendix A. Divergence report' - state each side and the convention/assumption behind the disagreement. NEVER silently resolve a divergence; choose one convention for the main text and document that choice.",
   "3. Write the reconciled paper using the best-substantiated version of each convergent claim. Required headings in order: '# <Title>', '## Abstract', '## 1. Introduction', '## 2. Background and Related Work', '## 3. Methods', '## 4. Analysis', '## 5. Results', '## 6. Discussion', '## 7. Conclusion', '## References', '## Appendix A. Divergence report', '## Appendix B. Claim attribution'.",
   "4. Length: 18000-30000 characters.",
-  "5. Section 2 must discuss at least 8 bibliography works with substantive context. References section lists ONLY bibliography works, in the bibliography's exact order and numbering. Never invent references.",
+  "5. Section 2 must discuss at least 8 bibliography works. Keep only statements about a work that its supplied entry supports; drop or reword any a draft added from memory, and where an entry is thin say so. References section lists ONLY bibliography works, in the bibliography's exact order and numbering. Never invent references.",
   "6. Quantitative claims: computed with shown arithmetic, or labeled projections with stated assumptions. No '[to verify]', no invented data.",
   "7. Appendix B: the claim table (C1..Cn, source drafts, agreement status).",
   "8. Output ONLY the paper markdown. No meta-commentary.",
@@ -2012,6 +2013,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "5. Prose gates: meta-commentary, reasoning preamble, 'Let me', '[to verify]' markers, placeholder text = HARD.",
   "6. Depth: superficial literature treatment, unexplained jargon, unstated limitations = SOFT.",
   "7. Divergence honesty: Appendix A present when drafts diverged = SOFT if missing.",
+  "8. Source support: any statement about what a cited work did, found or argued, or any claim about the outside world, that is not stated in that work's supplied Bibliography entry or the grounding input = HARD. Quote the unsupported sentence in claim.",
   'verdict = "revise" iff hard is non-empty. Do not pad hard with soft issues.',
   "### TASK REVISE",
   "You are the revising author. Apply the reviewer's HARD fixes to the paper. Return ONLY the full revised paper markdown with the same required structure and headings.",
@@ -3745,7 +3747,7 @@ function isPublicHost(h) { return /\.workers\.dev$|(^|\.)qnfo\.org$/i.test(Strin
 // calls are attributed to qnfo-paper-reviser. It runs on the :30 tick of every fourth UTC hour (its old "37 */4").
 // Public: GET /reviser/health. Its /run/* and /debug/* routes answer only a service binding whose props name the
 // member (props.member = "qnfo-paper-reviser", props.caller = qnfo-*); the props stand in for X-Reviser-Token (#1703).
-var REVISER_VERSION = "1.2.8-folded";
+var REVISER_VERSION = "1.3.0-folded";
 var REVISER_MEMBER = "qnfo-paper-reviser";
 var reviserMod = (function () {
 var __defProp = Object.defineProperty;
@@ -3969,11 +3971,80 @@ async function verifySingleVersion(env, recId) {
   return { count, conceptrecid, latestDoi, uncertain: false };
 }
 __name(verifySingleVersion, "verifySingleVersion");
+// ACCURACY-GROUND-1 (owner directive 2026-10-10: published or sent text is 100% accurate; every claim verifiable against supplied
+// source text): deterministic check that the figures, years, links and capitalised names in generated text occur in the source
+// text the model was given. Returns problem strings; an empty list means every one was found. Same method as
+// q08-signal-engine groundingProblems (Q08-VERIFY-1). A model's own recollection is never a source.
+var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "zenodo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+function groundWordSet(text) {
+  var set = {};
+  String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
+    w = w.replace(/[.'-]+$/, ""); set[w] = 1; set[w.replace(/'s$/, "")] = 1; return "";
+  });
+  return set;
+}
+function ungroundedTerms(text, source, allow) {
+  var out = [], seen = {}, words = groundWordSet(source), nums = {};
+  var ok = {}; GROUND_ALLOW.concat(allow || []).forEach(function (a) { ok[String(a).toLowerCase()] = 1; });
+  (String(source || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) { nums[n.replace(/,/g, "").replace(/\.0+$/, "")] = 1; });
+  function add(kind, v) { var k = kind + v.toLowerCase(); if (!seen[k]) { seen[k] = 1; out.push(kind + ": " + v); } }
+  var body = String(text || "");
+  (body.match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) {
+    var c = n.replace(/,/g, "").replace(/\.0+$/, "");
+    if (!nums[c]) add("figure or year not in the source", n);
+  });
+  (body.match(/https?:\/\/[^\s)\]>"']+|\b10\.\d{4,9}\/[^\s)\]>"']+|\barxiv:\s*\d{4}\.\d{4,5}/gi) || []).forEach(function (u) {
+    var core = u.replace(/[.,;:]+$/, "").toLowerCase();
+    if (String(source || "").toLowerCase().indexOf(core) < 0) add("link or identifier not in the source", u);
+  });
+  body.split(/(?<=[.!?:;])\s+|\n+/).forEach(function (sent) {
+    var toks = sent.match(/[A-Za-z0-9][A-Za-z0-9&'.’-]*/g) || [];
+    for (var i = 1; i < toks.length; i++) {
+      var t = toks[i].replace(/’/g, "'").replace(/[.'-]+$/, "");
+      if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t)) continue;
+      var low = t.toLowerCase().replace(/'s$/, "");
+      if (ok[low] || words[low] || words[t.toLowerCase()]) continue;
+      add("name not in the source", t);
+    }
+  });
+  return out.slice(0, 14);
+}
+// REVISER-GROUND-1 (owner directive 2026-10-10): the auditor's "low" label is a claim, not a fact. An edit is auto-applied
+// only when it adds no assertion: its category is a surface category, its replacement is short, and every name, figure, year,
+// link and all but a couple of its content words already occur in the paper. Anything else (a bridge sentence, a new
+// comparison, a definition, an attribution) is treated as high severity, so it is flagged for a second model and never
+// written into a paper from the auditor's memory.
+var LOW_SAFE_CATEGORY_RE = /^(?:\d+\.?\s*)?(prose|format|formatting|typo|grammar|spelling|punctuation|meta|branded|changelog|missing-changelog)/i;
+function contentWordSet(text) {
+  var set = {};
+  String(text || "").toLowerCase().replace(/[a-z][a-z'-]{3,}/g, function (w) { set[w] = 1; return ""; });
+  return set;
+}
+function lowEditProblem(it, body) {
+  var cat = String(it && it.category || "").trim();
+  if (!LOW_SAFE_CATEGORY_RE.test(cat)) return "category '" + cat.slice(0, 40) + "' can assert content";
+  var loc = String(it && it.location || ""), fix = String(it && it.fix || "");
+  var delta = fix.indexOf(loc) >= 0 && loc ? fix.replace(loc, " ") : fix;
+  if (delta.length > 240) return "replacement adds " + delta.length + " characters";
+  var probs = ungroundedTerms(delta, body);
+  if (probs.length) return probs[0];
+  var known = contentWordSet(body + " " + loc), fresh = 0;
+  String(delta).toLowerCase().replace(/[a-z][a-z'-]{3,}/g, function (w) { if (!known[w]) fresh++; return ""; });
+  if (fresh > 2) return fresh + " content words are not in the paper";
+  return "";
+}
+function guardSeverity(issues, body) {
+  return (issues || []).map(function (it) {
+    if (!it || it.severity === "high") return it;
+    var why = lowEditProblem(it, body);
+    return why ? Object.assign({}, it, { severity: "high", demoted: "REVISER-GROUND-1: " + why }) : it;
+  });
+}
 function auditPrompt(paper) {
   return [
     "You are an ADVERSARIAL reviewer auditing a QNFO research preprint for concrete, correctable defects. You are hostile-but-honest: report ONLY issues that genuinely appear in the text; never invent issues.",
-    "Review categories: 1. overclaim/unsupported (a claim stated as fact without support, or a conclusion that does not follow). 2. missing-limitations (a quantitative/empirical claim with no scope or uncertainty disclosure). 3. terminology-isolation (domain terms with no cross-domain bridge). 4. citation/attribution (miscited reference or missing attribution). 5. prose (grammar, typos, unclear sentences). 6. meta/branded-language (meta-narration, virtue labels, internal gate/tool names). 7. literature-coverage (no engagement with prior/related work, or statements about the literature with no citations). 8. quantitative-justification (a quantitative or empirical claim with no computation, simulation, derivation, or citation support). 9. computational-verification (results presented without a reproducible computation artifact: code block, table, or explicit derivation).",
-    "Severity: 'low' = prose/format/terminology-bridge/missing-changelog (safe to auto-fix); 'high' = any change to a number, equation, data, result, conclusion, or attribution, OR a literature-coverage / quantitative-justification / computational-verification gap (these require a full revision cycle, never a surgical edit).",
+    "Review categories: 1. overclaim/unsupported (a claim stated as fact without support, or a conclusion that does not follow). 2. missing-limitations (a quantitative/empirical claim with no scope or uncertainty disclosure). 3. terminology-isolation (a term used without a definition anywhere in the paper). 4. citation/attribution (miscited reference or missing attribution). 5. prose (grammar, typos, unclear sentences). 6. meta/branded-language (meta-narration, virtue labels, internal gate/tool names). 7. literature-coverage (no engagement with prior/related work, or statements about the literature with no citations). 8. quantitative-justification (a quantitative or empirical claim with no computation, simulation, derivation, or citation support). 9. computational-verification (results presented without a reproducible computation artifact: code block, table, or explicit derivation).",
+    "Severity: 'low' = spelling, grammar, formatting or changelog edits only, whose replacement adds no assertion and uses words already in the paper (safe to auto-fix); 'high' = any change to a number, equation, data, result, conclusion, or attribution, ANY inserted or rewritten sentence that asserts a fact, relationship, comparison, definition or bridge between terms or fields, OR a literature-coverage / quantitative-justification / computational-verification gap (these require a full revision cycle, never a surgical edit). Every name, number, year and claim in a 'fix' must be quoted from, or directly derivable from, the paper text; you never add content from memory, and when no paper text supports a fix, report the issue as high with fix = ''.",
     "For each issue provide a SURGICAL edit: 'location' must be an EXACT verbatim substring copied from the paper; 'fix' is the replacement (for insertion, fix = location + inserted text; for deletion, fix = ''). If you cannot quote an exact substring, do NOT propose an edit.",
     "'confidence' is your probability (0 to 1) that the issue is real and would survive a second independent reviewer.",
     'Output JSON only: {"issues":[{"severity":"low|high","category":"...","location":"exact verbatim substring","fix":"replacement","reason":"1 sentence","confidence":0.0}]}. If no genuine issues, return {"issues":[]}.',
@@ -4159,7 +4230,7 @@ async function processPaper(env, paper, mode, runId) {
   } catch (e) {
     findings = { issues: [], auditError: e.message };
   }
-  const issues = findings.issues || [];
+  const issues = guardSeverity(findings.issues || [], paper.body_md || "");
   const high = issues.filter(function(i) {
     return i.severity === "high";
   });
@@ -4336,7 +4407,7 @@ function reviserMemberCall(ctx) { var p = ctx && ctx.props; return !!(p && p.mem
 // BROWSER, SEND_EMAIL and ZENODO_TOKEN are the host's own. Its three jobs keep their minutes on this */15 tick (:00 watch,
 // :15 respond, :30 publish), each awaited. Public: GET /errata-hub/health. Every other route of it answers only a service
 // binding whose props name the member (props.member = "errata-hub", props.caller = qnfo-*), in place of ERRATA_TOKEN.
-var ERRATA_VERSION = "1.4.2-folded";
+var ERRATA_VERSION = "1.5.0-folded";
 var ERRATA_MEMBER = "errata-hub";
 var errataMod = (function () {
 var Buffer2 = __ErrataBuffer, Buffer3 = __ErrataBuffer;
@@ -4346,7 +4417,7 @@ var VERSION = ERRATA_VERSION; // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI 
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
 var WATCH_VERSION = "0.2.4-internal-sweep";
-var RESPOND_VERSION = "0.4.3-judge";
+var RESPOND_VERSION = "0.5.0-ground";
 var PUBLISH_VERSION = "0.8.0-publish-gate";
 // ERRATA-HUB-CRONS-UNDECLARED-1 (2026-10-02, #1747, pillar research): wrangler.toml now declares the three hourly members
 // (watch :00, respond :15, publish :30). Every cron tick upserts qnfo-audit errata_watch key 'tick:<member>' with its
@@ -4427,7 +4498,7 @@ async function runCheck(env, mode) {
       cls = { errata: false, error: err.message };
     }
     if (cls && cls.errata) {
-      let doi = cls.paper_doi || null;
+      let doi = cls.paper_doi && ((e.subject || "") + " " + (e.body_text || "")).toLowerCase().indexOf(String(cls.paper_doi).toLowerCase()) >= 0 ? cls.paper_doi : null; /* ERRATA-GROUND-1: a DOI the model names must occur in the email */
       if (!doi) {
         const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/10\.5281\/zenodo\.\d+/);
         if (dm) doi = dm[0];
@@ -4577,6 +4648,68 @@ async function logJudge(env, queueId, j) {
     await env.WATCH_DB.prepare("INSERT INTO errata_judge_log (queue_id, model, pass, reason) VALUES (?,?,?,?)").bind(queueId, j.model, j.pass ? 1 : 0, j.reason || "").run();
   } catch (e) { console.error("errata_judge_log write failed: " + String(e && e.message || e).slice(0, 160)); }
 }
+// ACCURACY-GROUND-1 (owner directive 2026-10-10: published or sent text is 100% accurate; every claim verifiable against supplied
+// source text): deterministic check that the figures, years, links and capitalised names in generated text occur in the source
+// text the model was given. Returns problem strings; an empty list means every one was found. Same method as
+// q08-signal-engine groundingProblems (Q08-VERIFY-1). A model's own recollection is never a source.
+var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "zenodo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+function groundWordSet(text) {
+  var set = {};
+  String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
+    w = w.replace(/[.'-]+$/, ""); set[w] = 1; set[w.replace(/'s$/, "")] = 1; return "";
+  });
+  return set;
+}
+function ungroundedTerms(text, source, allow) {
+  var out = [], seen = {}, words = groundWordSet(source), nums = {};
+  var ok = {}; GROUND_ALLOW.concat(allow || []).forEach(function (a) { ok[String(a).toLowerCase()] = 1; });
+  (String(source || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) { nums[n.replace(/,/g, "").replace(/\.0+$/, "")] = 1; });
+  function add(kind, v) { var k = kind + v.toLowerCase(); if (!seen[k]) { seen[k] = 1; out.push(kind + ": " + v); } }
+  var body = String(text || "");
+  (body.match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) {
+    var c = n.replace(/,/g, "").replace(/\.0+$/, "");
+    if (!nums[c]) add("figure or year not in the source", n);
+  });
+  (body.match(/https?:\/\/[^\s)\]>"']+|\b10\.\d{4,9}\/[^\s)\]>"']+|\barxiv:\s*\d{4}\.\d{4,5}/gi) || []).forEach(function (u) {
+    var core = u.replace(/[.,;:]+$/, "").toLowerCase();
+    if (String(source || "").toLowerCase().indexOf(core) < 0) add("link or identifier not in the source", u);
+  });
+  body.split(/(?<=[.!?:;])\s+|\n+/).forEach(function (sent) {
+    var toks = sent.match(/[A-Za-z0-9][A-Za-z0-9&'.’-]*/g) || [];
+    for (var i = 1; i < toks.length; i++) {
+      var t = toks[i].replace(/’/g, "'").replace(/[.'-]+$/, "");
+      if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t)) continue;
+      var low = t.toLowerCase().replace(/'s$/, "");
+      if (ok[low] || words[low] || words[t.toLowerCase()]) continue;
+      add("name not in the source", t);
+    }
+  });
+  return out.slice(0, 14);
+}
+// ERRATA-GROUND-1 (owner directive 2026-10-10): a correction may state only what the errata email or the paper states. A
+// corrected reference (author, year, title, DOI, link) written from the model's memory is the failure this gate stops: any
+// name, year, figure, DOI or link in the clarification, acknowledgement or changelog that is in neither the email nor the paper
+// makes the draft high risk, and errata-publish never sends a high-risk draft (fail closed).
+function correctionGroundingProblems(corr, item, paper) {
+  var ground = [item && item.sender, item && item.subject, item && item.claim, paper && paper.title, paper && paper.body_md].join("\n");
+  var ver = corr && corr.version ? String(corr.version) : "";
+  var out = [];
+  ["clarification", "acknowledgement", "changelog"].forEach(function (k) {
+    var t = String(corr && corr[k] || "");
+    if (!t) return;
+    if (ver) t = t.split(ver).join(" ");
+    ungroundedTerms(t, ground).forEach(function (p) { out.push(k + " " + p); });
+  });
+  return out;
+}
+function enforceCorrectionGrounding(corr, item, paper) {
+  var probs = correctionGroundingProblems(corr, item, paper);
+  if (probs.length) {
+    corr.risk = "high";
+    corr.judge_note = "grounding FAIL (ERRATA-GROUND-1): " + probs.slice(0, 4).join("; ");
+  }
+  return probs;
+}
 async function draftCorrection(env, item, paper) {
   const prompt = [
     "You are QNFO's errata-implementation assistant. Given (1) an errata email and (2) a QNFO published paper (markdown), produce a SURGICAL, MINIMAL correction.",
@@ -4585,6 +4718,7 @@ async function draftCorrection(env, item, paper) {
     "1. Do NOT change any scientific result, equation, number, data, or conclusion.",
     "2. The correction is ONLY: (a) an attribution/clarification sentence correcting a mis-attribution or miscitation, (b) an acknowledgement sentence naming the correspondent, (c) a changelog entry with a version bump.",
     "3. Provide an EXACT verbatim sentence from the paper (copy-paste, no paraphrase) as the insertion anchor.",
+    "4. Every name, year, figure, title, DOI and link you write must be copied from the ERRATA EMAIL or the PAPER below; your own memory is not a source. A corrected reference is written only when the errata email or the paper supplies it; otherwise set risk to high and set clarification, anchor and acknowledgement to null.",
     "",
     "ERRATA EMAIL:",
     "From: " + (item.sender || ""),
@@ -4594,7 +4728,7 @@ async function draftCorrection(env, item, paper) {
     "PAPER (markdown):",
     (paper.body_md || "").slice(0, 9e3),
     "",
-    'Respond with JSON only: {"risk":"low|high","clarification":"<1-3 sentences>","anchor":"<exact verbatim sentence from the paper>","position":"after|before","acknowledgement":"<1 sentence naming the correspondent>","changelog":"<1 line>","version":"<new version label e.g. 1.1>"}'
+    'Respond with JSON only: {"risk":"low|high","clarification":"<1-3 sentences>","anchor":"<exact verbatim sentence from the paper>","position":"after|before","acknowledgement":"<1 sentence naming the correspondent>","changelog":"<1 line>","version":"<next version label, in the numbering scheme the paper already uses>"}'
   ].join("\n");
   const res = await env.AI.run(MODEL, { messages: [{ role: "user", content: prompt }] }, { gateway: { id: "default" } });
   let text = "";
@@ -4673,6 +4807,7 @@ async function respondToItem(env, item) {
     return { error: "paper not found for " + item.paper_doi, item_id: item.id };
   }
   const corr = await draftCorrection(env, item, paper);
+  enforceCorrectionGrounding(corr, item, paper);
   if ((corr.risk || "high") === "low" && corr.clarification && corr.anchor) {
     const j = await judgeCorrection(env, item, paper, corr);
     await logJudge(env, item.id, j);

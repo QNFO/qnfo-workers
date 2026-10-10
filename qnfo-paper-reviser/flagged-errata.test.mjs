@@ -83,7 +83,7 @@ const ctx = { waitUntil() {} };
   check("erratum carries the model confidence", ev.confidence === 0.72, row.evidence);
   check("erratum carries the reviser run id and the log id", /^rv-[0-9a-z]+$/.test(String(ev.run_id)) && ev.log_id === log[0].id, row.evidence);
   check("erratum says it is unconfirmed until a second model confirms", /second model must confirm/.test(row.remediation || ""), row.remediation);
-  check("detected_by names the reviser and its version", /^qnfo-paper-reviser\/1\.2\.([5-9]|[1-9][0-9])/.test(row.detected_by || ""), row.detected_by);
+  check("detected_by names the reviser and its version", /^qnfo-paper-reviser\/1\.(2\.([5-9]|[1-9][0-9])|[3-9]\.)/.test(row.detected_by || ""), row.detected_by);
   const q = audit.prepare("SELECT * FROM errata_queue").all();
   check("one errata_queue row, internal-open, source internal_audit, confidence 0.72", q.length === 1 && q[0].status === "internal-open" && q[0].source === "internal_audit" && Math.abs(q[0].confidence - 0.72) < 1e-9 && q[0].subject === row.id, JSON.stringify(q));
   check("nothing was queued for publication", audit.prepare("SELECT COUNT(*) n FROM version_queue").get().n === 0);

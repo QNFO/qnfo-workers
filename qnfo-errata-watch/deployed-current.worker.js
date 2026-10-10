@@ -48,7 +48,7 @@ async function runCheck(env, mode) {
     let cls;
     try { cls = await classifyErrata(env, e); } catch (err) { cls = { errata: false, error: err.message }; }
     if (cls && cls.errata) {
-      let doi = cls.paper_doi || null;
+      let doi = cls.paper_doi && ((e.subject || "") + " " + (e.body_text || "")).toLowerCase().indexOf(String(cls.paper_doi).toLowerCase()) >= 0 ? cls.paper_doi : null; /* ERRATA-GROUND-1: a DOI the model names must occur in the email */
       if (!doi) {
         const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/10\.5281\/zenodo\.\d+/);
         if (dm) doi = dm[0];
