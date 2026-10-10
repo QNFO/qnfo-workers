@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-10 11:03:43",
+  "audited_at": "2026-10-10 16:03:56",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -538,7 +538,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.15.0-ab-split",
+        "version": "3.16.0-ipatent-ground",
         "worker": "qnfo-ipatent"
       },
       {
@@ -1228,9 +1228,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.15.0-ab-split",
+      "before": "3.16.0-ipatent-ground",
       "http": 200,
-      "live": "3.15.0-ab-split",
+      "live": "3.16.0-ipatent-ground",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
