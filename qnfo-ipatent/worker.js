@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.15.0-ab-split"; // 3.15.0 AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): a human GET / without a v parameter is assigned once to arm 1 (default page) or arm 2 (302 to ?v=2) by the cookie ipatent_ab (arm number only, 30 days; share = qnfo-audit ops_config ipatent_v2_share, cached 5 min, "0" turns it off without a deploy; env IPATENT_V2_SHARE overrides), so both variants get human traffic and step 2 can compare drafts per visit; crawlers, HEAD and an explicit ?v= are unchanged. 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.16.0-ipatent-ground"; // 3.16.0 IPATENT-GROUND-1 (2026-10-10, pillar core, owner directive: drafts state only what the inventor supplied, no example nouns in prompts, fail closed): the disclosure prompt takes its Background only from the inventor\'s text and labels any statement about existing approaches as unverified; the retrieved example disclosures are reduced to section headings (no titles, fields or text); the inventor declaration is a fixed text with no statement of novelty; the claim list no longer forces categories the description does not support; after drafting, a Background sentence the description does not support is removed, a sentence or claim reciting a figure, DOI, link or citation the inventor did not give is removed (a claim takes its dependents with it) and every removal is listed under SUPPORT GAPS. Tests: ground.test.mjs. // 3.15.0 AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): a human GET / without a v parameter is assigned once to arm 1 (default page) or arm 2 (302 to ?v=2) by the cookie ipatent_ab (arm number only, 30 days; share = qnfo-audit ops_config ipatent_v2_share, cached 5 min, "0" turns it off without a deploy; env IPATENT_V2_SHARE overrides), so both variants get human traffic and step 2 can compare drafts per visit; crawlers, HEAD and an explicit ?v= are unchanged. 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -463,19 +463,137 @@ async function upsertDraftAudit(env, model, inChars, ms, err, result) {
   }
 }
 
+// ---- IPG-BEGIN: IPATENT-GROUND-1 (owner directive 2026-10-10): a draft states only what the inventor supplied ----
+// The model drafts from the inventor's description (and mechanism card) alone. Afterwards the draft is checked against that same
+// text: a Background sentence the description does not support is removed and any statement about existing approaches is labelled
+// unverified; a sentence in the summary, description or abstract that carries a figure, DOI, link, author citation or patent number
+// the inventor did not give is removed; a claim that recites such a figure is removed together with the claims that depend on it;
+// the inventor declaration is a fixed text that makes no statement of novelty. Everything removed is listed under SUPPORT GAPS.
+var IP_DECLARATION = "To be completed and signed by the inventor. This draft makes no statement that the invention is novel; novelty has not been assessed.";
+var IP_BACKGROUND_NONE = "Not stated by the inventor. Describe the problem or limitation this invention addresses, in your own words, and redraft.";
+var IP_PRIOR_LABEL = " (Stated by the inventor; not verified against the prior art.)";
+var IP_STD_HEADINGS = ["TITLE OF INVENTION", "TECHNICAL FIELD", "BACKGROUND", "SUMMARY OF THE INVENTION", "DETAILED DESCRIPTION", "CLAIMS", "ABSTRACT", "BRIEF DESCRIPTION OF THE DRAWINGS", "INVENTOR DECLARATION", "SUPPORT GAPS", "CROSS-REFERENCE TO RELATED APPLICATIONS", "FIELD OF THE INVENTION", "SUMMARY", "DESCRIPTION OF EMBODIMENTS"];
+// Section headings only, in the order the retrieved disclosures use them. No title, field, text or noun of any disclosure.
+function ipStructureReference(ragContext) {
+  var seen = [];
+  (ragContext || []).forEach(function (r) {
+    String(r && r.disclosure_text || "").split("\n").forEach(function (line) {
+      var h = line.replace(/^[\s#*\d.)]+/, "").replace(/[\s*:]+$/, "").toUpperCase();
+      if (IP_STD_HEADINGS.indexOf(h) >= 0 && seen.indexOf(h) < 0) seen.push(h);
+    });
+  });
+  return seen;
+}
+function ipNums(text) {
+  var set = new Set();
+  (String(text || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) { set.add(n.replace(/,/g, "").replace(/\.0+$/, "")); });
+  return set;
+}
+function ipWordSet(text) {
+  var set = new Set();
+  String(text || "").toLowerCase().replace(/[a-z][a-z-]{3,}/g, function (w) { set.add(w); set.add(w.replace(/(ing|ed|es|s)$/, "")); return ""; });
+  return set;
+}
+// Identifiers and figures in `sent` that the supplied text does not contain.
+function ipSentenceProblems(sent, gl, gnums) {
+  var out = [];
+  var s = String(sent).replace(/\bclaims?\s+\d+(?:\s*(?:,|and|or|to|-)\s*\d+)*/gi, " ").replace(/^\s*\d{1,3}\s*[.)]\s+/, " ");
+  (s.match(/\b10\.\d{4,9}\/[^\s"<>)\]]+/g) || []).forEach(function (d) { d = d.replace(/[.,;:]+$/, "").toLowerCase(); if (gl.indexOf(d) < 0) out.push("doi: " + d); });
+  (s.match(/https?:\/\/[^\s)<>\]"]+/gi) || []).forEach(function (u) { if (gl.indexOf(u.toLowerCase().replace(/[.,;:)\]]+$/, "").replace(/\/+$/, "")) < 0) out.push("link: " + u); });
+  if (/\bet al\b/i.test(s) && gl.indexOf("et al") < 0) out.push("author citation: et al");
+  (s.match(/\b(?:novel|novelty|unprecedented|unique|never before|first of its kind)\b/gi) || []).forEach(function (w) { if (gl.indexOf(w.toLowerCase()) < 0) out.push("novelty statement: " + w); });
+  var body = s.replace(/10\.\d{4,9}\/\S+/g, " ").replace(/https?:\/\/\S+/gi, " ");
+  var re = /(\$?)(\d[\d,]*(?:\.\d+)?)(\s*(?:%|percent|[a-z]{1,}\b)?)/gi, m;
+  while ((m = re.exec(body))) {
+    var num = m[2].replace(/,/g, "").replace(/\.0+$/, "");
+    if (gnums.has(num)) continue;
+    if (/^\d{1,2}$/.test(num) && Number(num) <= 10 && !m[1] && !/^(%|percent)$/i.test((m[3] || "").trim())) continue;
+    out.push("figure: " + (m[1] + m[2] + " " + (m[3] || "")).trim());
+  }
+  return out;
+}
+function ipSplitSentences(text) { return String(text || "").split(/(?<=[.!?])\s+(?=[A-Z0-9"'(\[])/); }
+var IP_PRIOR_RE = /\b(prior art|state of the art|in the art|known|existing|conventional|traditional|traditionally|typically|commonly|widely|previously|others have|current(?:ly)?|today)\b/i;
+// Background: keep a sentence only when the supplied text carries it (at least 60 percent of its content words); label statements
+// about existing approaches as the inventor's, unverified.
+function ipGroundBackground(text, ground) {
+  var words = ipWordSet(ground), gl = String(ground || "").toLowerCase(), gnums = ipNums(ground), kept = [], removed = 0;
+  String(text || "").split("\n").forEach(function (line) {
+    ipSplitSentences(line).forEach(function (sn) {
+      if (!sn.trim()) return;
+      var cw = (sn.toLowerCase().match(/[a-z][a-z-]{4,}/g) || []);
+      var hit = cw.filter(function (w) { return words.has(w) || words.has(w.replace(/(ing|ed|es|s)$/, "")); }).length;
+      var unsupported = ipSentenceProblems(sn, gl, gnums).length > 0 || (cw.length >= 3 && hit / cw.length < 0.6);
+      if (unsupported) { removed++; return; }
+      if (IP_PRIOR_RE.test(sn) && sn.indexOf("not verified against the prior art") < 0) sn = sn.replace(/\s+$/, "") + IP_PRIOR_LABEL;
+      kept.push(sn);
+    });
+  });
+  return { text: kept.length ? kept.join(" ") : IP_BACKGROUND_NONE, removed: removed };
+}
+function ipGroundNarrative(text, ground) {
+  var gl = String(ground || "").toLowerCase(), gnums = ipNums(ground), removed = 0;
+  var lines = String(text || "").split("\n").map(function (line) {
+    if (!line.trim()) return line;
+    var lead = (line.match(/^\s*(?:[-*+]\s+|\d{1,2}[.)]\s+)?/) || [""])[0], kept = [];
+    ipSplitSentences(line.slice(lead.length)).forEach(function (sn) { if (ipSentenceProblems(sn, gl, gnums).length) removed++; else kept.push(sn); });
+    return kept.length ? lead + kept.join(" ") : "";
+  });
+  return { text: lines.join("\n").replace(/\n{3,}/g, "\n\n").trim(), removed: removed };
+}
+// Claims: a claim reciting an unsupported figure or identifier goes, and so does every claim that depends on it.
+function ipGroundClaims(text, ground) {
+  var gl = String(ground || "").toLowerCase(), gnums = ipNums(ground);
+  var lines = String(text || "").split("\n"), claims = [], loose = [];
+  lines.forEach(function (line) {
+    var m = line.match(/^\s*\**\s*(\d{1,3})\s*[.)]/);
+    if (m) claims.push({ n: Number(m[1]), text: line, dead: false, deps: (line.match(/\bclaims?\s+(\d+)/gi) || []).map(function (x) { return Number(x.replace(/\D/g, "")); }) });
+    else if (claims.length) claims[claims.length - 1].text += "\n" + line;
+    else loose.push(line);
+  });
+  if (!claims.length) return { text: text, removedClaims: [], problems: [] };
+  var problems = [];
+  claims.forEach(function (c) { var p = ipSentenceProblems(c.text, gl, gnums); if (p.length) { c.dead = true; problems.push("claim " + c.n + ": " + p.slice(0, 2).join(", ")); } });
+  var changed = true;
+  while (changed) { changed = false; claims.forEach(function (c) { if (!c.dead && c.deps.some(function (d) { return claims.some(function (o) { return o.n === d && o.dead; }); })) { c.dead = true; changed = true; problems.push("claim " + c.n + ": depends on a removed claim"); } }); }
+  return { text: loose.concat(claims.filter(function (c) { return !c.dead; }).map(function (c) { return c.text; })).join("\n").trim(), removedClaims: claims.filter(function (c) { return c.dead; }).map(function (c) { return c.n; }), problems: problems };
+}
+// Applies the checks to the parsed sections. `ground` is the inventor's text: title, field, description and mechanism card values.
+function ipGroundSections(sections, ground) {
+  var out = Object.assign({}, sections), notes = [];
+  if (out.background !== undefined) {
+    var b = ipGroundBackground(out.background, ground); out.background = b.text;
+    if (b.removed) notes.push(b.removed + " Background sentence(s) removed: the description you supplied does not state them. Add the problem and the approaches you know of, in your own words.");
+  }
+  ["summary", "detailed_description", "abstract", "technical_field"].forEach(function (k) {
+    if (!out[k]) return;
+    var r = ipGroundNarrative(out[k], ground); out[k] = r.text;
+    if (r.removed) notes.push(r.removed + " sentence(s) removed from " + k.replace(/_/g, " ") + ": each carried a figure, identifier or citation that is not in your description.");
+  });
+  if (out.raw) { out.raw = ipGroundNarrative(out.raw, ground).text; out.claims = out.raw; }
+  else if (out.claims) {
+    var c = ipGroundClaims(out.claims, ground); out.claims = c.text;
+    if (c.removedClaims.length) notes.push("Claim(s) " + c.removedClaims.join(", ") + " removed (" + c.problems.join("; ") + "). Give the missing values in your description, redraft, and renumber the remaining claims before filing.");
+  }
+  out.declaration = IP_DECLARATION;
+  if (notes.length) out.support_gaps = (out.support_gaps ? out.support_gaps + "\n" : "") + notes.map(function (n) { return "- " + n; }).join("\n");
+  Object.defineProperty(out, "__grounding", { value: notes, enumerable: false });
+  if (sections && sections.__attempts) Object.defineProperty(out, "__attempts", { value: sections.__attempts, enumerable: false });
+  return out;
+}
+// ---- IPG-END ----
 async function draftDisclosure(env, { title, technicalField, description, ragContext, mechanism }) {
-  const ragText = ragContext.length > 0 ? ragContext.map(
-    (r, i) => `EXAMPLE ${i + 1}: "${r.title}" [field: ${r.technical_field || "n/a"}] \u2014 ${(r.disclosure_text || "").slice(0, 500)}`
-  ).join("\n\n") : "No similar disclosures found in the database.";
-  const prompt = `You are an expert US patent drafter. Write a professional US Provisional Patent Disclosure based on the inventor's description below. Use the provided example disclosures as style references.
+  const structure = ipStructureReference(ragContext);
+  const structureText = structure.length ? structure.join("\n") : "No similar disclosures found in the database.";
+  const prompt = `You are an expert US patent drafter. Write a professional US Provisional Patent Disclosure from the inventor's description below, and only from it.
 
 ## INVENTOR'S DESCRIPTION
 Title: ${title}
 Technical Field: ${technicalField || "Not specified"}
 Description: ${description}${mechanismBlock(mechanism)}
 
-## EXAMPLE DISCLOSURES (for style reference only \u2014 do NOT copy content)
-${ragText}
+## STRUCTURE REFERENCE (section headings used by similar disclosures; structure only, it carries no content)
+${structureText}
 
 ## REQUIRED OUTPUT FORMAT
 Output the disclosure with these numbered sections:
@@ -487,13 +605,13 @@ Output the disclosure with these numbered sections:
 [1-3 sentences describing the field of the invention]
 
 ## 3. BACKGROUND
-[2-4 sentences describing the problem or limitation this invention addresses]
+[2-4 sentences stating the problem or limitation, using only what the inventor wrote. State no prior art, known product, publication, patent, date or figure that the inventor did not name. A statement about existing approaches must be one the inventor made, and ends with "(Stated by the inventor; not verified against the prior art.)". If the description states no problem, write "Not stated by the inventor."]
 
 ## 4. SUMMARY OF THE INVENTION
-[4-8 sentences summarizing what the invention is and its novelty]
+[4-8 sentences summarizing what the invention is and the effect the description states. Make no statement that it is new, better or unique.]
 
 ## 5. DETAILED DESCRIPTION
-[5-12 sentences describing how the invention works, its components, and implementation details. Include enough detail for someone skilled in the art to understand and reproduce it.]
+[5-12 sentences describing how the invention works, its components, and implementation details. Use only components, steps, values and ranges that the description or mechanism card states; where detail is missing, say it is not described and list it under SUPPORT GAPS. Add no number, standard or named product that the inventor did not give.]
 
 ## 6. CLAIMS
 [List 8-15 numbered patent claims in standard USPTO format:
@@ -501,19 +619,20 @@ Output the disclosure with these numbered sections:
 - Subsequent claims should add specific limitations and dependencies
 - Use "A method/system/apparatus comprising:" format for independent claims
 - Use "The method of claim X, further comprising:" for dependent claims
-- Include claims covering: method, system, apparatus, and computer-readable medium]
+- Use a claim category (method, system, apparatus, computer-readable medium) only where the description supports it
+- Every limitation in a claim, including every number, comes from the description]
 
 ## 7. ABSTRACT
-[150-250 word abstract summarizing the invention, its technical contribution, and key advantage]
+[150-250 word abstract summarizing the invention, what the description states it does, and the advantage the description states]
 
 ## 8. INVENTOR DECLARATION
-[A statement that the inventor believes this to be a novel invention]
+[Write exactly: ${IP_DECLARATION}]
 
 ## 9. SUPPORT GAPS
 [A bullet list for the inventor, not for filing: each feature, variant or claim element that the description mentions but does not explain well enough for a skilled person to make and use it; each drawing the specification should include and what it should show; and any statement in the draft that goes beyond what the inventor described. Be specific; if there are none, say so.]
 
 IMPORTANT:
-- Write ORIGINAL content based ONLY on the inventor's description \u2014 do NOT copy from the examples.
+- Write ONLY from the inventor's description and mechanism card. Your memory is not a source: add no prior art, publication, patent number, standard, product, date or figure that the inventor did not state.
 - Use formal patent language appropriate for USPTO filings.
 - Be specific and concrete \u2014 avoid vague generalities.
 - The claims are the most important section \u2014 make them detailed and defensible.
@@ -530,7 +649,7 @@ IMPORTANT:
     const ta = Date.now();
     const opts = {
       messages: [
-        { role: "system", content: "You are an expert US patent attorney and drafter. Write formal, precise, and defensible patent disclosures. Output only the disclosure text \u2014 no preamble or meta-commentary.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; expose at least one concrete limitation or failure mode in the drafted output (e.g. claims that may lack enablement or written-description support); label uncertainty, never inflate confidence." },
+        { role: "system", content: "You are an expert US patent attorney and drafter. Write formal, precise, and defensible patent disclosures. Output only the disclosure text \u2014 no preamble or meta-commentary.\n\nADVERSARIAL-REASONING-1 (anti-sycophancy / anti-confirmation-bias): never flatter, defer, or agree with the user or a source merely because it was stated - when evidence contradicts the premise, say so plainly with counter-evidence; expose at least one concrete limitation or failure mode in the drafted output, in the SUPPORT GAPS section; label uncertainty, never inflate confidence." },
         { role: "user", content: prompt }
       ],
       max_tokens: 8e3,
@@ -569,7 +688,9 @@ IMPORTANT:
   if (!text) { const e = new Error(`All models failed. Last error: ${lastError}`); e.attempts = attempts; throw e; }
   const parsed = parseDisclosureSections(text);
   Object.defineProperty(parsed, "__attempts", { value: attempts, enumerable: false });
-  return parsed;
+  // IPATENT-GROUND-1: check the draft against the inventor's own text before anyone sees it.
+  const ground = [title, technicalField, description, mechanism ? MECH_FIELDS.map((f) => mechanism[f[0]]).join("\n") : ""].join("\n");
+  return ipGroundSections(parsed, ground);
 }
 __name(draftDisclosure, "draftDisclosure");
 __name2(draftDisclosure, "draftDisclosure");
@@ -706,7 +827,7 @@ __name222(generateHtmlDocument, "generateHtmlDocument");
 var MECH_FIELDS = [
   ["what_it_is", "What it is", "the structure: the parts or steps and how they connect"],
   ["what_it_does", "What it does", "the technical effect, measurable, with units or a comparison to the known approach"],
-  ["how_it_works", "How it works", "the causal principle (physical, chemical or information-theoretic) that makes the structure produce the effect; for software, which resource (time, memory, bandwidth, energy, error rate) changes and why"],
+  ["how_it_works", "How it works", "the causal principle that makes the structure produce the effect, and which quantity changes and why"],
   ["distinction", "The distinction that makes the difference", "the one feature without which the effect disappears"],
   ["nearest_known", "Nearest known approach", "the closest existing approach the inventor names, and how it differs"],
   ["window_holds", "Operating window", "the parameter ranges over which the mechanism still works"],
@@ -752,7 +873,7 @@ function mechanismHoles(card) {
     if (card[f[0]] === MECH_NOT_STATED) holes.push({ field: f[0], why: f[1] + " is not stated: " + f[2] + "." });
   }
   if (card.what_it_does !== MECH_NOT_STATED && !MECH_MEASURABLE.test(card.what_it_does)) holes.push({ field: "what_it_does", why: "The effect is not measurable as written: give a number, a unit or a comparison with the known approach." });
-  if (card.distinction !== MECH_NOT_STATED && card.nearest_known === MECH_NOT_STATED) holes.push({ field: "distinction", why: "The distinction cannot be checked without the nearest known approach: a feature that is already common in the field (for example a known material or algorithm on its own) does not make the difference. Name what exists and what yours adds to it." });
+  if (card.distinction !== MECH_NOT_STATED && card.nearest_known === MECH_NOT_STATED) holes.push({ field: "distinction", why: "The distinction cannot be checked without the nearest known approach: a feature that is already common in the field does not make the difference. Name what exists and what yours adds to it." });
   if (card.how_it_works !== MECH_NOT_STATED && card.how_it_works.split(/\s+/).length < 8) holes.push({ field: "how_it_works", why: "The mechanism is too short to teach a skilled person how the structure produces the effect." });
   return holes;
 }
