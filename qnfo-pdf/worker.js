@@ -14929,7 +14929,8 @@ function renderPaperHTML(md, opts) {
   const affiliation = meta.affiliation || opts.affiliation || "";
   const date = meta.date || opts.date || "";
   const version2 = meta.version || opts.version || "";
-  const doi = meta.doi || meta.DOI || opts.doi || "";
+  const rawDoi = String(meta.doi || meta.DOI || opts.doi || "");
+  const doi = /10\.5281\/|zenodo/i.test(rawDoi) ? "" : rawDoi;
   const abstract = meta.abstract || opts.abstract || "";
   const keywords = Array.isArray(meta.keywords) ? meta.keywords : meta.keywords ? [meta.keywords] : [];
   const license = meta.license || opts.license || "";
@@ -14981,7 +14982,7 @@ function renderFullHTML(md, opts) {
 __name(renderFullHTML, "renderFullHTML");
 
 // worker.js
-var VERSION = "1.1.0-math-browser-check"; // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
+var VERSION = "1.1.1-no-zenodo-doi"; // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

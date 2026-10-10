@@ -268,7 +268,8 @@ function renderPaperHTML(md, opts) {
   const affiliation = meta.affiliation || opts.affiliation || "";
   const date = meta.date || opts.date || "";
   const version = meta.version || opts.version || "";
-  const doi = meta.doi || meta.DOI || opts.doi || "";
+  const rawDoi = String(meta.doi || meta.DOI || opts.doi || "");
+  const doi = /10\.5281\/|zenodo/i.test(rawDoi) ? "" : rawDoi;
   const abstract = meta.abstract || opts.abstract || "";
   const keywords = Array.isArray(meta.keywords) ? meta.keywords : (meta.keywords ? [meta.keywords] : []);
   const license = meta.license || opts.license || "";
