@@ -45,7 +45,7 @@ function setup(o) {
   } };
   globalThis.fetch = async (url, init) => {
     const u = String(url); calls.fetch.push(u);
-    if (u.includes("export.arxiv.org")) return new Response(atom([paper, { id: "2610.05555", title: "Other", authors: ["C D"], abstract: "Something else." }]), { status: 200 });
+    if (new URL(u).hostname === "export.arxiv.org") return new Response(atom([paper, { id: "2610.05555", title: "Other", authors: ["C D"], abstract: "Something else." }]), { status: 200 });
     if (u.includes("createSession")) return new Response(JSON.stringify({ accessJwt: "j", did: "did:plc:x" }), { status: 200 });
     if (u.includes("createRecord")) return new Response(JSON.stringify({ uri: "at://x/" + calls.fetch.length, cid: "c" }), { status: 200 });
     return new Response("nf", { status: 404 });
