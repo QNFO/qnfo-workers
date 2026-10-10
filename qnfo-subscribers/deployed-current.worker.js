@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.1.8-digest-links-utm"; // 1.1.8 DIGEST-LINKS-UTM-1 (2026-10-06, pillar reach; transformation lever T7.10): every paper link in the
+var VERSION = "1.1.9-no-zenodo-doi"; // 1.1.8 DIGEST-LINKS-UTM-1 (2026-10-06, pillar reach; transformation lever T7.10): every paper link in the
 // weekly digest carries utm_source=digest&utm_medium=email&utm_campaign=<slug> and the confirmation mail's corpus link
 // utm_source=confirm&utm_medium=email&utm_campaign=corpus, so a digest read becomes a measured visit once qnfo-gateway 3.10.0
 // (UTM-CLICK-LEDGER-1, T7.9) counts tagged page loads into reach_signals source utm (channel digest, campaign slug). No
@@ -165,7 +165,7 @@ function digestText(papers, token) {
   lines.push("");
   for (let i = 0; i < papers.length; i++) {
     const p = papers[i];
-    const doi = p.doi || p.zenodo_doi || "";
+    const doi = /10\.5281\/|zenodo/i.test(String(p.doi || "")) ? "" : String(p.doi || "");
     lines.push(i + 1 + ". " + String(p.title || "").replace(/\s+/g, " ").trim());
     const meta = [];
     if (p.created_at) meta.push(fmtDate(p.created_at));
@@ -319,7 +319,7 @@ async function runDigest(env, opts) {
   let papers = [];
   try {
     const pr = await env.LIVING.prepare(
-      "SELECT slug, title, created_at, doi, zenodo_doi FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') AND created_at >= ?1 ORDER BY created_at DESC LIMIT " + PAPER_CAP
+      "SELECT slug, title, created_at, doi FROM papers WHERE slug IS NOT NULL AND status NOT IN ('duplicate','kg-backfill','quarantined') AND created_at >= ?1 ORDER BY created_at DESC LIMIT " + PAPER_CAP
     ).bind(since).all();
     papers = pr && pr.results || [];
   } catch (e) {
