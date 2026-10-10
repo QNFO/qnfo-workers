@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-10 08:51:45",
+  "audited_at": "2026-10-10 09:28:48",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -523,12 +523,12 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.14.0-doi-scrub",
+        "version": "3.14.1-doi-scrub",
         "worker": "qnfo-gateway"
       },
       {
         "dir": "qnfo-infra",
-        "version": "1.3.2-codeagent",
+        "version": "1.3.3-doi-scrub",
         "worker": "qnfo-infra"
       },
       {
@@ -543,12 +543,12 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.10.0-spare-domains",
+        "version": "1.10.1-doi-scrub",
         "worker": "qnfo-lifecycle"
       },
       {
         "dir": "qnfo-memory-mcp",
-        "version": "2.0.5-capability-contract",
+        "version": "2.0.6-doi-scrub",
         "worker": "qnfo-memory-mcp"
       },
       {
@@ -563,7 +563,7 @@
       },
       {
         "dir": "qnfo-pdf",
-        "version": "1.1.1-no-zenodo-doi",
+        "version": "1.1.2-doi-scrub",
         "worker": "qnfo-pdf"
       },
       {
@@ -573,12 +573,12 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.11.0-grounding",
+        "version": "0.11.1-doi-scrub",
         "worker": "qnfo-social"
       },
       {
         "dir": "qnfo-subscribers",
-        "version": "1.1.9-no-zenodo-doi",
+        "version": "1.1.10-doi-scrub",
         "worker": "qnfo-subscribers"
       },
       {
@@ -1172,9 +1172,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.14.0-doi-scrub",
+      "before": "3.14.1-doi-scrub",
       "http": 200,
-      "live": "3.14.0-doi-scrub",
+      "live": "3.14.1-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1212,9 +1212,9 @@
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
-      "before": "1.3.2-codeagent",
+      "before": "1.3.3-doi-scrub",
       "http": 200,
-      "live": "1.3.2-codeagent",
+      "live": "1.3.3-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-infra"
@@ -1244,17 +1244,17 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.10.0-spare-domains",
+      "before": "1.10.1-doi-scrub",
       "http": 200,
-      "live": "1.10.0-spare-domains",
+      "live": "1.10.1-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
     },
     "qnfo-memory-mcp": {
-      "before": "2.0.5-capability-contract",
+      "before": "2.0.6-doi-scrub",
       "http": 200,
-      "live": "2.0.5-capability-contract",
+      "live": "2.0.6-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-memory-mcp"
@@ -1316,9 +1316,9 @@
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
-      "before": "1.1.1-no-zenodo-doi",
+      "before": "1.1.2-doi-scrub",
       "http": 200,
-      "live": "1.1.1-no-zenodo-doi",
+      "live": "1.1.2-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-pdf"
@@ -1412,17 +1412,17 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.11.0-grounding",
+      "before": "0.11.1-doi-scrub",
       "http": 200,
-      "live": "0.11.0-grounding",
+      "live": "0.11.1-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
     },
     "qnfo-subscribers": {
-      "before": "1.1.9-no-zenodo-doi",
+      "before": "1.1.10-doi-scrub",
       "http": 200,
-      "live": "1.1.9-no-zenodo-doi",
+      "live": "1.1.10-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-subscribers"
