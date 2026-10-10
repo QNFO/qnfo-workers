@@ -1,3 +1,4 @@
+var VERSION = "0.2.5-ground"; // ERRATA-GROUND-1 (2026-10-10): the classifier's paper_doi must occur in the email (version constant added so the bump guard can see the change)
 const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
 const NOISE = /bounce|dmarcreport|dmarc|cfbounces|noreply|no-reply|sciforum|evalsignal|wildapricot|glintopenaccess|primeoa|esciencelibrary|premiersciencenetwork|theopenresearchnetwork|gitlab|soverin|microsoft\.com/i;
 

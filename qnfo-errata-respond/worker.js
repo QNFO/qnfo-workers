@@ -1,3 +1,4 @@
+var VERSION = "0.5.0-ground"; // ERRATA-GROUND-1 (2026-10-10): corrections state only what the errata email or the paper states
 const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
 
 function json(data, status) {

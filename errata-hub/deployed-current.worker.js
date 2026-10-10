@@ -5,7 +5,7 @@ var VERSION = "1.5.0-ground"; // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
-var WATCH_VERSION = "0.2.4-internal-sweep";
+var WATCH_VERSION = "0.2.5-ground";
 var RESPOND_VERSION = "0.5.0-ground";
 var PUBLISH_VERSION = "0.8.0-publish-gate";
 // ERRATA-HUB-CRONS-UNDECLARED-1 (2026-10-02, #1747, pillar research): wrangler.toml now declares the three hourly members
