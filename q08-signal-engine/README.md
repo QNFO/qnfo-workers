@@ -98,7 +98,18 @@ Every HTML page (piece + index) loads MathJax 3 `tex-svg` with a jsDelivr→unpk
 ## Sources & further reading
 Each piece renders a footer from `published_pieces.sources_json` (`[{label,url}]`). `persistPiece()` writes it from the originating signal: GitHub repo / arXiv / article host + Hacker News discussion link.
 
+## Accuracy (Q08-VERIFY-1, 0.10.0)
+Owner directive 2026-10-10: every claim in a q08 piece is independently verified; nothing unverifiable is published. A 2026-10-10 essay stated invented history (goldsmith "trial stamps", a patent-medicine brand, a car model, a statute). Cause: the writer prompt asked for named historical precedents "from real, verifiable history", i.e. from the model's memory, and nothing checked them.
+- **Source material only.** The writer is given the signal and the fetched text of the linked article (`fetchArticleText`) and told its memory is not a source. Outside cases are allowed only as labelled hypotheticals that name no real person, company, product, date or number.
+- **Deterministic check** (`groundingProblems`): every capitalised name, year and figure in the draft must occur in the source material (small counts, months and days excepted; in forecasts also future years, probabilities and horizons).
+- **Two-family review** (`factCheck`): two reviewers from model families other than the writer's list every real-world claim the source does not state; one unsupported claim fails the piece. One corrective revision (`verifyAndRevise`) is allowed, then `gate_failed` ("accuracy: ..."). Fewer than two valid verdicts is a failure, not a pass.
+- **Audit and retraction** (`auditPublished`, 4 pieces per generation cron): a published piece with no `q08_audits` row is checked the same way; a failure is retracted (`retractPiece`): `/p/<slug>` answers 410 with a public notice, the piece leaves the index, feed, sitemap, `/api/pieces`, the citation files and the Forecast Ledger, queued social rows are suppressed, and forecasts built on it are retracted and voided. `/retractions` and `/api/retractions` list them. To reverse a retraction, delete its `q08_retractions` row and set its `q08_audits` row to `pass` only after a clean check.
+- Forecasts are built only from essays whose audit is `pass`.
+- Tables `q08_retractions`, `q08_audits` (created by the worker on first use; the migration runner only reaches qnfo-audit). Tests: `verify.test.mjs`.
+Known limits: reviewers are LLMs and can miss a claim; the deterministic check catches names, years and figures, not a wrongly stated relation between supported facts. The source article can be wrong or unreachable (then only the signal grounds the piece, which is stricter).
+
 ## Version history
+- **v0.10.0** (2026-10-10) — Q08-VERIFY-1 accuracy layer (above).
 - **v0.6.2** (2026-09-14) — RSS `renderFeed` strips raw LaTeX delimiters from descriptions.
 - **v0.6.1** (2026-09-14) — safe math delimiters (dropped single-`$`); Q08_DIRECTIVE locks `\(...\)`/`\[...\]`; currency-corruption adversarial test passes.
 - **v0.6.0** (2026-09-14) — MathJax rendering + Sources footer + math-aware `mdEmph()` + `sources_json` persistence.

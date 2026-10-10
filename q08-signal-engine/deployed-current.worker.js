@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.9.0"; // 0.9.0 Q08-FORECAST-1 (pillar: reach): forecast mode. Every FORECAST_EVERY pieces the engine writes a most-likely scenario narrative from a published essay's mechanism (dated causal sequence, rival scenarios with probabilities, leading indicators, a checkable resolution condition), stored in q08_forecasts, settled by a two-family judge panel when the horizon passes and scored (Brier) on /forecasts and /api/forecasts; undecidable ones go void in public after 4 checks. // 0.8.13-codeagent 0.8.12 Q08-PHRASE-REVISE-1: a phrase-level-only gate failure is retried as a revision of the same draft, not a rewrite from scratch (#2034); 0.8.11 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the attempt-bound note no longer cites a budget stop; the bound is publishing cadence. // 0.8.10 Q08-STALL-METRIC-1 writes q08_hours_since_last_piece (#2034); 0.8.9 unknown paths 404 noindex (no soft 404); 0.8.8 Q08-SITEMAP-INDEXABLE-1: canonical home loc, no feed in the sitemap, www -> apex 301; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.10.0"; // 0.10.0 Q08-VERIFY-1 (pillar: reach, owner directive 2026-10-10: q08 content is 100% accurate and fact-checked): the writer prompts no longer ask for history from memory; a piece is published only when every name, year and figure is in its source material (signal plus the fetched article) and two reviewers from other model families find no unsupported claim (a reviewer outage fails closed); published pieces are re-audited each cron and a failure is retracted in public (410 notice, /retractions, out of index, feed, sitemap, APIs and social; forecasts built on it too). // 0.9.0 Q08-FORECAST-1 (pillar: reach): forecast mode. Every FORECAST_EVERY pieces the engine writes a most-likely scenario narrative from a published essay's mechanism (dated causal sequence, rival scenarios with probabilities, leading indicators, a checkable resolution condition), stored in q08_forecasts, settled by a two-family judge panel when the horizon passes and scored (Brier) on /forecasts and /api/forecasts; undecidable ones go void in public after 4 checks. // 0.8.13-codeagent 0.8.12 Q08-PHRASE-REVISE-1: a phrase-level-only gate failure is retried as a revision of the same draft, not a rewrite from scratch (#2034); 0.8.11 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the attempt-bound note no longer cites a budget stop; the bound is publishing cadence. // 0.8.10 Q08-STALL-METRIC-1 writes q08_hours_since_last_piece (#2034); 0.8.9 unknown paths 404 noindex (no soft 404); 0.8.8 Q08-SITEMAP-INDEXABLE-1: canonical home loc, no feed in the sitemap, www -> apex 301; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -372,7 +372,7 @@ var Q08_DIRECTIVE = [
   "You are the writer for q08.org \u2014 long-form essays on the recurring systems that make things break, for a reader who wants to see a present incident as one instance of a larger, connected picture. The proper nouns of today are the lead-in, not the destination; the bigger system is the story. Not about technology or history per se \u2014 about the connected world they are part of.",
   "Your input is a friction signal from a technical community debate. Your output is a self-contained essay that a reader with no knowledge of the source thread can follow.",
   "",
-  "SYSTEMIC, NOT SPECIFIC \u2014 HISTORY RHYMES: the incident is a probe, never the subject. Extract the universal system the incident instantiates \u2014 the specific mechanism that would produce the same breakdown in any domain and any century. Then show it is universal by connecting it across domains and, where a real recurrence fits, across history. Historical precedent is a suggestion, not a requirement \u2014 use a well-known recurrence when it genuinely illuminates the system, but never force a rhyme, never fabricate a historical event to create one, and never let the search for a precedent crowd out the argument itself. The nouns change \u2014 a guild\u2019s quality mark becomes a verification badge, a patent-medicine advertisement becomes a sponsored result \u2014 the system does not. Your central claim must survive the disappearance of this specific incident. An essay that stays inside its incident, or that reaches for a metaphor instead of a true historical recurrence, is rejected.",
+  "SYSTEMIC, NOT SPECIFIC: the incident is a probe, never the subject. Extract the universal system the incident instantiates \u2014 the specific mechanism that would produce the same breakdown in any domain. Show it is general by REASONING about how the same incentive or information structure would behave elsewhere, in plain words and without naming outside events. Your central claim must survive the disappearance of this specific incident. An essay that stays inside its incident is rejected, and so is one that reaches outside the source by asserting facts the source does not contain.",
   "",
   "REGISTER: cold structural objectivity. An engineer describing a mechanism, not a consultant describing a market. Write the way a precise bug report reads: specific, unimpressed, exact.",
   "",
@@ -380,17 +380,17 @@ var Q08_DIRECTIVE = [
   "",
   "OPENING: in one or two sentences name the incident, then pivot immediately to the system it reveals. The incident earns at most one paragraph; the reader should know within the first paragraph what universal dynamic is at stake, not merely what specific product broke. Never open on an aphorism or a general claim; never dwell on the incident.",
   "",
-  "CONCRETENESS ACROSS ERAS: name the real things \u2014 but across history, not only in the present. The signal\u2019s particulars are one instance; the essay earns its length by naming the OTHER eras and institutions where the same system operated (a medieval guild\u2019s forged marks, a nineteenth-century patent-medicine boom, a twentieth-century ratings failure). Anonymizing the material is a register failure; refusing to leave the present is a depth failure. A sentence without a specific referent is a sentence to rewrite.",
+  "CONCRETENESS FROM THE SOURCE: name the real things the SOURCE MATERIAL names \u2014 its products, people, organisations, figures and quotations, exactly as given. Elsewhere, be concrete by describing the mechanism step by step (who does what, which information is missing, where it breaks), never by adding named outside examples. When you want a second case, build a clearly labelled hypothetical that names no real person, company, product, date or number ('Suppose a regional lender…') and say it is hypothetical. A sentence without a specific referent is a sentence to rewrite; a specific referent that is not in the source material is a sentence to delete.",
   "",
-  "FACTS (hard, non-negotiable): every specific fact \u2014 number, price, percentage, count, identifier, channel ID, database schema, SQL query, or log excerpt \u2014 must come from the SIGNAL, verbatim or as a direct paraphrase. The signal is your only source of specifics about the incident; historical precedents are drawn from real, verifiable history. If the signal gives no figure, write the claim in general terms ('the score is computed from static signals') and never supply a value. Inventing a number, a channel ID, a dollar amount, a database schema, or a log excerpt to sound concrete is the single worst failure this publication can commit \u2014 a reader who checks will find nothing behind it. A general honest sentence always beats a specific fabricated one. Before writing any number, ask: is this exact figure in the signal? If not, write the general claim instead.",
+  "FACTS (hard, non-negotiable, and checked): every claim about the real world \u2014 an event, a date, a person, an organisation, a product, a law, a number, a price, a percentage, a count, an identifier, a quotation, a study, a historical episode \u2014 must be stated in the SOURCE MATERIAL you are given (the signal and the linked article text), verbatim or as a direct paraphrase. Your own memory is NOT a source: do not add historical precedents, case studies, statistics, dates, names of people or companies, laws, institutions, product details or 'studies show' from memory, however sure you are. If the source does not state it, delete it or turn it into labelled hypothetical reasoning with no real names. Every draft is fact-checked sentence by sentence against the source material by independent reviewers from other model families; a single unsupported claim means the piece is not published. A general honest sentence always beats a specific unsupported one. Before writing any name, date or number, ask: is this exact item in the source material? If not, do not write it.",
   "",
   "PROSE, NOT SCHEME: write prose, not a specification. Never enumerate with '(1) ... (2) ...' in running text, and never write like a design document; the reader is a person, not a reviewer.",
   "",
   "NO SECTION HEADERS: the essay is continuous prose. Do not use Markdown section headers (## or ###) anywhere in the body \u2014 paragraph breaks only. A header is a crutch; if you need one, the prose has failed to carry the argument.",
   "",
-  "PRECEDENT, NOT METAPHOR: a historical precedent is a real, well-known recurrence of the same system \u2014 a named era and institution where the identical incentive or structural dynamic operated. Never fabricate a historical event or date to force a rhyme; a reader who checks must find it. A vague \u2018throughout history\u2019 with no named instance is not a precedent. A metaphor (\u2018it is like a telescope\u2019) is decorative and banned.",
+  "NO BORROWED HISTORY: do not cite historical episodes, past scandals, earlier industries, named laws, named institutions or named products that are not in the source material. A reader who checks must find every fact; the safest way to be checkable is to assert only what the source says and to reason openly about what follows from it. A metaphor ('it is like a telescope') is decorative and banned; reasoning from the stated facts to a general mechanism is the job.",
   "",
-  "CROSS-DOMAIN SYNTHESIS: the essay\u2019s spine is the universal system, and you must show it operating in genuinely different domains \u2014 engineering, economics, biology, law, politics, infrastructure, finance, military history \u2014 not as a list of analogies but as evidence the system is domain-independent. A decorative stock prop is banned; a historical recurrence of the same mechanism is required. Breadth is the point: an essay that never leaves its source domain has not found the signal.",
+  "CROSS-DOMAIN REASONING: the essay\u2019s spine is the universal system. Show that it is domain-independent by reasoning about how the same incentive, delay or information gap would play out in other kinds of settings (a lender, a hospital, a logistics network, a court), described generically as labelled hypotheticals with no real names, dates or figures. Breadth of reasoning is the point, not breadth of cited facts.",
   "",
   "ENDING: end at the point of maximum implication. A closing paragraph that describes a healed system is forbidden. If a fix exists, fold it into the argument; the final sentences leave the reader with the sharpest unresolved fact \u2014 not a summary, not a resolution, not a flourish.",
   "",
@@ -412,13 +412,13 @@ var Q08_DIRECTIVE = [
 ].join("\n");
 
 var REGISTER_EXEMPLAR = [
-  "# The rating agency that switched who paid",
+  "# A grade that stopped meaning what it said",
   "",
-  "Until the early 1970s the big credit rating agencies sold their ratings to investors. Then they switched: the company issuing the bond paid for its own rating. The letter grades looked the same on the day of the switch. What had changed was who could take their business elsewhere. An agency that rated a bond too harshly lost the issuer to a competitor, and the fee with it. Investors kept reading the grade as a judgement made on their behalf, and nothing on the page told them the customer had changed. Years later the top grade sat on thousands of mortgage securities that lost most of their value. The agencies had not faked a number. They had learned which answer kept the client.",
+  "Suppose a company that scores borrowers changes who pays for the score: first the lenders who read it, then the borrowers it rates. The letter grades look the same on the day of the switch. What has changed is who can take their business elsewhere. A scorer that grades a borrower too harshly loses that borrower to a competitor, and the fee with it. Lenders keep reading the grade as a judgement made on their behalf, and nothing on the page tells them the customer has changed. The scorer need not fake a single number. It only has to learn which answer keeps the client. (This is a hypothetical, named here to show a mechanism; it describes no real company.)",
   "",
-  "# The freight office that priced its own risk",
+  "# A freight office that priced its own risk",
   "",
-  "A shipping line asked its own freight office to set the insurance premium on the cargo it carried. The office priced each consignment from the manifest, and the manifest was written by the same clerks who loaded the hold. Nobody falsified a document; the incentive did the work. A consignment that was awkward to stow was written up as routine, because routine cargo cleared faster. The premium fell, the line won more contracts, and the losses surfaced only when a hull was opened in dry dock two seasons later. The party who could have measured the risk was the party paid to understate it.",
+  "Suppose a shipping line asks its own freight office to set the insurance premium on the cargo it carries. The office prices each consignment from the manifest, and the manifest is written by the same clerks who loaded the hold. Nobody falsifies a document; the incentive does the work. A consignment that is awkward to stow is written up as routine, because routine cargo clears faster. The premium falls, the line wins more contracts, and the losses surface only when a hull is opened in dry dock. The party who could measure the risk is the party paid to understate it. (A hypothetical, not a report of any real line.)",
 ].join("\n");
 
 // Only a reader-proven structure that is ALSO in-register may serve as an exemplar.
@@ -476,7 +476,7 @@ var READER_PROMPT = [
   "You are a busy, intelligent reader who has never heard of this site and owes it nothing. Read the essay below the way you read anything you found by chance: you stop at the first sentence that wastes your time.",
   "Answer with exactly one JSON object and nothing else:",
   "{\"would_read_to_end\": true or false, \"score\": 1 to 5 (5 = I would send it to a friend, 4 = worth the time, 3 = I would skim it, 1 = I stopped at the first paragraph), \"slop_tells\": [up to 3 short phrases copied from the essay that sound like generic machine prose], \"fix\": \"one sentence telling the writer what to change\"}",
-  "Judge: does it open with something concrete that happened? Can you state its claim in one sentence? Does every paragraph add a new fact or step, or only restate in abstract words? Are the words plain, or do role words ('the observer', 'the actor', 'the arrangement') and announcements of structure stand in for people doing things? Is the historical parallel specific and real, or a stock example? Be strict: a 4 must be earned."
+  "Judge: does it open with something concrete that happened? Can you state its claim in one sentence? Does every paragraph add a new fact or step, or only restate in abstract words? Are the words plain, or do role words ('the observer', 'the actor', 'the arrangement') and announcements of structure stand in for people doing things? Does it reason from the facts it states to a general mechanism, or does it lean on a stock example? Be strict: a 4 must be earned."
 ].join("\n");
 function parseReaderVerdict(text) {
   var m = String(text || "").match(/\{[\s\S]*\}/);
@@ -652,7 +652,7 @@ function buildPrompt(friction, fewShot, recentStructures, opts) {
   }
   var banned = opts && opts.banned || [];
   if (banned.length) {
-    parts.push("\n--- OVERUSED PRECEDENTS ON THIS SITE (BANNED: pick a different real case, or use none) ---");
+    parts.push("\n--- OVERUSED PRECEDENTS ON THIS SITE (BANNED: do not cite it) ---");
     parts.push(banned.map(function (b) { return b.label; }).join("; "));
   }
   var notes = opts && opts.ownerNotes || [];
@@ -664,6 +664,8 @@ function buildPrompt(friction, fewShot, recentStructures, opts) {
   parts.push("core_concept: " + friction.core_concept);
   parts.push("friction_point: " + friction.friction_point);
   parts.push("signal_strength: " + friction.signal_strength);
+  var art = opts && opts.article || "";
+  if (art) { parts.push("\n--- LINKED ARTICLE TEXT (source material, may be partial; facts may be taken from it) ---"); parts.push(String(art).slice(0, 6000)); }
   return parts.join("\n");
 }
 
@@ -852,7 +854,7 @@ function gate(text, banned) {
   if (tw.length >= 4 && tw.filter(function (w) { return /^[A-Z]/.test(w); }).length / tw.length >= 0.75) problems.push("Title Case title reads as a label, not a sentence: '" + title.slice(0, 60) + "'");
   if (/\b(?:signal_strength|friction_point|core_concept)\b|\bsignal strength (?:of|was|is|value)\s+[0-9.]+/i.test(text)) problems.push("pipeline metadata in the essay ('signal_strength', 'friction_point', 'core_concept' or a signal strength value) - open with what happened instead");
   if (banned && banned.length) {
-    for (var bp of banned) { if (bp.re.test(text)) { problems.push("overused precedent on this site: " + bp.label + " - use a different real case, or none"); break; } }
+    for (var bp of banned) { if (bp.re.test(text)) { problems.push("overused precedent on this site: " + bp.label + " - remove it"); break; } }
   }
   if (/\b(?:score|rating|ratio|reputation) of \d+\.\d+\b/i.test(body)) problems.push("invented decimal metric \u2014 no fabricated scores");
   if (/\b(?:channel|account|user|session) ID ['"][A-Za-z0-9_-]{6,}['"]/i.test(body)) problems.push("invented identifier \u2014 no fabricated IDs");
@@ -1073,6 +1075,7 @@ async function runLevels(env, a) {
 }
 async function generate(env) {
   var t0 = Date.now();
+  if (!(await ensureAccuracySchema(env))) return { ok: false, reason: "accuracy schema unavailable (publishing fails closed)" };
   // Daily cap check
   var dayCount = await env.DB.prepare(
     "SELECT COUNT(*) n FROM published_pieces WHERE published_at >= ?1"
@@ -1129,7 +1132,7 @@ async function generate(env) {
   }
   // Few-shot only from pieces with proven reader value (reads or verdicts); otherwise none.
   var exemplars = await env.DB.prepare(
-    "SELECT pp.structure_md FROM prompt_pool pp JOIN published_pieces p ON p.id = pp.piece_id WHERE pp.active = 2 AND (p.reads > 0 OR p.feedback_score > 0) ORDER BY pp.performance_score DESC, p.feedback_score DESC LIMIT 2"
+    "SELECT pp.structure_md FROM prompt_pool pp JOIN published_pieces p ON p.id = pp.piece_id WHERE pp.active = 2 AND p.slug NOT IN (SELECT slug FROM q08_retractions) AND (p.reads > 0 OR p.feedback_score > 0) ORDER BY pp.performance_score DESC, p.feedback_score DESC LIMIT 2"
   ).all();
   var fewShot = (exemplars.results || []).filter(function(r){ return exemplarOk(r.structure_md); });
   // Recent structures as divergence priming: the model must NOT repeat them.
@@ -1138,10 +1141,11 @@ async function generate(env) {
   ).all();
   var recentStructures = (recentRows.results || []).map(function(r){ return r.structure_md; });
   // Compose
-  var recentBodies = await env.DB.prepare("SELECT body_md FROM published_pieces ORDER BY published_at DESC LIMIT 8").all().catch(function () { return { results: [] }; });
+  var recentBodies = await env.DB.prepare("SELECT body_md FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 8").all().catch(function () { return { results: [] }; });
   var banned = overusedPrecedents((recentBodies.results || []).map(function (r) { return r.body_md; }), 2);
   var ownerNotes = await ownerDirectives(env);
-  var prompt = buildPrompt(friction, fewShot, recentStructures, { banned: banned, ownerNotes: ownerNotes });
+  var article = await fetchArticleText(story.url);
+  var prompt = buildPrompt(friction, fewShot, recentStructures, { banned: banned, ownerNotes: ownerNotes, article: article });
   var piece  = await compose(env, prompt, banned);
   // Gate \u2014 one corrective retry on failure
   var gateResult = gate(piece.text, banned);
@@ -1169,6 +1173,15 @@ async function generate(env) {
   var lv = await runLevels(env, { piece: piece, prompt: prompt, banned: banned, seedText: story.title || "", gateResult: gateResult });
   piece = lv.piece; gateResult = lv.gateResult;
   var readerRows = lv.rows;
+  // Q08-VERIFY-1: nothing is published until its names, years and figures are in the source material and two reviewers from
+  // other model families find no unsupported claim. An outage of the reviewers fails closed.
+  var essayVr = null;
+  if (gateResult.ok) {
+    var essayGround = [story.title || "", friction.core_concept || "", friction.friction_point || "", article, (ownerNotes || []).join("\n")].join("\n");
+    var ev = await verifyAndRevise(env, { piece: piece, prompt: prompt, banned: banned, ground: essayGround, seedText: String(story.id || story.title || ""), forecast: false });
+    piece = ev.piece; essayVr = ev.vr;
+    if (!ev.ok) gateResult = { ok: false, problems: ["accuracy: " + ev.problems.join("; ")] };
+  }
   if (!gateResult.ok) {
     await saveReaderTests(env, (story.source || "hn") + ":" + String(story.id || ""), readerRows);
     // Mark the signal processed so the same story is not retried by the next runs.
@@ -1186,6 +1199,7 @@ async function generate(env) {
   piece.text = piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
   // Persist
   var saved = await persistPiece(env, piece, friction, story, piece.model);
+  if (essayVr) await recordAudit(env, saved.slug, "pass", "publish", essayVr).catch(function () {});
   await saveReaderTests(env, saved.slug, readerRows);
   // Feedback loop. MUST be awaited: as a floating promise with no ctx.waitUntil it
   // was truncated by the Worker runtime once the response returned, so the promotion
@@ -1257,15 +1271,17 @@ async function forecastDue(env) {
   // Backpressure, not a stop: three forecast drafts rejected today means the rest of the day goes to essays.
   var ff = await env.DB.prepare("SELECT COUNT(*) n FROM engine_runs WHERE status = 'gate_failed' AND top_signal LIKE 'q08-forecast:%' AND ran_at >= datetime('now','start of day')").first().catch(function () { return { n: 0 }; });
   if ((ff && ff.n || 0) >= 3) return false;
-  var last = await env.DB.prepare("SELECT kind FROM published_pieces ORDER BY published_at DESC LIMIT ?1").bind(FORECAST_EVERY).all();
+  var last = await env.DB.prepare("SELECT kind FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT ?1").bind(FORECAST_EVERY).all();
   var rows = last.results || [];
   if (rows.length < FORECAST_EVERY) return false;
   return rows.every(function (r) { return r.kind !== "forecast"; });
 }
 async function pickForecastSource(env) {
+  if (!(await ensureAccuracySchema(env))) return null; // fail closed: no forecast is built on an essay whose audit state is unknown
   return await env.DB.prepare(
     "SELECT p.id, p.slug, p.title, p.body_md, p.core_concept, p.signal_source, p.published_at FROM published_pieces p " +
     "WHERE COALESCE(p.kind, 'analysis') != 'forecast' AND p.published_at >= ?1 " +
+    "AND p.slug IN (SELECT slug FROM q08_audits WHERE verdict = 'pass') AND p.slug NOT IN (SELECT slug FROM q08_retractions) " +
     "AND NOT EXISTS (SELECT 1 FROM q08_forecasts f WHERE f.source_slug = p.slug) " +
     "AND (SELECT COUNT(*) FROM engine_runs e WHERE e.status = 'gate_failed' AND e.top_signal = substr('q08-forecast:' || p.slug, 1, 80)) < 2 " +
     "ORDER BY COALESCE(p.feedback_score, 0) DESC, p.reads DESC, p.published_at DESC LIMIT 1"
@@ -1281,9 +1297,9 @@ var FORECAST_DIRECTIVE = [
   "",
   "PROBABILITIES: state your probability for the main scenario in the prose as a whole percent, and the alternatives' probabilities too. They are your judgments, not measurements: do not dress them as data and do not hedge them. The main scenario must be at least as probable as each alternative, and all stated probabilities together must not exceed 100 percent; the remainder is 'something else', and say so.",
   "",
-  "BASE RATE FIRST: before the scenario, anchor on how this kind of situation has usually ended. Name a real, well-known case or class of cases where the same mechanism ran its course and say how it ended; if you cannot name one you are sure is real, say which class of situations you are reasoning from and invent no case. Then say why this case should or should not follow it.",
+  "BASE RATE, WITHOUT BORROWED CASES: before the scenario, say which class of situations you are reasoning from (for example, 'a standard that two competing bodies both claim to own') and how situations of that class usually go, in general terms. Do not name a past case, company, law or event that is not stated in the ESSAY or SIGNAL below, and give no historical statistics; a reader will check every name. Then say why this case should or should not follow the class.",
   "",
-  "FACTS (hard, non-negotiable): every specific fact about the present (a number, price, date, count or identifier) must come from the ESSAY or the SIGNAL below, verbatim or as a direct paraphrase. Future dates and your own probabilities are the only numbers you may add. Never state a projected quantity (a price, a user count, a market size) unless the text derives it from a figure in the sources. Never invent a source, a report or a quote. A general honest sentence beats a specific invented one.",
+  "FACTS (hard, non-negotiable, and checked): every claim about the real world as it stands today (an event, a date, a person, an organisation, a product, a law, a number, a price, a count, an identifier, a quotation) must be stated in the ESSAY or the SIGNAL below, verbatim or as a direct paraphrase. Your memory is not a source: add no outside facts, precedents or statistics. Future dates and your own probabilities are the only numbers you may add. Never state a projected quantity (a price, a user count, a market size) unless the text derives it from a figure in the sources. Never invent a source, a report or a quote. Every draft is fact-checked against the essay and signal by independent reviewers from other model families; one unsupported claim and the forecast is not published. A general honest sentence beats a specific unsupported one.",
   "",
   "REGISTER: cold structural objectivity, plain words, a sharp person explaining something to a smart friend. Name actors by what they are, never by role words ('the observer', 'the actor', 'the mechanism'). No bullets, no tables, no '##' headers: continuous prose. No first person, no hedging words, no emotional vocabulary, no marketing register, no @handles. Never mention 'the essay', 'the signal' or any pipeline field. Open with what is happening now in one concrete sentence, then move forward in time.",
   "",
@@ -1304,7 +1320,7 @@ var READER_FORECAST_PROMPT = [
   "You are a busy, intelligent reader who has never heard of this site and owes it nothing. You are reading a forecast. You stop at the first sentence that wastes your time.",
   "Answer with exactly one JSON object and nothing else:",
   "{\"would_read_to_end\": true or false, \"score\": 1 to 5 (5 = I would send it to a friend, 4 = worth the time, 3 = I would skim it, 1 = I stopped at the first paragraph), \"slop_tells\": [up to 3 short phrases copied from the text that sound like generic machine prose], \"fix\": \"one sentence telling the writer what to change\"}",
-  "Judge: does it open with something concrete that is happening now? Is the main claim sharp enough that it could plainly turn out false? Is the path from now to the claim a chain of people doing things, each step caused by the one before? Does it anchor on a real, specific case or a clearly named class of cases, and say why this one should or should not follow it? Are the probabilities stated and consistent with each other? Does it say what to watch? Does it end on the fact that would flip it? Is it more than extrapolating the source? Be strict: a 4 must be earned."
+  "Judge: does it open with something concrete that is happening now? Is the main claim sharp enough that it could plainly turn out false? Is the path from now to the claim a chain of people doing things, each step caused by the one before? Does it name the class of situations it reasons from, without citing outside cases it cannot support, and say why this one should or should not follow it? Are the probabilities stated and consistent with each other? Does it say what to watch? Does it end on the fact that would flip it? Is it more than extrapolating the source? Be strict: a 4 must be earned."
 ].join("\n");
 
 function publicHttpsUrl(u) {
@@ -1381,7 +1397,7 @@ function buildForecastPrompt(src, signalText, opts) {
   var parts = [FORECAST_DIRECTIVE, "TODAY (UTC): " + utcDay()];
   var banned = opts && opts.banned || [];
   if (banned.length) {
-    parts.push("\n--- OVERUSED PRECEDENTS ON THIS SITE (BANNED: pick a different real case, or use none) ---");
+    parts.push("\n--- OVERUSED PRECEDENTS ON THIS SITE (BANNED: do not cite it) ---");
     parts.push(banned.map(function (b) { return b.label; }).join("; "));
   }
   var notes = opts && opts.ownerNotes || [];
@@ -1406,7 +1422,7 @@ async function generateForecast(env, t0) {
   var sg = await env.DB.prepare("SELECT friction_point FROM signal_log WHERE source_id = ?1 AND friction_point IS NOT NULL LIMIT 1").bind(String(src.signal_source || "")).first().catch(function () { return null; });
   var signalText = String(sg && sg.friction_point || "").slice(0, 800);
   var recentF = await env.DB.prepare("SELECT claim FROM q08_forecasts ORDER BY id DESC LIMIT 6").all().catch(function () { return { results: [] }; });
-  var recentBodies = await env.DB.prepare("SELECT body_md FROM published_pieces ORDER BY published_at DESC LIMIT 8").all().catch(function () { return { results: [] }; });
+  var recentBodies = await env.DB.prepare("SELECT body_md FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 8").all().catch(function () { return { results: [] }; });
   var banned = overusedPrecedents((recentBodies.results || []).map(function (r) { return r.body_md; }), 2);
   var prompt = buildForecastPrompt(src, signalText, { banned: banned, ownerNotes: await ownerDirectives(env), recent: (recentF.results || []).map(function (r) { return r.claim; }) });
   var topSig = ("q08-forecast:" + src.slug).slice(0, 80);
@@ -1424,6 +1440,13 @@ async function generateForecast(env, t0) {
     var lv = await runLevels(env, { piece: piece, prompt: prompt, banned: banned, seedText: src.title || "", gateResult: gateResult, xform: forecastXform, forecast: true, readerPrompt: READER_FORECAST_PROMPT });
     piece = lv.piece; gateResult = lv.gateResult; readerRows = lv.rows;
   }
+  var fcVr = null;
+  if (gateResult.ok) {
+    var fcGround = [src.title || "", src.body_md || "", signalText].join("\n");
+    var fv = await verifyAndRevise(env, { piece: piece, prompt: prompt, banned: banned, ground: fcGround, seedText: String(src.slug || ""), forecast: true, xform: forecastXform });
+    piece = fv.piece; fcVr = fv.vr;
+    if (!fv.ok) gateResult = { ok: false, problems: ["accuracy: " + fv.problems.join("; ")] };
+  }
   if (!gateResult.ok) {
     await saveReaderTests(env, topSig, readerRows);
     await env.DB.prepare("INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status, error) VALUES (?,?,?,?,?,?,?,?)")
@@ -1433,6 +1456,7 @@ async function generateForecast(env, t0) {
   piece.text = piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
   var pseudo = { source: "q08", id: src.id, slug: src.slug, title: src.title, url: ORIGIN + "/p/" + src.slug, points: 0, num_comments: 0, ratio: 0, volatility_score: 0 };
   var saved = await persistPiece(env, piece, { core_concept: src.core_concept || src.title, friction_point: signalText || String(src.title || ""), signal_strength: "Forecast" }, pseudo, piece.model);
+  if (fcVr) await recordAudit(env, saved.slug, "pass", "publish", fcVr).catch(function () {});
   await saveReaderTests(env, saved.slug, readerRows);
   var fcRow = await env.DB.prepare("SELECT claim, probability, horizon FROM q08_forecasts WHERE slug = ?").bind(saved.slug).first().catch(function () { return null; });
   await queueForDistribution(env, saved.title, saved.slug, fcRow);
@@ -1441,6 +1465,237 @@ async function generateForecast(env, t0) {
   await env.DB.prepare("INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status) VALUES (?,?,?,?,?,?,?)")
     .bind(1, 1, 1, topSig, piece.model, Date.now() - t0, "ok").run();
   return { ok: true, kind: "forecast", slug: saved.slug, title: saved.title, model: piece.model, source: "q08", story: src.title };
+}
+
+// ---- Accuracy layer (Q08-VERIFY-1, owner directive 2026-10-10: q08 content is 100% accurate and fact-checked) ---------------
+// An essay or forecast is published only when (1) every name, year and figure in it appears in the source material the writer
+// was given (deterministic check), and (2) two reviewers from model families other than the writer's find no claim about the
+// real world that the source material does not state. A reviewer outage fails closed: nothing is published unchecked. The same
+// test re-audits pieces already live; a piece that fails is retracted in public (never silently deleted).
+var GROUND_MAX = 14000;
+var __accSchemaDone = false, __accSchemaTried = 0;
+async function ensureAccuracySchema(env) {
+  if (__accSchemaDone) return true;
+  if (Date.now() - __accSchemaTried < 30000) return false;
+  __accSchemaTried = Date.now();
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS q08_retractions (slug TEXT PRIMARY KEY, reason TEXT, claims_json TEXT, retracted_at TEXT)").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS q08_audits (slug TEXT PRIMARY KEY, verdict TEXT, stage TEXT, models TEXT, unsupported_json TEXT, checked_at TEXT)").run();
+    __accSchemaDone = true;
+    return true;
+  } catch (e) {
+    console.error("q08 accuracy schema failed: " + String(e && e.message || e).slice(0, 200));
+    return false;
+  }
+}
+async function fetchArticleText(url) {
+  var u = publicHttpsUrl(url);
+  if (!u) return "";
+  try {
+    var r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "text/html,text/plain" }, signal: AbortSignal.timeout(15000), redirect: "follow" });
+    if (!r.ok) return "";
+    var ct = String(r.headers.get("content-type") || "");
+    if (!/text\/|html|xml/i.test(ct)) return "";
+    return plainText((await r.text()).slice(0, 400000)).slice(0, GROUND_MAX);
+  } catch (e) { return ""; }
+}
+var GROUND_LEAD = new Set(["the","a","an","in","on","at","when","if","but","and","so","as","that","this","these","those","it","its","each","every","most","some","no","for","with","without","before","after","once","while","because","since","what","where","who","why","how","then","there","here","not","only","even","still","yet","or","nor","by","from","to","of","their","his","her","our","your","one","two","three","such","both","many","any","all","i","we","you","he","she","they","my","whether","although","though","until","unless","instead","perhaps","suppose","imagine","consider","now","today","later","earlier","first","second","third","finally","meanwhile","however","which","whose","than","also","just","every","another","other","either","neither","same","more","less","few","several"]);
+var GROUND_OK = new Set(["january","february","march","april","may","june","july","august","september","october","november","december","monday","tuesday","wednesday","thursday","friday","saturday","sunday","q08","qnfo","hacker news","hn","github","arxiv","markdown","json","html"]);
+function groundWords(text) {
+  var set = new Set(); String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
+    w = w.replace(/[.'-]+$/, ""); set.add(w); set.add(w.replace(/'s$/, "")); if (w.length > 3 && w.charAt(w.length - 1) === "s") set.add(w.slice(0, -1)); else set.add(w + "s"); return "";
+  });
+  return set;
+}
+function groundNumbers(text) {
+  var set = new Set(); (String(text || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) { set.add(n.replace(/,/g, "").replace(/\.0+$/, "")); }); return set;
+}
+// Deterministic check: names, years and figures in `text` that `ground` does not contain. Returns a list of problem strings.
+function groundingProblems(text, ground, opts) {
+  var o = opts || {}, nowYear = Number(String(o.today || utcDay()).slice(0, 4));
+  var body = String(text || "").replace(/^[ \t]*FORECAST-JSON:.*$/gim, " ").replace(/\n?worth your time:[^\n]*$/im, " ").replace(/^#\s+/gm, "").replace(/\(?(?:This|A|An) hypothetical[^)]*\)?/gi, " ");
+  var words = groundWords(ground), nums = groundNumbers(ground), out = [], seen = {};
+  function add(kind, v) { var k = kind + v.toLowerCase(); if (seen[k]) return; seen[k] = 1; out.push(kind + ": " + v); }
+  // figures: every number must be in the source, except small counts, future years and (forecasts) probabilities and horizons
+  var nre = /\$?\d[\d,]*(?:\.\d+)?\s*(%|percent|days?|weeks?|months?|quarters?|years?|hours?)?/gi, m;
+  while ((m = nre.exec(body))) {
+    var raw = m[0], digits = raw.replace(/[^\d.]/g, "").replace(/\.$/, "").replace(/\.0+$/, "");
+    if (!digits || digits.indexOf(",") >= 0) continue;
+    var plain = m[0].replace(/[$,\s]/g, "").replace(/(%|percent|days?|weeks?|months?|quarters?|years?|hours?)$/i, "");
+    var num = plain.replace(/,/g, "");
+    if (nums.has(num) || nums.has(num.replace(/\.0+$/, ""))) continue;
+    var unit = (m[1] || "").toLowerCase(), val = Number(num);
+    var isYear = /^(1[0-9]|20)\d\d$/.test(num) && !unit;
+    if (isYear && val >= nowYear && o.forecast) continue;
+    if (o.forecast && (unit === "%" || unit === "percent")) continue;
+    if (o.forecast && /^(days?|weeks?|months?|quarters?|years?)$/.test(unit)) continue;
+    if (!isYear && !unit && /^\d{1,2}$/.test(num) && val <= 10 && raw.indexOf("$") < 0) continue;
+    if (!isYear && !unit && /^\d$/.test(num)) continue;
+    add(isYear ? "year not in the source" : "figure not in the source", raw.trim());
+  }
+  // names: capitalised words or phrases that are not at the start of a sentence and are absent from the source
+  var sentences = body.split(/(?<=[.!?:;—])\s+|\n+/);
+  sentences.forEach(function (sent) {
+    var toks = sent.match(/[A-Za-z0-9][A-Za-z0-9&'.’-]*|[,;]/g) || [];
+    var i = 0;
+    while (i < toks.length) {
+      var t = toks[i];
+      if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t) && toks[i + 1] && !/^[A-Z]/.test(toks[i + 1])) { i++; continue; }
+      var j = i, phrase = [];
+      while (j < toks.length && /^[A-Z][A-Za-z0-9&'.’-]*$/.test(toks[j])) { phrase.push(toks[j]); j++; if (toks[j] && /^(of|the|and|for|de|von|van|del|la)$/i.test(toks[j]) && toks[j + 1] && /^[A-Z]/.test(toks[j + 1])) { phrase.push(toks[j]); j++; } }
+      var lead = 0; while (lead < phrase.length - 1 && GROUND_LEAD.has(phrase[lead].toLowerCase().replace(/[^a-z]/g, ""))) lead++;
+      var core = phrase.slice(lead);
+      var first = (i === 0);
+      if (core.length && !(core.length === 1 && first && lead === 0) && !(core.length === 1 && GROUND_LEAD.has(core[0].toLowerCase()))) {
+        var joined = core.join(" ").replace(/[’]/g, "'");
+        var low = joined.toLowerCase().replace(/[^a-z0-9' ]/g, " ").replace(/\s+/g, " ").trim();
+        if (low && !GROUND_OK.has(low)) {
+          var miss = low.split(" ").filter(function (w) { return w && !GROUND_OK.has(w) && !GROUND_LEAD.has(w) && !words.has(w) && !words.has(w.replace(/'s$/, "")) && !/^\d+$/.test(w); });
+          if (miss.length) add("name not in the source", joined);
+        }
+      }
+      i = Math.max(j, i + 1);
+    }
+  });
+  return out.slice(0, 14);
+}
+var FACTCHECK_PROMPT = [
+  "You are a strict fact-checker for a publication that must contain no unsupported claim. You are given SOURCE MATERIAL and a DRAFT.",
+  "List every sentence or clause in the DRAFT that asserts something about the real world and is not stated in, or a direct paraphrase of, the SOURCE MATERIAL. That covers events, dates, people, organisations, products, laws, institutions, numbers, quotations, studies, historical episodes and precedents, and statements that a practice or fact is 'known' or 'common'.",
+  "Your own knowledge does not count as support, even if you are sure the claim is true: if it is not in the SOURCE MATERIAL, it is unsupported. These are NOT violations: reasoning that follows from the source's facts, definitions, and a clearly labelled hypothetical that names no real person, company, product, date or number.",
+  "Answer with exactly one JSON object and nothing else: {\"unsupported\": [up to 8 short quotations copied from the DRAFT, each followed by ' -- ' and the reason in a few words], \"verdict\": \"pass\" or \"fail\"}. verdict is \"pass\" only when unsupported is empty."
+].join("\n");
+function parseFactVerdict(text) {
+  var m = String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  var o; try { o = JSON.parse(m[0]); } catch (e) { return null; }
+  var v = String(o && o.verdict || "").toLowerCase().trim();
+  if (v !== "pass" && v !== "fail") return null;
+  var u = Array.isArray(o.unsupported) ? o.unsupported.map(function (x) { return String(x).replace(/\s+/g, " ").trim().slice(0, 260); }).filter(Boolean).slice(0, 8) : [];
+  if (v === "pass" && u.length) v = "fail";
+  if (v === "fail" && !u.length) u = ["the reviewer rejected the draft without naming a claim"];
+  return { verdict: v, unsupported: u };
+}
+async function factCheckOne(env, modelId, essay, ground) {
+  try {
+    var body = FACTCHECK_PROMPT + "\n\n--- SOURCE MATERIAL ---\n" + String(ground).slice(0, GROUND_MAX) + "\n\n--- DRAFT ---\n" + String(essay).replace(/^[ \t]*FORECAST-JSON:.*$/gim, "").replace(/\n?worth your time:[^\n]*$/im, "").trim().slice(0, 9000);
+    var resp = await env.AI.run(modelId, { messages: [{ role: "user", content: body }], max_tokens: READER_MAX_TOKENS, temperature: 0.1 }, { signal: AbortSignal.timeout(110000) });
+    var out = resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || "";
+    var v = parseFactVerdict(out);
+    if (v) { v.model = modelId; v.family = familyOf(modelId); }
+    return v;
+  } catch (e) { return null; }
+}
+// Two valid verdicts from two different families, neither the writer's. Fewer than two valid verdicts is "unavailable" (fail closed).
+async function factCheck(env, essay, ground, writerModel, seedText) {
+  var wf = familyOf(writerModel || "");
+  var ids = pickPanel([wf], 4, seedOf(seedText));
+  var got = [];
+  for (var k = 0; k < ids.length && got.length < 2; k += 2) {
+    var batch = ids.slice(k, k + (2 - got.length));
+    var rs = await Promise.all(batch.map(function (id) { return factCheckOne(env, id, essay, ground); }));
+    rs.forEach(function (r) { if (r) got.push(r); });
+  }
+  if (got.length < 2) return { ok: false, unavailable: true, unsupported: [], judges: got, reason: "fewer than two fact-check verdicts from other model families" };
+  var uns = []; got.forEach(function (g) { g.unsupported.forEach(function (u) { if (uns.indexOf(u) < 0) uns.push(u); }); });
+  return { ok: got.every(function (g) { return g.verdict === "pass"; }), unavailable: false, unsupported: uns.slice(0, 10), judges: got, reason: "" };
+}
+// Full verification of one draft: deterministic grounding first (free), then the two-family review.
+async function verifyPiece(env, text, ground, writerModel, seedText, opts) {
+  var det = groundingProblems(text, ground, opts);
+  if (det.length) return { ok: false, stage: "grounding", problems: det, judges: [], unavailable: false };
+  var fc = await factCheck(env, text, ground, writerModel, seedText);
+  if (fc.unavailable) return { ok: false, stage: "factcheck", problems: ["fact-check unavailable: " + fc.reason], judges: fc.judges, unavailable: true };
+  if (!fc.ok) return { ok: false, stage: "factcheck", problems: fc.unsupported.map(function (u) { return "unsupported claim: " + u; }), judges: fc.judges, unavailable: false };
+  return { ok: true, stage: "pass", problems: [], judges: fc.judges, unavailable: false };
+}
+function factRevisionPrompt(prompt, draft, problems, ground, forecastExtra) {
+  var d = String(draft || "") + (forecastExtra ? "\nFORECAST-JSON: " + JSON.stringify(forecastExtra) : "") + "\nworth your time: yes - revised for accuracy";
+  return prompt + "\n\n--- FACT REVISION: independent fact-checkers rejected your draft. Every item below is a claim the source material does not support. Return the SAME piece in the SAME output format (H1 title first, then the prose" + (forecastExtra ? ", the FORECAST-JSON line" : "") + ", and the final 'worth your time' line) with each such name, date, figure or claim deleted or replaced by general reasoning or a labelled hypothetical that names no real person, company, product, date or number. Add no new facts. Keep everything else. Problems:\n- "
+    + problems.join("\n- ") + "\n--- SOURCE MATERIAL (the only facts you may use) ---\n" + String(ground).slice(0, 7000) + "\n--- DRAFT TO REVISE ---\n" + d;
+}
+async function verifyAndRevise(env, a) {
+  var opts = { forecast: !!a.forecast };
+  var vr = await verifyPiece(env, a.piece.text, a.ground, a.piece.model, a.seedText, opts);
+  if (vr.ok || vr.unavailable) return { ok: vr.ok, piece: a.piece, vr: vr, problems: vr.problems };
+  var rev = null;
+  try { rev = await compose(env, factRevisionPrompt(a.prompt, a.piece.text, vr.problems, a.ground, a.forecast ? a.piece.extra : null), a.banned, undefined, a.xform); } catch (e) { rev = null; }
+  if (!rev || !rev.text) return { ok: false, piece: a.piece, vr: vr, problems: vr.problems.concat(["fact revision produced no draft"]) };
+  if (a.forecast && !rev.extra && a.piece.extra) rev.extra = a.piece.extra;
+  var sp = a.forecast ? forecastProblems(rev, a.banned) : gate(rev.text, a.banned).problems;
+  if (sp.length) return { ok: false, piece: a.piece, vr: vr, problems: vr.problems.concat(["fact revision failed the editorial gate: " + sp.join("; ")]) };
+  var vr2 = await verifyPiece(env, rev.text, a.ground, rev.model, a.seedText, opts);
+  return { ok: vr2.ok, piece: vr2.ok ? rev : a.piece, vr: vr2, problems: vr2.problems };
+}
+function auditSeed(slug) { return "audit:" + slug; }
+// Retracts a piece in public: the URL keeps answering with a notice, the piece leaves the index, feed, sitemap and APIs, queued
+// social rows for it are suppressed, and forecasts built on it are retracted too. Reversible by deleting the q08_retractions row.
+async function retractPiece(env, slug, reason, claims) {
+  await ensureAccuracySchema(env);
+  var now = nowIso(), cj = JSON.stringify((claims || []).slice(0, 8));
+  await env.DB.prepare("INSERT OR REPLACE INTO q08_retractions (slug, reason, claims_json, retracted_at) VALUES (?,?,?,?)").bind(slug, String(reason || "").slice(0, 400), cj, now).run();
+  try {
+    var kids = await env.DB.prepare("SELECT slug FROM q08_forecasts WHERE source_slug = ?").bind(slug).all();
+    for (var kid of (kids.results || [])) {
+      await env.DB.prepare("INSERT OR IGNORE INTO q08_retractions (slug, reason, claims_json, retracted_at) VALUES (?,?,?,?)").bind(kid.slug, "Built on an essay that was retracted for unsupported claims.", "[]", now).run();
+      await env.DB.prepare("UPDATE q08_forecasts SET status = 'void', disposition = 'retracted', resolved_at = ?1 WHERE slug = ?2 AND status = 'open'").bind(now, kid.slug).run().catch(function () {});
+    }
+  } catch (e) {}
+  try {
+    if (env.AUDIT) await env.AUDIT.prepare("UPDATE social_threads SET status = 'suppressed', notes = COALESCE(notes,'') || ' | Q08-VERIFY-1: piece retracted' WHERE status = 'queued' AND slug LIKE 'q08-%' AND posts LIKE ?1").bind("%/p/" + slug + "%").run();
+  } catch (e) {}
+  return { ok: true, slug: slug };
+}
+async function recordAudit(env, slug, verdict, stage, vr) {
+  await ensureAccuracySchema(env);
+  await env.DB.prepare("INSERT OR REPLACE INTO q08_audits (slug, verdict, stage, models, unsupported_json, checked_at) VALUES (?,?,?,?,?,?)")
+    .bind(slug, verdict, stage, (vr.judges || []).map(function (j) { return j.model; }).join(","), JSON.stringify((vr.problems || []).slice(0, 10)), nowIso()).run();
+}
+// Source material for a piece already published: its signal row, the linked article, and (for a forecast) the essay it projects.
+async function groundForPublished(env, p) {
+  var parts = [p.title || "", p.core_concept || ""];
+  var sig = null;
+  try { sig = await env.DB.prepare("SELECT title, url, friction_point FROM signal_log WHERE id = ?").bind(p.signal_id).first(); } catch (e) { sig = null; }
+  if (sig) { parts.push(sig.title || "", sig.friction_point || ""); }
+  if (p.kind === "forecast") {
+    var fr = await env.DB.prepare("SELECT source_slug FROM q08_forecasts WHERE slug = ?").bind(p.slug).first().catch(function () { return null; });
+    var src = fr && await env.DB.prepare("SELECT title, body_md FROM published_pieces WHERE slug = ?").bind(fr.source_slug).first().catch(function () { return null; });
+    if (src) parts.push(src.title || "", src.body_md || "");
+  } else if (sig && sig.url) {
+    parts.push(await fetchArticleText(sig.url));
+  }
+  return parts.join("\n").slice(0, GROUND_MAX + 8000);
+}
+// Cron step: audit published pieces that have no audit row. A reviewer outage writes nothing (retried next tick); a failure retracts.
+async function auditPublished(env, limit) {
+  if (!(await ensureAccuracySchema(env))) return { ok: false, reason: "schema" };
+  var rows = await env.DB.prepare(
+    "SELECT p.id, p.slug, p.title, p.body_md, p.core_concept, p.signal_id, p.kind, p.published_at FROM published_pieces p " +
+    "WHERE p.slug NOT IN (SELECT slug FROM q08_retractions) AND p.slug NOT IN (SELECT slug FROM q08_audits) ORDER BY p.published_at DESC LIMIT ?1"
+  ).bind(limit || 3).all();
+  var res = { checked: 0, passed: 0, retracted: 0, deferred: 0 };
+  for (var p of (rows.results || [])) {
+    var ground = await groundForPublished(env, p);
+    var vr = await verifyPiece(env, "# " + p.title + "\n" + p.body_md, ground, "", auditSeed(p.slug), { forecast: p.kind === "forecast", today: String(p.published_at || "").slice(0, 10) || utcDay() });
+    if (vr.unavailable) { res.deferred++; continue; }
+    res.checked++;
+    if (vr.ok) { await recordAudit(env, p.slug, "pass", vr.stage, vr); res.passed++; continue; }
+    await recordAudit(env, p.slug, "fail", vr.stage, vr);
+    await retractPiece(env, p.slug, "Retracted after an accuracy audit: the piece contained claims the source material does not support (" + vr.stage + " check).", vr.problems);
+    res.retracted++;
+  }
+  return Object.assign({ ok: true }, res);
+}
+function renderRetraction(r, p) {
+  var claims = []; try { claims = JSON.parse(r.claims_json || "[]"); } catch (e) { claims = []; }
+  var date = String(r.retracted_at || "").slice(0, 10);
+  var list = claims.length ? "<p>Examples of what could not be verified:</p><ul>" + claims.slice(0, 5).map(function (c) { return "<li>" + escHtml(c) + "</li>"; }).join("") + "</ul>" : "";
+  return '<meta name="robots" content="noindex"><article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">← Index</a></p><h1 class="q08-t">Retracted: ' + escHtml(p && p.title || "this piece") + '</h1><p class="q-meta">Retracted ' + escHtml(date) + '</p>' +
+    "<p>q08 withdrew this piece. " + escHtml(r.reason || "") + " Every q08 piece is now checked against its source material by two independent reviewers before publication, and earlier pieces are being re-audited; any that fail are withdrawn and listed on the <a href=\"/retractions\">retractions page</a>.</p>" + list + "</article>";
+}
+function renderRetractions(rows) {
+  var items = (rows || []).map(function (r) { return "<li><a href=\"/p/" + escHtml(r.slug) + "\">" + escHtml(r.title || r.slug) + "</a> — retracted " + escHtml(String(r.retracted_at || "").slice(0, 10)) + "</li>"; }).join("");
+  return '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">← Index</a></p><h1 class="q08-t">Corrections and retractions</h1><p>q08 publishes only claims its source material supports. When a piece is found to contain an unsupported claim, it is withdrawn and listed here.</p>' + (items ? "<ul>" + items + "</ul>" : "<p>No piece has been retracted.</p>") + "</article>";
 }
 
 // ---- Resolution and calibration -------------------------------------------------------------------------------------
@@ -1889,7 +2144,7 @@ async function sendEmail(env, to, subject, body, unsubUrl) {
 async function sendDigest(env) {
   var day = utcDay();
   await ensureForecastSchema(env);
-  var pieces = await env.DB.prepare("SELECT slug, title" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces WHERE published_at >= ?1 ORDER BY published_at ASC").bind(day + "T00:00:00.000Z").all();
+  var pieces = await env.DB.prepare("SELECT slug, title" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces WHERE published_at >= ?1 AND slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at ASC").bind(day + "T00:00:00.000Z").all();
   var rows = pieces.results || [];
   if (!rows.length) return { ok: true, skipped: "no pieces today", pieces: 0 };
   var subs = await env.DB.prepare("SELECT email, token FROM subscribers WHERE status='confirmed' LIMIT 500").all();
@@ -2018,6 +2273,7 @@ function cleanNote(v) {
 }
 // Q08-QUALITY-1: pure helpers exposed for the offline suite (quality.test.mjs); no route uses this export.
 export const __forecast = { forecastPostText: forecastPostText, gatherEvidence: gatherEvidence, forecastDue: forecastDue, resolveForecasts: resolveForecasts, ensureForecastSchema: ensureForecastSchema, generateForecast: generateForecast, forecastStats: forecastStats, parseForecastBlock: parseForecastBlock, validateForecast: validateForecast, forecastXform: forecastXform, forecastProblems: forecastProblems, buildForecastPrompt: buildForecastPrompt, calibration: calibration, parseJudgeVerdict: parseJudgeVerdict, aggregateJudges: aggregateJudges, parseForecastCap: parseForecastCap, publicHttpsUrl: publicHttpsUrl, fcStatus: fcStatus, renderForecastBox: renderForecastBox, renderForecasts: renderForecasts, FORECAST_DIRECTIVE: FORECAST_DIRECTIVE, FORECAST_EVERY: FORECAST_EVERY, FORECAST_MAX_CHECKS: FORECAST_MAX_CHECKS };
+export const __verify = { groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, verifyAndRevise: verifyAndRevise, retractPiece: retractPiece, auditPublished: auditPublished, ensureAccuracySchema: ensureAccuracySchema, renderRetraction: renderRetraction, fetchArticleText: fetchArticleText, factRevisionPrompt: factRevisionPrompt, Q08_DIRECTIVE: Q08_DIRECTIVE, FORECAST_DIRECTIVE: FORECAST_DIRECTIVE, REGISTER_EXEMPLAR: REGISTER_EXEMPLAR };
 export const __quality = { gate: gate, overusedPrecedents: overusedPrecedents, parseReaderVerdict: parseReaderVerdict, buildPrompt: buildPrompt, ownerDirectives: ownerDirectives, readerTest: readerTest, pickPanel: pickPanel, familyOf: familyOf, aggregatePanel: aggregatePanel, panelRead: panelRead, effectiveVotes: effectiveVotes, PANEL_POOL: PANEL_POOL, ensembleReport: ensembleReport, saveReaderTests: saveReaderTests, runLevels: runLevels, panelUnavailableShare: panelUnavailableShare, ensureReaderTable: ensureReaderTable, OWNER_VERDICT_WEIGHT: OWNER_VERDICT_WEIGHT, REGISTER_EXEMPLAR: REGISTER_EXEMPLAR };
 
 function q08SitemapXml(rows) {
@@ -2035,6 +2291,7 @@ export default {
     env = __aiAttrEnv(env, "q08-signal-engine", "AI", "AUDIT");
     var url  = new URL(req.url);
     var path = url.pathname.replace(/\/+$/, "") || "/";
+    await ensureAccuracySchema(env); // Q08-VERIFY-1: the retraction filter below reads q08_retractions
     // Q08-SITEMAP-INDEXABLE-1 (2026-10-06): www.q08.org answered 200 with a full duplicate of every page; pages now move
     // permanently to the canonical host so Google indexes one URL per piece (API routes are left alone).
     if (url.hostname === "www.q08.org" && (req.method === "GET" || req.method === "HEAD") && path.indexOf("/api/") !== 0) {
@@ -2051,7 +2308,7 @@ export default {
     if (path === "/health") {
       var m7 = await metrics7d(env).catch(function () { return null; });
       var cnt = await env.DB.prepare("SELECT COUNT(*) n FROM published_pieces").first().catch(() => ({n:0}));
-      var last = await env.DB.prepare("SELECT slug, title, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 1").first().catch(() => null);
+      var last = await env.DB.prepare("SELECT slug, title, published_at FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 1").first().catch(() => null);
       var runs = await env.DB.prepare("SELECT status, COUNT(*) n FROM engine_runs GROUP BY status").all().catch(() => ({results:[]}));
       return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["signal-scrape", "llm-compose", "essay-publish", "essay-regen", "rss", "mathjax-render", "sources-footer", "email-digest", "indexnow", "reader-verdict-vote", "self-verdict-gate", "feedback-calibration", "cross-day-signal-dedup", "fabrication-gate", "self-referential-signal-emit", "reader-test", "owner-editorial-directives", "owner-verdict-weight", "forecast-scenarios", "forecast-resolution", "forecast-calibration", "citation-files"], limitations: ["publisher/composer only - does NOT run a general agent tool loop and does not execute arbitrary code", "not a general-purpose model endpoint; use qnfo-ai for inference", "POST /run and POST /regen need x-loop-token (they spend model calls and change published essays; OPEN-ACCESS-1); every read stays open", "writes only to its own q08-signal D1; never writes research or personal stores", "no streaming"], metrics_7d: m7, pieces: cnt.n, daily_cap: await dailyCap(env), daily_cap_key: "ops_config " + CAP_KEY, last, runs: runs.results });
     }
@@ -2136,6 +2393,10 @@ export default {
         }
       }
       if (!gateResult.ok) return json({ ok: false, error: "gate failed: " + gateResult.problems.join("; ") }, 422);
+      // Q08-VERIFY-1: a regenerated essay is fact-checked against the same source material before it replaces the live text.
+      var rgArticle = await fetchArticleText(srow.url);
+      var rgv = await verifyPiece(env, piece.text, [srow.title || "", friction.core_concept || "", friction.friction_point || "", rgArticle].join("\n"), piece.model, target, { forecast: false });
+      if (!rgv.ok) return json({ ok: false, error: "accuracy check failed: " + rgv.problems.join("; ") }, 422);
       piece.text = piece.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
       var tm = piece.text.match(/^#\s+(.+)$/m);
       var title = tm ? tm[1].trim() : prow.title;
@@ -2168,13 +2429,13 @@ export default {
       return json({ ok: true, recorded: s, note_stored: !!fnote });
     }
     if (path === "/feed.xml") {
-      var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 20").all();
+      var rows = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 20").all();
       return new Response(renderFeed(rows.results || []), { headers: { "Content-Type": "application/rss+xml; charset=utf-8" } });
     }
 
     var cm = /^\/p\/([a-z0-9-]+)\.(bib|ris)$/.exec(path);
     if (cm) { // Q08-REACH-1: citation files for reference managers and scholarly indexing
-      var cp = await env.DB.prepare("SELECT slug, title, published_at FROM published_pieces WHERE slug=?").bind(cm[1]).first();
+      var cp = await env.DB.prepare("SELECT slug, title, published_at FROM published_pieces WHERE slug=? AND slug NOT IN (SELECT slug FROM q08_retractions)").bind(cm[1]).first();
       if (!cp) return html("<h1>Not found</h1>", 404);
       return new Response(citationFile(cp, cm[2]), { headers: { "Content-Type": cm[2] === "bib" ? "application/x-bibtex; charset=utf-8" : "application/x-research-info-systems; charset=utf-8", "Content-Disposition": 'attachment; filename="q08-' + cp.slug + "." + cm[2] + '"' } });
     }
@@ -2182,6 +2443,8 @@ export default {
       var slug = path.slice(3);
       var piece = await env.DB.prepare("SELECT * FROM published_pieces WHERE slug=?").bind(slug).first();
       if (!piece) return html("<h1>Not found</h1>", 404);
+      var retr = await env.DB.prepare("SELECT * FROM q08_retractions WHERE slug = ?").bind(slug).first().catch(function () { return null; });
+      if (retr) return html(renderRetraction(retr, piece), 410);
       // Increment read count
       env.DB.prepare("UPDATE published_pieces SET reads=reads+1 WHERE slug=?").bind(slug).run().catch(() => {});
       ctx.waitUntil(countRead(env, req).catch(function () {}));
@@ -2192,7 +2455,7 @@ export default {
     if (path === "/sitemap.xml") {
       // Q08-SITEMAP-INDEXABLE-1: the home <loc> matches its canonical (trailing slash) and carries the newest piece's date;
       // the RSS feed is not a page and is no longer listed; a piece without a valid date gets no <lastmod>.
-      var srows = await env.DB.prepare("SELECT slug, published_at FROM published_pieces ORDER BY published_at DESC LIMIT 5000").all();
+      var srows = await env.DB.prepare("SELECT slug, published_at FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 5000").all();
       var sitemapXml = q08SitemapXml(srows.results || []);
       var sxml = sitemapXml;
       return new Response(sxml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=1800" } });
@@ -2207,15 +2470,20 @@ export default {
     if (path === "/confirm") { var t0 = url.searchParams.get("t")||""; await env.DB.prepare("UPDATE subscribers SET status='confirmed', confirmed_at=? WHERE token=? AND status!='unsubscribed'").bind(nowIso(), t0).run(); return html("<h2>Subscribed</h2><p>You are subscribed. The daily digest arrives each evening.</p>"); }
     if (path === "/unsubscribe") { var t1 = (url.searchParams.get("t")||"").trim(); if (!t1) return html("<h2>Invalid link</h2><p>No unsubscribe token provided.</p>", 400); var unsub = await env.DB.prepare("UPDATE subscribers SET status='unsubscribed' WHERE token=?").bind(t1).run(); return (unsub && unsub.meta && unsub.meta.changes > 0) ? html("<h2>Unsubscribed</h2><p>You have been removed from the daily digest.</p>") : html("<h2>Not found</h2><p>That unsubscribe link is invalid or already used.</p>", 404); }
     if (path === "/forecasts") {
-      var frs = await env.DB.prepare("SELECT slug, source_slug, claim, probability, horizon, resolution, status, outcome, brier FROM q08_forecasts ORDER BY id DESC LIMIT 200").all().catch(function () { return { results: [] }; });
+      var frs = await env.DB.prepare("SELECT slug, source_slug, claim, probability, horizon, resolution, status, outcome, brier FROM q08_forecasts WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY id DESC LIMIT 200").all().catch(function () { return { results: [] }; });
       return html(renderForecasts(frs.results || [], await forecastStats(env)));
     }
+    if (path === "/retractions" || path === "/api/retractions") {
+      var rrows = await env.DB.prepare("SELECT r.slug, r.reason, r.retracted_at, p.title FROM q08_retractions r LEFT JOIN published_pieces p ON p.slug = r.slug ORDER BY r.retracted_at DESC LIMIT 500").all().catch(function () { return { results: [] }; });
+      if (path === "/api/retractions") return json({ ok: true, worker: WORKER, version: VERSION, retractions: rrows.results || [] });
+      return html(renderRetractions(rrows.results || []));
+    }
     if (path === "/api/forecasts") {
-      var fr2 = await env.DB.prepare("SELECT slug, source_slug, claim, probability, horizon, resolution, alternatives_json, status, outcome, brier, checks, created_at, resolved_at, disposition FROM q08_forecasts ORDER BY id DESC LIMIT 200").all().catch(function () { return { results: [] }; });
+      var fr2 = await env.DB.prepare("SELECT slug, source_slug, claim, probability, horizon, resolution, alternatives_json, status, outcome, brier, checks, created_at, resolved_at, disposition FROM q08_forecasts WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY id DESC LIMIT 200").all().catch(function () { return { results: [] }; });
       return json({ ok: true, worker: WORKER, version: VERSION, generated_at: nowIso(), stats: await forecastStats(env), forecasts: fr2.results || [] });
     }
     if (path === "/api/pieces") {
-      var rows = await env.DB.prepare("SELECT slug, title, core_concept, published_at, reads" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces ORDER BY published_at DESC LIMIT 50").all();
+      var rows = await env.DB.prepare("SELECT slug, title, core_concept, published_at, reads" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 50").all();
       return json(rows.results || []);
     }
 
@@ -2236,17 +2504,17 @@ export default {
       return new Response('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Not found · q08</title></head><body style="font-family:system-ui,sans-serif;max-width:640px;margin:15vh auto;padding:0 16px"><h1>Not found</h1><p>There is no page at this address. <a href="' + ORIGIN + '/">Go to q08</a>.</p></body></html>', { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
     }
     // Index
-    var pieces = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces ORDER BY published_at DESC LIMIT 20").all().catch(() => ({results:[]}));
+    var pieces = await env.DB.prepare("SELECT slug, title, body_md, core_concept, published_at" + (__forecastSchemaDone ? ", kind" : "") + " FROM published_pieces WHERE slug NOT IN (SELECT slug FROM q08_retractions) ORDER BY published_at DESC LIMIT 20").all().catch(() => ({results:[]}));
     return html(renderIndex(pieces.results || []));
   },
 
   async scheduled(controller, env, ctx) {
     env = __aiAttrEnv(env, "q08-signal-engine", "AI", "AUDIT");
     if (controller.cron === "0 17 * * *") { ctx.waitUntil(sendDigest(env)); return; }
-    ctx.waitUntil(sweepStaleRuns(env).then(() => generate(env)).catch(async (e) => {
+    ctx.waitUntil(ensureAccuracySchema(env).then(() => sweepStaleRuns(env)).then(() => generate(env)).catch(async (e) => {
       await env.DB.prepare(
         "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, ms, status, error) VALUES (0,0,0,0,'error',?)"
       ).bind(String(e && e.message || e).slice(0, 500)).run().catch(() => {});
-    }).then(function () { return resolveForecasts(env, 2).catch(function (e) { console.error("q08 resolveForecasts failed: " + String(e && e.message || e).slice(0, 200)); }); }).then(() => stallDetector(env)).then(() => writeOwnMetrics(env)).catch(function () {}));
+    }).then(function () { return resolveForecasts(env, 2).catch(function (e) { console.error("q08 resolveForecasts failed: " + String(e && e.message || e).slice(0, 200)); }); }).then(function () { return auditPublished(env, 4).catch(function (e) { console.error("q08 auditPublished failed: " + String(e && e.message || e).slice(0, 200)); }); }).then(() => stallDetector(env)).then(() => writeOwnMetrics(env)).catch(function () {}));
   },
 };
