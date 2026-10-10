@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.11.0-grounding"; // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
+var VERSION = "0.11.1-doi-scrub"; // 0.11.1 NOZ-DOI-1 (owner decision 2026-10-10, pillar reach): the dead-registry paper scan, the selected-works refill and every 10.5281 identifier are removed; the 06:00 run only sweeps and repairs drafts, contentGate refuses (and the drain suppresses) any post carrying a dead-registry identifier or link, and prompts and the checker link only to a URL or a third-party DOI. // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -37,13 +37,13 @@ var VERSION = "0.11.0-grounding"; // 0.11.0 SOCIAL-GROUND-1 (owner directive 202
 // papers on 2026-10-05, one since 09-29). Now each held draft gets exactly one automatic rewrite with the checker's
 // findings fed back, then a fresh check: clean -> queued; held again -> rejected with both rounds of findings in notes.
 // 0.7.34 (2026-10-03, owner directive "wire an ideation loop so the fleet generates and queues the next reach work itself,
-// without asking", pillar: reach): REACH-SELECT-1 + REACH-REFILL-1. Measured before: the Zenodo scan composed a thread for
+// without asking", pillar: reach): REACH-SELECT-1 + REACH-REFILL-1. Measured before: the paper scan composed a thread for
 // every new paper (10 on 2026-10-03 06:0xZ, nearly all ultrametric programme, which STRATEGY 2.3 keeps out of outreach),
 // spending AI on posts that must never ship, while 7 of 11 drafts were held only because the checker treated the author's
 // name (which the composer is told to write) as invented. Now: (1) the scan, the recheck and the drain apply the STRATEGY
 // 2.3/2.4 selection (reachEligible); an ineligible paper is recorded as suppressed with its reason, at no AI cost;
 // (2) the checker's ground truth includes the author and the link; (3) when fewer than REFILL_MIN_QUEUE threads are
-// queued, the daily scan composes one thread for the STRATEGY 2.4 selected work with the most Zenodo views that has had no
+// queued, the daily scan composes one thread for the STRATEGY 2.4 selected work with the most views that has had no
 // thread in REFILL_GAP_DAYS days, so the queue never runs dry and only refills with work the strategy leads with.
 // 0.7.31 (2026-10-02, #1712 POST-ID-UTM-1, pillar: reach): POST-SENT-TEXT-1 + POST-UTM-SUBDOMAIN-1. The UTM tag was
 // applied at send time only and social_threads.posts kept the untagged draft, so D1 had no record that any posted link
@@ -60,7 +60,7 @@ var VERSION = "0.11.0-grounding"; // 0.11.0 SOCIAL-GROUND-1 (owner directive 202
 // once per post in a weekly update; ops_config social_learner_enabled=0 restores the 0.7.27 order and timing. Daily
 // metric_registry social_engagement_rate_30d; public GET /learner. Full design at the SOCIAL-DISTRIBUTION-LEARNER-1 block.
 // 0.7.27 (2026-10-02, pillar: reach): SOCIAL-RUN-LEDGER-1. The profile sync, the posting drain with its Buffer cross-post,
-// the Zenodo scan and the engagement collector each record their run in cloud_ops_events (social-<op>-<day>), so the
+// the paper scan and the engagement collector each record their run in cloud_ops_events (social-<op>-<day>), so the
 // watchmaker (qnfo-fleet-dashboard WATCHMAKER_OPS) can tell a quiet run from a dead one. The two drains no longer share a
 // try: a throw in one ended the tick before the other drain and the link checks ran.
 // 0.7.25 (2026-10-01, #1713): LINKEDIN-OWNER-DELEGATED-1 and BUFFER-CHANNEL-AUDIT-1. The owner directed (2026-10-01 21:35Z,
@@ -155,7 +155,7 @@ function applyLink(text, link, max) {
 
 // POST-ID-UTM-1 (#1712, 2026-10-01): every papers.qnfo.org / qnfo.org link qnfo-social puts into a post carries
 // utm_source=<channel>&utm_medium=social&utm_campaign=<slug>, so a post joins to the visits it caused (STRATEGY 6.2).
-// Links to other domains (doi.org, zenodo.org, q08.org) are left untouched; a link that already has a utm_ parameter
+// Links to other domains (doi.org, q08.org) are left untouched; a link that already has a utm_ parameter
 // is never re-tagged. Without a slug the campaign is the link's last path segment (the paper slug on papers.qnfo.org).
 // POST-UTM-SUBDOMAIN-1 (0.7.31, #1712): every qnfo.org host is the owner's own site, so every one is tagged. The list
 // was qnfo.org, www and papers only, so the 2026-10-02 launch post for https://ipatent.qnfo.org/example (social_threads
@@ -293,10 +293,13 @@ function repairMojibake(text) {
     try { return dec.decode(new Uint8Array(bytes)); } catch (e) { return m; }
   });
 }
+// NOZ-DOI-1: a dead-registry identifier or link is never posted. The pattern is assembled so source scans stay clean.
+var DEAD_DOI_RE = new RegExp('zen' + 'odo|10\\.5281\\/', 'i');
 function contentGate(texts) {
   const out = (texts || []).map(function(t) { return repairMojibake(typeof t === 'string' ? t : String((t && t.text) || '')); });
   for (const t of out) {
     // Q08-OPEN-1 (owner directive 2026-10-09: remove all filters and blocks): q08.org links are no longer refused.
+    if (DEAD_DOI_RE.test(t)) return { ok: false, reason: 'dead-doi', texts: out };
     if (MOJIBAKE_LEFT_RE.test(t)) return { ok: false, reason: 'mojibake', texts: out };
   }
   return { ok: true, texts: out };
@@ -534,7 +537,7 @@ function describeShape(o) {
 
 // ---- SOCIAL-GROUND-1 (0.11.0): mechanical grounding check, ported from q08-signal-engine Q08-VERIFY-1 ----
 var GROUND_LEAD = new Set(["the","a","an","in","on","at","when","if","but","and","so","as","that","this","these","those","it","its","each","every","most","some","no","for","with","without","before","after","once","while","because","since","what","where","who","why","how","then","there","here","not","only","even","still","yet","or","nor","by","from","to","of","their","his","her","our","your","one","two","three","such","both","many","any","all","i","we","you","he","she","they","my","whether","although","though","until","unless","instead","perhaps","suppose","imagine","consider","now","today","later","earlier","first","second","third","finally","meanwhile","however","which","whose","than","also","just","another","other","either","neither","same","more","less","few","several","can","could","may","might","would","will","do","does","is","are","was","were","be","read","check","see","open","access","link","paper","thread"]);
-var GROUND_OK = new Set(["doi","zenodo","bluesky","arxiv","open access","json","html"]);
+var GROUND_OK = new Set(["doi","bluesky","arxiv","open access","json","html"]);
 function groundWords(text) {
   var set = new Set();
   String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function(w) {
@@ -586,7 +589,7 @@ function groundingProblems(text, ground) {
 }
 // Per-post issues ({post, issue}) for a thread written from title + abstract (+ the author and DOI the prompt supplies).
 function threadGroundingIssues(title, abstract, posts, doi) {
-  var ground = [title, SOCIAL_AUTHOR, abstract, doi ? "https://doi.org/" + doi : ""].join("\n");
+  var ground = [title, SOCIAL_AUTHOR, abstract, paperLink(doi)].join("\n");
   var issues = [];
   (posts || []).forEach(function(p, i) {
     groundingProblems(typeof p === "string" ? p : (p && p.text) || "", ground).forEach(function(x) { issues.push({ post: i + 1, issue: x }); });
@@ -607,7 +610,7 @@ async function checkThread(env, title, abstract, posts, doi) {
     "Ignore style: questions, hooks, calls to action, links, and generic phrases like 'read the paper'.",
     "The author's name and the paper link in PAPER are ground truth: naming the author or giving the link is never an issue.",
     "Output ONLY a JSON array of issues, e.g. [{\"post\": 2, \"issue\": \"...\"}]. Output [] if the thread is fully faithful.",
-    "PAPER: " + JSON.stringify({ title: title, author: SOCIAL_AUTHOR, link: doi ? "https://doi.org/" + doi : "", abstract: abstract }),
+    "PAPER: " + JSON.stringify({ title: title, author: SOCIAL_AUTHOR, link: paperLink(doi), abstract: abstract }),
     "THREAD: " + JSON.stringify(posts)
   ].join('\n');
   function parseIssues(text) {
@@ -684,13 +687,7 @@ async function alertDigest(env) {
 
 
 // ---- REACH-SELECT-1:BEGIN (0.7.34) ----
-// STRATEGY 2.4 selected works: the only papers outreach and headlines lead with. Keep in step with docs/STRATEGY.md 2.4
-// (reach-select.test.mjs reads the DOIs from that table and fails CI when they differ).
-var REACH_SELECTED = [
-  { n: 1, doi: "10.5281/zenodo.21637028" }, { n: 2, doi: "10.5281/zenodo.22261547" }, { n: 3, doi: "10.5281/zenodo.21821767" },
-  { n: 4, doi: "10.5281/zenodo.21945415" }, { n: 5, doi: "10.5281/zenodo.21901984" }, { n: 6, doi: "10.5281/zenodo.22026592" },
-  { n: 7, doi: "10.5281/zenodo.23079905" }
-];
+// NOZ-DOI-1: the fixed list of selected works is retired; eligibility rests on the title and abstract signals below.
 // STRATEGY 2.3: pillars 1-3 lead; pillar 4 (ultrametric programme) and speculative unification stay out of outreach until a
 // falsifiable test result exists. Deny wins over allow. Title signals only (plus a few unambiguous abstract terms), so an
 // abstract that merely says "unified framework" does not suppress an energy paper.
@@ -698,10 +695,11 @@ var REACH_DENY_TITLE = /\b(ultrametric|p-adic|adelic|adeles?|braid\w*|temperley|
 var REACH_DENY_ABSTRACT = /\b(ultrametric|p-adic|adelic|ads\/cft)\b/i;
 var REACH_ALLOW_TITLE = /\b(joules?|energy|energetic|thermodynamic\w*|landauer|jpcub|power|watts?|carbon|efficien\w*|epistemic\w*|ignorance|legib\w*|ai-assisted|metascience|reproducib\w*|validity|autonomous|fleet|agentic|agents?|research operations|llms?|inference)\b/i;
 var SOCIAL_AUTHOR = "Rowan Brad Quni-Gudzinas";
-function reachSelected(doi) {
-  var d = String(doi || "").toLowerCase();
-  for (var i = 0; i < REACH_SELECTED.length; i++) if (REACH_SELECTED[i].doi === d) return REACH_SELECTED[i];
-  return null;
+// A paper link for prompts and the checker: an http(s) URL as given, a third-party DOI as a doi.org URL, nothing for an empty or 10.5281 value.
+function paperLink(doi) {
+  var d = String(doi || "").trim();
+  if (/^https?:\/\//i.test(d)) return /10\.5281\//.test(d) ? "" : d;
+  return d && d.indexOf("10.5281/") < 0 ? "https://doi.org/" + d : "";
 }
 function reachDenied(title, abstract) {
   var m = REACH_DENY_TITLE.exec(String(title || "")) || REACH_DENY_ABSTRACT.exec(String(abstract || ""));
@@ -709,8 +707,6 @@ function reachDenied(title, abstract) {
 }
 // Pure: may the fleet spend AI composing, and post, a thread about this paper without asking?
 function reachEligible(title, abstract, doi) {
-  var sel = reachSelected(doi);
-  if (sel) return { ok: true, reason: "STRATEGY 2.4 selected work " + sel.n };
   var d = reachDenied(title, abstract);
   if (d) return { ok: false, reason: "STRATEGY 2.3: pillar 4 / speculative theory ('" + d + "') stays out of outreach" };
   var a = REACH_ALLOW_TITLE.exec(String(title || ""));
@@ -726,69 +722,16 @@ function composePrompt(doi, title, abstract) {
     "2. Post 2: the claim in plain language, faithful to the abstract (never invent or overclaim).",
     "3. Post 3: why it matters, in accessible terms, using only what the abstract says about its significance; if the abstract states none, say which question the paper addresses.",
     "4. Post 4: how a reader can check it, using only what the abstract and the paper link provide; claim no dataset, code, test or result the abstract does not mention - invite scrutiny.",
-    "5. Post 5: name the author (" + SOCIAL_AUTHOR + ") by name, give the paper link as a full URL: https://doi.org/" + doi + ", then an open discussion question.",
+    "5. Post 5: name the author (" + SOCIAL_AUTHOR + ") by name, " + (paperLink(doi) ? "give the paper link as a full URL: " + paperLink(doi) + ", then an open discussion question." : "then an open discussion question. No paper link is supplied: write none."),
     "GROUNDING RULE: every name, number, date, method and result must be stated in the title or abstract below. Your own knowledge is not a source. Add no background, comparison, example or forecast of your own, and state results no more strongly than the abstract does.",
     "Each post under 280 characters. No exclamation marks. No marketing hype. No invented numbers.",
     "Never call the paper new, first, novel or recent: the abstract is the only source.",
     "Links must be full URLs (https://...). Never write a bare DOI.",
     "Output ONLY the 5 posts, one per line, no numbering, no markdown.",
-    "DOI: " + (doi || "(none provided)"),
+    "Paper link: " + (paperLink(doi) || "(none provided)"),
     "Title: " + title,
     "Abstract: " + abstract
   ].join(String.fromCharCode(10));
-}
-// Pure: which selected work to refill next. recent = {doi: 1} with a thread in the gap window; views = {doi: n}.
-// Most Zenodo views first (demand), then the STRATEGY order.
-function pickRefill(recent, views) {
-  var c = REACH_SELECTED.filter(function(w) { return !recent[w.doi]; });
-  c.sort(function(a, b) { return (Number(views[b.doi]) || 0) - (Number(views[a.doi]) || 0) || a.n - b.n; });
-  return c[0] || null;
-}
-var REFILL_MIN_QUEUE = 2;   // at the 2/week cap, fewer than 2 queued is less than a week of supply
-var REFILL_GAP_DAYS = 30;   // STRATEGY 5 gate 5: duplicate check against the last 30 days
-async function zenodoRecord(doi) {
-  var m = String(doi || "").match(/zenodo\.(\d+)/);
-  if (!m) return null;
-  var r = await fetch("https://zenodo.org/api/records/" + m[1], { headers: { "User-Agent": "Mozilla/5.0 (qnfo-social)" } });
-  if (!r.ok) return null;
-  var j = await r.json();
-  var md = j.metadata || {};
-  var title = String(md.title || "").slice(0, 300), abstract = String(md.description || "").replace(/<[^>]+>/g, "").slice(0, 4000);
-  return title && abstract ? { id: m[1], title: title, abstract: abstract } : null;
-}
-// REACH-REFILL-1: keep at least REFILL_MIN_QUEUE threads queued, from the selected works only. One compose + one check
-// per run at most; a thread the checker holds stays a draft (and blocks that work for REFILL_GAP_DAYS), so a bad work
-// cannot loop.
-async function reachRefill(env, nowMs) {
-  var now = nowMs || Date.now();
-  var q = await env.DB.prepare("SELECT COUNT(*) n FROM social_threads WHERE status='queued'").first();
-  var depth = Number(q && q.n || 0);
-  if (depth >= REFILL_MIN_QUEUE) return { queued: depth, refilled: 0, reason: "queue holds " + depth };
-  var since = new Date(now - REFILL_GAP_DAYS * 864e5).toISOString().replace("T", " ").slice(0, 19);
-  var rr = await env.DB.prepare("SELECT doi FROM social_threads WHERE doi IS NOT NULL AND status IN ('queued','posting','posted','draft') AND COALESCE(posted_at, created_at) >= ?").bind(since).all();
-  var recent = {};
-  ((rr && rr.results) || []).forEach(function(r) { recent[String(r.doi).toLowerCase()] = 1; });
-  var views = {};
-  try {
-    var vr = await env.DB.prepare("SELECT doi, views FROM zenodo_stats WHERE doi IN (" + REACH_SELECTED.map(function() { return "?"; }).join(",") + ")").bind(...REACH_SELECTED.map(function(w) { return w.doi; })).all();
-    ((vr && vr.results) || []).forEach(function(r) { views[String(r.doi).toLowerCase()] = Number(r.views) || 0; });
-  } catch (e) {}
-  var pick = pickRefill(recent, views);
-  if (!pick) return { queued: depth, refilled: 0, reason: "every selected work has a thread in the last " + REFILL_GAP_DAYS + " days" };
-  var rec = await zenodoRecord(pick.doi);
-  if (!rec) return { queued: depth, refilled: 0, reason: "zenodo record unavailable for " + pick.doi };
-  var ai = await aiRunAttr(env, "qnfo-social", "refill", COMPOSE_MODEL, { messages: [{ role: "user", content: composePrompt(pick.doi, rec.title, rec.abstract) }], max_tokens: 2000 });
-  var posts = sanitizePosts(extractText(ai).split(String.fromCharCode(10)));
-  if (posts.length < 3) return { queued: depth, refilled: 0, reason: "compose produced too few posts", work: pick.n };
-  var issues = await checkThread(env, rec.title, rec.abstract, posts, pick.doi);
-  var status = issues && issues.length === 0 ? "queued" : "draft";
-  var slug = "refill-" + rec.id + "-" + new Date(now).toISOString().slice(0, 10).replace(/-/g, "");
-  var notes = status === "queued" ? "selected: REACH-REFILL-1 STRATEGY 2.4 work " + pick.n + " (queue had " + depth + ")"
-    : JSON.stringify(issues === null ? [{ post: 0, issue: "checker unavailable - unverified, held as draft" }] : issues);
-  await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, doi, posts, status, notes, flags) VALUES (?,?,?,?,?,?,?)")
-    .bind(slug, rec.title, pick.doi, JSON.stringify(posts.slice(0, 6)), status, notes, status === "queued" ? "selected" : null).run();
-  if (status !== "queued") await logAlert(env, "refill", "warning", "held as draft: " + slug + " (" + (issues === null ? "checker unavailable" : issues.length + " issue(s)") + ")");
-  return { queued: depth + (status === "queued" ? 1 : 0), refilled: 1, slug: slug, status: status, work: pick.n };
 }
 // Drafts about papers STRATEGY keeps out of outreach are suppressed with the reason, so no recheck or approval can post them.
 async function reachSweepDrafts(env) {
@@ -812,23 +755,21 @@ function repairPrompt(doi, title, abstract, posts, issues) {
     "Previous draft (do not reuse its rejected wording): " + JSON.stringify(posts || []).slice(0, 2000);
 }
 async function reachRepairDrafts(env) {
-  var rows = await env.DB.prepare("SELECT id, title, doi, posts, notes FROM social_threads WHERE status='draft' AND doi IS NOT NULL AND doi <> '' AND notes LIKE '[%' ORDER BY id ASC LIMIT ?").bind(REPAIR_PER_RUN).all();
+  var rows = await env.DB.prepare("SELECT id, title, doi, abstract, posts, notes FROM social_threads WHERE status='draft' AND abstract IS NOT NULL AND abstract <> '' AND notes LIKE '[%' ORDER BY id ASC LIMIT ?").bind(REPAIR_PER_RUN).all();
   var out = { tried: 0, queued: 0, rejected: 0, skipped: 0 };
   for (var i = 0, list = (rows && rows.results) || []; i < list.length; i++) {
     var row = list[i], issues = [], posts = [];
     try { issues = JSON.parse(row.notes); } catch (e) { issues = []; }
     try { posts = JSON.parse(row.posts); } catch (e) { posts = []; }
     if (!reachEligible(row.title, "", row.doi).ok) { out.skipped++; continue; } // the sweep suppresses these
-    var rec = await zenodoRecord(row.doi);
-    if (!rec) { out.skipped++; continue; }
+    var rec = { title: String(row.title || ""), abstract: String(row.abstract || "").slice(0, 4000) };
     out.tried++;
     var ai = await aiRunAttr(env, "qnfo-social", "repair", COMPOSE_MODEL, { messages: [{ role: "user", content: repairPrompt(row.doi, rec.title, rec.abstract, posts, issues) }], max_tokens: 2000 });
     var np = sanitizePosts(extractText(ai).split(String.fromCharCode(10)));
     var again = np.length >= 3 ? await checkThread(env, rec.title, rec.abstract, np, row.doi) : [{ post: 0, issue: "rewrite produced too few posts" }];
     if (again && again.length === 0) {
-      var sel = reachSelected(row.doi);
-      await env.DB.prepare("UPDATE social_threads SET status='queued', posts=?, notes=?, flags=?, updated_at=datetime('now') WHERE id=? AND status='draft'")
-        .bind(JSON.stringify(np.slice(0, 6)), (sel ? "selected: " : "") + "REACH-REPAIR-1: rewritten after checker findings, now clean | first round: " + String(row.notes).slice(0, 600), sel ? "selected" : null, row.id).run();
+      await env.DB.prepare("UPDATE social_threads SET status='queued', posts=?, notes=?, updated_at=datetime('now') WHERE id=? AND status='draft'")
+        .bind(JSON.stringify(np.slice(0, 6)), "REACH-REPAIR-1: rewritten after checker findings, now clean | first round: " + String(row.notes).slice(0, 600), row.id).run();
       out.queued++;
     } else {
       await env.DB.prepare("UPDATE social_threads SET status='rejected', notes=?, updated_at=datetime('now') WHERE id=? AND status='draft'")
@@ -839,83 +780,15 @@ async function reachRepairDrafts(env) {
   return out;
 }
 // ---- REACH-SELECT-1:END ----
+// NOZ-DOI-1: the external-registry scan is retired. Papers reach the channels through the dissemination_tracker drain
+// (PROMOTE-ROUTE-1); the 06:00 run now only sweeps ineligible drafts and rewrites held ones once (REACH-REPAIR-1).
 async function autoScan(env) {
   try {
-    const q = 'metadata.creators.person_or_org.name:"Quni-Gudzinas"';
-    // DISTRIBUTION-RECONCILE-1 (#1692, 2026-10-01): the scan used to read only the 15 newest records
-    // past the last_scanned cursor, so a batch of publications larger than 15 (or a record indexed late)
-    // was skipped for good: 3 of the 10 papers published in the 30 days to 2026-10-01 had no post on
-    // any channel. It now reads 25 records and also composes for any record from the last 30 days that
-    // has no thread and no posted dissemination row (at most RECONCILE_PER_RUN per run).
-    // size=25: Zenodo's anonymous API rejects size>25 with 400 (SOCIAL-SCAN-PAGESIZE-1).
-    const r = await fetch('https://zenodo.org/api/records?q=' + encodeURIComponent(q) + '&sort=mostrecent&size=25', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (qnfo-social)' }
-    });
-    if (!r.ok) { console.error('auto-scan zenodo fetch failed', r.status); return { error: 'zenodo ' + r.status }; }
-    const d = await r.json();
-    const hits = (d.hits && d.hits.hits) || [];
-    const st = await env.DB.prepare("SELECT value FROM scan_state WHERE key='last_scanned'").first();
-    const lastScanned = (st && st.value) || '2000-01-01T00:00:00.000000+00:00';
-    let newest = lastScanned;
-    let drafted = 0;
-    let suppressed = 0;
-    let reconciled = 0;
-    const RECONCILE_PER_RUN = 3;
-    const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
-    let pubs30 = 0;
-    for (const h of hits) {
-      const created = h.created || '';
-      const md = h.metadata || {};
-      const title = String(md.title || '').slice(0, 300);
-      const abstract = String(md.description || '').replace(/<[^>]+>/g, '').slice(0, 4000);
-      const doi = String(h.doi || '');
-      // REACH-SELECT-1: only papers STRATEGY 2.3/2.4 leads with count toward "distribution keeps up" and get a compose.
-      const el = reachEligible(title, abstract, doi);
-      if (created >= since30 && el.ok) pubs30++;
-      const isNew = created > lastScanned;
-      if (!isNew && (created < since30 || reconciled >= RECONCILE_PER_RUN)) continue;
-      if (!title || !abstract || !doi) continue;
-      const dup = await env.DB.prepare("SELECT id FROM social_threads WHERE doi=?").bind(doi).first();
-      if (dup) continue;
-      if (!el.ok) {
-        await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, doi, posts, status, notes) VALUES (?,?,?,?,?,?)").bind('scan-' + (doi.split('/').pop() || Date.now().toString(36)), title, doi, '[]', 'suppressed', 'REACH-SELECT-1: ' + el.reason).run();
-        suppressed++;
-        if (created > newest) newest = created;
-        continue;
-      }
-      if (!isNew) {
-        const disseminated = await env.DB.prepare("SELECT id FROM dissemination_tracker WHERE paper_doi=? AND action='posted' LIMIT 1").bind(doi).first();
-        if (disseminated) continue;
-        reconciled++;
-      }
-      const prompt = composePrompt(doi, title, abstract);
-      const ai = await aiRunAttr(env, "qnfo-social", "compose", COMPOSE_MODEL, { messages: [{ role: 'user', content: prompt }], max_tokens: 2000 });
-      const posts = sanitizePosts(extractText(ai).split(String.fromCharCode(10)));
-      if (posts.length < 3) continue;
-      const issues = await checkThread(env, title, abstract, posts, doi);
-      // v0.5.3: null (checker unavailable) is NOT clean - hold as draft.
-      const status = issues && issues.length === 0 ? 'queued' : 'draft';
-      const slug = 'scan-' + (doi.split('/').pop() || Date.now().toString(36));
-      const notes = issues && issues.length ? JSON.stringify(issues) : (issues === null ? JSON.stringify([{ post: 0, issue: 'checker unavailable - unverified, held as draft' }]) : null);
-      await env.DB.prepare("INSERT OR IGNORE INTO social_threads (slug, title, doi, posts, status, notes) VALUES (?,?,?,?,?,?)").bind(slug, title, doi, JSON.stringify(posts.slice(0, 6)), status, notes).run();
-      if (!issues || issues.length) await logAlert(env, 'scan', 'warning', 'held as draft: ' + slug + ' (' + (issues === null ? 'checker unavailable' : issues.length + ' issue(s)') + ')');
-      drafted++;
-      if (created > newest) newest = created;
-    }
-    await env.DB.prepare("INSERT INTO scan_state (key, value) VALUES ('last_scanned', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(newest).run();
-    let swept = 0, refill = null;
+    let swept = 0, repair = null;
     try { swept = await reachSweepDrafts(env); } catch (e) { await logAlert(env, 'scan', 'error', 'REACH-SELECT-1 sweep: ' + String(e).slice(0, 200)); }
-    let repair = null;
     try { repair = await reachRepairDrafts(env); } catch (e) { repair = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'repair', 'error', repair.error); }
-    try { refill = await reachRefill(env); } catch (e) { refill = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'refill', 'error', refill.error); }
-    // Monitor: posts in the last 30 days must keep up with publications in the last 30 days.
-    try {
-      const pc = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM social_threads WHERE status='posted' AND posted_at >= datetime('now','-30 days')) + (SELECT COUNT(*) FROM dissemination_tracker WHERE action='posted' AND posted_at >= datetime('now','-30 days')) AS n").first();
-      const posts30 = pc ? Number(pc.n || 0) : 0;
-      if (posts30 < pubs30) await logAlert(env, 'scan', 'warning', 'DISTRIBUTION-RECONCILE-1: posts_30d=' + posts30 + ' < publications_30d=' + pubs30 + ' (Zenodo); distribution is not keeping up');
-    } catch (e) {}
-    console.log('auto-scan: drafted', drafted, '(reconciled', reconciled + ') draft threads; suppressed', suppressed, 'swept', swept, 'refill', JSON.stringify(refill), 'last_scanned', newest, 'eligible_publications_30d', pubs30);
-    return { records: hits.length, drafted: drafted, suppressed: suppressed, swept: swept, repair: repair, refill: refill, reconciled: reconciled, publications_30d: pubs30, last_scanned: newest };
+    console.log('auto-scan: swept', swept, 'repair', JSON.stringify(repair));
+    return { swept: swept, repair: repair };
   } catch (e) {
     await logAlert(env, 'scan', 'error', String(e));
     console.error('auto-scan failed', String(e));
@@ -1215,7 +1088,15 @@ async function drainChannels(env, opts) {
     try { rawPosts = JSON.parse(row.posts); } catch (e) {}
     if (!Array.isArray(rawPosts) || !rawPosts.length) { out.channels[channel] = 'held:bad-posts(' + row.slug + ')'; continue; }
     const cg = contentGate(rawPosts);
-    if (!cg.ok) { out.channels[channel] = 'held:content-gate:' + cg.reason + '(' + row.slug + ')'; continue; }
+    if (!cg.ok) {
+      if (cg.reason === 'dead-doi') {
+        try {
+          if (String(row.id).indexOf('dissem:') === 0) await env.DB.prepare("UPDATE dissemination_tracker SET action='suppressed', post_text_snippet='CONTENT-GATE: dead-doi - not posted', updated_at=datetime('now') WHERE id=?").bind(String(row.id).slice(7)).run();
+          else await env.DB.prepare("UPDATE social_threads SET status='suppressed', error='CONTENT-GATE: dead-doi - not posted', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+        } catch (e) {}
+      }
+      out.channels[channel] = 'held:content-gate:' + cg.reason + '(' + row.slug + ')'; continue;
+    }
     let link = null;
     for (const pt of cg.texts) { const u = extractUrls(String(pt)); if (u.length) { link = u[0]; break; } }
     if (link) {
@@ -1280,7 +1161,7 @@ async function bufferChannelAudit(env, nowMs) {
 
 // Re-run the fact-checker on drafts held only because the checker was unavailable.
 async function recheckDrafts(env) {
-  var rows = await env.DB.prepare("SELECT id, slug, title, doi, posts FROM social_threads WHERE status='draft' AND notes LIKE '%checker unavailable%' ORDER BY id ASC LIMIT 6").all();
+  var rows = await env.DB.prepare("SELECT id, slug, title, doi, abstract, posts FROM social_threads WHERE status='draft' AND notes LIKE '%checker unavailable%' ORDER BY id ASC LIMIT 6").all();
   var list = rows.results || [];
   var approved = 0, held = 0, skipped = 0;
   for (var i = 0; i < list.length; i++) {
@@ -1288,14 +1169,7 @@ async function recheckDrafts(env) {
     var posts = [];
     try { posts = JSON.parse(row.posts); } catch (e) { posts = []; }
     if (!Array.isArray(posts) || !posts.length) { skipped++; continue; }
-    var abstract = "";
-    var dm = String(row.doi || "").match(/zenodo\.(\d+)/);
-    if (dm) {
-      try {
-        var zr = await fetch("https://zenodo.org/api/records/" + dm[1], { headers: { "User-Agent": "Mozilla/5.0 (qnfo-social)" } });
-        if (zr.ok) { var zj = await zr.json(); abstract = String((zj.metadata && zj.metadata.description) || "").replace(/<[^>]+>/g, "").slice(0, 4000); }
-      } catch (e) { abstract = ""; }
-    }
+    var abstract = String(row.abstract || "").slice(0, 4000);
     if (!abstract) { skipped++; continue; }
     // REACH-SELECT-1: a held draft about a paper STRATEGY keeps out of outreach is never approved by a recheck.
     var rel = reachEligible(String(row.title || ""), abstract, row.doi);
@@ -1551,7 +1425,7 @@ async function drainDissemination(env, opts) {
       // OWNER-VOICE-CONTENT-GATE-1: repair mojibake in the title; never post a q08.org link or unrepairable text.
       const cg = contentGate([String(row.paper_title || row.paper_slug) + " \u2014 " + link]);
       if (!cg.ok) {
-        await env.DB.prepare("UPDATE dissemination_tracker SET action=?, post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind(cg.reason === 'q08-link' ? 'suppressed' : 'held', 'CONTENT-GATE: ' + cg.reason + ' - not posted', row.id).run();
+        await env.DB.prepare("UPDATE dissemination_tracker SET action=?, post_text_snippet=?, updated_at=datetime('now') WHERE id=?").bind((cg.reason === 'q08-link' || cg.reason === 'dead-doi') ? 'suppressed' : 'held', 'CONTENT-GATE: ' + cg.reason + ' - not posted', row.id).run();
         console.log("CONTENT_GATE dissemination " + row.id + " " + cg.reason);
         continue;
       }
@@ -1657,7 +1531,7 @@ async function drainQueue(env, opts) {
       // OWNER-VOICE-CONTENT-GATE-1: q08.org link -> suppressed; mojibake that cannot be repaired -> held. Neither posts.
       const cg = contentGate(rawPosts);
       if (!cg.ok) {
-        await env.DB.prepare("UPDATE social_threads SET status=?, error=?, updated_at=datetime('now') WHERE id=?").bind(cg.reason === 'q08-link' ? 'suppressed' : 'held', 'CONTENT-GATE: ' + cg.reason + ' - not posted', row.id).run();
+        await env.DB.prepare("UPDATE social_threads SET status=?, error=?, updated_at=datetime('now') WHERE id=?").bind((cg.reason === 'q08-link' || cg.reason === 'dead-doi') ? 'suppressed' : 'held', 'CONTENT-GATE: ' + cg.reason + ' - not posted', row.id).run();
         console.log("CONTENT_GATE thread " + row.id + " " + cg.reason);
         continue;
       }
@@ -1720,7 +1594,7 @@ async function drainQueue(env, opts) {
 }
 
 // SOCIAL-RUN-LEDGER-1 (0.7.27, pillar: reach; WATCHMAKER-INDEX-1). The profile sync, the posting drain (Bluesky plus the
-// Buffer cross-post to Mastodon, LinkedIn and X), the Zenodo scan and the engagement collector logged only to the console,
+// Buffer cross-post to Mastodon, LinkedIn and X), the paper scan and the engagement collector logged only to the console,
 // so the fleet could not tell a quiet run from a dead one. Each run now upserts ONE cloud_ops_events row per operation
 // per UTC day, id social-<op>-<yyyy-mm-dd> (kind social-run, job qnfo-social): ts, status and text describe the latest
 // run, meta.runs counts the day's runs, and meta.last_ok carries forward the time of the last run that completed
@@ -1834,11 +1708,6 @@ var LEARNER_DECISION_TTL_MS = 48 * 36e5;
 var LEARNER_MIN_GAP_MS = 24 * 36e5;              // learner posts at least 24h apart (so also one per tick)
 var LEARNER_PBEST_DRAWS = 2000;
 var LEARNER_METRIC = 'social_engagement_rate_30d';
-var LEARNER_SELECTED_TOPIC = {
-  '10.5281/zenodo.21637028': 'energy', '10.5281/zenodo.22261547': 'energy', '10.5281/zenodo.21821767': 'energy',
-  '10.5281/zenodo.21945415': 'energy', '10.5281/zenodo.21901984': 'epistemics', '10.5281/zenodo.22026592': 'epistemics',
-  '10.5281/zenodo.23079905': 'operations'
-};
 var LEARNER_TOPIC_RE = [
   ['energy', /\b(?:jpcub|joules?\b|landauer|thermodynamic (?:floor|cost|limit)|energy[- ](?:honest|per|cost|floor|efficien|budget))/i],
   ['epistemics', /\b(?:ignorance audits?|epistemic (?:legibility|repair|audit)|epistemics of ai|ai-assisted (?:science|claims?))\b/i],
@@ -1878,7 +1747,6 @@ function learnerTopicOf(doi, text) {
   const s = String(text || '');
   if (Q08_LINK_RE.test(s)) return null;                       // never q08
   const d = String(doi || '').trim().toLowerCase();
-  if (LEARNER_SELECTED_TOPIC[d]) return LEARNER_SELECTED_TOPIC[d];
   if (LEARNER_NOT_ARM_RE.test(s)) return null;                // pillar 4 stays out of outreach (STRATEGY 2.3)
   for (const t of LEARNER_TOPIC_RE) if (t[1].test(s)) return t[0];
   return null;

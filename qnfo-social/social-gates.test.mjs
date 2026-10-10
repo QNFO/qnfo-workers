@@ -241,9 +241,9 @@ function baseState(over) {
 // ---------- POST-UTM-SUBDOMAIN-1: every qnfo.org host is tagged, nothing else ----------
 {
   for (const h of ['qnfo.org', 'www.qnfo.org', 'papers.qnfo.org', 'ipatent.qnfo.org', 'fleet.qnfo.org', 'a.b.qnfo.org']) assert.equal(mod.utmHost(h), true, h);
-  for (const h of ['q08.org', 'doi.org', 'zenodo.org', 'notqnfo.org', 'qnfo.org.evil.com', 'qnfo-social.q08.workers.dev', '']) assert.equal(mod.utmHost(h), false, h);
+  for (const h of ['q08.org', 'doi.org', 'notqnfo.org', 'qnfo.org.evil.com', 'qnfo-social.q08.workers.dev', '']) assert.equal(mod.utmHost(h), false, h);
   assert.equal(mod.utmTag('https://ipatent.qnfo.org/example', 'bluesky', 'ipatent-example'), 'https://ipatent.qnfo.org/example?utm_source=bluesky&utm_medium=social&utm_campaign=ipatent-example');
-  assert.equal(mod.utmTag('https://doi.org/10.5281/zenodo.1', 'bluesky', 'x'), 'https://doi.org/10.5281/zenodo.1');
+  assert.equal(mod.utmTag('https://doi.org/10.1000/t.1', 'bluesky', 'x'), 'https://doi.org/10.1000/t.1');
   ok('utmHost: every *.qnfo.org host is tagged (ipatent launch link), other domains untouched');
 }
 // ---------- POST-SENT-TEXT-1: a posted row stores the text as posted, UTM included ----------

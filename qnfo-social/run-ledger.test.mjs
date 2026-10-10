@@ -1,8 +1,8 @@
 // SOCIAL-RUN-LEDGER-1 offline suite (qnfo-social 0.7.27). Drives the real scheduled handler and recordSocialRun against
 // an in-memory SQLite D1 (the real upsert SQL, json_set included) with a stubbed fetch. Proves: one row per operation per
 // UTC day; meta.last_ok carries the last completed run across a later failure; runs counts the day's runs; the 2-hourly
-// tick records profile-sync and drain, 06:00 the scan, 07:00 the engagement collector; a failed Zenodo read is an error
-// run; the watchmaker's proof query reads the row; a ledger failure never stops a run.
+// tick records profile-sync and drain, 06:00 the draft sweep, 07:00 the engagement collector; a second run counts as run 2;
+// the watchmaker's proof query reads the row; a ledger failure never stops a run.
 // Run: node qnfo-social/run-ledger.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -35,7 +35,6 @@ function stmtOn(conn, sql) {
 const DB = { prepare: (sql) => stmtOn(db, sql), async batch(list) { for (const s of list) s._run(); return []; } };
 const env = { DB, BSKY_HANDLE: "qnfo.bsky.social", BSKY_APP_PASS: "x", BUFFER_TOKEN: "buf", AI: {} };
 
-let zenodoStatus = 200;
 globalThis.fetch = async (url, init) => {
   const u = String(url), body = init && init.body ? String(init.body) : "";
   const J = (o, st) => new Response(JSON.stringify(o), { status: st || 200, headers: { "Content-Type": "application/json" } });
@@ -48,7 +47,6 @@ globalThis.fetch = async (url, init) => {
     if (body.includes("organizations")) return J({ data: { account: { organizations: [{ id: "org1" }] } } });
     if (body.includes("channels(")) return J({ data: { channels: [{ id: "chL", service: "linkedin", name: "Rowan", isDisconnected: false }] } });
   }
-  if (u.startsWith("https://zenodo.org/api/records?")) return zenodoStatus === 200 ? J({ hits: { hits: [] } }) : new Response("busy", { status: zenodoStatus });
   return new Response("not found", { status: 404 });
 };
 
@@ -95,10 +93,9 @@ const dr = row("social-drain-" + today);
 ok(dr && dr.status === "ok" && JSON.parse(dr.meta).result.queue.posted === 0 && "dissemination" in JSON.parse(dr.meta).result, "the 2-hourly tick records the posting drain with both queues");
 ok(db.prepare("SELECT connected FROM social_channels WHERE channel_id = 'chL'").get().connected === 1, "the channel audit still writes social_channels in the same tick");
 await W.scheduled({ cron: "0 6 * * *" }, env);
-ok(row("social-scan-" + today) && row("social-scan-" + today).status === "ok" && JSON.parse(row("social-scan-" + today).meta).result.records === 0, "06:00 records the Zenodo scan");
-zenodoStatus = 503;
+ok(row("social-scan-" + today) && row("social-scan-" + today).status === "ok" && JSON.parse(row("social-scan-" + today).meta).result.swept === 0, "06:00 records the draft sweep and repair run");
 await W.scheduled({ cron: "0 6 * * *" }, env);
-ok(row("social-scan-" + today).status === "error" && JSON.parse(row("social-scan-" + today).meta).runs === 2 && JSON.parse(row("social-scan-" + today).meta).last_ok, "a failed Zenodo read is an error run that keeps the earlier good time");
+ok(row("social-scan-" + today).status === "ok" && JSON.parse(row("social-scan-" + today).meta).runs === 2 && JSON.parse(row("social-scan-" + today).meta).last_ok, "a second run the same day counts as run 2 and keeps the last good time");
 db.prepare("INSERT INTO social_threads (slug, title, posts, status, posted_at, post_uri) VALUES ('t1', 't', '[]', 'posted', datetime('now'), 'at://did:plc:me/app.bsky.feed.post/a1')").run();
 await W.scheduled({ cron: "0 7 * * *" }, env);
 const en = row("social-engagement-" + today);

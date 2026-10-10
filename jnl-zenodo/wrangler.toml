@@ -1,12 +1,4 @@
 name = "jnl-zenodo"
 main = "worker.js"
 compatibility_date = "2025-09-01"
-workers_dev = true
-
-[[kv_namespaces]]
-binding = "STATE"
-id = "0cf89b469bcb47058e343611d9117897"
-
-# RETIRED-BINDING-FIX (2026-09-15): REFEREE -> jnl-referee removed (retired; merged into jnl-pipeline).
-[ai]
-binding = "AI"
+# NOZ-DOI-1 (2026-10-10): retired and inert; KV and AI bindings removed.

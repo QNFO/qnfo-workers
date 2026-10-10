@@ -15,7 +15,7 @@ CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, paper_
 INSERT INTO social_threads (slug, title, posts, status, flags, notes) VALUES
   ('thread-a', 'Thread A', '["Claim: A https://papers.qnfo.org/papers/thread-a/"]', 'queued', 'selected', 'selected: a');
 INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, created_at) VALUES
-  ('d1', 'new-paper', '10.5281/zenodo.9', 'A new paper', 'bluesky', 'queued', datetime('now','-1 hours'));`);
+  ('d1', 'new-paper', '10.1000/t.9', 'A new paper', 'bluesky', 'queued', datetime('now','-1 hours'));`);
 const stmt = (sql) => { let a = []; const s = { bind(...x) { a = x.map((v) => (v === undefined ? null : v)); return s; }, async all() { return { results: db.prepare(sql).all(...a) }; }, async first() { return db.prepare(sql).get(...a) || null; }, async run() { db.prepare(sql).run(...a); return { success: true }; } }; return s; };
 const env = { DB: { prepare: stmt } };
 let r = await mod.pickChannelRow(env, "mastodon", "0");

@@ -22,7 +22,7 @@ db.exec(`CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT,
 CREATE TABLE social_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE, title TEXT, posts TEXT, status TEXT DEFAULT 'queued', posted_at TEXT,
   created_at TEXT DEFAULT (datetime('now')), retry_count INTEGER DEFAULT 0, error TEXT, doi TEXT, abstract TEXT, flags TEXT, notes TEXT, updated_at TEXT, post_uri TEXT);
 CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT NOT NULL, paper_doi TEXT, paper_title TEXT, channel TEXT NOT NULL, action TEXT NOT NULL DEFAULT 'posted',
-  post_url TEXT, post_id TEXT, post_text_snippet TEXT, mode TEXT, fallback INTEGER DEFAULT 0, posted_at TEXT, zenodo_url TEXT, pages_url TEXT, github_url TEXT,
+  post_url TEXT, post_id TEXT, post_text_snippet TEXT, mode TEXT, fallback INTEGER DEFAULT 0, posted_at TEXT, pages_url TEXT, github_url TEXT,
   created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')), retry_count INTEGER DEFAULT 0);
 CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT);
 CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT, note TEXT, updated_at TEXT DEFAULT (datetime('now')));
@@ -87,19 +87,19 @@ const decisionEvents = () => all("SELECT id, meta FROM cloud_ops_events WHERE ki
 const slotTick = (day, slot) => T(day + "T" + String(mod.LEARNER_SLOTS[slot][0]).padStart(2, "0") + ":30:00Z");
 
 // ---------- 1. Classification ----------
-let c = mod.learnerClassify({ slug: "jps-metric", title: "The Joules-per-Solution Metric", doi: "10.5281/zenodo.21637028", posts: JSON.stringify(JPS) }, "thread");
+let c = mod.learnerClassify({ slug: "jps-metric", title: "The Joules-per-Solution Metric", doi: "10.1000/t.21637028", posts: JSON.stringify(JPS) }, "thread");
 ok(c.topic === "energy" && c.format === "single" && c.n_posts === 1 && c.link_slug === "joules-per-solution-metric", "launch-queue claim/test/status post: energy (selected-work DOI), single, links the paper slug");
-c = mod.learnerClassify({ slug: "fleet", title: "Operating the Quniverse Fleet", doi: "10.5281/zenodo.23003473", posts: JSON.stringify(FLEETQ) }, "thread");
+c = mod.learnerClassify({ slug: "fleet", title: "Operating the Quniverse Fleet", doi: "10.1000/t.23003473", posts: JSON.stringify(FLEETQ) }, "thread");
 ok(c.topic === "operations" && c.format === "question" && c.n_posts === 3, "composer thread with a question hook: operations (keyword), question");
 c = mod.learnerClassify({ slug: "t", title: "JPCUB landscape", posts: JSON.stringify(["Gate speed, not cooling, dominates energy per correct answer.", "Second.", "Third https://papers.qnfo.org/papers/jpcub-competitive-landscape"]) }, "thread");
 ok(c.topic === "energy" && c.format === "thread", "statement-hook thread: thread");
-ok(mod.learnerClassify({ slug: "e", title: "Universal Ignorance Audit", doi: "10.5281/zenodo.21901984", posts: JSON.stringify(["A method others can use."]) }, "thread").topic === "epistemics", "selected work 5 maps to epistemics");
+ok(mod.learnerClassify({ slug: "e", title: "Universal Ignorance Audit", doi: "10.1000/t.21901984", posts: JSON.stringify(["A method others can use."]) }, "thread").topic === "epistemics", "selected work 5 maps to epistemics");
 ok(mod.learnerClassify({ slug: "q", title: "x", posts: JSON.stringify(Q08) }, "thread").topic === null, "a q08 post is never an arm");
-ok(mod.learnerClassify({ slug: "q2", title: "JPCUB", doi: "10.5281/zenodo.21637028", posts: JSON.stringify(Q08) }, "thread").topic === null, "a q08 link wins over a selected DOI: never an arm");
+ok(mod.learnerClassify({ slug: "q2", title: "JPCUB", doi: "10.1000/t.21637028", posts: JSON.stringify(Q08) }, "thread").topic === null, "a q08 link wins over a selected DOI: never an arm");
 ok(mod.learnerClassify({ slug: "u", title: "Ultrametric intelligence", posts: JSON.stringify(ULTRA) }, "thread").topic === null, "pillar 4 (ultrametric) is not an arm");
-c = mod.learnerClassify({ id: "d1", paper_slug: "braid-x", paper_doi: "10.5281/zenodo.23086421", paper_title: "Braid Group Representations, Modular Data, and the Classification of Majorana Zero Modes", pages_url: "https://papers.qnfo.org/papers/braid-x/" }, "dissem");
+c = mod.learnerClassify({ id: "d1", paper_slug: "braid-x", paper_doi: "10.1000/t.23086421", paper_title: "Braid Group Representations, Modular Data, and the Classification of Majorana Zero Modes", pages_url: "https://papers.qnfo.org/papers/braid-x/" }, "dissem");
 ok(c.topic === null && c.format === "single" && c.link_slug === "braid-x", "dissemination card on an unlisted topic: single, not an arm");
-ok(mod.learnerClassify({ id: "d2", paper_slug: "llm", paper_doi: "10.5281/zenodo.21945415", paper_title: "Joules-per-Solution for Stochastic and Agentic Inference" }, "dissem").topic === "energy", "dissemination card of selected work 4: energy");
+ok(mod.learnerClassify({ id: "d2", paper_slug: "llm", paper_doi: "10.1000/t.21945415", paper_title: "Joules-per-Solution for Stochastic and Agentic Inference" }, "dissem").topic === "energy", "dissemination card of selected work 4: energy");
 ok(mod.learnerClassify({ id: "d3", paper_slug: "v", paper_title: "Why Vertices, Not Points? Vertex-Anchored Braiding" }, "dissem").format === "question", "a title that asks a question is question-led");
 ok(!mod.learnerIsQuestion("Claim: 0.5 J per answer. Is it right?") && mod.learnerIsQuestion("What does 1.5 J mean? Read on.") && mod.learnerIsQuestion("Is it? https://x.org/a?b=1"), "question detection: first sentence only, decimals are not sentence ends");
 
@@ -139,12 +139,12 @@ ok(near(mod.learnerRewardOf({ e: 1 }, null).reward, 0.3935) && near(mod.learnerR
 // ---------- 6. The reward is counted once, only after the 72h window ----------
 reset();
 const P0 = "2026-10-06 08:30:00", P0ms = T("2026-10-06T08:30:00Z");
-const tJ = addThread("jps-metric", "The Joules-per-Solution Metric", "10.5281/zenodo.21637028", JPS, { status: "posted", posted_at: P0, post_uri: "at://did:plc:me/app.bsky.feed.post/p1", flags: "selected" });
-const tF = addThread("fleet-q", "Operating the Quniverse Fleet", "10.5281/zenodo.23003473", FLEETQ, { status: "posted", posted_at: "2026-10-06 18:30:00", post_uri: JSON.stringify({ bluesky: "at://did:plc:me/app.bsky.feed.post/p2", linkedin: "buffer:9" }) });
+const tJ = addThread("jps-metric", "The Joules-per-Solution Metric", "10.1000/t.21637028", JPS, { status: "posted", posted_at: P0, post_uri: "at://did:plc:me/app.bsky.feed.post/p1", flags: "selected" });
+const tF = addThread("fleet-q", "Operating the Quniverse Fleet", "10.1000/t.23003473", FLEETQ, { status: "posted", posted_at: "2026-10-06 18:30:00", post_uri: JSON.stringify({ bluesky: "at://did:plc:me/app.bsky.feed.post/p2", linkedin: "buffer:9" }) });
 addThread("q08-essay", "x", null, Q08, { status: "posted", posted_at: "2026-10-06 10:30:00", post_uri: "at://did:plc:me/app.bsky.feed.post/p3" });
-addThread("old", "JPCUB", "10.5281/zenodo.21821767", JPS, { status: "posted", posted_at: "2026-09-30 10:30:00", post_uri: "at://did:plc:me/app.bsky.feed.post/p0" });
+addThread("old", "JPCUB", "10.1000/t.21821767", JPS, { status: "posted", posted_at: "2026-09-30 10:30:00", post_uri: "at://did:plc:me/app.bsky.feed.post/p0" });
 addDissem("res-u", "ultrametric-intelligence", null, "Ultrametric intelligence", { action: "posted", post_id: "at://did:plc:me/app.bsky.feed.post/p4", posted_at: "2026-10-07 02:30:00" });
-addDissem("res-e", "statements-to-questions", "10.5281/zenodo.22026592", "Epistemic Legibility in AI-Assisted Science", { action: "posted", post_id: "at://did:plc:me/app.bsky.feed.post/p5", posted_at: "2026-10-06 14:30:00" });
+addDissem("res-e", "statements-to-questions", "10.1000/t.22026592", "Epistemic Legibility in AI-Assisted Science", { action: "posted", post_id: "at://did:plc:me/app.bsky.feed.post/p5", posted_at: "2026-10-06 14:30:00" });
 const se = (uri, day, m) => { for (const k of Object.keys(m)) db.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES ('bluesky', ?, ?, ?, 'qnfo-social', ?)").run(uri, k, m[k], day); };
 se("at://did:plc:me/app.bsky.feed.post/p1", "2026-10-07", { likes: 1, reposts: 0, replies: 0, quotes: 0 });
 se("at://did:plc:me/app.bsky.feed.post/p1", "2026-10-09", { likes: 3, reposts: 1, replies: 1, quotes: 0 });   // 07:00Z on 10-09 is 70.5h after posting: inside
@@ -193,9 +193,9 @@ const seedQueue = () => {
   const ids = {};
   ids.ultra = addThread("ultra", "Ultrametric intelligence", null, ULTRA);
   ids.q08 = addThread("q08-x", "q08", null, Q08);
-  ids.jps = addThread("jps-metric", "The Joules-per-Solution Metric", "10.5281/zenodo.21637028", JPS, { flags: "selected" });
-  ids.fleet = addThread("fleet-q", "Operating the Quniverse Fleet", "10.5281/zenodo.23003473", FLEETQ);
-  addDissem("res-b", "braid-x", "10.5281/zenodo.23086421", "Braid Group Representations and Modular Data");
+  ids.jps = addThread("jps-metric", "The Joules-per-Solution Metric", "10.1000/t.21637028", JPS, { flags: "selected" });
+  ids.fleet = addThread("fleet-q", "Operating the Quniverse Fleet", "10.1000/t.23003473", FLEETQ);
+  addDissem("res-b", "braid-x", "10.1000/t.23086421", "Braid Group Representations and Modular Data");
   return ids;
 };
 let ids = seedQueue();
@@ -236,8 +236,8 @@ ok(all("SELECT status FROM social_threads WHERE id IN (?, ?)", ids.ultra, ids.q0
 
 // A simulated week of ticks: never more than the weekly cap, every learner post inside its decided slot.
 ids = seedQueue();
-addThread("jpcub-17", "Energy per correct answer across 17 quantum platforms", "10.5281/zenodo.21821767", ["Claim: gate speed, not cooling, dominates energy per correct answer. https://papers.qnfo.org/papers/jpcub-competitive-landscape"], { flags: "selected" });
-addDissem("res-llm", "llm-jps", "10.5281/zenodo.21945415", "Joules-per-Solution for Stochastic and Agentic Inference");
+addThread("jpcub-17", "Energy per correct answer across 17 quantum platforms", "10.1000/t.21821767", ["Claim: gate speed, not cooling, dominates energy per correct answer. https://papers.qnfo.org/papers/jpcub-competitive-landscape"], { flags: "selected" });
+addDissem("res-llm", "llm-jps", "10.1000/t.21945415", "Joules-per-Solution for Stochastic and Agentic Inference");
 const rowsBefore = one("SELECT COUNT(*) n FROM social_threads").n + one("SELECT COUNT(*) n FROM dissemination_tracker").n;
 mod.setLearnerRng(mulberry32(99));
 let outsideSlot = 0;
