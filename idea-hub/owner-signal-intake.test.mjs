@@ -128,7 +128,7 @@ ok(r.scanned === 1 && refs.length === 1 && refs[0] === "10.5281/zenodo.1", "re-e
 const seed = await api.thinkSeed(env);
 ok(/The author's own lines of work/.test(seed) && /Distinction lattices|anyon condensation/.test(seed) && !/quantum foundations, information thermodynamics/.test(seed), "the think loop is seeded from the owner's accepted ideas, not fixed quantum themes", seed.slice(0, 200));
 const empty = mk(); empty.exec("CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY, name TEXT, idea TEXT, contact TEXT, decision TEXT)");
-ok(/Avoid quantum error correction/.test(await api.thinkSeed({ QNFO_AUDIT: shim(empty) })), "with no owner ideas on file the seed falls back without fixed quantum themes");
+ok(!/quantum/i.test(await api.thinkSeed({ QNFO_AUDIT: shim(empty) })), "with no owner ideas on file the seed falls back without fixed topic nouns");
 
 // 6. 1.7.2: reasoning budget, call + cache counters, prompt-cache affinity.
 ok(api.REASONING_MAX_TOKENS >= 2000 && seenMax.length > 0 && seenMax.every((m) => m === api.REASONING_MAX_TOKENS), "every scoring and notebook call carries the reasoning budget (>= 2000 tokens), never 600/700", [...new Set(seenMax)]);
