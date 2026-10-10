@@ -4,10 +4,10 @@
 // Purpose: hourly cloud-cron watcher that (1) queries CF GraphQL workersInvocationsAdaptive for
 // NEW uncaught worker exceptions in the last 60 min, (2) queries Log Explorer zone http_requests
 // for 5xx edges, (3) files deduped agent_issues + alerts for any new spike, (4) deterministically
-// auto-re-arms the now-fixed Zenodo legacy related_identifiers failure class (errata_actions
+// auto-re-arms the now-fixed legacy errata publish failure class (errata_actions
 // status='error' risk='low' -> 'drafted', bounded <=3/day/action) so the errata-publish worker
 // v0.7.1+ retries and publishes. Self-docs /health per FLEET-SELF-DOC-1.
-const VERSION = "1.0.2"; // 2026-09-06 v1.0.1 5xx ISO-filter fix; v1.0.2 alert-storm watchdog
+const VERSION = "1.0.3-doi-scrub"; // 1.0.3 NOZ-DOI-1 comment scrub; 2026-09-06 v1.0.1 5xx ISO-filter fix; v1.0.2 alert-storm watchdog
 const WORKER = "qnfo-error-selfheal";
 const ACCOUNT = "edb167b78c9fb901ea5bca3ce58ccc4b";
 const ZONE = "84e9dc1d7fb72629ccdbe3174ed24420"; // qnfo.org

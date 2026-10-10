@@ -7,7 +7,7 @@
 // Goal: grow QNFO reach/awareness by being the account that explains science to everyone.
 // Bluesky account: qnfo.bsky.social (shared with qnfo-social). Posted via our own AT Protocol
 // session so the explainer keeps a guaranteed daily cadence, independent of the qnfo-social
-// Zenodo queue backlog.
+// publication queue backlog.
 //
 // DESIGN GATES (self-imposed, see README):
 //   HONEST-OR-NOT-1   every explanation states the application the ABSTRACT states, or plainly that it states none
@@ -18,7 +18,7 @@
 //   DAILY-CAP-1       max 1 thread/day (DAILY_CAP).
 //   KILL-SWITCH-1     paper_explain_state.enabled=0 halts posting (still logs dry runs).
 
-var VERSION = "0.3.0";
+var VERSION = "0.3.1-doi-scrub";
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"; // non-reasoning, fp8-fast (24k ctx), fast + cheap
 const BSKY = "https://bsky.social/xrpc";
 const UA = "Mozilla/5.0 (qnfo-paper-explainer)";

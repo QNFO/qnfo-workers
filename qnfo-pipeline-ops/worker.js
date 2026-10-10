@@ -7,7 +7,7 @@
 //   so proposals stayed 'new' forever and NOTHING alerted. Now pipeline-ops alarms on this class in
 //   <=15 min, and auto-triggers a triage drain when the triage worker is reachable.
 
-var VERSION = "0.5.2-intake-alert-gate";
+var VERSION = "0.5.3-doi-scrub";
 var WORKER = "qnfo-pipeline-ops";
 var STALE_MIN = 60;
 var MAX_RECOVERS = 2;
@@ -126,7 +126,7 @@ async function escalateVersion(env, rows) {
   for (const v of rows) {
     const title = "VQ error version_queue id=" + v.id + " (" + String(v.paper_doi || "") + " -> " + String(v.version_to || "") + ")";
     const desc = "version_queue row " + v.id + " in error since " + v.updated_at + " (paper " + v.paper_doi + " from " + v.version_from + " to " + v.version_to + "). Escalated by pipeline-ops; research-exec purge-fix drain may auto-rearm after 2h.";
-    const r = await escIssue(env, title, desc, "zenodo-publish", "high");
+    const r = await escIssue(env, title, desc, "paper-publish", "high");
     if (r.inserted) { try { await env.QNFO_AUDIT.prepare("INSERT INTO alerts (source, level, message) VALUES (?,?,?)").bind(WORKER, "warning", "version_queue error escalated id=" + v.id + " -> agent_issues " + r.id).run(); } catch (e) {} }
   }
 }

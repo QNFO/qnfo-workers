@@ -1,4 +1,5 @@
 var __defProp = Object.defineProperty;
+var VERSION = "2.7.4-doi-scrub";
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js — qnfo-idea-factory v2.0.0
@@ -107,7 +108,7 @@ var worker_default = {
       return new Response(null, { status: 204, headers: cors() });
     }
     try {
-      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: "2.7.3", bindings: { d1: !!env.QNFO_AUDIT } });
+      if (path === "/health") return json({ status: "ok", worker: "qnfo-idea-factory", version: VERSION, bindings: { d1: !!env.QNFO_AUDIT } });
       if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
       if (path === "/rss.xml") return handleRss(env);
       if (path === "/embed") return serveEmbed();
@@ -155,7 +156,7 @@ function redact(s) {
   });
   t = t.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, REDACT);
   t = t.replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer " + REDACT);
-  t = t.replace(/(\b(?:api[_-]?key|secret|password|passwd|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|zenodo[_-]?token|cf[_-]?token|github[_-]?token)\b\s*[:=]\s*["']?)[A-Za-z0-9._~+/-]{8,}/gi, "$1" + REDACT);
+  t = t.replace(/(\b(?:api[_-]?key|secret|password|passwd|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|cf[_-]?token|github[_-]?token)\b\s*[:=]\s*["']?)[A-Za-z0-9._~+/-]{8,}/gi, "$1" + REDACT);
   t = t.replace(/\b(?:wWbJ|AoG|cf-api|glpat|ghp_|xox[baprs]-)[A-Za-z0-9_-]{6,}/g, REDACT);
   t = t.replace(/\b[0-9a-fA-F]{32,}\b/g, REDACT);
   t = t.replace(/\b[A-Za-z]:\\[^\s"'<>|]*/g, REDACT);

@@ -9,7 +9,7 @@
 //   INDEXNOW_KEY (IndexNow submission key).
 // Crons: "0 * * * *" triage; "*/10 * * * *" stage machine (sync + claim).
 
-const VERSION = "1.4.0-intake-only";
+const VERSION = "1.4.1-doi-scrub";
 const MODELS = {
   a: "@cf/zai-org/glm-5.3-flash",
   b: "@cf/deepseek-ai/deepseek-v4-flash-0731",
@@ -356,11 +356,10 @@ function briefPublish(row, slug, draft) {
     "",
     "Do the following IN ORDER:",
     "1) publish_paper(slug: \"" + slug + "\", title: <paper title>, authors: \"Rowan Brad Quni-Gudzinas\", abstract: <abstract>, body_md: <full paper markdown>).",
-    "2) zenodo_publish(slug: \"" + slug + "\", title: <paper title>, body_md: <full paper markdown>, authors: \"Rowan Brad Quni-Gudzinas\", description: <abstract>, keywords: [<3-5 keywords>]).",
-    "3) social_promote(slug: \"" + slug + "\", title: <paper title>, posts: [5 posts, each <=290 chars, strictly faithful to the abstract: hook -> plain-language claim -> why it matters -> 1 caveat -> link to https://papers.qnfo.org/papers/" + slug + "/]).",
-    "4) github_publish(repo: \"QNFO/qnfo-research\", path: \"papers/" + slug + "/paper.md\", content: <full paper markdown>, message: \"autonomous pipeline: " + slug + "\").",
+    "2) social_promote(slug: \"" + slug + "\", title: <paper title>, posts: [5 posts, each <=290 chars, strictly faithful to the abstract: hook -> plain-language claim -> why it matters -> 1 caveat -> link to https://papers.qnfo.org/papers/" + slug + "/]).",
+    "3) github_publish(repo: \"QNFO/qnfo-research\", path: \"papers/" + slug + "/paper.md\", content: <full paper markdown>, message: \"autonomous pipeline: " + slug + "\").",
     "Never invent numbers in the social posts beyond what the paper states.",
-    "Final response: JSON ONLY: {\"slug\":\"<slug>\",\"doi\":\"<doi from zenodo_publish or null>\",\"published\":true}",
+    "Final response: JSON ONLY: {\"slug\":\"<slug>\",\"published\":true}",
   ].join("\n");
 }
 
@@ -457,13 +456,13 @@ async function advance(env, row, result) {
         const claimedSlug = pub.slug || slug;
         let lp = null;
         try {
-          lp = await env.LIVING_PAPER.prepare("SELECT slug, doi, zenodo_doi FROM papers WHERE slug=?1").bind(claimedSlug).first();
+          lp = await env.LIVING_PAPER.prepare("SELECT slug FROM papers WHERE slug=?1").bind(claimedSlug).first();
         } catch (e) { await logTask(env, row.id, "publish", "verify", "error", "living-paper check failed: " + e.message); }
         if (!lp) {
           await logTask(env, row.id, "publish", "verify", "fail", "slug not in living-paper: " + claimedSlug + "; will retry publish");
           return { advanced: false, retry: true, reason: "living-paper row missing" };
         }
-        const doi = lp.zenodo_doi || lp.doi || pub.doi || null;
+        const doi = null; // NOZ-DOI-1: no DOI is registered for pipeline papers
         const paperUrl = "https://papers.qnfo.org/papers/" + lp.slug + "/";
         await env.QNFO_AUDIT.prepare(
           "UPDATE research_queue SET status='completed', completed_at=?1, paper_slug=?2, doi=?3, paper_url=?4, published_at=?1 WHERE id=?5"
