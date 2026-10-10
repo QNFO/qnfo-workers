@@ -9,7 +9,7 @@
 //   INDEXNOW_KEY (IndexNow submission key).
 // Crons: "0 * * * *" triage; "*/10 * * * *" stage machine (sync + claim).
 
-const VERSION = "1.4.1-doi-scrub";
+var VERSION = "1.4.1-doi-scrub";
 const MODELS = {
   a: "@cf/zai-org/glm-5.3-flash",
   b: "@cf/deepseek-ai/deepseek-v4-flash-0731",

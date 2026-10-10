@@ -1,7 +1,7 @@
 // research-daily-brief v1.1.0
 // FIX 2026-09-13: fetchArxiv now has 3-attempt exponential backoff (1s/3s/9s) + Semantic Scholar fallback
 // FIX 2026-09-13: scheduled() no longer silently drops errors; alertMsg fires on every failure
-var VERSION = '1.1.2-doi-scrub';
+var VERSION = "1.1.2-doi-scrub";
 var ARXIV = 'https://export.arxiv.org/api/query';
 var UA = 'QNFO-Research-Bot/1.1 (research@qnfo.org)';
 var ALERTS = 'alerts@qnfo.org';
