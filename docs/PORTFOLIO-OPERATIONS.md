@@ -28,7 +28,7 @@ Other recurring work, and the split so nothing runs twice (all of it on Cloudfla
   qnfo-backlog-exec (01:10 UTC) closes or reopens them with evidence. This procedure does not sweep general defects; it
   takes only STRATEGY-tagged issues (source or title naming STRATEGY, whoever filed them) and reach/ROI work.
 - **Identity weekly review** (IDENTITY-WEEKLY-1, Mondays after 06:00 UTC, qnfo-fleet-dashboard on its existing `*/15` cron,
-  once a day via the `cloud_ops_events` row `identity-weekly-<day>`): Bluesky, Mastodon, Zenodo, ORCID, GitHub and
+  once a day via the `cloud_ops_events` row `identity-weekly-<day>`): Bluesky, Mastodon, ORCID, GitHub and
   OpenAlex metrics; live bios against the canonical copy and the STRATEGY 2.2 never-claim list; deadline and page checks
   for every opportunity; funder and employer replies by domain and subject. It writes one `portfolio_runs` row (kind
   `identity-weekly`), opens one urgent owner queue card when something is urgent, and never edits the Identity doc or a

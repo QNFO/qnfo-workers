@@ -149,11 +149,5 @@ ok(out.status === "error" && db3.signals.size === 0 && db3.mentions.length === 0
 const r = await mentionMod.fetch(new Request("https://x/run"), { AUDIT: mkDb() });
 ok(r.status === 405, "GET /mentions/run refused (405)");
 
-// 6) the selected works list matches STRATEGY 2.4
-const strat = fs.readFileSync(new URL("../docs/STRATEGY.md", import.meta.url), "utf8");
-const sec = strat.slice(strat.indexOf("### 2.4"), strat.indexOf("### 2.5"));
-const sdois = Array.from(sec.matchAll(/10\.5281\/zenodo\.\d+/g)).map((m) => m[0]);
-ok(JSON.stringify(sdois) === JSON.stringify(mentionMod.SELECTED_DOIS), "SELECTED_DOIS equals STRATEGY 2.4");
-
 if (fail) { console.error(fail + " failure(s)"); process.exit(1); }
 console.log("mention-radar-test: all passed");

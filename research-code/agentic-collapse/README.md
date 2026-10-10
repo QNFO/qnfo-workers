@@ -1,7 +1,7 @@
 # agentic-collapse
 
 Reference implementation of the model in *AGENTIC COLLAPSE: A Time-Delayed Cybernetic Framework for Epistemic
-Stability in Autonomous AI Systems* (Rowan Brad Quni-Gudzinas, [10.5281/zenodo.18133065](https://doi.org/10.5281/zenodo.18133065)).
+Stability in Autonomous AI Systems* (Rowan Brad Quni-Gudzinas, papers.qnfo.org).
 
 An autonomous agent's generative drive (phi) outruns a verifier that sees it with a lag (psi), dissonance builds up as
 epistemic potential (U), and a "Popperian Guillotine" resets the agent when U crosses a threshold. This package runs

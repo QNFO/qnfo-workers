@@ -101,7 +101,7 @@ jobs:
           names = sorted(b.get('name') for b in d.get('result', {}).get('bindings', []))
           expected = {
               'AI', 'GITHUB_TOKEN', 'GRAPH_DB', 'LIVING_PAPER', 'MIRROR', 'PDF_SVC',
-              'PILOT_TOKEN', 'QNFO_AUDIT', 'RESEARCH_HALT', 'ROUTER_TOKEN', 'ZENODO_TOKEN',
+              'PILOT_TOKEN', 'QNFO_AUDIT', 'RESEARCH_HALT', 'ROUTER_TOKEN',
               'QNFO_AI',
           }
           print('live_binding_names=' + json.dumps(names))

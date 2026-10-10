@@ -11,7 +11,7 @@ Before filing an issue about an empty table, check this register.
 | #1638 | qnfo-graph `qacp_*` | UNBUILT-DESIGN | Inter-worker calls use service bindings and HTTP routes. |
 | #1645 | qnfo-audit `experiments` | UNBUILT-DESIGN | Changes are measured by metric triggers (METRIC-TRIGGER-LOOP-1), the daily worker census and the deploy gates. |
 | #1650 | portfolio-state `pipeline_runs` | UNBUILT-DESIGN | `program_registry` is read live by qnfo-cloud-ops and qnfo-infra. No portfolio pipeline runs. |
-| #1651 | living-paper `citations`, `citation_edges`, `paper_versions` | SUPERSEDED | `citation_stats` (OpenAlex/Crossref/Zenodo, daily) and `paper_revision_log.new_doi`. Zenodo version counts are recorded by qnfo-paper-indexer 3.0.6. The dashboard was re-pointed in 1.7.44. |
+| #1651 | living-paper `citations`, `citation_edges`, `paper_versions` | SUPERSEDED | `citation_stats` (OpenAlex/Crossref, daily) and `paper_revision_log.new_doi`. Version counts are recorded by qnfo-paper-indexer 3.0.6. The dashboard was re-pointed in 1.7.44. |
 | #1656 | qnfo-audit `prompt_provenance` | SUPERSEDED | `ops_ai_log` (per-call model and tokens) plus AI Gateway caller metadata. `meta_claims` and `meta_changes` stay live (qnfo-kaizen). |
 | #1657 | qnfo-cms `content`, `publish_queue` | UNBUILT / RETIRED-LANE | `content_entries` (145 rows) is the canonical table, read only ad hoc through qnfo-ops. The publish lane last ran 2026-06-25. |
 

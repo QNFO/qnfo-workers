@@ -1,6 +1,6 @@
 # ignorance-audit
 
-The Universal Ignorance Audit (Rowan Brad Quni-Gudzinas, [10.5281/zenodo.21901984](https://doi.org/10.5281/zenodo.21901984))
+The Universal Ignorance Audit (Rowan Brad Quni-Gudzinas, papers.qnfo.org)
 as a small, dependency-free Python library: the fifteen-question, five-phase instrument, its administration protocol as
 machine checks, a model-agnostic way to run it with any text model, and a scorer for the method's own pre-registered
 claim about AI-assisted research.

@@ -39,7 +39,7 @@ Verified present in `prompt-stores/customPrompts-canonical.json` (9 entries, 202
 | `CMD RED TEAM SUB` | parallel subagent red-team (3-5 reviewers) |
 | `CMD RESEARCH` | research Phase 0/1 due diligence (gate: Phase 1 after Phase 0 commit) |
 | `CMD SKILLS UPDATE` | kaizen cycle over skills |
-| `CMD PUBLISH` | research Phase 5: Zenodo deposit + D1 + deploy |
+| `CMD PUBLISH` | research Phase 5: publish + D1 + deploy |
 | `CMD CLOSEOUT` | git verify, handoffs row, wbs_state, continuation prompt |
 | `CMD DEPLOY` | Cloudflare deploy + live verification |
 

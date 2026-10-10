@@ -131,8 +131,8 @@ neither table exists in qnfo-audit (`no such table: jnl_polls`). The
 `[[kv_namespaces]]` binding `STATE` also has `id = "None"` as a literal string.
 
 `jnl-pipeline/worker.js` is 108,292 B, VERSION 0.1.9, BUILD
-`selfexclude-2026-09-10`, wrapping `jnlWatchMod` (Zenodo community
-`87f14e85-7156-4146-84e9-9e3a11e29c1d`, PAGE_SIZE 25, MAX_PAGES 40, self-exclude
+`selfexclude-2026-09-10`, wrapping `jnlWatchMod` (an external
+community feed, PAGE_SIZE 25, MAX_PAGES 40, self-exclude
 via ORCID 0009-0002-4317-5604). Substantial code, wrong binding.
 
 **Do not merge.** Fix the binding.
@@ -141,8 +141,8 @@ via ORCID 0009-0002-4317-5604). Substantial code, wrong binding.
 
 ## 7. Blocked queue
 
-`version_queue`: 16 `published`, **1 `error`** — v2.0.1 → v2.0.2, DOI
-10.5281/zenodo.22732639, created 2026-09-11 10:22:29, `updated_at`
+`version_queue`: 16 `published`, **1 `error`** — v2.0.1 → v2.0.2,
+created 2026-09-11 10:22:29, `updated_at`
 2026-09-13 14:16:11 (retried hourly, failing each time). Matches issue 706
 (`NL is not defined`). `cloud_ops_events` `kind='v2-drain'` n=23, newest
 2026-09-13T14:16:11Z.

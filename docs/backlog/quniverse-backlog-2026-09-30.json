@@ -479,7 +479,7 @@
    "status": "partial",
    "owner": "qnfo-paper-indexer",
    "source": "docs/AUTONOMOUS-RESEARCH-PIPELINE.md s5; citation_stats 3,604 rows, impact_scores 81",
-   "title": "Daily Crossref/OpenAlex/Zenodo impact collection for all 217 DOIs feeding impact_scores"
+   "title": "Daily Crossref/OpenAlex impact collection feeding impact_scores"
   },
   {
    "item": "RM-VISION-ASK-QWAV-1",
@@ -599,7 +599,7 @@
    "status": "partial",
    "owner": "qnfo-paper-reviser",
    "source": "kaizen kc-20260908-quality-revision-wave (user directive); #1621",
-   "title": "Revise/expand all research papers with ensembles, iterations and feedback loops (zenodo_versions_per_flagship 1 vs >= 2)"
+   "title": "Revise/expand all research papers with ensembles, iterations and feedback loops (flagship version count 1 vs >= 2)"
   },
   {
    "item": "RM-RESEARCH-BROWSER-QUEUES-1",
@@ -925,7 +925,7 @@
  "paper_gate_audit": [
   [
    "A1",
-   "Transcript sweep before publish; fixes ship as new Zenodo versions",
+   "Transcript sweep before publish; fixes ship as new versions",
    "enforced-unverified",
    "Needs a periodic sweep of published bodies to prove the gate holds."
   ],
@@ -939,7 +939,7 @@
    "A3",
    "DB and deposit converge on one version string",
    "violated",
-   "task_dod 385: 60 url-id != doi-id, 24 doi != zenodo_doi."
+   "task_dod 385: 60 url-id != doi-id."
   ],
   [
    "B1",
@@ -1264,7 +1264,7 @@
   {
    "id": "1091",
    "category": "publication",
-   "key": "DLF-ZENODO-PUBLISH-BLOCKED-1"
+   "key": "DLF-EXTERNAL-PUBLISH-BLOCKED-1"
   },
   {
    "id": "1111",
@@ -1449,7 +1449,7 @@
   {
    "id": "1621",
    "category": "publication",
-   "key": "ZENODO-VERSIONS-PER-FLAGSHIP-1"
+   "key": "FLAGSHIP-VERSIONS-1"
   },
   {
    "id": "1622",

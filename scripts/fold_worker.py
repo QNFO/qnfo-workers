@@ -261,7 +261,7 @@ def personal_bindings(t):
 
 def member_keys(gt, guest_code):
     """Least privilege: the env names the member receives are the guest's own bindings, its vars, and the upper-case
-    property names its code reads (secrets such as ZENODO_TOKEN are not in wrangler.toml), nothing else of the host."""
+    property names its code reads (secrets such as ROUTER_TOKEN are not in wrangler.toml), nothing else of the host."""
     names = {b[1] for b in toml_bindings(gt)} | set(gt.get("vars", {}).keys())
     names |= set(re.findall(r"\.([A-Z][A-Z0-9_]{1,40})\b", guest_code))
     return sorted(names)

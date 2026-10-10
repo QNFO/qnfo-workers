@@ -1,7 +1,7 @@
 # Research memos
 
 Working memos the fleet writes when an owner task asks for an analysis rather than a paper (OWNER-NOTES-ROUTE-1 tasks
-routed as `agent_issues`). They are AI-drafted, not peer reviewed, and never deposited on Zenodo; a memo that refutes a
+routed as `agent_issues`). They are AI-drafted, not peer reviewed, and never deposited externally; a memo that refutes a
 claim is the record that the claim is not to be published. Charter pillar: research.
 
 | Date | Memo | agent_issues | Verdict |

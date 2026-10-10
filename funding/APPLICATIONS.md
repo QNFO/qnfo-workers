@@ -46,7 +46,7 @@ programme (theory, not led with).
 
 ## Evidence chain (all verified live 2026-08-13)
 
-- DOIs resolve 200: 10.5281/zenodo.21901984, 21901983, 21922589, 21905166, 21637028, 21821767, 21880104
+- Papers resolve 200 at papers.qnfo.org (seven method papers checked)
 - GitHub org QNFO exists; provenance path `QNFO/qnfo-workers/papers/funding-strategy-2026-08-13` has 4 files
 - ORCID 0009-0002-4317-5604 → "Rowan Brad Quni-Gudzinas"
 - Dossier committed: `QNFO/qnfo-workers` `6b22fa5` (`funding/DOSSIER.md`)

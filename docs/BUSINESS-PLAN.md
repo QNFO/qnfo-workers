@@ -22,7 +22,7 @@ are aligned to docs/STRATEGY.md sections 4, 7, 8, 9 and 11. The section 1 P&L is
 | Revenue | $0.00 (no payment rail exists) | — |
 | Subscribers | 1 | D1 subscribers |
 | Outreach (cumulative) | 314 sent, 10 replies, 3.18% reply rate | D1 emails/outreach |
-| Output (30d) | 16 full reports; 451 all-time; 219 Zenodo DOIs | D1 living-paper |
+| Output (30d) | 16 full reports; 451 all-time | D1 living-paper |
 | Audience | 5,660 pageviews/30d (+0.89% vs baseline; gate +30%) | CF GraphQL RUM |
 
 Headline: **the entire burn is agent-session LLM spend; the system produces research output with zero monetization; its own survival gate (impressions +30% MoM) is failing.** (2026-10-01: that gate is retired; see section 2.)
@@ -73,7 +73,7 @@ Framing: QNFO is open, public-interest research with a funding target, funded by
 second. Paid products follow audience, not the other way round. Funding target: grant or engagement income at least equal
 to the AI burn by 2027-03-31, then to total fleet cost.
 
-Existing assets (2026-09-26 record): 904-paper living corpus (451 full reports, 219 Zenodo DOIs),
+Existing assets (2026-09-26 record): 904-paper living corpus (451 full reports),
 q08.org signal engine, ipatent (free experiment at ipatent.qnfo.org; `ipatent.me` has no DNS and is not cited), qnfo-ai
 research gateway, outreach engine (3.18% reply rate).
 Order:
@@ -92,10 +92,10 @@ Order:
 
 ### Standing rules
 - Personal utility layer (personal-api, qnfo-email, calendar, companion) is owner infrastructure, ~$0 marginal cost — it survives any research-layer decision and is NOT part of the research P&L.
-- Zenodo DOIs stay the record of each work, and qnfo.org + papers.qnfo.org are the home of record that every post links to.
+- qnfo.org + papers.qnfo.org are the home of record that every post links to.
   arXiv and selected venues for works 1, 2 and 4; no journal-chasing for the rest. Social channels are in, under the
   STRATEGY.md section 4 cadence and the section 5 owner-voice gates. (Changed 2026-10-01, STRATEGY-1 sections 4, 7 and 11;
-  v1 said "No traditional-journal submissions; Zenodo is canonical. No social media; own pages only.")
+  v1 said "No traditional-journal submissions. No social media; own pages only.")
 - The research layer is judged at the 2026-12-31 review gate (section 2). If it fails, the fleet shrinks to the
   selected-works core and the personal layer; no research data is deleted automatically. (Changed 2026-10-01, STRATEGY-1;
   v1 accepted phase-1 retirement on 2026-10-25.)

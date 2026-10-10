@@ -17,8 +17,7 @@ open item without waiting on the owner, find workarounds for credential gaps, an
 
 #1163 (Q08 article live: 200, feed, pieces 83), #1189-envelope (truthful ok:false observed live; persistence fixed in 1.3.7, see
 below), #1277 (Zero Trust org and Access apps measured; scoped decision), #1279 (not adopted, reasoned), #1621 (versions per
-flagship = 2), #1682 (probe neurons 0.32%), #1684 (DeepChat desktop client via BYOK `default`), #1685 (paper v1.4.1,
-10.5281/zenodo.23079905), #1688 (usage snapshot, 44 scripts), #1700, #1701 (lease mutual exclusion proven live),
+flagship = 2), #1682 (probe neurons 0.32%), #1684 (DeepChat desktop client via BYOK `default`), #1685 (paper v1.4.1), #1688 (usage snapshot, 44 scripts), #1700, #1701 (lease mutual exclusion proven live),
 #1702/#1703 (calibration 10/10 with a stale key), #1704 (agent-ws deleted; RM-AGENT-WS-DECISION-1 = archive), #1708/#1709
 (verified fix by a peer), #1717 (duplicate of #1189).
 
@@ -56,7 +55,7 @@ Each item below was observed live, root-caused, shipped through the canonical de
 | qnfo-email archived raw mail under a foreign or zero id (#1720) | `meta.last_row_id` is unchanged by the upsert's UPDATE path; redeliveries hit UNIQUE(email_id) on id 0 | 2.2.1: `RETURNING id`; archive `ON CONFLICT DO NOTHING`; two orphan rows removed (308) | orphans 0; the dashboard's one observability warn predates the deploy |
 | A burst of merges lost a commit's deploys (#1721) | GitHub keeps one pending run per concurrency group; the next run diffed only its own push | canonical-deploy diffs from the last successful push deploy (309); stranded workers redeployed | run 36855910264: `diff base b442f380 ... last successful push deploy b442f380` |
 | Two outreach engines could send 16/day (#1718) | each engine counted only its own ledger | one shared 8/day and 3/day-per-domain count read before every send, fail closed (310) | cloud-ops 1.15.9, outreach 0.3.4 live; EVID-1718-SHAREDCAP watches the 7-day window |
-| Paper pages had no `citation_pdf_url` (#1714) | no PDF route; the first cut sent no User-Agent to Zenodo and cached the failure | `/papers/<slug>.pdf` from the Zenodo record, else the qnfo-pdf rendered copy in R2 (316, 319, 323) | all 7 STRATEGY s2.4 works: meta plus 200 `application/pdf` (83 KB to 802 KB) |
+| Paper pages had no `citation_pdf_url` (#1714) | no PDF route; the first cut sent no User-Agent to the external host and cached the failure | `/papers/<slug>.pdf` from the external record, else the qnfo-pdf rendered copy in R2 (316, 319, 323) | all 7 STRATEGY s2.4 works: meta plus 200 `application/pdf` (83 KB to 802 KB) |
 | Research revise never produced a paper (#1504, #1620) | the revise asked for the whole 22.7k-char paper back for a 124-char fix; reasoning models spent the 8192-token budget reasoning (0 chars), and a 32768 budget hit Workers AI's 240 s timeout (3046) on every stage | patch-mode revise: exact find/replace edits applied only where unique (311); 8192 budget restored after the timeout regression (330); `reasoning_effort: low` for the patch (336); fail fast instead of the futile full rewrite, and no identical reconcile retry after a timeout, so a stage stays inside the 15-minute wall limit (341) | 12:31:16Z `revise-patch proposed=1 applied=1`, `revise->review` cycle 1; #1504 closed by EVID-1504-REVISE |
 
 Also this round:
@@ -104,14 +103,14 @@ live, fixed at the root, deployed through the canonical path (or wrangler for th
 | The gateway was silently unused (0-char reconcile, every review "unparseable") | gwCall returned "" when ROUTER_TOKEN was absent, before any call and without an event; qnfo-ai authenticates the binding by props | GW-PROPS-AUTH-1 (369) | after 15:17Z the review returned real findings (`review->verify hardLeft 6`) |
 | Verification scripts never ran | the public pilot hostname answers 403 since PILOT-PUBLIC-EXEC-CLOSED-1, and the result was read from the wrong field | PILOT-PROPS-CALLER-1: a CONTAINERS_PILOT binding with props; the pilot injects its bearer for props callers (372) | pilot 1.0.10 and research-exec 0.9.46 live 15:29Z |
 | Reference gates failed papers that had references | the heading regex allowed only "7."; the split returned a capture group, so the count was always 0 | REFS-RENDER-1 renders References from the bibliography; REFCOUNT-SPLIT-1, bib-aware floor, 20000-char publish floor and REVISE-NOOP-ADVANCE-1 folded in from the wave-4 session's PR 358 (372) | unit cases: 9 cited entries pass, 2 fail, appendices kept, idempotent |
-| A verified new paper could never publish | the 0.8 pipeline never created the living-paper row nor set research_queue.paper_slug, so publish read slug NULL and markError re-grounded the verified paper | PAPER-ROW-PREP-1 ported from PR 358 with credit (research-exec 0.9.49): the draft row and slug are built from reconciled.md before any Zenodo call, with the 20000-char floor checked first | row 5099abb8 passed verify at 15:51Z (8 claims executed in the container through the new binding, 13 references rendered); it was parked as held until 0.9.49 was live, then resumed. **Published 16:01:19Z: 10.5281/zenodo.23086421**, the first publication since 2026-09-08. #1620 closed by EVID-1620-PUBLISH (verification #334, 16:03:29Z) |
+| A verified new paper could never publish | the 0.8 pipeline never created the living-paper row nor set research_queue.paper_slug, so publish read slug NULL and markError re-grounded the verified paper | PAPER-ROW-PREP-1 ported from PR 358 with credit (research-exec 0.9.49): the draft row and slug are built from reconciled.md before any external deposit call, with the 20000-char floor checked first | row 5099abb8 passed verify at 15:51Z (8 claims executed in the container through the new binding, 13 references rendered); it was parked as held until 0.9.49 was live, then resumed. **Published 16:01:19Z**, the first publication since 2026-09-08. #1620 closed by EVID-1620-PUBLISH (verification #334, 16:03:29Z) |
 
 ### Charter gates (roadmap_implementation, re-measured)
 
 - C5 (declared and live schedules converge): 39 undeployed directories carried no marker and 21 still declared crons. PR 359 marked all 39 RETIRED/FOLDED (charter rule 2). Measured: 44 deployable = 44 live; 80 declared crons = 80 live. Status: violated-remediated.
 - C6 (version and capability list from the live endpoint): the snapshot's only writer was a desktop script, so it was 11 days stale. qnfo-deploy-guard 1.3.20 CAPABILITY-SNAPSHOT-1 (361) refreshes it from its cron every 6 hours. Forced run 15:11Z: 44 live, 41 stored, 11 retired rows removed. Conformance is now measured, at 5 of 44, and tracked as #1735 with contract EVID-C6-CONFORMANCE. Status: enforced-partial.
 - A2 (canonical link and related identifiers): publishV2 deleted related_identifiers, dropped keywords and repeated the funnel link. PUBLISH-V2-METADATA-1 (369) fixes all three and asserts them after every publish. Contract EVID-GATE-A2-PUBLISHV2 proves it on the first post-fix publish.
-- A3 (DB and deposit converge on one version string): all 218 published Zenodo-DOI papers were measured against the Zenodo API. 55 rows converged (zenodo_doi = doi, zenodo_url = the DOI's record, version = that record's Zenodo version). D1 triggers `trg_papers_doi_converge_ins/_upd` keep them converged. After: 0 url/doi mismatches and 0 doi/zenodo_doi mismatches.
+- A3 (DB and deposit converge on one version string): all 218 published papers with an external DOI were measured against the registry API (the external DOI deposit path was retired 2026-10-10). 55 rows converged. D1 triggers `trg_papers_doi_converge_ins/_upd` keep them converged. After: 0 url/doi mismatches.
 - F2, C7, G2, G4, I7: re-measured live, with evidence in each row (usage snapshot 44/44 scripts; guard_registry 68/68 verified; metric_registry 30/30 with a disposition actor; #1480 replay).
 
 ### Security H0, roadmap and portfolio
@@ -133,7 +132,7 @@ live, fixed at the root, deployed through the canonical path (or wrangler for th
 
 The wave-4 session's PR 358 overlapped research-exec and radar-hub. Its research-exec findings were folded into PR 372 with
 credit, and the overlap was noted on PR 358 and in handoff 29844. Issues owned by other sessions were left to them: #1710 to
-#1716 (STRATEGY-1), #1724 to #1727 (owner directive; PRs 345 and 353), #1731 (code-task loop smoke, PR 368), #1732 (Zenodo
+#1716 (STRATEGY-1), #1724 to #1727 (owner directive; PRs 345 and 353), #1731 (code-task loop smoke, PR 368), #1732 (external
 identity) and #1733 (PR 371).
 
 ### State at 16:05Z

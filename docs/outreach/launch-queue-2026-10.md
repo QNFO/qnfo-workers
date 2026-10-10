@@ -45,7 +45,7 @@ Schedule (Europe/Amsterdam, Tue/Thu mornings, then the bandit in s6.4 takes over
 > Status: proposed standard; preprint.
 > https://papers.qnfo.org/papers/joules-per-solution-metric?utm_source=bluesky&utm_medium=social&utm_campaign=jps-metric
 
-Source: abstract of 10.5281/zenodo.21637028.
+Source: the paper's abstract on papers.qnfo.org.
 
 ---
 
@@ -76,7 +76,7 @@ Source: abstract of 10.5281/zenodo.21637028.
 > Status: preprint, not peer reviewed.
 > https://papers.qnfo.org/papers/jpcub-qec-landauer?utm_source=bluesky&utm_medium=social&utm_campaign=qec-landauer
 
-Source: abstract of 10.5281/zenodo.22261547.
+Source: the paper's abstract on papers.qnfo.org.
 
 ---
 
@@ -110,7 +110,7 @@ Source: abstract of 10.5281/zenodo.22261547.
 > Status: estimates, not measurements.
 > https://papers.qnfo.org/papers/jpcub-competitive-landscape?utm_source=bluesky&utm_medium=social&utm_campaign=jpcub-17
 
-Source: abstract of 10.5281/zenodo.21821767.
+Source: the paper's abstract on papers.qnfo.org.
 
 ---
 
@@ -143,7 +143,7 @@ Source: abstract of 10.5281/zenodo.21821767.
 > Status: experience report.
 > https://papers.qnfo.org/papers/quniverse-fleet-lessons?utm_source=bluesky&utm_medium=social&utm_campaign=fleet-lessons
 
-Source: abstract of 10.5281/zenodo.23079905.
+Source: the paper's abstract on papers.qnfo.org.
 
 ---
 

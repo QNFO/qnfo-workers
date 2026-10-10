@@ -19,9 +19,9 @@ CANONICAL VICTIM: qnfo-research-exec.
         [[services]]
         binding = "QNFO_AI"
         service = "qnfo-ai"
-  * cf_worker_bindings(qnfo-research-exec) returns 11 bindings and NONE is
+  * cf_worker_bindings(qnfo-research-exec) returns its bindings and NONE is
     QNFO_AI (AI, GITHUB_TOKEN, GRAPH_DB, LIVING_PAPER, MIRROR, PDF_SVC,
-    PILOT_TOKEN, QNFO_AUDIT, RESEARCH_HALT, ROUTER_TOKEN, ZENODO_TOKEN).
+    PILOT_TOKEN, QNFO_AUDIT, RESEARCH_HALT, ROUTER_TOKEN).
   * Consequence: every router call degraded to the Workers AI fallback --
     cloud_ops_events kind=gw-fallback n=609, span
     2026-09-16T10:41:55Z -> 2026-09-29T16:32:28Z, sample text

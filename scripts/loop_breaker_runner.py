@@ -127,7 +127,7 @@ CREATE TABLE card (silent_drops INTEGER, issues_unaccounted INTEGER, failure_mod
 CREATE VIEW v_doctrine_scorecard_v2 AS SELECT * FROM card;
 INSERT INTO card VALUES (0, 3, 90);
 """)
-    c.execute("INSERT INTO sigs VALUES ('event', 'qnfo-research-exec', 'slot : D_ERROR: no such column: zenodo_enabled', 11, strftime('%Y-%m-%dT%H:%M:%SZ','now'), 'x')")
+    c.execute("INSERT INTO sigs VALUES ('event', 'qnfo-research-exec', 'slot : D_ERROR: no such column: legacy_flag', 11, strftime('%Y-%m-%dT%H:%M:%SZ','now'), 'x')")
     c.execute("INSERT INTO sigs VALUES ('event', 'old', 'stale sig', 5, '2020-01-01T00:00:00Z', 'x')")
 
     def d1(sql, params=None):
@@ -137,7 +137,7 @@ INSERT INTO card VALUES (0, 3, 90);
 
     assert main(d1) == 0 and main(d1) == 0
     titles = [r[0] for r in c.execute("SELECT title FROM agent_issues ORDER BY id")]
-    assert titles == ["LOOP-BREAKER-1: qnfo-research-exec: slot : D_ERROR: no such column: zenodo_enabled", "DOCTRINE-AUDIT-" + time.strftime("%G-W%V", time.gmtime())], titles
+    assert titles == ["LOOP-BREAKER-1: qnfo-research-exec: slot : D_ERROR: no such column: legacy_flag", "DOCTRINE-AUDIT-" + time.strftime("%G-W%V", time.gmtime())], titles
     probes = dict(c.execute("SELECT class, verify_probe FROM remediation_contracts"))
     assert all(p.startswith("SELECT '1' AS expected") for p in probes.values()), probes
     assert d1(probes["issue-1"])[0]["observed"] == "0"
