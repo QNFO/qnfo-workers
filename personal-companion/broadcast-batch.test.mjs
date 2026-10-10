@@ -29,6 +29,8 @@ function setup(opts) {
     all: async () => { T.calls++; if (deny && deny(sql)) throw new Error("D1_ERROR: unavailable"); return { results: db.prepare(sql).all(...args) }; } }); return mk([]); } });
   p.exec("CREATE TABLE companion_subscribers (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, status TEXT NOT NULL DEFAULT 'pending', token TEXT NOT NULL, created_at TEXT NOT NULL, confirmed_at TEXT)");
   p.exec("CREATE TABLE companion_pieces (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT UNIQUE NOT NULL, form TEXT NOT NULL, title TEXT NOT NULL, subtitle TEXT, lede TEXT, body_md TEXT NOT NULL, anchor_json TEXT, quality_json TEXT, word_count INTEGER, day TEXT, created_at TEXT NOT NULL)");
+  // COMPANION-VERIFY-1: a piece is mailable only with a passing audit row; the fixture audits every inserted piece.
+  p.exec("CREATE TABLE companion_audits (slug TEXT PRIMARY KEY, verdict TEXT NOT NULL, stage TEXT, models TEXT, problems_json TEXT, checked_at TEXT NOT NULL); CREATE TABLE companion_retractions (slug TEXT PRIMARY KEY, reason TEXT, claims_json TEXT, retracted_at TEXT NOT NULL); ALTER TABLE companion_pieces ADD COLUMN ground_text TEXT; CREATE TRIGGER t_audit AFTER INSERT ON companion_pieces BEGIN INSERT INTO companion_audits VALUES (NEW.slug,'pass','test',NULL,'[]','x'); END;");
   a.exec("CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT)");
   a.exec("CREATE TABLE contact_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, suppress INTEGER DEFAULT 0)");
   const ins = p.prepare("INSERT INTO companion_subscribers (email,status,token,created_at) VALUES (?,?,?,'x')");
