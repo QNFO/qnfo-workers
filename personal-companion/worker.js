@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.13.3-forced-fallback"; // 1.13.3 COMPANION-FORCED-FALLBACK-1 (#2106, #2126): the strongest critic-rejected draft that passed validation is published as gate forced once the companion has been silent for STALL_HOURS (12h); the forced branch was unreachable and nothing published for 81h. 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.14.1-verify"; // 1.14.0 COMPANION-VERIFY-1 (pillar: personal; owner directive 2026-10-10: published content is 100% accurate, independently fact-checked, process-and-style-only prompts, fail closed): every piece must pass a deterministic grounding check (each capitalised name, year and figure occurs in its source material) and a two-family LLM fact-check before it is stored, shown or mailed; critic or reviewer outage publishes nothing; the forced publish of critic-rejected drafts (1.13.3) is removed; topics come from live Wikipedia and arXiv, the hard-coded topic table and example nouns in the prompts are gone; companion_audits / companion_retractions give an audit and public-retraction path (410 notice, /retractions, /api/retractions); pieces without a recorded source are withdrawn. 1.13.3 COMPANION-FORCED-FALLBACK-1 (#2106, #2126): the strongest critic-rejected draft that passed validation is published as gate forced once the companion has been silent for STALL_HOURS (12h); the forced branch was unreachable and nothing published for 81h. 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -45,48 +45,7 @@ __name(L, "L");
 __name2(L, "L");
 __name22(L, "L");
 var RHYTHM = ["notes", "essay", "notes", "essay", "notes", "essay", "serial"];
-var TOPICS = [
-  { id: "coffeehouse-public", cat: "cs.CY", wiki: "Coffeehouse", rel: ["Public sphere", "Coffee", "Third place"], a: "the history of coffeehouses", b: "the birth of public space" },
-  { id: "walking-thinking", cat: "q-bio.NC", wiki: "Walking", rel: ["Psychogeography", "Fl\xE2neur", "Peripatetic school"], a: "walking", b: "the practice of thinking" },
-  { id: "ruins-memory", cat: "q-bio.NC", wiki: "Ruin", rel: ["Romanticism", "Palimpsest", "Ozymandias"], a: "ruins", b: "how memory works" },
-  { id: "fermentation-time", cat: "q-bio.PE", wiki: "Fermentation", rel: ["Fermentation in food processing", "Sourdough", "Yeast"], a: "fermentation", b: "the patience of slow transformation" },
-  { id: "translation-loss", cat: "cs.CL", wiki: "Untranslatability", rel: ["Translation", "Linguistic relativity", "Sapir-Whorf hypothesis"], a: "translation", b: "what refuses translation" },
-  { id: "boredom-creativity", cat: "q-bio.NC", wiki: "Boredom", rel: ["Attention", "Flow (psychology)", "Default mode network"], a: "boredom", b: "the conditions for creativity" },
-  { id: "maps-territory", cat: "cs.CY", wiki: "Map", rel: ["Map-territory relation", "Terra nullius", "Cartography"], a: "maps", b: "the territory they claim to describe" },
-  { id: "craft-quality", cat: "econ.GN", wiki: "Craft", rel: ["Craftsmanship", "Arts and Crafts movement", "Virtuoso"], a: "craft", b: "what quality means" },
-  { id: "garden-wildness", cat: "q-bio.PE", wiki: "Garden", rel: ["Wilderness", "Landscape architecture", "Botanical garden"], a: "gardens", b: "the idea of wildness" },
-  { id: "collecting-order", cat: "cs.SI", wiki: "Collecting", rel: ["Museum", "Cabinets of curiosities", "Hoarding"], a: "collecting", b: "the desire for order" },
-  { id: "silence-music", cat: "cs.SD", wiki: "Silence", rel: ["John Cage", "Rest (music)", "Soundscape"], a: "silence", b: "music" },
-  { id: "handwriting-identity", cat: "cs.HC", wiki: "Handwriting", rel: ["Graphology", "Signature", "Calligraphy"], a: "handwriting", b: "identity" },
-  { id: "season-ritual", cat: "cs.CY", wiki: "Season", rel: ["Solstice", "Harvest festival", "Liturgical year"], a: "the seasons", b: "ritual time" },
-  { id: "domestication-coevolution", cat: "q-bio.PE", wiki: "Domestication", rel: ["Co-evolution", "Neoteny", "Selective breeding"], a: "domestication", b: "coevolution" },
-  { id: "play-rules", cat: "cs.GT", wiki: "Play (activity)", rel: ["Homo Ludens", "Game", "Ludus"], a: "play", b: "rules" },
-  { id: "attention-time", cat: "econ.GN", wiki: "Attention economy", rel: ["Information overload", "Continuous partial attention", "Digital detox"], a: "attention", b: "how time is spent" },
-  { id: "notation-thought", cat: "cs.CL", wiki: "Musical notation", rel: ["Tablature", "Figured bass", "Laban notation"], a: "notation systems", b: "how they shape what can be thought" },
-  { id: "threshold-architecture", cat: "cs.CY", wiki: "Threshold", rel: ["Liminal space", "Vestibule", "Portal"], a: "thresholds in architecture", b: "the psychology of crossing" },
-  { id: "debt-memory", cat: "econ.GN", wiki: "Debt", rel: ["Jubilee (biblical)", "Odious debt", "Gift economy"], a: "debt", b: "social memory" },
-  { id: "color-perception", cat: "q-bio.NC", wiki: "Color", rel: ["Color theory", "Opponent process", "Munsell color system"], a: "colour perception", b: "the physics of light" },
-  { id: "archive-forgetting", cat: "cs.DL", wiki: "Archive", rel: ["Memory institution", "Apophenia", "Deaccessioning"], a: "archives", b: "the logic of forgetting" },
-  { id: "rhythm-time", cat: "cs.SD", wiki: "Rhythm", rel: ["Metre (music)", "Polyrhythm", "Entrainment (chronobiology)"], a: "musical rhythm", b: "how bodies keep time" },
-  { id: "market-price", cat: "econ.GN", wiki: "Price", rel: ["Price signal", "Auction theory", "Just price"], a: "prices", b: "what they actually measure" },
-  { id: "street-city", cat: "cs.CY", wiki: "Street", rel: ["Jane Jacobs", "Haussmann's renovation of Paris", "Shared space"], a: "streets", b: "what cities are for" },
-  { id: "tool-hand", cat: "cs.HC", wiki: "Tool", rel: ["Extended mind", "Affordance", "Heidegger's hammer"], a: "tools", b: "the hand that uses them" },
-  { id: "dialect-belonging", cat: "cs.CL", wiki: "Dialect", rel: ["Code-switching", "Diglossia", "Language death"], a: "dialects", b: "where belonging lives in speech" },
-  { id: "canal-infrastructure", cat: "cs.CY", wiki: "Canal", rel: ["Erie Canal", "Amsterdam canals", "Lock (water transport)"], a: "canals", b: "how infrastructure shapes a city" },
-  { id: "portrait-likeness", cat: "cs.CY", wiki: "Portrait", rel: ["Self-portrait", "Physiognomy", "Likeness"], a: "portrait painting", b: "what likeness means" },
-  { id: "index-knowledge", cat: "cs.IR", wiki: "Index (publishing)", rel: ["Back-of-book index", "Commonplace book", "Concordance"], a: "indexes", b: "the structure of knowledge" },
-  { id: "repair-object", cat: "econ.GN", wiki: "Repair", rel: ["Kintsugi", "Right to repair", "Planned obsolescence"], a: "repair", b: "what an object's life means" },
-  { id: "tide-prediction", cat: "physics.ao-ph", wiki: "Tide", rel: ["Tidal force", "Harmonic analysis", "Kelvin's tide predictor"], a: "tide prediction", b: "the history of mechanical computing" },
-  { id: "font-reading", cat: "cs.HC", wiki: "Typography", rel: ["Readability", "Legibility", "Type design"], a: "typefaces", b: "how they shape reading" },
-  { id: "smell-place", cat: "q-bio.NC", wiki: "Olfaction", rel: ["Odor", "Proust phenomenon", "Smell map"], a: "smell", b: "the memory of places" },
-  { id: "border-sovereignty", cat: "cs.CY", wiki: "Border", rel: ["Schengen Area", "Checkpoint Charlie", "Demilitarized zone"], a: "borders", b: "what sovereignty costs" },
-  { id: "library-public", cat: "cs.DL", wiki: "Public library", rel: ["Carnegie library", "Free library movement", "Library science"], a: "public libraries", b: "the idea of free access" },
-  { id: "bread-culture", cat: "q-bio.PE", wiki: "Bread", rel: ["Sourdough", "Baguette", "Wonder Bread"], a: "bread", b: "what industrial food did to culture" },
-  { id: "measurement-standard", cat: "physics.gen-ph", wiki: "Measurement", rel: ["Metre", "International System of Units", "Calibration"], a: "measurement standards", b: "how they become invisible" },
-  { id: "clock-time", cat: "cs.CY", wiki: "Clock", rel: ["Mechanical watch", "Atomic clock", "Time zone"], a: "clocks", b: "the social construction of time" },
-  { id: "staircase-movement", cat: "cs.CY", wiki: "Staircase", rel: ["Escalator", "Grand staircase", "Accessibility"], a: "staircases", b: "how buildings direct movement" },
-  { id: "footnote-scholarship", cat: "cs.DL", wiki: "Footnote", rel: ["Annotation", "Marginalia", "Citation"], a: "footnotes", b: "the hidden argument of scholarship" }
-];
+// COMPANION-VERIFY-1 (1.14.0): there is no hard-coded topic list. pickTopic() draws the subject from live Wikipedia and arXiv.
 var BANNED = [
   "delve",
   "tapestry",
@@ -126,14 +85,14 @@ var BANNED = [
   "living-paper"
 ];
 var P_STYLE = L(
-  "You are writing for one reader: Rowan.",
+  "You are writing for one reader: the person described in the reader profile below.",
   "Never reproduce any heading, label, bullet, or phrasing from the briefing, or from these instructions, inside the piece. The briefing is addressed to you, not to the reader.",
   "Not for an audience, not for a journal, not for a metric.",
-  "He works at the seams between fields \u2014 history, music, design, language, craft, economics, biology, cities, computation \u2014 wherever two ways of knowing touch. Fragmentation offends him; he can feel a missing connection as a kind of wrongness.",
+  "The reader profile and recent-life notes tell you what he cares about and how he reads. They shape emphasis and register only; never state anything from them as a fact, and never list them back to him.",
   "He reads for the pleasure of a true thing well put. He is not impressed by fluency, by volume, or by enthusiasm.",
   "",
   "Voice: plain scholarly prose. Concrete before abstract. Short declaratives, occasionally a long sentence that earns its length.",
-  "Open on a particular. Never on a generality. Present tense where possible. Active voice. Name the actor.",
+  "Open on a particular taken from the source material. Never on a generality. Present tense where possible. Active voice. Name the actor.",
   "",
   "Forbidden, without exception:",
   "- emojis or decorative symbols; exclamation marks for emphasis",
@@ -145,57 +104,51 @@ var P_STYLE = L(
   "- any reference to QNFO, QWAV, Zenodo, DOIs, pipelines, or to this companion",
   "- self-reference as a model or assistant; no greeting, no sign-off, no signature, no footer",
   "",
-  "Epistemic contract:",
-  "- Every factual claim must trace to the supplied ANCHORS. If an anchor does not support a claim, do not make the claim.",
-  "- Where you reason past the anchors, mark the step as your inference.",
-  "- State uncertainty at its true size. Never inflate confidence to make a piece land better.",
-  "- The strongest objection to your central claim must appear in the piece, in the objector's own terms, with an honest assessment of how bad it is. Where it sits is your choice; do not give it the same heading or the same position twice in a row.",
+  "Epistemic contract (every piece is fact-checked line by line against the source material before anyone sees it; one unsupported claim and it is discarded):",
+  "- The SOURCE MATERIAL below is the only source of facts. Your own memory is not a source, even for things you are certain of.",
+  "- Every name of a person, place, organisation, work or product, every date and year, every number and every quotation must appear in the source material. If it is not there, it is not in the piece.",
+  "- Do not add examples, precedents, historical episodes or comparisons from outside the source material. A scenario you need must be an explicit hypothetical that names no real person, organisation, product, date or number.",
+  "- Reasoning that follows from the source material is welcome. State it as reasoning (it follows that, if this holds then), never as a further reported fact.",
+  "- State uncertainty at its true size. Never inflate confidence to make a piece land better. If the source material does not settle a point, say it does not.",
+  "- The strongest objection to your central claim must appear in the piece, in the objector's own terms, with an honest assessment of how bad it is. It may rest on the source material or be pure logic; it may not rest on facts from outside it. Where it sits is your choice; do not give it the same heading or the same position twice in a row.",
   "",
-  "The anchors below are raw research notes, usually encyclopedic extracts in a register you must not copy. Never reproduce their sentences. Banned habits they carry: definitional lead sentences ('X is the study of ...'), hedged attributions ('commentators have linked', 'observers note', 'a study found', 'some argue'), and disambiguation-style enumeration. If you need a definition, state it in your own voice in one concrete sentence, or skip it. The piece must read as if you know the subject from inside, not as if you summarized an encyclopedia.",
-  "Do not open with 'In [year], ...' unless the date itself is doing the work. Never repeat the opening move of one of your recent pieces (listed below).",
+  "The source material is raw research notes, usually encyclopedic extracts in a register you must not copy. Never reproduce their sentences. Banned habits they carry: definitional lead sentences, hedged attributions ('commentators have linked', 'observers note', 'a study found', 'some argue'), and disambiguation-style enumeration. If you need a definition, state it in your own words.",
+  "Do not open with 'In [year], ...' unless the date itself is doing the work. Never repeat the opening move of one of your recent pieces (listed below). Pieces listed below are not sources.",
   "Reader verdicts (worth your time? yes/flat/no) are listed below. flat and no mean the piece did not earn its reading time; note what those pieces shared and do not repeat it. A recent no outweighs an old yes."
 );
 var P_ESSAY = L(
   "FORM: essay, 2000 to 2800 words. This is long-form. One sustained line of thought, carried to the end; do not stop while the argument is still thin, and do not pad.",
   "The subject is one thing. Write about the subject itself, in depth. Do not survey. Argue.",
   "Your argument must be a specific, falsifiable claim with consequences - something a knowledgeable reader could disagree with. It must not be an analogy, a family resemblance, or a restatement of the obvious.",
-  "You are given real source material below. Mine it. Use the specific names, dates, numbers, mechanisms and cases it contains; a piece that could have been written without reading the sources has failed.",
-  "Required content, not required sections: (a) the strongest objection to your central claim, in the objector's terms, weighed honestly; (b) what would have to be true for your claim to hold, and what observation would falsify it. Where these sit is your call \u2014 the objection can be a heading, two sentences mid-argument, or the whole last section. Do not end every piece with the same two moves.",
+  "You are given real source material below. Mine it. Use the names, dates, numbers, mechanisms and cases it contains, and only those; a piece that could have been written without reading the sources has failed, and a piece that states anything the sources do not contain is discarded.",
+  "Required content, not required sections: (a) the strongest objection to your central claim, in the objector's terms, weighed honestly; (b) what would have to be true for your claim to hold, and what observation would falsify it. Where these sit is your call - the objection can be a heading, two sentences mid-argument, or the whole last section. Do not end every piece with the same two moves.",
   "Vary the section plan. Your previous pieces are listed below; your structure must differ from each of their structures. A reader must not be able to predict your headings from the first page."
 );
 var P_NOTES = L(
   "FORM: connected field essay, 1800 to 2400 words, in 3 to 5 movements.",
-  "Each movement is one concrete thing: a paper, a concept, a place, a piece of music, a passage, an exhibition.",
-  "Each movement is 350 to 550 words. Say precisely what the thing is, then develop what it connects to in his world \u2014 draw the connection out, do not merely state it. One through-line binds the movements into a single sustained piece, not a list.",
-  "If only three of the supplied anchors are worth his time, give three. Never pad to a count. Never include an item you would not defend.",
+  "Each movement is one concrete thing taken from the source material.",
+  "Each movement is 350 to 550 words. Say precisely what the thing is, then develop what it connects to in his world - draw the connection out, do not merely state it. One through-line binds the movements into a single sustained piece, not a list.",
+  "If only three of the supplied sources are worth his time, give three. Never pad to a count. Never include an item you would not defend.",
   "Give every item a short title.",
-  "The set title names the subject, not the count. Banned patterns: 'Four Ways ...', 'Three Claims ...', 'N Instruments/Reasons/Things ...'."
+  "The set title names the subject, not the count. Banned pattern: a title that starts with a number followed by a plural noun."
 );
 var P_SERIAL = L(
   "FORM: serialized long-form, 1800 to 2400 words, continuing one ongoing work.",
-  "You are given the RUNNING WORK: its thesis and the closing lines of the previous installment.",
+  "You are given the RUNNING WORK: its thesis and the closing lines of the previous installment. They are part of the source material.",
   "Advance the argument. Do not recap beyond one sentence of orientation.",
   "This installment must add at least one claim that was not available before it, and it must close mid-motion on a question the next installment has to answer.",
   "Keep the running work's title. Put the installment number in the subtitle."
 );
-var P_OUT = L(
-  "Return JSON only, with no prose around it:",
-  '{"title":"...","subtitle":"","lede":"one sentence, at most 30 words","body_md":"the piece as markdown","bridge":{"a":"field or idea","b":"field or idea","kind":"structural" or "proposed analogy"},"objection":"the strongest objection, one or two sentences"}'
-);
 var P_CRITIQUE = L(
   "You are an adversarial reader. You dislike fluency. You are looking for reasons this piece is worthless.",
+  "You are given the SOURCE MATERIAL the writer was allowed to use, and the piece.",
   "Score each dimension 0 to 10. Be harsh: a 7 means genuinely good.",
-  "specificity: does it hang on concrete checkable particulars, or could it have been written about anything?",
+  "specificity: does it hang on concrete checkable particulars from the source material, or could it have been written about anything?",
   "argument: is there a claim that could be wrong, or only gestures?",
   "objection: is the stated objection the strongest available one, or a straw man?",
   "voice: plain scholarly prose free of filler, tells, and self-reference?",
-  'Return JSON only: {"specificity":n,"argument":n,"objection":n,"voice":n,"verdict":"accept" or "reject","why":"one sentence"}'
-);
-var P_BRIDGE = L(
-  "You tighten a cross-domain bridge until it is precise and falsifiable.",
-  "Given a piece and its stated bridge, rewrite the bridge so that it names the SPECIFIC mechanism or idea on each side, states the EXACT relationship (isomorphism, shared invariant, limiting case, or an analogy honestly labelled), and is falsifiable: say what observation would break it.",
-  'If the bridge is currently a vague rhyme dressed as a theorem, replace it with the precise correspondence you can defend. If you cannot defend a structural correspondence, downgrade it to "proposed analogy" and say so.',
-  'Return JSON only: {"bridge":{"a":"...","b":"...","kind":"structural" or "proposed analogy"},"bridge_claim":"one precise sentence","objection":"strongest objection to the bridge"}'
+  "grounding: does every concrete claim (name, date, number, event, quotation) trace to the source material? Score 0 if you find one that does not.",
+  'Return JSON only: {"specificity":n,"argument":n,"objection":n,"voice":n,"grounding":n,"verdict":"accept" or "reject","why":"one sentence"}'
 );
 function json(obj, status) {
   return new Response(JSON.stringify(obj, null, 2), {
@@ -438,55 +391,11 @@ function readWord(s, i) {
 __name(readWord, "readWord");
 __name2(readWord, "readWord");
 __name22(readWord, "readWord");
-var STOPW = ["The", "A", "An", "In", "On", "At", "By", "To", "Of", "If", "When", "Where", "What", "How", "Why", "Then", "There", "These", "Those", "We", "They", "He", "She", "His", "Her", "Its", "Our", "Their", "Not", "No", "Yet", "So", "As", "From", "With", "Without", "Between", "After", "Before", "During", "Both", "Each", "Every", "All", "Some", "Many", "Most", "Such", "That", "Than", "Because", "Although", "While", "Since", "Thus", "Hence", "Therefore", "However", "Moreover", "Furthermore", "One", "Two", "Three", "But", "And", "For", "Or", "It", "This", "Is", "Are", "Was", "Were", "Be", "Been", "Do", "Does", "Did", "Has", "Have", "Had", "Can", "Could", "Shall", "Should", "Will", "Would", "May", "Might", "Must"];
-var STOP = {};
-for (sw = 0; sw < STOPW.length; sw++) STOP[STOPW[sw]] = true;
-var sw;
-function nameCandidates(text) {
-  var s = String(text || "");
-  var out = [];
-  for (var i = 0; i < s.length; i++) {
-    if (!isCap(s, i)) continue;
-    var a = readWord(s, i);
-    if (a.w.length < 3 || STOP[a.w] === true) continue;
-    var j = i + a.w.length;
-    var sp = 0;
-    while (j < s.length && s.charAt(j) === " ") {
-      sp++;
-      j++;
-    }
-    if (sp !== 1 || !isCap(s, j)) continue;
-    var b = readWord(s, j);
-    if (b.w.length < 3 || STOP[b.w] === true) continue;
-    out.push(a.w + " " + b.w);
-    i = i + a.w.length - 1;
-  }
-  return out;
-}
-__name(nameCandidates, "nameCandidates");
-__name2(nameCandidates, "nameCandidates");
-__name22(nameCandidates, "nameCandidates");
 function anchorsText(anchors) {
   var parts = [];
   for (var i = 0; i < anchors.length; i++) parts.push(String(anchors[i].title || "") + " " + String(anchors[i].text || ""));
   return parts.join(" ");
 }
-__name(anchorsText, "anchorsText");
-__name2(anchorsText, "anchorsText");
-__name22(anchorsText, "anchorsText");
-function unverifiedNames(piece, anchors, topic) {
-  var at = anchorsText(anchors) + " " + String(topic && topic.a || "") + " " + String(topic && topic.b || "");
-  var cand = nameCandidates(String(piece.body_md || ""));
-  var low = at.toLowerCase();
-  var bad = [];
-  for (var i = 0; i < cand.length; i++) {
-    if (low.indexOf(cand[i].toLowerCase()) < 0 && bad.indexOf(cand[i]) < 0) bad.push(cand[i]);
-  }
-  return bad;
-}
-__name(unverifiedNames, "unverifiedNames");
-__name2(unverifiedNames, "unverifiedNames");
-__name22(unverifiedNames, "unverifiedNames");
 function wordCount(s) {
   var n = 0;
   var inWord = false;
@@ -533,6 +442,7 @@ async function ensureSchema(env) {
   for (var i = 0; i < stmts.length; i++) {
     await env.PERSONAL.prepare(stmts[i]).run();
   }
+  await ensureAccuracySchema(env);
 }
 __name(ensureSchema, "ensureSchema");
 __name2(ensureSchema, "ensureSchema");
@@ -645,6 +555,62 @@ async function loadContinuity(env, form) {
 __name(loadContinuity, "loadContinuity");
 __name2(loadContinuity, "loadContinuity");
 __name22(loadContinuity, "loadContinuity");
+// COMPANION-VERIFY-1 (1.14.0, owner directive 2026-10-10: generative instructions specify process and style only, no hard-coded
+// topics). The subject is drawn live: a random encyclopedia article that has enough text to argue from, two articles it links
+// to, and recent arXiv submissions (matching the subject when any exist, otherwise the newest submissions of any field). Nothing
+// here names a field, a category or a subject. Nothing fetched is trusted beyond being the source material the piece is checked
+// against; if too little can be fetched the run is blocked and publishes nothing.
+var WIKI_API = "https://en.wikipedia.org/w/api.php";
+var UA_FETCH = { "User-Agent": "Mozilla/5.0 (personal-companion)" };
+var ANCHOR_MIN_CHARS = 2500;
+var LINK_MIN_CHARS = 1200;
+async function fetchRandomTitles(n) {
+  var resp = await fetch(WIKI_API + "?action=query&list=random&rnnamespace=0&rnlimit=" + n + "&format=json", { headers: UA_FETCH, signal: AbortSignal.timeout(12e3) });
+  if (!resp.ok) return [];
+  var j = await resp.json();
+  return ((j && j.query && j.query.random) || []).map(function (r) { return squish(r.title || ""); }).filter(Boolean);
+}
+async function fetchLinkedTitles(title) {
+  var resp = await fetch(WIKI_API + "?action=query&prop=links&plnamespace=0&pllimit=60&redirects=1&format=json&titles=" + encodeURIComponent(title), { headers: UA_FETCH, signal: AbortSignal.timeout(12e3) });
+  if (!resp.ok) return [];
+  var j = await resp.json();
+  var pages = j && j.query && j.query.pages || {};
+  var pk = Object.keys(pages)[0];
+  var links = (pages[pk] && pages[pk].links) || [];
+  return links.map(function (l) { return squish(l.title || ""); }).filter(function (t) { return t && !/^\d{1,4}$/.test(t) && !/^(List|Lists|Index|Outline|Timeline) of /i.test(t); });
+}
+async function fetchArxivQuery(query, sortBy) {
+  var url = "https://export.arxiv.org/api/query?search_query=" + query + "&sortBy=" + (sortBy || "submittedDate") + "&sortOrder=descending&max_results=8";
+  var resp = await fetch(url, { headers: UA_FETCH, signal: AbortSignal.timeout(12e3) });
+  if (!resp.ok) return [];
+  var chunks = sections(await resp.text(), "entry");
+  var out = [];
+  for (var i = 0; i < chunks.length; i++) {
+    var title = firstTag(chunks[i], "title");
+    var summary = firstTag(chunks[i], "summary");
+    var id = firstTag(chunks[i], "id");
+    if (title && summary && squish(summary).length > 300) out.push({ kind: "paper", ref: id, title: squish(title), text: squish(summary).slice(0, 1200) });
+  }
+  return out;
+}
+function arxivWindow(nowMs) {
+  function stamp(ms) { return new Date(ms).toISOString().replace(/[-:T]/g, "").slice(0, 12); }
+  return "submittedDate:[" + stamp(nowMs - 3 * 864e5) + "+TO+" + stamp(nowMs) + "]";
+}
+function pickSeeded(list, seed, k) {
+  var arr = list.slice(), out = [], h = seed >>> 0;
+  while (arr.length && out.length < k) {
+    h = (Math.imul(h, 1664525) + 1013904223) >>> 0;
+    out.push(arr.splice(h % arr.length, 1)[0]);
+  }
+  return out;
+}
+// Fits the anchors to the budget the writer, the grounding check and the reviewers all share.
+var GROUND_MAX = 18000;
+function fitAnchors(anchors) {
+  var n = anchors.length || 1, per = Math.max(900, Math.floor(GROUND_MAX / n));
+  return anchors.map(function (a) { return { kind: a.kind, ref: a.ref, title: a.title, text: String(a.text || "").slice(0, per) }; });
+}
 async function pickTopic(env, form) {
   var used = [];
   try {
@@ -659,64 +625,52 @@ async function pickTopic(env, form) {
   var cooled = {};
   try {
     var cr = await env.PERSONAL.prepare(
-      "SELECT topic, SUM(CASE WHEN status IN ('failed','forced') THEN 1 ELSE 0 END) f FROM companion_runs WHERE topic != '' AND run_at > datetime('now','-14 days') GROUP BY topic"
+      "SELECT topic, SUM(CASE WHEN status IN ('failed','blocked') THEN 1 ELSE 0 END) f FROM companion_runs WHERE topic != '' AND run_at > datetime('now','-14 days') GROUP BY topic"
     ).all();
     var crr = cr.results || [];
     for (var ci = 0; ci < crr.length; ci++) if (Number(crr[ci].f) >= 2) cooled[crr[ci].topic] = true;
   } catch (e) {
     cooled = {};
   }
-  var fresh = [];
-  for (var j = 0; j < TOPICS.length; j++) {
-    if (used.indexOf(TOPICS[j].id) < 0 && !cooled[TOPICS[j].id]) fresh.push(TOPICS[j]);
+  var seed = (Date.now() ^ (Math.random() * 4294967296)) >>> 0;
+  var titles = [];
+  try { titles = await fetchRandomTitles(14); } catch (eT) { titles = []; }
+  var anchors = [], primary = null;
+  for (var t = 0; t < titles.length && !primary && t < 8; t++) {
+    var key = "wiki:" + titles[t];
+    if (used.indexOf(key) >= 0 || cooled[key]) continue;
+    var art = null;
+    try { art = await fetchWiki(titles[t]); } catch (eA) { art = null; }
+    if (art && art.text.length >= ANCHOR_MIN_CHARS) primary = art;
   }
-  if (!fresh.length) {
-    for (var k = 0; k < TOPICS.length; k++) {
-      if (!cooled[TOPICS[k].id]) fresh.push(TOPICS[k]);
-    }
+  if (!primary) return { id: "none", a: "", b: "", anchors: [] };
+  anchors.push(primary);
+  var linked = [];
+  try { linked = pickSeeded(await fetchLinkedTitles(primary.title), seed, 6); } catch (eL) { linked = []; }
+  var gotLinks = 0;
+  for (var li = 0; li < linked.length && gotLinks < 2; li++) {
+    try {
+      var la = await fetchWiki(linked[li]);
+      if (la && la.text.length >= LINK_MIN_CHARS) { anchors.push(la); gotLinks++; }
+    } catch (eW) {}
   }
-  var pool = fresh.length ? fresh : TOPICS.slice();
-  var entropy = String(Date.now()) + String(Math.random()) + form;
-  var hashBuf = new TextEncoder().encode(entropy);
-  var digest = await crypto.subtle.digest("SHA-256", hashBuf);
-  var bytes = new Uint8Array(digest);
-  var idx = (bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[3]) >>> 0;
-  idx = idx % pool.length;
-  var pick = pool[idx];
+  var papers = [];
+  try { papers = await fetchArxivQuery("all:%22" + encodeURIComponent(primary.title) + "%22", "relevance"); } catch (eP) { papers = []; }
+  if (!papers.length) { try { papers = pickSeeded(await fetchArxivQuery(arxivWindow(Date.now())), seed, 8); } catch (eP2) { papers = []; } }
+  for (var pi = 0; pi < papers.length && pi < 2; pi++) anchors.push(papers[pi]);
+  var pick = { id: "wiki:" + primary.title, a: primary.title, b: anchors.length > 1 ? anchors[1].title : "", anchors: fitAnchors(anchors) };
   try {
     await env.PERSONAL.prepare(
       "INSERT INTO companion_seeds(key, source, form, used_at) VALUES(?,?,?,?) ON CONFLICT(key) DO UPDATE SET used_at=excluded.used_at, form=excluded.form"
-    ).bind(pick.id, "rotation", form, nowIso()).run();
+    ).bind(pick.id, "live", form, nowIso()).run();
   } catch (e) {
     try {
-      await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_seeds(key, source, form, used_at) VALUES(?,?,?,?)").bind(pick.id, "rotation", form, nowIso()).run();
+      await env.PERSONAL.prepare("INSERT OR IGNORE INTO companion_seeds(key, source, form, used_at) VALUES(?,?,?,?)").bind(pick.id, "live", form, nowIso()).run();
     } catch (e2) {
     }
   }
   return pick;
 }
-__name(pickTopic, "pickTopic");
-__name2(pickTopic, "pickTopic");
-__name22(pickTopic, "pickTopic");
-async function fetchArxiv(cat) {
-  var url = "https://export.arxiv.org/api/query?search_query=cat:" + encodeURIComponent(cat) + "&sortBy=submittedDate&sortOrder=descending&max_results=5";
-  var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
-  if (!resp.ok) return [];
-  var xml = await resp.text();
-  var chunks = sections(xml, "entry");
-  var out = [];
-  for (var i = 0; i < chunks.length; i++) {
-    var title = firstTag(chunks[i], "title");
-    var summary = firstTag(chunks[i], "summary");
-    var id = firstTag(chunks[i], "id");
-    if (title) out.push({ kind: "paper", ref: id, title, text: squish(summary).slice(0, 900) });
-    if (out.length >= 3) break;
-  }
-  return out;
-}
-__name(fetchArxiv, "fetchArxiv");
-__name2(fetchArxiv, "fetchArxiv");
-__name22(fetchArxiv, "fetchArxiv");
 async function fetchWiki(title) {
   var url = "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exintro=0&redirects=1&format=json&titles=" + encodeURIComponent(title);
   var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
@@ -732,18 +686,6 @@ async function fetchWiki(title) {
 __name(fetchWiki, "fetchWiki");
 __name2(fetchWiki, "fetchWiki");
 __name22(fetchWiki, "fetchWiki");
-async function fetchWikiSearch(query) {
-  var url = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(query) + "&format=json&srlimit=1&redirects=1";
-  var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
-  if (!resp.ok) return null;
-  var j = await resp.json();
-  var hits = j && j.query && j.query.search || [];
-  if (!hits.length) return null;
-  return await fetchWiki(hits[0].title);
-}
-__name(fetchWikiSearch, "fetchWikiSearch");
-__name2(fetchWikiSearch, "fetchWikiSearch");
-__name22(fetchWikiSearch, "fetchWikiSearch");
 // COMPANION-DEEPSEEK-402-FALLBACK-1 (1.13.0, 2026-10-07, pillar core): the owner left the DeepSeek balance empty
 // (decision 2026-10-05, #1986), every writer and critic call got HTTP 402 in under a second, and reading.q08.org
 // published nothing after 2026-10-05 08:06Z (companion_runs: "composed 0" x5 per run, steward "collapse" every hour).
@@ -1035,9 +977,9 @@ function anchorsBlock(topic, anchors, life, profile) {
   var lines = [];
   lines.push("--- briefing. Never reproduce any wording from this briefing in the piece. ---");
   lines.push("subject: " + topic.a);
-  lines.push("lens: " + topic.b);
+  lines.push("The other items are supporting source material: use those that bear on the subject, ignore the rest. Do not force a connection the sources do not make.");
   lines.push("");
-  lines.push("source material, concrete and checkable; the only things you may assert as fact:");
+  lines.push("SOURCE MATERIAL, concrete and checkable; the only things you may assert as fact (nothing outside it, not even what you are sure is true):");
   for (var i = 0; i < anchors.length; i++) {
     var a = anchors[i];
     lines.push("[" + (i + 1) + "] " + a.kind + " :: " + a.title);
@@ -1045,12 +987,12 @@ function anchorsBlock(topic, anchors, life, profile) {
     lines.push("    " + a.text);
     lines.push("");
   }
-  lines.push("who the reader is; write for this person:");
+  lines.push("who the reader is; shapes emphasis and register only, is not source material and supports no factual claim:");
   lines.push(profile);
   lines.push("");
-  lines.push("his recent life; use only if it sharpens a piece, never list it back at him:");
+  lines.push("his recent life; shapes emphasis only, is not source material, never list it back at him:");
   lines.push(life);
-  return lines.join(NL).slice(0, 16e3);
+  return lines.join(NL).slice(0, 32e3);
 }
 __name(anchorsBlock, "anchorsBlock");
 __name2(anchorsBlock, "anchorsBlock");
@@ -1108,14 +1050,14 @@ function extractLede(md) {
 __name(extractLede, "extractLede");
 __name2(extractLede, "extractLede");
 __name22(extractLede, "extractLede");
-async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback) {
+async function composePiece(env, form, topic, anchors, life, profile, continuity, feedback, revision) {
   var formContract = form === "essay" ? P_ESSAY : form === "serial" ? P_SERIAL : P_NOTES;
   var outRule = form === "notes" ? "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and a short title for the whole set. Then each movement as its own ## heading followed by several developed paragraphs." : "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. Use ## for sections. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it";
   var P_ADV1 = L("ADVERSARIAL-REASONING-1 (binding): DISAGREE-WITH-EVIDENCE - state disagreement plainly with counter-evidence when evidence contradicts the user/source/corpus; SEEK-DISCONFIRMATION - name and test the strongest argument against the current answer; EXPOSE-FAILURE-MODES - state at least one concrete failure mode per substantive response; LABEL-UNCERTAINTY - tie confidence to evidence, never inflate it, and say I do not know with a reason when required.");
   var sys = [P_STYLE, P_ADV1, "", formContract, "", outRule].join(NL);
-  var concreteRule = "Every claim must be tied to a named, checkable particular from the source material. Name the paper, the theorem, the number, or the place. A sentence that could have been written without the source material is a failed sentence.";
+  var concreteRule = "Every claim must be tied to a named, checkable particular that appears in the source material, and you may name nothing that does not appear there. A sentence that could have been written without the source material is a failed sentence. Write the title and every heading in sentence case: capitalise only the first word and names that appear in the source material.";
   var lenRule = concreteRule + " " + (form === "essay" ? "Length: 2000 to 2800 words. This is a requirement, not a suggestion." : form === "serial" ? "Length: 1800 to 2400 words. This is a requirement, not a suggestion." : "Length: 1800 to 2400 words, in 3 to 5 movements. This is a requirement, not a suggestion.");
-  var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous draft was rejected by an adversarial reader for this reason: " + feedback + " Write a better draft that fixes that." : ""].join(NL);
+  var user = [anchorsBlock(topic, anchors, life, profile), "", lenRule, "", continuity, feedback ? "A previous draft was rejected by an adversarial reader for this reason: " + feedback + " Write a better draft that fixes that." : "", revision ? NL + factRevisionPrompt(revision.problems) + NL + NL + "--- DRAFT TO REVISE ---" + NL + "# " + String(revision.title || "") + NL + NL + String(revision.body_md || "").slice(0, 24e3) : ""].join(NL);
   var writerModel = form === "notes" ? WRITER_MODEL : WRITER_MODEL_ESSAY;
   var r = await callModel(env, [{ role: "system", content: sys }, { role: "user", content: user }], GEN_MAX_TOKENS, WRITER_TIMEOUT_MS, writerModel, form === "notes" ? "writer" : "essay");
   if (!r || !r.text) {
@@ -1136,7 +1078,7 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
     title = lines[0].trim().slice(2).trim();
     md = lines.slice(1).join(NL).trim();
   }
-  if (!title) title = topic.a + " and " + topic.b;
+  if (!title) title = topic.b ? topic.a + " and " + topic.b : topic.a;
   var objection = extractSection(md, "objection");
   var ledeObj = extractLede(md);
   return {
@@ -1154,34 +1096,15 @@ async function composePiece(env, form, topic, anchors, life, profile, continuity
 __name(composePiece, "composePiece");
 __name2(composePiece, "composePiece");
 __name22(composePiece, "composePiece");
-async function critiquePiece(env, piece, form) {
+async function critiquePiece(env, piece, form, ground) {
   var band = form === "essay" ? "2000 to 2800 words" : form === "serial" ? "1800 to 2400 words" : "1800 to 2400 words in 3 to 5 movements";
-  var user = "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED OBJECTION: " + (piece.objection || "") + NL + NL + "BODY:" + NL + piece.body_md;
+  var user = "SOURCE MATERIAL:" + NL + String(ground || "").slice(0, GROUND_MAX + 2000) + NL + NL + "FORM: " + form + " (" + band + ")" + NL + NL + "TITLE: " + piece.title + NL + "LEDE: " + (piece.lede || "") + NL + "STATED OBJECTION: " + (piece.objection || "") + NL + NL + "BODY:" + NL + piece.body_md;
   var r = await callModel(env, [{ role: "system", content: P_CRITIQUE }, { role: "user", content: user }], 900, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL, "critic");
-  return parseJsonLoose(r.text);
+  return r && r.text ? parseJsonLoose(r.text) : null;
 }
 __name(critiquePiece, "critiquePiece");
 __name2(critiquePiece, "critiquePiece");
 __name22(critiquePiece, "critiquePiece");
-async function sharpenBridge(env, piece, form) {
-  try {
-    var user = "STATED BRIDGE: " + JSON.stringify(piece.bridge || {}) + NL + NL + "PIECE:" + NL + String(piece.body_md).slice(0, 6e3);
-    var r = await callModel(env, [{ role: "system", content: P_BRIDGE }, { role: "user", content: user }], 1400, CRITIQUE_TIMEOUT_MS, CRITIC_MODEL, "critic");
-    var j = parseJsonLoose(r && r.text);
-    if (j && j.bridge && j.bridge.a && j.bridge.b) {
-      piece.bridge = j.bridge;
-      if (j.bridge_claim) piece.bridge.claim = j.bridge_claim;
-      if (j.objection) piece.objection = j.objection;
-      return true;
-    }
-    return false;
-  } catch (e) {
-    return false;
-  }
-}
-__name(sharpenBridge, "sharpenBridge");
-__name2(sharpenBridge, "sharpenBridge");
-__name22(sharpenBridge, "sharpenBridge");
 var GEN_BUDGET_MS = 600e3;
 var LENGTH_FLOOR = { essay: 2000, serial: 1800, notes: 1700 };
 // COMPANION-FALLBACK-FLOOR-1: measured 2026-10-07/08, 40+ gpt-oss-120b drafts all landed at 1100-1750 words and none passed the
@@ -1208,7 +1131,7 @@ function expandFeedback(problems, form, piece) {
     "treatment of the strongest objection. Keep every sentence that is already there unless extending it. The draft follows." + NL + NL +
     "# " + String(piece && piece.title || "") + NL + NL + String(piece && piece.body_md || "").slice(0, 24e3);
 }
-function validatePiece(piece, form) {
+function validatePiece(piece, form, ground) {
   var problems = [];
   if (!piece || !piece.body_md) return { ok: false, problems: ["no body"] };
   var md = String(piece.body_md);
@@ -1225,6 +1148,11 @@ function validatePiece(piece, form) {
   if (hasEmoji(md)) problems.push("emoji present");
   if (!piece.title || String(piece.title).length < 4) problems.push("no title");
   if (form !== "notes" && wc >= 700 && (!piece.objection || String(piece.objection).length < 40)) problems.push("objection too thin");
+  // COMPANION-VERIFY-1: when the source material is given, every name, year and figure must occur in it.
+  if (ground !== undefined && ground !== null) {
+    var gp = groundingProblems(pieceText(piece), ground, {});
+    for (var gi = 0; gi < gp.length; gi++) problems.push("grounding: " + gp[gi]);
+  }
   return { ok: problems.length === 0, problems, words: wc };
 }
 __name(validatePiece, "validatePiece");
@@ -1278,14 +1206,14 @@ async function emitReadingSignal(env, piece, form, slug) {
   }
 }
 __name(emitReadingSignal, "emitReadingSignal");
-async function persistPiece(env, piece, form, topic, model, quality, words) {
+async function persistPiece(env, piece, form, topic, model, quality, words, ground) {
   var day = amsDayKey(/* @__PURE__ */ new Date());
   var salt = String(Date.now()) + topic.id + form;
   var slug = day + "-" + form + "-" + await sha16(salt);
-  var anchorJson = JSON.stringify({ topic: topic.id, seam: [topic.a, topic.b], bridge: piece.bridge || null });
+  var anchorJson = JSON.stringify({ topic: topic.id, seam: [topic.a, topic.b].filter(Boolean), refs: (topic.anchors || []).map(function (a) { return a.ref; }) });
   await env.PERSONAL.prepare(
-    "INSERT OR IGNORE INTO companion_pieces(slug, form, title, subtitle, lede, body_md, anchor_json, quality_json, word_count, day, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
-  ).bind(slug, form, String(piece.title).slice(0, 300), String(piece.subtitle || "").slice(0, 300), String(piece.lede || "").slice(0, 2e3), String(piece.body_md), anchorJson, JSON.stringify(quality || {}), words, day, nowIso()).run();
+    "INSERT OR IGNORE INTO companion_pieces(slug, form, title, subtitle, lede, body_md, anchor_json, quality_json, word_count, day, created_at, ground_text) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
+  ).bind(slug, form, String(piece.title).slice(0, 300), String(piece.subtitle || "").slice(0, 300), String(piece.lede || "").slice(0, 2e3), String(piece.body_md), anchorJson, JSON.stringify(quality || {}), words, day, nowIso(), String(ground || "")).run();
   emitReadingSignal(env, piece, form, slug).catch(function() {
   });
   try {
@@ -1333,6 +1261,8 @@ __name(logRun, "logRun");
 __name2(logRun, "logRun");
 __name22(logRun, "logRun");
 async function sendMail(env, piece, slug, day) {
+  // COMPANION-VERIFY-1: nothing is mailed, to the owner or to subscribers, unless the piece passed the accuracy audit (fail closed).
+  if (!(await pieceVerified(env, slug))) return { ok: false, error: "piece not verified, nothing mailed (fail closed)" };
   var subject = piece.title + " (" + formLabel(piece.form || "essay") + ")";
   var body = (/^\s*#/.test(String(piece.body_md || "")) ? "" : piece.lede ? piece.lede + NL + NL : "") + String(piece.body_md).slice(0, 2e4) + NL + NL + "Read online: " + String(piece.link || "");
   return await sendOne(env, "rwnquni@outlook.com", subject, body);
@@ -1461,7 +1391,7 @@ async function feedXml(env, u) {
     await ensureSchema(env);
   } catch (e) {
   }
-  var q = await env.PERSONAL.prepare("SELECT slug, title, lede, day, created_at FROM companion_pieces ORDER BY id DESC LIMIT 30").all();
+  var q = await env.PERSONAL.prepare("SELECT slug, title, lede, day, created_at FROM companion_pieces WHERE " + VISIBLE_SQL + " ORDER BY id DESC LIMIT 30").all();
   var rows = q.results || [];
   var base = subBase(env, u.origin);
   var items = "";
@@ -1534,7 +1464,7 @@ function digestMail(day, list, base) {
   };
 }
 async function digestList(env, day, base) {
-  var pr = await env.PERSONAL.prepare("SELECT slug, title, form FROM companion_pieces WHERE day = ? ORDER BY id ASC").bind(day).all();
+  var pr = await env.PERSONAL.prepare("SELECT slug, title, form FROM companion_pieces WHERE day = ? AND " + VISIBLE_SQL + " ORDER BY id ASC").bind(day).all();
   var rows = pr.results || [];
   return { n: rows.length, list: rows.map(function (r) { return "- " + r.title + " \u2014 " + base + "/p/" + r.slug; }).join(NL) };
 }
@@ -1557,6 +1487,7 @@ async function resumeSendRuns(env) {
   var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(t.key).all();
   var prow = (pr.results || [])[0];
   if (!prow) { await env.PERSONAL.prepare("UPDATE companion_broadcasts SET done = 1, updated_at = ?1 WHERE key = ?2").bind(nowIso(), t.key).run(); return { ok: false, key: t.key, error: "piece gone; run closed" }; }
+  if (!(await pieceVerified(env, t.key))) { await env.PERSONAL.prepare("UPDATE companion_broadcasts SET done = 1, updated_at = ?1 WHERE key = ?2").bind(nowIso(), t.key).run(); return { ok: false, key: t.key, error: "piece not verified or retracted; run closed (fail closed)" }; }
   var b2 = subBase(env, t.origin);
   return await sendRun(env, t.key, t.origin, pieceMail(prow, b2, b2 + "/p/" + t.key));
 }
@@ -1579,6 +1510,7 @@ async function broadcast(env, slug, origin) {
     var pr = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(slug).all();
     var prow = (pr.results || [])[0];
     if (!prow) return { ok: false, error: "no piece" };
+    if (!(await pieceVerified(env, slug))) return { ok: false, error: "piece not verified, nothing mailed (fail closed)" };
     // BROADCAST-BATCH-1: one capped, resumable run per piece; the hourly tick sends the rest.
     var base = subBase(env, origin);
     return await sendRun(env, slug, base, pieceMail(prow, base, base + "/p/" + slug));
@@ -1607,6 +1539,245 @@ async function sendDigest(env) {
 __name(sendDigest, "sendDigest");
 __name2(sendDigest, "sendDigest");
 __name22(sendDigest, "sendDigest");
+// ---- Accuracy layer (COMPANION-VERIFY-1, 1.14.0; pattern ported from q08-signal-engine Q08-VERIFY-1) -------------------------
+// Owner directive 2026-10-10: published content is 100% accurate and independently fact-checked, every claim verifiable against
+// the supplied source text; if a check or reviewer is unavailable nothing is published. A piece becomes visible (site, feed,
+// API) and mailable (owner, subscribers, digest) only when companion_audits holds a 'pass' row for it, and that row is written
+// only after (1) the deterministic grounding check (every capitalised name, year and figure occurs in the source material) and
+// (2) two reviewers from model families other than the writer's found no unsupported claim. A piece that later fails the same
+// test is retracted in public (companion_retractions: 410 notice, gone from index, feed, API and mail). Reversible by deleting
+// the companion_retractions row.
+var REVIEW_MAX_TOKENS = 4000;
+var REVIEW_TIMEOUT_MS = 11e4;
+var MODEL_FAMILY = {
+  "@cf/nvidia/nemotron-3-120b-a12b": "nvidia",
+  "@cf/openai/gpt-oss-120b": "openai",
+  "@cf/moonshotai/kimi-k2.6": "moonshot",
+  "@cf/deepseek-ai/deepseek-v4-pro-0813": "deepseek",
+  "@cf/zai-org/glm-5.3": "zai",
+  "deepseek-chat": "deepseek",
+  "deepseek-reasoner": "deepseek"
+};
+// Reviewers, non-reasoning first so that a verdict does not spend its whole budget thinking. Banned models stay banned.
+var REVIEW_POOL = [
+  "@cf/nvidia/nemotron-3-120b-a12b",
+  "@cf/openai/gpt-oss-120b",
+  "@cf/moonshotai/kimi-k2.6",
+  "@cf/deepseek-ai/deepseek-v4-pro-0813",
+  "@cf/zai-org/glm-5.3"
+];
+function familyOf(id) { return MODEL_FAMILY[id] || "unknown:" + String(id || "").split("/")[1]; }
+function seedOf(str) { var h = 0, t = String(str || ""); for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return Math.abs(h); }
+// Up to k reviewers, one per family, none from the family in `exclude`; the start rotates with `seed`.
+function pickReviewers(exclude, k, seed) {
+  var ex = {}; (exclude || []).forEach(function (f) { ex[f] = 1; });
+  var n = REVIEW_POOL.length, start = Math.abs(seed | 0) % n, out = [], seen = {};
+  for (var i = 0; i < n && out.length < k; i++) {
+    var id = REVIEW_POOL[(start + i) % n], f = familyOf(id);
+    if (ex[f] || seen[f] || !modelAllowed(id)) continue;
+    seen[f] = 1; out.push(id);
+  }
+  return out;
+}
+var GROUND_LEAD = new Set(["the","a","an","in","on","at","when","if","but","and","so","as","that","this","these","those","it","its","each","every","most","some","no","for","with","without","before","after","once","while","because","since","what","where","who","why","how","then","there","here","not","only","even","still","yet","or","nor","by","from","to","of","their","his","her","our","your","one","two","three","such","both","many","any","all","i","we","you","he","she","they","my","whether","although","though","until","unless","instead","perhaps","suppose","imagine","consider","now","today","later","earlier","first","second","third","finally","meanwhile","however","which","whose","than","also","just","every","another","other","either","neither","same","more","less","few","several"]);
+var GROUND_OK = new Set(["january","february","march","april","may","june","july","august","september","october","november","december","monday","tuesday","wednesday","thursday","friday","saturday","sunday","arxiv","markdown","json","html"]);
+function groundWords(text) {
+  var set = new Set(); String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
+    w = w.replace(/[.'-]+$/, ""); set.add(w); set.add(w.replace(/'s$/, "")); if (w.length > 3 && w.charAt(w.length - 1) === "s") set.add(w.slice(0, -1)); else set.add(w + "s"); return "";
+  });
+  return set;
+}
+function groundNumbers(text) {
+  var set = new Set(); (String(text || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).forEach(function (n) { set.add(n.replace(/,/g, "").replace(/\.0+$/, "")); }); return set;
+}
+// Deterministic check: names, years and figures in `text` that `ground` does not contain. Returns a list of problem strings.
+function groundingProblems(text, ground, opts) {
+  var o = opts || {}, nowYear = Number(String(o.today || nowIso().slice(0, 10)).slice(0, 4));
+  var body = String(text || "").replace(/^#+[ \t]+(.*)$/gm, function (m, h) { return h.toLowerCase(); }).replace(/\(?(?:This|A|An) hypothetical[^)]*\)?/gi, " ");
+  var words = groundWords(ground), nums = groundNumbers(ground), out = [], seen = {};
+  function add(kind, v) { var k = kind + v.toLowerCase(); if (seen[k]) return; seen[k] = 1; out.push(kind + ": " + v); }
+  // figures: every number must be in the source, except small counts, future years and (forecasts) probabilities and horizons
+  var nre = /\$?\d[\d,]*(?:\.\d+)?\s*(%|percent|days?|weeks?|months?|quarters?|years?|hours?)?/gi, m;
+  while ((m = nre.exec(body))) {
+    var raw = m[0], digits = raw.replace(/[^\d.]/g, "").replace(/\.$/, "").replace(/\.0+$/, "");
+    if (!digits || digits.indexOf(",") >= 0) continue;
+    var plain = m[0].replace(/[$,\s]/g, "").replace(/(%|percent|days?|weeks?|months?|quarters?|years?|hours?)$/i, "");
+    var num = plain.replace(/,/g, "");
+    if (nums.has(num) || nums.has(num.replace(/\.0+$/, ""))) continue;
+    var unit = (m[1] || "").toLowerCase(), val = Number(num);
+    var isYear = /^(1[0-9]|20)\d\d$/.test(num) && !unit;
+    if (isYear && val >= nowYear && o.forecast) continue;
+    if (o.forecast && (unit === "%" || unit === "percent")) continue;
+    if (o.forecast && /^(days?|weeks?|months?|quarters?|years?)$/.test(unit)) continue;
+    if (!isYear && !unit && /^\d{1,2}$/.test(num) && val <= 10 && raw.indexOf("$") < 0) continue;
+    if (!isYear && !unit && /^\d$/.test(num)) continue;
+    add(isYear ? "year not in the source" : "figure not in the source", raw.trim());
+  }
+  // names: capitalised words or phrases that are not at the start of a sentence and are absent from the source
+  var sentences = body.split(/(?<=[.!?:;—])\s+|\n+/);
+  sentences.forEach(function (sent) {
+    var toks = sent.match(/[A-Za-z0-9][A-Za-z0-9&'.’-]*|[,;]/g) || [];
+    var i = 0;
+    while (i < toks.length) {
+      var t = toks[i];
+      if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t) && toks[i + 1] && !/^[A-Z]/.test(toks[i + 1])) { i++; continue; }
+      var j = i, phrase = [];
+      while (j < toks.length && /^[A-Z][A-Za-z0-9&'.’-]*$/.test(toks[j])) { phrase.push(toks[j]); j++; if (toks[j] && /^(of|the|and|for|de|von|van|del|la)$/i.test(toks[j]) && toks[j + 1] && /^[A-Z]/.test(toks[j + 1])) { phrase.push(toks[j]); j++; } }
+      var lead = 0; while (lead < phrase.length - 1 && GROUND_LEAD.has(phrase[lead].toLowerCase().replace(/[^a-z]/g, ""))) lead++;
+      var core = phrase.slice(lead);
+      var first = (i === 0);
+      if (core.length && !(core.length === 1 && first && lead === 0) && !(core.length === 1 && GROUND_LEAD.has(core[0].toLowerCase()))) {
+        var joined = core.join(" ").replace(/[’]/g, "'");
+        var low = joined.toLowerCase().replace(/[^a-z0-9' ]/g, " ").replace(/\s+/g, " ").trim();
+        if (low && !GROUND_OK.has(low)) {
+          var miss = low.split(" ").filter(function (w) { return w && !GROUND_OK.has(w) && !GROUND_LEAD.has(w) && !words.has(w) && !words.has(w.replace(/'s$/, "")) && !/^\d+$/.test(w); });
+          if (miss.length) add("name not in the source", joined);
+        }
+      }
+      i = Math.max(j, i + 1);
+    }
+  });
+  return out.slice(0, 14);
+}
+var FACTCHECK_PROMPT = [
+  "You are a strict fact-checker for a publication that must contain no unsupported claim. You are given SOURCE MATERIAL and a DRAFT.",
+  "List every sentence or clause in the DRAFT, headings and title included, that asserts something about the real world and is not stated in, or a direct paraphrase of, the SOURCE MATERIAL. That covers events, dates, people, organisations, places, works, products, laws, institutions, numbers, quotations, studies, historical episodes and precedents, claims about what the reader does or has done, and statements that a practice or fact is 'known' or 'common'.",
+  "Your own knowledge does not count as support, even if you are sure the claim is true: if it is not in the SOURCE MATERIAL, it is unsupported. A claim that distorts what the SOURCE MATERIAL says (a changed number, a stronger or different relationship, a cause where the source gives only a sequence) is unsupported too. These are NOT violations: reasoning that follows from the source's facts and is presented as reasoning, definitions, and a clearly labelled hypothetical that names no real person, organisation, product, date or number.",
+  "Answer with exactly one JSON object and nothing else: {\"unsupported\": [up to 8 short quotations copied from the DRAFT, each followed by ' -- ' and the reason in a few words], \"verdict\": \"pass\" or \"fail\"}. verdict is \"pass\" only when unsupported is empty."
+].join("\n");
+function parseFactVerdict(text) {
+  var m = String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  var o; try { o = JSON.parse(m[0]); } catch (e) { return null; }
+  var v = String(o && o.verdict || "").toLowerCase().trim();
+  if (v !== "pass" && v !== "fail") return null;
+  var u = Array.isArray(o.unsupported) ? o.unsupported.map(function (x) { return String(x).replace(/\s+/g, " ").trim().slice(0, 260); }).filter(Boolean).slice(0, 8) : [];
+  if (v === "pass" && u.length) v = "fail";
+  if (v === "fail" && !u.length) u = ["the reviewer rejected the draft without naming a claim"];
+  return { verdict: v, unsupported: u };
+}
+async function factCheckOne(env, modelId, draft, ground) {
+  try {
+    var body = FACTCHECK_PROMPT + "\n\n--- SOURCE MATERIAL ---\n" + String(ground).slice(0, GROUND_MAX + 2000) + "\n\n--- DRAFT ---\n" + String(draft).trim().slice(0, 30000);
+    var resp = await aiRunAttr(env, "personal-companion", "factcheck", modelId, { messages: [{ role: "user", content: body }], max_tokens: REVIEW_MAX_TOKENS, temperature: 0.1 }, { gateway: { id: "default" }, signal: AbortSignal.timeout(REVIEW_TIMEOUT_MS) });
+    var out = resp && (resp.response || (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content)) || "";
+    var v = parseFactVerdict(out);
+    if (v) { v.model = modelId; v.family = familyOf(modelId); }
+    return v;
+  } catch (e) { return null; }
+}
+// Two valid verdicts from two different families, neither the writer's. Fewer than two valid verdicts is "unavailable": fail closed.
+async function factCheck(env, draft, ground, writerModel, seedText) {
+  var wf = writerModel ? familyOf(writerModel) : "";
+  var ids = pickReviewers(wf ? [wf] : [], 5, seedOf(seedText));
+  var got = [];
+  for (var k = 0; k < ids.length && got.length < 2; k += 2) {
+    var batch = ids.slice(k, k + (2 - got.length));
+    var rs = await Promise.all(batch.map(function (id) { return factCheckOne(env, id, draft, ground); }));
+    rs.forEach(function (r) { if (r) got.push(r); });
+  }
+  if (got.length < 2) return { ok: false, unavailable: true, unsupported: [], judges: got, reason: "fewer than two fact-check verdicts from other model families" };
+  var uns = []; got.forEach(function (g) { g.unsupported.forEach(function (u) { if (uns.indexOf(u) < 0) uns.push(u); }); });
+  return { ok: got.every(function (g) { return g.verdict === "pass"; }), unavailable: false, unsupported: uns.slice(0, 10), judges: got, reason: "" };
+}
+// Full verification of one draft: deterministic grounding first (free), then the two-family review. `text` includes the title.
+async function verifyPiece(env, text, ground, writerModel, seedText, opts) {
+  var det = groundingProblems(text, ground, opts);
+  if (det.length) return { ok: false, stage: "grounding", problems: det, judges: [], unavailable: false };
+  var fc = await factCheck(env, text, ground, writerModel, seedText);
+  if (fc.unavailable) return { ok: false, stage: "factcheck", problems: ["fact-check unavailable: " + fc.reason], judges: fc.judges, unavailable: true };
+  if (!fc.ok) return { ok: false, stage: "factcheck", problems: fc.unsupported.map(function (u) { return "unsupported claim: " + u; }), judges: fc.judges, unavailable: false };
+  return { ok: true, stage: "pass", problems: [], judges: fc.judges, unavailable: false };
+}
+// Everything a reader is shown: title, subtitle, lede (stored apart from the body when the piece does not open with a heading) and body.
+function pieceText(piece) { return "# " + String(piece.title || "") + "\n\n" + (piece.subtitle ? String(piece.subtitle) + "\n\n" : "") + (piece.lede ? String(piece.lede) + "\n\n" : "") + String(piece.body_md || ""); }
+var __accSchemaDb = null;
+async function ensureAccuracySchema(env) {
+  if (__accSchemaDb && __accSchemaDb === env.PERSONAL) return true;
+  try {
+    await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_audits (slug TEXT PRIMARY KEY, verdict TEXT NOT NULL, stage TEXT, models TEXT, problems_json TEXT, checked_at TEXT NOT NULL)").run();
+    await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_retractions (slug TEXT PRIMARY KEY, reason TEXT, claims_json TEXT, retracted_at TEXT NOT NULL)").run();
+    await ensureColumns(env.PERSONAL, "companion_pieces", { ground_text: "TEXT" });
+    __accSchemaDb = env.PERSONAL;
+    return true;
+  } catch (e) {
+    console.error("companion accuracy schema failed: " + String(e && e.message || e).slice(0, 200));
+    return false;
+  }
+}
+// A piece is visible and mailable only with a passing audit row and no retraction. Used as a WHERE fragment on companion_pieces.
+var VISIBLE_SQL = "slug IN (SELECT slug FROM companion_audits WHERE verdict = 'pass') AND slug NOT IN (SELECT slug FROM companion_retractions)";
+async function pieceVerified(env, slug) {
+  try {
+    await ensureAccuracySchema(env);
+    var r = await env.PERSONAL.prepare("SELECT 1 AS ok FROM companion_pieces WHERE slug = ?1 AND " + VISIBLE_SQL).bind(slug).first();
+    return !!r;
+  } catch (e) { return false; }
+}
+async function recordAudit(env, slug, verdict, stage, vr) {
+  await ensureAccuracySchema(env);
+  await env.PERSONAL.prepare("INSERT OR REPLACE INTO companion_audits (slug, verdict, stage, models, problems_json, checked_at) VALUES (?,?,?,?,?,?)")
+    .bind(slug, verdict, stage, ((vr && vr.judges) || []).map(function (j) { return j.model; }).join(","), JSON.stringify(((vr && vr.problems) || []).slice(0, 10)), nowIso()).run();
+}
+// Retracts a piece in public: its URL keeps answering with a notice, it leaves the index, feed, API and every mail run.
+async function retractPiece(env, slug, reason, claims) {
+  await ensureAccuracySchema(env);
+  await env.PERSONAL.prepare("INSERT OR REPLACE INTO companion_retractions (slug, reason, claims_json, retracted_at) VALUES (?,?,?,?)")
+    .bind(slug, String(reason || "").slice(0, 400), JSON.stringify((claims || []).slice(0, 8)), nowIso()).run();
+  try {
+    if (env.AUDIT) await env.AUDIT.prepare("UPDATE signals SET status = 'retracted' WHERE id = ?1").bind("reading:" + slug).run();
+  } catch (e) {}
+  return { ok: true, slug: slug };
+}
+// Cron step. Pieces with no audit row: one with no recorded source material cannot be verified and is withdrawn (no model call);
+// one with stored source material is verified now. A reviewer outage writes nothing (retried next tick); a failure retracts.
+async function auditPublished(env, limit) {
+  if (!(await ensureAccuracySchema(env))) return { ok: false, reason: "schema" };
+  var rows = await env.PERSONAL.prepare(
+    "SELECT slug, title, subtitle, lede, body_md, ground_text FROM companion_pieces WHERE slug NOT IN (SELECT slug FROM companion_retractions) AND slug NOT IN (SELECT slug FROM companion_audits) ORDER BY id DESC LIMIT ?1"
+  ).bind(limit || 3).all();
+  var res = { checked: 0, passed: 0, retracted: 0, withdrawn: 0, deferred: 0 };
+  for (var p of (rows.results || [])) {
+    if (!p.ground_text || String(p.ground_text).length < 500) {
+      await recordAudit(env, p.slug, "unverifiable", "no-source-record", { judges: [], problems: ["no source material was recorded for this piece"] });
+      await retractPiece(env, p.slug, "Withdrawn: no record of the source material this piece was written from exists, so its claims cannot be verified.", []);
+      res.withdrawn++;
+      continue;
+    }
+    var vr = await verifyPiece(env, pieceText(p), p.ground_text, "", "audit:" + p.slug, {});
+    if (vr.unavailable) { res.deferred++; continue; }
+    res.checked++;
+    if (vr.ok) { await recordAudit(env, p.slug, "pass", vr.stage, vr); res.passed++; continue; }
+    await recordAudit(env, p.slug, "fail", vr.stage, vr);
+    await retractPiece(env, p.slug, "Retracted after an accuracy audit: the piece contained claims its source material does not support (" + vr.stage + " check).", vr.problems);
+    res.retracted++;
+  }
+  return Object.assign({ ok: true }, res);
+}
+function renderRetraction(r, p, keyQS) {
+  var claims = []; try { claims = JSON.parse(r.claims_json || "[]"); } catch (e) { claims = []; }
+  var date = String(r.retracted_at || "").slice(0, 10);
+  var list = claims.length ? "<p>Examples of what could not be verified:</p><ul>" + claims.slice(0, 5).map(function (c) { return "<li>" + escHtml(c) + "</li>"; }).join("") + "</ul>" : "";
+  var body = "<div class=meta>Retracted " + escHtml(date) + "</div><h2>Retracted: " + escHtml(p && p.title || "this piece") + "</h2><p>" + escHtml(r.reason || "") +
+    " Every piece is now checked against its source material by two independent reviewers before it is shown or mailed; earlier pieces are audited, and any that fail are withdrawn and listed on the <a href=/retractions" + (keyQS || "") + ">retractions page</a>.</p>" + list +
+    "<footer><a href=/" + (keyQS || "") + ">back to index</a></footer>";
+  return page("Retracted", shell(body), '<meta name="robots" content="noindex">');
+}
+function renderRetractions(rows, keyQS) {
+  var items = (rows || []).map(function (r) { return "<li>" + escHtml(r.title || r.slug) + " &mdash; retracted " + escHtml(String(r.retracted_at || "").slice(0, 10)) + ". " + escHtml(r.reason || "") + "</li>"; }).join("");
+  var body = "<h2>Corrections and retractions</h2><p>Pieces are shown only when their claims are supported by their source material. When one is found not to be, it is withdrawn and listed here.</p>" + (items ? "<ul>" + items + "</ul>" : "<p>No piece has been retracted.</p>") + "<footer><a href=/" + (keyQS || "") + ">back to index</a></footer>";
+  return page("Retractions", shell(body), '<meta name="robots" content="noindex">');
+}
+function factRevisionPrompt(problems, ground) {
+  return "FACT REVISION. Independent fact-checkers rejected the draft below. Every item in the list is a claim the source material does not support." + NL +
+    "Return the SAME piece in the SAME output format (a single # heading with the title, then the prose), with each such name, date, figure or claim deleted, or replaced by reasoning that follows from the source material, or by a labelled hypothetical that names no real person, organisation, product, date or number. Add no new facts. Keep everything else, including the length." + NL + NL +
+    "Problems:" + NL + "- " + problems.slice(0, 12).join(NL + "- ");
+}
+
+// COMPANION-VERIFY-1 (1.14.0): the publish path. Nothing is persisted before it passes (1) the editorial validation with the
+// deterministic grounding check, (2) the adversarial reader, whose outage fails closed, and (3) the two-family fact-check, whose
+// outage fails closed. There is no forced publish: when every draft fails, nothing is published and the stall detector says so.
+var REVISE_BEFORE_MS = 42e4;
 async function generate(env, form, opts) {
   var t0 = Date.now();
   opts = opts || {};
@@ -1621,47 +1792,12 @@ async function generate(env, form, opts) {
     var life = await loadLife(env);
     var continuity = await loadContinuity(env, form);
     await logRun(env, form, "", topic.id, "stage", "context " + profile.length + "/" + life.length + "/" + continuity.length, Date.now() - t0);
-    var anchors = [];
-    var seen = {};
-    var dayN = Number(amsDayKey(/* @__PURE__ */ new Date()).slice(8, 10)) || 0;
-    var addAnchor = /* @__PURE__ */ __name22(function(a) {
-      if (a && a.title && !seen[a.title]) {
-        seen[a.title] = true;
-        anchors.push(a);
-      }
-    }, "addAnchor");
-    try {
-      addAnchor(await fetchWiki(topic.wiki));
-    } catch (e) {
-    }
-    try {
-      addAnchor(await fetchWikiSearch(String(topic.a || "")));
-    } catch (e) {
-    }
-    try {
-      addAnchor(await fetchWikiSearch(String(topic.b || "")));
-    } catch (e) {
-    }
-    try {
-      for (var ri = 0; ri < (topic.rel || []).length; ri++) addAnchor(await fetchWiki(topic.rel[ri]));
-    } catch (e) {
-    }
-    if (anchors.length < 3) {
+    var anchors = (topic.anchors || []).slice();
+    if (form === "serial") {
       try {
-        var papers = await fetchArxiv(topic.cat);
-        for (var i = 0; i < papers.length && anchors.length < 4; i++) addAnchor(papers[i]);
-      } catch (e) {
-      }
-    }
-    if (anchors.length < 3) {
-      var fbWiki = ["Coffeehouse", "Walking", "Ruin", "Craft", "Silence"];
-      var fw = fbWiki[dayN % fbWiki.length];
-      if (fw !== topic.wiki) {
-        try {
-          addAnchor(await fetchWiki(fw));
-        } catch (e) {
-        }
-      }
+        var sr = await env.PERSONAL.prepare("SELECT title, thesis, last_lines FROM companion_series ORDER BY id DESC LIMIT 1").first();
+        if (sr) anchors.push({ kind: "previous installment", ref: "previous installment", title: squish(sr.title || ""), text: squish(String(sr.thesis || "") + " " + String(sr.last_lines || "")).slice(0, 1600) });
+      } catch (eSr) {}
     }
     await logRun(env, form, "", topic.id, "stage", "anchorKinds " + anchors.map(function(x) {
       return x.kind;
@@ -1671,20 +1807,11 @@ async function generate(env, form, opts) {
       await logRun(env, form, "", topic.id, "blocked", "insufficient anchors", Date.now() - t0);
       return { ok: false, error: "insufficient anchors" };
     }
+    var ground = anchorsText(anchors);
     var attempt = 0;
     var best = null;
     var feedback = "";
-    // COMPANION-FORCED-FALLBACK-1 (1.13.3, agent_issues 2106/2126): a critic-rejected draft was marked gate "forced" and then
-    // dropped, so the forced-fallback branch below could never run; with every draft rejected since the DeepSeek 402
-    // (2026-10-05), reading.q08.org published nothing for 81h. The strongest rejected draft (highest worst dimension) that
-    // passed validation is kept, and published as forced only when the companion has been silent for STALL_HOURS.
-    var bestRejected = null;
-    var stalledHours = null;
-    try {
-      var lastPiece = await env.PERSONAL.prepare("SELECT created_at FROM companion_pieces ORDER BY id DESC LIMIT 1").first();
-      var lastPieceMs = lastPiece && lastPiece.created_at ? Date.parse(String(lastPiece.created_at)) : 0;
-      stalledHours = lastPieceMs ? (Date.now() - lastPieceMs) / 36e5 : Infinity;
-    } catch (eS) {}
+    var failClosed = "";
     while (attempt < 5) {
       // COMPANION-FALLBACK-TUNE-1: no new attempt once GEN_BUDGET_MS is spent, so the run ends with a logged failure
       // instead of being killed by the 15-minute cron wall mid-attempt (2026-10-07 12:00Z run: killed in attempt 3).
@@ -1701,21 +1828,10 @@ async function generate(env, form, opts) {
       if (!piece) {
         continue;
       }
-      var v = validatePiece(piece, form);
-      if (v.ok) {
-        var badNames = unverifiedNames(piece, anchors, topic);
-        var citeBad = [];
-        for (var bi = 0; bi < badNames.length; bi++) {
-          var nm = badNames[bi];
-          if (/[0-9]{4}/.test(nm) || /et al/i.test(nm) || /, ?[A-Z]/.test(nm)) citeBad.push(nm);
-        }
-        if (citeBad.length) {
-          v = { ok: false, problems: ["unverified citations: " + citeBad.slice(0, 6).join(", ")], words: v.words };
-        }
-      }
+      var v = validatePiece(piece, form, ground);
       if (!v.ok) {
         await logRun(env, form, model, topic.id, "rejected", "validate: " + v.problems.join("; ") + " || raw: " + String(comp.raw || "").slice(0, 500), Date.now() - t0);
-        feedback = "The previous draft failed validation for these reasons: " + v.problems.join("; ") + ". Fix them and try again.";
+        feedback = "The previous draft failed validation for these reasons: " + v.problems.join("; ") + ". Fix them and try again. Remove every name, year and figure that is not in the source material.";
         // COMPANION-FALLBACK-TUNE-1: a draft whose only problem is being short is extended, not rewritten from scratch
         // (12:00Z run: gpt-oss drafts of 1591 and 1764 words against the 2000-word essay floor were thrown away).
         var shortOnly = expandFeedback(v.problems, form, piece);
@@ -1755,42 +1871,73 @@ async function generate(env, form, opts) {
         } catch (e) {
         }
       }
-      await sharpenBridge(env, piece, form);
       await logRun(env, form, model, topic.id, "stage", "critique", Date.now() - t0);
-      var crit = await critiquePiece(env, piece, form);
-      var q = crit || {};
+      var crit = await critiquePiece(env, piece, form, ground);
+      if (!crit) {
+        // fail closed: an unavailable reader is not a pass (before 1.14.0 a missing critique scored a neutral 5 and passed)
+        failClosed = "critic unavailable";
+        await logRun(env, form, model, topic.id, "rejected", "critic unavailable (fail closed)", Date.now() - t0);
+        continue;
+      }
+      var q = crit;
       var dims = ["specificity", "argument", "objection", "voice"];
       var worst = 10;
       var worstName = "";
+      var missing = false;
       for (var d = 0; d < dims.length; d++) {
         var val = Number(q[dims[d]]);
-        if (!Number.isFinite(val)) val = 5;
+        if (!Number.isFinite(val)) { missing = true; val = 0; }
         if (val < worst) {
           worst = val;
           worstName = dims[d];
         }
       }
+      if (missing) failClosed = "critic returned no score";
+      var groundScore = Number(q.grounding);
+      if (Number.isFinite(groundScore) && groundScore < ACCEPT_FLOOR_NOTES && worst >= ACCEPT_FLOOR_NOTES) { worst = groundScore; worstName = "grounding"; }
       var floorForForm = form === "notes" ? ACCEPT_FLOOR_NOTES : ACCEPT_FLOOR_ESSAY;
       if (worst < floorForForm) {
         await logRun(env, form, model, topic.id, "rejected", "critique " + worstName + "=" + worst + " :: " + String(q.why || ""), Date.now() - t0);
-        feedback = "REVISE the previous draft: keep its strong parts, fix its weak ones. Previous scores: specificity=" + q.specificity + " argument=" + q.argument + " bridge=" + q.bridge + " objection=" + q.objection + " voice=" + q.voice + ". Weakest was " + worstName + ". Why: " + String(q.why || "") + ".";
-        q.gate = "forced";
-        if (!bestRejected || worst > bestRejected.worst) bestRejected = { piece, quality: q, words: v.words, worst: worst };
+        feedback = "REVISE the previous draft: keep its strong parts, fix its weak ones. Previous scores: specificity=" + q.specificity + " argument=" + q.argument + " objection=" + q.objection + " voice=" + q.voice + (q.grounding !== undefined ? " grounding=" + q.grounding : "") + ". Weakest was " + worstName + ". Why: " + String(q.why || "") + ".";
+        continue;
+      }
+      // the fact-check: two reviewers from other model families; one corrective revision when time allows
+      await logRun(env, form, model, topic.id, "stage", "fact-check", Date.now() - t0);
+      var vr = await verifyPiece(env, pieceText(piece), ground, model, topic.id + ":" + attempt, {});
+      var finalPiece = piece;
+      if (!vr.ok && !vr.unavailable && Date.now() - t0 < REVISE_BEFORE_MS) {
+        await logRun(env, form, model, topic.id, "rejected", "fact-check " + vr.stage + ": " + vr.problems.slice(0, 4).join(" | ").slice(0, 600) + " (one corrective revision)", Date.now() - t0);
+        var rev = await composePiece(env, form, topic, anchors, life, profile, continuity, "", { title: piece.title, body_md: piece.body_md, problems: vr.problems });
+        var rp = rev && rev.piece;
+        var rv = rp ? validatePiece(rp, form, ground) : { ok: false, problems: ["fact revision produced no draft"] };
+        if (rp && rv.ok) {
+          vr = await verifyPiece(env, pieceText(rp), ground, rev.model, topic.id + ":" + attempt + ":rev", {});
+          if (vr.ok) { finalPiece = rp; model = rev.model; v = rv; }
+        } else {
+          vr = { ok: false, stage: "revision", problems: (vr.problems || []).concat(rv.problems || []), judges: [], unavailable: false };
+        }
+      }
+      if (vr.unavailable) {
+        failClosed = "fact-check unavailable";
+        await logRun(env, form, model, topic.id, "rejected", "fact-check unavailable (fail closed): " + vr.problems.join("; ").slice(0, 300), Date.now() - t0);
+        break;
+      }
+      if (!vr.ok) {
+        await logRun(env, form, model, topic.id, "rejected", "fact-check " + vr.stage + ": " + vr.problems.slice(0, 4).join(" | ").slice(0, 600), Date.now() - t0);
+        feedback = "The previous draft was rejected by independent fact-checkers; every item is a claim the source material does not support. Write a new draft that makes none of them and adds no other fact from outside the source material: " + vr.problems.slice(0, 8).join(" | ");
         continue;
       }
       q.gate = "passed";
-      best = { piece, quality: q, words: v.words };
+      q.factcheck = { stage: vr.stage, models: (vr.judges || []).map(function (j) { return j.model; }) };
+      best = { piece: finalPiece, quality: q, words: v.words, vr: vr };
       break;
     }
-    if (!best && bestRejected && stalledHours != null && stalledHours >= STALL_HOURS) best = bestRejected;
     if (!best) {
-      await logRun(env, form, model, topic.id, "failed", "no piece survived the gate", Date.now() - t0);
-      return { ok: false, error: "no piece survived the gate" };
+      await logRun(env, form, model, topic.id, "failed", "no piece survived the gate" + (failClosed ? " (" + failClosed + ")" : ""), Date.now() - t0);
+      return { ok: false, error: "no piece survived the gate" + (failClosed ? " (" + failClosed + ")" : "") };
     }
-    if (best.quality && best.quality.gate === "forced") {
-      await logRun(env, form, model, topic.id, "forced", "gate not passed (forced fallback)", Date.now() - t0);
-    }
-    var slug = await persistPiece(env, best.piece, form, topic, model, best.quality, best.words);
+    var slug = await persistPiece(env, best.piece, form, topic, model, best.quality, best.words, ground);
+    await recordAudit(env, slug, "pass", best.vr.stage, best.vr);
     await logRun(env, form, model, topic.id, "ok", slug, Date.now() - t0);
     return { ok: true, slug, form, title: best.piece.title, words: best.words, quality: best.quality, topic: topic.id, model };
   } catch (e) {
@@ -1888,15 +2035,18 @@ var worker_default = {
     var p = u.pathname;
     if (request.method === "OPTIONS") return json({ ok: true });
     if (p === "/health") {
-      var n = 0, last = null;
+      var n = 0, last = null, acc = null;
       try {
-        var r = await env.PERSONAL.prepare("SELECT COUNT(*) n FROM companion_pieces").all();
+        await ensureAccuracySchema(env);
+        var r = await env.PERSONAL.prepare("SELECT COUNT(*) n FROM companion_pieces WHERE " + VISIBLE_SQL).all();
         n = ((r.results || [])[0] || {}).n || 0;
-        var r2 = await env.PERSONAL.prepare("SELECT slug, title, form, day FROM companion_pieces ORDER BY id DESC LIMIT 1").all();
+        var r2 = await env.PERSONAL.prepare("SELECT slug, title, form, day FROM companion_pieces WHERE " + VISIBLE_SQL + " ORDER BY id DESC LIMIT 1").all();
         last = (r2.results || [])[0] || null;
+        var r3 = await env.PERSONAL.prepare("SELECT (SELECT COUNT(*) FROM companion_audits WHERE verdict = 'pass') passed, (SELECT COUNT(*) FROM companion_retractions) retracted, (SELECT COUNT(*) FROM companion_pieces WHERE slug NOT IN (SELECT slug FROM companion_audits) AND slug NOT IN (SELECT slug FROM companion_retractions)) unaudited").first();
+        acc = r3 || null;
       } catch (e) {
       }
-      return json({ ok: true, version: VERSION, capabilities: ["companion-writing", "morning-brief", "subscriber-feed", "feedback", "owner-prompts"], limitations: ["every route except /health needs the companion key (?k=)", "writes at most 5 pieces a day, only at the generation hours (UTC) listed here", "the writer is DeepSeek via the personal plane's own key (BYOK), outside the qnfo AI router", "the morning brief goes only to the owner's address", "the morning brief and owner questions bypass email_suppression by design; the owner stops them with one row: UPDATE calendar_meta SET v='0' WHERE k='owner_notice_enabled' (qnfo-audit; INSERT it if absent; 0/off/false/no stops, anything else or no row means on)", "an unsent brief claim older than 90 minutes is retried hourly between 08:00 and 12:00 Amsterdam; an owner question whose worker died mid-send is retried after 6 hours, so a very rare duplicate is possible"], pieces: n, last, rhythm: RHYTHM, writer: WRITER_MODEL, writer_essay: WRITER_MODEL_ESSAY, topics: TOPICS.length, gen_hours_utc: GEN_HOURS_UTC, max_per_day: MAX_PIECES_PER_DAY, models: MODELS });
+      return json({ ok: true, version: VERSION, capabilities: ["companion-writing", "morning-brief", "subscriber-feed", "feedback", "owner-prompts", "accuracy-verify", "retractions"], limitations: ["every route except /health needs the companion key (?k=)", "writes at most 5 pieces a day, only at the generation hours (UTC) listed here", "the writer is DeepSeek via the personal plane's own key (BYOK), outside the qnfo AI router", "a piece is shown and mailed only after a deterministic grounding check and a two-family fact-check against its source material; if either is unavailable nothing is published (COMPANION-VERIFY-1)", "the morning brief goes only to the owner's address", "the morning brief and owner questions bypass email_suppression by design; the owner stops them with one row: UPDATE calendar_meta SET v='0' WHERE k='owner_notice_enabled' (qnfo-audit; INSERT it if absent; 0/off/false/no stops, anything else or no row means on)", "an unsent brief claim older than 90 minutes is retried hourly between 08:00 and 12:00 Amsterdam; an owner question whose worker died mid-send is retried after 6 hours, so a very rare duplicate is possible"], pieces: n, last, rhythm: RHYTHM, writer: WRITER_MODEL, writer_essay: WRITER_MODEL_ESSAY, topics: "live (Wikipedia, arXiv)", accuracy: acc, gen_hours_utc: GEN_HOURS_UTC, max_per_day: MAX_PIECES_PER_DAY, models: MODELS });
     }
     if (!authorized(request, env)) {
       return json({ error: { message: "unauthorized: append ?k=KEY" } }, 401);
@@ -1929,7 +2079,7 @@ var worker_default = {
           var rq = await aiRunAttr(env, "personal-companion", "probe-gen", cand[ci], {
             messages: [
               { role: "system", content: "Write plain scholarly prose. No filler, no emojis, no meta-commentary." },
-              { role: "user", content: "Write three short paragraphs, about 250 words total, on why the arithmetic of p-adic numbers resembles musical tuning systems. Be concrete." }
+              { role: "user", content: "Write three short paragraphs, about 250 words total, summarising the text that follows in plain prose. Text: The probe checks only that the model returns prose within the token budget." }
             ],
             max_tokens: Number(u.searchParams.get("mt") || 700),
             temperature: 0.7
@@ -1948,43 +2098,6 @@ var worker_default = {
       }
       return json({ ok: true, probe });
     }
-    if (p === "/api/compare") {
-      var cm = u.searchParams.get("m") || MODELS[0];
-      if (!modelAllowed(cm)) return json({ error: "model refused: banned by standing directive", model: cm }, 400);
-      var cmt = Number(u.searchParams.get("mt") || 2600);
-      var cTopic = { id: "compare", cat: "math.NT", wiki: "Ultrametric space", a: "p-adic geometry", b: "musical tuning" };
-      var cAnchors = [
-        { kind: "paper", ref: "arXiv:2509.00001", title: "Ultrametric Hierarchies in Representation Learning", text: "We show that the tree-structured distance induced by a p-adic valuation on a finite alphabet yields a representation in which semantically nested categories are metrically nested. The ultrametric inequality forces every triangle to be isosceles with the two long sides equal, which makes hierarchical clustering exact rather than approximate. We report exact recovery on three benchmarks where agglomerative clustering fails." },
-        { kind: "paper", ref: "arXiv:2509.00002", title: "Continued Fractions and Just Intonation", text: "The convergents of a continued fraction give the best rational approximations to a real number. Applied to frequency ratios, this recovers the historically attested tuning ladder: 3/2, 4/3, 5/4 and their compounds. The approximation error of a convergent falls monotonically, so the order of the ladder is forced rather than chosen. We tabulate the first nine convergents against the historical record." },
-        { kind: "concept", ref: "https://en.wikipedia.org/wiki/Ultrametric_space", title: "Ultrametric space", text: "An ultrametric space is a metric space in which the triangle inequality is replaced by the strong triangle inequality: d(x,z) is at most the larger of d(x,y) and d(y,z). Every ultrametric space embeds isometrically in a complete one, and its closed balls are either disjoint or nested, never partially overlapping." }
-      ];
-      var cSys = [P_STYLE, "", P_ESSAY, "", "Output format: plain markdown only, no JSON, no code fences. First line: a single heading starting with # and the title. The strongest objection must appear in the piece, but never under the same heading or in the same position twice in a row; place it where the argument needs it"].join(NL);
-      var cUser = [anchorsBlock(cTopic, cAnchors, "(life context omitted for this comparison run)", "(taste context omitted for this comparison run)"), "", "Length: 900 to 1100 words. This is a requirement."].join(NL);
-      var c0 = Date.now();
-      try {
-        var cr = await aiRunAttr(env, "personal-companion", "compose", cm, { messages: [{ role: "system", content: cSys }, { role: "user", content: cUser }], max_tokens: cmt, temperature: 0.7 });
-        var cc = "";
-        var crc = "";
-        if (cr && typeof cr.response === "string" && cr.response.length) cc = cr.response;
-        if (cr && cr.choices && cr.choices[0] && cr.choices[0].message) {
-          if (!cc && typeof cr.choices[0].message.content === "string") cc = cr.choices[0].message.content;
-          crc = cr.choices[0].message.reasoning_content || cr.choices[0].message.reasoning || "";
-        }
-        return json({
-          model: cm,
-          mt: cmt,
-          ms: Date.now() - c0,
-          clen: String(cc).length,
-          rlen: String(crc).length,
-          fr: cr && cr.choices && cr.choices[0] && cr.choices[0].finish_reason || "",
-          words: wordCount(String(cc)),
-          head: String(cc).slice(0, 1200),
-          tail: String(cc).slice(-320)
-        });
-      } catch (e) {
-        return json({ model: cm, mt: cmt, ms: Date.now() - c0, err: String(e && e.message || e).slice(0, 300) });
-      }
-    }
     if (p === "/api/f" || p === "/api/feedback") {
       var slug = u.searchParams.get("slug") || "";
       var sig = u.searchParams.get("s") || u.searchParams.get("signal") || "";
@@ -1997,19 +2110,27 @@ var worker_default = {
       return Response.redirect(new URL("/p/" + slug + (u.searchParams.get("k") ? "?k=" + u.searchParams.get("k") : ""), u.origin).toString(), 302);
     }
     if (p === "/api/pieces") {
+      await ensureSchema(env);
       var lim = Number(u.searchParams.get("limit")) || 30;
       var f2 = u.searchParams.get("form") || "";
-      var sql = f2 ? "SELECT slug, form, title, subtitle, lede, word_count, day, created_at, anchor_json, quality_json FROM companion_pieces WHERE form = ? ORDER BY id DESC LIMIT ?" : "SELECT slug, form, title, subtitle, lede, word_count, day, created_at, anchor_json, quality_json FROM companion_pieces ORDER BY id DESC LIMIT ?";
+      var sql = f2 ? "SELECT slug, form, title, subtitle, lede, word_count, day, created_at, anchor_json, quality_json FROM companion_pieces WHERE form = ? AND " + VISIBLE_SQL + " ORDER BY id DESC LIMIT ?" : "SELECT slug, form, title, subtitle, lede, word_count, day, created_at, anchor_json, quality_json FROM companion_pieces WHERE " + VISIBLE_SQL + " ORDER BY id DESC LIMIT ?";
       var st = f2 ? env.PERSONAL.prepare(sql).bind(f2, lim) : env.PERSONAL.prepare(sql).bind(lim);
       var rr = await st.all();
       return json({ ok: true, count: (rr.results || []).length, pieces: rr.results || [] });
     }
     if (p.indexOf("/api/piece/") === 0) {
+      await ensureSchema(env);
       var s3 = p.slice(11);
-      var q3 = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(s3).all();
+      var q3 = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ? AND " + VISIBLE_SQL).bind(s3).all();
       var row3 = (q3.results || [])[0];
       if (!row3) return json({ error: { message: "not found" } }, 404);
       return json({ ok: true, piece: row3 });
+    }
+    if (p === "/api/retractions" || p === "/retractions") {
+      await ensureSchema(env);
+      var rq = await env.PERSONAL.prepare("SELECT r.slug, r.reason, r.claims_json, r.retracted_at, p.title FROM companion_retractions r LEFT JOIN companion_pieces p ON p.slug = r.slug ORDER BY r.retracted_at DESC LIMIT 200").all();
+      if (p === "/api/retractions") return json({ ok: true, count: (rq.results || []).length, retractions: rq.results || [] });
+      return html(renderRetractions(rq.results || [], env.COMPANION_KEY && u.searchParams.get("k") ? "?k=" + u.searchParams.get("k") : ""));
     }
     if (p === "/api/runs") {
       var q4 = await env.PERSONAL.prepare("SELECT * FROM companion_runs ORDER BY id DESC LIMIT 40").all();
@@ -2060,8 +2181,9 @@ var worker_default = {
       return feedXml(env, u);
     }
     if (p === "/" || p === "") {
+      await ensureSchema(env);
       var filter = u.searchParams.get("form") || "";
-      var sql2 = filter ? "SELECT slug, form, title, lede, word_count, day FROM companion_pieces WHERE form = ? ORDER BY id DESC LIMIT 200" : "SELECT slug, form, title, lede, word_count, day FROM companion_pieces ORDER BY id DESC LIMIT 200";
+      var sql2 = filter ? "SELECT slug, form, title, lede, word_count, day FROM companion_pieces WHERE form = ? AND " + VISIBLE_SQL + " ORDER BY id DESC LIMIT 200" : "SELECT slug, form, title, lede, word_count, day FROM companion_pieces WHERE " + VISIBLE_SQL + " ORDER BY id DESC LIMIT 200";
       var st2 = filter ? env.PERSONAL.prepare(sql2).bind(filter) : env.PERSONAL.prepare(sql2);
       var rows = await st2.all();
       var res = html(renderIndex(rows.results || [], keyQS, filter));
@@ -2070,9 +2192,12 @@ var worker_default = {
     }
     if (p.indexOf("/p/") === 0) {
       var s = p.slice(3);
-      var q = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ?").bind(s).all();
+      await ensureSchema(env);
+      var rt = await env.PERSONAL.prepare("SELECT r.reason, r.claims_json, r.retracted_at, p.title FROM companion_retractions r LEFT JOIN companion_pieces p ON p.slug = r.slug WHERE r.slug = ?").bind(s).first();
+      if (rt) return new Response(renderRetraction(rt, { title: rt.title }, keyQS), { status: 410, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+      var q = await env.PERSONAL.prepare("SELECT * FROM companion_pieces WHERE slug = ? AND " + VISIBLE_SQL).bind(s).all();
       var row = (q.results || [])[0];
-      if (!row) return html(page("Not found", shell("<p>No such piece.</p>")), 404);
+      if (!row) return html(page("Not found", shell("<p>No such piece, or it has not passed the accuracy check.</p>")), 404);
       var res2 = html(renderPiece(row, keyQS));
       if (cookie) res2.headers.set("Set-Cookie", cookie);
       return res2;
@@ -2089,6 +2214,7 @@ var worker_default = {
     ctx.waitUntil((async function() {
       // BROADCAST-BATCH-1: continue an unfinished broadcast or digest before anything else on the hourly tick.
       try { await resumeSendRuns(env); } catch (eR) { console.log("resumeSendRuns: " + String(eR && eR.message || eR)); }
+      try { await ensureSchema(env); var _au = await auditPublished(env, 40); if (_au && (_au.retracted || _au.withdrawn || _au.deferred)) console.log("accuracy-audit: " + JSON.stringify(_au)); } catch (eAu) { console.error("accuracy-audit:", String(eAu && eAu.message || eAu)); }
       try {
         var nowUtc = /* @__PURE__ */ new Date();
         var utcHour = nowUtc.getUTCHours();
@@ -2758,7 +2884,9 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
+var __verify = { groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
 export {
+  __verify,
   GenerationFlow,
   deliverOwnerPrompts,
   broadcast,
