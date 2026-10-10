@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.2-codeagent"; // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
+var VERSION = "1.3.3-doi-scrub"; // 1.3.1 INDEXER-FOLD-1 (#1756): qnfo-paper-indexer runs here as a member (its two jobs on this worker's existing 06:30 trigger, no cron added; /indexer/* read routes).
 function auth(token, env) {
   const exp = env.INFRA_TOKEN;
   if (!exp || !token) return false;
@@ -301,7 +301,7 @@ function metaLine(doc, m) {
     }
     return "";
   }, "pick");
-  if (doc === "PAPER_VZ") return (pick(["title"]) ? pick(["title"]) + " \u2014 " : "") + (pick(["doi"]) ? "DOI " + pick(["doi"]) + " \u2014 " : "") + (pick(["abstract"]) ? pick(["abstract"]).slice(0, 300) : pick(["slug"]) ? "slug " + pick(["slug"]) + " chunk " + pick(["chunk"]) : "");
+  if (doc === "PAPER_VZ") return (pick(["title"]) ? pick(["title"]) + " \u2014 " : "") + (pick(["doi"]) && !isZenodoId(pick(["doi"])) ? "DOI " + pick(["doi"]) + " \u2014 " : "") + (pick(["abstract"]) ? pick(["abstract"]).slice(0, 300) : pick(["slug"]) ? "slug " + pick(["slug"]) + " chunk " + pick(["chunk"]) : "");
   if (doc === "IPATENT_VZ") return pick(["title"]) + " \u2014 " + pick(["text"]).slice(0, 300) + (pick(["section"]) ? " [" + pick(["section"]) + "]" : "");
   if (doc === "TASKS_VZ") return (pick(["title"]) || pick(["summary"])) + (pick(["status"]) ? " [" + pick(["status"]) + "]" : "") + (pick(["source_id"]) ? " (source " + pick(["source_id"]) + ")" : "");
   if (doc === "LOG_VZ") return "Q: " + pick(["prompt"]).slice(0, 180) + " || A: " + pick(["response"]).slice(0, 180);
@@ -328,8 +328,8 @@ async function retrieveRecords(env, q, scope, k) {
           const slug = String((h.metadata || {}).slug || "").trim();
           if (slug && env.LIVING) {
             try {
-              const row = await env.LIVING.prepare("SELECT identifier, title, authors, doi, zenodo_doi, slug, status, abstract FROM papers WHERE slug = ?1 LIMIT 1").bind(slug).first();
-              if (row) enriched.push({ score: h.score, id: h.id, text: (row.title || row.identifier || slug) + (row.doi ? " | DOI " + row.doi : "") + (row.zenodo_doi ? " | Zenodo " + row.zenodo_doi : "") + " | status " + (row.status || "") + " | " + String(row.abstract || "").slice(0, 220), meta: { ...h.metadata, title: row.title, doi: row.doi || row.zenodo_doi || "", abstract: row.abstract || "" } });
+              const row = await env.LIVING.prepare("SELECT identifier, title, authors, doi, slug, status, abstract FROM papers WHERE slug = ?1 LIMIT 1").bind(slug).first();
+              if (row) enriched.push({ score: h.score, id: h.id, text: (row.title || row.identifier || slug) + (row.doi && !isZenodoId(row.doi) ? " | DOI " + row.doi : "") + " | status " + (row.status || "") + " | " + String(row.abstract || "").slice(0, 220), meta: { ...h.metadata, title: row.title, doi: isZenodoId(row.doi) ? "" : (row.doi || ""), abstract: row.abstract || "" } });
               else enriched.push({ score: h.score, id: h.id, text: "slug " + slug + " (not in living-paper)", meta: h.metadata });
             } catch (e) {
               enriched.push({ score: h.score, id: h.id, text: "slug " + slug + " (enrich error)", meta: h.metadata });
@@ -349,7 +349,7 @@ async function retrieveRecords(env, q, scope, k) {
   try {
     if (env.LIVING && (scope === "research" || scope === "all")) {
       const like = "%" + String(q).slice(0, 80).replace(/%/g, "") + "%";
-      const rows = await env.LIVING.prepare("SELECT identifier, title, authors, doi, zenodo_doi, slug, status, updated_at FROM papers WHERE title LIKE ?1 OR identifier LIKE ?1 OR doi LIKE ?1 OR slug LIKE ?1 ORDER BY updated_at DESC LIMIT ?2").bind(like, K).all();
+      const rows = await env.LIVING.prepare("SELECT identifier, title, authors, doi, slug, status, updated_at FROM papers WHERE title LIKE ?1 OR identifier LIKE ?1 OR doi LIKE ?1 OR slug LIKE ?1 ORDER BY updated_at DESC LIMIT ?2").bind(like, K).all();
       if (rows.results && rows.results.length) out.sources.living_papers = rows.results;
     }
   } catch (e) {
@@ -407,7 +407,7 @@ function renderContext(retrieved) {
     if (src === "programs") {
       any = true;
       L.push("- PROGRAM REGISTRY:");
-      for (const p of items) L.push("  " + (p.wbs_code || p.program_code || p.code || "") + " " + (p.name || p.title || "") + " [phase " + (p.phase || p.current_phase || "?") + ", " + (p.status || "") + ", " + (p.zenodo_doi ? p.zenodo_doi : "") + "]");
+      for (const p of items) L.push("  " + (p.wbs_code || p.program_code || p.code || "") + " " + (p.name || p.title || "") + " [phase " + (p.phase || p.current_phase || "?") + ", " + (p.status || "") + ", " + "" + "]");
       continue;
     }
     if (!label[src]) continue;
@@ -452,7 +452,8 @@ var indexerMod = (function() {
   // docs/STRATEGY.md s2.4. selected_works_citation_coverage counts how many have an OpenAlex reading in 3 days; it read 3
   // of 7 because runImpact measured only the newest papers and the ten most-downloaded DOIs, so older selected works fell
   // outside the window (STRATEGY s6.1: cover the selected works always). Keep this list equal to STRATEGY s2.4.
-  var SELECTED_WORKS = ["10.5281/zenodo.21637028", "10.5281/zenodo.22261547", "10.5281/zenodo.21821767", "10.5281/zenodo.21945415", "10.5281/zenodo.21901984", "10.5281/zenodo.22026592", "10.5281/zenodo.23079905"];
+  // NOZ-DOI-1 (2026-10-10): the Zenodo account is blocked; every 10.5281/zenodo.* DOI is dead and is never measured or emitted.
+  function isZenodoId(d) { return /10\.5281\/|zenodo/i.test(String(d || "")); }
 
   function auth(req, env) {
     if (!env.IMPACT_TOKEN) return false;
@@ -485,33 +486,21 @@ var indexerMod = (function() {
     await ensureSchema(env);
     const out = { papers: 0, stats: [], errors: [] };
     if (!commit) {
-      const n2 = await env.LIVING_PAPER.prepare("SELECT COUNT(*) c FROM papers WHERE doi IS NOT NULL OR zenodo_doi IS NOT NULL").first();
+      const n2 = await env.LIVING_PAPER.prepare("SELECT COUNT(*) c FROM papers WHERE doi IS NOT NULL AND doi NOT LIKE '10.5281/%'").first();
       return { preview: true, papersWithDoi: n2 ? n2.c : 0 };
     }
     const n = Math.min(limit || 50, 100);
-    const papers = await env.LIVING_PAPER.prepare("SELECT slug, doi, zenodo_doi FROM papers WHERE doi IS NOT NULL OR zenodo_doi IS NOT NULL ORDER BY created_at DESC LIMIT ?1").bind(n).all();
+    const papers = await env.LIVING_PAPER.prepare("SELECT slug, doi FROM papers WHERE doi IS NOT NULL AND doi NOT LIKE '10.5281/%' ORDER BY created_at DESC LIMIT ?1").bind(n).all();
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    // FLAGSHIP-MEASURE-1 (2026-10-02, agent_issues #1754): zenodo_versions_per_flagship = min(versions) over the 10
-    // most-downloaded DOIs, and "no versions row counts as 1". This run only measured the newest n papers, so an older
-    // flagship fell out of the window and the metric read 1 while that record has 5 versions (10.5281/zenodo.21979060,
-    // last measured 2026-09-30). The flagship set is now always measured, whatever its age.
     const list = (papers.results || []).slice();
-    const have = new Set(list.map((p) => p.zenodo_doi || p.doi));
-    // SELECTED-WORKS-OPENALEX-1: the selected works are always measured, before and independent of the flagship query.
-    for (const doi of SELECTED_WORKS) if (!have.has(doi)) { have.add(doi); list.push({ slug: "selected:" + doi, doi, zenodo_doi: doi }); }
-    try {
-      const fl = await env.QNFO_AUDIT.prepare("SELECT doi FROM citation_stats WHERE source='zenodo' AND metric='downloads' GROUP BY doi ORDER BY MAX(value) DESC LIMIT 10").all();
-      for (const f of fl.results || []) if (f.doi && !have.has(f.doi)) { have.add(f.doi); list.push({ slug: "flagship:" + f.doi, doi: f.doi, zenodo_doi: f.doi }); }
-    } catch (e) {
-      out.errors.push({ slug: "flagship-set", error: String(e && e.message || e).slice(0, 200) });
-    }
+    const have = new Set(list.map((p) => p.doi));
     for (const p of list) {
-      const doi = p.zenodo_doi || p.doi;
-      if (!doi) continue;
+      const doi = p.doi;
+      if (!doi || isZenodoId(doi)) continue;
       out.papers++;
       const entry = { slug: p.slug, doi, sources: {} };
       let crCited;
-      if (!doi.startsWith("10.5281/zenodo")) {
+      {
         const cr = await fetchJson("https://api.crossref.org/works/" + encodeURIComponent(doi));
         crCited = cr?.message && cr.message["is-referenced-by-count"];
       }
@@ -520,37 +509,10 @@ var indexerMod = (function() {
       const oa = await fetchJson("https://api.openalex.org/works/doi:" + encodeURIComponent(doi));
       const oaCited = oa?.cited_by_count;
       if (typeof oaCited === "number") entry.sources.openalex = oaCited;
-      const zn = await fetchJson("https://zenodo.org/api/records?q=doi:" + encodeURIComponent('"' + doi + '"') + "&size=1&all_versions=true");
-      // SUPERSEDED-DOI-LOOKUP-1: without all_versions=true Zenodo returns 0 hits for a DOI that has a newer version
-      // (measured 2026-10-02 on 10.5281/zenodo.22073477: 0 hits, 1 with the flag), so a superseded flagship had no
-      // Zenodo rows at all.
-      const rec = zn && zn.hits && zn.hits.hits && zn.hits.hits[0];
-      if (rec) {
-        let views = 0, downloads = 0;
-        const st = rec.stats || {};
-        if (st.views || st.downloads) {
-          views = st.views || 0;
-          downloads = st.downloads || 0;
-        } else {
-          for (const f of rec.files || []) {
-            views += f.views || 0;
-            downloads += f.downloads || 0;
-          }
-        }
-        if (views || downloads) entry.sources.zenodo = { views, downloads };
-        // ZENODO-VERSION-COUNT-1 (2026-10-01, #1621): record the Zenodo version count (relations.version index + 1, exact
-        // when is_last). zenodo_versions_per_flagship read a stale 1 because nothing measured versions, while the top
-        // papers carry 5 to 9.
-        const rv = rec.metadata && rec.metadata.relations && rec.metadata.relations.version && rec.metadata.relations.version[0];
-        // A superseded record (is_last false) has at least one newer version: index + 2 is a lower bound, never an overcount.
-        if (rv && typeof rv.index === "number") entry.sources.zenodoVersions = rv.index + (rv.is_last === false ? 2 : 1);
-      }
       const cited = (entry.sources.openalex || 0) + (entry.sources.crossref || 0);
-      const dls = entry.sources.zenodo && entry.sources.zenodo.downloads || 0;
-      const vws = entry.sources.zenodo && entry.sources.zenodo.views || 0;
-      const score = Math.round((cited + dls / 50 + vws / 500) * 1e3) / 1e3;
+      const score = Math.round(cited * 1e3) / 1e3;
       try {
-        for (const [src, metric, value] of [["crossref", "is-referenced-by-count", entry.sources.crossref], ["openalex", "cited_by_count", entry.sources.openalex], ["zenodo", "versions", entry.sources.zenodoVersions], ["zenodo", "views", entry.sources.zenodo && entry.sources.zenodo.views], ["zenodo", "downloads", entry.sources.zenodo && entry.sources.zenodo.downloads]]) {
+        for (const [src, metric, value] of [["crossref", "is-referenced-by-count", entry.sources.crossref], ["openalex", "cited_by_count", entry.sources.openalex]]) {
           if (value !== void 0 && value !== null) {
             await env.QNFO_AUDIT.prepare("INSERT OR REPLACE INTO citation_stats (id, doi, source, metric, value, collected_at) VALUES (?1,?2,?3,?4,?5,?6)").bind(crypto.randomUUID(), doi, src, metric, value, now).run();
           }

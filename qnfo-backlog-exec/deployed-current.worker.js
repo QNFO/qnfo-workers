@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "2.0.5-priority-queue";
+var VERSION = "2.0.6-doi-scrub";
 // PRIORITY-QUEUE-1 (2026-10-03, owner directive): the sweep ranks critical first. The old CASE ranked high, medium, else,
 // so critical issues sorted with low. Within a priority the least recently touched row still goes first (rotation).
 var WORKER = "qnfo-backlog-exec";
@@ -204,7 +204,7 @@ var INVENTORY_LANES = [
   ["email_send_violations", "SELECT COUNT(*) n FROM email_send_violations WHERE COALESCE(resolved,0)=0", "issue", "qnfo-email send policy"],
   ["dead_links", "SELECT COUNT(*) n FROM dead_links WHERE resolved_at IS NULL", "issue", "link checker"],
   ["email_loop_quarantine", "SELECT COUNT(*) n FROM email_loop_quarantine WHERE status NOT IN ('processed','archived','spam')", "quarantine", "qnfo-email loop classifier"],
-  ["version_queue", "SELECT COUNT(*) n FROM version_queue WHERE status NOT IN ('published','wontfix')", "pipeline", "qnfo-paper-reviser / zenodo depositor"],
+  ["version_queue", "SELECT COUNT(*) n FROM version_queue WHERE status NOT IN ('published','wontfix')", "pipeline", "qnfo-paper-reviser"],
   ["outreach_queue", "SELECT COUNT(*) n FROM outreach_queue WHERE COALESCE(status,'') NOT IN ('sent','skipped','rejected')", "queue", "qnfo-outreach drain"],
   ["deploy_locks", "SELECT COUNT(*) n FROM deploy_locks WHERE typeof(expires_at) IN ('integer','real') AND expires_at > (strftime('%s','now')*1000)", "lock", "qnfo-deploy-guard reap"],
   ["ai_gateway_failures", "SELECT COALESCE(SUM(count),0) n FROM ai_gateway_failures WHERE ts >= ((strftime('%s','now')-86400)*1000)", "event-plane", "qnfo-ai-calibration / gateway-health"]
@@ -481,7 +481,7 @@ async function run(env) {
           await closeIssue(env, row.id, now);
           closed++;
           detail.push({ id: row.id, target: "version_queue#" + vq[1], action: "closed", note: q ? "version_queue status=" + q.status + " (not error) - condition cleared" : "version_queue row absent - ticket orphaned" });
-          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (VQ " + vq[1] + "): " + (q ? "status=" + q.status : "row absent"), { id: row.id, action: "closed", reason: "zenodo-publish predicate cleared v1.2.9" }, WORKER, "ok");
+          await recordEvent(env, "job-run", "backlog-exec closed issue " + row.id + " (VQ " + vq[1] + "): " + (q ? "status=" + q.status : "row absent"), { id: row.id, action: "closed", reason: "publish predicate cleared v1.2.9" }, WORKER, "ok");
           continue;
         }
         rechecked++;
