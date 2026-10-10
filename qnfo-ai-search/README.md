@@ -14,6 +14,6 @@ Owner directive 2026-10-10: an answer is verifiable against supplied text, and g
 - The grounding judge (ASK-LOOP-1) still measures the published text. `cites` and `cites_invalid` in `ask_events` still record what
   the model wrote before the check, so prompt quality stays measurable.
 - The page lede, the input placeholder and the fallback question seeds name no topic; the seeds come from `/api/recent`.
-- `ASK_GLOSSARY` is a retrieval alias map (term to defining paper slug), not prompt text; it is extensible in `pipeline_flags`.
+- `GLOSSARY` is a retrieval alias map (term to defining paper slug), not prompt text; it is extensible in `pipeline_flags`.
 
 Suite: `node qnfo-ai-search/ask-ground.test.mjs`.
