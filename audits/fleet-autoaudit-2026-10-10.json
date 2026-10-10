@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-10 10:03:43",
+  "audited_at": "2026-10-10 11:03:43",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-cloud-ops"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -470,7 +463,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.13.3-forced-fallback",
+        "version": "1.14.1-verify",
         "worker": "personal-companion"
       },
       {
@@ -811,9 +804,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.13.3-forced-fallback",
+      "before": "1.14.1-verify",
       "http": 200,
-      "live": "1.13.3-forced-fallback",
+      "live": "1.14.1-verify",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
