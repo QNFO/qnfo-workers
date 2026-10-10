@@ -5,7 +5,7 @@
 // used to end with still precedes the per-call text.
 // Run: node qnfo-research-exec/prompt-prefix.test.mjs   -> prints "prompt-prefix tests passed"
 import assert from "node:assert/strict";
-import { RESEARCH_SHARED_PREAMBLE, stagePrompt, WRITER_PROMPT, RECONCILE_PROMPT, REVIEW_PROMPT, REVISE_PROMPT, REVISE_PATCH_PROMPT, VERIFY_EXTRACT_PROMPT, VERIFY_GEN_PROMPT } from "./worker.js";
+import { RESEARCH_SHARED_PREAMBLE, stagePrompt, stageContextPrompt, WRITER_PROMPT, RECONCILE_PROMPT, REVIEW_PROMPT, REVISE_PROMPT, REVISE_PATCH_PROMPT, VERIFY_EXTRACT_PROMPT, VERIFY_GEN_PROMPT } from "./worker.js";
 
 assert.ok(RESEARCH_SHARED_PREAMBLE.length >= 4096, "preamble >= 4096 chars: " + RESEARCH_SHARED_PREAMBLE.length);
 const names = ["WRITER", "RECONCILE", "REVIEW", "REVISE", "REVISE_PATCH", "VERIFY_EXTRACT", "VERIFY_GEN"];
@@ -24,4 +24,23 @@ for (const [n, [p, label]] of Object.entries(consts)) {
   assert.ok(p.trimEnd().endsWith(label), n + "_PROMPT still ends with " + label);
   assert.equal((p + "\n\nper-call text " + n).slice(0, 4096), WRITER_PROMPT.slice(0, 4096), n + " shares the first 4096 chars");
 }
+
+// PROMPT-CACHE-PREFIX-2: the stages that read one paper share preamble + paper as a prefix, and the task selector and the
+// per-call text come after the paper.
+const paper = "# A paper\n\n" + "Body sentence about qubits. ".repeat(900);
+const rv = stageContextPrompt("REVIEW", "PAPER", paper, "BIBLIOGRAPHY (numbered; the paper may cite only these):\n[1] x");
+const rp = stageContextPrompt("REVISE_PATCH", "PAPER", paper, "FIXES (JSON):\n[{\"id\":\"h1\"}]");
+const rf = stageContextPrompt("REVISE", "PAPER", paper, "FIXES (JSON):\n[]");
+const ve = stageContextPrompt("VERIFY_EXTRACT", "PAPER", paper, "");
+const vg = stageContextPrompt("VERIFY_GEN", "PAPER", paper.slice(0, 2e4), "CLAIMS (JSON):\n[]");
+const common = (x, y) => { let i = 0; while (i < x.length && i < y.length && x[i] === y[i]) i++; return i; };
+const shared = RESEARCH_SHARED_PREAMBLE.length + paper.length;
+for (const [n, p] of Object.entries({ rp, rf, ve })) assert.ok(common(rv, p) >= shared, n + " shares preamble + paper with REVIEW: " + common(rv, p) + " < " + shared);
+assert.ok(common(ve, vg) >= RESEARCH_SHARED_PREAMBLE.length + 2e4, "VERIFY_GEN shares preamble + 20k paper chars with VERIFY_EXTRACT");
+for (const [n, p] of Object.entries({ REVIEW: rv, REVISE_PATCH: rp, REVISE: rf, VERIFY_EXTRACT: ve, VERIFY_GEN: vg })) {
+  assert.equal(p.slice(0, 4096), WRITER_PROMPT.slice(0, 4096), n + " keeps the one-per-model affinity key");
+  const t = p.indexOf("=== TASK: " + n + " ===\nDo ONLY task " + n + " ");
+  assert.ok(t > p.indexOf("=== END PAPER ==="), n + ": task selector follows the paper");
+}
+assert.ok(rp.endsWith("FIXES (JSON):\n[{\"id\":\"h1\"}]") && rv.includes("=== END PAPER ===\n\n=== TASK: REVIEW"), "per-call text follows the task selector");
 console.log("prompt-prefix tests passed");
