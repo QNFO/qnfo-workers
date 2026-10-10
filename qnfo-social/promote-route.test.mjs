@@ -18,10 +18,10 @@ CREATE TABLE dissemination_tracker (id TEXT PRIMARY KEY, paper_slug TEXT, paper_
 INSERT INTO social_threads (slug, title, posts, status, flags, notes, posted_at) VALUES
   ('old-thread', 'Old', '["Old https://papers.qnfo.org/papers/old-thread/"]', 'posted', NULL, NULL, datetime('now','-2 days'));
 INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, pages_url, channel, action, created_at) VALUES
-  ('d1', 'older-paper', '10.5281/zenodo.1', 'Older paper', NULL, 'bluesky', 'queued', datetime('now','-3 days')),
-  ('d2', 'newest-paper', '10.5281/zenodo.2', 'Boundary-crossing paths bound emergence', NULL, 'bluesky', 'queued', datetime('now','-1 hours')),
-  ('d3', 'ancient-paper', '10.5281/zenodo.3', 'Ancient', NULL, 'bluesky', 'queued', datetime('now','-40 days')),
-  ('d4', 'done-paper', '10.5281/zenodo.4', 'Done', NULL, 'bluesky', 'posted', datetime('now')),
+  ('d1', 'older-paper', '10.1000/t.1', 'Older paper', NULL, 'bluesky', 'queued', datetime('now','-3 days')),
+  ('d2', 'newest-paper', '10.1000/t.2', 'Boundary-crossing paths bound emergence', NULL, 'bluesky', 'queued', datetime('now','-1 hours')),
+  ('d3', 'ancient-paper', '10.1000/t.3', 'Ancient', NULL, 'bluesky', 'queued', datetime('now','-40 days')),
+  ('d4', 'done-paper', '10.1000/t.4', 'Done', NULL, 'bluesky', 'posted', datetime('now')),
   ('d5', 'q08-essay', NULL, 'Essay', NULL, 'bluesky', 'queued', datetime('now'));`);
 const stmt = (sql) => { let a = []; const s = { bind(...x) { a = x.map((v) => (v === undefined ? null : v)); return s; }, async all() { return { results: db.prepare(sql).all(...a) }; }, async first() { return db.prepare(sql).get(...a) || null; }, async run() { const r = db.prepare(sql).run(...a); return { success: true, meta: { changes: Number(r.changes) } }; } }; return s; };
 const env = { DB: { prepare: stmt } };

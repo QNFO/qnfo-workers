@@ -36,8 +36,8 @@ assert.deepEqual(res.link_uris, [uri]); ok('postText returns the tagged link uri
 assert.equal(res.text, rec.text); ok('returned text is the posted text');
 
 // Non-qnfo links and already-tagged links are left alone; campaign defaults to the last path segment.
-const f2 = mod.tagFacets(mod.buildFacets('a https://doi.org/10.5281/zenodo.1 b https://papers.qnfo.org/papers/x/'), 'bluesky');
-assert.equal(f2[0].features[0].uri, 'https://doi.org/10.5281/zenodo.1'); ok('doi.org link untouched');
+const f2 = mod.tagFacets(mod.buildFacets('a https://doi.org/10.1000/t.1 b https://papers.qnfo.org/papers/x/'), 'bluesky');
+assert.equal(f2[0].features[0].uri, 'https://doi.org/10.1000/t.1'); ok('doi.org link untouched');
 assert.ok(f2[1].features[0].uri.includes('utm_campaign=x')); ok('default campaign is the last path segment');
 const pre = 'https://qnfo.org/p?utm_source=email';
 assert.equal(mod.tagFacets(mod.buildFacets('z ' + pre), 'bluesky')[0].features[0].uri, pre); ok('already-tagged link never re-tagged');

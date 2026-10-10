@@ -1,9 +1,3 @@
 # jnl-reviser
 
-> Self-doc header (FLEET-SELF-DOC-1)
-> Purpose: Journal pipeline revise-and-deposit stage
-> Canonical source: this directory (QNFO/qnfo-workers)
-> Version: worker.js VERSION + /health (see fleet-drift scan)
-
-Deployed-current discipline: deployed-current.worker.js mirrors the live bundle;
-regenerate via: wrangler deploy --dry-run --outdir dist && cp dist/worker.js deployed-current.worker.js
+Retired and inert (NOZ-DOI-1, 2026-10-10). The referee-driven revision-and-deposit stage it implemented is gone; the worker has no bindings and no outbound calls, and answers `/health` only.

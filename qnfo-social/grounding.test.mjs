@@ -14,7 +14,7 @@ const ok = (c, m, x) => { if (c) passes++; else { fails++; console.log("FAIL " +
 
 const title = "Energy Cost Of A Single Inference Step";
 const abstract = "We measure the energy used by one inference step of a small model and report 3.2 joules per step across 12 runs. The authors note the measurement excludes cooling.";
-const doi = "10.5281/zenodo.23105375";
+const doi = "10.1000/t.23105375";
 const AUTHOR = "Rowan Brad Quni-Gudzinas";
 const goodPosts = [
   "One inference step of a small model uses a measurable amount of energy.",
@@ -33,7 +33,7 @@ ok(iss.some((i) => /9\.7/.test(i.issue)) && iss.some((i) => /Acme/.test(i.issue)
 const hedged = goodPosts.slice(); hedged[2] = "This could help Contoso Bank cut its power bill by 20 percent.";
 ok(W.threadGroundingIssues(title, abstract, hedged, doi).length >= 2, "hedged invented claims are rejected too");
 ok(W.threadGroundingIssues(title, abstract, ["A post by Someone Else."], doi).some((i) => /Someone Else/.test(i.issue)), "an author name that is not the paper's author is rejected");
-ok(W.threadGroundingIssues(title, abstract, ["Link https://doi.org/10.5281/zenodo.23105375 only."], doi).length === 0, "the paper link is not counted as a figure");
+ok(W.threadGroundingIssues(title, abstract, ["Link https://doi.org/10.1000/t.23105375 only."], doi).length === 0, "the paper link is not counted as a figure");
 
 // ---- checkThread: mechanical first, then the model; outage fails closed ----
 let calls = 0;

@@ -28870,7 +28870,7 @@ var marker21 = `vercel.ai.error.${name21}`;
 var symbol21 = Symbol.for(marker21);
 var _a21;
 _a21 = symbol21;
-var VERSION = true ? "7.0.62" : "0.0.0-test";
+var VERSION = true ? "7.0.63-doi-scrub" : "0.0.0-test";
 var download = /* @__PURE__ */ __name2(async ({
   url: url2,
   maxBytes,
@@ -61824,7 +61824,7 @@ QUNIVERSE CONTEXT
 - personal-api (personal-api.q08.workers.dev) \u2014 personal twin; NEVER call for research (PERSONAL-QNFO-SEPARATION-1).
 - ideas.qnfo.org \u2014 idea intake hub; /api/sessions, /rss.xml, /sitemap.xml.
 - qnfo-signal-loop \u2014 signal-organism L8 re-entry; emits signals from living-paper open-question sections.
-- qnfo-paper-reviser \u2014 adversarial revision loop; all publications target >=2 Zenodo versions.
+- qnfo-paper-reviser \u2014 adversarial revision loop.
 
 RULES:
 1. Use the available tools to gather information before answering. Try multiple query formulations.
@@ -61833,7 +61833,7 @@ RULES:
 4. If a tool returns no results, try a different query or report what you found.
 5. Output your final answer as plain markdown \u2014 no tool calls in the final response.
 6. ADVERSARIAL-REASONING-1: never flatter, defer, or agree merely because it was stated \u2014 state the strongest argument against your own answer; expose at least one concrete failure mode in every substantive response; label uncertainty, never inflate confidence.
-7. NO-JOURNALS-1: never suggest traditional journal submissions. Zenodo is the canonical venue.
+7. NO-JOURNALS-1: never suggest traditional journal submissions.
 8. PERSONAL-QNFO-SEPARATION-1: never cross-pollinate personal data into research answers.
 
 TOOLS AVAILABLE:

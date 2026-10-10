@@ -111,8 +111,8 @@ ok(/^posted:/.test(String(d.channels.mastodon)) && /^posted:/.test(String(d.chan
 
 // ---------- the learner credits closed windows daily ----------
 await env.DB.prepare("CREATE TABLE IF NOT EXISTS social_learner_posts (post_key TEXT PRIMARY KEY, slug TEXT, bsky_uri TEXT, link_slug TEXT, topic TEXT, format TEXT, slot TEXT, n_posts INTEGER, posted_at TEXT, chosen_by TEXT, decision TEXT, status TEXT, engagement REAL, visits REAL, reward REAL, reward_detail TEXT, credited_at TEXT, created_at TEXT)").run();
-// the threads the channel posts name carry a selected DOI, so their channel posts are arms (topic energy)
-db.prepare("UPDATE social_threads SET doi = '10.5281/zenodo.21637028' WHERE id IN (203, 204)").run();
+// the threads the channel posts name carry an energy title, so their channel posts are arms (topic energy)
+db.prepare("UPDATE social_threads SET title = 'The Joules-per-Solution Metric' WHERE id IN (203, 204)").run();
 const posted = new Date(Date.now() - 5 * 864e5);
 const d0 = posted.toISOString().slice(0, 10);
 db.prepare("INSERT INTO social_learner_posts (post_key, slug, bsky_uri, link_slug, topic, format, slot, n_posts, posted_at, chosen_by, status, created_at) VALUES ('thread:203', 'liked-one', 'at://did:plc:q/app.bsky.feed.post/l1', 'liked-one', 'energy', 'single', 'us-morning', 1, ?, 'learner', 'pending', ?)").run(posted.toISOString(), posted.toISOString());
