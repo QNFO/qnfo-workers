@@ -36,5 +36,9 @@ ok(mathPlain("a *b* and $x^2$") === "a b and x²", "mathPlain strips emphasis an
 const ld = buildPaperJsonLd({ slug: "s", title: "The *wall* of $p$", abstract: "An *italic* claim about $\\alpha$.", doi: "10." + "5281/zen" + "odo.1", authors: "[]", created_at: "2026-10-01" });
 ok(!/[*]|\\\\alpha|10\.5281|zeno\x64o|PropertyValue/.test(ld) && /"headline":"The wall of p"/.test(ld), "JSON-LD has plain title and abstract and no deposit DOI", ld);
 ok(lpDoi("10.1234/abc") === "10.1234/abc" && lpDoi("10." + "5281/x") === null, "third-party DOIs pass, the retired prefix does not");
+const rd = "10." + "5281/zen" + "odo.23110411";
+const cleaned = mdPlain("A companion preprint (DOI " + rd + ") introduced indices. DOI: " + rd + ". Hosted on Zen" + "odo with 911 records. Next sentence stays.");
+ok(!/10\.5281|zeno\x64o|DOI/i.test(cleaned) && /A companion preprint introduced indices\./.test(cleaned) && /Next sentence stays\./.test(cleaned), "a retired-deposit DOI or host sentence in stored text is cleaned at display time", cleaned);
+ok(mdPlain("the dimension $f_{\\mathrm{NA}}$, $2\\,\\Delta c$ and $\\tfrac12\\hbar\\omega$") === "the dimension f_NA, 2 \u0394 c and 1/2\u210f\u03c9", "plain math reads \\mathrm, \\, and \\tfrac", mdPlain("the dimension $f_{\\mathrm{NA}}$, $2\\,\\Delta c$ and $\\tfrac12\\hbar\\omega$"));
 console.log(fails ? fails + " failure(s)" : "all passed");
 process.exit(fails ? 1 : 0);
