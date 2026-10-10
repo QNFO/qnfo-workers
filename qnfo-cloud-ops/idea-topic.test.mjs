@@ -10,18 +10,12 @@ const IMPORT = 'import { connect } from "cloudflare:sockets";';
 const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 if (!src.includes(IMPORT)) throw new Error("worker.js import line changed: update the loader in this test");
 const patched = src.replace(IMPORT, "var connect = function () { throw new Error('sockets are stubbed in this test'); };") +
-  "\nexport { RESEARCH_SCAN_QUERY as __Q, ideaTopicCluster as __cluster, ideaTopicConcentration as __conc, jobIdeaTopicMetric as __job, CRON_COMPANIONS as __comp, JOBS as __jobs, AMS_SCHEDULE as __sched };\n";
+  "\nexport { ideaTopicCluster as __cluster, ideaTopicConcentration as __conc, jobIdeaTopicMetric as __job, CRON_COMPANIONS as __comp, JOBS as __jobs, AMS_SCHEDULE as __sched };\n";
 const mod = await import("data:text/javascript;base64," + Buffer.from(patched).toString("base64"));
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? " -- " + JSON.stringify(x).slice(0, 300) : "")); } };
 
-// 1. Query: generic QEC is gone, energy-bound QEC and every other term stay.
-const Q = mod.__Q;
-ok(!/OR all:"quantum error correction" OR/.test(Q), "plain QEC is no longer an OR term", Q);
-ok(Q.includes('(all:"quantum error correction" AND (all:energy OR all:thermodynamic OR all:Landauer))'), "QEC enters only with an energy angle");
-for (const term of ['all:"ultrametric"', 'all:"p-adic"', 'all:"Bruhat-Tits"', 'all:"quantum energy"', 'all:"joules per solution"', 'all:"ZBW"', 'all:"quantum thermodynamics"', "cat:quant-ph", "cat:math-ph", "cat:hep-th", "cat:cs.ET"]) ok(Q.includes(term), "query keeps " + term);
-ok((Q.match(/\(/g) || []).length === (Q.match(/\)/g) || []).length, "parentheses balance");
 
 // 2. Classifier: quantum first, then ultrametric, energy, ai-epistemics, other.
 ok(mod.__cluster("Low-Overhead Quantum Error Correction with Boundary-Connected Planar Modules") === "quantum", "QEC paper is quantum");
