@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.10.1"; // 0.10.1 generative prompts name no example nouns (process and style only); 0.10.0 Q08-VERIFY-1 (pillar: reach, owner directive 2026-10-10: q08 content is 100% accurate and fact-checked): the writer prompts no longer ask for history from memory; a piece is published only when every name, year and figure is in its source material (signal plus the fetched article) and two reviewers from other model families find no unsupported claim (a reviewer outage fails closed); published pieces are re-audited each cron and a failure is retracted in public (410 notice, /retractions, out of index, feed, sitemap, APIs and social; forecasts built on it too). // 0.9.0 Q08-FORECAST-1 (pillar: reach): forecast mode. Every FORECAST_EVERY pieces the engine writes a most-likely scenario narrative from a published essay's mechanism (dated causal sequence, rival scenarios with probabilities, leading indicators, a checkable resolution condition), stored in q08_forecasts, settled by a two-family judge panel when the horizon passes and scored (Brier) on /forecasts and /api/forecasts; undecidable ones go void in public after 4 checks. // 0.8.13-codeagent 0.8.12 Q08-PHRASE-REVISE-1: a phrase-level-only gate failure is retried as a revision of the same draft, not a rewrite from scratch (#2034); 0.8.11 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the attempt-bound note no longer cites a budget stop; the bound is publishing cadence. // 0.8.10 Q08-STALL-METRIC-1 writes q08_hours_since_last_piece (#2034); 0.8.9 unknown paths 404 noindex (no soft 404); 0.8.8 Q08-SITEMAP-INDEXABLE-1: canonical home loc, no feed in the sitemap, www -> apex 301; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.10.2"; // 0.10.2 Q08-RENDER-1 + NO-ZENODO-DOI-2 (pillar: reach; owner directives 2026-10-10, agent_issues 2279 and 2275): titles, headings, list items, claims and previews render inline Markdown (*italic*, **bold**, `code`, links) and math (\\( \\), $$ $$, and $...$ only with a TeX token and no space inside, never before a digit, so currency stays literal) through q08Inline; <title>, og/twitter, citation meta, JSON-LD, RSS, e-mail digest, social text and BibTeX/RIS use q08Plain (markers stripped, TeX as Unicode); mdToHtml gains numbered lists and block quotes; the funnel copy no longer claims a DOI; the writer prompt states the title format. // 0.10.1 generative prompts name no example nouns (process and style only); 0.10.0 Q08-VERIFY-1 (pillar: reach, owner directive 2026-10-10: q08 content is 100% accurate and fact-checked): the writer prompts no longer ask for history from memory; a piece is published only when every name, year and figure is in its source material (signal plus the fetched article) and two reviewers from other model families find no unsupported claim (a reviewer outage fails closed); published pieces are re-audited each cron and a failure is retracted in public (410 notice, /retractions, out of index, feed, sitemap, APIs and social; forecasts built on it too). // 0.9.0 Q08-FORECAST-1 (pillar: reach): forecast mode. Every FORECAST_EVERY pieces the engine writes a most-likely scenario narrative from a published essay's mechanism (dated causal sequence, rival scenarios with probabilities, leading indicators, a checkable resolution condition), stored in q08_forecasts, settled by a two-family judge panel when the horizon passes and scored (Brier) on /forecasts and /api/forecasts; undecidable ones go void in public after 4 checks. // 0.8.13-codeagent 0.8.12 Q08-PHRASE-REVISE-1: a phrase-level-only gate failure is retried as a revision of the same draft, not a rewrite from scratch (#2034); 0.8.11 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the attempt-bound note no longer cites a budget stop; the bound is publishing cadence. // 0.8.10 Q08-STALL-METRIC-1 writes q08_hours_since_last_piece (#2034); 0.8.9 unknown paths 404 noindex (no soft 404); 0.8.8 Q08-SITEMAP-INDEXABLE-1: canonical home loc, no feed in the sitemap, www -> apex 301; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -399,7 +399,7 @@ var Q08_DIRECTIVE = [
     "MECHANISM, NOT LABEL: name the causal process \u2014 who is incentivised to do what, which information is missing, where the coupling breaks \u2014 as actors doing something, never as an abstract noun. 'Incentive structure', 'information asymmetry', 'coupling failure', 'structural dynamic' and 'systemic failure' are labels, not mechanisms: if a sentence reduces to one of them, the mechanism has not been found yet. The words 'structural', 'systemic' and 'dynamic' are permitted only as a precise description of a named mechanism, never as a summary of your own argument.",
     "BANNED FRAMING (automatic rejection \u2014 the tells of a banal essay): 'illustrates a broader structural dynamic', 'exposes a structural dynamic', 'reveals a structural dynamic', 'a recurring institutional dynamic', 'a systemic failure in which', 'a structural gap between', 'what this reveals about', 'the deeper pattern', 'the broader lesson'. Never tell the reader what the essay 'reveals'; demonstrate it and stop. A sentence that announces the significance of the essay instead of adding a fact is a sentence to delete.",
     "SIGNIFICANCE ANNOUNCEMENT (banned): never write \"the incident illustrates / exposes / reveals / foregrounds / underscores a <noun phrase>\". Those verbs, applied to the incident, are the banality signature \u2014 they announce that the essay has a point instead of making it. State the causal chain directly: who does what to whom, and what breaks as a result. If a draft contains any of these verbs, rewrite the sentence as a mechanism.",
-    "TITLE: name the mechanism, not the category. A good title names a specific causal process or its actors \u2014 e.g. 'The clearinghouse that paid itself first' or 'Why the map outlives the territory it describes'. Banned title shapes: the bare '[Adjective]-[Noun] [Preposition] [Abstract Noun]' stack ('Scale-Induced Professional Displacement'); 'The X of Y' ('The Incentive-Driven Misalignment of Threat Models'); 'X as Y' ('Formal Guarantees as Market Signal'); and any title opening with Structural, Systemic, Implicit, Opaque, Formal, Abstract, Externalized, Statistical or a similar nominalisation. If the title would work as a category label in a management deck, it is the wrong title.",
+    "TITLE: name the mechanism, not the category. A good title names a specific causal process or its actors \u2014 e.g. 'The clearinghouse that paid itself first' or 'Why the map outlives the territory it describes'. Banned title shapes: the bare '[Adjective]-[Noun] [Preposition] [Abstract Noun]' stack ('Scale-Induced Professional Displacement'); 'The X of Y' ('The Incentive-Driven Misalignment of Threat Models'); 'X as Y' ('Formal Guarantees as Market Signal'); and any title opening with Structural, Systemic, Implicit, Opaque, Formal, Abstract, Externalized, Statistical or a similar nominalisation. If the title would work as a category label in a management deck, it is the wrong title. TITLE FORMAT: plain text; the only markup allowed is *italic* emphasis and math written as \\( ... \\); never use dollar signs for math, and write a literal dollar sign as \\$.",
   "PLAIN WORDING (this is what a reader judges first): write the way a sharp person explains something to a smart friend, not the way a paper abstracts it. Mix short sentences with long ones. Name who did what by what they are (the parties as the source describes them), never by role words: no 'the observer', 'the actor', 'the producer', 'the consumer', 'the proxy', 'the cue', 'the arrangement', 'the mechanism', 'the signal', 'the process'. A sentence that exists only to announce structure ('This same arrangement appears...', 'The mechanism works like this', 'The process therefore hinges on', 'not a quirk of a single product') is deleted. If you cannot picture a person doing the thing in a sentence, rewrite it. Say it once; do not restate a point in new abstract words.",
   "INTERNAL FIELDS: the SIGNAL block's field names and its signal_strength value are pipeline metadata, not facts about the world. Never mention them, never write 'signal strength', 'friction point' or 'core concept'. Open with what actually happened or was said, as one concrete event, in plain words.",
   "CONSTRAINTS (hard):",
@@ -1205,7 +1205,7 @@ async function generate(env) {
   // updates landed, promotions did not).
   await feedbackScan(env).catch(() => {});
   // Social cross-post (Bluesky via qnfo-social; skips silently if unset)
-  await queueForDistribution(env, saved.title, saved.slug, null, q08Lede(piece.text || ""));
+  await queueForDistribution(env, q08Plain(saved.title), saved.slug, null, q08Lede(piece.text || ""));
   pingIndexNow(env, ORIGIN + "/p/" + saved.slug).catch(() => {});
   emitContentSignal(env, piece, saved).catch(() => {});
   // Log run
@@ -1457,7 +1457,7 @@ async function generateForecast(env, t0) {
   if (fcVr) await recordAudit(env, saved.slug, "pass", "publish", fcVr).catch(function () {});
   await saveReaderTests(env, saved.slug, readerRows);
   var fcRow = await env.DB.prepare("SELECT claim, probability, horizon FROM q08_forecasts WHERE slug = ?").bind(saved.slug).first().catch(function () { return null; });
-  await queueForDistribution(env, saved.title, saved.slug, fcRow);
+  await queueForDistribution(env, q08Plain(saved.title), saved.slug, fcRow);
   pingIndexNow(env, ORIGIN + "/p/" + saved.slug).catch(function () {});
   emitContentSignal(env, piece, saved).catch(function () {});
   await env.DB.prepare("INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, top_signal, model, ms, status) VALUES (?,?,?,?,?,?,?)")
@@ -1688,11 +1688,11 @@ function renderRetraction(r, p) {
   var claims = []; try { claims = JSON.parse(r.claims_json || "[]"); } catch (e) { claims = []; }
   var date = String(r.retracted_at || "").slice(0, 10);
   var list = claims.length ? "<p>Examples of what could not be verified:</p><ul>" + claims.slice(0, 5).map(function (c) { return "<li>" + escHtml(c) + "</li>"; }).join("") + "</ul>" : "";
-  return '<meta name="robots" content="noindex"><article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">← Index</a></p><h1 class="q08-t">Retracted: ' + escHtml(p && p.title || "this piece") + '</h1><p class="q-meta">Retracted ' + escHtml(date) + '</p>' +
+  return '<meta name="robots" content="noindex"><article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">← Index</a></p><h1 class="q08-t">Retracted: ' + q08Inline(p && p.title || "this piece") + '</h1><p class="q-meta">Retracted ' + escHtml(date) + '</p>' +
     "<p>q08 withdrew this piece. " + escHtml(r.reason || "") + " Every q08 piece is now checked against its source material by two independent reviewers before publication, and earlier pieces are being re-audited; any that fail are withdrawn and listed on the <a href=\"/retractions\">retractions page</a>.</p>" + list + "</article>";
 }
 function renderRetractions(rows) {
-  var items = (rows || []).map(function (r) { return "<li><a href=\"/p/" + escHtml(r.slug) + "\">" + escHtml(r.title || r.slug) + "</a> — retracted " + escHtml(String(r.retracted_at || "").slice(0, 10)) + "</li>"; }).join("");
+  var items = (rows || []).map(function (r) { return "<li><a href=\"/p/" + escHtml(r.slug) + "\">" + q08Inline(r.title || r.slug) + "</a> — retracted " + escHtml(String(r.retracted_at || "").slice(0, 10)) + "</li>"; }).join("");
   return '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">← Index</a></p><h1 class="q08-t">Corrections and retractions</h1><p>q08 publishes only claims its source material supports. When a piece is found to contain an unsupported claim, it is withdrawn and listed here.</p>' + (items ? "<ul>" + items + "</ul>" : "<p>No piece has been retracted.</p>") + "</article>";
 }
 
@@ -1860,9 +1860,9 @@ function renderForecastBox(f) {
   if (!f) return "";
   var alts = []; try { alts = JSON.parse(f.alternatives_json || "[]"); } catch (e) { alts = []; }
   var ind = []; try { ind = JSON.parse(f.indicators_json || "[]"); } catch (e) { ind = []; }
-  var altText = (Array.isArray(alts) ? alts : []).map(function (a) { return escHtml(String(a.claim || "")) + " (" + fcPct(a.probability) + ")"; }).join("; ");
+  var altText = (Array.isArray(alts) ? alts : []).map(function (a) { return q08Inline(String(a.claim || "")) + " (" + fcPct(a.probability) + ")"; }).join("; ");
   return '<section class="q-panel" style="margin:32px 0 0"><h2 class="q-h3" style="margin:0 0 8px">Forecast record</h2>' +
-    '<p style="margin:0 0 8px"><strong>Most likely scenario (' + fcPct(f.probability) + '):</strong> ' + escHtml(f.claim) + '</p>' +
+    '<p style="margin:0 0 8px"><strong>Most likely scenario (' + fcPct(f.probability) + '):</strong> ' + q08Inline(f.claim) + '</p>' +
     '<p class="q-meta" style="margin:0 0 6px">Settled by ' + escHtml(f.horizon) + ' &middot; status: ' + escHtml(fcStatus(f)) + (f.status === "resolved" && f.brier != null ? ' &middot; Brier score ' + escHtml(String(f.brier)) : "") + '</p>' +
     '<p class="q-meta" style="margin:0 0 6px">Resolves true if: ' + escHtml(f.resolution) + '</p>' +
     (altText ? '<p class="q-meta" style="margin:0 0 6px">Rival scenarios: ' + altText + '</p>' : "") +
@@ -1872,7 +1872,7 @@ function renderForecastBox(f) {
 function renderForecasts(rows, stats) {
   var item = function (f) {
     var extra = f.status === "resolved" ? " &middot; " + escHtml(fcStatus(f)) + (f.brier != null ? " &middot; Brier " + escHtml(String(f.brier)) : "") : " &middot; " + escHtml(fcStatus(f));
-    return '<li class="q-item"><a class="q-item-title" href="/p/' + escHtml(f.slug) + '">' + escHtml(f.claim) + '</a><div class="q-item-meta"><span class="q-badge">' + fcPct(f.probability) + '</span> settled by ' + escHtml(f.horizon) + extra + '</div></li>';
+    return '<li class="q-item"><a class="q-item-title" href="/p/' + escHtml(f.slug) + '">' + q08Inline(f.claim) + '</a><div class="q-item-meta"><span class="q-badge">' + fcPct(f.probability) + '</span> settled by ' + escHtml(f.horizon) + extra + '</div></li>';
   };
   var open = rows.filter(function (f) { return f.status === "open"; }).sort(function (a, b) { return String(a.horizon).localeCompare(String(b.horizon)); });
   var fin = rows.filter(function (f) { return f.status !== "open"; });
@@ -1926,13 +1926,56 @@ function buildSources(story) {
   return out;
 }
 
-function mdEmph(x) {
-  var parts = String(x).split(/(\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g);
+// Q08-RENDER-1 (owner directive 2026-10-10): inline Markdown and math render wherever a title, heading, claim or preview shows.
+// Math: \( \) and $$ $$ always; a single-dollar span only when the opening $ is not followed by a space, the closing $ is not
+// preceded by a space or followed by a digit, and the inside holds a TeX token, so currency such as "$870 million ... $7.5
+// billion" stays literal. \$ is a literal dollar. q08Inline gives HTML (typeset by MathJax in the page); q08Plain gives plain
+// text for <title>, meta, JSON-LD, RSS, e-mail and social text.
+var Q08_PH0 = "\uE000", Q08_PH1 = "\uE001", Q08_DOLLAR = "\uE002";
+function q08Math(s, store) {
+  var keep = function (tex, disp) { store.push([String(tex), disp]); return Q08_PH0 + (store.length - 1) + Q08_PH1; };
+  s = String(s == null ? "" : s).replace(/\\\$/g, Q08_DOLLAR);
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, function (m, t) { return keep(t, true); });
+  s = s.replace(/\\\[([\s\S]+?)\\\]/g, function (m, t) { return keep(t, true); });
+  s = s.replace(/\\\(([\s\S]+?)\\\)/g, function (m, t) { return keep(t, false); });
+  s = s.replace(/\$(?=[^\s$])([^$\n]*?[^\s$])\$(?!\d)/g, function (m, t) { return (/[\\^_{}]/.test(t) || /^[A-Za-z]$/.test(t)) ? keep(t, false) : m; });
+  return s;
+}
+function q08Unmath(s, store, f) {
+  return s.replace(/\uE000(\d+)\uE001/g, function (m, i) { return f(store[+i]); }).split(Q08_DOLLAR).join("$");
+}
+var Q08_TEX = { alpha: "\u03b1", beta: "\u03b2", gamma: "\u03b3", delta: "\u03b4", epsilon: "\u03b5", varepsilon: "\u03b5", zeta: "\u03b6", eta: "\u03b7", theta: "\u03b8", iota: "\u03b9", kappa: "\u03ba", lambda: "\u03bb", mu: "\u03bc", nu: "\u03bd", xi: "\u03be", pi: "\u03c0", rho: "\u03c1", sigma: "\u03c3", tau: "\u03c4", phi: "\u03c6", varphi: "\u03c6", chi: "\u03c7", psi: "\u03c8", omega: "\u03c9", Gamma: "\u0393", Delta: "\u0394", Theta: "\u0398", Lambda: "\u039b", Pi: "\u03a0", Sigma: "\u03a3", Phi: "\u03a6", Psi: "\u03a8", Omega: "\u03a9", times: "\u00d7", cdot: "\u00b7", leq: "\u2264", le: "\u2264", geq: "\u2265", ge: "\u2265", neq: "\u2260", ne: "\u2260", approx: "\u2248", to: "\u2192", rightarrow: "\u2192", leftarrow: "\u2190", infty: "\u221e", pm: "\u00b1", sum: "\u03a3", log: "log", ln: "ln", min: "min", max: "max" };
+var Q08_SUP = { "0": "\u2070", "1": "\u00b9", "2": "\u00b2", "3": "\u00b3", "4": "\u2074", "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079", "+": "\u207a", "-": "\u207b", "n": "\u207f", "i": "\u2071" };
+var Q08_SUB = { "0": "\u2080", "1": "\u2081", "2": "\u2082", "3": "\u2083", "4": "\u2084", "5": "\u2085", "6": "\u2086", "7": "\u2087", "8": "\u2088", "9": "\u2089", "+": "\u208a", "-": "\u208b" };
+function q08TexPlain(tex) {
+  var t = String(tex).replace(/\\(?:text|mathrm|mathbf|mathit|operatorname|mathcal|mathbb)\s*\{([^{}]*)\}/g, "$1");
+  t = t.replace(/\\([A-Za-z]+)/g, function (m, n) { return Object.prototype.hasOwnProperty.call(Q08_TEX, n) ? Q08_TEX[n] : n; });
+  t = t.replace(/\^\{?([0-9+\-ni]+)\}?/g, function (m, d) { var o = ""; for (var i = 0; i < d.length; i++) { if (!Q08_SUP[d[i]]) return m; o += Q08_SUP[d[i]]; } return o; });
+  t = t.replace(/_\{?([0-9+\-]+)\}?/g, function (m, d) { var o = ""; for (var i = 0; i < d.length; i++) { if (!Q08_SUB[d[i]]) return m; o += Q08_SUB[d[i]]; } return o; });
+  return t.replace(/[{}\\]/g, "").replace(/\s+/g, " ").trim();
+}
+function q08Inline(s) {
+  var store = [];
+  var t = escHtml(q08Math(s, store));
+  var parts = t.split(/(`[^`\n]+`)/);
   for (var i = 0; i < parts.length; i++) {
-    if (i % 2 === 1) continue;
-    parts[i] = parts[i].replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/_(.+?)_/g, "<em>$1</em>");
+    if (i % 2 === 1) { parts[i] = "<code>" + parts[i].slice(1, -1) + "</code>"; continue; }
+    parts[i] = parts[i]
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" rel="noopener noreferrer">$1</a>')
+      .replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*\w])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![*\w])/g, "$1<em>$2</em>")
+      .replace(/(^|[^\w])_(?=[^\s_])([^_\n]*?[^\s_])_(?!\w)/g, "$1<em>$2</em>");
   }
-  return parts.join("");
+  return q08Unmath(parts.join(""), store, function (m) { return m[1] ? "$$" + escHtml(m[0]) + "$$" : "\\(" + escHtml(m[0]) + "\\)"; });
+}
+function q08Plain(s) {
+  var store = [];
+  var t = q08Math(s, store)
+    .replace(/!?\[([^\]\n]*)\]\([^)\s]*\)/g, "$1").replace(/`([^`\n]*)`/g, "$1")
+    .replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, "$1")
+    .replace(/(^|[^*\w])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![*\w])/g, "$1$2")
+    .replace(/(^|[^\w])_(?=[^\s_])([^_\n]*?[^\s_])_(?!\w)/g, "$1$2");
+  return q08Unmath(t, store, function (m) { return q08TexPlain(m[0]); }).replace(/\s+/g, " ").trim();
 }
 
 var CSS = `
@@ -2007,14 +2050,14 @@ function q08Sub(compact) {
     '<form method="post" action="/subscribe"><label class="q-sr" for="q08-e">Email address</label><input class="q-input" id="q08-e" type="email" name="email" placeholder="you@example.com" autocomplete="email" required><button class="q-btn q-btn-accent" type="submit">Subscribe</button></form></section>';
 }
 function q08Short(t, n) { t = String(t || ""); if (t.length <= n) return t; var c = t.slice(0, n), sp = c.lastIndexOf(" "); return (sp > n * 0.5 ? c.slice(0, sp) : c).replace(/[\s,;:.\-]+$/, "") + "\u2026"; }
-function q08Lede(md) { return (md || "").replace(/^#+\s*.+\n?/m, "").replace(/[#*_`]/g, "").replace(/\s+/g, " ").trim(); }
+function q08Lede(md) { return q08Plain(String(md || "").replace(/^#+\s*.+\n?/m, "").replace(/^[ \t]*(?:#{1,6}|[-*]|>|\d+[.)])[ \t]+/gm, "")); }
 function renderIndex(pieces) {
   var items = pieces.map(function(p) {
     var date = (p.published_at || "").slice(0, 10);
-    var lede = q08Lede(p.body_md).slice(0, 220);
-    return '<li class="q-item"><a class="q-item-title" href="/p/' + escHtml(p.slug) + '">' + escHtml(p.title) + "</a>" +
+    var lede = q08Short(q08Lede(p.body_md), 220);
+    return '<li class="q-item"><a class="q-item-title" href="/p/' + escHtml(p.slug) + '">' + q08Inline(p.title) + "</a>" +
       '<div class="q-item-meta"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.kind === "forecast" ? '<span class="q-badge">Forecast</span>' : (p.core_concept ? '<span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "")) + "</div>" +
-      (lede ? '<p class="q-item-text">' + escHtml(lede) + "\u2026</p>" : "") + "</li>";
+      (lede ? '<p class="q-item-text">' + escHtml(lede) + "</p>" : "") + "</li>";
   }).join("");
   var body = '<section class="q08-hero"><h1>Systems-level critique of technical industry friction.</h1><p class="q-lede">Cold, structural, timeless. Each piece takes one story from the technical front page and asks what system produced it.</p></section>' +
     '<section class="q08-feed" aria-label="Pieces">' + (items ? '<ul class="q-list">' + items + "</ul>" : '<div class="q-note">No pieces published yet. The engine publishes a few times a day; subscribe below to get the next one.</div>') + "</section>" + q08Sub(true);
@@ -2023,13 +2066,13 @@ function renderIndex(pieces) {
 // Q08-REACH-1: every piece carries one-tap share links, a ready-to-paste citation and a prompt to answer back, plus Scholar-style
 // citation meta tags and fuller JSON-LD, so a reader can pass it on, cite it and argue with it without leaving the page.
 function shareText(p) {
-  return p.kind === "forecast" ? "A scored forecast: " + String(p.title || "") : String(p.title || "");
+  return p.kind === "forecast" ? "A scored forecast: " + q08Plain(p.title) : q08Plain(p.title);
 }
 function renderShare(p) {
   var u = ORIGIN + "/p/" + p.slug, t = shareText(p), eu = encodeURIComponent(u), et = encodeURIComponent(t);
   var links = [["Bluesky", "https://bsky.app/intent/compose?text=" + encodeURIComponent(t + " " + u)], ["X", "https://twitter.com/intent/tweet?text=" + et + "&url=" + eu], ["LinkedIn", "https://www.linkedin.com/sharing/share-offsite/?url=" + eu], ["Mastodon", "https://mastodon.social/share?text=" + encodeURIComponent(t + " " + u)], ["Hacker News", "https://news.ycombinator.com/submitlink?u=" + eu + "&t=" + et], ["Reddit", "https://www.reddit.com/submit?url=" + eu + "&title=" + et], ["Email", "mailto:?subject=" + et + "&body=" + encodeURIComponent(t + "\n" + u)]];
   var yr = (p.published_at || "").slice(0, 4);
-  var cite = "q08. (" + yr + "). " + String(p.title || "") + ". q08.org. " + u;
+  var cite = "q08. (" + yr + "). " + q08Plain(p.title) + ". q08.org. " + u;
   return '<section class="q08-share" aria-label="Share and cite" style="margin:28px 0"><p class="q-meta" style="margin:0 0 8px">Pass it on: ' +
     links.map(function (l) { return '<a href="' + escHtml(l[1]) + '" rel="noopener" target="_blank">' + l[0] + "</a>"; }).join(" \u00b7 ") + "</p>" +
     (p.kind === "forecast" ? '<p class="q-meta" style="margin:0 0 8px">Disagree? Post your own probability for the claim and link this page; q08 settles it in public on the stated date.</p>' : "") +
@@ -2038,7 +2081,7 @@ function renderShare(p) {
 }
 function citationFile(p, fmt) {
   var u = ORIGIN + "/p/" + p.slug, y = (p.published_at || "").slice(0, 4), m = (p.published_at || "").slice(5, 7), d = (p.published_at || "").slice(8, 10);
-  var t = String(p.title || "").replace(/[{}\r\n]+/g, " ");
+  var t = q08Plain(p.title).replace(/[{}\r\n]+/g, " ");
   if (fmt === "bib") return "@online{q08_" + String(p.slug).replace(/[^a-z0-9]/g, "") + ",\n  author = {{q08}},\n  title = {" + t + "},\n  year = {" + y + "},\n  month = {" + m + "},\n  url = {" + u + "},\n  organization = {q08},\n  note = {q08.org}\n}\n";
   return "TY  - ELEC\r\nAU  - q08\r\nTI  - " + t + "\r\nPY  - " + y + "\r\nDA  - " + y + "/" + m + "/" + d + "\r\nPB  - q08\r\nUR  - " + u + "\r\nER  - \r\n";
 }
@@ -2050,13 +2093,13 @@ function funnelUrl(base, slug) {
 }
 function renderFunnel(slug) {
   return '<aside class="q08-funnel q-panel" aria-label="From the same imprint" style="margin:28px 0"><p class="q-meta" style="margin:0 0 6px">q08 is published by QNFO, an independent research imprint. Same author, slower and checked line by line:</p>' +
-    '<ul class="q-list" style="margin:0"><li><a href="' + escHtml(funnelUrl("https://papers.qnfo.org/", slug)) + '">Open-access research papers</a>, each with a DOI</li>' +
+    '<ul class="q-list" style="margin:0"><li><a href="' + escHtml(funnelUrl("https://papers.qnfo.org/", slug)) + '">Open-access research papers</a></li>' +
     '<li><a href="' + escHtml(funnelUrl("https://ipatent.qnfo.org/", slug)) + '">iPatent</a>: free, private-by-default provisional patent drafting</li>' +
     '<li><a href="' + escHtml(funnelUrl("https://qnfo.org/", slug)) + '">QNFO</a>: the work and the author</li></ul></aside>';
 }
 function pieceHead(p, desc) {
   var u = ORIGIN + "/p/" + p.slug, d = (p.published_at || "").slice(0, 10).replace(/-/g, "/");
-  return '<meta name="citation_title" content="' + q08Attr(p.title) + '"><meta name="citation_publication_date" content="' + q08Attr(d) + '"><meta name="citation_abstract_html_url" content="' + q08Attr(u) + '"><meta name="citation_publisher" content="q08"><meta name="citation_author" content="q08">' +
+  return '<meta name="citation_title" content="' + q08Attr(q08Plain(p.title)) + '"><meta name="citation_publication_date" content="' + q08Attr(d) + '"><meta name="citation_abstract_html_url" content="' + q08Attr(u) + '"><meta name="citation_publisher" content="q08"><meta name="citation_author" content="q08">' +
     '<meta property="article:published_time" content="' + q08Attr(p.published_at || "") + '"><meta property="article:section" content="' + (p.kind === "forecast" ? "Forecast" : "Analysis") + '">';
 }
 function renderPiece(p, fr) {
@@ -2064,11 +2107,11 @@ function renderPiece(p, fr) {
   var refs = renderSources(p.sources_json);
   var fb = '<form class="q08-fb" method="post"><span>Was this worth your time?</span><textarea class="q-input" name="note" maxlength="280" rows="2" style="flex-basis:100%;order:2" placeholder="Optional: what was missing?" aria-label="Optional note: what was missing?"></textarea><button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=good">Yes</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=flat">Flat</button> <button class="q-btn q-btn-ghost" formaction="/api/f?slug=' + escHtml(p.slug) + '&amp;s=no">No</button></form>';
   var date = (p.published_at || "").slice(0, 10);
-  var desc = q08Lede(p.body_md).slice(0, 160);
-  var html = '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">\u2190 Index</a></p><h1 class="q08-t">' + escHtml(p.title) + '</h1><p class="q-meta" style="margin:0 0 28px"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.kind === "forecast" ? ' \u00b7 <span class="q-badge">Forecast</span>' : (p.core_concept ? ' \u00b7 <span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "")) + "</p>" +
+  var desc = q08Short(q08Lede(p.body_md), 160);
+  var html = '<article class="q08-piece"><p class="q-eyebrow"><a href="/" style="text-decoration:none;color:inherit">\u2190 Index</a></p><h1 class="q08-t">' + q08Inline(p.title) + '</h1><p class="q-meta" style="margin:0 0 28px"><time datetime="' + escHtml(p.published_at || "") + '">' + date + "</time>" + (p.kind === "forecast" ? ' \u00b7 <span class="q-badge">Forecast</span>' : (p.core_concept ? ' \u00b7 <span class="q-badge">' + escHtml(q08Short(p.core_concept, 44)) + "</span>" : "")) + "</p>" +
     '<div class="q-prose piece">' + body + "</div>" + (p.kind === "forecast" ? renderForecastBox(fr) : "") + fb + renderShare(p) + renderFunnel(p.slug) + (refs ? '<div class="q08-refs">' + refs.replace(/^\s*<section class="refs">/, "").replace(/<\/section>\s*$/, "") + "</div>" : "") + "</article>" + q08Sub(false);
-  return q08Page({ title: p.title + " \u00b7 q08", description: desc, canonical: ORIGIN + "/p/" + p.slug, ogType: "article", extraHead: pieceHead(p, desc),
-    jsonld: { "@context": "https://schema.org", "@type": "Article", headline: String(p.title || "").slice(0, 110), description: desc, datePublished: p.published_at || undefined, dateModified: p.published_at || undefined, url: ORIGIN + "/p/" + p.slug, mainEntityOfPage: ORIGIN + "/p/" + p.slug, isAccessibleForFree: true, inLanguage: "en", articleSection: p.kind === "forecast" ? "Forecast" : "Analysis", isPartOf: p.kind === "forecast" ? { "@type": "CreativeWorkSeries", name: "q08 Forecast Ledger", url: ORIGIN + "/forecasts" } : undefined, author: { "@type": "Organization", name: "q08", url: ORIGIN + "/" }, publisher: { "@type": "Organization", name: "q08", url: ORIGIN + "/", parentOrganization: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org/" } } } }, html);
+  return q08Page({ title: q08Plain(p.title) + " \u00b7 q08", description: desc, canonical: ORIGIN + "/p/" + p.slug, ogType: "article", extraHead: pieceHead(p, desc),
+    jsonld: { "@context": "https://schema.org", "@type": "Article", headline: q08Plain(p.title).slice(0, 110), description: desc, datePublished: p.published_at || undefined, dateModified: p.published_at || undefined, url: ORIGIN + "/p/" + p.slug, mainEntityOfPage: ORIGIN + "/p/" + p.slug, isAccessibleForFree: true, inLanguage: "en", articleSection: p.kind === "forecast" ? "Forecast" : "Analysis", isPartOf: p.kind === "forecast" ? { "@type": "CreativeWorkSeries", name: "q08 Forecast Ledger", url: ORIGIN + "/forecasts" } : undefined, author: { "@type": "Organization", name: "q08", url: ORIGIN + "/" }, publisher: { "@type": "Organization", name: "q08", url: ORIGIN + "/", parentOrganization: { "@type": "Organization", name: "QNFO", url: "https://qnfo.org/" } } } }, html);
 }
 // Bare fragments (subscribe, confirm, unsubscribe, not found) get the full page shell.
 function q08Wrap(fragment, title) {
@@ -2080,24 +2123,25 @@ function q08Wrap(fragment, title) {
 }
 
 function mdToHtml(md) {
-  // Minimal Markdown -> HTML (headings, bold, italic, bullets, paragraphs)
-  var lines = md.split("\n");
+  // Markdown -> HTML: headings, bullet and numbered lists, block quotes and paragraphs; every text run goes through q08Inline
+  // (Q08-RENDER-1), so emphasis, links, code and math render in headings and list items too.
+  var lines = String(md || "").split("\n");
   var out = [];
-  var inUl = false;
+  var list = "";
+  var close = function () { if (list) { out.push("</" + list + ">"); list = ""; } };
   for (var line of lines) {
-    var h3 = line.match(/^### (.+)/);
-    var h2 = line.match(/^## (.+)/);
-    var h1 = line.match(/^# (.+)/);
-    var li = line.match(/^[-*] (.+)/);
-    var blank = line.trim() === "";
-    if (h1) { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<h1>" + escHtml(h1[1]) + "</h1>"); }
-    else if (h2) { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<h2>" + escHtml(h2[1]) + "</h2>"); }
-    else if (h3) { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<h3>" + escHtml(h3[1]) + "</h3>"); }
-    else if (li) { if (!inUl) { out.push("<ul>"); inUl=true; } out.push("<li>" + mdEmph(escHtml(li[1])) + "</li>"); }
-    else if (blank) { if (inUl) { out.push("</ul>"); inUl=false; } }
-    else { if (inUl) { out.push("</ul>"); inUl=false; } out.push("<p>" + mdEmph(escHtml(line)) + "</p>"); }
+    var hm = line.match(/^(#{1,3}) +(.+)/);
+    var ul = line.match(/^[-*] +(.+)/);
+    var ol = line.match(/^\d+[.)] +(.+)/);
+    var bq = line.match(/^> ?(.+)/);
+    if (hm) { close(); out.push("<h" + hm[1].length + ">" + q08Inline(hm[2]) + "</h" + hm[1].length + ">"); }
+    else if (ul) { if (list !== "ul") { close(); out.push("<ul>"); list = "ul"; } out.push("<li>" + q08Inline(ul[1]) + "</li>"); }
+    else if (ol) { if (list !== "ol") { close(); out.push("<ol>"); list = "ol"; } out.push("<li>" + q08Inline(ol[1]) + "</li>"); }
+    else if (bq) { close(); out.push("<blockquote><p>" + q08Inline(bq[1]) + "</p></blockquote>"); }
+    else if (line.trim() === "") { close(); }
+    else { close(); out.push("<p>" + q08Inline(line) + "</p>"); }
   }
-  if (inUl) out.push("</ul>");
+  close();
   return out.join("\n");
 }
 
@@ -2105,8 +2149,8 @@ function mdToHtml(md) {
 function renderFeed(pieces) {
   var items = pieces.map(function(p) {
     var date = new Date(p.published_at || Date.now()).toUTCString();
-    var desc = (p.body_md || "").replace(/\\/g, "").replace(/[<>&"]/g, function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c];}).slice(0, 500);
-    return "<item><title>" + escHtml(p.title) + "</title><link>https://q08.org/p/" + escHtml(p.slug) + "</link><pubDate>" + date + "</pubDate><description>" + desc + "...</description></item>";
+    var desc = escHtml(q08Short(q08Lede(p.body_md), 500));
+    return "<item><title>" + escHtml(q08Plain(p.title)) + "</title><link>https://q08.org/p/" + escHtml(p.slug) + "</link><pubDate>" + date + "</pubDate><description>" + desc + "...</description></item>";
   }).join("\n");
   return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>q08</title><link>https://q08.org</link><description>Systems-level critique. Structural. Timeless.</description>' + items + '</channel></rss>';
 }
@@ -2146,7 +2190,7 @@ async function sendDigest(env) {
   var rows = pieces.results || [];
   if (!rows.length) return { ok: true, skipped: "no pieces today", pieces: 0 };
   var subs = await env.DB.prepare("SELECT email, token FROM subscribers WHERE status='confirmed' LIMIT 500").all();
-  var list = rows.map(function(r){ return "- " + (r.kind === "forecast" ? "Forecast: " : "") + r.title + " - https://q08.org/p/" + r.slug; }).join("\n");
+  var list = rows.map(function(r){ return "- " + (r.kind === "forecast" ? "Forecast: " : "") + q08Plain(r.title) + " - https://q08.org/p/" + r.slug; }).join("\n");
   var sent = 0;
   for (var s of (subs.results || [])) {
     var unsubUrl = "https://q08.org/unsubscribe?t=" + s.token;
@@ -2202,7 +2246,7 @@ function forecastPostText(fc, url) {
   var tail = "\n\nSettles by " + fc.horizon + ", scored in public. What is your number? " + url;
   var head = "Forecast, " + Math.round(Number(fc.probability) * 100) + "%: ";
   var room = 280 - tail.length - head.length;
-  var claim = String(fc.claim || "").replace(/\s+/g, " ").trim();
+  var claim = q08Plain(fc.claim);
   if (claim.length > room) claim = claim.slice(0, Math.max(0, room - 1)).replace(/\s+\S*$/, "") + "\u2026";
   return head + claim + tail;
 }
