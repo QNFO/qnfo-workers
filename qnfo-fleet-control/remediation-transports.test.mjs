@@ -37,7 +37,7 @@ const calls = [];
 const routes = {
   "https://raw.githubusercontent.com/QNFO/license/main/VERSION": { status: 200, body: "2.1\n" },
   "https://pypi.org/pypi/ignorance-audit/json": { status: 200, body: JSON.stringify({ info: { version: "0.1.0", name: "ignorance-audit" } }) },
-  "https://doi.org/10.5281/zenodo.1": { status: 302, headers: { location: "https://zenodo.org/records/1" } },
+  "https://doi.org/10.9999/ext.1": { status: 302, headers: { location: "https://example.org/records/1" } },
   "https://api.openalex.org/authors/A1": { status: 404, body: "{}" }
 };
 const fetchStub = async (url, init) => {
@@ -79,7 +79,7 @@ for (const [id, t] of issues) db.prepare("INSERT INTO agent_issues (id, title, s
 const add = (cls, issue, transport, probe) => db.prepare("INSERT INTO remediation_contracts (class, issue_id, verify_probe, verify_transport, max_attempts, expected_cadence_h) VALUES (?, ?, ?, ?, 3, 24)").run(cls, issue, typeof probe === "string" ? probe : JSON.stringify(probe), transport);
 add("lic", 1, "external-https", { url: "https://raw.githubusercontent.com/QNFO/license/main/VERSION", check: "body-contains:2.1", expected: "present" });
 add("pypi", 2, "external-https", { url: "https://pypi.org/pypi/ignorance-audit/json", check: "json:info.version", expected: "0.2.0" });
-add("doi", 3, "external-https", { url: "https://doi.org/10.5281/zenodo.1", method: "HEAD", check: "status", expected: "302" });
+add("doi", 3, "external-https", { url: "https://doi.org/10.9999/ext.1", method: "HEAD", check: "status", expected: "302" });
 add("fleet", 4, "external-https", { url: "https://legal.qnfo.org/license", check: "status", expected: "200" });
 add("port", 5, "d1-query@portfolio-state", "SELECT 'research' AS expected, (SELECT tier FROM program_registry WHERE repo = 'ignorance-audit') AS observed");
 add("oa", 6, "external-https", { url: "https://api.openalex.org/authors/A1", check: "status", expected: "200" });
