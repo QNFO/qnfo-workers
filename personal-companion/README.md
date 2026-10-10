@@ -8,6 +8,36 @@ Autonomous personal reading companion. Personal plane only.
 > what an operator reads before deploying; a README that names banned models and documents an
 > inverted publish policy is a defect, not a nicety.
 
+## Accuracy layer (COMPANION-VERIFY-1, 1.14.0)
+
+Owner directive 2026-10-10: published content is 100% accurate and independently fact-checked, every claim is verifiable against
+supplied source text, generative instructions carry process and style only, and a missing check or reviewer means nothing is
+published (fail closed). The pattern is ported from `q08-signal-engine` (Q08-VERIFY-1).
+
+- **Topics are live.** There is no topic table. `pickTopic()` draws a random Wikipedia article with enough text to argue from,
+  two articles it links to, and arXiv submissions (matching the subject, else the newest of any field). That text is the *source
+  material*: it is stored with the piece (`companion_pieces.ground_text`) and is the only thing a piece may assert. If too little
+  can be fetched the run is `blocked` and writes nothing.
+- **Prompts carry process and style only.** No example subjects, fields or scenarios. The reader profile and life notes shape
+  emphasis only and are not a source. The critic also sees the source material and scores `grounding`.
+- **Deterministic grounding** (`groundingProblems`, inside `validatePiece`): every capitalised name, year and figure in the title,
+  lede and body must occur in the source material, otherwise the draft is rejected before any model reviewer is called.
+- **Two-family fact-check** (`factCheck`): two reviewers from model families other than the writer's (pool: nvidia, openai,
+  moonshot, deepseek, zai; banned models stay banned) must both find no claim the source material does not support. A failing
+  draft gets one corrective revision (re-verified); a reviewer or critic outage publishes nothing.
+- **No forced publish.** The 1.13.3 branch that published the strongest critic-rejected draft after `STALL_HOURS` is removed.
+  After a stall the stall detector files its issue and the next run tries again; nothing unverified is published.
+- **Gate on every surface.** A piece is shown (index, `/p/`, feed, `/api/pieces`, `/health`) and mailed (owner mail, subscriber
+  broadcast, resumed runs, daily digest) only when `companion_audits` has a `pass` row for it and `companion_retractions` has none.
+- **Audit and retraction.** The hourly tick runs `auditPublished`: a piece with no recorded source material (everything published
+  before 1.14.0) is withdrawn without a model call; one with stored source material that has no audit row is verified now (a reviewer
+  outage defers, a failure retracts). A retracted piece answers `410` with a public notice, is listed at `/retractions` and
+  `/api/retractions`, and is skipped by any unfinished mail run. Reversible: delete its `companion_retractions` row.
+  Mail already sent cannot be recalled; the notice is the correction.
+- Tests: `node personal-companion/verify.test.mjs` (offline; an invented name/year is rejected, an outage fails closed, no forced
+  publish, nothing mailed without an audit, withdrawal and retraction).
+- `companion-hub/` is FOLDED (see its `FOLDED` file) and is not deployed, so its stale embedded copy is left untouched.
+
 ## What it does
 
 Writes for one reader. Reads his own taste model (`personal-life.profile`), his lived

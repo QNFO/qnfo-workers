@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.3.2"; // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.3.3"; // 1.3.3 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the arXiv radar builds its query, keyword list and classes from the owner's accepted ideas in idea_proposals instead of fixed tables; with none on file it skips. // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -437,6 +437,43 @@ return { default: worker_default };
 })();
 //# sourceMappingURL=worker.js.map
 
+// NO-TOPIC-HARDCODE-1 (1.3.3): seed terms for the arXiv radar come from the owner's own accepted ideas (idea_proposals), the same
+// rows the idea-hub think loop seeds from. Pure helpers first, so they are testable without a network or a database.
+var ARXIV_SEED_STOPWORDS = new Set("about above across after again against also among because been before being between both cannot could does doing during each either every from further gives given have having here however into itself just keep known like made make many more most much must need neither often only other over said same should since some such than that their them then there these they this those through thus under until upon using very want were what when where whether which while whose will with within without would your idea ideas research question questions paper papers study studies analysis approach method methods result results claim claims note notes proposal show shows shown based work works new novel first second third".split(" "));
+function arxivOwnerGroups(texts, maxGroups, termsPer) {
+  var docs = (texts || []).map(function(t) { return String(t || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9\- ]+/g, " ").split(/\s+/).filter(function(w) { return w.length >= 5 && !ARXIV_SEED_STOPWORDS.has(w) && !/^[0-9-]+$/.test(w); }); });
+  var df = {};
+  docs.forEach(function(d) { new Set(d).forEach(function(w) { df[w] = (df[w] || 0) + 1; }); });
+  var groups = [];
+  for (var k = 0; k < docs.length && groups.length < maxGroups; k++) {
+    var tf = {};
+    docs[k].forEach(function(w) { tf[w] = (tf[w] || 0) + 1; });
+    var wt = function(w) { return tf[w] * Math.log(1 + docs.length / df[w]); };
+    var terms = Object.keys(tf).sort(function(x, y) { return (wt(y) - wt(x)) || (x < y ? -1 : 1); }).slice(0, termsPer);
+    if (terms.length) groups.push({ label: terms[0], terms: terms });
+  }
+  return groups;
+}
+async function arxivSeedGroups(env) {
+  var rows = [];
+  try {
+    if (env.AUDIT) rows = (await env.AUDIT.prepare("SELECT idea FROM idea_proposals WHERE decision = 'ACCEPT' AND (name = 'owner-corpus' OR contact = 'owner' OR name LIKE 'rowan%' OR name LIKE 'owner%') ORDER BY random() LIMIT 9").all()).results || [];
+  } catch (e) { rows = []; }
+  return arxivOwnerGroups(rows.map(function(r) { return r.idea; }), 4, 4);
+}
+// Pure: text + groups -> { top, classes, score, fit }; "core" when two lines of work match or one matches on two terms.
+function arxivClassify(text, groups) {
+  var classes = {}, score = 0;
+  (groups || []).forEach(function(g) {
+    var n = 0;
+    g.terms.forEach(function(t) { if (text.indexOf(t) >= 0) n++; });
+    if (n) { classes[g.label] = n; score += n; }
+  });
+  var top = "other", best = 0;
+  for (var k in classes) if (classes[k] > best) { best = classes[k]; top = k; }
+  var fit = Object.keys(classes).length >= 2 || best >= 2 ? "core" : "adjacent";
+  return { top: top, classes: classes, score: score, fit: fit };
+}
 var arxivMod = (function(){
 const QNFO_VERSION = "qnfo-arxiv-radar/fabric-20260910";
 const VERSION = "1.1.0-qwav-classify";
@@ -461,13 +498,23 @@ var arxivModDefault = {
     return new Response("not found", { status: 404 });
   }
 };
-const WIDE_QUERY = '(all:"ultrametric" OR all:"p-adic" OR all:"Bruhat-Tits" OR all:"quantum energy" OR all:"joules per solution" OR all:"quantum error correction" OR all:"ZBW" OR all:"quantum thermodynamics" OR all:"Landauer" OR all:"energy per logical qubit" OR all:"Margolus-Levitin" OR all:"cryogenic controller" OR all:"primon" OR all:"Gentile statistics" OR all:"adelic" OR all:"arithmetic quantum") AND (cat:quant-ph OR cat:math-ph OR cat:hep-th OR cat:cs.ET)';
-const STRONG = ["ultrametric","p-adic","bruhat","primon","adelic","gentile","joules","landauer","margolus","quantum energy","error correction","thermodynamics","logical qubit","zbw","arithmetic","energy overhead","energy efficiency","cryogenic"];
 const UA = "Mozilla/5.0 (QNFO arxiv-radar)";
 function pad(n) { return String(n).padStart(2, "0"); }
 async function run(env) {
   const out = { hits: 0, candidates: 0, enqueued: 0, dupes: 0, noteKey: null, error: null, sample: [] };
   let hits = [];
+  // NO-TOPIC-HARDCODE-1 (1.3.3, owner directive 2026-10-10): the radar's query, keyword list and classes come from the
+  // owner's accepted ideas in idea_proposals (groups of distinctive terms, one group per idea), never from a fixed table.
+  const groups = await arxivSeedGroups(env);
+  if (!groups.length) {
+    out.skipped = "no-owner-ideas";
+    // Log the skipped run so the fleet can tell a quiet radar from a dormant one.
+    try { if (env.AUDIT) await env.AUDIT.prepare("INSERT INTO research_scan_log (id, ts, job, payload) VALUES (?1, ?2, 'arxiv-radar', ?3)").bind("arxiv-" + Date.now().toString(36), new Date().toISOString(), JSON.stringify({ v: VERSION, skipped: out.skipped })).run(); } catch (e) {}
+    return out;
+  }
+  const STRONG = [];
+  for (const g of groups) for (const t of g.terms) if (STRONG.indexOf(t) < 0) STRONG.push(t);
+  const WIDE_QUERY = "(" + STRONG.map(function(t) { return 'all:"' + t.replace(/-/g, " ") + '"'; }).join(" OR ") + ")";
   try {
     const q = encodeURIComponent(WIDE_QUERY);
     const r = await fetch("https://export.arxiv.org/api/query?search_query=" + q + "&start=0&max_results=20&sortBy=submittedDate&sortOrder=descending", { headers: { "User-Agent": UA } });
@@ -494,10 +541,10 @@ async function run(env) {
   out.candidates = candidates.length;
   // QWAV-SCAN-CLASSIFY-1 (2026-10-01, RM-VISION-QWAV-SCAN-1): the radar kept any hit with one keyword and gave no
   // topic, so the digest could not be read by research area and nothing downstream could weigh a hit. Each hit is now
-  // classified deterministically (no model call, zero cost) into the QWAV research classes and given a fit grade:
-  // "core" when it touches the ultrametric/ZBW programme or two classes at once, "adjacent" otherwise.
+  // classified deterministically (no model call, zero cost) into the owner's lines of work (arxivClassify) and given a fit grade:
+  // "core" when it matches two lines of work or one on two terms, "adjacent" otherwise.
   for (const c of candidates) {
-    const cls = classify(c.text);
+    const cls = arxivClassify(c.text, groups);
     c.cls = cls.top; c.classes = cls.classes; c.score = cls.score; c.fit = cls.fit;
   }
   candidates.sort(function(a, b) { return (b.fit === "core") - (a.fit === "core") || b.score - a.score; });
@@ -506,11 +553,11 @@ async function run(env) {
   out.core = candidates.filter(function(c) { return c.fit === "core"; }).length;
   out.sample = candidates.slice(0, 5).map(function(c){ return c.id + " [" + c.cls + "/" + c.fit + "] " + c.title.slice(0, 60); });
   const lines = [];
-  const order = ["ultrametric", "zbw", "qec", "energy", "other"];
+  const order = groups.map(function(g) { return g.label; }).concat(["other"]);
   for (const k of order) {
     const grp = candidates.filter(function(c) { return c.cls === k; }).slice(0, 10);
     if (!grp.length) continue;
-    lines.push("", "## " + CLASS_TITLE[k] + " (" + grp.length + ")");
+    lines.push("", "## " + (k === "other" ? "Other" : k.charAt(0).toUpperCase() + k.slice(1)) + " (" + grp.length + ")");
     for (const c of grp) lines.push("- [" + c.id + "] " + c.title + " (" + c.published + ", " + c.fit + ", score " + c.score + ") " + c.authors.slice(0, 3).join(", "));
   }
   const d = new Date();
@@ -538,27 +585,6 @@ async function run(env) {
   }
   return out;
 }
-const CLASS_KW = {
-  ultrametric: ["ultrametric", "p-adic", "padic", "bruhat", "adelic", "primon", "non-archimedean", "arithmetic quantum"],
-  zbw: ["zbw", "zitterbewegung", "compton"],
-  qec: ["error correction", "logical qubit", "qldpc", "ldpc", "surface code", "fault-tolerant", "fault tolerant", "stabilizer code"],
-  energy: ["quantum energy", "joules", "landauer", "thermodynamic", "energy overhead", "energy efficiency", "cryogenic", "margolus", "energy cost"]
-};
-const CLASS_TITLE = { ultrametric: "Ultrametric, p-adic and adelic", zbw: "Zitterbewegung", qec: "Quantum error correction", energy: "Quantum energy and thermodynamics", other: "Other" };
-function classify(text) {
-  const classes = {};
-  let score = 0;
-  for (const k in CLASS_KW) {
-    let n = 0;
-    for (const kw of CLASS_KW[k]) if (text.includes(kw)) n++;
-    if (n) { classes[k] = n; score += n; }
-  }
-  let top = "other", best = 0;
-  for (const k in classes) if (classes[k] > best) { best = classes[k]; top = k; }
-  const fit = classes.ultrametric || classes.zbw || Object.keys(classes).length >= 2 ? "core" : "adjacent";
-  return { top: top, classes: classes, score: score, fit: fit };
-}
-
 return arxivModDefault;
 })();
 var researchMod = (function(){
