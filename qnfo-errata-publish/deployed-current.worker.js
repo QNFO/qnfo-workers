@@ -20805,7 +20805,7 @@ var PUPPETEER_REVISIONS = Object.freeze({
 var puppeteer = new PuppeteerWorkers();
 var { connect, history, launch, limits, sessions, acquire } = puppeteer;
 var puppeteer_cloudflare_default = puppeteer;
-var ZENODO = "https://zenodo.org/api/deposit/depositions";
+var VERSION = "0.8.0-doi-scrub"; // NOZ-DOI-1 (2026-10-10): no external deposit step; a publish re-renders the paper and re-points D1, graph and R2 only, with doi/zenodo_doi/zenodo_url left NULL.
 function json(data, status) {
   if (status === void 0) status = 200;
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -20820,13 +20820,6 @@ function authorized(request, env) {
 __name(authorized, "authorized");
 __name2(authorized, "authorized");
 __name22(authorized, "authorized");
-function doiToRecordId(doi) {
-  const m = (doi || "").match(/zenodo\.(\d+)/);
-  return m ? m[1] : null;
-}
-__name(doiToRecordId, "doiToRecordId");
-__name2(doiToRecordId, "doiToRecordId");
-__name22(doiToRecordId, "doiToRecordId");
 function r2Prefix(paper) {
   const raw = paper && (paper.r2_path || paper.r2_key) || "";
   let p = raw.replace(/^qnfo-releases\//, "").replace(/^\/+/, "").replace(/\/+$/, "");
@@ -20915,117 +20908,26 @@ async function renderPdf(env, html) {
 __name(renderPdf, "renderPdf");
 __name2(renderPdf, "renderPdf");
 __name22(renderPdf, "renderPdf");
-async function zenodo(env, path, opts) {
-  const sep = path.indexOf("?") >= 0 ? "&" : "?";
-  const url = ZENODO + path + sep + "access_token=" + env.ZENODO_TOKEN;
-  const headers = { "User-Agent": "QNFO-errata-publish/0.7" };
-  const init = { method: opts && opts.method || "GET", headers };
-  if (opts && opts.jsonBody !== void 0) {
-    headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(opts.jsonBody);
-  }
-  const resp = await fetch(url, init);
-  const text = await resp.text();
-  let d;
-  try {
-    d = JSON.parse(text);
-  } catch (e) {
-    d = { error: text };
-  }
-  if (!resp.ok) throw new Error("zenodo " + resp.status + ": " + text.slice(0, 200));
-  return d;
-}
-__name(zenodo, "zenodo");
-__name2(zenodo, "zenodo");
-__name22(zenodo, "zenodo");
 async function publishNewVersion(env, action, paper) {
-  const recordId = doiToRecordId(paper.doi || action.paper_doi);
-  if (!recordId) throw new Error("cannot derive record id from " + (paper.doi || action.paper_doi));
-  const nv = await zenodo(env, "/" + recordId + "/actions/newversion", { method: "POST" });
-  const draftId = nv.id;
-  const slug = paper.slug || "paper";
-  const mainNames = [slug + ".md", slug + ".html", slug + ".pdf"];
-  const files = nv.files || [];
-  let deletedCount = 0;
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
-    const name = f.filename || "";
-    if (mainNames.indexOf(name) >= 0) {
-      const dr = await fetch(f.links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
-      if (!dr.ok) throw new Error("delete failed for " + name + ": " + dr.status);
-      deletedCount++;
-    }
-  }
-  if (deletedCount !== mainNames.length) {
-    throw new Error("delete-count mismatch: deleted " + deletedCount + " of " + mainNames.length + " expected renderings; aborting");
-  }
-  const mdBlob = new Blob([action.corrected_md || ""], { type: "text/markdown" });
-  const fd1 = new FormData();
-  fd1.append("file", mdBlob, slug + ".md");
-  await fetch(ZENODO + "/" + draftId + "/files?access_token=" + env.ZENODO_TOKEN, { method: "POST", body: fd1 });
-  const html = markdownToHtml(action.corrected_md);
-  const fd2 = new FormData();
-  fd2.append("file", new Blob([html], { type: "text/html" }), slug + ".html");
-  await fetch(ZENODO + "/" + draftId + "/files?access_token=" + env.ZENODO_TOKEN, { method: "POST", body: fd2 });
+  const html = markdownToHtml(action.corrected_md || "");
   let pdf = null;
   let pdfError = null;
   try {
     pdf = await renderPdf(env, html);
-    const fd3 = new FormData();
-    fd3.append("file", new Blob([pdf], { type: "application/pdf" }), slug + ".pdf");
-    await fetch(ZENODO + "/" + draftId + "/files?access_token=" + env.ZENODO_TOKEN, { method: "POST", body: fd3 });
   } catch (e) {
     pdfError = e.message;
     console.error("PDF regeneration failed:", e.message);
   }
-  const meta = nv.metadata || {};
-  if (action.version_to) meta.version = action.version_to;
-  const metaClean = {};
-  for (const k in meta) {
-    if (k !== "prereserve_doi" && k !== "doi" && k !== "recid") metaClean[k] = meta[k];
-  }
-  try {
-    const pr = await fetch("https://zenodo.org/api/records/" + recordId, { headers: { "User-Agent": "QNFO-errata-publish/0.7" } }).then(function(r) {
-      return r.json();
-    });
-    const prRels = pr.metadata && pr.metadata.related_identifiers || [];
-    const parentCustom = prRels.filter(function(r) {
-      const rel = (r.relationType || r.relation || "").toLowerCase();
-      return rel.indexOf("version") < 0 && rel.indexOf("obsolet") < 0;
-    }).map(function(r) {
-      return { identifier: r.relatedIdentifier || r.identifier, relation: r.relationType || r.relation, scheme: r.scheme || "doi" };
-    });
-    const draftRels = (metaClean.related_identifiers || []).filter(function(r) {
-      const rel = (r.relation || "").toLowerCase();
-      return rel.indexOf("version") < 0 && rel.indexOf("obsolet") < 0;
-    });
-    const merged = draftRels.slice();
-    for (let pi = 0; pi < parentCustom.length; pi++) {
-      const pc = parentCustom[pi];
-      const dup = merged.some(function(m) {
-        return m.identifier === pc.identifier && m.relation === pc.relation;
-      });
-      if (!dup) merged.push(pc);
-    }
-    if (merged.length) metaClean.notes = (metaClean.notes ? metaClean.notes + " " : "") + "Sources: " + merged.map(function(m) {
-      return m.identifier;
-    }).join(", ");
-  } catch (e) {
-  }
-  delete metaClean.related_identifiers;
-  await zenodo(env, "/" + draftId, { method: "PUT", jsonBody: { metadata: metaClean } });
-  const pub = await zenodo(env, "/" + draftId + "/actions/publish", { method: "POST" });
-  return { newDoi: pub.doi, newRecordId: pub.id, conceptrecid: pub.conceptrecid, version: action.version_to, pdf, pdfError };
+  return { newDoi: null, version: action.version_to, pdf, pdfError };
 }
 __name(publishNewVersion, "publishNewVersion");
 __name2(publishNewVersion, "publishNewVersion");
 __name22(publishNewVersion, "publishNewVersion");
 async function repointStores(env, action, paper, pub) {
-  if (!pub.newDoi) throw new Error("publish response missing doi; aborting store re-point");
   const status = {};
   await env.PAPERS_DB.prepare(
-    "UPDATE papers SET body_md=?1, version=?2, doi=?3, zenodo_doi=?3, updated_at=datetime('now') WHERE slug=?4"
-  ).bind(action.corrected_md || "", action.version_to || paper.version, pub.newDoi, paper.slug).run();
+    "UPDATE papers SET body_md=?1, version=?2, doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, updated_at=datetime('now') WHERE slug=?3"
+  ).bind(action.corrected_md || "", action.version_to || paper.version, paper.slug).run();
   status.d1 = "ok";
   const kgId = "paper:" + paper.slug;
   const node = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?1").bind(kgId).first();
@@ -21036,8 +20938,8 @@ async function repointStores(env, action, paper, pub) {
     } catch (e) {
       props = {};
     }
-    props.doi = pub.newDoi;
-    props.zenodo_url = "https://doi.org/" + pub.newDoi;
+    delete props.doi;
+    delete props.zenodo_url;
     props.version = action.version_to || paper.version;
     await env.GRAPH_DB.prepare("UPDATE nodes SET properties=?1, updated_at=datetime('now') WHERE id=?2").bind(JSON.stringify(props), kgId).run();
     status.kg = "ok";
@@ -21083,8 +20985,8 @@ __name2(notifyUser, "notifyUser");
 __name22(notifyUser, "notifyUser");
 async function publishAction(env, action) {
   const paper = await env.PAPERS_DB.prepare(
-    "SELECT slug, title, version, doi, zenodo_doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 LIMIT 1"
-  ).bind(action.paper_doi).first();
+    "SELECT slug, title, version, doi, zenodo_doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+  ).bind(action.paper_doi, action.slug || "").first();
   if (!paper) {
     await env.WATCH_DB.prepare("UPDATE errata_actions SET status='error', updated_at=datetime('now') WHERE id=?").bind(action.id).run();
     await notifyUser(env, action, null, null, "paper not found for " + action.paper_doi);
@@ -21141,9 +21043,9 @@ async function runPublish(env, mode) {
     const a = rows[i];
     if (dry) {
       const paper = await env.PAPERS_DB.prepare(
-        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 LIMIT 1"
-      ).bind(a.paper_doi).first();
-      results.push({ action_id: a.id, dry: true, paper: paper ? paper.slug : null, record_id: doiToRecordId(paper ? paper.doi : a.paper_doi), r2_prefix: paper ? r2Prefix(paper) : null, version_to: a.version_to, corrected_md_len: (a.corrected_md || "").length, would_publish: true, pdf: "in-worker-render" });
+        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+      ).bind(a.paper_doi, a.slug || "").first();
+      results.push({ action_id: a.id, dry: true, paper: paper ? paper.slug : null, r2_prefix: paper ? r2Prefix(paper) : null, version_to: a.version_to, corrected_md_len: (a.corrected_md || "").length, would_publish: true, pdf: "in-worker-render" });
       continue;
     }
     try {
@@ -21152,7 +21054,7 @@ async function runPublish(env, mode) {
       results.push({ action_id: a.id, error: e.message });
     }
   }
-  return { ok: true, worker: "qnfo-errata-publish", version: "0.7.1-relid-fix", dry, processed: rows.length, results };
+  return { ok: true, worker: "qnfo-errata-publish", version: VERSION, dry, processed: rows.length, results };
 }
 __name(runPublish, "runPublish");
 __name2(runPublish, "runPublish");
@@ -21164,7 +21066,7 @@ var publish_worker_src_default = {
       return json({ error: "unauthorized" }, 401);
     }
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: "qnfo-errata-publish", version: "0.7.1-relid-fix", bindings: { zenodo: !!env.ZENODO_TOKEN, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
+      return json({ ok: true, worker: "qnfo-errata-publish", version: VERSION, bindings: { papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
     }
     if (url.pathname === "/debug/pdf") {
       try {

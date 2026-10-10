@@ -1,3 +1,4 @@
+var VERSION = "1.0.1-doi-scrub";
 export default {
   async scheduled(event, env, ctx) {
     try {
@@ -10,7 +11,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
-      return new Response(JSON.stringify({ ok: true, worker: "qnfo-citation-watch", version: "1.0.0" }), { headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true, worker: "qnfo-citation-watch", version: VERSION }), { headers: { "Content-Type": "application/json" } });
     }
     if (url.pathname === "/run") {
       const out = await run(env);
@@ -19,13 +20,9 @@ export default {
     return new Response("not found", { status: 404 });
   }
 };
-const KNOWN_DOIS = [
-  "10.5281/zenodo.21803159",
-  "10.5281/zenodo.21786473",
-  "10.5281/zenodo.21784489",
-  "10.5281/zenodo.21784490",
-  "10.5281/zenodo.21786603"
-];
+// NOZ-DOI-1 (2026-10-10): the five legacy DOIs all sat under the owner's closed repository prefix and no longer resolve, so the
+// watch list is empty until third-party DOIs are added. Third-party DOI lookups below are unchanged.
+const KNOWN_DOIS = [];
 async function run(env) {
   const lines = [];
   let total = 0;

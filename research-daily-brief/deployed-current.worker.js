@@ -1,9 +1,8 @@
 // research-daily-brief v1.1.0
 // FIX 2026-09-13: fetchArxiv now has 3-attempt exponential backoff (1s/3s/9s) + Semantic Scholar fallback
 // FIX 2026-09-13: scheduled() no longer silently drops errors; alertMsg fires on every failure
-var VERSION = '1.1.1';
+var VERSION = "1.1.2-doi-scrub";
 var ARXIV = 'https://export.arxiv.org/api/query';
-var ZENODO = 'https://zenodo.org/api/records';
 var UA = 'QNFO-Research-Bot/1.1 (research@qnfo.org)';
 var ALERTS = 'alerts@qnfo.org';
 var EMAIL_URL = 'https://qnfo-email.q08.workers.dev/send';
@@ -175,11 +174,8 @@ function topicsFor(title) {
 }
 async function scanOutreach(env) {
   var today = new Date().toISOString().slice(0,10);
-  var q = encodeURIComponent('metadata.creators.person_or_org.name:"Quni-Gudzinas"');
-  var zr = await fetch(ZENODO + '?q=' + q + '&sort=mostrecent&size=20', { headers: { 'User-Agent': UA, 'Accept': 'application/json' } });
-  if (!zr.ok) throw new Error('zenodo ' + zr.status);
-  var zdata = await zr.json();
-  var hits = (zdata.hits && zdata.hits.hits) || [];
+  // NOZ-DOI-1 (2026-10-10): no repository lookup; scan the default topic only.
+  var hits = [{ metadata: { title: '' } }];
   var count = 0;
   for (var i = 0; i < Math.min(hits.length, 2); i++) {
     var title = ((hits[i].metadata && hits[i].metadata.title) || '').slice(0,150);
