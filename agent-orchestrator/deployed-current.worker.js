@@ -3,6 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { DurableObject } from "cloudflare:workers";
+var VERSION = "1.0.1-doi-scrub";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var ARXIV_API = "https://export.arxiv.org/api/query";

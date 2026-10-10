@@ -5,7 +5,8 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var PROTOCOL_VERSION = "2024-11-05";
 var SERVER_NAME = "qnfo-memory-mcp";
 function cleanDoi(d) { return d && !String(d).includes("10.5281/") ? d : null; }
-var SERVER_VERSION = "2.0.5-doi-scrub";
+var VERSION = "2.0.5-doi-scrub";
+var SERVER_VERSION = VERSION;
 var EMBED_MODEL = "@cf/baai/bge-base-en-v1.5";
 var TOOLS = [
   { name: "search_papers", description: "Semantic search across QWAV research papers using Vectorize.", inputSchema: { type: "object", properties: { query: { type: "string", description: "Natural language search query" }, limit: { type: "number", description: "Maximum results (1-20, default 10)", default: 10 } }, required: ["query"] } },

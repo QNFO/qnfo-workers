@@ -1,0 +1,4 @@
+name = "jnl-zenodo"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+# NOZ-DOI-1 (2026-10-10): retired and inert; KV and AI bindings removed.

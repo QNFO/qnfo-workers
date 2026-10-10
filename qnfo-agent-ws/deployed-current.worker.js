@@ -28870,7 +28870,7 @@ var marker21 = `vercel.ai.error.${name21}`;
 var symbol21 = Symbol.for(marker21);
 var _a21;
 _a21 = symbol21;
-var VERSION = true ? "7.0.63-doi-scrub" : "0.0.0-test";
+var VERSION = "7.0.63-doi-scrub";
 var download = /* @__PURE__ */ __name2(async ({
   url: url2,
   maxBytes,
