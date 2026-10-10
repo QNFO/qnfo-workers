@@ -96,7 +96,7 @@ function installFetch(opts) {
       const t = decodeURIComponent((u.match(/titles=([^&]*)/) || [])[1] || "");
       return new Response(JSON.stringify({ query: { pages: { 1: { title: t, extract: SRC[t] || "" } } } }), { status: 200 });
     }
-    if (u.includes("export.arxiv.org")) return new Response("<feed><entry><id>http://arxiv.org/abs/1</id><title>A paper on drift</title><summary>" + ("The Alpha Subject drifts when measured at the Beta Station. ").repeat(8) + "</summary></entry></feed>", { status: 200 });
+    if (new URL(u).hostname === "export.arxiv.org") return new Response("<feed><entry><id>http://arxiv.org/abs/1</id><title>A paper on drift</title><summary>" + ("The Alpha Subject drifts when measured at the Beta Station. ").repeat(8) + "</summary></entry></feed>", { status: 200 });
     return new Response("{}", { status: 404 });
   };
 }
