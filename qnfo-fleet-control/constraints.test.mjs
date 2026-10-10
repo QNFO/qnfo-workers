@@ -92,8 +92,8 @@ eq(ev.constraints.every((c) => c.meets === null), true, "empty facts: every verd
 const reg = (metric, target, value, refreshedH) => ({ metric, target, last_value: value, last_refreshed: refreshedH === undefined ? h(1) : (refreshedH === null ? null : h(refreshedH)) });
 const registry = [
   reg("worker_count", "<= 24", "44"), reg("drift_total", "0", "0"), reg("probe_coverage_pct", ">=95", "97.7"), reg("deploy_freshness_h", "< 24h behind repo main", "4"), reg("cron_compliance", "<=144/day each (CRON-MANDATE-1)", "100"), reg("guard_rcs", "all 0", "0"),
-  reg("publications_30d", ">=2/30d", "12"), reg("full_reports_live_30d", ">=2 by 2026-10-25", "12"), reg("zenodo_versions_per_flagship", ">=2 per flagship", "1"), reg("indexed_surface", "maximize (crawl surface)", "450"),
-  reg("distribution_posts_30d", ">=1/day", "139"), reg("subscribers_growth_monthly", "+10 new/month", "1"), reg("pageviews_30d", "maximize", "5960"), reg("referral_30d", "maximize", "70"), reg("external_impact_per_dollar", "maximize (trend)", "0.014"), reg("zenodo_views_total", "maximize", "25408"),
+  reg("publications_30d", ">=2/30d", "12"), reg("full_reports_live_30d", ">=2 by 2026-10-25", "12"), reg("indexed_surface", "maximize (crawl surface)", "450"),
+  reg("distribution_posts_30d", ">=1/day", "139"), reg("subscribers_growth_monthly", "+10 new/month", "1"), reg("pageviews_30d", "maximize", "5960"), reg("referral_30d", "maximize", "70"), reg("external_impact_per_dollar", "maximize (trend)", "0.014"),
   reg("cost_usd_30d", "<= 200", "450"), reg("workers_ai_cost_30d_usd", "<= 7.50", "59"), reg("gateway_cap_30d_usd", "<=150", "150"), reg("cost_per_successful_task_by_class", "<0.05 USD/task", "0.13"), reg("workers_ai_attribution_coverage_pct", ">= 80", "98.5"),
   reg("energy_efficiency", ">= 0.8 (compute proxy)", "0.97"), reg("unmanaged_direct_spend_share", "<= 0.5", "0.256"),
   reg("open_agent_issues", "<=10", "23"), reg("fleet_context_tokens", "<=1000000", "210372"), reg("capability_contract_conformance", ">= 1.0", "1")
@@ -101,15 +101,15 @@ const registry = [
 const objectives = [{ objective_key: "mission", version: 1 }, { objective_key: "objective-function", version: 3 }, { objective_key: "cost-ceiling", version: 2 }, { objective_key: "return-on-spend", version: 3 }];
 let rv = C.objectiveLimitsReview({ objectives, metric_registry: registry, impact_thresholds: [] }, NOW);
 eq(rv.map((r) => r.objective_key).join(), "return-on-spend", "only the objective graded on undecidable terms is proposed for revision");
-eq(rv[0].undecidable.slice().sort().join(","), "external_impact_per_dollar,indexed_surface,pageviews_30d,referral_30d,zenodo_views_total", "the five 'maximize' terms are undecidable");
-eq(rv[0].terms, 10, "return-on-spend is graded on ten terms");
+eq(rv[0].undecidable.slice().sort().join(","), "external_impact_per_dollar,indexed_surface,pageviews_30d,referral_30d", "the four 'maximize' terms are undecidable");
+eq(rv[0].terms, 8, "return-on-spend is graded on eight terms");
 ok(rv[0].statement.length <= 220, "the statement fits the dashboard card (" + rv[0].statement.length + " chars)");
 ok(!/weight\s+of/i.test(rv[0].statement), "the statement is not mistaken for a weight change by OBJECTIVE-REVISION-APPLY-1");
 ok(/goals\.id=41/.test(rv[0].alignment), "the alignment cites the ratified goal");
 const key1 = rv[0].goal_key;
 eq(C.objectiveLimitsReview({ objectives, metric_registry: registry, impact_thresholds: [] }, NOW + 864e5)[0].goal_key, key1, "the goal_key is stable for the same objective version and limits");
-rv = C.objectiveLimitsReview({ objectives, metric_registry: registry, impact_thresholds: [{ metric: "zenodo_views_total", target: "RETIRED 2026-10-02" }] }, NOW);
-ok(rv[0].undecidable.indexOf("zenodo_views_total") < 0 && rv[0].goal_key !== key1, "a retired term is excluded and changes the key");
+rv = C.objectiveLimitsReview({ objectives, metric_registry: registry, impact_thresholds: [{ metric: "pageviews_30d", target: "RETIRED 2026-10-02" }] }, NOW);
+ok(rv[0].undecidable.indexOf("pageviews_30d") < 0 && rv[0].goal_key !== key1, "a retired term is excluded and changes the key");
 const reg2 = registry.filter((r) => r.metric !== "energy_efficiency").concat([]).map((r) => (r.metric === "gateway_cap_30d_usd" ? reg("gateway_cap_30d_usd", "<=150", "n/a", 200) : r));
 rv = C.objectiveLimitsReview({ objectives, metric_registry: reg2, impact_thresholds: [] }, NOW);
 const cc = rv.find((r) => r.objective_key === "cost-ceiling");

@@ -730,7 +730,7 @@ ok(!W.CM_REVIEW_MODELS.some((m) => ["qwen", "moonshotai", "zai-org"].includes(W.
   const lad = JSON.parse(orch.slice(ld + "const DEFAULT_LADDER = ".length, le + 1));
   ok(lad.length > 0 && lad.every((m) => W.cmReviewModel(m) && W.cmModelFamily(W.cmReviewModel(m)) !== W.cmModelFamily(m)), "every rung of the orchestrator's DEFAULT_LADDER gets a reviewer from another family", lad);
 }
-ok(J(W.cmReviewParse('<think>the diff passes [] only</think>{"verdict":"no","defects":["publishStage only passes [] to publishToZenodo; no citation is checked"]}')).verdict === "no", "a reply with a think block parses");
+ok(J(W.cmReviewParse('<think>the diff passes [] only</think>{"verdict":"no","defects":["publishStage only passes [] to publishToArchive; no citation is checked"]}')).verdict === "no", "a reply with a think block parses");
 ok(W.cmReviewParse('```json\n{"verdict": "Implements", "defects": []}\n```').verdict === "implements" && W.cmReviewParse('noise "verdict": "partial" noise').verdict === "partial", "fenced JSON and a bare verdict field parse; case is ignored");
 ok(W.cmReviewParse("I think it is fine").verdict === null && W.cmReviewParse('{"verdict":"maybe"}').verdict === null && W.cmReviewParse("").verdict === null, "an unreadable reply or an unknown verdict is no verdict");
 ok(W.cmReviewParse('{"verdict":"no","defects":["a","b","c","d","e","f"]}').defects.length === 4, "at most 4 defects are kept");
