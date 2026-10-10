@@ -19,7 +19,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const missing = guest.split("\n").filter((l) => l.trim() && !src.includes(l.trim()));
   ok(missing.length === 4 && missing.filter((l) => l.startsWith("import { Buffer as Buffer")).length === 2 && missing.some((l) => l.startsWith("var VERSION = ")) && missing.some((l) => l === "export default {"),
     "every errata-hub line is in the host except its two node:buffer imports, its VERSION line and its export", missing.map((l) => l.slice(0, 60)));
-  ok(versionAtLeast(mod.__hv, "0.9.65") && mod.__mv === "1.4.2-folded" && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.9.65 or later, member 1.4.2-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
+  ok(versionAtLeast(mod.__hv, "0.9.65") && versionAtLeast(mod.__mv, "1.5.0") && (src.match(/var VERSION = "/g) || []).length === 1, "host 0.9.65 or later, member 1.4.2-folded, one quoted VERSION constant", [mod.__hv, mod.__mv]);
   ok(/^import \{ Buffer as __ErrataBuffer \} from "node:buffer";\n/.test(src), "the host imports node:buffer once for the member");
 }
 
@@ -52,7 +52,7 @@ const mkEnv = () => ({ LIVING_PAPER: db("living"), QNFO_AUDIT: db("audit"), GRAP
   const pub = "https://qnfo-research-exec.q08.workers.dev";
   const h = await mod.default.fetch(new Request(pub + "/errata-hub/health"), mkEnv(), {});
   const hj = await h.json();
-  ok(h.status === 200 && hj.worker === "errata-hub" && hj.version === "1.4.2-folded", "GET /errata-hub/health answers as the member", hj);
+  ok(h.status === 200 && hj.worker === "errata-hub" && versionAtLeast(hj.version, "1.5.0"), "GET /errata-hub/health answers as the member", hj);
   const props = { caller: "qnfo-ops", member: "errata-hub" };
   const viaBinding = await mod.default.fetch(new Request("https://internal/internal-errata", { method: "POST", body: "not json" }), mkEnv(), { props });
   ok(viaBinding.status === 400 && (await viaBinding.json()).error === "invalid json", "a binding with member props passes the member's token gate (POST /internal-errata reaches body validation)", viaBinding.status);

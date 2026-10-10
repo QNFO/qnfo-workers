@@ -1,3 +1,4 @@
+var VERSION = "0.2.5-ground"; // ERRATA-GROUND-1 (2026-10-10): the classifier's paper_doi must occur in the email (version constant added so the bump guard can see the change)
 const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
 const NOISE = /bounce|dmarcreport|dmarc|cfbounces|noreply|no-reply|sciforum|evalsignal|wildapricot|glintopenaccess|primeoa|esciencelibrary|premiersciencenetwork|theopenresearchnetwork|gitlab|soverin|microsoft\.com/i;
 
@@ -48,7 +49,7 @@ async function runCheck(env, mode) {
     let cls;
     try { cls = await classifyErrata(env, e); } catch (err) { cls = { errata: false, error: err.message }; }
     if (cls && cls.errata) {
-      let doi = cls.paper_doi || null;
+      let doi = cls.paper_doi && ((e.subject || "") + " " + (e.body_text || "")).toLowerCase().indexOf(String(cls.paper_doi).toLowerCase()) >= 0 ? cls.paper_doi : null; /* ERRATA-GROUND-1: a DOI the model names must occur in the email */
       if (!doi) {
         const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/10\.5281\/zenodo\.\d+/);
         if (dm) doi = dm[0];
