@@ -1,328 +1,96 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@f2bce2cbeaff",
- "due": 40,
- "pass": 21,
- "fail": 18,
+ "verifier": "remediation-consumer@5c392d06867f",
+ "due": 11,
+ "pass": 1,
+ "fail": 9,
  "skipped": 1,
  "contracts": [
   {
-   "class": "issue-2105",
-   "issue_id": 2105,
+   "class": "issue-2050",
+   "issue_id": 2050,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: ungated published=294 newest verdict=2026-10-09T04:20:16.096Z published quarantine-candidates=0",
+   "observed": "pending: check 3 (PROMPT-CACHE-1) waits on open issues 2116",
    "written": true
   },
   {
-   "class": "issue-2171",
-   "issue_id": 2171,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2187",
-   "issue_id": 2187,
-   "verdict": "probe-not-machine-executable",
-   "reason": "url-not-allowlisted"
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "issue-2042",
-   "issue_id": 2042,
-   "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ipatent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "plane-living-paper-fresh",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-1962",
-   "issue_id": 1962,
-   "verdict": "pass",
-   "expected": "fresh",
-   "observed": "fresh",
-   "written": true
-  },
-  {
-   "class": "issue-1981",
-   "issue_id": 1981,
-   "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
-   "written": true
-  },
-  {
-   "class": "issue-1982",
-   "issue_id": 1982,
-   "verdict": "pass",
-   "expected": "retired",
-   "observed": "retired",
-   "written": true
-  },
-  {
-   "class": "issue-2141",
-   "issue_id": 2141,
+   "class": "issue-2199",
+   "issue_id": 2199,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2144",
-   "issue_id": 2144,
+   "class": "issue-2206",
+   "issue_id": 2206,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
    "written": true
   },
   {
-   "class": "issue-2145",
-   "issue_id": 2145,
+   "class": "issue-1760",
+   "issue_id": 1760,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
+   "observed": "pending",
    "written": true
   },
   {
-   "class": "issue-2149",
-   "issue_id": 2149,
+   "class": "issue-2193",
+   "issue_id": 2193,
    "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "fm-host-census-stale",
-   "issue_id": null,
-   "verdict": "pass",
    "expected": "1",
-   "observed": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "fm-social-channel-drain-silent",
-   "issue_id": null,
-   "verdict": "pass",
+   "class": "issue-2194",
+   "issue_id": 2194,
+   "verdict": "fail",
    "expected": "1",
-   "observed": "1",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "fm-autoaudit-stale",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-queue-sla-review-proxy",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-zenodo-exit-stalled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-claim-reaper-stalled",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-detector-parked",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-1683",
-   "issue_id": 1683,
+   "class": "issue-1796",
+   "issue_id": 1796,
    "verdict": "fail",
    "expected": "0",
    "observed": "1",
    "written": true
   },
   {
-   "class": "issue-2146",
-   "issue_id": 2146,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2151",
-   "issue_id": 2151,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2155",
-   "issue_id": 2155,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2157",
-   "issue_id": 2157,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2158",
-   "issue_id": 2158,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2159",
-   "issue_id": 2159,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-advisor, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2161",
-   "issue_id": 2161,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by scheduled-check, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2162",
-   "issue_id": 2162,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-email, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2165",
-   "issue_id": 2165,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by autonomy-first-gate, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2167",
-   "issue_id": 2167,
+   "class": "issue-2195",
+   "issue_id": 2195,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2168",
-   "issue_id": 2168,
+   "class": "issue-1983",
+   "issue_id": 1983,
+   "verdict": "pass",
+   "expected": "retired",
+   "observed": "retired",
+   "written": true
+  },
+  {
+   "class": "issue-2077",
+   "issue_id": 2077,
+   "verdict": "probe-not-machine-executable",
+   "reason": "bad-contains"
+  },
+  {
+   "class": "issue-2249",
+   "issue_id": 2249,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "status=404",
    "written": true
   }
  ],
@@ -349,13 +117,13 @@
   "http",
   "runner-https"
  ],
- "https": 9,
- "runtime_verified_share_24h": 4.6,
+ "https": 1,
+ "runtime_verified_share_24h": 4.5,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 133360,
- "head": "f2bce2cbeaff2ee7ab33b207f9a374d6013b5f7a",
+ "spent_ms": 38189,
+ "head": "5c392d06867fea1ef0832f78f34be52ace2e990d",
  "job_status": "success",
- "ts": "2026-10-10T00:24:34Z"
+ "ts": "2026-10-10T00:57:00Z"
 }
