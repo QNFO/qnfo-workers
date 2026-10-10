@@ -96,3 +96,21 @@ drafts, distinct drafters); qnfo-fleet-control IMPROVEMENT-LOOP-1 (SURFACE-METRI
   ipatent-corpus, AI).
 - Verify after deploy: `/health` version + `/api/status` bindings true.
 - Live custom route: ipatent.qnfo.org (verified). qnfo.org gateway 301s /ipatent here.
+
+## Drafts state only what the inventor supplied (IPATENT-GROUND-1, 3.16.0)
+
+Owner directive 2026-10-10. The disclosure prompt carries process and style only:
+
+- Background uses only the inventor's text; a statement about existing approaches must be the inventor's and is labelled
+  "(Stated by the inventor; not verified against the prior art.)". The prompt asks for no novelty statement and no claim category
+  the description does not support.
+- Retrieved disclosures reach the prompt as section headings only (`ipStructureReference`): no title, field or text.
+- The inventor declaration is a fixed text that makes no statement of novelty.
+- After drafting, `ipGroundSections` checks the draft against the inventor's text (title, field, description, mechanism card): a
+  Background sentence the text does not support is removed; a sentence with a figure, DOI, link, author citation or novelty word the
+  inventor did not give is removed; a claim reciting such a figure is removed with its dependents; each removal is listed under
+  SUPPORT GAPS so the inventor can supply the detail and redraft.
+- `IDEA_BANK` (prefilled example inputs for the form) and `EXAMPLE_SECTIONS` (the static /example page) are demonstration content
+  shown to people; neither is sent to a model.
+
+Suite: `node qnfo-ipatent/ground.test.mjs`.
