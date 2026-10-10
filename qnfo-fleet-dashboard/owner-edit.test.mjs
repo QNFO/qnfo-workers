@@ -149,10 +149,10 @@ ok(r.status === 200 && doc("identity").body_md.includes("Private by token."), "w
 
 // NO-CLAUDE-RUNTIME-DEPENDENCY-1: an owner document never links out to claude.ai or anthropic.com (text stays, link does not)
 const offHost = "https://" + ["claude", "ai"].join(".") + "/artifact/x";   // built at run time so the host guard (CI) stays exact
-idb.prepare("INSERT INTO owner_docs (key, title, body_md, updated_at) VALUES ('links', 'Links', ?, '2026-10-01 00:00:00')").run("[old doc](" + offHost + ") and https://www.anthropic.com/x and [ok](https://zenodo.org/x) https://orcid.org/y");
+idb.prepare("INSERT INTO owner_docs (key, title, body_md, updated_at) VALUES ('links', 'Links', ?, '2026-10-01 00:00:00')").run("[old doc](" + offHost + ") and https://www.anthropic.com/x and [ok](https://example.org/x) https://orcid.org/y");
 r = await call("/owner/doc/links", { headers: { Cookie: cookie } });
 h = await r.text();
-ok(r.status === 200 && !/href="https:\/\/(claude\.ai|www\.anthropic\.com)/.test(h) && h.includes("old doc") && h.includes('href="https://zenodo.org/x"') && h.includes('href="https://orcid.org/y"'), "owner docs render claude.ai/anthropic.com as text, other links as links");
+ok(r.status === 200 && !/href="https:\/\/(claude\.ai|www\.anthropic\.com)/.test(h) && h.includes("old doc") && h.includes('href="https://example.org/x"') && h.includes('href="https://orcid.org/y"'), "owner docs render claude.ai/anthropic.com as text, other links as links");
 
 // Doc view links and history count
 r = await call("/owner/doc/identity", { headers: { Cookie: cookie } });

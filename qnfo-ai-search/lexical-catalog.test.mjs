@@ -17,8 +17,8 @@ const src = raw.replace(/^export \{[^}]*\};?\s*$/m, "").replace(/^import [^;]*;/
 
 // ---- fixtures
 const CATALOG = [
-  { slug: "the-q-generalized-diameter", title: "The q-Generalized Diameter: Scaling Exponents for Arbitrary Ultrametric Ratios", doi: "10.5281/zenodo.11", abstract: "We count the levels a self-similar ultrametric hierarchy with scaling ratio q needs to span the gap between the classical electron radius and the reduced Compton wavelength, and show how the level count depends on q." },
-  { slug: "physics-solved", title: "Physics, Solved", doi: "10.5281/zenodo.12", abstract: "A critique of claims that a single framework closes fundamental physics, with the tests that would falsify it." },
+  { slug: "the-q-generalized-diameter", title: "The q-Generalized Diameter: Scaling Exponents for Arbitrary Ultrametric Ratios", doi: "10.1234/qnfo.11", abstract: "We count the levels a self-similar ultrametric hierarchy with scaling ratio q needs to span the gap between the classical electron radius and the reduced Compton wavelength, and show how the level count depends on q." },
+  { slug: "physics-solved", title: "Physics, Solved", doi: "10.1234/qnfo.12", abstract: "A critique of claims that a single framework closes fundamental physics, with the tests that would falsify it." },
   { slug: "no-abstract-paper", title: "Ledger Notes on Distillation Factories", doi: null, abstract: "" },
   { slug: "audit-test-003", title: "Ultrametric hierarchy electron Compton scaling ratio test document", doi: null, abstract: "ultrametric hierarchy scaling ratio electron radius Compton wavelength levels" },
 ];
@@ -62,7 +62,7 @@ ok(r[0] && r[0].slug === "the-q-generalized-diameter", "a paper absent from the 
 ok(r.some((x) => x.slug === "beyond-the-qubit"), "the vector results are still among the sources");
 ok(!r.some((x) => /^audit-test/.test(x.slug)), "junk slugs from the catalog never become sources");
 ok(state.listCalls === 3, "the catalog (454 rows) is read in 3 pages of 200", state.listCalls);
-ok(r[0].doi === "10.5281/zenodo.11" && r[0].published === true && /papers\.qnfo\.org\/papers\/the-q-generalized-diameter$/.test(r[0].url), "the catalog row supplies title, DOI and URL", r[0]);
+ok(r[0].doi === "10.1234/qnfo.11" && r[0].published === true && /papers\.qnfo\.org\/papers\/the-q-generalized-diameter$/.test(r[0].url), "the catalog row supplies title, DOI and URL", r[0]);
 ok(state.detailCalls.indexOf("the-q-generalized-diameter") < 0 && state.detailCalls.indexOf("beyond-the-qubit") >= 0, "catalog rows with an abstract need no detail fetch; vector-only sources are still fetched", state.detailCalls);
 
 // 2. Cached: a second question in the TTL reads no catalog page.

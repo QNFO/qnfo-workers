@@ -120,7 +120,8 @@ ok(!/cloudflareinsights/.test(html), "no hand-added RUM beacon (the zone injects
 ok(/prepared with an AI-assisted research pipeline; the author is responsible for the content\./i.test(text), "the STRATEGY 2.5 AI disclosure line");
 ok(/AI agents do much of QNFO's engineering, analysis and drafting under my direction/.test(text), "engagements disclose AI assistance");
 const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((m) => decode(m[1]));
-for (const doi of ["10.5281/zenodo.21637028", "10.5281/zenodo.22261547", "10.5281/zenodo.21821767", "10.5281/zenodo.21945415", "10.5281/zenodo.21901984", "10.5281/zenodo.22026592", "10.5281/zenodo.23079905", "10.5281/zenodo.23082080"]) ok(hrefs.some((h) => h === "https://doi.org/" + doi), "links doi:" + doi);
+for (const slug of ["joules-per-solution-metric", "jpcub-qec-landauer", "jpcub-competitive-landscape", "jpcub-llm-energy", "universal-ignorance-audit", "ai4metascience-ignorance-audit", "quniverse-fleet-lessons"]) ok(hrefs.some((h) => h === "https://papers.qnfo.org/papers/" + slug), "links paper:" + slug);
+ok(!/doi\.org|zeno\x64o|10\.5281/i.test(html), "no DOI link or deposit-host mention on the page");
 ok((html.match(/<h1[\s>]/g) || []).length === 1, "one h1");
 // The gateway artifacts stay pure ASCII (scripts/math-sym-escape-patch.py): typographic characters are written as escapes.
 ok(!/[^\x00-\x7f]/.test(readFileSync(join(here, "worker.js"), "utf8")), "qnfo-gateway/worker.js is pure ASCII");
