@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.9-no-topic-tags"; /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
+var VERSION = "1.3.10-routable-models"; /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -69,20 +69,20 @@ __name2(recordClassify, "recordClassify");
 async function pickClassifier(env) {
   try {
     const cutoff = new Date(Date.now() - 7 * 864e5).toISOString();
-    const row = await env.D1.prepare("SELECT COALESCE(SUM(CASE WHEN ok=0 THEN 1 ELSE 0 END),0) AS fails, COUNT(*) AS n FROM intent_classify_stats WHERE model='glm-5.2' AND ts>=?1").bind(cutoff).first();
+    const row = await env.D1.prepare("SELECT COALESCE(SUM(CASE WHEN ok=0 THEN 1 ELSE 0 END),0) AS fails, COUNT(*) AS n FROM intent_classify_stats WHERE model='glm-5.3-flash' AND ts>=?1").bind(cutoff).first();
     const n = row && row.n || 0;
     const fails = row && row.fails || 0;
-    if (n >= 20 && fails / n > 0.05) return "glm-5.3-flash";
+    if (n >= 20 && fails / n > 0.05) return "deepseek-v4-flash";
   } catch (e) {
   }
-  return "glm-5.2";
+  return "glm-5.3-flash";
 }
 __name(pickClassifier, "pickClassifier");
 __name2(pickClassifier, "pickClassifier");
 async function classifyAI(env, desire) {
   const sys = 'You classify a user desire into strict JSON: {"type":"note|task|event|email|reminder|research|activity|unknown","domain":"research|personal|qwav|general","priority":"low|medium|high","summary":"max 120 chars","due":"YYYY-MM-DD or null"}. Reply with the JSON object only. Do not fabricate fields or values the desire does not state; when ambiguous, classify type:"unknown" rather than guessing. ADVERSARIAL-REASONING-1 (label uncertainty, never invent a classification the text does not support).';
   const first = await pickClassifier(env);
-  const order = first === "glm-5.3-flash" ? ["glm-5.3-flash", "glm-5.2"] : ["glm-5.2", "glm-5.3-flash"];
+  const order = first === "deepseek-v4-flash" ? ["deepseek-v4-flash", "glm-5.3-flash"] : ["glm-5.3-flash", "deepseek-v4-flash"];
   for (let i = 0; i < order.length; i++) {
     const model = order[i];
     try {

@@ -123,14 +123,14 @@ def main():
     ok = s == 200 and j and j.get("version") == args.expect_personal_version
     check("personal health " + ver, ok)
 
-    # 3 router chat (free glm-5.2, non-stream)
+    # 3 router chat (free glm-5.3-flash, non-stream)
     s, j = req(ROUTER + "/v1/chat/completions",
-               {"model": "glm-5.2", "messages": [{"role": "user", "content": "Reply with exactly: " + marker}]},
+               {"model": "glm-5.3-flash", "messages": [{"role": "user", "content": "Reply with exactly: " + marker}]},
                {"Authorization": "Bearer " + rk}, timeout=120)
     content = ""
     if s == 200 and j:
         content = ((j.get("choices") or [{}])[0].get("message", {}) or {}).get("content", "")
-    check("router chat (glm-5.2 free)", s == 200 and marker in content, "cost $0")
+    check("router chat (glm-5.3-flash free)", s == 200 and marker in content, "cost $0")
 
     # 4 personal chat (logs thread verify-<ts>)
     s, j = req(PERSONAL + "/v1/chat/completions",
