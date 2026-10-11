@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-11 14:11:52",
+  "audited_at": "2026-10-11 15:03:46",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -569,7 +569,7 @@
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.9.0-fleet-tick",
+        "version": "0.10.0-intake-window",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -589,7 +589,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.14.2-doi-scrub",
+        "version": "0.16.0-repair-intask",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -599,7 +599,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.14.1-doi-scrub",
+        "version": "3.14.3-doi-scrub",
         "worker": "qnfo-gateway"
       },
       {
@@ -1134,9 +1134,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.9.0-fleet-tick",
+      "before": "0.10.0-intake-window",
       "http": 200,
-      "live": "0.9.0-fleet-tick",
+      "live": "0.10.0-intake-window",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1256,9 +1256,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.14.2-doi-scrub",
+      "before": "0.16.0-repair-intask",
       "http": 200,
-      "live": "0.14.2-doi-scrub",
+      "live": "0.16.0-repair-intask",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1290,9 +1290,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.14.1-doi-scrub",
+      "before": "3.14.3-doi-scrub",
       "http": 200,
-      "live": "3.14.1-doi-scrub",
+      "live": "3.14.3-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
