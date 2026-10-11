@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-11 17:55:40",
+  "audited_at": "2026-10-11 18:28:06",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -544,7 +544,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.11.7",
+        "version": "0.11.8",
         "worker": "q08-signal-engine"
       },
       {
@@ -589,7 +589,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.16.0-repair-intask",
+        "version": "0.16.1-perf-pin",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -932,9 +932,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.11.7",
+      "before": "0.11.8",
       "http": 200,
-      "live": "0.11.7",
+      "live": "0.11.8",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1256,9 +1256,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.16.0-repair-intask",
+      "before": "0.16.1-perf-pin",
       "http": 200,
-      "live": "0.16.0-repair-intask",
+      "live": "0.16.1-perf-pin",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
