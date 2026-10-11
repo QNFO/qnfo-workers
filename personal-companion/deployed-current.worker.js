@@ -6,7 +6,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var __name22 = __name2;
-var VERSION = "1.14.1-verify"; // 1.14.0 COMPANION-VERIFY-1 (pillar: personal; owner directive 2026-10-10: published content is 100% accurate, independently fact-checked, process-and-style-only prompts, fail closed): every piece must pass a deterministic grounding check (each capitalised name, year and figure occurs in its source material) and a two-family LLM fact-check before it is stored, shown or mailed; critic or reviewer outage publishes nothing; the forced publish of critic-rejected drafts (1.13.3) is removed; topics come from live Wikipedia and arXiv, the hard-coded topic table and example nouns in the prompts are gone; companion_audits / companion_retractions give an audit and public-retraction path (410 notice, /retractions, /api/retractions); pieces without a recorded source are withdrawn. 1.13.3 COMPANION-FORCED-FALLBACK-1 (#2106, #2126): the strongest critic-rejected draft that passed validation is published as gate forced once the companion has been silent for STALL_HOURS (12h); the forced branch was unreachable and nothing published for 81h. 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.15.0-verify"; // 1.15.0 COMPANION-SOURCES-1 (pillar: personal): every run since 1.14.1 ended blocked "insufficient anchors" with no reason; source fetches now send a descriptive User-Agent, retry with backoff and record each HTTP status/error in the blocked run detail; Wikipedia and arXiv are independent providers (arXiv alone needs 2 recent papers, Wikipedia alone 2 articles), unpublished fetched material is cached and reused during an outage, a blocked generation is retried at the next hourly tick, and the steward collapse alert resolves once a piece is accepted. The accuracy gate is unchanged. 1.14.1 1.14.0 COMPANION-VERIFY-1 (pillar: personal; owner directive 2026-10-10: published content is 100% accurate, independently fact-checked, process-and-style-only prompts, fail closed): every piece must pass a deterministic grounding check (each capitalised name, year and figure occurs in its source material) and a two-family LLM fact-check before it is stored, shown or mailed; critic or reviewer outage publishes nothing; the forced publish of critic-rejected drafts (1.13.3) is removed; topics come from live Wikipedia and arXiv, the hard-coded topic table and example nouns in the prompts are gone; companion_audits / companion_retractions give an audit and public-retraction path (410 notice, /retractions, /api/retractions); pieces without a recorded source are withdrawn. 1.13.3 COMPANION-FORCED-FALLBACK-1 (#2106, #2126): the strongest critic-rejected draft that passed validation is published as gate forced once the companion has been silent for STALL_HOURS (12h); the forced branch was unreachable and nothing published for 81h. 1.13.1 COMPANION-FALLBACK-TUNE-1: gpt-oss-120b writes first (kimi-k2.6 spent the 300 s timeout per attempt), a short-only draft is extended instead of rewritten, and a run stops starting attempts after 10 min (#2126). 1.13.0 COMPANION-PUBLISH-STALL-AUTO-1: hourly companion_hours_since_last_piece metric, a self-filed and self-closed stall issue (12h + 2 failed runs). COMPANION-DEEPSEEK-402-FALLBACK-1: DeepSeek 401/402/403 opens a 60-min breaker and writer/critic fall through to Workers AI (kimi-k2.6 / glm-5.3 / gpt-oss-120b, role-ordered); the compose stage logs the call error. 1.12.3: the hourly tick creates companion_broadcasts, so the resume read never meets a missing table and the table shows the release runs live. 1.12.2 BROADCAST-BATCH-1 (agent_issues 2042, 2026-10-06, pillar personal): a piece broadcast and the daily digest no longer spend two suppression lookups plus a send per subscriber in one invocation (about 3 subrequests each, so a list above about 330 would hit the subrequest limit mid-send): opt-outs are read in batches of 50 (two queries per batch), at most SEND_CAP_PER_RUN sends go out per run, and a cursor in companion_broadcasts lets the hourly tick resume the rest. Suppression fails closed: if the opt-out lists cannot be read, nobody is mailed in that run and the cursor stays. // 1.12.0 PERSONAL-RESILIENCE-1 (#1953): a stale unsent brief claim is retried inside 08:00-12:00 Amsterdam; owner questions are claimed before the mail leaves (rolled back on a failed send, not re-sent when only the sent_at mark failed); an undeliverable question is flagged once per row; calendar_meta owner_notice_enabled is the owner kill switch for the brief and owner questions; the daily cap starts at the real Amsterdam midnight; notice size is bounded; subscriber sends page past 500 rows. // 1.11.0-brief-claim: 1.11.0 MORNING-BRIEF-CLAIM-1 + OWNER-QUESTION-UNDELIVERABLE-1: the brief claims its day before sending (failed send releases it), answered after-event questions drop out of "Questions waiting", and a question stuck at the attempt cap files one agent_issues row. // 1.10.2 EMAIL-CALLER-PROPS-1 (#1923): the EMAIL binding authenticates by service-binding props (caller personal-companion) instead of an EMAIL_API_KEY the worker never held (its only secret is DEEPSEEK_API_KEY), which is why every EMAIL-path send got 401. // 1.10.1 ANSWER-RATE-KIND-1: the answer-rate metric counts after-event questions only (triage refs are ISO weeks and could never match, which would have fired a false breach). // 1.10.0 CONNECTION-LEDGER-1 step 2 + CONNECTION-ENGAGEMENT-1: each hourly tick queues at most one follow-up question a day for a due Ledger person (template text, no model call) and refreshes metrics ledger_people_seen_twice and owner_question_answer_rate_14d in qnfo-audit.metric_registry. // 1.9.3 MORNING-BRIEF-OWNER-NOTICE-1: the morning brief goes out as an owner notice (sendOwnerNotice, same path as owner questions) so it is no longer silenced by the owner digest opt-out, which stays untouched so essay mail stays off; the brief lists waiting owner questions. // 1.9.2 OWNER-QUESTIONS-DIRECT-1: live probe got "email 401 unauthorized" from qnfo-email (EMAIL_API_KEY not valid), so owner questions send through the native SEND_EMAIL binding the morning brief already uses; the EMAIL path stays as fallback. // 1.9.1 OWNER-QUESTIONS-RENAME-1: qnfo-audit.owner_prompts already belongs to the fleet dashboard (different schema) // 1.8.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -556,34 +556,70 @@ __name(loadContinuity, "loadContinuity");
 __name2(loadContinuity, "loadContinuity");
 __name22(loadContinuity, "loadContinuity");
 // COMPANION-VERIFY-1 (1.14.0, owner directive 2026-10-10: generative instructions specify process and style only, no hard-coded
-// topics). The subject is drawn live: a random encyclopedia article that has enough text to argue from, two articles it links
-// to, and recent arXiv submissions (matching the subject when any exist, otherwise the newest submissions of any field). Nothing
-// here names a field, a category or a subject. Nothing fetched is trusted beyond being the source material the piece is checked
-// against; if too little can be fetched the run is blocked and publishes nothing.
+// topics) and COMPANION-SOURCES-1 (1.14.2, 2026-10-11). The subject is drawn live from two independent providers, each of which
+// can carry a piece alone: Wikipedia (a random article with enough text to argue from, plus two articles it links to) and arXiv
+// (recent submissions; the abstracts are the source text). With both up the piece draws on both; with one down it draws on the
+// other (arXiv alone needs at least two papers, Wikipedia alone at least two articles). Nothing here names a field, a category
+// or a subject. Every fetch carries a descriptive User-Agent, is retried with backoff, and records its HTTP status or error in
+// srcDiag, which the run log shows when a run is blocked (1.14.1 blocked every run with "insufficient anchors" and no reason).
+// Material that was fetched but never became a published piece is cached (companion_anchor_cache) and reused on an outage.
+// Whatever is fetched is only ever the source material the piece is checked against; the accuracy gate is unchanged.
 var WIKI_API = "https://en.wikipedia.org/w/api.php";
-var UA_FETCH = { "User-Agent": "Mozilla/5.0 (personal-companion)" };
-var ANCHOR_MIN_CHARS = 2500;
-var LINK_MIN_CHARS = 1200;
+var fetchCfg = { backoff: [400, 1500], timeoutMs: 12e3 };
+var srcDiag = [];
+function fetchUA() { return "qnfo-personal-companion/" + String(VERSION).split("-")[0] + " (https://reading.q08.org; mailto:rowan@qnfo.org)"; }
+function diagNote(s) { if (srcDiag.length < 14) srcDiag.push(String(s).slice(0, 140)); }
+function sleepMs(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+// One GET with retries on network errors, 429 and 5xx. Returns the Response, or null after recording why in srcDiag.
+async function srcFetch(label, url) {
+  var tries = fetchCfg.backoff.length + 1, last = "";
+  for (var t = 0; t < tries; t++) {
+    try {
+      var resp = await fetch(url, { headers: { "User-Agent": fetchUA(), "Accept": "application/json, application/atom+xml, text/xml, */*", "Api-User-Agent": fetchUA() }, signal: AbortSignal.timeout(fetchCfg.timeoutMs) });
+      if (resp.ok) return resp;
+      last = "HTTP " + resp.status;
+      if (resp.status !== 429 && resp.status < 500) break;
+      var ra = Number(resp.headers && resp.headers.get && resp.headers.get("retry-after"));
+      if (t < tries - 1 && ra > 0 && ra <= 5) await sleepMs(ra * 1e3);
+    } catch (e) {
+      last = "error " + String(e && e.message || e).slice(0, 60);
+    }
+    if (t < tries - 1) await sleepMs(fetchCfg.backoff[t]);
+  }
+  diagNote(label + ": " + last);
+  return null;
+}
+async function srcJson(label, url) {
+  var resp = await srcFetch(label, url);
+  if (!resp) return null;
+  try { return await resp.json(); } catch (e) { diagNote(label + ": not JSON"); return null; }
+}
 async function fetchRandomTitles(n) {
-  var resp = await fetch(WIKI_API + "?action=query&list=random&rnnamespace=0&rnlimit=" + n + "&format=json", { headers: UA_FETCH, signal: AbortSignal.timeout(12e3) });
-  if (!resp.ok) return [];
-  var j = await resp.json();
+  var j = await srcJson("wikipedia random", WIKI_API + "?action=query&list=random&rnnamespace=0&rnlimit=" + n + "&format=json");
   return ((j && j.query && j.query.random) || []).map(function (r) { return squish(r.title || ""); }).filter(Boolean);
 }
 async function fetchLinkedTitles(title) {
-  var resp = await fetch(WIKI_API + "?action=query&prop=links&plnamespace=0&pllimit=60&redirects=1&format=json&titles=" + encodeURIComponent(title), { headers: UA_FETCH, signal: AbortSignal.timeout(12e3) });
-  if (!resp.ok) return [];
-  var j = await resp.json();
+  var j = await srcJson("wikipedia links", WIKI_API + "?action=query&prop=links&plnamespace=0&pllimit=60&redirects=1&format=json&titles=" + encodeURIComponent(title));
   var pages = j && j.query && j.query.pages || {};
   var pk = Object.keys(pages)[0];
   var links = (pages[pk] && pages[pk].links) || [];
   return links.map(function (l) { return squish(l.title || ""); }).filter(function (t) { return t && !/^\d{1,4}$/.test(t) && !/^(List|Lists|Index|Outline|Timeline) of /i.test(t); });
 }
-async function fetchArxivQuery(query, sortBy) {
-  var url = "https://export.arxiv.org/api/query?search_query=" + query + "&sortBy=" + (sortBy || "submittedDate") + "&sortOrder=descending&max_results=8";
-  var resp = await fetch(url, { headers: UA_FETCH, signal: AbortSignal.timeout(12e3) });
-  if (!resp.ok) return [];
-  var chunks = sections(await resp.text(), "entry");
+async function fetchWiki(title) {
+  var j = await srcJson("wikipedia extract", WIKI_API + "?action=query&prop=extracts&explaintext=1&exintro=0&redirects=1&format=json&titles=" + encodeURIComponent(title));
+  var pages = j && j.query && j.query.pages || {};
+  var pk = Object.keys(pages)[0];
+  var p = pages[pk] || {};
+  var text = squish(p.extract || "");
+  if (!text) return null;
+  return { kind: "concept", ref: "https://en.wikipedia.org/wiki/" + encodeURIComponent(p.title || title), title: squish(p.title || title), text: text.slice(0, 12e3) };
+}
+__name(fetchWiki, "fetchWiki");
+async function fetchArxivQuery(label, query, sortBy) {
+  var resp = await srcFetch(label, "https://export.arxiv.org/api/query?search_query=" + query + "&sortBy=" + (sortBy || "submittedDate") + "&sortOrder=descending&max_results=8");
+  if (!resp) return [];
+  var chunks = [];
+  try { chunks = sections(await resp.text(), "entry"); } catch (e) { diagNote(label + ": unreadable"); return []; }
   var out = [];
   for (var i = 0; i < chunks.length; i++) {
     var title = firstTag(chunks[i], "title");
@@ -591,8 +627,11 @@ async function fetchArxivQuery(query, sortBy) {
     var id = firstTag(chunks[i], "id");
     if (title && summary && squish(summary).length > 300) out.push({ kind: "paper", ref: id, title: squish(title), text: squish(summary).slice(0, 1200) });
   }
+  if (!out.length) diagNote(label + ": no usable entries");
   return out;
 }
+var ANCHOR_MIN_CHARS = 2500;
+var LINK_MIN_CHARS = 1200;
 function arxivWindow(nowMs) {
   function stamp(ms) { return new Date(ms).toISOString().replace(/[-:T]/g, "").slice(0, 12); }
   return "submittedDate:[" + stamp(nowMs - 3 * 864e5) + "+TO+" + stamp(nowMs) + "]";
@@ -611,7 +650,39 @@ function fitAnchors(anchors) {
   var n = anchors.length || 1, per = Math.max(900, Math.floor(GROUND_MAX / n));
   return anchors.map(function (a) { return { kind: a.kind, ref: a.ref, title: a.title, text: String(a.text || "").slice(0, per) }; });
 }
+async function wikiAnchors(used, cooled, seed) {
+  var titles = await fetchRandomTitles(14);
+  var primary = null;
+  for (var t = 0; t < titles.length && !primary && t < 8; t++) {
+    var key = "wiki:" + titles[t];
+    if (used.indexOf(key) >= 0 || cooled[key]) continue;
+    var art = await fetchWiki(titles[t]);
+    if (art && art.text.length >= ANCHOR_MIN_CHARS) primary = art;
+  }
+  if (!primary) return [];
+  var anchors = [primary];
+  var linked = pickSeeded(await fetchLinkedTitles(primary.title), seed, 6);
+  var got = 0;
+  for (var li = 0; li < linked.length && got < 2; li++) {
+    var la = await fetchWiki(linked[li]);
+    if (la && la.text.length >= LINK_MIN_CHARS) { anchors.push(la); got++; }
+  }
+  return anchors;
+}
+async function paperAnchors(subject, seed) {
+  var papers = [];
+  if (subject) papers = await fetchArxivQuery("arxiv subject", "all:%22" + encodeURIComponent(subject) + "%22", "relevance");
+  if (!papers.length) papers = pickSeeded(await fetchArxivQuery("arxiv recent", arxivWindow(Date.now())), seed, 8);
+  return papers;
+}
+async function ensureAnchorCache(env) {
+  try {
+    await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS companion_anchor_cache (id INTEGER PRIMARY KEY AUTOINCREMENT, topic_id TEXT, a TEXT, anchors_json TEXT NOT NULL, created_at TEXT NOT NULL, attempts INTEGER DEFAULT 0, done INTEGER DEFAULT 0)").run();
+    return true;
+  } catch (e) { return false; }
+}
 async function pickTopic(env, form) {
+  srcDiag = [];
   var used = [];
   try {
     var r = await env.PERSONAL.prepare(
@@ -625,7 +696,7 @@ async function pickTopic(env, form) {
   var cooled = {};
   try {
     var cr = await env.PERSONAL.prepare(
-      "SELECT topic, SUM(CASE WHEN status IN ('failed','blocked') THEN 1 ELSE 0 END) f FROM companion_runs WHERE topic != '' AND run_at > datetime('now','-14 days') GROUP BY topic"
+      "SELECT topic, SUM(CASE WHEN status IN ('failed') THEN 1 ELSE 0 END) f FROM companion_runs WHERE topic != '' AND topic != 'none' AND run_at > datetime('now','-14 days') GROUP BY topic"
     ).all();
     var crr = cr.results || [];
     for (var ci = 0; ci < crr.length; ci++) if (Number(crr[ci].f) >= 2) cooled[crr[ci].topic] = true;
@@ -633,32 +704,40 @@ async function pickTopic(env, form) {
     cooled = {};
   }
   var seed = (Date.now() ^ (Math.random() * 4294967296)) >>> 0;
-  var titles = [];
-  try { titles = await fetchRandomTitles(14); } catch (eT) { titles = []; }
-  var anchors = [], primary = null;
-  for (var t = 0; t < titles.length && !primary && t < 8; t++) {
-    var key = "wiki:" + titles[t];
-    if (used.indexOf(key) >= 0 || cooled[key]) continue;
-    var art = null;
-    try { art = await fetchWiki(titles[t]); } catch (eA) { art = null; }
-    if (art && art.text.length >= ANCHOR_MIN_CHARS) primary = art;
+  var wiki = [], papers = [];
+  try { wiki = await wikiAnchors(used, cooled, seed); } catch (eW) { wiki = []; diagNote("wikipedia: " + String(eW && eW.message || eW).slice(0, 60)); }
+  try { papers = await paperAnchors(wiki.length ? wiki[0].title : "", seed); } catch (eP) { papers = []; diagNote("arxiv: " + String(eP && eP.message || eP).slice(0, 60)); }
+  var anchors = [], id = "", subject = "";
+  if (wiki.length >= 2) { anchors = wiki.concat(papers.slice(0, 2)); id = "wiki:" + wiki[0].title; subject = wiki[0].title; }
+  else if (papers.length >= 2) {
+    // Wikipedia unavailable (or too thin): the piece rests on recent papers alone; their abstracts are the whole ground.
+    var pp = papers.slice(0, 3);
+    anchors = (wiki.length ? wiki : []).concat(pp);
+    id = "arxiv:" + pp[0].title; subject = pp[0].title;
+    if (used.indexOf(id) >= 0) { anchors = []; }
   }
-  if (!primary) return { id: "none", a: "", b: "", anchors: [] };
-  anchors.push(primary);
-  var linked = [];
-  try { linked = pickSeeded(await fetchLinkedTitles(primary.title), seed, 6); } catch (eL) { linked = []; }
-  var gotLinks = 0;
-  for (var li = 0; li < linked.length && gotLinks < 2; li++) {
+  var cacheOk = await ensureAnchorCache(env);
+  var cacheId = 0, fromCache = false;
+  if (anchors.length < 2 && cacheOk) {
     try {
-      var la = await fetchWiki(linked[li]);
-      if (la && la.text.length >= LINK_MIN_CHARS) { anchors.push(la); gotLinks++; }
-    } catch (eW) {}
+      var cr2 = await env.PERSONAL.prepare("SELECT id, topic_id, a, anchors_json FROM companion_anchor_cache WHERE done = 0 AND attempts < 3 AND created_at > ? ORDER BY id DESC LIMIT 1").bind(new Date(Date.now() - 3 * 864e5).toISOString()).first();
+      var cached = cr2 && JSON.parse(cr2.anchors_json);
+      if (cached && cached.length >= 2) {
+        anchors = cached; id = cr2.topic_id; subject = cr2.a; cacheId = cr2.id; fromCache = true;
+        await env.PERSONAL.prepare("UPDATE companion_anchor_cache SET attempts = attempts + 1 WHERE id = ?").bind(cr2.id).run();
+        diagNote("reused cached material " + id);
+      }
+    } catch (eC) {}
   }
-  var papers = [];
-  try { papers = await fetchArxivQuery("all:%22" + encodeURIComponent(primary.title) + "%22", "relevance"); } catch (eP) { papers = []; }
-  if (!papers.length) { try { papers = pickSeeded(await fetchArxivQuery(arxivWindow(Date.now())), seed, 8); } catch (eP2) { papers = []; } }
-  for (var pi = 0; pi < papers.length && pi < 2; pi++) anchors.push(papers[pi]);
-  var pick = { id: "wiki:" + primary.title, a: primary.title, b: anchors.length > 1 ? anchors[1].title : "", anchors: fitAnchors(anchors) };
+  if (anchors.length < 2) return { id: "none", a: "", b: "", anchors: [], diag: srcDiag.join("; ") || "no source returned usable text" };
+  anchors = fitAnchors(anchors);
+  var pick = { id: id, a: subject, b: anchors.length > 1 ? anchors[1].title : "", anchors: anchors, diag: srcDiag.join("; "), cacheId: cacheId, fromCache: fromCache };
+  if (!fromCache && cacheOk) {
+    try {
+      var ins = await env.PERSONAL.prepare("INSERT INTO companion_anchor_cache (topic_id, a, anchors_json, created_at, attempts) VALUES (?,?,?,?,1)").bind(id, subject, JSON.stringify(anchors), nowIso()).run();
+      pick.cacheId = ins && ins.meta && ins.meta.last_row_id || 0;
+    } catch (eI) {}
+  }
   try {
     await env.PERSONAL.prepare(
       "INSERT INTO companion_seeds(key, source, form, used_at) VALUES(?,?,?,?) ON CONFLICT(key) DO UPDATE SET used_at=excluded.used_at, form=excluded.form"
@@ -671,21 +750,6 @@ async function pickTopic(env, form) {
   }
   return pick;
 }
-async function fetchWiki(title) {
-  var url = "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exintro=0&redirects=1&format=json&titles=" + encodeURIComponent(title);
-  var resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (personal-companion)" }, signal: AbortSignal.timeout(12e3) });
-  if (!resp.ok) return null;
-  var j = await resp.json();
-  var pages = j && j.query && j.query.pages || {};
-  var pk = Object.keys(pages)[0];
-  var p = pages[pk] || {};
-  var text = squish(p.extract || "");
-  if (!text) return null;
-  return { kind: "concept", ref: "https://en.wikipedia.org/wiki/" + encodeURIComponent(p.title || title), title: squish(p.title || title), text: text.slice(0, 12e3) };
-}
-__name(fetchWiki, "fetchWiki");
-__name2(fetchWiki, "fetchWiki");
-__name22(fetchWiki, "fetchWiki");
 // COMPANION-DEEPSEEK-402-FALLBACK-1 (1.13.0, 2026-10-07, pillar core): the owner left the DeepSeek balance empty
 // (decision 2026-10-05, #1986), every writer and critic call got HTTP 402 in under a second, and reading.q08.org
 // published nothing after 2026-10-05 08:06Z (companion_runs: "composed 0" x5 per run, steward "collapse" every hour).
@@ -1802,10 +1866,10 @@ async function generate(env, form, opts) {
     await logRun(env, form, "", topic.id, "stage", "anchorKinds " + anchors.map(function(x) {
       return x.kind;
     }).join(","), Date.now() - t0);
-    await logRun(env, form, "", topic.id, "stage", "anchors " + anchors.length, Date.now() - t0);
+    await logRun(env, form, "", topic.id, "stage", "anchors " + anchors.length + (topic.diag ? " (" + topic.diag + ")" : ""), Date.now() - t0);
     if (anchors.length < 2) {
-      await logRun(env, form, "", topic.id, "blocked", "insufficient anchors", Date.now() - t0);
-      return { ok: false, error: "insufficient anchors" };
+      await logRun(env, form, "", topic.id, "blocked", "insufficient anchors: " + (topic.diag || "no source returned usable text"), Date.now() - t0);
+      return { ok: false, error: "insufficient anchors: " + (topic.diag || "") };
     }
     var ground = anchorsText(anchors);
     var attempt = 0;
@@ -1938,6 +2002,7 @@ async function generate(env, form, opts) {
     }
     var slug = await persistPiece(env, best.piece, form, topic, model, best.quality, best.words, ground);
     await recordAudit(env, slug, "pass", best.vr.stage, best.vr);
+    if (topic.cacheId) { try { await env.PERSONAL.prepare("UPDATE companion_anchor_cache SET done = 1 WHERE id = ?").bind(topic.cacheId).run(); } catch (eCd) {} }
     await logRun(env, form, model, topic.id, "ok", slug, Date.now() - t0);
     return { ok: true, slug, form, title: best.piece.title, words: best.words, quality: best.quality, topic: topic.id, model };
   } catch (e) {
@@ -2219,7 +2284,10 @@ var worker_default = {
         var nowUtc = /* @__PURE__ */ new Date();
         var utcHour = nowUtc.getUTCHours();
         var isGenHour = GEN_HOURS_UTC.indexOf(utcHour) >= 0;
-        if (isGenHour) {
+        // COMPANION-SOURCES-1: a generation that was blocked before any model call (no source material) is retried at the next
+        // hourly tick instead of waiting for the next generation hour; it costs nothing while blocked and stays within the daily cap.
+        var retryBlocked = !isGenHour && await blockedRetryDue(env);
+        if (isGenHour || retryBlocked) {
           var day = amsDayKey(nowUtc);
           var dayCount = await env.PERSONAL.prepare(
             "SELECT COUNT(*) n FROM companion_pieces WHERE day = ?"
@@ -2802,6 +2870,13 @@ async function sendMorningBrief(env, nowMs) {
 }
 __name(sendMorningBrief, "sendMorningBrief");
 
+// True when the latest generation run ended "blocked" (it stopped before composing, so a retry spends no model calls).
+async function blockedRetryDue(env) {
+  try {
+    var r = await env.PERSONAL.prepare("SELECT status FROM companion_runs WHERE status IN ('ok','failed','blocked','error') AND form <> 'steward' ORDER BY id DESC LIMIT 1").first();
+    return !!(r && r.status === "blocked");
+  } catch (e) { return false; }
+}
 async function steward(env) {
   try {
     await ensureSchema(env);
@@ -2819,8 +2894,16 @@ async function steward(env) {
     var ar = a ? o / a : null;
     var d = "";
     if (h === null || h > 48) d = "stall: no successful piece in " + (h === null ? "ever" : h.toFixed(1) + "h");
-    else if (ar !== null && a >= 8 && ar < 0.1) d = "collapse: accept rate " + Math.round(ar * 100) + "% over " + a + " attempts";
+    else if (ar !== null && a >= 8 && ar < 0.1) {
+      // COMPANION-SOURCES-1: a collapse over a 24h window ends the moment the latest attempt is an accepted piece.
+      var lt = await env.PERSONAL.prepare("SELECT status FROM companion_runs WHERE status IN ('ok','failed','rejected','blocked','error') AND form <> 'steward' ORDER BY id DESC LIMIT 1").first();
+      if (!(lt && lt.status === "ok")) d = "collapse: accept rate " + Math.round(ar * 100) + "% over " + a + " attempts";
+    }
     if (d) await env.PERSONAL.prepare("INSERT INTO companion_runs(run_at, form, model, topic, status, detail, ms) VALUES(?,?,?,?,?,?,?)").bind(nowIso(), "steward", "", "steward", "alert", d, 0).run();
+    else {
+      var la = await env.PERSONAL.prepare("SELECT status FROM companion_runs WHERE form = 'steward' ORDER BY id DESC LIMIT 1").first();
+      if (la && la.status === "alert") await env.PERSONAL.prepare("INSERT INTO companion_runs(run_at, form, model, topic, status, detail, ms) VALUES(?,?,?,?,?,?,?)").bind(nowIso(), "steward", "", "steward", "resolved", "recovered: a piece was accepted" + (h === null ? "" : " " + h.toFixed(1) + "h ago"), 0).run();
+    }
   } catch (e) {
   }
 }
@@ -2884,7 +2967,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-var __verify = { groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
+var __verify = { blockedRetryDue: blockedRetryDue, steward: steward, fetchCfg: fetchCfg, fetchUA: fetchUA, groundingProblems: groundingProblems, parseFactVerdict: parseFactVerdict, factCheck: factCheck, verifyPiece: verifyPiece, auditPublished: auditPublished, retractPiece: retractPiece, pieceVerified: pieceVerified, recordAudit: recordAudit, generate: generate, pickTopic: pickTopic, sendMail: sendMail, pickReviewers: pickReviewers, familyOf: familyOf, anchorsBlock: anchorsBlock, prompts: { P_STYLE: P_STYLE, P_ESSAY: P_ESSAY, P_NOTES: P_NOTES, P_SERIAL: P_SERIAL, P_CRITIQUE: P_CRITIQUE, FACTCHECK_PROMPT: FACTCHECK_PROMPT }, VISIBLE_SQL: VISIBLE_SQL, REVIEW_POOL: REVIEW_POOL };
 export {
   __verify,
   GenerationFlow,

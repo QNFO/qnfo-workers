@@ -34,6 +34,7 @@ published (fail closed). The pattern is ported from `q08-signal-engine` (Q08-VER
   outage defers, a failure retracts). A retracted piece answers `410` with a public notice, is listed at `/retractions` and
   `/api/retractions`, and is skipped by any unfinished mail run. Reversible: delete its `companion_retractions` row.
   Mail already sent cannot be recalled; the notice is the correction.
+- **Source resilience (COMPANION-SOURCES-1, 1.15.0).** Wikipedia and arXiv are independent providers: with one down the other carries the piece (arXiv alone needs two recent papers, Wikipedia alone two articles), always through the same unchanged gate. Fetches send a descriptive User-Agent, retry with backoff and record each HTTP status or error in the `blocked` run detail. Fetched material that never became a piece is cached (`companion_anchor_cache`) and reused during an outage. A blocked run is retried at the next hourly tick (within the daily cap), and the steward `collapse` alert resolves once a piece is accepted. Tests: `node personal-companion/sources.test.mjs`.
 - Tests: `node personal-companion/verify.test.mjs` (offline; an invented name/year is rejected, an outage fails closed, no forced
   publish, nothing mailed without an audit, withdrawal and retraction).
 - `companion-hub/` is FOLDED (see its `FOLDED` file) and is not deployed, so its stale embedded copy is left untouched.
