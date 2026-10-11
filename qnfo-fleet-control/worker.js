@@ -5354,13 +5354,13 @@ function nozScrubLine(l) {
   if (/zenodo/i.test(s)) {
     const m = s.match(/^(\s*(?:[-*+]|\d+[.)]|\[\d+\])?\s*(?:<[^>]+>)*)([\s\S]*)$/);
     const kept = m[2].split(/(?<=[.!?])\s+/).filter((p) => !/zenodo/i.test(p)).join(" ").replace(/\s+$/, "");
-    s = kept.replace(/<[^>]+>|\s|[-*_.]/g, "") ? m[1] + kept : null;
+    s = /[A-Za-z0-9]/.test(kept) ? m[1] + kept : null;
     if (s === null) return null;
   }
   if (/\*\*\s*$/.test(s) && ((s.match(/\*/g) || []).length % 2) === 1) s = s.replace(/\*\*(\s*)$/, "*$1");
   s = s.replace(/\(\s*[,;.]?\s*\)/g, "").replace(/,\s*([.)])/g, "$1").replace(/(\S)[ \t]+([.,;:)])/g, "$1$2").replace(/(\S)[ \t]{2,}(?=\S)/g, "$1 ").replace(/[ \t]+$/g, "").replace(/\.\.(?!\.)/g, ".");
   s = s.replace(/\.\*\.$/, ".*");
-  return s.replace(/<[^>]+>|\s/g, "") === "" && /<\//.test(l) === false && s.trim() === "" ? null : s;
+  return s.trim() === "" ? null : s;
 }
 function nozScrubText(text) {
   const t = String(text == null ? "" : text);
