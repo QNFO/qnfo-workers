@@ -38,12 +38,12 @@ CREATE TABLE errata_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, queue_id INTE
 CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT);`);
 const papers = new DatabaseSync(":memory:");
-papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, zenodo_doi TEXT, body_md TEXT, r2_path TEXT, r2_key TEXT, updated_at TEXT)");
+papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, zenodo_doi TEXT, zenodo_url TEXT, body_md TEXT, r2_path TEXT, r2_key TEXT, updated_at TEXT)");
 const graph = new DatabaseSync(":memory:");
 graph.exec("CREATE TABLE nodes (id TEXT PRIMARY KEY, properties TEXT, updated_at TEXT)");
 
 // The live state of 2026-10-05: one inbound-email queue row, and the qnfo-ops erratum that never reached the queue.
-audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status) VALUES (3, 'inbound-email', 'author@example.edu', 'AW: a paper', '10.5281/zenodo.22144215', 'misattribution', 0.8, 'implemented')").run();
+audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, paper_doi, claim, confidence, status) VALUES (3, 'inbound-email', 'author@example.edu', 'AW: a paper', '10.9999/test.22144215', 'misattribution', 0.8, 'implemented')").run();
 const LIVE_ID = "err-20260926-001";
 const LIVE_CLAIM = "Cosmic inflation is the epoch when the universe cooled and expanded enough for stable periodic processes to emerge.";
 const addErr = (id, status, detectedBy, extra) => {
@@ -63,7 +63,7 @@ const mirrorPuts = [];
 const MIRROR = { async put(k) { mirrorPuts.push(k); } };
 const fetches = [];
 globalThis.fetch = async (url, init) => { fetches.push({ url: String(url && url.url || url), method: (init && init.method) || "GET" }); return new Response("{}", { status: 404 }); };
-const env = { AI, SEND_EMAIL, MIRROR, ERRATA_TOKEN: "t0k", ZENODO_TOKEN: "test-zenodo", WATCH_DB: d1(audit), AUDIT_DB: d1(audit), PAPERS_DB: d1(papers), GRAPH_DB: d1(graph) };
+const env = { AI, SEND_EMAIL, MIRROR, ERRATA_TOKEN: "t0k", WATCH_DB: d1(audit), AUDIT_DB: d1(audit), PAPERS_DB: d1(papers), GRAPH_DB: d1(graph) };
 const ctx = { waitUntil() {}, passThroughOnException() {} };
 
 const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
@@ -111,7 +111,7 @@ ok(audit.prepare("SELECT COUNT(*) n FROM errata_actions").get().n === 0, "errata
 ok((audit.prepare("SELECT status FROM errata_queue WHERE subject = ?").get(LIVE_ID) || {}).status === "internal-open", "the swept row stays internal-open");
 const pub = tickRow("errata-publish");
 ok(pub && pub.ok === true && pub.processed === 0 && pub.published.length === 0, "errata-publish processes nothing (" + JSON.stringify(pub && { processed: pub.processed, published: pub.published }) + ")");
-ok(aiCalls.length === 0 && sends.length === 0 && fetches.length === 0 && mirrorPuts.length === 0, "no model call, mail, Zenodo call or R2 write");
+ok(aiCalls.length === 0 && sends.length === 0 && fetches.length === 0 && mirrorPuts.length === 0, "no model call, mail, outside call or R2 write");
 audit.exec("DELETE FROM pipeline_flags");
 
 // 4. An erratum filed through POST /internal-errata is queued once, also when the POST is repeated.
@@ -123,13 +123,13 @@ ok(a1.ok === true && a2.ok === true && rowsFor("err-rt-1").length === 1 && rowsF
 const unauth = await worker.fetch(new Request("https://errata-hub.example/internal-errata", { method: "POST", body: "{}" }), env, ctx);
 ok(unauth.status === 401, "the intake still needs the errata token");
 addErr("err-rt-2", "open", "red-team-2026q4");
-addErr("rev-paper-1", "open", "qnfo-paper-reviser/1.2.7", { kind: "paper", ref: "10.5281/zenodo.123456" });
+addErr("rev-paper-1", "open", "qnfo-paper-reviser/1.2.7", { kind: "paper", ref: "a-paper-slug" });
 addErr("err-null-status", null, null);
 await tick("0 * * * *");
 ok(rowsFor("err-rt-1").length === 1, "the sweep does not queue an intake erratum a second time");
 ok(rowsFor("err-rt-2").length === 1 && rowsFor("err-rt-2")[0].source === "red_team", "detected_by naming a red team maps to source red_team");
 const rp = rowsFor("rev-paper-1")[0] || {};
-ok(rp.source === "internal_audit" && rp.sender === "qnfo-paper-reviser/1.2.7" && rp.paper_doi === "10.5281/zenodo.123456", "a paper erratum carries its DOI (" + JSON.stringify([rp.source, rp.sender, rp.paper_doi]) + ")");
+ok(rp.source === "internal_audit" && rp.sender === "qnfo-paper-reviser/1.2.7" && rp.paper_doi === "a-paper-slug", "a paper erratum carries its paper key (" + JSON.stringify([rp.source, rp.sender, rp.paper_doi]) + ")");
 const rn = rowsFor("err-null-status")[0] || {};
 ok(rn.source === "internal_audit" && rn.sender === "internal_audit", "a row with no status counts as open and gets the default source");
 ok(tickRow("errata-watch").internal_sweep.queued === 3, "this tick queued the three new errata");

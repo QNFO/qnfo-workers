@@ -1,13 +1,13 @@
 import { Buffer as Buffer2 } from "node:buffer";
 import { Buffer as Buffer3 } from "node:buffer";
-var VERSION = "1.5.1-ground"; // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
+var VERSION = "1.5.2-doi-scrub"; // 1.5.2 NOZ-DOI-1 (2026-10-11): no external DOI-registrar call, token, route or text: the publish member re-renders the paper and re-points D1, graph and R2 with doi/zenodo_doi/zenodo_url left NULL, respond resolves papers by slug, watch keys a paper by its slug, the internal sweep takes a slug; a DOI value of the dead registrar is treated as absent in every emitted text. 1.5.1 // 1.5.0 ERRATA-GROUND-1 (owner directive 2026-10-10): a correction states only what the errata email or the paper states; a name, year, figure, DOI or link in neither makes the draft high risk (never sent). 1.4.2 prompt-cache // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI wrapped with __aiAttrEnv at the entry, so the members' glm-5.3-flash and gemma-4 calls are counted in ai_call_counters (worker errata-hub); 1.4.0 ERRATA-INTERNAL-SWEEP-1 (#1164, pillar: research): the :00 watch tick first moves open internal_errata rows that have no errata_queue row into errata_queue (email_id NULL, subject = the erratum id, status internal-open, at most 20 per tick, no model call), so a finding recorded straight into internal_errata (qnfo-ops err-20260926-001) reaches the queue; the queue insert is shared with POST /internal-errata and adds nothing when a row for the erratum exists; 1.3.1 ERRATA-JUDGE-1 (pillar: research): a correction the drafting model (zai glm-5.3-flash) rates low risk is read once by a small model from another family (google gemma-4) before it can stay low risk; no verdict or a failing verdict makes it high risk, which errata-publish never sends (fail closed; docs/ENSEMBLE-POLICY.md); 1.3.0 1.3.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger runs watch, respond, publish in that order; 1.2.0 ERRATA-HUB-CRONS-UNDECLARED-1 (#1747): hourly crons declared, publish gated off, tick rows; 1.1.5 WORKER-CONTRACT (HUB-VERSIONING-1) + cfWorkerRead /ops/deploy guard
 // MEMBER-VERSION-IDENTS-1 (2026-10-01): the three folded members reported their /health versions as string literals,
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
-var WATCH_VERSION = "0.2.5-ground";
-var RESPOND_VERSION = "0.5.0-ground";
-var PUBLISH_VERSION = "0.8.0-publish-gate";
+var WATCH_VERSION = "0.2.6-doi-scrub";
+var RESPOND_VERSION = "0.5.1-doi-scrub";
+var PUBLISH_VERSION = "0.8.1-doi-scrub";
 // ERRATA-HUB-CRONS-UNDECLARED-1 (2026-10-02, #1747, pillar research): wrangler.toml now declares the three hourly members
 // (watch :00, respond :15, publish :30). Every cron tick upserts qnfo-audit errata_watch key 'tick:<member>' with its
 // outcome, so a member that stops running is visible in D1 (qnfo-fleet-dashboard WATCHMAKER_OPS reads $.last_ok). A
@@ -88,9 +88,10 @@ async function runCheck(env, mode) {
     }
     if (cls && cls.errata) {
       let doi = cls.paper_doi && ((e.subject || "") + " " + (e.body_text || "")).toLowerCase().indexOf(String(cls.paper_doi).toLowerCase()) >= 0 ? cls.paper_doi : null; /* ERRATA-GROUND-1: a DOI the model names must occur in the email */
+      if (doi && /10\.5281\/|z[e]nodo/i.test(doi)) doi = null; /* NOZ-DOI-1: a dead-registrar DOI value is treated as absent */
       if (!doi) {
-        const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/10\.5281\/zenodo\.\d+/);
-        if (dm) doi = dm[0];
+        const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/papers\.qnfo\.org\/papers\/([a-z0-9][a-z0-9-]*)/);
+        if (dm) doi = dm[1]; /* NOZ-DOI-1: the paper's slug is the join key; respond resolves it */
       }
       if (!dry) {
         await db.prepare("INSERT OR IGNORE INTO errata_queue (email_id, sender, subject, paper_doi, claim, confidence, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'detected', datetime('now'), datetime('now'))").bind(e.id, e.sender, e.subject, doi, cls.claim || null, cls.confidence || 0).run();
@@ -161,36 +162,14 @@ function authorized(request, env) {
   return (request.headers.get("X-Erratta-Token") || "") === env.ERRATA_TOKEN;
 }
 __name(authorized, "authorized");
-function doiToRecordId(doi) {
-  const m = (doi || "").match(/zenodo\.(\d+)/);
-  return m ? m[1] : null;
-}
-__name(doiToRecordId, "doiToRecordId");
 async function resolvePaper(env, doi) {
-  const base = "SELECT slug, title, version, doi, zenodo_doi, body_md FROM papers WHERE doi = ?1 OR zenodo_doi = ?1 LIMIT 1";
+  // NOZ-DOI-1: lookup by the stored join key or the slug; no external record service is called.
+  const base = "SELECT slug, title, version, doi, zenodo_doi, body_md FROM papers WHERE doi = ?1 OR zenodo_doi = ?1 OR slug = ?1 LIMIT 1";
   const row = await env.PAPERS_DB.prepare(base).bind(doi).first();
-  if (row) return row;
-  try {
-    const recId = doiToRecordId(doi);
-    if (!recId) return null;
-    const vresp = await fetch("https://zenodo.org/api/records/" + recId + "/versions?size=10", { headers: { "User-Agent": "QNFO-errata-respond/0.4" } }).then(function(r) {
-      return r.json();
-    });
-    const hits = vresp && vresp.hits && vresp.hits.hits || [];
-    hits.sort(function(a, b) {
-      return (b.created || "").localeCompare(a.created || "");
-    });
-    if (hits.length) {
-      const headDoi = hits[0].doi || null;
-      if (headDoi) {
-        const row2 = await env.PAPERS_DB.prepare(base).bind(headDoi).first();
-        if (row2) return row2;
-      }
-    }
-  } catch (e) {
-  }
-  return null;
+  return row || null;
 }
+var DEAD_DOI = /10\.5281\/|z[e]nodo/i; // NOZ-DOI-1: a dead-registrar DOI value is treated as absent in any emitted text
+function safeDoi(d) { return d && !DEAD_DOI.test(String(d)) ? String(d) : ""; }
 __name(resolvePaper, "resolvePaper");
 // ERRATA-JUDGE-1 (docs/ENSEMBLE-POLICY.md). The drafting model's own risk flag is a same-family opinion. Before a correction can stay
 // "low" (the only value errata-publish sends), a small model from a different family (google, not zai) answers two questions about
@@ -241,7 +220,7 @@ async function logJudge(env, queueId, j) {
 // source text): deterministic check that the figures, years, links and capitalised names in generated text occur in the source
 // text the model was given. Returns problem strings; an empty list means every one was found. Same method as
 // q08-signal-engine groundingProblems (Q08-VERIFY-1). A model's own recollection is never a source.
-var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "zenodo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 function groundWordSet(text) {
   var set = {};
   String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
@@ -416,11 +395,11 @@ async function notifyUser(env, paper, corr, action) {
   // SUPPRESSION-1 (2026-09-22): honour owner opt-out before emailing the receipt.
   try { if (env.AUDIT_DB) { const _s = await env.AUDIT_DB.prepare("SELECT 1 FROM email_suppression WHERE lower(email)='rwnquni@outlook.com'").first(); if (_s) return { skipped: "owner opted out" }; } } catch (e) {}
   try {
-    const subject = "QNFO errata drafted: " + (paper.slug || paper.doi || "");
+    const subject = "QNFO errata drafted: " + (paper.slug || safeDoi(paper.doi) || "");
     const text = [
       "An inbound email requested a correction to a QNFO paper, and a correction was drafted automatically by an AI model (" + MODEL + ", cloud pipeline).",
       "",
-      "Paper: " + (paper.slug || "") + " (" + (paper.doi || "") + ")",
+      "Paper: " + (paper.slug || "") + (safeDoi(paper.doi) ? " (" + safeDoi(paper.doi) + ")" : ""),
       "Risk: " + (corr.risk || "high"),
       "Cross-family read: " + (corr.judge_note || "(not run: the drafting model already rated it high risk)"),
       "Clarification: " + (corr.clarification || "(none)"),
@@ -428,7 +407,7 @@ async function notifyUser(env, paper, corr, action) {
       "Changelog: " + (corr.changelog || "(none)"),
       "New version: " + (corr.version || "(unchanged)"),
       "",
-      "This is an automatic receipt. The staged correction is recorded in D1 (errata_actions). errata-publish sends a low-risk draft to Zenodo only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (default off); until then it is listed as would_publish in errata_watch tick:errata-publish. The errata sender is not emailed."
+      "This is an automatic receipt. The staged correction is recorded in D1 (errata_actions) and listed for review; nothing is published automatically. The errata sender is not emailed."
     ].join("\n");
     await env.SEND_EMAIL.send({ to: "rwnquni@outlook.com", from: "qnfo@qnfo.org", subject, text, html: "<pre>" + text.replace(/</g, "&lt;") + "</pre>" });
     return { sent: true };
@@ -465,32 +444,11 @@ var worker_default = {
     if (url.pathname === "/health") {
       return json({ ok: true, worker: "qnfo-errata-respond", version: RESPOND_VERSION, bindings: { ai: !!env.AI, watch: !!env.WATCH_DB, papers: !!env.PAPERS_DB, send_email: !!env.SEND_EMAIL, auth: !!env.ERRATA_TOKEN }, model: MODEL });
     }
-    if (url.pathname === "/debug/zenodo") {
-      const doi = url.searchParams.get("doi") || "";
-      const out = { doi, recId: doiToRecordId(doi) };
-      try {
-        const rec = await fetch("https://zenodo.org/api/records/" + out.recId, { headers: { "User-Agent": "QNFO-errata-respond/0.4" } });
-        out.recStatus = rec.status;
-        const recJson = await rec.json();
-        out.conceptrecid = recJson.conceptrecid;
-        const vresp = await fetch("https://zenodo.org/api/records/" + out.recId + "/versions?size=10", { headers: { "User-Agent": "QNFO-errata-respond/0.4" } });
-        out.versionsStatus = vresp.status;
-        const vJson = await vresp.json();
-        const hits = vJson.hits && vJson.hits.hits || [];
-        out.hits = hits.map(function(h) {
-          return { id: h.id, doi: h.doi, created: h.created };
-        });
-        out.hitsCount = out.hits.length;
-      } catch (e) {
-        out.error = e.message;
-      }
-      return json(out);
-    }
     if (url.pathname === "/debug/resolve") {
       const doi = url.searchParams.get("doi") || "";
       try {
         const paper = await resolvePaper(env, doi);
-        return json({ ok: true, doi, resolved: paper ? { slug: paper.slug, version: paper.version, doi: paper.doi, zenodo_doi: paper.zenodo_doi } : null, method: paper ? paper.doi === doi || paper.zenodo_doi === doi ? "exact" : "concept-head" : null });
+        return json({ ok: true, doi, resolved: paper ? { slug: paper.slug, version: paper.version } : null });
       } catch (e) {
         return json({ ok: false, error: e.message }, 500);
       }
@@ -21327,7 +21285,9 @@ var PUPPETEER_REVISIONS = Object.freeze({
 var puppeteer = new PuppeteerWorkers();
 var { connect, history, launch, limits, sessions, acquire } = puppeteer;
 var puppeteer_cloudflare_default = puppeteer;
-var ZENODO = "https://zenodo.org/api/deposit/depositions";
+// NOZ-DOI-1 (2026-10-10): no external deposit step; a publish re-renders the paper and re-points D1, graph and R2 only, with doi/zenodo_doi/zenodo_url left NULL.
+var DEAD_DOI = /10\.5281\/|z[e]nodo/i;
+function safeDoi(d) { return d && !DEAD_DOI.test(String(d)) ? String(d) : ""; }
 function json(data, status) {
   if (status === void 0) status = 200;
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -21342,13 +21302,6 @@ function authorized(request, env) {
 __name(authorized, "authorized");
 __name2(authorized, "authorized");
 __name22(authorized, "authorized");
-function doiToRecordId(doi) {
-  const m = (doi || "").match(/zenodo\.(\d+)/);
-  return m ? m[1] : null;
-}
-__name(doiToRecordId, "doiToRecordId");
-__name2(doiToRecordId, "doiToRecordId");
-__name22(doiToRecordId, "doiToRecordId");
 function r2Prefix(paper) {
   const raw = paper && (paper.r2_path || paper.r2_key) || "";
   let p = raw.replace(/^qnfo-releases\//, "").replace(/^\/+/, "").replace(/\/+$/, "");
@@ -21437,117 +21390,26 @@ async function renderPdf(env, html) {
 __name(renderPdf, "renderPdf");
 __name2(renderPdf, "renderPdf");
 __name22(renderPdf, "renderPdf");
-async function zenodo(env, path, opts) {
-  const sep = path.indexOf("?") >= 0 ? "&" : "?";
-  const url = ZENODO + path + sep + "access_token=" + env.ZENODO_TOKEN;
-  const headers = { "User-Agent": "QNFO-errata-publish/0.7" };
-  const init = { method: opts && opts.method || "GET", headers };
-  if (opts && opts.jsonBody !== void 0) {
-    headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(opts.jsonBody);
-  }
-  const resp = await fetch(url, init);
-  const text = await resp.text();
-  let d;
-  try {
-    d = JSON.parse(text);
-  } catch (e) {
-    d = { error: text };
-  }
-  if (!resp.ok) throw new Error("zenodo " + resp.status + ": " + text.slice(0, 200));
-  return d;
-}
-__name(zenodo, "zenodo");
-__name2(zenodo, "zenodo");
-__name22(zenodo, "zenodo");
 async function publishNewVersion(env, action, paper) {
-  const recordId = doiToRecordId(paper.doi || action.paper_doi);
-  if (!recordId) throw new Error("cannot derive record id from " + (paper.doi || action.paper_doi));
-  const nv = await zenodo(env, "/" + recordId + "/actions/newversion", { method: "POST" });
-  const draftId = nv.id;
-  const slug = paper.slug || "paper";
-  const mainNames = [slug + ".md", slug + ".html", slug + ".pdf"];
-  const files = nv.files || [];
-  let deletedCount = 0;
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
-    const name = f.filename || "";
-    if (mainNames.indexOf(name) >= 0) {
-      const dr = await fetch(f.links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
-      if (!dr.ok) throw new Error("delete failed for " + name + ": " + dr.status);
-      deletedCount++;
-    }
-  }
-  if (deletedCount !== mainNames.length) {
-    throw new Error("delete-count mismatch: deleted " + deletedCount + " of " + mainNames.length + " expected renderings; aborting");
-  }
-  const mdBlob = new Blob([action.corrected_md || ""], { type: "text/markdown" });
-  const fd1 = new FormData();
-  fd1.append("file", mdBlob, slug + ".md");
-  await fetch(ZENODO + "/" + draftId + "/files?access_token=" + env.ZENODO_TOKEN, { method: "POST", body: fd1 });
-  const html = markdownToHtml(action.corrected_md);
-  const fd2 = new FormData();
-  fd2.append("file", new Blob([html], { type: "text/html" }), slug + ".html");
-  await fetch(ZENODO + "/" + draftId + "/files?access_token=" + env.ZENODO_TOKEN, { method: "POST", body: fd2 });
+  const html = markdownToHtml(action.corrected_md || "");
   let pdf = null;
   let pdfError = null;
   try {
     pdf = await renderPdf(env, html);
-    const fd3 = new FormData();
-    fd3.append("file", new Blob([pdf], { type: "application/pdf" }), slug + ".pdf");
-    await fetch(ZENODO + "/" + draftId + "/files?access_token=" + env.ZENODO_TOKEN, { method: "POST", body: fd3 });
   } catch (e) {
     pdfError = e.message;
     console.error("PDF regeneration failed:", e.message);
   }
-  const meta = nv.metadata || {};
-  if (action.version_to) meta.version = action.version_to;
-  const metaClean = {};
-  for (const k in meta) {
-    if (k !== "prereserve_doi" && k !== "doi" && k !== "recid") metaClean[k] = meta[k];
-  }
-  try {
-    const pr = await fetch("https://zenodo.org/api/records/" + recordId, { headers: { "User-Agent": "QNFO-errata-publish/0.7" } }).then(function(r) {
-      return r.json();
-    });
-    const prRels = pr.metadata && pr.metadata.related_identifiers || [];
-    const parentCustom = prRels.filter(function(r) {
-      const rel = (r.relationType || r.relation || "").toLowerCase();
-      return rel.indexOf("version") < 0 && rel.indexOf("obsolet") < 0;
-    }).map(function(r) {
-      return { identifier: r.relatedIdentifier || r.identifier, relation: r.relationType || r.relation, scheme: r.scheme || "doi" };
-    });
-    const draftRels = (metaClean.related_identifiers || []).filter(function(r) {
-      const rel = (r.relation || "").toLowerCase();
-      return rel.indexOf("version") < 0 && rel.indexOf("obsolet") < 0;
-    });
-    const merged = draftRels.slice();
-    for (let pi = 0; pi < parentCustom.length; pi++) {
-      const pc = parentCustom[pi];
-      const dup = merged.some(function(m) {
-        return m.identifier === pc.identifier && m.relation === pc.relation;
-      });
-      if (!dup) merged.push(pc);
-    }
-    if (merged.length) metaClean.notes = (metaClean.notes ? metaClean.notes + " " : "") + "Sources: " + merged.map(function(m) {
-      return m.identifier;
-    }).join(", ");
-  } catch (e) {
-  }
-  delete metaClean.related_identifiers;
-  await zenodo(env, "/" + draftId, { method: "PUT", jsonBody: { metadata: metaClean } });
-  const pub = await zenodo(env, "/" + draftId + "/actions/publish", { method: "POST" });
-  return { newDoi: pub.doi, newRecordId: pub.id, conceptrecid: pub.conceptrecid, version: action.version_to, pdf, pdfError };
+  return { newDoi: null, version: action.version_to, pdf, pdfError };
 }
 __name(publishNewVersion, "publishNewVersion");
 __name2(publishNewVersion, "publishNewVersion");
 __name22(publishNewVersion, "publishNewVersion");
 async function repointStores(env, action, paper, pub) {
-  if (!pub.newDoi) throw new Error("publish response missing doi; aborting store re-point");
   const status = {};
   await env.PAPERS_DB.prepare(
-    "UPDATE papers SET body_md=?1, version=?2, doi=?3, zenodo_doi=?3, updated_at=datetime('now') WHERE slug=?4"
-  ).bind(action.corrected_md || "", action.version_to || paper.version, pub.newDoi, paper.slug).run();
+    "UPDATE papers SET body_md=?1, version=?2, doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, updated_at=datetime('now') WHERE slug=?3"
+  ).bind(action.corrected_md || "", action.version_to || paper.version, paper.slug).run();
   status.d1 = "ok";
   const kgId = "paper:" + paper.slug;
   const node = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?1").bind(kgId).first();
@@ -21558,8 +21420,8 @@ async function repointStores(env, action, paper, pub) {
     } catch (e) {
       props = {};
     }
-    props.doi = pub.newDoi;
-    props.zenodo_url = "https://doi.org/" + pub.newDoi;
+    delete props.doi;
+    delete props.zenodo_url;
     props.version = action.version_to || paper.version;
     await env.GRAPH_DB.prepare("UPDATE nodes SET properties=?1, updated_at=datetime('now') WHERE id=?2").bind(JSON.stringify(props), kgId).run();
     status.kg = "ok";
@@ -21591,8 +21453,8 @@ __name22(repointStores, "repointStores");
 async function notifyUser(env, action, paper, pub, err) {
   if (!env.SEND_EMAIL) return { skipped: "no send_email binding" };
   try {
-    const subject = (err ? "QNFO errata publish FAILED: " : "QNFO errata published: ") + (paper && paper.slug || action && action.paper_doi || "");
-    const lines = err ? ["The auto-publish of an errata correction failed.", "", "Paper: " + (paper && paper.slug || action && action.paper_doi || ""), "Error: " + err] : ["An errata correction was published automatically (cloud pipeline).", "", "Paper: " + (paper && paper.slug || ""), "New DOI: " + (pub.newDoi || ""), "Version: " + (pub.version || ""), "PDF: " + (pub.pdf ? "regenerated in-worker" : "failed (" + (pub.pdfError || "n/a") + ")"), "", "This is an automatic receipt. A post-publish adversarial audit is recommended."];
+    const subject = (err ? "QNFO errata publish FAILED: " : "QNFO errata published: ") + (paper && paper.slug || action && safeDoi(action.paper_doi) || "");
+    const lines = err ? ["The auto-publish of an errata correction failed.", "", "Paper: " + (paper && paper.slug || action && safeDoi(action.paper_doi) || ""), "Error: " + err] : ["An errata correction was published automatically (cloud pipeline).", "", "Paper: " + (paper && paper.slug || ""), "Version: " + (pub.version || ""), "PDF: " + (pub.pdf ? "regenerated in-worker" : "failed (" + (pub.pdfError || "n/a") + ")"), "", "This is an automatic receipt. A post-publish adversarial audit is recommended."];
     const text = lines.join("\n");
     await env.SEND_EMAIL.send({ to: "rwnquni@outlook.com", from: "qnfo@qnfo.org", subject, text, html: "<pre>" + text.replace(/</g, "&lt;") + "</pre>" });
     return { sent: true };
@@ -21605,8 +21467,8 @@ __name2(notifyUser, "notifyUser");
 __name22(notifyUser, "notifyUser");
 async function publishAction(env, action) {
   const paper = await env.PAPERS_DB.prepare(
-    "SELECT slug, title, version, doi, zenodo_doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 LIMIT 1"
-  ).bind(action.paper_doi).first();
+    "SELECT slug, title, version, doi, zenodo_doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+  ).bind(action.paper_doi, action.slug || "").first();
   if (!paper) {
     await env.WATCH_DB.prepare("UPDATE errata_actions SET status='error', updated_at=datetime('now') WHERE id=?").bind(action.id).run();
     await notifyUser(env, action, null, null, "paper not found for " + action.paper_doi);
@@ -21642,9 +21504,9 @@ __name(publishAction, "publishAction");
 __name2(publishAction, "publishAction");
 __name22(publishAction, "publishAction");
 // ERRATA-REPUBLISH-VERIFY-1 (2026-10-01, #1181): a correction marked 'published' was never checked afterwards.
-// publishNewVersion plus repointStores could succeed against Zenodo while the new DOI never registered, or the papers row
+// repointStores could succeed while the papers row
 // could drift. Each published action older than 30 min is now verified:
-//   - papers (by slug) must carry version_to, and its doi must resolve in the DOI handle registry (responseCode 1);
+//   - papers (by slug) must carry version_to;
 //   - pass -> status 'verified';
 //   - still failing 48h after publication -> 'verify-failed', plus a notification.
 async function verifyPublished(env) {
@@ -21659,13 +21521,7 @@ async function verifyPublished(env) {
       const paper = a.slug ? await env.PAPERS_DB.prepare("SELECT version, doi FROM papers WHERE slug=?1 LIMIT 1").bind(a.slug).first() : null;
       if (!paper) why = "paper row missing for slug " + a.slug;
       else if (a.version_to && String(paper.version) !== String(a.version_to)) why = "papers.version " + paper.version + " != version_to " + a.version_to;
-      else if (!paper.doi) why = "papers.doi empty";
-      else {
-        const r = await fetch("https://doi.org/api/handles/" + encodeURIComponent(paper.doi).replace(/%2F/gi, "/"), { headers: { "User-Agent": "qnfo-errata-verify/1.0" } });
-        const j = r.ok ? await r.json() : null;
-        ok = !!(j && j.responseCode === 1);
-        if (!ok) why = "doi " + paper.doi + " not registered (http " + r.status + ")";
-      }
+      else ok = true;
     } catch (e) { why = "verify error: " + String(e && e.message || e); }
     if (ok) {
       await env.WATCH_DB.prepare("UPDATE errata_actions SET status='verified', updated_at=datetime('now') WHERE id=?").bind(a.id).run();
@@ -21679,10 +21535,10 @@ async function verifyPublished(env) {
   return out;
 }
 __name(verifyPublished, "verifyPublished");
-// ERRATA-PUBLISH-GATE-1 (2026-10-02, #1747, pillar research): a live publish mints an irreversible Zenodo version in the
+// ERRATA-PUBLISH-GATE-1 (2026-10-02, #1747, pillar research): a live publish re-points the public paper, graph and R2 copies in the
 // owner's name from an AI-drafted correction whose risk label the model chose itself (AUTONOMY-DECISION-POLICY-1: irreversible
 // and external, so it parks with a safe default). It runs only while qnfo-audit pipeline_flags.errata_publish_enabled = '1';
-// no row, any other value or an unreadable flag means off. Off, a live run is forced dry: no Zenodo call, no papers/KG/R2
+// no row, any other value or an unreadable flag means off. Off, a live run is forced dry: no papers/KG/R2
 // re-point, no status change, no mail. The cron's tick row (errata_watch tick:errata-publish) lists what it would publish.
 async function publishGate(env) {
   const flag = "qnfo-audit pipeline_flags.errata_publish_enabled";
@@ -21718,9 +21574,9 @@ async function runPublish(env, mode) {
     const a = rows[i];
     if (dry) {
       const paper = await env.PAPERS_DB.prepare(
-        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 LIMIT 1"
-      ).bind(a.paper_doi).first();
-      results.push({ action_id: a.id, dry: true, paper: paper ? paper.slug : null, record_id: doiToRecordId(paper ? paper.doi : a.paper_doi), r2_prefix: paper ? r2Prefix(paper) : null, version_to: a.version_to, corrected_md_len: (a.corrected_md || "").length, would_publish: true, pdf: "in-worker-render" });
+        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+      ).bind(a.paper_doi, a.slug || "").first();
+      results.push({ action_id: a.id, dry: true, paper: paper ? paper.slug : null, r2_prefix: paper ? r2Prefix(paper) : null, version_to: a.version_to, corrected_md_len: (a.corrected_md || "").length, would_publish: true, pdf: "in-worker-render" });
       continue;
     }
     try {
@@ -21741,7 +21597,7 @@ var publish_worker_src_default = {
       return json({ error: "unauthorized" }, 401);
     }
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: "qnfo-errata-publish", version: PUBLISH_VERSION, bindings: { zenodo: !!env.ZENODO_TOKEN, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
+      return json({ ok: true, worker: "qnfo-errata-publish", version: PUBLISH_VERSION, bindings: { papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
     }
     if (url.pathname === "/debug/pdf") {
       try {
@@ -21816,13 +21672,16 @@ async function queueInternalErratum(env, e) {
 async function sweepInternalErrata(env) {
   const out = { ok: true, max: INTERNAL_SWEEP_MAX, candidates: 0, queued: 0, ids: [] };
   try {
-    const rows = (await env.WATCH_DB.prepare("SELECT ie.id, ie.target_ref, ie.detected_by, ie.claim_text FROM internal_errata ie WHERE COALESCE(ie.status, 'open') NOT IN ('closed', 'resolved', 'rejected') AND NOT EXISTS (SELECT 1 FROM errata_queue q WHERE q.email_id IS NULL AND q.subject = ie.id) ORDER BY ie.detected_at ASC, ie.id ASC LIMIT ?1")
+    const rows = (await env.WATCH_DB.prepare("SELECT ie.id, ie.target_kind, ie.target_ref, ie.detected_by, ie.claim_text FROM internal_errata ie WHERE COALESCE(ie.status, 'open') NOT IN ('closed', 'resolved', 'rejected') AND NOT EXISTS (SELECT 1 FROM errata_queue q WHERE q.email_id IS NULL AND q.subject = ie.id) ORDER BY ie.detected_at ASC, ie.id ASC LIMIT ?1")
       .bind(INTERNAL_SWEEP_MAX).all()).results || [];
     out.candidates = rows.length;
     for (const row of rows) {
       const by = typeof row.detected_by === "string" && row.detected_by.trim() ? row.detected_by.trim().slice(0, 128) : null;
       const source = internalErrataSource(by);
-      const doi = (String(row.target_ref || "").match(/10\.5281\/zenodo\.\d+/) || [null])[0];
+      /* NOZ-DOI-1: a paper erratum is keyed by the paper's slug (respond resolves slugs); a dead-registrar DOI value is treated as absent */
+      const ref = String(row.target_ref || "");
+      const um = ref.match(/papers\.qnfo\.org\/papers\/([a-z0-9][a-z0-9-]*)/);
+      const doi = um ? um[1] : (row.target_kind === "paper" && /^[a-z0-9][a-z0-9-]{2,}$/.test(ref) ? ref : null);
       const claim = typeof row.claim_text === "string" && row.claim_text.trim() ? row.claim_text.trim().slice(0, 4000) : null;
       if (await queueInternalErratum(env, { id: row.id, source, sender: by || source, paper_doi: doi, claim }) > 0) {
         out.queued++;
@@ -21946,7 +21805,7 @@ export default {
   async fetch(request, env, ctx) {
     env = __aiAttrEnv(env, "errata-hub", "AI", "WATCH_DB");
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction goes to Zenodo only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction is re-published only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)"] }), { headers: { "content-type": "application/json" } });
     if (p === "/internal-errata" && request.method === "POST") return internalErrataIntake(request, env);
     if (p === "/errata-watch" || p.startsWith("/errata-watch/")) { const u = new URL(request.url); u.pathname = p.slice(13) || "/"; return erratawatchMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/errata-respond" || p.startsWith("/errata-respond/")) { const u = new URL(request.url); u.pathname = p.slice(15) || "/"; return erratarespondMod.default.fetch(new Request(u.toString(), request), env, ctx); }

@@ -1,4 +1,4 @@
-var VERSION = "0.2.5-ground"; // ERRATA-GROUND-1 (2026-10-10): the classifier's paper_doi must occur in the email (version constant added so the bump guard can see the change)
+var VERSION = "0.2.6-doi-scrub"; // 0.2.6 NOZ-DOI-1: a paper named in an errata email is keyed by its slug (papers.qnfo.org link), never a DOI value; // ERRATA-GROUND-1 (2026-10-10): the classifier's paper_doi must occur in the email (version constant added so the bump guard can see the change)
 const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
 const NOISE = /bounce|dmarcreport|dmarc|cfbounces|noreply|no-reply|sciforum|evalsignal|wildapricot|glintopenaccess|primeoa|esciencelibrary|premiersciencenetwork|theopenresearchnetwork|gitlab|soverin|microsoft\.com/i;
 
@@ -50,9 +50,10 @@ async function runCheck(env, mode) {
     try { cls = await classifyErrata(env, e); } catch (err) { cls = { errata: false, error: err.message }; }
     if (cls && cls.errata) {
       let doi = cls.paper_doi && ((e.subject || "") + " " + (e.body_text || "")).toLowerCase().indexOf(String(cls.paper_doi).toLowerCase()) >= 0 ? cls.paper_doi : null; /* ERRATA-GROUND-1: a DOI the model names must occur in the email */
+      if (doi && /10\.5281\/|z[e]nodo/i.test(doi)) doi = null; /* NOZ-DOI-1: a dead-registrar DOI value is treated as absent */
       if (!doi) {
-        const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/10\.5281\/zenodo\.\d+/);
-        if (dm) doi = dm[0];
+        const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/papers\.qnfo\.org\/papers\/([a-z0-9][a-z0-9-]*)/);
+        if (dm) doi = dm[1]; /* NOZ-DOI-1: the paper's slug is the join key; respond resolves it */
       }
       if (!dry) {
         await db.prepare("INSERT OR IGNORE INTO errata_queue (email_id, sender, subject, paper_doi, claim, confidence, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'detected', datetime('now'), datetime('now'))").bind(e.id, e.sender, e.subject, doi, cls.claim || null, cls.confidence || 0).run();

@@ -9,19 +9,19 @@ import { groundQueries, stageGround } from "./worker.js";
 globalThis.setTimeout = (fn) => { fn(); return 0; };
 
 // 1. groundQueries keeps the OR fallback in the last slot.
-const IDEA_574 = "Re-entry from 10.5281/zenodo.22749402: | **Weight sequence classification** | For which $U_n$ is arithmetic polynomial-time?";
+const IDEA_574 = "Re-entry from 10.9999/test.22749402: | **Weight sequence classification** | For which $U_n$ is arithmetic polynomial-time?";
 const PARENT_574 = "Nonlinear Tree-Based Numeration Systems: A Consolidated Synthesis";
 let qs = groundQueries(IDEA_574, PARENT_574);
 assert.equal(qs.length, 6);
 assert.match(qs[5], /^all:Weight OR all:sequence OR all:arithmetic OR all:polynomial-time OR /, "row 196536e3's OR fallback must survive the cap");
 assert.equal(qs.filter((q) => / OR /.test(q)).length, 1);
 // One idea phrase + a long parent title: already fit (OR was 6th), unchanged.
-qs = groundQueries("Re-entry from 10.5281/zenodo.22739626: (ii) Can this framework classify all possible fusion rules for MZMs in 2D TSCs?", "Braid Group Representations, Modular Data, and the Classification of Majorana Zero Mode Fusion Rules in 2D Topological Superconductors");
+qs = groundQueries("Re-entry from 10.9999/test.22739626: (ii) Can this framework classify all possible fusion rules for MZMs in 2D TSCs?", "Braid Group Representations, Modular Data, and the Classification of Majorana Zero Mode Fusion Rules in 2D Topological Superconductors");
 assert.equal(qs.length, 6);
 assert.match(qs[0], /^all:"fusion rules" AND /);
 assert.match(qs[5], / OR /);
 // Short query sets are untouched; an idea with no content words yields no OR query and no crash.
-assert.equal(groundQueries("Re-entry from 10.5281/zenodo.22758712: Why Vertices, Not Points?", "p-Adic Braid Groups on Bruhat-Tits Buildings").length, 4);
+assert.equal(groundQueries("Re-entry from 10.9999/test.22758712: Why Vertices, Not Points?", "p-Adic Braid Groups on Bruhat-Tits Buildings").length, 4);
 assert.deepEqual(groundQueries("what is the", ""), []);
 
 // 2. stageGround end to end against fake arXiv, router search, living-paper, R2 and qnfo-audit.
@@ -31,8 +31,8 @@ CREATE TABLE cloud_ops_events (id TEXT, ts TEXT, kind TEXT, text TEXT, meta TEXT
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);`);
 const lp = new DatabaseSync(":memory:");
 lp.exec(`CREATE TABLE papers (slug TEXT, title TEXT, doi TEXT, abstract TEXT, status TEXT);
-INSERT INTO papers VALUES ('nonlinear-tree-based-numeration-systems-a-consolidated-synthesis', '${PARENT_574}', '10.5281/zenodo.22749402', 'parent abstract', 'published'),
-  ('corpus-a', 'Corpus paper A', '10.5281/zenodo.1', 'a', 'published'), ('corpus-b', 'Corpus paper B', '10.5281/zenodo.2', 'b', 'published');`);
+INSERT INTO papers VALUES ('nonlinear-tree-based-numeration-systems-a-consolidated-synthesis', '${PARENT_574}', '10.9999/test.22749402', 'parent abstract', 'published'),
+  ('corpus-a', 'Corpus paper A', '10.9999/test.1', 'a', 'published'), ('corpus-b', 'Corpus paper B', '10.9999/test.2', 'b', 'published');`);
 const d1 = (db) => ({ prepare(sql) {
   let args = [];
   const o = { bind(...a) { args = a; return o; },

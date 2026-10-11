@@ -67,7 +67,7 @@ const money = L.inl("It costs $5 and $10 more.");
 ok(money === "It costs \\$5 and \\$10 more.", "currency is text, not math", money);
 
 // 5. the whole document stays well-formed for an ordinary paper
-const paper = "---\ntitle: Error rates at 10^-4\nauthor: QNFO\ndate: 2026-10-06\n---\n\n# Error rates\n\n## Abstract\n\nWe bound $p_L \\le 10^{-4}$ for a 3×3 lattice.\n\n## 1. Results\n\nThe logical rate is $$p_L = A (p/p_{th})^{(d+1)/2}$$ with **50% margin** and *T₁ ≈ 5 us*. See [the data](https://zenodo.org/records/1) and https://qnfo.org/a_b.\n\n## References\n\n1. A. Author, Title, 2024.\n";
+const paper = "---\ntitle: Error rates at 10^-4\nauthor: QNFO\ndate: 2026-10-06\n---\n\n# Error rates\n\n## Abstract\n\nWe bound $p_L \\le 10^{-4}$ for a 3×3 lattice.\n\n## 1. Results\n\nThe logical rate is $$p_L = A (p/p_{th})^{(d+1)/2}$$ with **50% margin** and *T₁ ≈ 5 us*. See [the data](https://example.org/records/1) and https://qnfo.org/a_b.\n\n## References\n\n1. A. Author, Title, 2024.\n";
 const pt = L.mdToLatex(paper);
 const strip = pt.replace(/\\[{}$%#&_]/g, "");
 let depth = 0, neg = false;

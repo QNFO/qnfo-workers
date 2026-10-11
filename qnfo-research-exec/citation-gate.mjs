@@ -134,7 +134,7 @@ async function lookupDoi(doi, fetchFn) {
   } catch (e) {
     return { state: "error", note: String(e && e.message || e).slice(0, 120) };
   }
-  // Title from Crossref when the DOI is a Crossref one; DataCite DOIs (Zenodo) have no Crossref entry, so no title is judged.
+  // Title from Crossref when the DOI is a Crossref one; DataCite DOIs have no Crossref entry, so no title is judged.
   try {
     const c = await fetchFn("https://api.crossref.org/works/" + doi.split("/").map(encodeURIComponent).join("/"), { headers: { "User-Agent": "qnfo-citation-gate/1.0 (mailto:ops@qnfo.org)" } });
     if (c.ok) {

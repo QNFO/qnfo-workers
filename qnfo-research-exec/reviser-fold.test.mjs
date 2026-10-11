@@ -70,7 +70,7 @@ const mkEnv = () => ({ LIVING_PAPER: mkDb("living"), QNFO_AUDIT: mkDb("audit"), 
   const props = { caller: "qnfo-fleet-dashboard", member: "qnfo-paper-reviser" };
   const st = await mod.default.fetch(new Request("https://internal/run/status"), mkEnv(), { props });
   const sj = await st.json();
-  ok(st.status === 200 && sj.worker === "qnfo-paper-reviser" && sj.published_zenodo_total === 3, "a binding with member props reaches /run/status, authenticated by the props", sj);
+  ok(st.status === 200 && sj.worker === "qnfo-paper-reviser" && sj.published_total === 3, "a binding with member props reaches /run/status, authenticated by the props", sj);
   const noProps = await mod.default.fetch(new Request(host + "/run/status"), mkEnv(), {});
   ok(noProps.status === 404, "without the props /run/status is the host's 404, not the member", noProps.status);
   const badCaller = await mod.default.fetch(new Request("https://internal/run/status"), mkEnv(), { props: { caller: "evil", member: "qnfo-paper-reviser" } });

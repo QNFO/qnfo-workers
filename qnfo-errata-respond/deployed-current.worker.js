@@ -1,4 +1,4 @@
-var VERSION = "0.5.0-ground"; // ERRATA-GROUND-1 (2026-10-10): corrections state only what the errata email or the paper states
+var VERSION = "0.5.1-doi-scrub"; // 0.5.1 NOZ-DOI-1: no external record-service call or debug route, papers resolve by stored key or slug, receipt text names no DOI registrar; // ERRATA-GROUND-1 (2026-10-10): corrections state only what the errata email or the paper states
 const MODEL = "@cf/zai-org/glm-5.3-flash"; // 2026-09-08 model audit swap
 
 function json(data, status) {
@@ -12,37 +12,21 @@ function authorized(request, env) {
   return (request.headers.get("X-Erratta-Token") || "") === env.ERRATA_TOKEN;
 }
 
-function doiToRecordId(doi) {
-  const m = (doi || "").match(/zenodo\.(\d+)/);
-  return m ? m[1] : null;
-}
 
 async function resolvePaper(env, doi) {
-  const base = "SELECT slug, title, version, doi, zenodo_doi, body_md FROM papers WHERE doi = ?1 OR zenodo_doi = ?1 LIMIT 1";
+  // NOZ-DOI-1: lookup by the stored join key or the slug; no external record service is called.
+  const base = "SELECT slug, title, version, doi, zenodo_doi, body_md FROM papers WHERE doi = ?1 OR zenodo_doi = ?1 OR slug = ?1 LIMIT 1";
   const row = await env.PAPERS_DB.prepare(base).bind(doi).first();
-  if (row) return row;
-  try {
-    const recId = doiToRecordId(doi);
-    if (!recId) return null;
-    const vresp = await fetch("https://zenodo.org/api/records/" + recId + "/versions?size=10", { headers: { "User-Agent": "QNFO-errata-respond/0.4" } }).then(function (r) { return r.json(); });
-    const hits = (vresp && vresp.hits && vresp.hits.hits) || [];
-    hits.sort(function (a, b) { return (b.created || "").localeCompare(a.created || ""); });
-    if (hits.length) {
-      const headDoi = hits[0].doi || null;
-      if (headDoi) {
-        const row2 = await env.PAPERS_DB.prepare(base).bind(headDoi).first();
-        if (row2) return row2;
-      }
-    }
-  } catch (e) { }
-  return null;
+  return row || null;
 }
+var DEAD_DOI = /10\.5281\/|z[e]nodo/i; // NOZ-DOI-1: a dead-registrar DOI value is treated as absent in any emitted text
+function safeDoi(d) { return d && !DEAD_DOI.test(String(d)) ? String(d) : ""; }
 
 // ACCURACY-GROUND-1 (owner directive 2026-10-10: published or sent text is 100% accurate; every claim verifiable against supplied
 // source text): deterministic check that the figures, years, links and capitalised names in generated text occur in the source
 // text the model was given. Returns problem strings; an empty list means every one was found. Same method as
 // q08-signal-engine groundingProblems (Q08-VERIFY-1). A model's own recollection is never a source.
-var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "zenodo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 function groundWordSet(text) {
   var set = {};
   String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
@@ -199,18 +183,18 @@ async function respondToItem(env, item) {
 async function notifyUser(env, paper, corr, action) {
   if (!env.SEND_EMAIL) return { skipped: "no send_email binding" };
   try {
-    const subject = "QNFO errata drafted: " + (paper.slug || paper.doi || "");
+    const subject = "QNFO errata drafted: " + (paper.slug || safeDoi(paper.doi) || "");
     const text = [
       "An inbound email requested a correction to a QNFO paper, and a correction was drafted automatically (cloud pipeline).",
       "",
-      "Paper: " + (paper.slug || "") + " (" + (paper.doi || "") + ")",
+      "Paper: " + (paper.slug || "") + (safeDoi(paper.doi) ? " (" + safeDoi(paper.doi) + ")" : ""),
       "Risk: " + (corr.risk || "high"),
       "Clarification: " + (corr.clarification || "(none)"),
       "Acknowledgement: " + (corr.acknowledgement || "(none)"),
       "Changelog: " + (corr.changelog || "(none)"),
       "New version: " + (corr.version || "(unchanged)"),
       "",
-      "This is an automatic receipt. The staged correction is recorded in D1 (errata_actions) and is queued for publication."
+      "This is an automatic receipt. The staged correction is recorded in D1 (errata_actions). Nothing is published automatically."
     ].join("\n");
     await env.SEND_EMAIL.send({ to: "rwnquni@outlook.com", from: "qnfo@qnfo.org", subject: subject, text: text, html: "<pre>" + text.replace(/</g, "&lt;") + "</pre>" });
     return { sent: true };
@@ -240,28 +224,11 @@ export default {
     if (url.pathname === "/health") {
       return json({ ok: true, worker: "qnfo-errata-respond", version: "0.4.1", bindings: { ai: !!env.AI, watch: !!env.WATCH_DB, papers: !!env.PAPERS_DB, send_email: !!env.SEND_EMAIL, auth: !!env.ERRATA_TOKEN }, model: MODEL });
     }
-    if (url.pathname === "/debug/zenodo") {
-      const doi = url.searchParams.get("doi") || "";
-      const out = { doi: doi, recId: doiToRecordId(doi) };
-      try {
-        const rec = await fetch("https://zenodo.org/api/records/" + out.recId, { headers: { "User-Agent": "QNFO-errata-respond/0.4" } });
-        out.recStatus = rec.status;
-        const recJson = await rec.json();
-        out.conceptrecid = recJson.conceptrecid;
-        const vresp = await fetch("https://zenodo.org/api/records/" + out.recId + "/versions?size=10", { headers: { "User-Agent": "QNFO-errata-respond/0.4" } });
-        out.versionsStatus = vresp.status;
-        const vJson = await vresp.json();
-        const hits = (vJson.hits && vJson.hits.hits) || [];
-        out.hits = hits.map(function (h) { return { id: h.id, doi: h.doi, created: h.created }; });
-        out.hitsCount = out.hits.length;
-      } catch (e) { out.error = e.message; }
-      return json(out);
-    }
     if (url.pathname === "/debug/resolve") {
       const doi = url.searchParams.get("doi") || "";
       try {
         const paper = await resolvePaper(env, doi);
-        return json({ ok: true, doi: doi, resolved: paper ? { slug: paper.slug, version: paper.version, doi: paper.doi, zenodo_doi: paper.zenodo_doi } : null, method: paper ? (paper.doi === doi || paper.zenodo_doi === doi ? "exact" : "concept-head") : null });
+        return json({ ok: true, doi: doi, resolved: paper ? { slug: paper.slug, version: paper.version } : null });
       } catch (e) { return json({ ok: false, error: e.message }, 500); }
     }
     if (url.pathname === "/run/respond") {

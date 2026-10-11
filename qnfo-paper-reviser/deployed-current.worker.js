@@ -2,7 +2,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "1.3.0-ground"; // 1.3.0 REVISER-GROUND-1 (owner directive 2026-10-10): a low-severity edit must add no assertion (surface category, short, every name/figure/year/link and nearly every content word already in the paper); anything else is high and flagged, so bridge sentences are never auto-applied from memory; the audit prompt says so. // 1.2.7 REVISER-FLAGGED-DEADEND-1 (#1812): high findings become internal_errata rows (unconfirmed until a second model confirms); 1.2.6 LICENSE-ONE-1 (#517): new deposits under QNFO-ULA v2.0; 1.2.5 CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
+var VERSION = "1.3.1-doi-scrub"; // 1.3.1 NOZ-DOI-1 (2026-10-11): no external record service is called; candidates are the published papers, the already-revised test reads the paper version, provenance files are regenerated from the body, and the paper key in logs, queues and errata is the slug (status reports published_total).  1.3.0 1.3.0 REVISER-GROUND-1 (owner directive 2026-10-10): a low-severity edit must add no assertion (surface category, short, every name/figure/year/link and nearly every content word already in the paper); anything else is high and flagged, so bridge sentences are never auto-applied from memory; the audit prompt says so. // 1.2.7 REVISER-FLAGGED-DEADEND-1 (#1812): high findings become internal_errata rows (unconfirmed until a second model confirms); 1.2.6 LICENSE-ONE-1 (#517): new packages under QNFO-ULA v2.0; 1.2.5 CHANGELOG-ANCHOR-1 (2026-10-02): changelog block anchored to a References heading at line start (no bare "#" line). 1.2.4: FIX-REVISER-GARBAGE (2026-09-14): reject reasoning/outline output before queue
 var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731"; // 2026-09-08 model audit: 24k-ctx fp8-fast -> 1.3M ctx fc+reasoning
 var BATCH = 3;
 var UA = "QNFO-paper-reviser/" + VERSION + " (+https://papers.qnfo.org)";
@@ -17,21 +17,6 @@ function authorized(request, env) {
   return (request.headers.get("X-Reviser-Token") || "") === env.REVISER_TOKEN;
 }
 __name(authorized, "authorized");
-function recIdOf(doi) {
-  const m = String(doi || "").match(/zenodo\.(\d+)/);
-  return m ? m[1] : null;
-}
-__name(recIdOf, "recIdOf");
-async function zenodoGet(path) {
-  const r = await fetch("https://zenodo.org/api/records" + path, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(3e4) });
-  if (!r.ok) return { _status: r.status };
-  try {
-    return await r.json();
-  } catch (e) {
-    return { _status: r.status, _parseError: e.message };
-  }
-}
-__name(zenodoGet, "zenodoGet");
 function bibEsc(s) {
   return String(s || "").replace(/[{}]/g, function(c) {
     return c === "{" ? "\\{" : "\\}";
@@ -102,40 +87,15 @@ function regenerateProvenance(bodyMd, title, slug) {
     const id = [p.arxiv ? "arXiv:" + p.arxiv : null, p.doi ? "DOI " + p.doi : null].filter(Boolean).join("; ") || "no machine identifier present";
     return i + 1 + ". " + p.authors + " (" + p.year + "). " + p.title + ". Source: " + p.rest + " | Identifier: " + id;
   }).join("\n") : "No numbered references section found in the body.");
-  const readme = "# " + title + "\n\nAuthor: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)\nLicense: QNFO-ULA v2.0, CC BY-NC-SA 4.0 with the QNFO Supplemental Terms (see LICENSE)\n\nHow to cite: use the deposit record DOI.\nFiles in this deposit:\n- " + slug + ".md - full paper (source)\n- references.bib - BibTeX of the cited references\n- citation-audit.md - reference verification log\n- PROJECT-PLAN.md - goal and claim\n- README.md - this file\n- LICENSE - QNFO-ULA v2.0\n\nProvenance: produced by the QNFO autonomous research pipeline.\n";
-  const plan = "# Project plan\n\nGoal: an open, self-contained preprint with real, verifiable references and no fabricated content.\n- Claim: stated in the record body.\n- Research/due-diligence: prior-work context is stated in the body; every reference is real (arXiv ID or DOI) and non-invented.\n- Deposit: paper, references.bib, citation-audit.md, README.md, PROJECT-PLAN.md, LICENSE.\n- License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 base).\n";
+  const readme = "# " + title + "\n\nAuthor: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)\nLicense: QNFO-ULA v2.0, CC BY-NC-SA 4.0 with the QNFO Supplemental Terms (see LICENSE)\n\nHow to cite: use the paper URL on papers.qnfo.org.\nFiles in this package:\n- " + slug + ".md - full paper (source)\n- references.bib - BibTeX of the cited references\n- citation-audit.md - reference verification log\n- PROJECT-PLAN.md - goal and claim\n- README.md - this file\n- LICENSE - QNFO-ULA v2.0\n\nProvenance: produced by the QNFO autonomous research pipeline.\n";
+  const plan = "# Project plan\n\nGoal: an open, self-contained preprint with real, verifiable references and no fabricated content.\n- Claim: stated in the record body.\n- Research/due-diligence: prior-work context is stated in the body; every reference is real (arXiv ID or DOI) and non-invented.\n- Package: paper, references.bib, citation-audit.md, README.md, PROJECT-PLAN.md, LICENSE.\n- License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 base).\n";
   const lic = "SPDX-License-Identifier: LicenseRef-QNFO-ULA-2.0\n\nThis work is licensed under the QNFO Unified License Agreement, version 2.0 (QNFO-ULA): the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0) together with the QNFO Supplemental Terms.\nYou may share and adapt it for non-commercial purposes with credit, under the same terms. Commercial use needs a separate agreement: rowan.quni@qnfo.org.\n\nFull text: https://legal.qnfo.org/\nCC BY-NC-SA 4.0 legal code: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode\n"; // LICENSE-ONE-1 (2026-10-02): new deposits under QNFO-ULA v2.0
   return { references_bib: bib, citation_audit: audit, readme_md: readme, project_plan: plan, license_md: lic };
 }
 __name(regenerateProvenance, "regenerateProvenance");
-async function downloadProvenance(recId) {
-  const out = { references_bib: null, citation_audit: null, due_diligence: null, project_plan: null, readme_md: null, license_md: null, verify_script: null, verify_output: null };
-  const rec = await zenodoGet("/" + recId);
-  if (!rec || rec._status) return out;
-  const files = Array.isArray(rec.files) ? rec.files : [];
-  for (const f of files) {
-    const name = f.key || f.filename || "";
-    const contentUrl = f.links && (f.links.content || f.links.self);
-    if (!contentUrl) continue;
-    const isProv = PROV_FILES.indexOf(name) >= 0;
-    const isVerify = /verify/i.test(name);
-    if (!isProv && !isVerify) continue;
-    try {
-      const r = await fetch(contentUrl, { headers: { "User-Agent": UA } });
-      if (!r.ok) continue;
-      const text = await r.text();
-      if (name === "references.bib") out.references_bib = text;
-      else if (name === "citation-audit.md") out.citation_audit = text;
-      else if (name === "DUE-DILIGENCE.md") out.due_diligence = text;
-      else if (name === "PROJECT-PLAN.md") out.project_plan = text;
-      else if (name === "README.md") out.readme_md = text;
-      else if (name === "LICENSE") out.license_md = text;
-      else if (isVerify && !out.verify_script && /\.(py|sh)$/i.test(name)) out.verify_script = text;
-      else if (isVerify && !out.verify_output && /\.(txt|out|log)$/i.test(name)) out.verify_output = text;
-    } catch (e) {
-    }
-  }
-  return out;
+function downloadProvenance() {
+  // NOZ-DOI-1: there is no external deposit to download from; the provenance files are regenerated from the paper body.
+  return { references_bib: null, citation_audit: null, due_diligence: null, project_plan: null, readme_md: null, license_md: null, verify_script: null, verify_output: null };
 }
 __name(downloadProvenance, "downloadProvenance");
 async function aiText(env, prompt, model, maxTokens) {
@@ -176,7 +136,7 @@ function parseJsonObject(text) {
 }
 __name(parseJsonObject, "parseJsonObject");
 async function selectCandidates(env, limit) {
-  const rows = await env.PAPERS_DB.prepare("SELECT slug, doi, zenodo_doi, title, version, body_md, paper_type, created_at FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != '' ORDER BY CASE WHEN created_at >= datetime('now','-7 days') THEN 0 ELSE 1 END, created_at ASC LIMIT 60").all();
+  const rows = await env.PAPERS_DB.prepare("SELECT slug, title, version, body_md, paper_type, created_at FROM papers WHERE status='published' ORDER BY CASE WHEN created_at >= datetime('now','-7 days') THEN 0 ELSE 1 END, created_at ASC LIMIT 60").all();
   const all = rows && rows.results || [];
   // id 132 (2026-09-08): terminal dispositions only; every status below is terminal for the auto-loop.
   // "needs-substantive-revision" and "stub-fragment" defer to the substantive-remediation loop (id 133).
@@ -192,7 +152,7 @@ async function selectCandidates(env, limit) {
   for (const p of all) {
     if (doneSet.has(p.slug) || pendSet.has(p.slug)) continue;
     if (String(p.body_md || "").length < 8000) {
-      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, 'stub-fragment', 'auto-skip: body < 8000 chars; defers to substantive-remediation loop', datetime('now'), datetime('now'))").bind(p.slug, p.doi, p.title).run();
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, 'stub-fragment', 'auto-skip: body < 8000 chars; defers to substantive-remediation loop', datetime('now'), datetime('now'))").bind(p.slug, p.slug, p.title).run();
       continue;
     }
     out.push(p);
@@ -201,29 +161,17 @@ async function selectCandidates(env, limit) {
   return out;
 }
 __name(selectCandidates, "selectCandidates");
-async function verifySingleVersion(env, recId) {
-  const rec = await zenodoGet("/" + recId);
-  if (!rec || rec._status) return { count: 1, conceptrecid: null, latestDoi: null, uncertain: true };
-  const conceptrecid = rec.conceptrecid || null;
-  let count = 1;
-  let latestDoi = rec.doi || null;
-  try {
-    const v = await zenodoGet("/" + recId + "/versions?size=5");
-    const hits = v && v.hits && v.hits.hits || [];
-    if (hits.length) {
-      count = hits.length;
-      latestDoi = hits[hits.length - 1].doi || rec.doi || null;
-    }
-  } catch (e) {
-  }
-  return { count, conceptrecid, latestDoi, uncertain: false };
+function revisionCount(paper) {
+  // NOZ-DOI-1: a paper already at version 2 or later has been revised once (the revision publish bumps to 2.x); no external record is consulted.
+  const major = parseInt(String(paper && paper.version || "1").replace(/^v/i, ""), 10);
+  return { count: isFinite(major) && major >= 2 ? major : 1 };
 }
-__name(verifySingleVersion, "verifySingleVersion");
+__name(revisionCount, "revisionCount");
 // ACCURACY-GROUND-1 (owner directive 2026-10-10: published or sent text is 100% accurate; every claim verifiable against supplied
 // source text): deterministic check that the figures, years, links and capitalised names in generated text occur in the source
 // text the model was given. Returns problem strings; an empty list means every one was found. Same method as
 // q08-signal-engine groundingProblems (Q08-VERIFY-1). A model's own recollection is never a source.
-var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "zenodo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 function groundWordSet(text) {
   var set = {};
   String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
@@ -424,7 +372,7 @@ __name(clampConfidence, "clampConfidence");
 async function recordFlaggedErrata(env, paper, doi, high, meta) {
   meta = meta || {};
   const ref = doi || paper.slug;
-  const key = (recIdOf(doi) || String(paper.slug || "")).slice(0, 40);
+  const key = String(paper.slug || "").slice(0, 40);
   const now = new Date().toISOString();
   const ids = [];
   let recorded = 0;
@@ -451,19 +399,18 @@ async function recordFlaggedErrata(env, paper, doi, high, meta) {
 __name(recordFlaggedErrata, "recordFlaggedErrata");
 async function processPaper(env, paper, mode, runId) {
   const dry = mode === "dry";
-  const doi = paper.zenodo_doi || paper.doi || "";
-  const recId = recIdOf(doi);
-  if (!recId) {
-    return { slug: paper.slug, skipped: true, reason: "no zenodo recid", doi };
+  const doi = paper.slug || ""; // NOZ-DOI-1: the paper key in logs, queues and errata is the slug, never a DOI value
+  if (!doi) {
+    return { slug: paper.slug, skipped: true, reason: "no slug", doi };
   }
-  const v = await verifySingleVersion(env, recId);
+  const v = revisionCount(paper);
   if (v.count >= 2) {
     if (!dry) {
-      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, 'already-revised', ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify({ zenodo_versions: v.count })).run();
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, 'already-revised', ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify({ paper_versions: v.count })).run();
     }
     return { slug: paper.slug, skipped: true, reason: "already " + v.count + " versions", doi };
   }
-  const prov = await downloadProvenance(recId);
+  const prov = downloadProvenance();
   let findings = { issues: [] };
   let auditParsed = false;
   let rawAuditLen = 0;
@@ -511,7 +458,7 @@ async function processPaper(env, paper, mode, runId) {
   var isStub = bodyLen < 1500;
   if (isStub || noRealIssues) {
     if (!dry) {
-      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, isStub ? "stub-fragment" : "needs-substantive-revision", JSON.stringify({ zenodo_versions: v.count, skipped: isStub ? "stub-or-fragment" : "no-genuine-issues", body_len: bodyLen })).run();
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, isStub ? "stub-fragment" : "needs-substantive-revision", JSON.stringify({ paper_versions: v.count, skipped: isStub ? "stub-or-fragment" : "no-genuine-issues", body_len: bodyLen })).run();
     }
     return { slug: paper.slug, skipped: true, reason: isStub ? "stub/fragment body" : "audit found no genuine issues (needs substantive revision)", issues: auditSummary, body_len: bodyLen, doi };
   }
@@ -578,10 +525,10 @@ async function runOnce(env, mode) {
 }
 __name(runOnce, "runOnce");
 async function statusSweep(env) {
-  const total = await env.PAPERS_DB.prepare("SELECT COUNT(*) AS n FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != ''").first();
+  const total = await env.PAPERS_DB.prepare("SELECT COUNT(*) AS n FROM papers WHERE status='published'").first();
   const done = await env.WATCH_DB.prepare("SELECT status, COUNT(*) AS n FROM paper_revision_log GROUP BY status").all();
   const pending = await env.WATCH_DB.prepare("SELECT COUNT(*) AS n FROM version_queue WHERE status IN ('drafted','publishing')").first();
-  return { worker: "qnfo-paper-reviser", version: VERSION, published_zenodo_total: total && total.n || 0, revision_log: done && done.results || [], pending_version_queue: pending && pending.n || 0 };
+  return { worker: "qnfo-paper-reviser", version: VERSION, published_total: total && total.n || 0, revision_log: done && done.results || [], pending_version_queue: pending && pending.n || 0 };
 }
 __name(statusSweep, "statusSweep");
 var worker_default = {
@@ -600,7 +547,7 @@ var worker_default = {
     if (url.pathname === "/debug/audit") {
       const slug = url.searchParams.get("slug") || "";
       try {
-        const p = await env.PAPERS_DB.prepare("SELECT slug, doi, zenodo_doi, title, version, body_md FROM papers WHERE slug=? LIMIT 1").bind(slug).first();
+        const p = await env.PAPERS_DB.prepare("SELECT slug, title, version, body_md FROM papers WHERE slug=? LIMIT 1").bind(slug).first();
         if (!p) return json({ ok: false, error: "no paper for slug " + slug }, 404);
         const t = await aiText(env, auditPrompt(p));
         return json({ ok: true, slug, rawLen: t.length, raw: t.slice(0, 3e3), parsed: parseJsonObject(t) });
