@@ -37,7 +37,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -53,6 +53,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      # PUBLISH-SUITE-CHECK-1: the touched worker's suites run before a branch is pushed; they need node:sqlite (Node 22).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - name: publisher self-test (offline)
         run: python scripts/code-task-publish.py --selftest

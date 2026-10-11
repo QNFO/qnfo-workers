@@ -247,11 +247,97 @@ def js_syntax_errors(repo_dir, files):
     return None
 
 
+# PUBLISH-SUITE-CHECK-1 (2026-10-11, owner directive "Remediate root causes automatically for future deploy 100% success
+# target"). In the 30 days to 2026-10-11, 15 code-loop tasks ended at CI with "required check(s) failed: gate" (the worker's
+# *.test.mjs suites, SUITE-RUNNER-1) and each one died there: the orchestrator's verifier parses a proposal but runs no suite, and
+# the merge runner can only refuse. Every one of those suites passes on main today, so the proposals broke them. This runner
+# holds the whole repository, so after the patch applies it runs the suites of the touched worker directory (the same
+# scripts/run-suites.mjs selection deploy-gate uses). A suite that fails here and passes on the unpatched base is the change's
+# fault: the task goes back to propose with the failing lines (SELF-REPAIR-1 counts the attempt), never to a pull request. A suite
+# already red on the base is not blamed on the change (the base is re-run for exactly those suites) and the publish proceeds.
+# Shared paths (scripts, .github, migrations) would select every suite and are left to CI. Node 22+ is required (node:sqlite).
+SUITE_TIMEOUT_S = 180
+SUITE_FEEDBACK_LINES = 12
+SUITE_LINE_RE = re.compile(r"^(FAIL\b|not ok \d|AssertionError|TypeError|ReferenceError|SyntaxError|RangeError|Error\b.*:)")
+
+
+def node_major():
+    try:
+        r = subprocess.run(["node", "--version"], capture_output=True, text=True, timeout=20)
+        return int((r.stdout or "v0").strip().lstrip("v").split(".")[0])
+    except (FileNotFoundError, ValueError, subprocess.TimeoutExpired):
+        return 0
+
+
+def run_suites(repo_dir, dirs, only=None):
+    """{suite: (ok, tail)} for the suites run-suites.mjs selects for dirs (or exactly `only`)."""
+    sel = []
+    for d in dirs:
+        p = os.path.join(repo_dir, d)
+        if os.path.isdir(p):
+            sel += sorted(d + "/" + f for f in os.listdir(p) if f.endswith(".test.mjs"))
+    if only is not None:
+        sel = [x for x in sel if x in only]
+    def one(suite):
+        try:
+            r = subprocess.run(["node", "--no-warnings", suite], cwd=repo_dir, capture_output=True, text=True, timeout=SUITE_TIMEOUT_S)
+            return suite, (r.returncode == 0, (r.stdout or "") + (r.stderr or ""))
+        except subprocess.TimeoutExpired:
+            return suite, (False, "timed out after %d s" % SUITE_TIMEOUT_S)
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        return dict(pool.map(one, sel))
+
+
+def suite_feedback(results):
+    """The failing suites with their FAIL and error lines, for the model."""
+    parts = []
+    for suite, (ok, text) in sorted(results.items()):
+        if ok:
+            continue
+        lines, seen = [], set()
+        for ln in text.splitlines():
+            t = ln.strip()
+            if SUITE_LINE_RE.match(t) and t not in seen:
+                seen.add(t)
+                lines.append(t[:200])
+            if len(lines) >= SUITE_FEEDBACK_LINES:
+                break
+        parts.append("FAIL " + suite + (": " + " | ".join(lines) if lines else ": " + " | ".join(text.strip().splitlines()[-3:])[:300]))
+    return " ; ".join(parts)[:900]
+
+
+def suite_check(repo_dir, files, base):
+    """None when the touched worker's suites pass (or were red on the base already); else the feedback for the model."""
+    dirs = sorted({f.split("/")[0] for f in files if "/" in f})
+    if not dirs or any(d in ("scripts", ".github", "migrations") for d in dirs):
+        return None
+    if node_major() < 22:
+        print("::warning::PUBLISH-SUITE-CHECK-1 skipped: node 22+ is not installed")
+        return None
+    after = run_suites(repo_dir, dirs)
+    bad = {k: v for k, v in after.items() if not v[0]}
+    if not bad:
+        return None
+    stash = git(repo_dir, "stash", "push", "--include-untracked", "-q", check=False)
+    try:
+        before = run_suites(repo_dir, dirs, only=set(bad))
+    finally:
+        if stash.returncode == 0:
+            git(repo_dir, "stash", "pop", "-q", check=False)
+    new = {k: v for k, v in bad.items() if before.get(k, (False, ""))[0]}
+    if not new:
+        print("::notice::PUBLISH-SUITE-CHECK-1: failing suites are red on " + base + " too, not blamed on the change: " + ",".join(sorted(bad)))
+        return None
+    return suite_feedback(new)
+
+
 def requeue_for_syntax(store, tid, err):
     """Send a task whose patch does not parse back to the orchestrator's propose step with the parser's message."""
-    lang = "Python does not parse after applying the edits (compile, PUBLISH-PY-CHECK-1): " if "SyntaxError" in err and ".py:" in err else \
+    lang = "the worker's suites fail after applying the edits and pass on main without them (PUBLISH-SUITE-CHECK-1); keep the change and fix what these tests assert: " if err.startswith("FAIL ") else \
+        "Python does not parse after applying the edits (compile, PUBLISH-PY-CHECK-1): " if "SyntaxError" in err and ".py:" in err else \
         "JavaScript does not parse after applying the edits (node --check, PUBLISH-JS-CHECK-1): "
-    msg = (lang + err)[:500]
+    msg = (lang + err)[:1200]
     return store.changes(
         "UPDATE code_tasks SET status='queued', step='propose', attempts=attempts+1, lease_until=NULL, last_error=?, "
         "ctx=json_set(COALESCE(ctx, '{}'), '$.lastError', ?), updated_at=? WHERE id=?",
@@ -395,7 +481,7 @@ def publish_one(task, repo_dir, base, pr, delegate=False):
                 return "publish_failed", None, why + "; rebase: " + rb_err, None
         else:
             git(repo_dir, "apply", pf)
-        bad = js_syntax_errors(repo_dir, sorted(files))
+        bad = js_syntax_errors(repo_dir, sorted(files)) or suite_check(repo_dir, sorted(files), base)
         if bad:
             git(repo_dir, "reset", "-q", "--hard")
             git(repo_dir, "checkout", "-q", "--detach", "origin/" + base)
@@ -803,6 +889,32 @@ def selftest():
     check("reconcile counts", r == {"merged": 3, "closed": 1, "open": 2, "errors": 1}, r)
     r2 = reconcile_outcomes(store, pr, quiet)
     check("reconcile is idempotent", r2["merged"] == 0 and r2["closed"] == 0, r2)
+
+    # 7b. PUBLISH-SUITE-CHECK-1: a suite the change breaks sends feedback; one already red on the base does not
+    if node_major() >= 22:
+        sroot = tempfile.mkdtemp(prefix="ctp-suite-")
+        _sh(sroot, "git", "init", "-q", "-b", "main")
+        os.makedirs(os.path.join(sroot, "w"))
+        with open(os.path.join(sroot, "w/worker.js"), "w") as fh:
+            fh.write("export const v = 1;\n")
+        with open(os.path.join(sroot, "w/v.test.mjs"), "w") as fh:
+            fh.write("import { v } from './worker.js';\nif (v !== 1) { console.log('FAIL v is one :: ' + v); process.exit(1); }\n")
+        with open(os.path.join(sroot, "w/red.test.mjs"), "w") as fh:
+            fh.write("console.log('FAIL always red'); process.exit(1);\n")
+        _sh(sroot, "git", "add", "-A")
+        _sh(sroot, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
+        with open(os.path.join(sroot, "w/worker.js"), "w") as fh:
+            fh.write("export const v = 2;\n")
+        fb = suite_check(sroot, ["w/worker.js"], "main")
+        check("suite check: a suite the change breaks comes back as feedback naming it",
+              fb is not None and fb.startswith("FAIL w/v.test.mjs") and "v is one" in fb and "red.test" not in fb, fb)
+        check("suite check: the working tree is restored after the base run", open(os.path.join(sroot, "w/worker.js")).read() == "export const v = 2;\n")
+        with open(os.path.join(sroot, "w/worker.js"), "w") as fh:
+            fh.write("export const v = 1; // comment\n")
+        check("suite check: only a suite already red on the base fails -> not blamed (None)", suite_check(sroot, ["w/worker.js"], "main") is None)
+        check("suite check: shared paths are left to CI", suite_check(sroot, ["scripts/x.py"], "main") is None)
+    else:
+        print("SKIP suite check selftest: node 22+ not installed")
 
     # 8. CODE-TASK-MERGE-RUNNER-1: with the fleet as PR opener the branch is pushed and no PR is created here
     remote, work, store = fixture()
