@@ -6,8 +6,9 @@ WHY   unverified_blocker_claims read 43 and could never fall: v_blocker_claims e
       blocker_redteam rows ever written came from sessions. Doctrine section 3 asks that a blocker be attempted before it is
       believed; nothing attempted any automatically.
 WHAT  Each run takes every row of v_blocker_claims and makes one deterministic attempt, recording it in blocker_redteam:
-        - an issue that already has a doer (an active machine probe, a code-task line or a live work claim) is not blocked:
-          verdict false-belief-removed, naming the doer;
+        - an issue claiming the owner is needed is confirmed only by an IDENTITY-BOUND: line in its text, else left counted;
+        - an issue that already has a doer (a code-task line or a live work claim; a closing probe verifies, it is not a doer:
+          BLOCKER-REDTEAM-AUTO-2) is not blocked: verdict false-belief-removed, naming the doer;
         - an issue claiming a missing token: the repository token is verified live against the Cloudflare API; a success is
           false-belief-removed with the verify result, a refusal is confirmed-with-evidence with the refusal text;
         - an owner card whose why carries an IDENTITY-BOUND: line: confirmed-with-evidence, quoting it (the gate, not this
@@ -25,14 +26,14 @@ import remediation_consumer as RC  # noqa: E402
 
 ACTOR = "blocker-redteam-runner"
 TOKEN_RE = re.compile(r"needs a token|no token", re.I)
+OWNER_RE = re.compile(r"owner only|owner-only|needs the owner", re.I)
+BOUND_RE = re.compile(r"IDENTITY-BOUND:[^\n]{0,240}")
 SURFACES = "surfaces: D1 contract and work-claim ledgers, issue text, Cloudflare token verify API, owner-card why"
 
 
 def doer_of(d1, iid, desc):
-    rows = d1("SELECT class, verify_transport FROM remediation_contracts WHERE issue_id = ?1 AND status = 'active' "
-              "AND verify_probe NOT LIKE 'needs%' LIMIT 1", [iid])
-    if rows:
-        return "active machine probe %s (%s)" % (rows[0]["class"], rows[0]["verify_transport"])
+    # BLOCKER-REDTEAM-AUTO-2: a closing probe verifies a fix, it does not do the work, so only a code-loop task line or a
+    # live work claim counts as a doer (the first run counted active probes and so cleared owner-bound #1750).
     m = re.search(r"code-task: repo=\S+ path=\S+", desc or "")
     if m:
         return "code-loop task line '%s'" % m.group(0)
@@ -82,6 +83,15 @@ def main(d1=None, req=None):
                 iid = int(target.split(":", 1)[1])
                 row = d1("SELECT description FROM agent_issues WHERE id = ?1", [iid])
                 desc = (row[0].get("description") if row else "") or ""
+                bound = BOUND_RE.search(desc)
+                if OWNER_RE.search(text + " " + desc):
+                    if not bound:
+                        out["left"] += 1
+                        continue
+                    record(d1, target, text, "read the issue's identity-bound statement", "confirmed-with-evidence", bound.group(0))
+                    out["confirmed"] += 1
+                    out["tested"] += 1
+                    continue
                 doer = doer_of(d1, iid, desc)
                 if doer:
                     record(d1, target, text, "looked for a doer that can close it", "false-belief-removed",
@@ -101,7 +111,7 @@ def main(d1=None, req=None):
                 cid = int(target.split(":", 1)[1])
                 row = d1("SELECT why FROM human_actions WHERE id = ?1", [cid])
                 why = (row[0].get("why") if row else "") or ""
-                m = re.search(r"IDENTITY-BOUND:[^\n]{0,240}", why)
+                m = BOUND_RE.search(why)
                 if not m:
                     out["left"] += 1
                     continue
@@ -129,12 +139,14 @@ CREATE TABLE blocker_redteam (id INTEGER PRIMARY KEY, target TEXT, claim TEXT, a
 CREATE TABLE claims (target TEXT, text TEXT);
 CREATE VIEW v_blocker_claims AS SELECT * FROM claims;
 INSERT INTO agent_issues VALUES (1, 'blocked on x', 'needs fixing'), (2, 'blocked', 'fix it\ncode-task: repo=qnfo-workers path=a/worker.js'),
-  (3, 'needs a token', 'cannot write routes, no token'), (4, 'blocked', 'nothing'), (5, 'blocked', 'claimed');
+  (3, 'needs a token', 'cannot write routes, no token'), (4, 'blocked', 'nothing'), (5, 'blocked', 'claimed'),
+  (6, 'owner only', 'needs the owner
+IDENTITY-BOUND: a signing act'), (9, 'owner only: x', 'code-task: repo=qnfo-workers path=a/worker.js');
 INSERT INTO remediation_contracts VALUES ('issue-1', 1, 'active', 'SELECT 1', 'd1-query'), ('issue-4', 4, 'needs-machine-probe', 'needs-machine-probe', 'd1-query');
 INSERT INTO work_claims VALUES (5, 'session_x', NULL, '2999-01-01T00:00:00Z');
 INSERT INTO human_actions VALUES (7, 'Post the license.\nIDENTITY-BOUND: a legal act in the owner''s name'), (8, 'just do it');
 INSERT INTO claims VALUES ('issue:1', 'blocked on x'), ('issue:2', 'blocked'), ('issue:3', 'needs a token'), ('issue:4', 'blocked'),
-  ('issue:5', 'blocked'), ('card:7', 'Post the license'), ('card:8', 'do it');
+  ('issue:5', 'blocked'), ('issue:6', 'owner only'), ('issue:9', 'owner only: x'), ('card:7', 'Post the license'), ('card:8', 'do it');
 """)
 
     def d1(sql, params=None):
@@ -147,7 +159,9 @@ INSERT INTO claims VALUES ('issue:1', 'blocked on x'), ('issue:2', 'blocked'), (
 
     main(d1, req_ok)
     got = {r[0]: (r[1], r[2]) for r in c.execute("SELECT target, verdict, evidence FROM blocker_redteam")}
-    assert got["issue:1"][0] == "false-belief-removed" and "issue-1" in got["issue:1"][1], got
+    assert "issue:1" not in got, "an active probe alone is not a doer"
+    assert got["issue:6"][0] == "confirmed-with-evidence" and "signing" in got["issue:6"][1], got
+    assert "issue:9" not in got, "an owner claim without IDENTITY-BOUND stays counted"
     assert got["issue:2"][0] == "false-belief-removed" and "code-task" in got["issue:2"][1], got
     assert got["issue:3"][0] == "false-belief-removed" and "active" in got["issue:3"][1], got
     assert "issue:4" not in got, "an untested claim must stay unrecorded"
