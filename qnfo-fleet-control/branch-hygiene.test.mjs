@@ -85,7 +85,7 @@ async function run(sc, opts, d1In) {
   const sandbox = { evApi: gh.evApi, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, __export: null };
   vm.createContext(sandbox);
   const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_DENY = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
-  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, branchHygieneTick, BH_MAX_ACTIONS };", sandbox, { filename: "bh-block.js" });
+  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, bhConflictDecide, bhConflictIssue, branchHygieneTick, BH_MAX_ACTIONS };", sandbox, { filename: "bh-block.js" });
   const env = { GITHUB_TOKEN: "x", AUDIT: d1.AUDIT };
   const out = await sandbox.__export.branchHygieneTick(env, Object.assign({ now: NOW }, opts || {}));
   return { out, calls: gh.calls, d1, W: sandbox.__export };
@@ -319,6 +319,36 @@ const scenario = () => ({
   eq(d(p70, files, req.concat([{ id: 5, name: "Analyze (python)", status: "in_progress", conclusion: null }]), {}).repair, false, "repair pure: a running check -> wait");
   eq(d(mkpr(72, "x", { head: { ref: "codeagent-x", sha: "x", repo: R } }), files, req.concat([codeql]), {}).repair, false, "repair pure: a code-loop branch is the merge runner's");
   eq(d(p70, files, req.concat([codeql, Object.assign({}, codeql, { id: 778, conclusion: "success" })]), {}).repair, false, "repair pure: a re-run that passed supersedes the failure");
+}
+
+{ // STALE-PR-CONFLICT-REPAIR-1 (PR 870, 2026-10-10): a quiet green PR that conflicts with main -> one repair issue, never a merge, never silent
+  const R = { full_name: "QNFO/qnfo-workers" };
+  const mkpr = (n, sha, extra) => Object.assign({ number: n, state: "open", draft: false, mergeable: false, mergeable_state: "dirty", title: "qnfo-ai 5.33.0 ACCURACY-GROUND-1", labels: [], updated_at: hAgo(3), head: { ref: "claude/c" + n, sha, repo: R }, base: { ref: "main", repo: R } }, extra || {});
+  const req = ["gate", "guard", "mirror-guard", "comparator"].map((nm, i) => ({ id: 200 + i, name: nm, status: "completed", conclusion: "success" }));
+  const files = [{ filename: "qnfo-ai/worker.js" }, { filename: "qnfo-ai/deployed-current.worker.js" }, { filename: "qnfo-ai/accuracy-ground.test.mjs" }];
+  const p80 = mkpr(80, "c80");
+  const mk = () => ({ branches: [br("main", 0, true)], compare: {}, prs: { 80: p80 }, pulls: [p80].map((p) => ({ number: p.number, state: "open", updated_at: p.updated_at, head: p.head })), files: { 80: files }, checks: { c80: req } });
+  const s1 = mk();
+  const r1 = await run(s1);
+  const iss = () => r1.d1.db.prepare("SELECT title, description, status, priority FROM agent_issues ORDER BY id").all();
+  eq([r1.out.merged_prs, (s1.merges || []).length], [[], 0], "conflict: a conflicting PR is never merged");
+  eq(iss().length, 1, "conflict: exactly one issue for the dirty PR");
+  eq(iss()[0].title, "STALE-PR-CONFLICT-REPAIR-1 PR 80: merge conflicts with main on a quiet session pull request", "conflict: the title names the PR");
+  eq([iss()[0].priority, iss()[0].status], ["high", "open"], "conflict: filed high and open");
+  eq(/qnfo-ai\/worker\.js, qnfo-ai\/deployed-current\.worker\.js/.test(iss()[0].description) && /\/pulls\/80\/commits/.test(iss()[0].description) && /superseded by #<new>/.test(iss()[0].description) && /DoD: PR 80 is merged, or closed as superseded/.test(iss()[0].description), true, "conflict: the issue carries the files, the commit source, the supersede step and the closing condition");
+  eq(r1.d1.db.prepare("SELECT pr FROM branch_hygiene_log WHERE action = 'conflict-repair-issue'").all().map((r) => r.pr), [80], "conflict: the filing is logged in branch_hygiene_log");
+  eq(r1.d1.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'stale-pr-conflict-repair'").get().n, 1, "conflict: one stale-pr-conflict-repair event");
+  const s2 = mk();
+  await run(s2, undefined, r1.d1);
+  eq(iss().length, 1, "conflict: a second tick files no duplicate while the issue is open");
+  const d = r1.W.bhConflictDecide;
+  eq(d(p80, files).conflict, true, "conflict pure: dirty and quiet -> repair");
+  eq(d(mkpr(81, "x", { mergeable: true, mergeable_state: "clean" }), files).conflict, false, "conflict pure: a clean PR is the merge lane's");
+  eq(d(mkpr(82, "x", { mergeable: null, mergeable_state: "unknown" }), files).conflict, false, "conflict pure: unknown is not dirty");
+  eq(d(mkpr(83, "x", { draft: true }), files).conflict, false, "conflict pure: a draft is left alone");
+  eq(d(mkpr(84, "x", { title: "WIP qnfo-ai" }), files).conflict, false, "conflict pure: a hold is respected");
+  eq(d(mkpr(85, "x", { head: { ref: "codeagent-x", sha: "x", repo: R } }), files).conflict, false, "conflict pure: a code-loop branch is the merge runner's");
+  eq(d(mkpr(86, "x", { head: { ref: "f", sha: "x", repo: { full_name: "someone/fork" } } }), files).conflict, false, "conflict pure: a fork is never repaired here");
 }
 
 console.log(`${passed} passed, ${failed} failed`);
