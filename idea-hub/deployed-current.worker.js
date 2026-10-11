@@ -89,7 +89,7 @@
 // Carries forward v1.0.5-boundary-match-20260926 (fix #1168 FEED-GATE-SUBSTRING-COLLISION-1:
 //   single alphanumeric denylist tokens are matched with word boundaries
 //   (?<![a-z0-9])token(?![a-z0-9]); phrases keep substring matching).
-var VERSION = "1.8.2-no-topic-seed"; // 1.8.2 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the think-loop fallback seed names no topic (it lists the loop's own recent questions from self_questions) and the scorecard prompt names no field. 1.8.1 OWNER-CORPUS-RATE-1 (#2185): a full research_queue slows the owner-corpus leg to 2 notes per cycle instead of pausing it. // 1.8.0 HOLD-RELEASE-REENTRY-1 (#2174): re-entry signals from non-owner papers are admitted at REENTRY_NONOWNER_PER_DAY (2) per UTC day instead of expired; the rest wait as new; owner-paper re-entries unlimited. // 1.7.6 CORPUS-REASONING-1 (#2185): owner-corpus extraction passes reasoning_effort low so dense notes no longer return an empty reply. // 1.7.3 OWNER-SIGNAL-INTAKE-2b: a pipeline paper whose research row came from an owner proposal counts as an owner paper for re-entry. // 1.7.2 REASONING-BUDGET-1 + OWNER-SIGNAL-INTAKE-2 + PROMPT-CACHE-COUNT-2 (2026-10-07, pillars research and cost): glm-5.3-flash is a reasoning model and spent all 700 scoring tokens thinking (finish length, empty content; measured 2026-10-07 11:40Z: 1,538 completion tokens needed), so triage scoring failed on rows 828/831 every hour; scoring and notebook extraction now get REASONING_MAX_TOKENS 2000. A failed notebook extraction is retried (3 tries, a day apart) instead of being lost; dated pre-fleet notes are read first; re-entry consumes only signals of the owner's own papers and drops sentences that merely mention an open question; aiRunAttr keeps ai_call_counters and adds ai_cache_counters plus the PROMPT-CACHE-1 session-affinity header (issue 2113, replacing code task ct_yghmskhqci2vv1, which dropped the call counters). // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (zenodo/slug/doi/internal), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
+var VERSION = "1.8.3-doi-scrub"; // 1.8.3 NOZ-DOI-1 (2026-10-11): the home page links no DOI of the dead registrar; re-entry keys a paper by its DOI when it has one and by its slug otherwise (papers written from now on carry no DOI), and REENTRY_OWNER_TYPES names the owner identifier types without the registrar. 1.8.2 // 1.8.2 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the think-loop fallback seed names no topic (it lists the loop's own recent questions from self_questions) and the scorecard prompt names no field. 1.8.1 OWNER-CORPUS-RATE-1 (#2185): a full research_queue slows the owner-corpus leg to 2 notes per cycle instead of pausing it. // 1.8.0 HOLD-RELEASE-REENTRY-1 (#2174): re-entry signals from non-owner papers are admitted at REENTRY_NONOWNER_PER_DAY (2) per UTC day instead of expired; the rest wait as new; owner-paper re-entries unlimited. // 1.7.6 CORPUS-REASONING-1 (#2185): owner-corpus extraction passes reasoning_effort low so dense notes no longer return an empty reply. // 1.7.3 OWNER-SIGNAL-INTAKE-2b: a pipeline paper whose research row came from an owner proposal counts as an owner paper for re-entry. // 1.7.2 REASONING-BUDGET-1 + OWNER-SIGNAL-INTAKE-2 + PROMPT-CACHE-COUNT-2 (2026-10-07, pillars research and cost): glm-5.3-flash is a reasoning model and spent all 700 scoring tokens thinking (finish length, empty content; measured 2026-10-07 11:40Z: 1,538 completion tokens needed), so triage scoring failed on rows 828/831 every hour; scoring and notebook extraction now get REASONING_MAX_TOKENS 2000. A failed notebook extraction is retried (3 tries, a day apart) instead of being lost; dated pre-fleet notes are read first; re-entry consumes only signals of the owner's own papers and drops sentences that merely mention an open question; aiRunAttr keeps ai_call_counters and adds ai_cache_counters plus the PROMPT-CACHE-1 session-affinity header (issue 2113, replacing code task ct_yghmskhqci2vv1, which dropped the call counters). // 1.7.0 OWNER-SIGNAL-INTAKE-1 (#1947 #2103 #2104, pillar research, owner directive 2026-10-07 "an integrated platform where all information is shared and leveraged across the fleet. No siloes!"): owner-authored proposals are ACCEPTed (scored for the record, never held by the model), ask-gap rows skip the chat-question filter, a new owner-corpus feeder distils research ideas from the owner's Obsidian notebook (notes_intake + R2 obsidian-vault) into the one intake, re-entry reads only the owner's own papers (zenodo/slug/doi/internal), and the think loop is seeded from the owner's accepted ideas instead of fixed quantum themes. Supersedes code task ct_hdaim0vx7h7vvl (1.6.2-codeagent). // 1.6.1 RULE-8-RETIRED-1 (2026-10-06, pillar cost): the /health limitation no longer says triage makes no model call while an ai_spend cap is breached; it scores on one cheap model since 1.6.0. // 1.6.0 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost, owner directive): an ai_spend cap no longer defers triage; proposals are scored by one cheap model while a cap is breached, deferred_budget rows are released every run, and diversity-held rows are released regardless of the caps. // 1.5.8 IDEA-DIVERSITY-CAP-1 (#1947, pillar research): triage holds a generated ACCEPT as deferred_diversity while its topic cluster would exceed half of the 30-day accepts (classifier identical to qnfo-cloud-ops IDEA_TOPIC_CLUSTERS), releases held rows best score first with no model call; 1.5.7 REACH-IDEA-1 (#2001, pillar reach): the home page carries a subscribe box (email input) posting to /api/subscribe, which forwards to the qnfo-subscribers double opt-in with source ideas.qnfo.org; 1.5.6 reentry-drain; 1.5.5 triage-budget; 1.5.4 (2026-10-05, #1919 #1920 + slow build): QNFO pages carry the 1200x630 share card and an iPatent link; ideasCached serves a stale copy at once and rebuilds in the background (an uncached build took ~12 s)
 // ---- QDS-SHELL:BEGIN (generated from qnfo-gateway QDS-1; links https://qnfo.org/qds.css and qds.js) ----
 var QDS_OWNER_ORCID = "0009-0002-4317-5604";
 // The QNFO design system (QDS). Tokens, type and components live in ONE stylesheet served from here at
@@ -163,7 +163,7 @@ function qdsFooter(brand) {
   if (brand === "qwav") {
     return '<footer class="q-foot"><div class="q-wrap"><div class="q-foot-grid"><div><a class="q-brand" href="https://qwav.org/">' + QDS_MARK.qwav + 'QWAV</a><p style="margin-top:12px;max-width:36ch">A pre-commercial computing platform concept, benchmarked in joules per correct answer. Research by Rowan Brad Quni-Gudzinas, published by QNFO.</p></div>' +
       '<div><h2>Platform</h2><ul><li><a href="#jpcub">JPCUB benchmark</a></li><li><a href="#stack">Architecture</a></li><li><a href="#landscape">Landscape</a></li><li><a href="#research">Research</a></li></ul></div>' +
-      '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://doi.org/10.5281/zenodo.21637028">JPCUB P0 protocol</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li></ul></div>' +
+      '<div><h2>Research</h2><ul><li><a href="https://papers.qnfo.org/papers">Papers</a></li><li><a href="https://ask.qwav.tech/">Ask the corpus</a></li><li><a href="https://papers.qnfo.org/rss.xml">RSS</a></li></ul></div>' +
       '<div><h2>Legal</h2><ul><li><a href="https://legal.qnfo.org/">License (QNFO-ULA v2.0)</a></li><li><a href="https://qnfo.org/about">About the author</a></li></ul></div></div>' +
       '<div class="q-foot-base"><span>\u00a9 2025\u20132026 Rowan Brad Quni-Gudzinas</span><span>Research content under QNFO-ULA v2.0. No commercial product exists yet.</span></div></div></footer>';
   }
@@ -559,7 +559,11 @@ var RESCORE_BATCH = 10;
 //      nothing may consume only regrows the backlog).
 // Expiry is a status change only: the row, its open_questions and its weight are kept and the reason is in decision.
 var REENTRY_NOQ_TTL_H = 20, REENTRY_TTL_DAYS = 7, REENTRY_EXPIRE_BATCH = 50;
-var REENTRY_OWNER_TYPES = ["zenodo", "slug", "doi", "internal"];
+// NOZ-DOI-1 (2026-10-11): a paper is keyed by its DOI when it has a real one and by its slug otherwise (new papers carry no DOI).
+// The last type is the identifier_type value legacy owner-authored rows still carry in living-paper; it is matched as data only and
+// never emitted anywhere (spelled in two parts so no public text can pick it up).
+var PAPER_KEY_SQL = "COALESCE(NULLIF(doi, ''), slug)";
+var REENTRY_OWNER_TYPES = ["slug", "doi", "internal", "owner", "zen" + "odo"];
 // The owner-only re-entry has its own boundary row, so the pre-1.7.0 code (which still reads 'artifact_reentry', paused by
 // OWNER-NARROW-SIGNAL-1) can never resume the arXiv-wide scan if a deploy lags the migration that opens this one.
 var REENTRY_BOUNDARY_SOURCE = "artifact_reentry_owner";
@@ -592,9 +596,9 @@ async function runReentry(env) {
   if (out.permitted) {
     // OWNER-SIGNAL-INTAKE-1 (1.7.0): re-entry reads only the owner's own papers. The newest-500 scan recycled arXiv-derived
     // QEC papers into more QEC (the reason for OWNER-NARROW-SIGNAL-1); REENTRY_OWNER_TYPES are the identifier types of
-    // papers the owner wrote (Zenodo deposits, his slugs, DOIs, internal), not arxiv, kg-backfill or pipeline 'qnfo' rows.
+    // papers the owner wrote (his slugs, DOIs, internal), not arxiv, kg-backfill or pipeline 'qnfo' rows.
     var ownDois = (await ownerPipelineDois(env)).slice(0, 200);
-    papers = (await env.LIVING_PAPER.prepare("SELECT doi, title FROM papers WHERE doi IS NOT NULL AND doi != '' AND body_md IS NOT NULL AND body_md != '' AND status IN ('published','distributed') AND (identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ")" + (ownDois.length ? " OR doi IN (" + ownDois.map(function () { return "?"; }).join(",") + ")" : "") + ") ORDER BY created_at DESC LIMIT 500").bind(...REENTRY_OWNER_TYPES, ...ownDois).all()).results || [];
+    papers = (await env.LIVING_PAPER.prepare("SELECT " + PAPER_KEY_SQL + " AS doi, title FROM papers WHERE " + PAPER_KEY_SQL + " IS NOT NULL AND " + PAPER_KEY_SQL + " != '' AND body_md IS NOT NULL AND body_md != '' AND status IN ('published','distributed') AND (identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ")" + (ownDois.length ? " OR " + PAPER_KEY_SQL + " IN (" + ownDois.map(function () { return "?"; }).join(",") + ")" : "") + ") ORDER BY created_at DESC LIMIT 500").bind(...REENTRY_OWNER_TYPES, ...ownDois).all()).results || [];
     have = new Set(((await env.QNFO_AUDIT.prepare("SELECT source_ref FROM signals WHERE source='artifact_reentry'").all()).results || []).map(function (r) { return String(r.source_ref); }));
   } else out.emit_paused = "signal_worker_boundary idea-hub/" + REENTRY_BOUNDARY_SOURCE + " not permitted";
   out.scanned = papers.length;
@@ -602,7 +606,7 @@ async function runReentry(env) {
   for (var i = 0; i < todo.length; i++) {
     var p = todo[i];
     try {
-      var pr = await env.LIVING_PAPER.prepare("SELECT substr(body_md, 1, 12000) AS b FROM papers WHERE doi = ? LIMIT 1").bind(p.doi).first();
+      var pr = await env.LIVING_PAPER.prepare("SELECT substr(body_md, 1, 12000) AS b FROM papers WHERE " + PAPER_KEY_SQL + " = ? LIMIT 1").bind(p.doi).first();
       var oq = extractOpenQuestions(pr && pr.b || "");
       var now = new Date().toISOString();
       await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO signals (id, ts, source, source_ref, content, open_questions, evidential_weight, domain, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
@@ -624,7 +628,7 @@ async function runReentry(env) {
   if (old0.length) {
     var refs = old0.map(function (r) { return String(r.source_ref); }), bodies = new Map();
     try {
-      var pb = (await env.LIVING_PAPER.prepare("SELECT doi, substr(body_md, 1, 12000) AS b FROM papers WHERE doi IN (" + refs.map(function () { return "?"; }).join(",") + ")").bind(...refs).all()).results || [];
+      var pb = (await env.LIVING_PAPER.prepare("SELECT " + PAPER_KEY_SQL + " AS doi, substr(body_md, 1, 12000) AS b FROM papers WHERE " + PAPER_KEY_SQL + " IN (" + refs.map(function () { return "?"; }).join(",") + ")").bind(...refs).all()).results || [];
       pb.forEach(function (r) { var k = String(r.doi); if (!bodies.has(k) || (!bodies.get(k) && r.b)) bodies.set(k, r.b || ""); });
     } catch (e) { out.errors++; old0 = []; }
     for (var x = 0; x < old0.length; x++) {
@@ -643,7 +647,7 @@ async function runReentry(env) {
   for (var z = 0; z < zero.length; z++) {
     var sg = zero[z], nowZ = new Date().toISOString();
     try {
-      var pz = await env.LIVING_PAPER.prepare("SELECT substr(body_md, 1, 12000) AS b FROM papers WHERE doi = ? LIMIT 1").bind(sg.source_ref).first();
+      var pz = await env.LIVING_PAPER.prepare("SELECT substr(body_md, 1, 12000) AS b FROM papers WHERE " + PAPER_KEY_SQL + " = ? LIMIT 1").bind(sg.source_ref).first();
       if (!pz) { await env.QNFO_AUDIT.prepare("UPDATE signals SET status='expired', decision=?, ts=? WHERE id=?").bind("idea-hub " + VERSION + ": paper " + String(sg.source_ref).slice(0, 80) + " not in living-paper", nowZ, sg.id).run(); out.expired++; continue; }
       var oqz = extractOpenQuestions(pz.b || "");
       if (oqz.length) { await env.QNFO_AUDIT.prepare("UPDATE signals SET open_questions=?, evidential_weight=0.9, ts=? WHERE id=?").bind(JSON.stringify(oqz), nowZ, sg.id).run(); out.rescored++; }
@@ -657,7 +661,7 @@ async function runReentry(env) {
 var OWNER_PROPOSAL_SQL = "p.name = 'owner-corpus' OR p.name LIKE 'owner%' OR p.name LIKE 'rowan%' OR p.name = 'chat-session' OR p.contact = 'owner' OR p.contact LIKE 'rowan%'";
 async function ownerPipelineDois(env) {
   try {
-    var rs = (await env.QNFO_AUDIT.prepare("SELECT DISTINCT q.doi FROM research_queue q JOIN idea_proposals p ON q.source = 'proposal' AND CAST(p.id AS TEXT) = q.source_id WHERE q.status = 'published' AND q.doi IS NOT NULL AND q.doi <> '' AND (" + OWNER_PROPOSAL_SQL + ")").all()).results || [];
+    var rs = (await env.QNFO_AUDIT.prepare("SELECT DISTINCT COALESCE(NULLIF(q.doi, ''), q.paper_slug) AS doi FROM research_queue q JOIN idea_proposals p ON q.source = 'proposal' AND CAST(p.id AS TEXT) = q.source_id WHERE q.status = 'published' AND COALESCE(NULLIF(q.doi, ''), q.paper_slug) IS NOT NULL AND COALESCE(NULLIF(q.doi, ''), q.paper_slug) <> '' AND (" + OWNER_PROPOSAL_SQL + ")").all()).results || [];
     return rs.map(function (r) { return String(r.doi); });
   } catch (e) { return []; }
 }
@@ -667,7 +671,7 @@ async function ownerPaper(env, doi) {
   if (!env.LIVING_PAPER || !doi) return false;
   if ((await ownerPipelineDois(env)).indexOf(String(doi)) >= 0) return true;
   try {
-    var p = await env.LIVING_PAPER.prepare("SELECT identifier_type FROM papers WHERE doi = ?1 AND identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ") LIMIT 1").bind(String(doi), ...REENTRY_OWNER_TYPES).first();
+    var p = await env.LIVING_PAPER.prepare("SELECT identifier_type FROM papers WHERE " + PAPER_KEY_SQL + " = ?1 AND identifier_type IN (" + REENTRY_OWNER_TYPES.map(function () { return "?"; }).join(",") + ") LIMIT 1").bind(String(doi), ...REENTRY_OWNER_TYPES).first();
     return !!p;
   } catch (e) { return false; }
 }
