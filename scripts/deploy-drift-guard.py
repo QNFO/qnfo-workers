@@ -627,7 +627,10 @@ def main():
             "cron_only": [{"worker": w, "dir": d, "crons": declared_crons(d)}
                           for d, w in cron_only],
             "cron_only_count": len(cron_only),
-            "not_deployed_workers": [{"worker": w, "dir": d} for d, w in not_deployed],
+            # AUTOAUDIT-ACTIONABLE-1 (2026-10-11): a FOLDED/RETIRED directory that is absent from the account is the
+            # expected state, not a missing deploy; the marker lets the audit count those apart (76 of 76 were, measured).
+            "not_deployed_workers": [{"worker": w, "dir": d, "marker": next((m for m in ("FOLDED", "RETIRED") if os.path.isfile(os.path.join(ROOT, d, m))), None)}
+                                     for d, w in not_deployed],
             "not_deployed_dirs": [d for d, w in not_deployed],
             "not_deployed_notdrift": len(not_deployed),
             "not_a_worker": [{"worker": w, "dir": d} for d, w in not_a_worker],

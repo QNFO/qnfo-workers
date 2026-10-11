@@ -346,6 +346,10 @@ def classify(d):
     # class, not by the repo directory. Legacy bare strings are still accepted.
     for it in d.get("not_deployed_workers", []):
         put(_w(it), 404, None, None, 0, "NOT_DEPLOYED")
+        # AUTOAUDIT-ACTIONABLE-1: the D1 note stays NOT_DEPLOYED (fleet-control, observability and a D1 trigger key on
+        # it); the marker only tells the report and the issue state that this absence is a retirement, not a defect.
+        if isinstance(it, dict) and it.get("marker") and _w(it) in rows:
+            rows[_w(it)]["retired"] = it["marker"]
     # NOT-DEPLOYED-NONWORKER-NOISE-1: a directory with no worker config and no artifact is
     # not a worker. Written in its own class so it cannot inflate NOT_DEPLOYED.
     for it in d.get("not_a_worker", []):
@@ -428,10 +432,33 @@ def purge_stale(now):
     return d1_changes(res), None
 
 
+# AUTOAUDIT-ACTIONABLE-1 (2026-10-11, owner: "always automatically audit and remediate all issues, failure modes, open items"):
+# GitHub #52 stayed open for two weeks as a standing report although every row was in its expected state (28 SYNC, 10
+# NOT_A_WORKER, 76 NOT_DEPLOYED that were all FOLDED/RETIRED directories). An open issue with nothing to do is a false open
+# item, and one that is always open cannot signal a real finding. These notes are expected states; anything else, a D1
+# write failure, a failed purge or a repo-ahead worker is a finding, and the issue is open exactly while one exists.
+EXPECTED_NOTES = {"SYNC", "NOT_A_WORKER", "CRON_ONLY"}
+
+
+def actionable(d, rows, failed, purge_err):
+    out = []
+    for w in sorted(rows):
+        r = rows[w]
+        if r["note"] in EXPECTED_NOTES or (r["note"] == "NOT_DEPLOYED" and r.get("retired")):
+            continue
+        out.append(f"`{w}`: {r['note']}" + (" (no FOLDED/RETIRED marker: deploy it or mark it)" if r["note"] == "NOT_DEPLOYED" else ""))
+    out += [f"D1 write failure `{w}`: {e}" for w, e in failed]
+    if purge_err:
+        out.append(f"stale-row purge failed: {purge_err}")
+    out += [f"repo-ahead `{it['worker']}` repo `{it['repo']}` > live `{it['live']}`" for it in d.get("ahead", [])]
+    return out
+
+
 def summary_md(d, rows, ok, failed, now, purged=None, purge_err=None):
     counts = {}
     for r in rows.values():
-        counts[r["note"]] = counts.get(r["note"], 0) + 1
+        k = r["note"] + (" (FOLDED/RETIRED, expected)" if r["note"] == "NOT_DEPLOYED" and r.get("retired") else "")
+        counts[k] = counts.get(k, 0) + 1
     lines = [
         f"# {ISSUE_TAG} fleet self-audit - {now}Z", "",
         f"- workers classified: **{len(rows)}** | audit rows written: **{ok}** | write failures: **{len(failed)}**",
@@ -459,6 +486,9 @@ def summary_md(d, rows, ok, failed, now, purged=None, purge_err=None):
         lines += ["", "## D1 write failures", ""]
         for w, e in failed:
             lines.append(f"- `{w}`: {e}")
+    act = actionable(d, rows, failed, purge_err)
+    lines += ["", f"## Actionable findings: {len(act)}", ""]
+    lines += [f"- {a}" for a in act] if act else ["- none: every worker is in its expected state, so this issue is closed until the next finding"]
     lines += ["", "## What this audit cannot see", "",
               "- behavioural breakage behind a 200 /health",
               "- workers with no version constant (reported as NO_REPO_VERSION, not skipped)",
@@ -550,13 +580,19 @@ def gh_api(method, path, payload=None):
     return {"_error": "unreachable"}
 
 
-def publish_issue(body):
-    existing = gh_api("GET", "/issues?state=open&per_page=100")
+def publish_issue(body, has_findings=True):
+    """AUTOAUDIT-ACTIONABLE-1: one issue, reused open or closed; open exactly while the audit has an actionable finding."""
+    existing = gh_api("GET", "/issues?state=all&labels=fleet-autoaudit&sort=updated&per_page=20")
     if isinstance(existing, list):
         for it in existing:
-            if str(it.get("title", "")).startswith(ISSUE_TAG):
-                res = gh_api("PATCH", f"/issues/{it['number']}", {"body": body})
-                return "updated", it.get("number"), res.get("_error")
+            if str(it.get("title", "")).startswith(ISSUE_TAG) and not it.get("pull_request"):
+                patch = {"body": body, "state": "open" if has_findings else "closed"}
+                if not has_findings:
+                    patch["state_reason"] = "completed"
+                res = gh_api("PATCH", f"/issues/{it['number']}", patch)
+                return ("updated" if has_findings else "closed"), it.get("number"), res.get("_error")
+    if not has_findings:
+        return "none-needed", None, None
     res = gh_api("POST", "/issues", {"title": f"{ISSUE_TAG}: scheduled fleet self-audit",
                                      "body": body, "labels": ["fleet-autoaudit"]})
     return "created", res.get("number"), res.get("_error")
@@ -697,7 +733,7 @@ def main():
                    "stale_rows_purged": purged, "purge_error": purge_err}, fh, indent=2, sort_keys=True)
     print(body)
     if should_publish(mode):
-        action, num, err = publish_issue(body)
+        action, num, err = publish_issue(body, bool(actionable(d, rows, failed, purge_err)))
         if err:
             print(f"::warning::issue publish {action} failed: {err}")
             _record_publish_failure(action, num, err, now)
