@@ -3,7 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // worker.js
 import { connect } from "cloudflare:sockets";
-var VERSION = "1.24.1-no-topic-seeds"; /* 1.24.1 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the daily research scan builds its arXiv lanes from the owner's accepted ideas in idea_proposals instead of a fixed query table; its extractor prompt names no topic and uses only the match list; the email triage prompt is unchanged because qnfo-email-orchestrator carries the same line (email-orch-fold parity). */ /* 1.24.0 PROBE-REVIEW-1 (2026-10-07, agent_issues 2112 PROBE-INDEPENDENCE-2, pillar autonomy, core rule 7): every tick reads up to two closing probes (remediation_contracts on open issues, d1-query, not the template ownership probes nor METRIC-TRIGGER probes) whose text it has not judged and asks one Workers AI model (gpt-oss-120b, then deepseek-v4-flash) whether the probe tests the issue's definition of done; self-confirming takes the contract out of the closing path (status probe-review-refused, which neither executor reads, and a note on the issue) until a rewrite is judged tests-dod or partial, which restores it. One verdict per probe text (cloud_ops_events probe-review-<class>-<sha12>), heartbeat probe-review-tick each tick, ops_config probe_review_enabled / probe_review_enforce (record) switches; guard probe_review_refused_share_7d. Sessions write the closing probes for their own fixes, and a probe that checks only that a change was made closes the issue whether or not its outcome arrived. */ /* 1.23.1 WORKERS-AI-ATTRIBUTION-2 (2026-10-07, pillar cost, agent_issues 2097): every env.AI.run of this worker is counted in ai_call_counters through __aiAttrEnv (the helper of scripts/ai-attr-env-patch.py, env rebound at the top of scheduled and fetch); its neurons were unattributed while workers_ai_attribution_coverage_pct read 36.2 against a threshold of 50. */ /* 1.23.0 PUB-GATE-LOOP-1 (2026-10-07, agent_issues 2105, pillar research): the daily quality-score sweep scores every published paper (it wrote only the first 200 of 466 and still reported ok, so 266 papers were never scored) and runs the publication gate on all of them: papers.release_gate_pass/at/reason are written for the first time, publication_gate_audit gets a row per changed verdict (the only earlier run was the one-off shadow-20261004), and a score under 25 quarantines the paper unless ops_config publication_gate_mode = shadow or the run would demote more than 20 (then none, degraded). 1.22.1 GRANT-GMAIL-UNGRADED-1 (2026-10-07, pillar autonomy): grant-followup grades only the mailboxes it holds a credential for; without GMAIL_PASS Gmail is reported (channels.gmail no-credential, gmail_graded false) but the run is ok when qnfo.org mail was read and issues filed, since the owner dismissed both Gmail cards (human_actions 42, 47) and OPEN-ACCESS-1 forbids asking for a token (the pattern of RADAR-CAP-GRADING-1); 10 degraded runs in a row had kept watchmaker_index at 2 on a step no one may ask for. A Gmail read that fails with the credential set still degrades the run. 1.22.0 1.22.0 PROBE-CADENCE-1 (2026-10-06, pillar autonomy; owner question 2026-10-06 "why do fleet probes only run as SQL against qnfo-audit"): every 10-minute tick reads the last run of remediation-consumer.yml, the only runner of runtime probes (runner-https on fleet hosts, plane D1s), and sends repository_dispatch remediation-tick when that run is older than 60 minutes; 98 of its last 100 runs were chained to pushes on main, so a quiet main stopped every runtime probe. State in scheduler_state probe_cadence; a dispatch the token may not send files PROBE-CADENCE-DISPATCH-1. 1.21.1 RADAR-CAP-GRADING-1 (2026-10-06, agent_issues 1641, pillar reach): the mention radar reports a source blocked by an external per-IP quota (capped:..., StackExchange on shared Workers egress, never answered since 2026-10-02) without grading it, so the run is ok when every readable source is; any other failure still degrades it; the owner card stackexchange-key (free stackapps key, STACKEXCHANGE_KEY var) tracks the blind spot and resolves itself on the first ok answer. 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). OWNER-STEPS-WATCH-1: a read-only companion of the daily release-check slot resolves the CODE-REACH-1 owner cards ula-v2-1-post and code-release-pypi-zenodo with evidence once their public results exist (QNFO/license v2.1 file; PyPI and Zenodo software records). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 ZENODO-CATCHUP-1 (a zenodo-stats week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when zenodo_stats is older than 180h and no run started in 20h; no new cron) and ZENODO-REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 ZENODO-UA-1 (zenodo-stats sends an honest User-Agent; Zenodo refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
+var VERSION = "1.24.2-doi-scrub"; /* 1.24.2 NOZ-DOI-1 (2026-10-10): the weekly external-registry stats job, its slot and catch-up, and every report line about it are removed; the portfolio status and board items carry no DOI; the release card probe checks PyPI only. 1.24.1 1.24.1 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the daily research scan builds its arXiv lanes from the owner's accepted ideas in idea_proposals instead of a fixed query table; its extractor prompt names no topic and uses only the match list; the email triage prompt is unchanged because qnfo-email-orchestrator carries the same line (email-orch-fold parity). */ /* 1.24.0 PROBE-REVIEW-1 (2026-10-07, agent_issues 2112 PROBE-INDEPENDENCE-2, pillar autonomy, core rule 7): every tick reads up to two closing probes (remediation_contracts on open issues, d1-query, not the template ownership probes nor METRIC-TRIGGER probes) whose text it has not judged and asks one Workers AI model (gpt-oss-120b, then deepseek-v4-flash) whether the probe tests the issue's definition of done; self-confirming takes the contract out of the closing path (status probe-review-refused, which neither executor reads, and a note on the issue) until a rewrite is judged tests-dod or partial, which restores it. One verdict per probe text (cloud_ops_events probe-review-<class>-<sha12>), heartbeat probe-review-tick each tick, ops_config probe_review_enabled / probe_review_enforce (record) switches; guard probe_review_refused_share_7d. Sessions write the closing probes for their own fixes, and a probe that checks only that a change was made closes the issue whether or not its outcome arrived. */ /* 1.23.1 WORKERS-AI-ATTRIBUTION-2 (2026-10-07, pillar cost, agent_issues 2097): every env.AI.run of this worker is counted in ai_call_counters through __aiAttrEnv (the helper of scripts/ai-attr-env-patch.py, env rebound at the top of scheduled and fetch); its neurons were unattributed while workers_ai_attribution_coverage_pct read 36.2 against a threshold of 50. */ /* 1.23.0 PUB-GATE-LOOP-1 (2026-10-07, agent_issues 2105, pillar research): the daily quality-score sweep scores every published paper (it wrote only the first 200 of 466 and still reported ok, so 266 papers were never scored) and runs the publication gate on all of them: papers.release_gate_pass/at/reason are written for the first time, publication_gate_audit gets a row per changed verdict (the only earlier run was the one-off shadow-20261004), and a score under 25 quarantines the paper unless ops_config publication_gate_mode = shadow or the run would demote more than 20 (then none, degraded). 1.22.1 GRANT-GMAIL-UNGRADED-1 (2026-10-07, pillar autonomy): grant-followup grades only the mailboxes it holds a credential for; without GMAIL_PASS Gmail is reported (channels.gmail no-credential, gmail_graded false) but the run is ok when qnfo.org mail was read and issues filed, since the owner dismissed both Gmail cards (human_actions 42, 47) and OPEN-ACCESS-1 forbids asking for a token (the pattern of RADAR-CAP-GRADING-1); 10 degraded runs in a row had kept watchmaker_index at 2 on a step no one may ask for. A Gmail read that fails with the credential set still degrades the run. 1.22.0 1.22.0 PROBE-CADENCE-1 (2026-10-06, pillar autonomy; owner question 2026-10-06 "why do fleet probes only run as SQL against qnfo-audit"): every 10-minute tick reads the last run of remediation-consumer.yml, the only runner of runtime probes (runner-https on fleet hosts, plane D1s), and sends repository_dispatch remediation-tick when that run is older than 60 minutes; 98 of its last 100 runs were chained to pushes on main, so a quiet main stopped every runtime probe. State in scheduler_state probe_cadence; a dispatch the token may not send files PROBE-CADENCE-DISPATCH-1. 1.21.1 RADAR-CAP-GRADING-1 (2026-10-06, agent_issues 1641, pillar reach): the mention radar reports a source blocked by an external per-IP quota (capped:..., StackExchange on shared Workers egress, never answered since 2026-10-02) without grading it, so the run is ok when every readable source is; any other failure still degrades it; the owner card stackexchange-key (free stackapps key, STACKEXCHANGE_KEY var) tracks the blind spot and resolves itself on the first ok answer. 1.21.0 RESEARCH-SCAN-LANES-1 (2026-10-06, pillar research, docs/CODE-REACH-PROGRAM.md): the daily arXiv research scan runs three lanes, each its own query and quota (quantum-energy = RESEARCH_SCAN_QUERY unchanged, ai-agents-epistemics, formal-verification; 4/3/3 results, 2/2/1 idea_proposals: the same ten results, five proposals and one extractor call as before), each proposal names its lane, and the must-read prompt names the new lanes; the outreach criterion is unchanged. Lever for idea_topic_concentration_30d (0.596, breach > 0.50). OWNER-STEPS-WATCH-1: a read-only companion of the daily release-check slot resolves the CODE-REACH-1 owner cards ula-v2-1-post and code-release-pypi with evidence once their public results exist (QNFO/license v2.1 file; PyPI and external registry software records). 1.20.0 EMAIL-ORCH-FOLD-1 (agent_issues 1756, pillar core): qnfo-email-orchestrator runs here as the member emailOrchMod (0.5.4-folded) on the single tick at its old cadence; /email-orch/health serves its health; the EMAIL binding declares props.caller so the member's sends authenticate. 1.19.2 RADAR-SE-REASON-1 (agent_issues 1641, pillar reach): the mention radar's StackExchange failure note carries the API's error_name and error_message (the API answers HTTP 400 for every error class, so "http:400" on every run since 2026-10-02 named nothing while the same URL answers 200 from outside Cloudflare); a per-address throttle is reported as capped:<why>; an optional STACKEXCHANGE_KEY var (public stackapps key) is appended when set. 1.19.1 SIGNAL-INTAKE-QEC-1 + IDEA-TOPIC-METRIC-1 (#1947): the research scan admits QEC only with an energy angle (all 10 hits and all 5 accepted auto-scan proposals on 2026-10-05 were generic QEC), and a daily companion in the quality-score slot recomputes metric_registry idea_topic_concentration_30d, which had no producer; OUTREACH-REASON-LEAK-1 (#1875): the first-contact mail quoted outreach_queue.reason raw, so all 49 cold emails sent to 2026-10-05 read "(arXiv 2609.30069v1 — arxiv-radar widened: <title>)", an internal pipeline label in the owner's voice (STRATEGY 2.5 no internal jargon); it now names the paper by its title and arXiv id only (outreachWorkLine) and never echoes other reason text; LEARNER_TEMPLATE jpcub-first-v3 so the learner tells the two texts apart; 1.19.0 CRON-SINGLE-TRIGGER-1 (#1785): one ten-minute trigger and an in-code due table in Amsterdam time replace 21 per-slot cron triggers; 1.18.4 WORKER-HEALTH-PROBE-AUTH-1: the qnfo-ai chat probe goes through the QNFO_AI service binding (props caller, #1703) instead of an absent ROUTER_AUTH_KEY copy, a probe whose credential this worker lacks is skipped with its reason instead of failing the endpoint, one job-run row per run (was two); GMAIL-TRIAGE-UNCONFIGURED-1: gmail-triage without GMAIL_PASS is recorded as skipped, not error; 1.18.3 CATCHUP-1 (a stats-job week missed by the 2026-09-25..30 trigger outage or failed is re-run the next day from the release-check slot when stats table is older than 180h and no run started in 20h; no new cron) and REFUSAL-STOP-1 (a run whose first 20 record reads are all refused stops instead of sending ~300 more); JOB-REASON-1: a run that is not 'ok' may return reason, stored in its job-run row's meta (grant-followup names the unread mailbox, e.g. GMAIL_PASS unset); 1.18.2 UTF8-DEPLOY-1: GitHub contents decode and encode as UTF-8 (ghB64Text, ghTextB64); also redeploys this worker, whose out-of-office regexes were uploaded double-encoded; 1.18.1 LEARNER_AUTO_SUBJ_RX prefix made unambiguous (CodeQL js/redos: no exponential backtracking on repeated "\taw:"); 1.18.0 OUTREACH-TEMPLATE-V2: the first-contact mail calls QNFO "an independent research imprint" (STRATEGY 2.1; v1 said "a research collective", which section 5 gate 2 bans) and spells JPCUB; LEARNER_TEMPLATE jpcub-first-v2; OUTREACH-LEARNER-1 (docs/STRATEGY.md s6.4): Thompson-sampling allocation of the unchanged shared outreach cap over 6 topic x recipient-type segments, per-send reply outcomes and Beta posteriors in D1 (outreach_learner_sends, outreach_learner_arms), stop rule (>= 50 sends and < 1% positive), ops_config kill switch outreach_learner_enabled, daily tick (engagement slot) publishing outreach_reply_rate_30d and warm_conversations_30d; SENT-AS-YOU-DELIVERY-1: the daily digest is mailed to the owner's qnfo.org address through SEND_EMAIL, once a day; 1.17.1 UA-1 (stats-job sends an honest User-Agent; external registry refused the spoofed browser one with 403 from 2026-09-05) and EMAIL-TRIAGE-D1-1 (email triage reads and marks qnfo-audit.emails directly instead of through qnfo-email's EMAIL_API_KEY routes); 1.17.0 GRANT-FOLLOWUP-1 (replies before an application's handled_through date are recorded, not refiled): funder replies from qnfo.org mail and Gmail (read-only) become cloud_ops_events rows and agent_issues, in the worker-health slot (CRON_COMPANIONS); OUTREACH-OPTOUT-EVIDENCE-1, OUTREACH-CONSENT-1, OUTREACH-SHARED-CAP-1, SENT-AS-YOU-DIGEST-1, REGISTER-GUARD-FOLD-1; IDENTITY-WEEKLY-1 moved to qnfo-fleet-dashboard with the private store (IDENTITY-STORE-1) */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -221,7 +221,6 @@ var AMS_SCHEDULE = {
   "weekly": { times: ["17:00"], days: "5", fixed: null },
   "weekly-ops": { times: ["06:00"], days: "7", fixed: null },
   "portfolio-sync": { times: ["08:00"], days: "1", fixed: null },
-  "zenodo-stats": { times: ["09:00"], days: "7", fixed: null },
   "board-sync": { times: ["08:00"], days: "6", fixed: null },
   "outreach": { times: ["11:00"], days: "1-5", fixed: null },
   "nlnet": { times: ["11:00"], days: null, fixed: { dom: 3, mon: 9 } },
@@ -899,7 +898,7 @@ __name(jobIdeaTopicMetric, "jobIdeaTopicMetric");
    no model call. code-repos-create is resolved by the hourly metric-refresh step instead (research_code_public >= 3). */
 var OWNER_STEP_PROBES = [
   { slug: "ula-v2-1-post", urls: ["https://raw.githubusercontent.com/QNFO/license/HEAD/QNFO-ULA-v2.1.md"], kind: "ula" },
-  { slug: "code-release-pypi-zenodo", urls: ["https://pypi.org/pypi/agentic-collapse/json", "https://pypi.org/pypi/ignorance-audit/json", "https://zenodo.org/api/records?q=%22agentic-collapse%22&type=software&size=1", "https://zenodo.org/api/records?q=%22ignorance-audit%22&type=software&size=1"], kind: "release" }
+  { slug: "code-release-pypi", urls: ["https://pypi.org/pypi/agentic-collapse/json", "https://pypi.org/pypi/ignorance-audit/json"], kind: "release" }
 ];
 // Pure: one probe and its responses ([{ status, text }], in url order) -> { done, evidence }.
 function ownerStepVerdict(probe, res) {
@@ -911,12 +910,8 @@ function ownerStepVerdict(probe, res) {
   }
   if (probe.kind === "release") {
     const pypi = [0, 1].map((i) => !!(r[i] && r[i].status === 200));
-    const zen = [2, 3].map((i) => {
-      if (!(r[i] && r[i].status === 200)) return false;
-      try { return Number(((JSON.parse(r[i].text) || {}).hits || {}).total || 0) > 0; } catch (e) { return false; }
-    });
-    const done = pypi.every(Boolean) && zen.every(Boolean);
-    return { done, evidence: "PyPI agentic-collapse " + pypi[0] + ", ignorance-audit " + pypi[1] + "; Zenodo software records agentic-collapse " + zen[0] + ", ignorance-audit " + zen[1] };
+    const done = pypi.every(Boolean);
+    return { done, evidence: "PyPI agentic-collapse " + pypi[0] + ", ignorance-audit " + pypi[1] };
   }
   return { done: false, evidence: "unknown probe kind" };
 }
@@ -1342,11 +1337,6 @@ async function jobWeeklyOps(env) {
     L.push("infra query error: " + e.message);
   }
   try {
-    const z = await env.AUDIT.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(downloads),0) AS dl, COALESCE(SUM(views),0) AS vw FROM zenodo_stats").first();
-    if (z) L.push("Zenodo stats table: " + z.n + " DOIs, " + z.dl + " downloads, " + z.vw + " views (cumulative).");
-  } catch (e) {
-  }
-  try {
     const seo = [];
     const ua = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" };
     for (const [name, url] of [["papers", "https://papers.qnfo.org/"], ["qnfo", "https://qnfo.org/"], ["qwav", "https://qwav.org/"], ["qwav-tech", "https://qwav.tech/"]]) {
@@ -1413,10 +1403,6 @@ async function jobPortfolioSync(env) {
   } catch (e) {
     out.repos = -1;
   }
-  try {
-    out.zenodoDOIs = (await env.LIVING.prepare("SELECT COUNT(DISTINCT zenodo_doi) AS n FROM papers WHERE zenodo_doi IS NOT NULL AND zenodo_doi != ''").first() || {}).n || 0;
-  } catch (e) {
-  }
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const md = [
     "# QNFO Portfolio Status",
@@ -1428,9 +1414,8 @@ async function jobPortfolioSync(env) {
     "## Records",
     "",
     "- Papers in living-paper: " + out.papers,
-    "- Published/distributed (Zenodo DOI): " + out.published,
+    "- Published/distributed: " + out.published,
     "- Updated in last 7 days: " + out.recent7,
-    "- Distinct Zenodo DOIs: " + out.zenodoDOIs,
     "",
     "## Knowledge graph",
     "",
@@ -1472,124 +1457,17 @@ async function jobPortfolioSync(env) {
   return { status: "ok", notes: { drift: true, directMain: true, ...out } };
 }
 __name(jobPortfolioSync, "jobPortfolioSync");
-// ZENODO-UA-1 (1.17.1, pillar: reach): the weekly zenodo-stats run fetched 0 of 308, 218 and 218 records on 2026-09-05,
-// 09-12 and 09-19 (cloud_ops_events jr-zenodo-stats-*), so zenodo_stats froze at 2026-08-29. It sent a spoofed desktop
-// Chrome User-Agent, which Zenodo now refuses with 403 "unusual traffic from your network"; the same request with an
-// honest client name returns 200 (probed 2026-10-02), and qnfo-paper-indexer and qnfo-social read the same API from
-// Cloudflare with honest names. Failures are now counted by HTTP status in the run notes, so a refusal is visible.
-// ZENODO-REFUSAL-STOP-1 (1.18.3): ZENODO-CATCHUP-1 retries a failed week daily, so a run whose first ZENODO_REFUSAL_STOP
-// record reads all failed stops there (notes.stopped_after) instead of sending a few hundred more requests Zenodo refuses.
-var ZENODO_UA = "qnfo-cloud-ops/" + VERSION + " (+https://qnfo.org; zenodo-stats)";
-var ZENODO_REFUSAL_STOP = 20;
-async function jobZenodoStats(env) {
-  const corpus = await env.LIVING.prepare("SELECT zenodo_doi, slug FROM papers WHERE zenodo_doi IS NOT NULL AND zenodo_doi != '' AND status IN ('published','distributed')").all();
-  const byDoi = {};
-  for (const row of corpus.results || []) {
-    const d2 = String(row.zenodo_doi || "").trim();
-    if (d2 && d2 !== "pending" && !byDoi[d2]) byDoi[d2] = row;
-  }
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
-  const freshRows = await env.AUDIT.prepare("SELECT doi FROM zenodo_stats WHERE fetched_at LIKE ?1 || '%'").bind(today).all();
-  const fresh = new Set((freshRows.results || []).map((r) => r.doi));
-  const prevRows = await env.AUDIT.prepare("SELECT doi, downloads, views FROM zenodo_stats").all();
-  const prevMap = {};
-  let prevDl = 0, prevVw = 0;
-  for (const r of prevRows.results || []) {
-    prevMap[r.doi] = r;
-    prevDl += Number(r.downloads || 0);
-    prevVw += Number(r.views || 0);
-  }
-  const todo = Object.keys(byDoi).filter((d2) => !fresh.has(d2));
-  let fetched = 0, errors = 0;
-  const failures = {};
-  const UA = { "User-Agent": ZENODO_UA, Accept: "application/json" };
-  const movers = [];
-  const auditViolations = [];
-  let stoppedAfter = 0;
-  for (const doi of todo) {
-    if (fetched === 0 && errors >= ZENODO_REFUSAL_STOP) {
-      stoppedAfter = errors;
-      break;
-    }
-    const rid = doi.split(".").pop();
-    try {
-      const r = await fetch("https://zenodo.org/api/records/" + rid, { headers: UA });
-      if (!r.ok) {
-        errors++;
-        failures[r.status] = (failures[r.status] || 0) + 1;
-        continue;
-      }
-      const d2 = await r.json();
-      const st = d2.stats || {};
-      const rec = {
-        doi: d2.doi || doi,
-        conceptdoi: d2.conceptdoi || null,
-        title: String(d2.metadata && d2.metadata.title || "").slice(0, 200),
-        slug: byDoi[doi] && byDoi[doi].slug || null,
-        downloads: Number(st.downloads || 0),
-        unique_downloads: Number(st.unique_downloads || 0),
-        views: Number(st.views || 0),
-        unique_views: Number(st.unique_views || 0),
-        version_downloads: Number(st.version_downloads || 0)
-      };
-      const prev = prevMap[doi] || {};
-      await env.AUDIT.prepare(
-        "INSERT INTO zenodo_stats (doi, conceptdoi, title, slug, downloads, unique_downloads, views, unique_views, version_downloads, prev_downloads, prev_views, fetched_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12, datetime('now')) ON CONFLICT(doi) DO UPDATE SET prev_downloads=zenodo_stats.downloads, prev_views=zenodo_stats.views, downloads=excluded.downloads, unique_downloads=excluded.unique_downloads, views=excluded.views, unique_views=excluded.unique_views, version_downloads=excluded.version_downloads, title=excluded.title, slug=excluded.slug, conceptdoi=excluded.conceptdoi, fetched_at=excluded.fetched_at, updated_at=datetime('now')"
-      ).bind(rec.doi, rec.conceptdoi, rec.title, rec.slug, rec.downloads, rec.unique_downloads, rec.views, rec.unique_views, rec.version_downloads, Number(prev.downloads || 0), Number(prev.views || 0), today).run();
-      fetched++;
-      const growth = rec.downloads - Number(prev.downloads || 0);
-      if (growth > 0) movers.push({ doi, title: rec.title, g: growth });
-      try {
-        const creators = ((d2.metadata || {}).creators || []).map((c) => String(c.name || "")).filter(Boolean);
-        const rels = ((d2.metadata || {}).related_identifiers || []).map((r2) => String(r2.relation_type && (r2.relation_type.id || r2.relation_type) || "").toLowerCase() + ":" + String(r2.identifier || "")).join(",");
-        const creatorOk = creators.length > 0 && creators.some((n) => /Quni-Gudzinas/i.test(n));
-        const hasObsoleted = /isobsoletedby|issupersededby/i.test(rels);
-        await env.AUDIT.prepare(
-          "INSERT INTO zenodo_attribution_audit (doi, creators, related, creator_ok, obsoleted_ok, audited_at) VALUES (?1,?2,?3,?4,?5, datetime('now')) ON CONFLICT(doi) DO UPDATE SET creators=excluded.creators, related=excluded.related, creator_ok=excluded.creator_ok, obsoleted_ok=excluded.obsoleted_ok, audited_at=datetime('now')"
-        ).bind(rec.doi, creators.join("; ").slice(0, 500), rels.slice(0, 1500), creatorOk ? 1 : 0, hasObsoleted ? 1 : 0).run();
-        if (!creatorOk) auditViolations.push({ doi: rec.doi, why: "creator", creators: creators.join("; ").slice(0, 120) });
-      } catch (e) {
-      }
-    } catch (e) {
-      errors++;
-      failures.thrown = (failures.thrown || 0) + 1;
-    }
-    if (fetched % 40 === 0) await new Promise((res) => setTimeout(res, 200));
-  }
-  const tot = await env.AUDIT.prepare("SELECT COALESCE(SUM(downloads),0) AS dl, COALESCE(SUM(views),0) AS vw, COUNT(*) AS n FROM zenodo_stats").first();
-  movers.sort((a, b) => b.g - a.g);
-  const L = ["QNFO Zenodo stats delta \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ""];
-  L.push("Corpus " + Object.keys(byDoi).length + " DOIs; fetched " + fetched + " today, errors " + errors + (errors ? " " + JSON.stringify(failures) : "") + "." + (stoppedAfter ? " Stopped after " + stoppedAfter + " refused reads (ZENODO-REFUSAL-STOP-1)." : ""));
-  L.push("downloads: " + prevDl + " -> " + (tot.dl || 0) + " (+" + ((tot.dl || 0) - prevDl) + ")");
-  L.push("views:     " + prevVw + " -> " + (tot.vw || 0) + " (+" + ((tot.vw || 0) - prevVw) + ")");
-  if (movers.length) {
-    L.push("", "top movers (downloads):");
-    for (const m of movers.slice(0, 8)) L.push("- +" + m.g + "  " + m.title.slice(0, 50) + "  " + m.doi);
-  }
-  if (auditViolations.length) {
-    L.push("", "ADR-014 attribution violations (" + auditViolations.length + "):");
-    for (const v of auditViolations.slice(0, 8)) L.push("- " + v.doi + " [" + v.why + "] " + v.creators);
-  } else {
-    L.push("", "ADR-014 attribution audit: 0 creator violations (sole-author mandate holds).");
-  }
-  const d = await storeDigest(env, "zenodo-stats", "QNFO Zenodo stats delta \u2014 " + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), L.join(NL));
-  const zStatus = fetched > 0 || errors === 0 ? "ok" : "error";
-  const zNotes = { fetched, errors, failures, corpus: Object.keys(byDoi).length, audit_violations: auditViolations.length, digest: d };
-  if (stoppedAfter) zNotes.stopped_after = stoppedAfter;
-  return { status: zStatus, reason: zStatus === "ok" ? void 0 : "no Zenodo record read: " + errors + " failed " + JSON.stringify(failures) + (stoppedAfter ? ", stopped after " + stoppedAfter : ""), notes: zNotes };
-}
-__name(jobZenodoStats, "jobZenodoStats");
 async function jobBoardSync(env) {
   const out = { programs: 0, projects: 0, boardItems: 0, existing: 0, added: 0, skipped: 0, errors: [] };
   const canonical = [];
   try {
-    const prog = await env.PORTFOLIO.prepare("SELECT wbs_code, name, level, status, github_repo, zenodo_doi, phase FROM program_registry WHERE level IN ('program','project') ORDER BY wbs_code").all();
+    const prog = await env.PORTFOLIO.prepare("SELECT wbs_code, name, level, status, github_repo, phase FROM program_registry WHERE level IN ('program','project') ORDER BY wbs_code").all();
     for (const r of prog.results || []) {
       const c = String(r.wbs_code || "");
       const lvl = String(r.level || "").toLowerCase() === "program" ? "Program" : "Project";
       if (lvl === "Program") out.programs++;
       else out.projects++;
-      canonical.push({ code: c, title: c + " \u2014 " + String(r.name || "").slice(0, 120), body: lvl + ". Repo: " + (r.github_repo || "\u2014") + ". DOI: " + (r.zenodo_doi || "\u2014") + ". Phase: " + (r.phase || "\u2014") + ". Status: " + (r.status || "\u2014") + ". Synced from Cloudflare canonical (portfolio-state).", level: lvl, status: String(r.status || "") === "completed" || String(r.status || "") === "published" ? "Completed" : "Active" });
+      canonical.push({ code: c, title: c + " \u2014 " + String(r.name || "").slice(0, 120), body: lvl + ". Repo: " + (r.github_repo || "\u2014") + ". Phase: " + (r.phase || "\u2014") + ". Status: " + (r.status || "\u2014") + ". Synced from Cloudflare canonical (portfolio-state).", level: lvl, status: String(r.status || "") === "completed" || String(r.status || "") === "published" ? "Completed" : "Active" });
     }
   } catch (e) {
     out.errors.push("registry: " + String(e && e.message || e));
@@ -2888,34 +2766,6 @@ async function jobVisibility(env) {
     out.web_error = String(e && e.message || e);
   }
   try {
-    const agg = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(downloads),0) dl, COALESCE(SUM(views),0) vw, COALESCE(SUM(prev_downloads),0) pdl, COALESCE(SUM(prev_views),0) pvw FROM zenodo_stats").first();
-    if (agg) {
-      out.dois = agg.n;
-      out.zenodo_downloads = agg.dl;
-      out.zenodo_views = agg.vw;
-      out.dl_delta = agg.dl - agg.pdl;
-      out.vw_delta = agg.vw - agg.pvw;
-    }
-    const mov = await env.AUDIT.prepare("SELECT doi, title, downloads, prev_downloads, views, prev_views FROM zenodo_stats WHERE updated_at >= datetime('now','-8 days') ORDER BY (downloads - prev_downloads) DESC LIMIT 10").all();
-    out.movers = (mov.results || []).map(function(r) {
-      return { doi: r.doi, title: String(r.title || "").slice(0, 50), dl_gain: (r.downloads || 0) - (r.prev_downloads || 0), vw_gain: (r.views || 0) - (r.prev_views || 0) };
-    }).filter(function(m) {
-      return m.dl_gain > 0 || m.vw_gain > 0;
-    });
-  } catch (e) {
-    out.zs_error = String(e && e.message || e);
-  }
-  try {
-    const wk = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 19).replace("T", " ");
-    const vs = await env.LIVING.prepare("SELECT title, version, zenodo_doi, updated_at FROM papers WHERE status IN ('published','distributed') AND zenodo_doi IS NOT NULL AND zenodo_doi != '' AND updated_at >= ?1 ORDER BY updated_at DESC LIMIT 12").bind(wk).all();
-    out.new_versions = (vs.results || []).length;
-    out.versions = (vs.results || []).map(function(r) {
-      return { title: String(r.title || "").slice(0, 50), ver: r.version, doi: r.zenodo_doi };
-    });
-  } catch (e) {
-    out.lp_error = String(e && e.message || e);
-  }
-  try {
     const wk = new Date(Date.now() - 7 * 864e5).toISOString().replace("T", " ");
     const sc = await env.AUDIT.prepare("SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN status='posted' THEN 1 ELSE 0 END),0) posted FROM social_threads WHERE created_at >= ?1").bind(wk).first();
     out.social_threads_7d = sc ? sc.n || 0 : 0;
@@ -2955,15 +2805,6 @@ async function jobVisibility(env) {
   const L = ["QNFO visibility scorecard \u2014 " + today, ""];
   if (out.requests !== void 0) L.push("zone qnfo.org 7d: " + out.requests + " requests / " + out.pageviews + " pageviews / " + out.uniques + " unique visitors (" + out.days + " days)");
   else L.push("zone qnfo.org 7d: unavailable (" + (out.web_error || "no data") + ")");
-  L.push("zenodo: " + (out.dois || 0) + " records | downloads " + (out.zenodo_downloads || 0) + " (+\u0394" + (out.dl_delta || 0) + ") | views " + (out.zenodo_views || 0) + " (+\u0394" + (out.vw_delta || 0) + ")");
-  if (out.movers && out.movers.length) {
-    L.push("", "zenodo top movers (7d):");
-    for (const m of out.movers.slice(0, 6)) L.push("- +" + m.dl_gain + " dl / +" + m.vw_gain + " vw  " + m.title + "  " + m.doi);
-  }
-  if (out.new_versions !== void 0) {
-    L.push("", "new versions this week: " + out.new_versions);
-    for (const v of (out.versions || []).slice(0, 8)) L.push("- " + v.title + " " + v.ver + "  " + v.doi);
-  }
   L.push("", "social threads created 7d: " + (out.social_threads_7d || 0) + " (posted " + (out.social_posted_7d || 0) + ")");
   L.push("citations: " + (out.citation_count || 0) + " cited-by across " + (out.cited_dois || 0) + " DOIs (" + (out.citation_events || 0) + " events 7d)");
   if (out.engagement && out.engagement.length) {
@@ -3655,7 +3496,6 @@ var JOBS = {
   "weekly": jobWeekly,
   "weekly-ops": jobWeeklyOps,
   "portfolio-sync": jobPortfolioSync,
-  "zenodo-stats": jobZenodoStats,
   "board-sync": jobBoardSync,
   "release-check": jobReleaseCheck,
   "nlnet": jobNlnet,
@@ -3708,7 +3548,7 @@ async function runScheduledJob(env, job) {
     } catch (e2) {
     }
   }
-  // ZENODO-CATCHUP-1: after the slot's own job, so a catch-up never delays or hides it.
+  // CATCHUP: after the slot's own job, so a catch-up never delays or hides it.
   if (CRON_CATCHUP[job]) await runCatchups(env, job, Date.now());
 }
 // At most one run per job and slot: the tick's lookback, a legacy per-slot trigger still registered during the switch, or
@@ -3733,17 +3573,8 @@ async function runCompanion(env, job, extra) {
     await recordEvent(env, "job-run", "jr-" + job + "-" + Date.now().toString(36), job + " error " + String(e && e.message || e), jobRunMeta(job, { status: "error", reason: String(e && e.message || e) }, extra));
   }
 }
-// ZENODO-CATCHUP-1 (1.18.3, pillar: reach; WATCHMAKER_OPS zenodo-stats "stalled: last run 815.9h ago"). zenodo-stats has one
-// weekly slot (Sunday 09:00 Amsterdam), and nothing re-ran a week it missed or failed. Its 2026-09-26 run never happened:
-// every qnfo-cloud-ops trigger was removed live on 2026-09-25 between board-sync's 06:01Z run and worker-health's missing
-// 15:05Z run (only "30 5 * * 1" stayed, committed on 09-26 as 5afe051d) until 1.15.3-schedules-live-1 restored all 21 on
-// 2026-09-30 08:49Z with the CF-DOW-1 spellings, which moved zenodo-stats from Saturday ("0 7 * * 7") to Sunday
-// ("0 7 * * 1"). The three runs before it (09-05, 09-12, 09-19) fetched 0 records (Zenodo 403, ZENODO-UA-1), so
-// zenodo_stats stayed at 2026-08-29 for five weeks. Now each slot listed here checks its catch-ups after its own job:
-// one runs (logged as its own job-run row, meta.via) when its data is older than stale_h and no run of it started in
-// retry_h. 180h is past the weekly cadence (a Sunday run is 165h old at the next Sunday's 04:15Z check) and 20h keeps it to
-// once a day; release-check is one GitHub call, so the slot has room. No new cron (charter rule 2).
-var CRON_CATCHUP = { "release-check": [{ job: "zenodo-stats", stale_h: 180, retry_h: 20, data_sql: "SELECT MAX(updated_at) AS last FROM zenodo_stats" }] };
+// CRON-CATCHUP-1 (1.18.3): a slot may list jobs that re-run after its own job when their data is older than stale_h and no run of them started in retry_h. NOZ-DOI-1 (1.24.2): the only entry (a weekly external-registry stats job) is gone; the mechanism stays, empty.
+var CRON_CATCHUP = {};
 function cloudOpsUtcMs(v) {
   if (v == null || v === "") return NaN;
   let s = String(v).trim();

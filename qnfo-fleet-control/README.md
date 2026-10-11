@@ -65,7 +65,7 @@ not tell whether anything was getting better. The hourly tick now:
 - writes `metric_history` (one row per metric per UTC day: value, met target or not);
 - compares each metric's 7d mean with the prior 7d in its good direction (from the target: `<=` down, `>=`/`+N`/`maximize`
   up) and files `METRIC-REGRESSION-1: <metric>` on a >= 15% worsening, including `maximize` metrics that have no trigger
-  (pageviews, referrals, Zenodo views, impact per dollar); it closes itself, with hysteresis, when the decline stops;
+  (pageviews, referrals, impact per dollar); it closes itself, with hysteresis, when the decline stops;
 - re-checks metric issues closed in the last 30 days and files `METRIC-FIX-RELAPSED-1: <metric>` naming the issue whose
   remediation did not hold;
 - grades itself in `metric_registry`: `improvement_rate_7d` (>= 0.5), `metric_regressions_7d` (<= 1), `fix_hold_rate_30d`

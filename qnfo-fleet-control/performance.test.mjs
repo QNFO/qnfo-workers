@@ -77,6 +77,7 @@ eq(P.perfWorkerHealth({ live_audit: [wla("d", 404, "NOT_DEPLOYED", 1)] }, NOW).v
 
 // --- credibility events and citation coverage -----------------------------------------------------------------------
 const D = P.PERF_SELECTED_DOIS;
+for (let i = 1; i <= 7; i++) D.push("10.9999/selected." + i); // fixture identifiers: the production list is empty (NOZ-DOI-1)
 const cite = (doi, value, ageD) => ({ doi, value, collected_at: new Date(NOW - ageD * 864e5).toISOString() });
 r = P.perfCredibility({ selected_citations: [cite(D[0], 0, 30), cite(D[0], 0, 1), cite(D[1], 0, 1), cite(D[2], 0, 1)], mentions: [], attested: null }, NOW);
 eq(r.value, null, "3 of 7 selected works covered and nothing attested: unmeasured, not 0");
@@ -94,7 +95,7 @@ eq(r.value, 2, "an attested count stands when coverage is thin");
 r = P.perfCredibility({ selected_citations: [cite(D[0], 0, 1), cite(D[1], 0, 1), cite(D[2], 0, 1), cite(D[3], 0, 1)], mentions: [], attested: { value: "1", updated_at: h(100 * 24) } }, NOW);
 eq(r.value, 0, "an attestation older than 90 days is ignored; four covered works with no event read 0");
 eq(P.perfCredibility({ selected_citations: null, mentions: [] }, NOW).value, null, "unreadable citations: unmeasured");
-r = P.perfCitationCoverage({ selected_recent: [{ doi: D[0] }, { doi: D[1].toUpperCase() }, { doi: "10.5281/zenodo.1" }], citations_last: h(5) }, NOW);
+r = P.perfCitationCoverage({ selected_recent: [{ doi: D[0] }, { doi: D[1].toUpperCase() }, { doi: "10.9999/other.1" }], citations_last: h(5) }, NOW);
 eq(r.value, 2, "two selected works in the last 3 days (case-insensitive, others ignored)");
 eq(r.detail.missing.length, 5, "the five missing works are listed");
 eq(P.perfCitationCoverage({ selected_recent: [], citations_last: h(80) }, NOW).value, null, "a collection over 72h old: unmeasured");

@@ -1,109 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@9d0d1399c42a",
- "due": 12,
- "pass": 7,
- "fail": 5,
+ "verifier": "remediation-consumer@b3d3f9fb07bf",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "issue-2214",
-   "issue_id": 2214,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2300",
-   "issue_id": 2300,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2105",
-   "issue_id": 2105,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: ungated published=128 newest verdict=2026-10-11T04:20:27.078Z published quarantine-candidates=0",
-   "written": true
-  },
-  {
-   "class": "issue-2155",
-   "issue_id": 2155,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "belief-repo-token-writes-routes",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "belief-owner-queue-identity-only",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "belief-research-publishes-without-zenodo",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2223",
-   "issue_id": 2223,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "fm-head-of-line",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-silent-refile-drop",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-enum-abort-drop",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-single-heartbeat",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -127,12 +30,13 @@
   "http",
   "runner-https"
  ],
- "runtime_verified_share_24h": 4.1,
+ "budget_exhausted": false,
+ "runtime_verified_share_24h": 4,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 37804,
- "head": "9d0d1399c42a6ff96bbee8739847002987479bc3",
+ "spent_ms": 6241,
+ "head": "b3d3f9fb07bf7d0f75c4d19d4e62296064fc347a",
  "job_status": "success",
- "ts": "2026-10-11T08:37:41Z"
+ "ts": "2026-10-11T12:09:18Z"
 }

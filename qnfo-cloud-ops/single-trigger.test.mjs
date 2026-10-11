@@ -27,7 +27,7 @@ check(isoDayMatch("*", 3) && isoDayMatch("1-5", 5) && !isoDayMatch("1-5", 6) && 
 check(JSON.stringify(amsParts(Date.UTC(2026, 9, 2, 15, 0))) === JSON.stringify({ y: 2026, mo: 10, d: 2, hm: "17:00", isoDow: 5, date: "2026-10-02" }), "Friday 2026-10-02 15:00Z is Friday 17:00 in Amsterdam (CEST)");
 check(amsParts(Date.UTC(2026, 10, 2, 16, 0)).hm === "17:00", "after the 2026-10-25 change 16:00Z is 17:00 in Amsterdam (CET)");
 check(dueJobs(AMS_SCHEDULE, Date.UTC(2026, 9, 2, 15, 0)).map((x) => x.job).join() === "weekly", "the weekly digest is due Friday 17:00 Amsterdam");
-check(dueJobs(AMS_SCHEDULE, Date.UTC(2026, 9, 4, 7, 2, 30)).map((x) => x.job).join() === "zenodo-stats", "zenodo-stats is due Sunday 09:00 Amsterdam, and a tick 150 s late still names its slot");
+check(dueJobs(AMS_SCHEDULE, Date.UTC(2026, 9, 4, 4, 2, 30)).map((x) => x.job).join() === "weekly-ops", "weekly-ops is due Sunday 06:00 Amsterdam, and a tick 150 s late still names its slot");
 check(dueJobs(AMS_SCHEDULE, Date.UTC(2026, 8, 3, 9, 0)).some((x) => x.job === "nlnet") && !dueJobs(AMS_SCHEDULE, Date.UTC(2026, 9, 3, 9, 0)).some((x) => x.job === "nlnet"), "a fixed date (3 September) fires on that date only");
 
 // Replay: over two CEST weeks and two CET weeks, drive a tick every 10 minutes through the claim ledger. Every fire of the

@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-11 08:34:07",
+  "audited_at": "2026-10-11 12:03:22",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "q08-signal-engine"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -534,22 +541,22 @@
       },
       {
         "dir": "personal-api",
-        "version": "4.8.4-no-topic-prompts",
+        "version": "4.8.5-doi-scrub",
         "worker": "personal-api"
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.0-verify",
+        "version": "1.15.1-doi-scrub",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.11.0",
+        "version": "0.11.1",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.33.2-doi-scrub",
+        "version": "5.34.1-accuracy-ground",
         "worker": "qnfo-ai"
       },
       {
@@ -564,7 +571,7 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.24.1-no-topic-seeds",
+        "version": "1.24.2-doi-scrub",
         "worker": "qnfo-cloud-ops"
       },
       {
@@ -589,7 +596,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.13.1-check-repair",
+        "version": "0.14.2-doi-scrub",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -634,7 +641,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.40.1-grounded-public",
+        "version": "2.40.2-doi-scrub",
         "worker": "qnfo-ops"
       },
       {
@@ -880,17 +887,17 @@
       "worker": "papers"
     },
     "personal-api": {
-      "before": "4.8.4-no-topic-prompts",
+      "before": "4.8.5-doi-scrub",
       "http": 200,
-      "live": "4.8.4-no-topic-prompts",
+      "live": "4.8.5-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.0-verify",
+      "before": "1.15.1-doi-scrub",
       "http": 200,
-      "live": "1.15.0-verify",
+      "live": "1.15.1-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -932,9 +939,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.11.0",
+      "before": "0.11.1",
       "http": 200,
-      "live": "0.11.0",
+      "live": "0.11.1",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -967,9 +974,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.33.2-doi-scrub",
+      "before": "5.34.1-accuracy-ground",
       "http": 200,
-      "live": "5.33.2-doi-scrub",
+      "live": "5.34.1-accuracy-ground",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1117,9 +1124,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.24.1-no-topic-seeds",
+      "before": "1.24.2-doi-scrub",
       "http": 200,
-      "live": "1.24.1-no-topic-seeds",
+      "live": "1.24.2-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1256,9 +1263,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.13.1-check-repair",
+      "before": "0.14.2-doi-scrub",
       "http": 200,
-      "live": "0.13.1-check-repair",
+      "live": "0.14.2-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1400,9 +1407,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.40.1-grounded-public",
+      "before": "2.40.2-doi-scrub",
       "http": 200,
-      "live": "2.40.1-grounded-public",
+      "live": "2.40.2-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"

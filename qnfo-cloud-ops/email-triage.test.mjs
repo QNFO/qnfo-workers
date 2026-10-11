@@ -1,8 +1,8 @@
-// EMAIL-TRIAGE-D1-1 + ZENODO-UA-1 offline suite (qnfo-cloud-ops 1.17.1). Replays jobEmailTriage and jobZenodoStats from
+// EMAIL-TRIAGE-D1-1 offline suite (qnfo-cloud-ops 1.17.1). Replays jobEmailTriage from
 // worker.js against in-memory SQLite D1s and a stubbed fetch. Proves: the triage reads qnfo-audit.emails itself (no
 // qnfo-email call, no EMAIL_API_KEY), marks only noise as spam, leaves actionable mail alone and still flags outreach
-// replies; the Zenodo fetch sends an honest User-Agent (never a spoofed browser), and a refusal is counted by HTTP status.
-// Run: node qnfo-cloud-ops/email-zenodo.test.mjs   -> prints "N passed, 0 failed"
+// replies.
+// Run: node qnfo-cloud-ops/email-triage.test.mjs   -> prints "N passed, 0 failed"
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 
@@ -14,7 +14,6 @@ function slice(start, end) {
 }
 const VERSION = (/var VERSION = "([^"]+)"/.exec(src) || [])[1];
 const triageSrc = slice("var EMAIL_TRIAGE_STATUSES", '__name(jobEmailTriage, "jobEmailTriage");');
-const zenodoSrc = slice("var ZENODO_UA", '__name(jobZenodoStats, "jobZenodoStats");');
 
 let digests = [];
 let fetchCalls = [];
@@ -24,7 +23,7 @@ const api = new Function("VERSION", "NL", "fetchStub", "digests",
   "var fetch = function(u, i) { return fetchStub(u, i); };\n" +
   "async function storeDigest(env, job, subject, text) { digests.push({ job: job, subject: subject, text: text }); return { stored: true, id: 'dg-' + job }; }\n" +
   "async function cfEmail() { throw new Error('qnfo-email must not be called by the triage'); }\n" +
-  triageSrc + "\n" + zenodoSrc + "\nreturn { jobEmailTriage, jobZenodoStats, ZENODO_UA, emailTriageSetStatus };"
+  triageSrc + "\nreturn { jobEmailTriage, emailTriageSetStatus };"
 )(VERSION, "\n", (u, i) => { fetchCalls.push({ u: String(u), i }); return fetchImpl(u, i); }, digests);
 
 function d1(db) {
@@ -73,34 +72,6 @@ ok(digests.length === 1 && /2 actionable, 3 noise/.test(digests[0].text) && /po@
 ok(!(await api.emailTriageSetStatus(env, 1, "deleted")) && !(await api.emailTriageSetStatus(env, 0, "spam")), "only qnfo-email's allowed statuses and a real id are written");
 const broken = await api.jobEmailTriage({ AUDIT: { prepare() { throw new Error("no such table: emails"); } } });
 ok(broken.status === "error" && /emails read: no such table/.test(broken.notes.error), "a D1 read failure is an error run, not a silent ok");
-
-// ---------- ZENODO-UA-1 ----------
-ok(!/Chrome|Safari|Windows NT|AppleWebKit/.test(api.ZENODO_UA) && api.ZENODO_UA.startsWith("qnfo-cloud-ops/" + VERSION), "the Zenodo User-Agent names the worker honestly (" + api.ZENODO_UA + ")");
-const living = new DatabaseSync(":memory:");
-living.exec("CREATE TABLE papers (zenodo_doi TEXT, slug TEXT, status TEXT)");
-for (const [doi, slug] of [["10.5281/zenodo.111", "a"], ["10.5281/zenodo.222", "b"], ["10.5281/zenodo.333", "c"], ["pending", "d"]]) living.prepare("INSERT INTO papers VALUES (?, ?, 'published')").run(doi, slug);
-audit.exec(`CREATE TABLE zenodo_stats (doi TEXT PRIMARY KEY, conceptdoi TEXT, title TEXT, slug TEXT, downloads INTEGER, unique_downloads INTEGER, views INTEGER,
-  unique_views INTEGER, version_downloads INTEGER, prev_downloads INTEGER, prev_views INTEGER, fetched_at TEXT, updated_at TEXT DEFAULT (datetime('now')));
-CREATE TABLE zenodo_attribution_audit (doi TEXT PRIMARY KEY, creators TEXT, related TEXT, creator_ok INTEGER, obsoleted_ok INTEGER, audited_at TEXT);`);
-// Zenodo's behaviour as probed on 2026-10-02: a browser-like UA gets 403, an honest one gets the record.
-fetchCalls = [];
-fetchImpl = async (u, i) => {
-  const ua = (i && i.headers && i.headers["User-Agent"]) || "";
-  if (/Chrome|Safari/.test(ua)) return new Response("<html>403 Forbidden unusual traffic</html>", { status: 403 });
-  const id = String(u).split("/").pop();
-  if (id === "333") return new Response("{}", { status: 429 });
-  return new Response(JSON.stringify({ doi: "10.5281/zenodo." + id, conceptdoi: null, metadata: { title: "Paper " + id, creators: [{ name: "Quni-Gudzinas, Rowan Brad" }] }, stats: { downloads: 10, unique_downloads: 8, views: 20, unique_views: 15, version_downloads: 10 } }), { status: 200, headers: { "Content-Type": "application/json" } });
-};
-digests.length = 0;
-const z = await api.jobZenodoStats({ AUDIT: d1(audit), LIVING: d1(living) });
-ok(fetchCalls.length === 3 && fetchCalls.every((c) => c.i.headers["User-Agent"] === api.ZENODO_UA && c.i.headers.Accept === "application/json"), "every record fetch carries the honest User-Agent");
-ok(z.status === "ok" && z.notes.fetched === 2 && z.notes.errors === 1 && z.notes.failures["429"] === 1, "two records stored, the 429 counted by status (" + JSON.stringify(z.notes.failures) + ")");
-ok(audit.prepare("SELECT COUNT(*) n FROM zenodo_stats").get().n === 2, "zenodo_stats holds the fetched records");
-ok(/errors 1 \{"429":1\}/.test(digests[0].text), "the digest names the refusal status");
-fetchImpl = async () => new Response("<html>403</html>", { status: 403 });
-audit.exec("DELETE FROM zenodo_stats");
-const zf = await api.jobZenodoStats({ AUDIT: d1(audit), LIVING: d1(living) });
-ok(zf.status === "error" && zf.notes.fetched === 0 && zf.notes.failures["403"] === 3, "an all-refused run is an error with the 403s counted (the 2026-09-05..19 failure is now self-explaining)");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

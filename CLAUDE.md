@@ -140,6 +140,11 @@ because each one was broken at least once; the linked issue holds the evidence.
   - `runner-https` GETs a fleet host from the GitHub runner, outside the Cloudflare account, because a Worker's request to its own account's hosts is the issue-1190 artifact;
   - `d1-query@<db>` reads any other account D1 by name (the consumer). qnfo-identity and qnfo-outreach are refused, because the run log is public.
 - An issue about live behaviour names what closes it on a line of its own: `runtime-probe: {"url": "https://...", "status": 200, "contains": "<marker>"}`. D1 triggers make that line the issue's runner-https contract (PROBE-BIRTH-RUNTIME-1). Never choose a URL and marker that already pass while the defect exists. The runners' write-keyword guard scans string literals too, so a probe's failure text must not contain words like "update ".
+- A removal is probed too (AUTOAUDIT-PROBES-1): a runtime-probe takes `"absent": "<text>"` (case-insensitive, must not occur),
+  and an issue whose defect is the code on main names `code-probe: {"paths": ["<dir>/worker.js"], "absent"|"contains": "<exact text>"}`
+  on a line of its own; D1 triggers make it a `code-read` contract that the consumer runs against its checkout of main. Use it
+  where the code state is the defect; behaviour still needs a runtime or D1 probe. The consumer drains every due contract
+  per run (PROBE-DRAIN-1).
 - ORPHAN-GUARD-BIRTH-1 (migrations/2026-10-06-orphan-birth-contracts.sql) writes the `issue-<id>` contract row at birth, so a session or loop that gives an issue its probe uses UPDATE on class `issue-<id>` (PROBE-BIRTH-RUNTIME-1 does; an INSERT OR IGNORE of that class is silently ignored). An issue filed by a live worker carries a 48-hour probe that reads `pending` while the filing loop owns it and `stale` after.
 - qnfo-cloud-ops dispatches the consumer when it has been idle for 60 minutes (PROBE-CADENCE-1), so runtime probes do not depend on pushes to main.
 

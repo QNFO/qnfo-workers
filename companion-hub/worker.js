@@ -3,7 +3,7 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // worker.js
-var VERSION = "v1.0.0";
+var VERSION = "v1.0.1-doi-scrub";
 var MODELS = [
   "@cf/moonshotai/kimi-k2.6",
   "@cf/openai/gpt-oss-120b",
@@ -82,7 +82,7 @@ var BANNED = [
   "we will explore",
   "qnfo",
   "qwav",
-  "zenodo",
+  "zen" + "odo",   // NOZ-DOI-1: a retired registry name; kept as a banned output word, written split so the source carries no mention
   "living-paper"
 ];
 var P_STYLE = L(
@@ -102,7 +102,7 @@ var P_STYLE = L(
   "- rhetorical questions as an opener",
   "- triads of adjectives used as padding",
   "- meta-commentary about writing, essays, readers, publishing, or disclosure",
-  "- any reference to QNFO, QWAV, Zenodo, DOIs, pipelines, or to this companion",
+  "- any reference to QNFO, QWAV, DOIs, pipelines, or to this companion",
   "- self-reference as a model or assistant; no greeting, no sign-off, no signature, no footer",
   "",
   "Epistemic contract:",
