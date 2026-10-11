@@ -57,6 +57,7 @@ RUNTIME PROBES (PROBE-TRANSPORT-MONOCULTURE-1, agent_issues 2060, 2026-10-06)
 """
 
 import json
+import concurrent.futures
 import os
 import sys
 import time
@@ -71,6 +72,9 @@ DB_NAME = os.environ.get("REMEDIATION_DB", "qnfo-audit")
 DB_ID = os.environ.get("D1_DATABASE_ID", "")
 VERIFIER = "remediation-consumer@%s" % (os.environ.get("GITHUB_SHA", "local")[:12])
 MAX_ITEMS = int(os.environ.get("REMEDIATION_MAX_ITEMS", "10"))
+# PROBE-DRAIN-1: a run drains the due set within this budget (the job also runs other steps inside its 15-minute timeout).
+PROBE_BUDGET_S = int(os.environ.get("REMEDIATION_BUDGET_S", "300"))
+PROBE_WORKERS = max(1, int(os.environ.get("REMEDIATION_WORKERS", "4")))
 
 WRITE_KW = (
     "insert into", "update ", "delete from", "drop table", "drop index",
@@ -494,6 +498,51 @@ def _selftest():
     if classify("ok", "status=404") != (0, "fail") or classify("ok", "ok") != (1, "pass"):
         print(json.dumps({"ok": False, "case": "https-classify"}))
         return 1
+    # PROBE-DRAIN-1: hourly contracts come due inside their 60-minute window; counters from parallel probes add up; a run
+    # drains every due batch and never probes a contract twice.
+    if next_due_offset(1) != "+45 minutes" or next_due_offset(6) != "+345 minutes" or next_due_offset(0.25) != "+30 minutes":
+        print(json.dumps({"ok": False, "case": "next-due-offset"}))
+        return 1
+    agg = {"pass": 1, "fail": 0, "skipped": 0}
+    merge_out(agg, {"pass": 2, "fail": 1, "skipped": 0, "filed": [7]})
+    if agg != {"pass": 3, "fail": 1, "skipped": 0, "filed": [7]}:
+        print(json.dumps({"ok": False, "case": "merge-out", "got": agg}))
+        return 1
+    g = globals()
+    saved = (g["d1"], g["MAX_ITEMS"], g["_req"])
+    due = ["c%d" % i for i in range(9)]
+    seen_sql = []
+
+    def fake_d1(sql, params=None):
+        seen_sql.append(sql.split()[0])
+        if sql.lstrip().startswith("SELECT transport"):
+            return [{"transport": "d1-query"}]
+        if "FROM remediation_contracts" in sql and sql.lstrip().startswith("SELECT"):
+            return [{"class": c, "verify_transport": "d1-query", "verify_probe": "SELECT 'a' AS expected, 'a' AS observed",
+                     "expected_cadence_h": 1} for c in due[: params[0]]]
+        if sql.lstrip().startswith("UPDATE remediation_contracts"):
+            if params[-1] in due:
+                due.remove(params[-1])
+            return []
+        if sql.lstrip().startswith("SELECT 'a'"):
+            return [{"expected": "a", "observed": "a"}]
+        return []
+    try:
+        g["d1"], g["MAX_ITEMS"] = fake_d1, 4
+
+        def no_net(*a, **k):
+            raise RuntimeError("selftest: no network")
+        g["_req"] = no_net
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main()
+        res = json.loads(buf.getvalue().strip().splitlines()[-1])
+    finally:
+        g["d1"], g["MAX_ITEMS"], g["_req"] = saved
+    if res.get("due") != 9 or res.get("pass") != 9 or due:
+        print(json.dumps({"ok": False, "case": "drain", "got": {k: res.get(k) for k in ("due", "pass", "fail", "skipped")}, "left": due}))
+        return 1
     try:
         import host_census
         hc = host_census.selftest()
@@ -581,6 +630,50 @@ def consume_d1(c, rec, out, trusted):
             out["fail"] += 1
 
 
+def next_due_offset(cadence_h):
+    """PROBE-DRAIN-1: due 15 minutes before the cadence, so an hourly contract is probed inside its 60-minute window
+    (issues_unprobed_60m) by a run that starts on the hour, instead of always just after it."""
+    return "+%d minutes" % max(30, int(float(cadence_h) * 60) - 15)
+
+
+def consume_one(c, trusted):
+    """Probe and stamp one contract with its own counters, so contracts can run in parallel (merge_out folds them)."""
+    local = {"pass": 0, "fail": 0, "skipped": 0}
+    cls = c.get("class")
+    rec = {"class": cls, "issue_id": c.get("issue_id"), "verdict": None}
+    next_status, cadence = None, None
+    try:
+        if c.get("verify_transport") == HTTPS_TRANSPORT:
+            next_status, cadence = consume_https(c, rec, local, trusted)
+        else:
+            consume_d1(c, rec, local, trusted)
+    except Exception as e:  # noqa: BLE001 - one bad contract must not kill the run
+        rec["verdict"] = "probe-error"
+        rec["reason"] = str(e)[:300]
+        local["skipped"] += 1
+        log("contract %s error: %s" % (cls, e))
+    if cadence is None:
+        cadence = c.get("expected_cadence_h") or 6
+    try:
+        d1(
+            "UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, "
+            "last_attempt_at = datetime('now'), last_verdict = ?, "
+            "next_due_at = datetime('now', ?), status = COALESCE(?, status) WHERE class = ?",
+            [rec["verdict"], next_due_offset(cadence), next_status, cls],
+        )
+    except Exception as e:  # noqa: BLE001
+        log("contract %s stamp failed: %s" % (cls, e))
+    return rec, local
+
+
+def merge_out(out, local):
+    for k, v in local.items():
+        if isinstance(v, list):
+            out.setdefault(k, []).extend(v)
+        elif isinstance(v, (int, float)):
+            out[k] = out.get(k, 0) + v
+
+
 def main():
     t0 = time.time()
     out = {"ok": True, "marker": "REMEDIATION-CONSUMER-1", "verifier": VERIFIER,
@@ -594,37 +687,24 @@ def main():
         print(json.dumps(out))
         return 1
 
-    contracts = d1(CONTRACT_SQL, [MAX_ITEMS])
+    # PROBE-DRAIN-1 (2026-10-11, owner directive "remediate all open items and failure modes ... automatic resolution of root
+    # causes"): one run took MAX_ITEMS (40) contracts, but 242 contracts are hourly and a quiet main runs this workflow about
+    # once an hour, so 117 were overdue at 09:08Z and issues_unprobed_60m read 59 (failure-mode detectors unprobed: 8). A run
+    # now drains the due set in batches of MAX_ITEMS, PROBE_WORKERS at a time, until nothing is due or PROBE_BUDGET_S runs out.
+    contracts, seen = [], set()
+    while time.time() - t0 < PROBE_BUDGET_S:
+        batch = [c for c in d1(CONTRACT_SQL, [MAX_ITEMS]) if c.get("class") not in seen]
+        if not batch:
+            break
+        seen.update(c.get("class") for c in batch)
+        contracts += batch
+        with concurrent.futures.ThreadPoolExecutor(max_workers=PROBE_WORKERS) as pool:
+            for rec, local in pool.map(lambda c: consume_one(c, trusted), batch):
+                merge_out(out, local)
+                out["contracts"].append(rec)
     out["due"] = len(contracts)
-    log("due contracts: %d" % len(contracts))
-
-    for c in contracts:
-        cls = c.get("class")
-        rec = {"class": cls, "issue_id": c.get("issue_id"), "verdict": None}
-        next_status, cadence = None, None
-        try:
-            if c.get("verify_transport") == HTTPS_TRANSPORT:
-                next_status, cadence = consume_https(c, rec, out, trusted)
-            else:
-                consume_d1(c, rec, out, trusted)
-        except Exception as e:  # noqa: BLE001 - one bad contract must not kill the run
-            rec["verdict"] = "probe-error"
-            rec["reason"] = str(e)[:300]
-            out["skipped"] += 1
-            log("contract %s error: %s" % (cls, e))
-
-        if cadence is None:
-            cadence = c.get("expected_cadence_h") or 6
-        try:
-            d1(
-                "UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, "
-                "last_attempt_at = datetime('now'), last_verdict = ?, "
-                "next_due_at = datetime('now', ?), status = COALESCE(?, status) WHERE class = ?",
-                [rec["verdict"], "+%d hours" % int(cadence), next_status, cls],
-            )
-        except Exception as e:  # noqa: BLE001
-            log("contract %s stamp failed: %s" % (cls, e))
-        out["contracts"].append(rec)
+    out["budget_exhausted"] = time.time() - t0 >= PROBE_BUDGET_S
+    log("contracts probed: %d" % len(contracts))
 
     try:
         refresh_runtime_share(out)
@@ -650,7 +730,7 @@ def main():
              json.dumps([c.get("issue_id") for c in contracts]),
              45000, spent, len(contracts),
              out["pass"] + out["fail"], out["pass"], out["fail"],
-             "completed",
+             "budget-exhausted" if out.get("budget_exhausted") else "completed",
              json.dumps({"contracts": out["contracts"]})[:4000],
              json.dumps({"verifier": VERIFIER, "trusted": sorted(trusted)})],
         )
