@@ -96,6 +96,14 @@ LIMIT ?
 
 # PROBE-TRANSPORT-MONOCULTURE-1: the runtime transport this file executes itself (see the docstring, rules 6-9).
 HTTPS_TRANSPORT = "runner-https"
+# CODE-READ-PROBE-1 (2026-10-11): transport_trust has listed code-read as trusted, but nothing executed it, so an issue whose
+# defect IS the code (a dead caller, a hard-coded table, a missing workflow guard) could only carry needs-machine-probe (17
+# open issues on 2026-10-11). This runner works in a checkout of main, so it reads the files itself. Spec (JSON data, never
+# code): {"paths": ["dir/file.js", ...], "contains": "<exact text>", "absent": "<exact text>"}; ok when every path exists and
+# every file contains `contains` and none contains `absent` (both case-sensitive). It proves the code on main, not behaviour:
+# use it where the code state is the defect, and a runtime or D1 probe for behaviour.
+CODE_TRANSPORT = "code-read"
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # PROBE-PLANES-1: qwav.tech (ask.qwav.tech) and qwav.org are fleet hosts in fleet-control RT_FLEET_HOSTS as well, and a
 # Worker may not probe them (issue 1190), so only this runner can.
 HTTPS_HOSTS = ("qnfo.org", "q08.org", "q08.workers.dev", "qwav.tech", "qwav.org")
@@ -264,7 +272,9 @@ def parse_https_probe(spec):
         return None, "not-json"
     if not isinstance(p, dict):
         return None, "not-an-object"
-    unknown = set(p) - {"url", "status", "contains", "max_ms"}
+    # ABSENT-PROBE-1 (2026-10-11): "absent" is a case-insensitive token the body must NOT contain, so a removal (a scrub, a
+    # retired string) has a machine probe; before it the six NO-ZENODO-DOI issues could only carry needs-machine-probe.
+    unknown = set(p) - {"url", "status", "contains", "absent", "max_ms"}
     if unknown:
         return None, "unknown-key:%s" % sorted(unknown)[0]
     if not host_allowed(p.get("url")):
@@ -275,10 +285,13 @@ def parse_https_probe(spec):
     c = p.get("contains")
     if c is not None and (not isinstance(c, str) or not c or len(c) > 200):
         return None, "bad-contains"
+    a = p.get("absent")
+    if a is not None and (not isinstance(a, str) or not a or len(a) > 200):
+        return None, "bad-absent"
     m = p.get("max_ms")
     if m is not None and (not isinstance(m, int) or m <= 0 or m > HTTPS_TIMEOUT_S * 1000):
         return None, "bad-max_ms"
-    return {"url": p["url"], "status": st, "contains": c, "max_ms": m}, None
+    return {"url": p["url"], "status": st, "contains": c, "absent": a, "max_ms": m}, None
 
 
 class _AllowlistRedirect(urllib.request.HTTPRedirectHandler):
@@ -297,6 +310,8 @@ def judge_https(probe, status, elapsed_ms, body):
         return "status=%d" % status
     if probe.get("contains") and probe["contains"].encode("utf-8") not in (body or b""):
         return "missing-marker"
+    if probe.get("absent") and probe["absent"].lower().encode("utf-8") in (body or b"").lower():
+        return "present-marker"
     if probe.get("max_ms") and elapsed_ms > probe["max_ms"]:
         return "slow=%dms" % elapsed_ms
     return "ok"
@@ -490,6 +505,34 @@ def _selftest():
         ((200, 50, b"..gateway.."), "ok"), ((404, 50, b"gateway"), "status=404"),
         ((200, 50, b"nothing"), "missing-marker"), ((200, 1500, b"gateway"), "slow=1500ms"),
     ]
+    pa = {"url": "https://qnfo.org/", "status": 200, "contains": None, "absent": "Zenodo", "max_ms": None}
+    if judge_https(pa, 200, 5, b"see zenodo.org") != "present-marker" or judge_https(pa, 200, 5, b"clean") != "ok":
+        print(json.dumps({"ok": False, "case": "absent-marker"}))
+        return 1
+    import tempfile
+    tmp = tempfile.mkdtemp()
+    os.makedirs(os.path.join(tmp, "w"))
+    with open(os.path.join(tmp, "w", "worker.js"), "w") as fh:
+        fh.write('var VERSION = "1.0.0"; fetch("https://old.q08.workers.dev")')
+    code_cases = [
+        ({"paths": ["w/worker.js"], "absent": "old.q08"}, "present-marker:w/worker.js"),
+        ({"paths": ["w/worker.js"], "contains": "VERSION"}, "ok"),
+        ({"paths": ["w/worker.js"], "contains": "Version"}, "missing-marker:w/worker.js"),
+        ({"paths": ["w/none.js"], "absent": "x"}, "missing:w/none.js"),
+    ]
+    for spec, want in code_cases:
+        pr2, err2 = parse_code_probe(json.dumps(spec))
+        if err2 or run_code_probe(pr2, tmp) != want:
+            print(json.dumps({"ok": False, "case": "code-read", "spec": spec, "got": err2 or run_code_probe(pr2, tmp)}))
+            return 1
+    for bad, want in (('{"paths": ["../etc/passwd"], "absent": "x"}', "bad-path"), ('{"paths": ["/etc/passwd"], "absent": "x"}', "bad-path"),
+                      ('{"paths": ["a"]}', "no-condition"), ('{"paths": ["a"], "absent": "x", "sql": 1}', "unknown-key:sql")):
+        if parse_code_probe(bad)[1] != want:
+            print(json.dumps({"ok": False, "case": "code-read-parse", "spec": bad, "got": parse_code_probe(bad)[1]}))
+            return 1
+    if parse_https_probe('{"url": "https://qnfo.org/", "absent": ""}')[1] != "bad-absent":
+        print(json.dumps({"ok": False, "case": "absent-parse"}))
+        return 1
     for (st, ms, body), want in judged:
         got = judge_https(pr, st, ms, body)
         if got != want:
@@ -582,6 +625,72 @@ def consume_https(c, rec, out, trusted):
     return https_after_verdict(c, passed, obs, out)
 
 
+def parse_code_probe(spec):
+    """(probe dict, None) or (None, reason) for a code-read contract."""
+    try:
+        p = json.loads(spec or "")
+    except (TypeError, ValueError):
+        return None, "not-json"
+    if not isinstance(p, dict):
+        return None, "not-an-object"
+    unknown = set(p) - {"paths", "contains", "absent"}
+    if unknown:
+        return None, "unknown-key:%s" % sorted(unknown)[0]
+    paths = p.get("paths")
+    if not isinstance(paths, list) or not paths or len(paths) > 20:
+        return None, "bad-paths"
+    for x in paths:
+        if not isinstance(x, str) or not x or x.startswith("/") or ".." in x.split("/") or "\\" in x:
+            return None, "bad-path"
+    for k in ("contains", "absent"):
+        v = p.get(k)
+        if v is not None and (not isinstance(v, str) or not v or len(v) > 200):
+            return None, "bad-%s" % k
+    if p.get("contains") is None and p.get("absent") is None:
+        return None, "no-condition"
+    return {"paths": paths, "contains": p.get("contains"), "absent": p.get("absent")}, None
+
+
+def run_code_probe(probe, root=None):
+    """observed token: ok, missing:<path>, missing-marker:<path> or present-marker:<path>."""
+    root = os.path.realpath(root or REPO_ROOT)
+    for rel in probe["paths"]:
+        full = os.path.realpath(os.path.join(root, rel))
+        if not full.startswith(root + os.sep) or not os.path.isfile(full):
+            return "missing:%s" % rel
+        with open(full, "r", encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        if probe.get("contains") and probe["contains"] not in text:
+            return "missing-marker:%s" % rel
+        if probe.get("absent") and probe["absent"] in text:
+            return "present-marker:%s" % rel
+    return "ok"
+
+
+def consume_code(c, rec, out, trusted):
+    """Run one code-read contract against this checkout of main."""
+    probe, why = parse_code_probe(c.get("verify_probe"))
+    if probe is None:
+        rec["verdict"], rec["reason"] = "probe-not-machine-executable", why
+        out["skipped"] += 1
+        return
+    if CODE_TRANSPORT not in trusted:
+        rec["verdict"], rec["reason"] = "untrusted-transport", "%r not trusted" % CODE_TRANSPORT
+        out["skipped"] += 1
+        return
+    obs = run_code_probe(probe)
+    passed, verdict = classify("ok", obs)
+    rec.update({"expected": "ok", "observed": obs, "verdict": verdict})
+    d1(
+        "INSERT INTO remediation_verifications "
+        "(issue_id, class, probe_url, transport, expected, observed, pass, verifier) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [c.get("issue_id"), c.get("class"), "code:" + ",".join(probe["paths"])[:200], CODE_TRANSPORT, "ok", obs, passed, VERIFIER],
+    )
+    rec["written"] = True
+    out["pass" if passed == 1 else "fail"] += 1
+
+
 def consume_d1(c, rec, out, trusted):
     """Run one d1-query (or d1-query@plane) contract: the REMEDIATION-CONSUMER-1 path, unchanged."""
     cls = c.get("class")
@@ -645,6 +754,8 @@ def consume_one(c, trusted):
     try:
         if c.get("verify_transport") == HTTPS_TRANSPORT:
             next_status, cadence = consume_https(c, rec, local, trusted)
+        elif c.get("verify_transport") == CODE_TRANSPORT:
+            consume_code(c, rec, local, trusted)
         else:
             consume_d1(c, rec, local, trusted)
     except Exception as e:  # noqa: BLE001 - one bad contract must not kill the run
