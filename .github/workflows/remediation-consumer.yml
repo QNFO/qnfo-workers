@@ -106,6 +106,14 @@ jobs:
         run: |
           python3 scripts/loop_breaker_runner.py --selftest && python3 scripts/loop_breaker_runner.py
 
+      # BLOCKER-REDTEAM-AUTO-1 (owner directive 2026-10-11, automatic resolution of root causes): one deterministic attempt per
+      # untested blocker claim in v_blocker_claims (a doer exists, the repository token verifies, an IDENTITY-BOUND line),
+      # recorded in blocker_redteam; a claim it cannot test stays counted. Never fails the job.
+      - name: Red-team blocker claims
+        continue-on-error: true
+        run: |
+          python3 scripts/blocker_redteam_runner.py --selftest && python3 scripts/blocker_redteam_runner.py
+
       # CLAIM-REAPER-1 (owner request 2026-10-09, scheduled audits that remediate): releases work claims whose PR merged or
       # closed 30+ minutes ago, in work_claims and deploy_locks, so a session that stopped without releasing does not block
       # the file for the rest of its TTL. Reads PR state with this run's token; never fails the job.
