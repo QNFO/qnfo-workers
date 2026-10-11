@@ -77,7 +77,10 @@ assert.deepEqual(q.pickPanel(PF, 2, 0), [], "nothing left means no panel");
 // 9. aggregation: mean >= 4 and a strict majority would read; a missing judge is ignored; none means null (fail open)
 const J = (score, wr) => ({ score, would_read: wr, tells: [], fix: "f" + score, pass: wr && score >= 4 });
 assert.equal(q.aggregatePanel([J(5, true), J(4, true)]).pass, true);
-assert.equal(q.aggregatePanel([J(5, true), J(3, false)]).pass, false, "one dissenter among two fails the panel");
+assert.equal(q.aggregatePanel([J(5, true), J(3, false)]).pass, true, "a mean of 4 with one reader to the end passes (Q08-PANEL-THRESHOLD-1)");
+assert.equal(q.aggregatePanel([J(5, true), J(2, false)]).pass, false, "a reader who stopped early (score 2) fails the panel");
+assert.equal(q.aggregatePanel([J(4, true), J(3, false)]).pass, true, "a 4 and a 3 (mean 3.5) pass");
+assert.equal(q.aggregatePanel([J(3, false), J(3, false)]).pass, false, "two 3s (mean 3) fail");
 assert.equal(q.aggregatePanel([J(5, true), null]).pass, true, "an errored judge is dropped");
 assert.equal(q.aggregatePanel([null, null]), null);
 
