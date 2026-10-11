@@ -1,12 +1,181 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@0b25b80b569b",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@185c439f949d",
+ "due": 21,
+ "pass": 3,
+ "fail": 18,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2293",
+   "issue_id": 2293,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2294",
+   "issue_id": 2294,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2295",
+   "issue_id": 2295,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2296",
+   "issue_id": 2296,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2297",
+   "issue_id": 2297,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by fi-executor, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2025",
+   "issue_id": 2025,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "pending: 30-day window from 2026-10-06T06:30Z still open",
+   "written": true
+  },
+  {
+   "class": "issue-2022",
+   "issue_id": 2022,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2074",
+   "issue_id": 2074,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: lever T1.24 status session",
+   "written": true
+  },
+  {
+   "class": "issue-2146",
+   "issue_id": 2146,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop fi-executor did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2085",
+   "issue_id": 2085,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2087",
+   "issue_id": 2087,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2089",
+   "issue_id": 2089,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "fm-autoaudit-stale",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2096",
+   "issue_id": 2096,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop objective-constraints did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2101",
+   "issue_id": 2101,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no scripts/* code task merged yet (0 such tasks exist)",
+   "written": true
+  },
+  {
+   "class": "issue-2256",
+   "issue_id": 2256,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2102",
+   "issue_id": 2102,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no code-task.intake-redirect event yet",
+   "written": true
+  },
+  {
+   "class": "issue-2109",
+   "issue_id": 2109,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop qnfo-email did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2111",
+   "issue_id": 2111,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 23 SEARCH-not-found failures in 7 days (target <= 3)",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,12 +199,13 @@
   "http",
   "runner-https"
  ],
+ "https": 2,
  "runtime_verified_share_24h": 4,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 5103,
- "head": "0b25b80b569bd1e6229d812c03105961d160f69c",
+ "spent_ms": 53956,
+ "head": "185c439f949d28c46f2c67516a5663a1e8665e74",
  "job_status": "success",
- "ts": "2026-10-11T05:08:18Z"
+ "ts": "2026-10-11T05:13:53Z"
 }
