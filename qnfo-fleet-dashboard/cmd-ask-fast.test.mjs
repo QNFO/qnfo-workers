@@ -9,12 +9,14 @@ const src = readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (d === undefined ? "" : " :: " + JSON.stringify(d).slice(0, 300))); } };
 const cut = (a, b) => src.slice(src.indexOf(a), src.indexOf(b));
+const bud = /var CMD_AI_BUDGET_MS = (\d+)e3;/.exec(src);
+ok(bud && Number(bud[1]) <= 27, "the AI budget stays inside the 30 s ctx.waitUntil window (CMD-ASK-BUDGET-1)", bud && bud[1]);
 ok(!/var ASK_MODELS = \[[^\]]*glm-5\.2/.test(src), "ASK_MODELS no longer names glm-5.2");
 ok(/var ASK_MODELS = \["deepseek-v4-flash", "glm-5\.3-flash"/.test(src), "ASK_MODELS leads with deepseek-v4-flash then glm-5.3-flash");
 ok(/\[\[d1_databases\]\]\s*binding = "Q08"/.test(readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8")), "wrangler.toml declares the Q08 read binding");
 
 const helpers = cut("function squash(s) {", "__name(squash") + "\n" + cut("async function d1all(", "__name(d1all");
-const race = cut("var ASK_MODELS = ", "async function sha256hex(").replace("var ASK_HEDGE_MS = 5e3;", "var ASK_HEDGE_MS = 150;")
+const race = cut("var ASK_MODELS = ", "async function sha256hex(").replace("var ASK_HEDGE_MS = 4e3;", "var ASK_HEDGE_MS = 150;")
   + "\n" + cut("// CMD-ASK-FAST-1: race the models", "// One plain-English answer: models raced")
   + "\n" + cut("// One model call with a real abort", "// One plain-English answer: models raced");
 const q08 = cut("var Q08_Q = ", "async function cmdAnswer(");
