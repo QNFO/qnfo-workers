@@ -583,6 +583,10 @@ def gh_api(method, path, payload=None):
 def publish_issue(body, has_findings=True):
     """AUTOAUDIT-ACTIONABLE-1: one issue, reused open or closed; open exactly while the audit has an actionable finding."""
     existing = gh_api("GET", "/issues?state=all&labels=fleet-autoaudit&sort=updated&per_page=20")
+    # AUTOAUDIT-ACTIONABLE-2 (2026-10-11): a failed lookup (HTTP 403 rate limit) fell through to POST and opened duplicate #907
+    # while #52 existed; without a listing the issue state is unknown, so report the failure instead of creating.
+    if not isinstance(existing, list):
+        return "lookup-failed", None, (existing or {}).get("_error") or "issue lookup returned no list"
     if isinstance(existing, list):
         for it in existing:
             if str(it.get("title", "")).startswith(ISSUE_TAG) and not it.get("pull_request"):
