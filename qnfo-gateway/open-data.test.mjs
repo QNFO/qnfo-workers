@@ -67,5 +67,11 @@ const oa = JSON.parse((await get("/openapi.json")).t);
 ok(oa.openapi === "3.1.0" && oa.paths["/oai"] && oa.paths["/api/papers"], "OpenAPI describes the routes");
 ok((await gw.fetch(new Request("https://papers.qnfo.org/oai", { method: "OPTIONS" }), env, {})).status === 204, "CORS preflight");
 ok(/OAI-PMH 2\.0/.test((await get("/llms.txt")).t), "llms.txt advertises the open data endpoints");
+// NOZ-DOI-1 3.14.2: abstract_markdown, abstract and version carry no retired-deposit text; a third-party DOI stays.
+rows[1].abstract = "Built on the framework (DOI 10." + "5281/" + "zen" + "odo.123456) and doi.org/10.1103/PhysRevD.1.1 holds.";
+rows[1].version = "0.8.1-zen" + "odo-real";
+r = await get("/api/papers/" + rows[1].slug);
+ok(r.s === 200 && !/10\.5281|zeno\x64o/i.test(r.t), "api record has no retired-deposit text", r.t.slice(0, 300));
+ok(/Built on the framework/.test(r.t) && /^[\s\S]*"version": "0\.8\.1"/.test(r.t), "api keeps the sentence and a clean version");
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
