@@ -1,98 +1,122 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@a3023a805346",
- "due": 11,
- "pass": 1,
- "fail": 10,
+ "verifier": "remediation-consumer@b53861d2aa1f",
+ "due": 14,
+ "pass": 8,
+ "fail": 6,
  "skipped": 0,
  "contracts": [
   {
-   "class": "rt-q08",
-   "issue_id": null,
+   "class": "issue-2306",
+   "issue_id": 2306,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "research-terminal-77ddda46",
+   "issue_id": 2306,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "parked+queue-moving",
+   "observed": "parked+queue-moving",
    "written": true
   },
   {
-   "class": "issue-2116",
-   "issue_id": 2116,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "below target: qnfo-research-exec glm-5.3-flash cached share 0.241 under 0.30 on the last complete day",
-   "written": true
-  },
-  {
-   "class": "issue-2118",
-   "issue_id": 2118,
+   "class": "issue-2214",
+   "issue_id": 2214,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2151",
-   "issue_id": 2151,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2072",
-   "issue_id": 2072,
-   "verdict": "fail",
-   "expected": "merged",
-   "observed": "failed",
-   "written": true
-  },
-  {
-   "class": "issue-2174",
-   "issue_id": 2174,
+   "class": "issue-2300",
+   "issue_id": 2300,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2130",
-   "issue_id": 2130,
+   "class": "issue-2105",
+   "issue_id": 2105,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "stale: the filing loop host-census did not close it within 48h",
+   "observed": "pending: ungated published=130 newest verdict=2026-10-11T04:20:27.078Z published quarantine-candidates=0",
    "written": true
   },
   {
-   "class": "issue-2132",
-   "issue_id": 2132,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2158",
-   "issue_id": 2158,
+   "class": "issue-2155",
+   "issue_id": 2155,
    "verdict": "fail",
    "expected": "ok",
    "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
    "written": true
   },
   {
-   "class": "issue-2170",
-   "issue_id": 2170,
-   "verdict": "fail",
+   "class": "belief-repo-token-writes-routes",
+   "issue_id": null,
+   "verdict": "pass",
    "expected": "1",
-   "observed": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-2133",
-   "issue_id": 2133,
+   "class": "belief-owner-queue-identity-only",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "belief-research-publishes-without-zenodo",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2223",
+   "issue_id": 2223,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: watchmaker_index reads 1 and qnfo-fleet-dashboard is ?",
+   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "fm-head-of-line",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-silent-refile-drop",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-enum-abort-drop",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-single-heartbeat",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
    "written": true
   }
  ],
@@ -119,14 +143,13 @@
   "http",
   "runner-https"
  ],
- "https": 1,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 4.2,
+ "runtime_verified_share_24h": 4.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 15991,
- "head": "a3023a8053463c7e63e353bbc8759e8f6e128885",
+ "spent_ms": 14712,
+ "head": "b53861d2aa1f96637c6c70dd7d4687cfd94301f8",
  "job_status": "success",
- "ts": "2026-10-11T09:36:20Z"
+ "ts": "2026-10-11T09:37:49Z"
 }
