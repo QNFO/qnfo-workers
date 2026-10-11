@@ -404,5 +404,10 @@ CREATE TABLE invest_facts (key TEXT PRIMARY KEY, value TEXT, evidence TEXT, upda
   ok(!JSON.stringify(status).includes("@"), "the read-out carries no address");
 }
 
+// PERF-PIN-1: a pinned lever never moves; a blank pin pins nothing.
+eq(P.perfLeverBounds(q08, { "perf_pin:q08-cadence": "owner cap, card 58" }), null, "a pinned lever has no bounds");
+eq(JSON.stringify(P.perfLeverBounds(q08, { "perf_pin:q08-cadence": "  " })), JSON.stringify({ min: 2, max: 10 }), "a blank pin pins nothing");
+plan = P.perfExperimentPlan(facts({ ops: { "perf_pin:q08-cadence": "owner cap" } }), NOW);
+ok(plan.starts.length === 0, "pinned: no experiment on the q08 cadence");
 console.log(`performance.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
