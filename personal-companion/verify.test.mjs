@@ -36,6 +36,10 @@ ok(probs.some((p) => /4000/.test(p)), "an invented figure is caught", probs);
 ok(!probs.some((p) => /Alpha|Beta|Gamma|1987|14\b|Objection/.test(p)), "what the source says, and a title-case heading, is not flagged", probs);
 ok(V.groundingProblems("# Drift in the readings\n\nThe Alpha Subject recorded 14 measurements in 1987. Suppose a hypothetical station kept a ledger: the reader would see two columns.\n", source).length === 0, "a grounded piece with a labelled hypothetical has no problems");
 
+// Unicode hyphens and single capitals (COMPANION-HYPHEN-NAMES-1): a name the source spells with "-" matches the writer's U+2011 spelling.
+ok(V.groundingProblems("# A method\n\nThe study of Dex\u2011One2Many shows that the Alpha Subject drifts. Section C describes the Beta Station.", "The Alpha Subject drifts at the Beta Station. Dex-One2Many is a method.").length === 0, "a non-breaking hyphen matches the source's plain hyphen and a single capital is not a name");
+ok(V.groundingProblems("# A method\n\nThe study of Quill\u2011Lantern shows it.", "The Alpha Subject drifts.").some((x) => /Quill/.test(x)), "an invented hyphenated name is still caught");
+
 // ---- fact-check verdicts and the two-family rule ---------------------------------------------------------------------------------
 ok(V.parseFactVerdict('{"unsupported":[],"verdict":"pass"}').verdict === "pass" && V.parseFactVerdict("no json") === null && V.parseFactVerdict('{"verdict":"maybe"}') === null, "verdict parser: pass, junk, unknown verdict");
 ok(V.parseFactVerdict('{"unsupported":["a -- x"],"verdict":"pass"}').verdict === "fail" && V.parseFactVerdict('{"unsupported":[],"verdict":"fail"}').unsupported.length === 1, "a pass that lists claims is a fail; a bare fail names a reason");
