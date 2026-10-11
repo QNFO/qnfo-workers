@@ -36,7 +36,7 @@
 
 // Q08-ASCII-SOURCE-1 (2026-10-01): this file is ASCII-only; every typographic character is a \uXXXX escape. The deploy path
 // double-encoded raw UTF-8, so live pages read "... \u00e2 q08" and posts "\u00e2\u0080\u0094". Keep new literals escaped.
-var VERSION = "0.10.2"; // 0.10.2 Q08-RENDER-1 + NO-ZENODO-DOI-2 (pillar: reach; owner directives 2026-10-10, agent_issues 2279 and 2275): titles, headings, list items, claims and previews render inline Markdown (*italic*, **bold**, `code`, links) and math (\\( \\), $$ $$, and $...$ only with a TeX token and no space inside, never before a digit, so currency stays literal) through q08Inline; <title>, og/twitter, citation meta, JSON-LD, RSS, e-mail digest, social text and BibTeX/RIS use q08Plain (markers stripped, TeX as Unicode); mdToHtml gains numbered lists and block quotes; the funnel copy no longer claims a DOI; the writer prompt states the title format. // 0.10.1 generative prompts name no example nouns (process and style only); 0.10.0 Q08-VERIFY-1 (pillar: reach, owner directive 2026-10-10: q08 content is 100% accurate and fact-checked): the writer prompts no longer ask for history from memory; a piece is published only when every name, year and figure is in its source material (signal plus the fetched article) and two reviewers from other model families find no unsupported claim (a reviewer outage fails closed); published pieces are re-audited each cron and a failure is retracted in public (410 notice, /retractions, out of index, feed, sitemap, APIs and social; forecasts built on it too). // 0.9.0 Q08-FORECAST-1 (pillar: reach): forecast mode. Every FORECAST_EVERY pieces the engine writes a most-likely scenario narrative from a published essay's mechanism (dated causal sequence, rival scenarios with probabilities, leading indicators, a checkable resolution condition), stored in q08_forecasts, settled by a two-family judge panel when the horizon passes and scored (Brier) on /forecasts and /api/forecasts; undecidable ones go void in public after 4 checks. // 0.8.13-codeagent 0.8.12 Q08-PHRASE-REVISE-1: a phrase-level-only gate failure is retried as a revision of the same draft, not a rewrite from scratch (#2034); 0.8.11 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the attempt-bound note no longer cites a budget stop; the bound is publishing cadence. // 0.8.10 Q08-STALL-METRIC-1 writes q08_hours_since_last_piece (#2034); 0.8.9 unknown paths 404 noindex (no soft 404); 0.8.8 Q08-SITEMAP-INDEXABLE-1: canonical home loc, no feed in the sitemap, www -> apex 301; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
+var VERSION = "0.11.0"; // 0.11.0 Q08-YIELD-REPAIR-1 (pillar: reach; owner directive 2026-10-11, automation must run user-free): generation runs hourly and audit/repair has its own :30 cron; an essay that fails the audit is repaired (unsupported claims deleted, correction note) before it is retracted and earlier audit retractions get one restoration attempt; essay length follows the source (700-1100 words, never padded) so the panel stops rejecting padding; name check ignores initials; article fetch upgrades http to https; attempt cap 4x. // 0.10.2 Q08-RENDER-1 + NO-ZENODO-DOI-2 (pillar: reach; owner directives 2026-10-10, agent_issues 2279 and 2275): titles, headings, list items, claims and previews render inline Markdown (*italic*, **bold**, `code`, links) and math (\\( \\), $$ $$, and $...$ only with a TeX token and no space inside, never before a digit, so currency stays literal) through q08Inline; <title>, og/twitter, citation meta, JSON-LD, RSS, e-mail digest, social text and BibTeX/RIS use q08Plain (markers stripped, TeX as Unicode); mdToHtml gains numbered lists and block quotes; the funnel copy no longer claims a DOI; the writer prompt states the title format. // 0.10.1 generative prompts name no example nouns (process and style only); 0.10.0 Q08-VERIFY-1 (pillar: reach, owner directive 2026-10-10: q08 content is 100% accurate and fact-checked): the writer prompts no longer ask for history from memory; a piece is published only when every name, year and figure is in its source material (signal plus the fetched article) and two reviewers from other model families find no unsupported claim (a reviewer outage fails closed); published pieces are re-audited each cron and a failure is retracted in public (410 notice, /retractions, out of index, feed, sitemap, APIs and social; forecasts built on it too). // 0.9.0 Q08-FORECAST-1 (pillar: reach): forecast mode. Every FORECAST_EVERY pieces the engine writes a most-likely scenario narrative from a published essay's mechanism (dated causal sequence, rival scenarios with probabilities, leading indicators, a checkable resolution condition), stored in q08_forecasts, settled by a two-family judge panel when the horizon passes and scored (Brier) on /forecasts and /api/forecasts; undecidable ones go void in public after 4 checks. // 0.8.13-codeagent 0.8.12 Q08-PHRASE-REVISE-1: a phrase-level-only gate failure is retried as a revision of the same draft, not a rewrite from scratch (#2034); 0.8.11 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the attempt-bound note no longer cites a budget stop; the bound is publishing cadence. // 0.8.10 Q08-STALL-METRIC-1 writes q08_hours_since_last_piece (#2034); 0.8.9 unknown paths 404 noindex (no soft 404); 0.8.8 Q08-SITEMAP-INDEXABLE-1: canonical home loc, no feed in the sitemap, www -> apex 301; // v0.8.6 Q08-WRITE-ROUTES-TOKEN-1 (pillar: reach, agent_issues 1995): POST /run and POST /regen need x-loop-token (both spent model calls for anyone; /regen rewrote a published essay without the panel); v0.8.5 Q08-ENSEMBLE-1 (pillar: reach): writer -> 2-judge reader panel from model families other than the writer -> editor from the other writer family -> fresh panel; judges are small-active-parameter models; panel agreement measured (q08_panel_effective_votes_30d); v0.8.4 Q08-QUALITY-1 (pillar: reach): plain-wording and no-pipeline-metadata rules, overused-precedent ban, Title Case title gate, owner editorial directives (qnfo-audit q08_editor_notes), reader-test rounds by the other model (max 1 rewrite, fail-open on a critic error), daily attempt cap of 2x the publish cap, owner verdict weight 3 (q08_owner_verdicts); v0.8.3 Q08-NOTE-1 (pillar: reach): optional sanitized note on the verdict form, stored in q08_feedback.note, never read by any prompt; v0.8.2 Q08-METRICS-1: daily human/crawler read counter, GET /api/metrics, metrics_7d on /health, own registry values (#1759); compose temperature from ops_config q08_compose_temperature 0.4..0.8 (#1760); v0.7.37 Q08-CADENCE-CAP-1: daily cap read from ops_config q08_max_per_day (#1716); v0.7.36 personal-channel-hold-ascii; v0.7.16 ANTI-BANAL-1: ban stock "structural dynamic" framing + label/abstraction titles; title must name a mechanism, not a category
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -380,7 +380,7 @@ var Q08_DIRECTIVE = [
   "",
   "OPENING: in one or two sentences name the incident, then pivot immediately to the system it reveals. The incident earns at most one paragraph; the reader should know within the first paragraph what universal dynamic is at stake, not merely what specific product broke. Never open on an aphorism or a general claim; never dwell on the incident.",
   "",
-  "CONCRETENESS FROM THE SOURCE: name the real things the SOURCE MATERIAL names \u2014 its products, people, organisations, figures and quotations, exactly as given. Elsewhere, be concrete by describing the mechanism step by step (who does what, which information is missing, where it breaks), never by adding named outside examples. When you want a second case, build a clearly labelled hypothetical that names no real person, company, product, date or number (open it with 'Suppose' and describe parties only by their function) and say it is hypothetical. A sentence without a specific referent is a sentence to rewrite; a specific referent that is not in the source material is a sentence to delete.",
+  "CONCRETENESS FROM THE SOURCE: name the real things the SOURCE MATERIAL names \u2014 its products, people, organisations, figures and quotations, exactly as given. Elsewhere, be concrete by describing the mechanism step by step (who does what, which information is missing, where it breaks), never by adding named outside examples. Use at most one labelled hypothetical, in no more than three sentences, only if it makes the argument shorter or clearer; otherwise use none. It names no real person, company, product, date or number, describes parties only by their function, and says it is hypothetical. A sentence without a specific referent is a sentence to rewrite; a specific referent that is not in the source material is a sentence to delete.",
   "",
   "FACTS (hard, non-negotiable, and checked): every claim about the real world \u2014 an event, a date, a person, an organisation, a product, a law, a number, a price, a percentage, a count, an identifier, a quotation, a study, a historical episode \u2014 must be stated in the SOURCE MATERIAL you are given (the signal and the linked article text), verbatim or as a direct paraphrase. Your own memory is NOT a source: do not add historical precedents, case studies, statistics, dates, names of people or companies, laws, institutions, product details or 'studies show' from memory, however sure you are. If the source does not state it, delete it or turn it into labelled hypothetical reasoning with no real names. Every draft is fact-checked sentence by sentence against the source material by independent reviewers from other model families; a single unsupported claim means the piece is not published. A general honest sentence always beats a specific unsupported one. Before writing any name, date or number, ask: is this exact item in the source material? If not, do not write it.",
   "",
@@ -390,7 +390,7 @@ var Q08_DIRECTIVE = [
   "",
   "NO BORROWED HISTORY: do not cite historical episodes, past scandals, earlier industries, named laws, named institutions or named products that are not in the source material. A reader who checks must find every fact; the safest way to be checkable is to assert only what the source says and to reason openly about what follows from it. A metaphor ('it is like a telescope') is decorative and banned; reasoning from the stated facts to a general mechanism is the job.",
   "",
-  "CROSS-DOMAIN REASONING: the essay\u2019s spine is the universal system. Show that it is domain-independent by reasoning about how the same incentive, delay or information gap would play out in other kinds of settings, chosen by the mechanism and not from a stock list, described generically as labelled hypotheticals with no real names, dates or figures. Breadth of reasoning is the point, not breadth of cited facts.",
+  "CROSS-DOMAIN REASONING: the essay\u2019s spine is the universal system. Say in a sentence or two why the same incentive, delay or information gap is not specific to this case, reasoning only from the facts in the source. Do not build extra scenarios to fill space; depth on the source's own facts beats breadth.",
   "",
   "ENDING: end at the point of maximum implication. A closing paragraph that describes a healed system is forbidden. If a fix exists, fold it into the argument; the final sentences leave the reader with the sharpest unresolved fact \u2014 not a summary, not a resolution, not a flourish.",
   "",
@@ -406,7 +406,7 @@ var Q08_DIRECTIVE = [
   "- The structural claim must outlive the incident: dates may appear in the material, but the argument must not depend on them.",
   "- No @handles, no marketing register, no promotional language. No emotional vocabulary ('anxiety', 'dread', 'excitement'). No hedging ('it seems', 'perhaps').",
   "- No first person. No preamble, no meta-commentary about the essay itself.",
-  "- 1200-1800 words. This is a requirement, not a suggestion: essays under this length are rejected. Complete sentences only: the essay ends on a full stop, never mid-sentence.",
+  "- 700-1100 words. Length follows the source material: a thin source gets a short, dense essay. Never pad: restating the mechanism in new words, closing summaries and filler cases are rejected. Complete sentences only: the essay ends on a full stop, never mid-sentence.",
   "- Output: valid Markdown, H1 title first, then the essay. The title must name the system, not the incident \u2014 concrete but general, surviving the disappearance of this particular signal. Banned title forms: 'When X Meets Y', 'X: The Hidden Z', 'An Analysis of X', 'A Critique of Y'.",
   "- Mathematical notation: inline math as \\(...\\), display math as \\[...\\]. Use only these delimiters; never single-dollar signs.",
 ].join("\n");
@@ -811,7 +811,7 @@ function gate(text, banned) {
   var problems = [];
   var body = text.toLowerCase();
 
-  if (text.length < 4000) problems.push("too short for long-form (" + text.length + " chars; 1200-1800 words required)");
+  if (text.length < 2800) problems.push("too short (" + text.length + " chars; 700-1100 words required)");
 
   var titleMatch = text.match(/^#\s+(.+)$/m);
   var title = titleMatch ? titleMatch[1].trim().replace(/[\u2010-\u2015\u2212]/g, "-") : "";
@@ -1040,7 +1040,7 @@ function phraseLevelOnly(problems) {
 }
 function retryPromptFor(prompt, draft, problems) {
   var list = (problems || []).join("; ");
-  if (phraseLevelOnly(problems) && draft && draft.length >= 4000) {
+  if (phraseLevelOnly(problems) && draft && draft.length >= 2800) {
     return prompt + "\n\n--- REVISION: your draft below was rejected only for these phrases: " + list
       + ". Return the SAME essay with only those sentences and, if named, the title rewritten so that each names the concrete mechanism (who does what, which information is missing, where it breaks) in plain words. Keep every other sentence, the facts, the structure, the length and the final 'worth your time' line exactly as they are. Output the full essay, starting with its '# ' H1 title line, and nothing else. ---\n\n" + draft;
   }
@@ -1083,11 +1083,11 @@ async function generate(env) {
   if (todayN >= cap) {
     return { ok: false, reason: "daily cap reached (" + todayN + "/" + cap + (cap < MAX_PER_DAY ? ", ops_config " + CAP_KEY : "") + ")" };
   }
-  // Q08-QUALITY-1: attempts are bounded at twice the publish cap (a publishing-cadence and quality bound, not a spend
+  // Q08-QUALITY-1: attempts are bounded at four times the publish cap (a publishing-cadence and quality bound, not a spend
   // stop: under BUDGET-SOFT-ROUTE-1 a breached fleet_budget cap only steers model choice, never halts the engine).
   var attempts = await env.DB.prepare("SELECT COUNT(*) n FROM engine_runs WHERE ran_at >= datetime('now','start of day') AND status IN ('ok','gate_failed')").first().catch(function () { return { n: 0 }; });
-  if ((attempts && attempts.n || 0) >= cap * 2) {
-    return { ok: false, reason: "daily attempt cap reached (" + attempts.n + "/" + (cap * 2) + ")" };
+  if ((attempts && attempts.n || 0) >= cap * 4) {
+    return { ok: false, reason: "daily attempt cap reached (" + attempts.n + "/" + (cap * 4) + ")" };
   }
   // Q08-FORECAST-1: every FORECAST_EVERY pieces, write a forecast from a published essay's mechanism instead of scraping a
   // new signal. A forecast that fails its gate is logged and the analysis path below still runs this tick, so a failing
@@ -1487,7 +1487,7 @@ async function ensureAccuracySchema(env) {
   }
 }
 async function fetchArticleText(url) {
-  var u = publicHttpsUrl(url);
+  var u = publicHttpsUrl(String(url || "").replace(/^http:\/\//i, "https://"));
   if (!u) return "";
   try {
     var r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "text/html,text/plain" }, signal: AbortSignal.timeout(15000), redirect: "follow" });
@@ -1540,7 +1540,8 @@ function groundingProblems(text, ground, opts) {
       var t = toks[i];
       if (!/^[A-Z]/.test(t) || /^[A-Z]$/.test(t) && toks[i + 1] && !/^[A-Z]/.test(toks[i + 1])) { i++; continue; }
       var j = i, phrase = [];
-      while (j < toks.length && /^[A-Z][A-Za-z0-9&'.’-]*$/.test(toks[j])) { phrase.push(toks[j]); j++; if (toks[j] && /^(of|the|and|for|de|von|van|del|la)$/i.test(toks[j]) && toks[j + 1] && /^[A-Z]/.test(toks[j + 1])) { phrase.push(toks[j]); j++; } }
+      while (j < toks.length && /^[A-Z][A-Za-z0-9&'.’-]*$/.test(toks[j])) { var endsDot = /\.$/.test(toks[j]); phrase.push(toks[j]); j++; if (endsDot) break; if (toks[j] && /^(of|the|de|von|van|del|la)$/i.test(toks[j]) && toks[j + 1] && /^[A-Z]/.test(toks[j + 1])) { phrase.push(toks[j]); j++; } }
+      phrase = phrase.filter(function (w) { return !/^[A-Z]\.$/.test(w); }); // initials ("Y.") are not names to check
       var lead = 0; while (lead < phrase.length - 1 && GROUND_LEAD.has(phrase[lead].toLowerCase().replace(/[^a-z]/g, ""))) lead++;
       var core = phrase.slice(lead);
       var first = (i === 0);
@@ -1664,23 +1665,68 @@ async function groundForPublished(env, p) {
   }
   return parts.join("\n").slice(0, GROUND_MAX + 8000);
 }
-// Cron step: audit published pieces that have no audit row. A reviewer outage writes nothing (retried next tick); a failure retracts.
+// Repair before retract (Q08-REPAIR-1): an essay that fails the audit is first revised to delete the unsupported claims; if the
+// revision passes the full check it is updated in place with a visible correction note, otherwise it is retracted. A piece whose
+// repair already failed is not tried again.
+async function repairPublished(env, p, ground, problems) {
+  if (p.kind === "forecast") return { ok: false, reason: "forecasts are retracted, not repaired" };
+  var draft = "# " + p.title + "\n" + p.body_md;
+  var rev = null;
+  try { rev = await compose(env, factRevisionPrompt(Q08_DIRECTIVE, draft, problems, ground, null), []); } catch (e) { rev = null; }
+  if (!rev || !rev.text) return { ok: false, reason: "no revision produced" };
+  var text = rev.text.replace(/\n?worth your time:\s*(yes|flat|no)\s*[\u2014\u2013-].*$/im, "").trim();
+  var tm = text.match(/^#\s+(.+)$/m);
+  if (!tm) return { ok: false, reason: "revision lost its title" };
+  var body = text.replace(/^#\s+.+\n?/, "").trim();
+  if (body.length < 1500) return { ok: false, reason: "revision too short to stand as an essay" };
+  var vr = await verifyPiece(env, text, ground, rev.model, auditSeed(p.slug) + ":repair", { forecast: false, today: String(p.published_at || "").slice(0, 10) || utcDay() });
+  if (!vr.ok) return { ok: false, reason: vr.problems.slice(0, 3).join("; "), unavailable: vr.unavailable, vr: vr };
+  var note = "*Corrected " + utcDay() + ": a fact-check against the source material removed statements it did not support.*\n\n";
+  await env.DB.prepare("UPDATE published_pieces SET title = ?1, body_md = ?2 WHERE slug = ?3").bind(tm[1].trim(), note + body, p.slug).run();
+  return { ok: true, vr: vr };
+}
+// Cron step: audit published pieces that have no audit row, then give audit-retracted essays one repair attempt each.
+// A reviewer outage writes nothing (retried next tick); an unrepairable failure retracts.
 async function auditPublished(env, limit) {
   if (!(await ensureAccuracySchema(env))) return { ok: false, reason: "schema" };
   var rows = await env.DB.prepare(
     "SELECT p.id, p.slug, p.title, p.body_md, p.core_concept, p.signal_id, p.kind, p.published_at FROM published_pieces p " +
     "WHERE p.slug NOT IN (SELECT slug FROM q08_retractions) AND p.slug NOT IN (SELECT slug FROM q08_audits) ORDER BY p.published_at DESC LIMIT ?1"
   ).bind(limit || 3).all();
-  var res = { checked: 0, passed: 0, retracted: 0, deferred: 0 };
+  var res = { checked: 0, passed: 0, repaired: 0, retracted: 0, deferred: 0, restored: 0 };
   for (var p of (rows.results || [])) {
     var ground = await groundForPublished(env, p);
     var vr = await verifyPiece(env, "# " + p.title + "\n" + p.body_md, ground, "", auditSeed(p.slug), { forecast: p.kind === "forecast", today: String(p.published_at || "").slice(0, 10) || utcDay() });
     if (vr.unavailable) { res.deferred++; continue; }
     res.checked++;
     if (vr.ok) { await recordAudit(env, p.slug, "pass", vr.stage, vr); res.passed++; continue; }
+    var rp = await repairPublished(env, p, ground, vr.problems);
+    if (rp.unavailable) { res.deferred++; continue; }
+    if (rp.ok) { await recordAudit(env, p.slug, "pass", "repaired", rp.vr); res.repaired++; continue; }
     await recordAudit(env, p.slug, "fail", vr.stage, vr);
-    await retractPiece(env, p.slug, "Retracted after an accuracy audit: the piece contained claims the source material does not support (" + vr.stage + " check).", vr.problems);
+    await retractPiece(env, p.slug, "Retracted after an accuracy audit: the piece contained claims the source material does not support (" + vr.stage + " check) and could not be repaired.", vr.problems);
     res.retracted++;
+  }
+  // Restoration: essays retracted by an earlier audit pass that never had a repair attempt.
+  var rest = await env.DB.prepare(
+    "SELECT p.id, p.slug, p.title, p.body_md, p.core_concept, p.signal_id, p.kind, p.published_at FROM q08_retractions r JOIN published_pieces p ON p.slug = r.slug " +
+    "WHERE r.reason LIKE 'Retracted after an accuracy audit%' AND COALESCE(p.kind,'analysis') != 'forecast' AND r.reason NOT LIKE '%could not be repaired%' " +
+    "AND p.slug NOT IN (SELECT slug FROM q08_audits WHERE stage = 'repair-failed') ORDER BY p.published_at DESC LIMIT ?1"
+  ).bind(Math.max(1, Math.min(3, limit || 3))).all().catch(function () { return { results: [] }; });
+  for (var q of (rest.results || [])) {
+    var g2 = await groundForPublished(env, q);
+    var v2 = await verifyPiece(env, "# " + q.title + "\n" + q.body_md, g2, "", auditSeed(q.slug) + ":restore", { forecast: false, today: String(q.published_at || "").slice(0, 10) || utcDay() });
+    if (v2.unavailable) { res.deferred++; continue; }
+    var r2 = v2.ok ? { ok: true, vr: v2 } : await repairPublished(env, q, g2, v2.problems);
+    if (r2.unavailable) { res.deferred++; continue; }
+    if (r2.ok) {
+      await env.DB.prepare("DELETE FROM q08_retractions WHERE slug = ?1").bind(q.slug).run();
+      await recordAudit(env, q.slug, "pass", "restored", r2.vr);
+      res.restored++;
+    } else {
+      await recordAudit(env, q.slug, "fail", "repair-failed", { judges: [], problems: [r2.reason] });
+      await env.DB.prepare("UPDATE q08_retractions SET reason = reason || ' (could not be repaired)' WHERE slug = ?1").bind(q.slug).run();
+    }
   }
   return Object.assign({ ok: true }, res);
 }
@@ -2553,10 +2599,12 @@ export default {
   async scheduled(controller, env, ctx) {
     env = __aiAttrEnv(env, "q08-signal-engine", "AI", "AUDIT");
     if (controller.cron === "0 17 * * *") { ctx.waitUntil(sendDigest(env)); return; }
+    // Q08-REPAIR-1: the :30 cron only audits, repairs and restores pieces; generation has the whole hourly slot to itself.
+    if (controller.cron === "30 * * * *") { ctx.waitUntil(auditPublished(env, 3).catch(function (e) { console.error("q08 auditPublished failed: " + String(e && e.message || e).slice(0, 200)); })); return; }
     ctx.waitUntil(ensureAccuracySchema(env).then(() => sweepStaleRuns(env)).then(() => generate(env)).catch(async (e) => {
       await env.DB.prepare(
         "INSERT INTO engine_runs (signals_scraped, signals_scored, piece_published, ms, status, error) VALUES (0,0,0,0,'error',?)"
       ).bind(String(e && e.message || e).slice(0, 500)).run().catch(() => {});
-    }).then(function () { return resolveForecasts(env, 2).catch(function (e) { console.error("q08 resolveForecasts failed: " + String(e && e.message || e).slice(0, 200)); }); }).then(function () { return auditPublished(env, 4).catch(function (e) { console.error("q08 auditPublished failed: " + String(e && e.message || e).slice(0, 200)); }); }).then(() => stallDetector(env)).then(() => writeOwnMetrics(env)).catch(function () {}));
+    }).then(function () { return resolveForecasts(env, 2).catch(function (e) { console.error("q08 resolveForecasts failed: " + String(e && e.message || e).slice(0, 200)); }); }).then(() => stallDetector(env)).then(() => writeOwnMetrics(env)).catch(function () {}));
   },
 };
