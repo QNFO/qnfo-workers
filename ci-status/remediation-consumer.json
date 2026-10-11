@@ -1,12 +1,21 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@5ef41ea1117e",
- "due": 0,
+ "verifier": "remediation-consumer@c5527c065161",
+ "due": 1,
  "pass": 0,
- "fail": 0,
+ "fail": 1,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-2316",
+   "issue_id": 2316,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "status=404",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,13 +39,14 @@
   "http",
   "runner-https"
  ],
+ "https": 1,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 4.6,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 4909,
- "head": "5ef41ea1117e86c439260013ba0898582303a807",
+ "spent_ms": 9359,
+ "head": "c5527c065161dd3c396e2cd2d5e8c58ff0386bb1",
  "job_status": "success",
- "ts": "2026-10-11T20:12:52Z"
+ "ts": "2026-10-11T20:46:51Z"
 }
