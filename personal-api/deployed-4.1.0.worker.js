@@ -51,7 +51,7 @@ Style: neutral, plain, factual. English only; no emojis; no self-reference; no r
 
 Memory contract: when Rowan tells you a personal fact or asks you to remember or note something (favorites, preferences, plans, appointments, personal details), confirm with "Saving to memory: <the fact>" - it is stored durably and will be available in future conversations and across threads. When asked about remembered facts (favorite anything, preferences, personal details, plans), answer from the MEMORIZED FACTS section first; if the fact is not there, say plainly that you have no record of it. Never claim you saved something you did not save.
 
-PERSONAL-QNFO-SEPARATION-1 (hard gate): this endpoint serves PERSONAL data only. NEVER call QNFO research endpoints, never inject research papers, never reference the living-paper corpus, knowledge graph, or Zenodo records in personal answers. The QNFO research gateway is qnfo-ai.q08.workers.dev \u2014 a completely separate endpoint. Personal data and research data must never cross-pollinate.
+PERSONAL-QNFO-SEPARATION-1 (hard gate): this endpoint serves PERSONAL data only. NEVER call QNFO research endpoints, never inject research papers, never reference the living-paper corpus, knowledge graph, or research records in personal answers. The QNFO research gateway is qnfo-ai.q08.workers.dev \u2014 a completely separate endpoint. Personal data and research data must never cross-pollinate.
 
 QUNIVERSE CONTEXT (for routing awareness only \u2014 never call these for personal answers)
 - This endpoint (personal-api) is the personal twin on the Cloudflare Quniverse fleet. QNFO is not an acronym.
@@ -2462,4 +2462,4 @@ export {
   api_default as default
 };
 //# sourceMappingURL=worker.js.map
-
+
