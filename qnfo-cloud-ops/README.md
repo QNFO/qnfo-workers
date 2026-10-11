@@ -69,13 +69,12 @@ secret is unset" (JOB-REASON-1, 1.18.3), and WATCHMAKER_OPS (`grant-followup`) k
 new application to `GRANT_APPLICATIONS` in the same PR that records its submission in `funding/APPLICATIONS.md`.
 Test: `node qnfo-cloud-ops/grant-followup.test.mjs`.
 
-## Catch-ups (ZENODO-CATCHUP-1, 1.18.3, pillar: reach)
+## Catch-ups (CRON-CATCHUP-1, 1.18.3, pillar: reach)
 
-`CRON_CATCHUP` lets a daily slot re-run a weekly job whose week was missed or failed, with no new cron. `release-check`
-(06:15 Amsterdam) runs `zenodo-stats` after its own job when `zenodo_stats` is older than 180h and no `jr-zenodo-stats-*`
-run started in the last 20h, so a missed Sunday is retried the next morning and at most once a day; the run is logged as
-its own job-run row with `meta.via = "catch-up:release-check"`. A zenodo-stats run whose first 20 record reads all fail
-stops there (ZENODO-REFUSAL-STOP-1) and says why in `meta.reason`. Test: `node qnfo-cloud-ops/zenodo-catchup.test.mjs`.
+`CRON_CATCHUP` lets a daily slot re-run a weekly job whose week was missed or failed, with no new cron. The table is empty
+since NOZ-DOI-1 (1.24.2): its only entry, a weekly external-registry stats job, is gone. An entry names the slot, the job,
+`stale_h`, `retry_h` and a `data_sql` that reads the job's last data time; the run is logged as its own job-run row with
+`meta.via = "catch-up:<slot>"`. Test: `node qnfo-cloud-ops/job-reason.test.mjs`.
 
 ## Manual / API trigger (diagnostics only — normal operation is cron-only)
 
@@ -97,17 +96,16 @@ Authorization: Bearer <INFRA_TOKEN>
 The cloud worker provides a **digest layer** (email-triage, briefing, research-scan,
 weekly, weekly-ops, portfolio-sync). It does NOT (yet) replicate the deep grounding
 functions — proactive outreach drafting, GTD register maintenance, contact-ledger
-extraction, Zenodo ADR-014/SEO audits, Zenodo stats upserts. Those functions remain
+extraction, ADR-014/SEO audits, stats upserts. Those functions remain
 on the local scheduled tasks until their data sources (contact-ledger, GTD register,
-Zenodo scripts) move cloud-side.
+registry scripts) move cloud-side.
 
 | Local job | Cloud covers | Still local (deep grounding) | Status |
 |---|---|---|---|
 | qnfo-email-inbox-check + outreach (3851f539) | inbox check + triage digest | **proactive outreach** (contact-ledger dedup, arXiv verification, LLM drafting; cap now 8/day in total across both engines and 3/day per domain, see Outreach job; was 3-5/day, changed 2026-10-01, STRATEGY-1) | ✅ RESUMED — outreach must not be dropped |
 | Daily Briefing PDB (a82062c7) | D1 emails+intents digest | **GTD register + outreach-log** (primary sources) | ✅ RESUMED |
 | Research Scan GTD extractor (fdf1403c) | arXiv scan digest | **GTD extraction → contact-ledger queue + GTD register** | ✅ RESUMED |
-| Weekly Ops merged audits (8eb69c12) | cost audit (weekly-ops) | Zenodo ADR-014/SEO/D4-D5/kaizen/retrospective | ✅ RESUMED |
-| Zenodo Stats Delta (384c5299) | — | full zenodo_stats delta upsert | ✅ RESUMED |
+| Weekly Ops merged audits (8eb69c12) | cost audit (weekly-ops) | ADR-014/SEO/D4-D5/kaizen/retrospective | ✅ RESUMED |
 | Weekly Review GTD (382376cd) | weekly digest | Obsidian review | ⏳ local (Obsidian-bound) |
 | Portfolio Public Sync (ec43131a) | portfolio-sync digest | GitHub PR sync | ⏳ local |
 | Research Weekly (a3c0c2b4) | research-scan + weekly | Obsidian intelligence note | ⏳ local (Obsidian-bound) |
@@ -118,7 +116,7 @@ Zenodo scripts) move cloud-side.
 
 **2026-08-28 red-team correction:** the initial migration paused 5 local jobs,
 but the cloud worker only replaced the digest surface — pausing dropped proactive
-outreach, GTD grounding, and Zenodo audits (3 HARD findings). Those 5 jobs were
+outreach, GTD grounding, and registry audits (3 HARD findings). Those 5 jobs were
 RESUMED and the matrix corrected. Full cloud-only operation requires moving the
-contact-ledger, GTD register, and Zenodo/Outlook scripts to cloud stores first —
+contact-ledger, GTD register, and registry/Outlook scripts to cloud stores first —
 tracked as follow-up work.
