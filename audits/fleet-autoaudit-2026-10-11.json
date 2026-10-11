@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-11 16:24:47",
+  "audited_at": "2026-10-11 17:24:36",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "personal-companion"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -551,7 +544,7 @@
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.11.5",
+        "version": "0.11.6",
         "worker": "q08-signal-engine"
       },
       {
@@ -939,9 +932,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.11.5",
+      "before": "0.11.6",
       "http": 200,
-      "live": "0.11.5",
+      "live": "0.11.6",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
