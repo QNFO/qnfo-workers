@@ -310,6 +310,7 @@ const scenario = () => ({
   eq(/promote-route\.test\.mjs:31 \[warning\] Incomplete URL substring sanitization/.test(iss()[0].description) && /\ncode-task: repo=qnfo-workers path=qnfo-social\/promote-route\.test\.mjs$/.test(iss()[0].description), true, "repair: the annotation and a code-task line naming the annotated file are in the issue");
   eq(r1.calls.includes("GET /check-runs/777/annotations?per_page=20"), true, "repair: the failing run's annotations are read");
   eq(r1.d1.db.prepare("SELECT pr FROM branch_hygiene_log WHERE action = 'check-repair-issue'").all().map((r) => r.pr), [70], "repair: the filing is logged in branch_hygiene_log");
+  eq(r1.d1.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'stale-pr-check-repair'").get().n, 1, "repair: one stale-pr-check-repair event (the issue-2122 contract's proof)");
   const s2 = mk();
   await run(s2, undefined, r1.d1);
   eq(iss().length, 1, "repair: a second tick files no duplicate while the issue is open");

@@ -4527,7 +4527,11 @@ async function branchHygieneTick(env, opts) {
       if (tm.repair && tm.pr) {
         var fr = await bhFileRepair(env, tm.pr, tm.repair);
         (out.repair_issues = out.repair_issues || []).push({ pr: p.number, filed: fr.filed });
-        if (fr.filed) { try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'check-repair-issue', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, p.head.sha || null, String(fr.title).slice(0, 500), p.number).run(); } catch (e) {} }
+        if (fr.filed) {
+          try { await env.AUDIT.prepare("INSERT INTO branch_hygiene_log (ts, branch, sha, action, why, pr, archive_ref, ok, dry) VALUES (?1, ?2, ?3, 'check-repair-issue', ?4, ?5, NULL, 1, 0)").bind(iso, p.head.ref, p.head.sha || null, String(fr.title).slice(0, 500), p.number).run(); } catch (e) {}
+          // The issue-2122 contract reads this event kind as proof the repair path ran live.
+          try { await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, job, status) VALUES (?1, ?2, 'stale-pr-check-repair', ?3, 'BRANCH-HYGIENE-1', 'ok') ON CONFLICT(id) DO NOTHING").bind("stale-pr-check-repair-" + p.number + "-" + String(p.head.sha || "").slice(0, 12), iso, String(fr.title).slice(0, 300)).run(); } catch (e) {}
+        }
       }
     }
     if ((nowMs - updMs) < BH_STALE_PR_H * 36e5) continue;
