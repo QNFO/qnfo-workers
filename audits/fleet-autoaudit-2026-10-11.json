@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-11 08:00:29",
+  "audited_at": "2026-10-11 08:34:07",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "q08-signal-engine"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -82,7 +75,6 @@
       "jnl-referee",
       "jnl-reviser",
       "jnl-watch",
-      "jnl-zenodo",
       "memory-mcp",
       "notes-intake",
       "obsidian-writer",
@@ -143,6 +135,7 @@
       "qnfo-twin-maintain",
       "qnfo-venue-radar",
       "research-daily-brief",
+      "retired-deposit-stage",
       "skills-discovery",
       "vault-indexer"
     ],
@@ -150,306 +143,382 @@
     "not_deployed_workers": [
       {
         "dir": "agent-orchestrator",
+        "marker": "RETIRED",
         "worker": "qnfo-agent-orchestrator-legacy-dup"
       },
       {
         "dir": "ai-health-prober",
+        "marker": "FOLDED",
         "worker": "ai-health-prober"
       },
       {
         "dir": "audit-hub",
+        "marker": "RETIRED",
         "worker": "audit-hub"
       },
       {
         "dir": "calendar-api",
+        "marker": "FOLDED",
         "worker": "calendar-api"
       },
       {
         "dir": "companion-hub",
+        "marker": "FOLDED",
         "worker": "companion-hub"
       },
       {
         "dir": "errata-hub",
+        "marker": "FOLDED",
         "worker": "errata-hub"
       },
       {
         "dir": "errata-orchestrator",
+        "marker": "RETIRED",
         "worker": "qnfo-errata-orchestrator"
       },
       {
         "dir": "events-radar",
+        "marker": "FOLDED",
         "worker": "events-radar"
       },
       {
         "dir": "fleet-exec",
+        "marker": "FOLDED",
         "worker": "fleet-exec"
       },
       {
         "dir": "jnl-pipeline",
+        "marker": "RETIRED",
         "worker": "jnl-pipeline"
       },
       {
         "dir": "jnl-referee",
+        "marker": "RETIRED",
         "worker": "jnl-referee"
       },
       {
         "dir": "jnl-reviser",
+        "marker": "RETIRED",
         "worker": "jnl-reviser"
       },
       {
         "dir": "jnl-watch",
+        "marker": "RETIRED",
         "worker": "jnl-watch"
       },
       {
-        "dir": "jnl-zenodo",
-        "worker": "jnl-zenodo"
-      },
-      {
         "dir": "memory-mcp",
+        "marker": "RETIRED",
         "worker": "qnfo-memory-mcp-legacy-dup"
       },
       {
         "dir": "notes-intake",
+        "marker": "FOLDED",
         "worker": "notes-intake"
       },
       {
         "dir": "obsidian-writer",
+        "marker": "RETIRED",
         "worker": "obsidian-writer"
       },
       {
         "dir": "ops-gateway",
+        "marker": "RETIRED",
         "worker": "ops-gateway"
       },
       {
         "dir": "osf-integrity-check",
+        "marker": "RETIRED",
         "worker": "osf-integrity-check"
       },
       {
         "dir": "paper-hub",
+        "marker": "RETIRED",
         "worker": "paper-hub"
       },
       {
         "dir": "personal-events-radar",
+        "marker": "FOLDED",
         "worker": "personal-events-radar"
       },
       {
         "dir": "personal-life-indexer",
+        "marker": "RETIRED",
         "worker": "personal-life-indexer"
       },
       {
         "dir": "personal-life-maintain",
+        "marker": "RETIRED",
         "worker": "personal-life-maintain"
       },
       {
         "dir": "personal-life-search",
+        "marker": "RETIRED",
         "worker": "personal-life-search"
       },
       {
         "dir": "qnfo-agent-orchestrator",
+        "marker": "RETIRED",
         "worker": "qnfo-agent-orchestrator"
       },
       {
         "dir": "qnfo-agent-ws",
+        "marker": "RETIRED",
         "worker": "qnfo-agent-ws"
       },
       {
         "dir": "qnfo-analytics",
+        "marker": "RETIRED",
         "worker": "qnfo-analytics"
       },
       {
         "dir": "qnfo-archive",
+        "marker": "RETIRED",
         "worker": "qnfo-archive"
       },
       {
         "dir": "qnfo-artifact-agent",
+        "marker": "RETIRED",
         "worker": "qnfo-artifact-agent"
       },
       {
         "dir": "qnfo-artifacts",
+        "marker": "RETIRED",
         "worker": "qnfo-artifacts"
       },
       {
         "dir": "qnfo-arxiv-radar",
+        "marker": "FOLDED",
         "worker": "qnfo-arxiv-radar"
       },
       {
         "dir": "qnfo-auditor",
+        "marker": "RETIRED",
         "worker": "qnfo-auditor"
       },
       {
         "dir": "qnfo-autonomy-scorer",
+        "marker": "FOLDED",
         "worker": "qnfo-autonomy-scorer"
       },
       {
         "dir": "qnfo-autopilot",
+        "marker": "FOLDED",
         "worker": "qnfo-autopilot"
       },
       {
         "dir": "qnfo-backlog-exec",
+        "marker": "FOLDED",
         "worker": "qnfo-backlog-exec"
       },
       {
         "dir": "qnfo-blank-audit",
+        "marker": "RETIRED",
         "worker": "qnfo-blank-audit"
       },
       {
         "dir": "qnfo-calendar-intake",
+        "marker": "RETIRED",
         "worker": "qnfo-calendar-intake"
       },
       {
         "dir": "qnfo-chameleon",
+        "marker": "RETIRED",
         "worker": "qnfo-chameleon"
       },
       {
         "dir": "qnfo-chat-canary",
+        "marker": "RETIRED",
         "worker": "qnfo-chat-canary"
       },
       {
         "dir": "qnfo-citation-watch",
+        "marker": "FOLDED",
         "worker": "qnfo-citation-watch"
       },
       {
         "dir": "qnfo-code-agent",
+        "marker": "RETIRED",
         "worker": "qnfo-code-agent"
       },
       {
         "dir": "qnfo-ddocs-indexer",
+        "marker": "RETIRED",
         "worker": "qnfo-ddocs-indexer"
       },
       {
         "dir": "qnfo-email-orchestrator",
+        "marker": "FOLDED",
         "worker": "qnfo-email-orchestrator"
       },
       {
         "dir": "qnfo-errata-publish",
+        "marker": "FOLDED",
         "worker": "qnfo-errata-publish"
       },
       {
         "dir": "qnfo-errata-respond",
+        "marker": "FOLDED",
         "worker": "qnfo-errata-respond"
       },
       {
         "dir": "qnfo-errata-watch",
+        "marker": "FOLDED",
         "worker": "qnfo-errata-watch"
       },
       {
         "dir": "qnfo-error-selfheal",
+        "marker": "RETIRED",
         "worker": "qnfo-error-selfheal"
       },
       {
         "dir": "qnfo-events",
+        "marker": "RETIRED",
         "worker": "qnfo-events"
       },
       {
         "dir": "qnfo-fleet-advisor",
+        "marker": "FOLDED",
         "worker": "qnfo-fleet-advisor"
       },
       {
         "dir": "qnfo-fleet-calibrator",
+        "marker": "FOLDED",
         "worker": "qnfo-fleet-calibrator"
       },
       {
         "dir": "qnfo-fleet-deploy",
+        "marker": "RETIRED",
         "worker": "qnfo-fleet-deploy"
       },
       {
         "dir": "qnfo-fleet-feed",
+        "marker": "RETIRED",
         "worker": "qnfo-fleet-feed"
       },
       {
         "dir": "qnfo-idea-factory",
+        "marker": "RETIRED",
         "worker": "qnfo-idea-factory"
       },
       {
         "dir": "qnfo-idea-miner",
+        "marker": "RETIRED",
         "worker": "qnfo-idea-miner"
       },
       {
         "dir": "qnfo-idea-triage",
+        "marker": "FOLDED",
         "worker": "qnfo-idea-triage"
       },
       {
         "dir": "qnfo-impact",
+        "marker": "RETIRED",
         "worker": "qnfo-impact"
       },
       {
         "dir": "qnfo-kaizen",
+        "marker": "RETIRED",
         "worker": "qnfo-kaizen"
       },
       {
         "dir": "qnfo-outreach",
+        "marker": "RETIRED",
         "worker": "qnfo-outreach"
       },
       {
         "dir": "qnfo-paper-explainer",
+        "marker": "RETIRED",
         "worker": "qnfo-paper-explainer"
       },
       {
         "dir": "qnfo-paper-indexer",
+        "marker": "FOLDED",
         "worker": "qnfo-paper-indexer"
       },
       {
         "dir": "qnfo-paper-reviser",
+        "marker": "FOLDED",
         "worker": "qnfo-paper-reviser"
       },
       {
         "dir": "qnfo-pipeline-ops",
+        "marker": "RETIRED",
         "worker": "qnfo-pipeline-ops"
       },
       {
         "dir": "qnfo-proof",
+        "marker": "RETIRED",
         "worker": "qnfo-proof"
       },
       {
         "dir": "qnfo-qwav",
+        "marker": "RETIRED",
         "worker": "qnfo-qwav"
       },
       {
         "dir": "qnfo-register-guard",
+        "marker": "FOLDED",
         "worker": "qnfo-register-guard"
       },
       {
         "dir": "qnfo-research-radar",
+        "marker": "FOLDED",
         "worker": "qnfo-research-radar"
       },
       {
         "dir": "qnfo-research-supervisor",
+        "marker": "RETIRED",
         "worker": "qnfo-research-supervisor"
       },
       {
         "dir": "qnfo-scorecard",
+        "marker": "RETIRED",
         "worker": "qnfo-scorecard"
       },
       {
         "dir": "qnfo-signal-loop",
+        "marker": "RETIRED",
         "worker": "qnfo-signal-loop"
       },
       {
         "dir": "qnfo-skill-sync",
+        "marker": "RETIRED",
         "worker": "qnfo-skill-sync"
       },
       {
         "dir": "qnfo-thread-ingest",
+        "marker": "RETIRED",
         "worker": "qnfo-thread-ingest"
       },
       {
         "dir": "qnfo-twin-maintain",
+        "marker": "FOLDED",
         "worker": "qnfo-twin-maintain"
       },
       {
         "dir": "qnfo-venue-radar",
+        "marker": "RETIRED",
         "worker": "qnfo-venue-radar"
       },
       {
         "dir": "research-daily-brief",
+        "marker": "RETIRED",
         "worker": "research-daily-brief"
       },
       {
+        "dir": "retired-deposit-stage",
+        "marker": "RETIRED",
+        "worker": "retired-deposit-stage"
+      },
+      {
         "dir": "skills-discovery",
+        "marker": "RETIRED",
         "worker": "qnfo-skills-discovery"
       },
       {
         "dir": "vault-indexer",
+        "marker": "FOLDED",
         "worker": "vault-indexer"
       }
     ],
@@ -460,7 +529,7 @@
     "sync_workers": [
       {
         "dir": "idea-hub",
-        "version": "1.8.2-no-topic-seed",
+        "version": "1.8.3-doi-scrub",
         "worker": "idea-hub"
       },
       {
@@ -520,7 +589,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.12.2-cost-run-rate",
+        "version": "0.13.1-check-repair",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -575,7 +644,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.12.2-prefix-stagger",
+        "version": "0.12.3-doi-scrub",
         "worker": "qnfo-research-exec"
       },
       {
@@ -595,7 +664,7 @@
       },
       {
         "dir": "radar-hub",
-        "version": "1.3.3",
+        "version": "1.3.4-doi-scrub",
         "worker": "radar-hub"
       }
     ]
@@ -608,6 +677,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "ai-health-prober"
     },
     "audit-hub": {
@@ -616,6 +686,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "audit-hub"
     },
     "audits": {
@@ -632,6 +703,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "calendar-api"
     },
     "ci-status": {
@@ -648,6 +720,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "companion-hub"
     },
     "docs": {
@@ -664,6 +737,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "errata-hub"
     },
     "events-radar": {
@@ -672,6 +746,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "events-radar"
     },
     "fleet-exec": {
@@ -680,6 +755,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "fleet-exec"
     },
     "funding": {
@@ -691,9 +767,9 @@
       "worker": "funding"
     },
     "idea-hub": {
-      "before": "1.8.2-no-topic-seed",
+      "before": "1.8.3-doi-scrub",
       "http": 200,
-      "live": "1.8.2-no-topic-seed",
+      "live": "1.8.3-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "idea-hub"
@@ -704,6 +780,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "jnl-pipeline"
     },
     "jnl-referee": {
@@ -712,6 +789,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "jnl-referee"
     },
     "jnl-reviser": {
@@ -720,6 +798,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "jnl-reviser"
     },
     "jnl-watch": {
@@ -728,15 +807,8 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "jnl-watch"
-    },
-    "jnl-zenodo": {
-      "before": null,
-      "http": 404,
-      "live": null,
-      "match": 0,
-      "note": "NOT_DEPLOYED",
-      "worker": "jnl-zenodo"
     },
     "machine-readability": {
       "before": null,
@@ -760,6 +832,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "notes-intake"
     },
     "obsidian-writer": {
@@ -768,6 +841,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "obsidian-writer"
     },
     "ops-gateway": {
@@ -776,6 +850,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "ops-gateway"
     },
     "osf-integrity-check": {
@@ -784,6 +859,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "osf-integrity-check"
     },
     "paper-hub": {
@@ -792,6 +868,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "paper-hub"
     },
     "papers": {
@@ -824,6 +901,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "personal-events-radar"
     },
     "personal-life-indexer": {
@@ -832,6 +910,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "personal-life-indexer"
     },
     "personal-life-maintain": {
@@ -840,6 +919,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "personal-life-maintain"
     },
     "personal-life-search": {
@@ -848,6 +928,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
@@ -864,6 +945,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-agent-orchestrator"
     },
     "qnfo-agent-orchestrator-legacy-dup": {
@@ -872,6 +954,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-agent-orchestrator-legacy-dup"
     },
     "qnfo-agent-ws": {
@@ -880,6 +963,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
@@ -912,6 +996,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-analytics"
     },
     "qnfo-archive": {
@@ -920,6 +1005,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-archive"
     },
     "qnfo-artifact-agent": {
@@ -928,6 +1014,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-artifact-agent"
     },
     "qnfo-artifacts": {
@@ -936,6 +1023,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-artifacts"
     },
     "qnfo-arxiv-radar": {
@@ -944,6 +1032,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-arxiv-radar"
     },
     "qnfo-auditor": {
@@ -952,6 +1041,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-auditor"
     },
     "qnfo-autonomy-scorer": {
@@ -960,6 +1050,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-autonomy-scorer"
     },
     "qnfo-autopilot": {
@@ -968,6 +1059,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-autopilot"
     },
     "qnfo-backlog-exec": {
@@ -976,6 +1068,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-backlog-exec"
     },
     "qnfo-blank-audit": {
@@ -984,6 +1077,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-blank-audit"
     },
     "qnfo-calendar-intake": {
@@ -992,6 +1086,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-calendar-intake"
     },
     "qnfo-chameleon": {
@@ -1000,6 +1095,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-chameleon"
     },
     "qnfo-chat-canary": {
@@ -1008,6 +1104,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-chat-canary"
     },
     "qnfo-citation-watch": {
@@ -1016,6 +1113,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
@@ -1032,6 +1130,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
@@ -1056,6 +1155,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
@@ -1080,6 +1180,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-email-orchestrator"
     },
     "qnfo-errata-orchestrator": {
@@ -1088,6 +1189,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-errata-orchestrator"
     },
     "qnfo-errata-publish": {
@@ -1096,6 +1198,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-errata-publish"
     },
     "qnfo-errata-respond": {
@@ -1104,6 +1207,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-errata-respond"
     },
     "qnfo-errata-watch": {
@@ -1112,6 +1216,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-errata-watch"
     },
     "qnfo-error-selfheal": {
@@ -1120,6 +1225,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-error-selfheal"
     },
     "qnfo-events": {
@@ -1128,6 +1234,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-events"
     },
     "qnfo-fleet-advisor": {
@@ -1136,6 +1243,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-fleet-advisor"
     },
     "qnfo-fleet-calibrator": {
@@ -1144,12 +1252,13 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.12.2-cost-run-rate",
+      "before": "0.13.1-check-repair",
       "http": 200,
-      "live": "0.12.2-cost-run-rate",
+      "live": "0.13.1-check-repair",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1168,6 +1277,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-fleet-deploy"
     },
     "qnfo-fleet-feed": {
@@ -1176,6 +1286,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
@@ -1192,6 +1303,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-idea-factory"
     },
     "qnfo-idea-miner": {
@@ -1200,6 +1312,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-idea-miner"
     },
     "qnfo-idea-triage": {
@@ -1208,6 +1321,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-idea-triage"
     },
     "qnfo-impact": {
@@ -1216,6 +1330,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-impact"
     },
     "qnfo-infra": {
@@ -1248,6 +1363,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
@@ -1272,6 +1388,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-memory-mcp-legacy-dup"
     },
     "qnfo-observability": {
@@ -1296,6 +1413,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-outreach"
     },
     "qnfo-paper-explainer": {
@@ -1304,6 +1422,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-paper-explainer"
     },
     "qnfo-paper-indexer": {
@@ -1312,6 +1431,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-paper-indexer"
     },
     "qnfo-paper-reviser": {
@@ -1320,6 +1440,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-paper-reviser"
     },
     "qnfo-pdf": {
@@ -1336,6 +1457,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-pipeline-ops"
     },
     "qnfo-proof": {
@@ -1344,6 +1466,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-proof"
     },
     "qnfo-qwav": {
@@ -1352,6 +1475,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-qwav"
     },
     "qnfo-register-guard": {
@@ -1360,12 +1484,13 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.12.2-prefix-stagger",
+      "before": "0.12.3-doi-scrub",
       "http": 200,
-      "live": "0.12.2-prefix-stagger",
+      "live": "0.12.3-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
@@ -1376,6 +1501,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-research-radar"
     },
     "qnfo-research-supervisor": {
@@ -1384,6 +1510,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-research-supervisor"
     },
     "qnfo-scorecard": {
@@ -1392,6 +1519,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-scorecard"
     },
     "qnfo-signal-loop": {
@@ -1400,6 +1528,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-signal-loop"
     },
     "qnfo-skill-sync": {
@@ -1408,6 +1537,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-skill-sync"
     },
     "qnfo-skills-discovery": {
@@ -1416,6 +1546,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
@@ -1440,6 +1571,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-thread-ingest"
     },
     "qnfo-tools-mcp": {
@@ -1456,6 +1588,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "qnfo-twin-maintain"
     },
     "qnfo-venue-radar": {
@@ -1464,6 +1597,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "qnfo-venue-radar"
     },
     "qnfo-web-unified": {
@@ -1475,9 +1609,9 @@
       "worker": "qnfo-web-unified"
     },
     "radar-hub": {
-      "before": "1.3.3",
+      "before": "1.3.4-doi-scrub",
       "http": 200,
-      "live": "1.3.3",
+      "live": "1.3.4-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "radar-hub"
@@ -1496,7 +1630,17 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
       "worker": "research-daily-brief"
+    },
+    "retired-deposit-stage": {
+      "before": null,
+      "http": 404,
+      "live": null,
+      "match": 0,
+      "note": "NOT_DEPLOYED",
+      "retired": "RETIRED",
+      "worker": "retired-deposit-stage"
     },
     "scripts": {
       "before": null,
@@ -1512,6 +1656,7 @@
       "live": null,
       "match": 0,
       "note": "NOT_DEPLOYED",
+      "retired": "FOLDED",
       "worker": "vault-indexer"
     }
   },
