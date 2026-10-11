@@ -603,10 +603,14 @@ ok(gh.calls.includes("PATCH /pulls/401") && gh.comments.some((c) => c.pr === 401
 ok(one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.requeued'").n === 1, "the re-proposal writes one cloud_ops_events row");
 sc = await staleCase(MOVED, 0, true);
 ok(sc.rr.decided[0].action === "requeued" && sc.fresh.length === 1, "a conflicting PR on a moved file is re-proposed the same way", sc.rr.decided);
+// CODE-REPAIR-INTASK-1 (0.16.0): a real check failure is repaired inside the task before it can fail
 sc = await staleCase(BASE, 0, false);
-ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "failed" && sc.fresh.length === 0, "a failed check while main did NOT change the file is a real failure: failed, handed to the fleet", sc.old);
-sc = await staleCase(MOVED, 2, false);
-ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "failed" && sc.fresh.length === 0, "after two re-proposals of one goal the runner stops and hands it to the fleet", sc.rr.decided);
+ok(sc.rr.decided[0].action === "repair-requeued" && sc.old.status === "queued" && sc.old.step === "propose" && sc.old.attempts === 1 && sc.old.branch === BRANCH + "-r2" && sc.old.pr_url === null && /required check\(s\) failed/.test(JSON.parse(sc.old.ctx).lastError) && JSON.parse(sc.old.ctx).repair_round === 1, "a failed check while main did NOT change the file: the same task goes back to propose with the failure as feedback, on a fresh branch", sc.old);
+ok(gh.calls.includes("PATCH /pulls/401") && gh.comments.some((c) => c.pr === 401 && /CODE-REPAIR-INTASK-1 round 1 of 2/.test(c.body)) && gh.merges.length === 0 && one("SELECT COUNT(*) n FROM cloud_ops_events WHERE kind = 'code-merge.repair-requeued'").n === 1, "the repaired PR is closed with a comment and one repair-requeued event; nothing merges");
+sc = await staleCase(BASE, 0, false, { repair_round: 2 });
+ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "failed" && sc.fresh.length === 0, "after two repair rounds a real check failure fails the task and hands it to the fleet", sc.old);
+sc = await staleCase(MOVED, 2, false, { repair_round: 2 });
+ok(sc.rr.decided[0].action === "refuse" && sc.old.status === "failed" && sc.fresh.length === 0, "after two re-proposals of one goal and two repair rounds the runner stops and hands it to the fleet", sc.rr.decided);
 
 // ---- REBASE-REQUEUE-1 (0.4.135, transformation lever T1.3 half 2): a stale task that parked its edits goes back to the publisher
 const EDITS = [{ search: "  return 2;", replace: "  return 3;" }];
@@ -817,7 +821,17 @@ gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
 sandbox.aiRunAttr = reviewer('{"verdict":"no","defects":["the change does not do what the goal asks"]}');
 r = J(await W.codeMergeTick(genv, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(gh.merges.length === 0 && row.status === "failed" && gh.comments.some((c) => c.pr === 401 && /goal review/.test(c.body)), "merge lane: a green PR whose review says no is not merged; the task fails and the PR says why", { merges: gh.merges.length, status: row.status, comments: gh.comments.length });
+ok(gh.merges.length === 0 && row.status === "queued" && row.step === "propose" && /goal review/.test(JSON.parse(row.ctx).lastError) && /does not do what the goal asks/.test(JSON.parse(row.ctx).lastError) && gh.comments.some((c) => c.pr === 401 && /CODE-REPAIR-INTASK-1/.test(c.body) && /goal review/.test(c.body)), "merge lane: a green PR whose review says no is not merged; the task is re-proposed with the reviewer's defects and the PR says why", { merges: gh.merges.length, status: row.status, comments: gh.comments.length });
+freshDb(); freshGh(); aiCalls = [];
+db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+seedTask({ status: "published", attempts: 8 });
+seedWorkerPr(401, BRANCH, "h1");
+gh.files[401] = GPATCH;
+gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+sandbox.aiRunAttr = reviewer('{"verdict":"no","defects":["the change does not do what the goal asks"]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.merges.length === 0 && row.status === "failed", "a review refusal with no attempt left fails the task as before", { status: row.status, attempts: row.attempts });
 sandbox.aiRunAttr = async () => null;
 
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);

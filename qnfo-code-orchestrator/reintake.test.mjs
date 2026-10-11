@@ -32,6 +32,9 @@ ok(__decide([{ id: "a", status: "closed", last_error: "stale base", updated_at: 
 ok(__decide([{ id: "a", status: "queued", updated_at: at(9) }], now).why === "in flight", "a task in flight: not taken");
 ok(/merged/.test(__decide([{ id: "a", status: "merged", updated_at: at(9) }], now).why), "a merged task: not taken again");
 ok(__decide([{ id: "c", status: "failed", updated_at: at(9) }, { id: "b", status: "closed", updated_at: at(20) }, { id: "a", status: "closed", updated_at: at(30) }], now).exhausted === true, "three tasks: exhausted");
+// INTAKE-WINDOW-1 (0.10.0): only tasks created in the last 3 days count toward the cap
+ok(__decide([{ id: "c", status: "failed", created_at: at(80), updated_at: at(79) }, { id: "b", status: "failed", created_at: at(90), updated_at: at(89) }, { id: "a", status: "failed", created_at: at(100), updated_at: at(99) }], now).take === true, "three tasks all older than 3 days: the issue is taken again");
+ok(__decide([{ id: "c", status: "failed", created_at: at(10), updated_at: at(9) }, { id: "b", status: "failed", created_at: at(20), updated_at: at(19) }, { id: "a", status: "failed", created_at: at(30), updated_at: at(29) }], now).exhausted === true, "three tasks inside 3 days: still exhausted");
 ok(__decide([{ id: "a", status: "closed", merge_note: "rejected by session_x review: cosmetic", updated_at: at(9) }], now).take === false, "a review rejection is never retried");
 ok(__decide([{ id: "a", status: "needs_human", last_error: "model m: noop-proposal: ... [3 no-op proposals in a row: needs a person]", updated_at: at(9) }], now).take === false, "a no-op refusal is never retried");
 ok(__decide([{ id: "a", status: "needs_human", last_error: "the JS verifier could not confirm the syntax", updated_at: at(9) }], now).take === true, "a needs_human from a fixed engine wall is retried");
