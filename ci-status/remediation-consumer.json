@@ -1,12 +1,29 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@fa6819bd288a",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@094c0aef8a00",
+ "due": 2,
+ "pass": 1,
+ "fail": 1,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-2312",
+   "issue_id": 2312,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by qnfo-research-exec, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "research-terminal-9c89cc2f",
+   "issue_id": 2312,
+   "verdict": "pass",
+   "expected": "parked+queue-moving",
+   "observed": "parked+queue-moving",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -35,8 +52,8 @@
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 4650,
- "head": "fa6819bd288a130a812cdc62f06e8cfe91af5797",
+ "spent_ms": 11456,
+ "head": "094c0aef8a00d04e2e8512b25371679688fa79f1",
  "job_status": "success",
- "ts": "2026-10-11T15:16:36Z"
+ "ts": "2026-10-11T15:46:44Z"
 }
