@@ -1,15 +1,8 @@
 {
-  "audited_at": "2026-10-11 12:03:22",
+  "audited_at": "2026-10-11 12:54:22",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "q08-signal-engine"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -546,7 +539,7 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.1-doi-scrub",
+        "version": "1.15.2-ground-acronyms",
         "worker": "personal-companion"
       },
       {
@@ -895,9 +888,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.1-doi-scrub",
+      "before": "1.15.2-ground-acronyms",
       "http": 200,
-      "live": "1.15.1-doi-scrub",
+      "live": "1.15.2-ground-acronyms",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
