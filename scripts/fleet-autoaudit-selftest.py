@@ -361,5 +361,9 @@ check("the lookup includes closed issues so the issue is reused, not duplicated"
 calls.clear(); fa.gh_api = lambda m, p, b=None: (calls.append((m, p, b)) or ([] if m == "GET" else {"number": 99}))
 check("no issue and no findings: nothing is created", fa.publish_issue("b", False)[0] == "none-needed" and len(calls) == 1, calls)
 
+calls.clear(); fa.gh_api = lambda m, p, b=None: (calls.append((m, p, b)) or ({"_error": "HTTP 403: rate limit"} if m == "GET" else {"number": 907}))
+r = fa.publish_issue("b", True)
+check("a failed lookup creates no duplicate issue and reports the error", r[0] == "lookup-failed" and "403" in r[2] and len(calls) == 1, (r, calls))
+
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)

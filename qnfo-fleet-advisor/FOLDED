@@ -1,0 +1,1 @@
+qnfo-fleet-advisor is FOLDED into qnfo-fleet-control (2026-10-11, AUTOAUDIT-ACTIONABLE-2, owner directive 2026-10-11 "always automatically audit and remediate"): its code runs as advisorMod inside qnfo-fleet-control/worker.js (member VERSION 0.3.3, WORKER "qnfo-fleet-advisor"). The script is absent from the Cloudflare account; this directory holds the pre-fold source.
