@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-11 20:04:18",
+  "audited_at": "2026-10-11 20:45:35",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -539,12 +539,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.4-ground-acronyms-2",
+        "version": "1.15.5-factcheck-diag",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.11.9",
+        "version": "0.11.10",
         "worker": "q08-signal-engine"
       },
       {
@@ -594,7 +594,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.29.0-cmd-ask-fast",
+        "version": "1.29.1-cmd-ask-fast",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -888,9 +888,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.4-ground-acronyms-2",
+      "before": "1.15.5-factcheck-diag",
       "http": 200,
-      "live": "1.15.4-ground-acronyms-2",
+      "live": "1.15.5-factcheck-diag",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -932,9 +932,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.11.9",
+      "before": "0.11.10",
       "http": 200,
-      "live": "0.11.9",
+      "live": "0.11.10",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1264,9 +1264,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.29.0-cmd-ask-fast",
+      "before": "1.29.1-cmd-ask-fast",
       "http": 200,
-      "live": "1.29.0-cmd-ask-fast",
+      "live": "1.29.1-cmd-ask-fast",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
