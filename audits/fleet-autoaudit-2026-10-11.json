@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-11 11:03:37",
+  "audited_at": "2026-10-11 12:03:22",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "q08-signal-engine"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -539,12 +546,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.0-verify",
+        "version": "1.15.1-doi-scrub",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.11.0",
+        "version": "0.11.1",
         "worker": "q08-signal-engine"
       },
       {
@@ -589,7 +596,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.14.1-doi-scrub",
+        "version": "0.14.2-doi-scrub",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -888,9 +895,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.0-verify",
+      "before": "1.15.1-doi-scrub",
       "http": 200,
-      "live": "1.15.0-verify",
+      "live": "1.15.1-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -932,9 +939,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.11.0",
+      "before": "0.11.1",
       "http": 200,
-      "live": "0.11.0",
+      "live": "0.11.1",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -1256,9 +1263,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.14.1-doi-scrub",
+      "before": "0.14.2-doi-scrub",
       "http": 200,
-      "live": "0.14.1-doi-scrub",
+      "live": "0.14.2-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
