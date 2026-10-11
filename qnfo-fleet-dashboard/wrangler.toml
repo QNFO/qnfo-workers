@@ -98,3 +98,9 @@ environment = "production"
 binding = "FLEET_CFG"
 id = "d3768b93a76640be83151b00a8b42717"
 
+
+# CMD-ASK-FAST-1: read-only (published_pieces counts and titles) for the command line's Q08 answers
+[[d1_databases]]
+binding = "Q08"
+database_name = "q08-signal"
+database_id = "10fd74b7-c4b3-43c7-9ca5-855213f44a69"

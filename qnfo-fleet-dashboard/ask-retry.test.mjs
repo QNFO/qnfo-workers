@@ -76,9 +76,9 @@ function seed(db) {
   const r = await W.__askRetry(env);
   const row = (id) => db.prepare("SELECT status, response, model, error, retries FROM owner_prompts WHERE id = ?").get(id);
   ok(r.retried.length === 3 && ["op-a", "op-b", "op-c"].every((id) => row(id).status === "answered"), "R1 the three abandoned asks are answered again, newest first", r);
-  ok(row("op-a").response.indexOf("Here is the answer.") === 0 && /Proposed actions .*Refresh fleet state/.test(row("op-a").response) && row("op-a").model === "glm-5.2 (retried)" && row("op-a").error === null, "R2 the row shows the answer, the proposed actions and the retried model", row("op-a"));
+  ok(row("op-a").response.indexOf("Here is the answer.") === 0 && /Proposed actions .*Refresh fleet state/.test(row("op-a").response) && row("op-a").model === "deepseek-v4-flash (retried)" && row("op-a").error === null, "R2 the row shows the answer, the proposed actions and the retried model", row("op-a"));
   ok(row("op-d").status === "failed" && row("op-e").status === "failed" && row("op-f").status === "answered", "R3 at most 3 per run; a non-abandoned failure and an answered row are left alone", [row("op-d"), row("op-e")]);
-  ok(calls[0].model === "glm-5.2", "R4 the fastest model is asked first", calls[0].model);
+  ok(calls[0].model === "deepseek-v4-flash", "R4 the fastest model is asked first", calls[0].model);
   await W.__askRetry(env);
   ok(row("op-d").status === "answered", "R5 the next run takes the rest");
 }
