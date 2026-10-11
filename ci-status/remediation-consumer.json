@@ -1,12 +1,149 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@272cd668115b",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@08a20ef3cdd8",
+ "due": 17,
+ "pass": 2,
+ "fail": 15,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-2248",
+   "issue_id": 2248,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker",
+   "written": true
+  },
+  {
+   "class": "issue-2274",
+   "issue_id": 2274,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker",
+   "written": true
+  },
+  {
+   "class": "issue-2275",
+   "issue_id": 2275,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-pdf/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2276",
+   "issue_id": 2276,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "4",
+   "written": true
+  },
+  {
+   "class": "issue-2277",
+   "issue_id": 2277,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2278",
+   "issue_id": 2278,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "617",
+   "written": true
+  },
+  {
+   "class": "issue-2273",
+   "issue_id": 2273,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "5",
+   "written": true
+  },
+  {
+   "class": "issue-2281",
+   "issue_id": 2281,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:idea-hub/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2282",
+   "issue_id": 2282,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-email-orchestrator/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-1996",
+   "issue_id": 1996,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:personal-api/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2121",
+   "issue_id": 2121,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "1120",
+   "written": true
+  },
+  {
+   "class": "issue-1824",
+   "issue_id": 1824,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2232",
+   "issue_id": 2232,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-fleet-control/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2271",
+   "issue_id": 2271,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-ai/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2302",
+   "issue_id": 2302,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-intent-orchestrator/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-probe-line-unparsed",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-removal-unprobeable",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,13 +167,14 @@
   "http",
   "runner-https"
  ],
+ "https": 2,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 3.9,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 3692,
- "head": "272cd668115b48136383b0b576390c9fe95c6bd4",
+ "spent_ms": 14049,
+ "head": "08a20ef3cdd8e0769469e20153c368043f5a7ce8",
  "job_status": "success",
- "ts": "2026-10-11T09:24:36Z"
+ "ts": "2026-10-11T09:28:00Z"
 }
