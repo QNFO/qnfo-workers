@@ -29,6 +29,7 @@ PATTERNS = [
     (re.compile(r"clearance[- ]eligible", re.I), "clearance-eligible claim"),
     (re.compile(r"featured in national media", re.I), "unlinked media claim"),
     (re.compile(r"thermodynamic dead end", re.I), "physics headline claim"),
+    (re.compile(r"10\.5281/zenodo\.\d+|zenodo\.org|\bZenodo\b"), "dead deposit registrar (owner directive 2026-10-10, NOZ-DOI-1: the account is blocked; no output may name it or its DOIs)"),
     (re.compile(r"\b(649|891)\+\s*(publications|papers|records)", re.I), "shifting publication count"),
 ]
 COMMENT = re.compile(r"^\s*(//|/\*|\*|#)")
@@ -72,7 +73,7 @@ def main():
         for dirpath, dirnames, filenames in os.walk(wd):
             dirnames[:] = [x for x in dirnames if x not in ("node_modules", ".wrangler", "dist")]
             for fn in filenames:
-                if fn == "deployed-current.worker.js" or fn.endswith((".test.mjs", ".fixture.json")) or not fn.endswith(TEXT_EXT):
+                if fn == "deployed-current.worker.js" or re.match(r"(worker-.*|deployed-.*\.worker)\.js$", fn) or fn.endswith((".test.mjs", ".fixture.json")) or not fn.endswith(TEXT_EXT):
                     continue
                 findings += scan_file(os.path.join(dirpath, fn))
     for path, n, why, hit in findings:
