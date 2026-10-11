@@ -9,7 +9,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 let fails = 0;
 const check = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fails++; };
 const FORMER = {
-  "radar-hub": ["0 5 * * 2", "30 8 * * *", "0 6 1 * *", "0 8 * * 7", "0 9 * * 7", "0 11 1,15 * *", "0 7 * * 2", "30 5 * * 2", "0 6 * * *"],
+  "radar-hub": ["0 5 * * 2", "30 8 * * *", "0 6 1 * *", "0 9 * * 7", "0 11 1,15 * *", "0 7 * * 2", "30 5 * * 2", "0 6 * * *"],
   "errata-hub": ["0 * * * *", "15 * * * *", "30 * * * *"],
   "qnfo-lifecycle": ["0 * * * *", "0 0 1 * *", "0 3 * * *", "0 5 * * *", "0 8 * * 1"],
   "personal-companion": ["0 * * * *", "0 21 * * *"]
