@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-11 08:34:07",
+  "audited_at": "2026-10-11 09:24:20",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -589,7 +589,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.13.1-check-repair",
+        "version": "0.14.1-doi-scrub",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -1256,9 +1256,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.13.1-check-repair",
+      "before": "0.14.1-doi-scrub",
       "http": 200,
-      "live": "0.13.1-check-repair",
+      "live": "0.14.1-doi-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
