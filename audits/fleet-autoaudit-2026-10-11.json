@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-11 20:45:35",
+  "audited_at": "2026-10-11 21:16:06",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "q08-signal-engine"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -539,12 +546,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.5-factcheck-diag",
+        "version": "1.15.7-ground-hyphen",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.11.10",
+        "version": "0.11.12",
         "worker": "q08-signal-engine"
       },
       {
@@ -888,9 +895,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.5-factcheck-diag",
+      "before": "1.15.7-ground-hyphen",
       "http": 200,
-      "live": "1.15.5-factcheck-diag",
+      "live": "1.15.7-ground-hyphen",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -932,9 +939,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.11.10",
+      "before": "0.11.12",
       "http": 200,
-      "live": "0.11.10",
+      "live": "0.11.12",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
