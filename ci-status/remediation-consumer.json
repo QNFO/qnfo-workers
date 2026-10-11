@@ -1,12 +1,29 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@d6a1f48868ad",
- "due": 0,
+ "verifier": "remediation-consumer@ae94d31c57e8",
+ "due": 2,
  "pass": 0,
- "fail": 0,
+ "fail": 2,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "issue-2070",
+   "issue_id": 2070,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 175 open issues, ceiling 50 (autonomy_scores issue_flow)",
+   "written": true
+  },
+  {
+   "class": "issue-2119",
+   "issue_id": 2119,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -31,12 +48,12 @@
   "runner-https"
  ],
  "budget_exhausted": false,
- "runtime_verified_share_24h": 4.3,
+ "runtime_verified_share_24h": 4.4,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 4927,
- "head": "d6a1f48868ad37d3d4446b01b90a0502f312ea5a",
+ "spent_ms": 9421,
+ "head": "ae94d31c57e8eeca9d262589b70d37c7705dd7b9",
  "job_status": "success",
- "ts": "2026-10-11T17:29:48Z"
+ "ts": "2026-10-11T18:03:09Z"
 }
