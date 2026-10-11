@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-11 19:22:40",
+  "audited_at": "2026-10-11 20:04:18",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -594,7 +594,7 @@
       },
       {
         "dir": "qnfo-fleet-dashboard",
-        "version": "1.28.2-doi-scrub",
+        "version": "1.29.0-cmd-ask-fast",
         "worker": "qnfo-fleet-dashboard"
       },
       {
@@ -1264,9 +1264,9 @@
       "worker": "qnfo-fleet-control"
     },
     "qnfo-fleet-dashboard": {
-      "before": "1.28.2-doi-scrub",
+      "before": "1.29.0-cmd-ask-fast",
       "http": 200,
-      "live": "1.28.2-doi-scrub",
+      "live": "1.29.0-cmd-ask-fast",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-dashboard"
