@@ -1,53 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@73cf64e2e0e0",
- "due": 5,
- "pass": 3,
- "fail": 2,
+ "verifier": "remediation-consumer@c0324f48baaa",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "fm-migration-unapplied",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2301",
-   "issue_id": 2301,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "fm-dedup-id-gap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-registry-live-absent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-standing-report-issue",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -71,13 +30,12 @@
   "http",
   "runner-https"
  ],
- "https": 1,
  "runtime_verified_share_24h": 3.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 16406,
- "head": "73cf64e2e0e051e3622d88541f2d5b2765822835",
+ "spent_ms": 5216,
+ "head": "c0324f48baaa62dcf105fa3bea1af5a2857684f1",
  "job_status": "success",
- "ts": "2026-10-11T08:21:24Z"
+ "ts": "2026-10-11T08:24:51Z"
 }
