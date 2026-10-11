@@ -1,184 +1,106 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@3fc959bc9c03",
- "due": 22,
- "pass": 10,
- "fail": 11,
- "skipped": 1,
+ "verifier": "remediation-consumer@9d0d1399c42a",
+ "due": 12,
+ "pass": 7,
+ "fail": 5,
+ "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2171",
-   "issue_id": 2171,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2187",
-   "issue_id": 2187,
-   "verdict": "probe-not-machine-executable",
-   "reason": "url-not-allowlisted"
-  },
-  {
-   "class": "TWIN-VISION-TOOLLEAK-1",
-   "issue_id": 1805,
-   "verdict": "pass",
-   "expected": "fixed",
-   "observed": "fixed",
-   "written": true
-  },
-  {
-   "class": "issue-2042",
-   "issue_id": 2042,
-   "verdict": "pass",
-   "expected": "live",
-   "observed": "live",
-   "written": true
-  },
-  {
-   "class": "rt-fleet-dashboard",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-gateway",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ai-router",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-idea-hub",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-personal-api",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-ipatent",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-papers",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "rt-q08",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2116",
-   "issue_id": 2116,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "below target: qnfo-research-exec glm-5.3-flash cached share 0.241 under 0.30 on the last complete day",
-   "written": true
-  },
-  {
-   "class": "issue-2118",
-   "issue_id": 2118,
+   "class": "issue-2214",
+   "issue_id": 2214,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2151",
-   "issue_id": 2151,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2072",
-   "issue_id": 2072,
-   "verdict": "fail",
-   "expected": "merged",
-   "observed": "failed",
-   "written": true
-  },
-  {
-   "class": "issue-2174",
-   "issue_id": 2174,
+   "class": "issue-2300",
+   "issue_id": 2300,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2130",
-   "issue_id": 2130,
+   "class": "issue-2105",
+   "issue_id": 2105,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "stale: the filing loop host-census did not close it within 48h",
+   "observed": "pending: ungated published=128 newest verdict=2026-10-11T04:20:27.078Z published quarantine-candidates=0",
    "written": true
   },
   {
-   "class": "issue-2132",
-   "issue_id": 2132,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2158",
-   "issue_id": 2158,
+   "class": "issue-2155",
+   "issue_id": 2155,
    "verdict": "fail",
    "expected": "ok",
    "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
    "written": true
   },
   {
-   "class": "issue-2170",
-   "issue_id": 2170,
-   "verdict": "fail",
+   "class": "belief-repo-token-writes-routes",
+   "issue_id": null,
+   "verdict": "pass",
    "expected": "1",
-   "observed": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-2133",
-   "issue_id": 2133,
+   "class": "belief-owner-queue-identity-only",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "belief-research-publishes-without-zenodo",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "issue-2223",
+   "issue_id": 2223,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: watchmaker_index reads 1 and qnfo-fleet-dashboard is ?",
+   "observed": "pending: filed by qnfo-fleet-control, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "fm-head-of-line",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-silent-refile-drop",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-enum-abort-drop",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "fm-single-heartbeat",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
    "written": true
   }
  ],
@@ -205,13 +127,12 @@
   "http",
   "runner-https"
  ],
- "https": 9,
  "runtime_verified_share_24h": 4.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 63167,
- "head": "3fc959bc9c035c5706560e7a236ff2dee3352fc5",
+ "spent_ms": 37804,
+ "head": "9d0d1399c42a6ff96bbee8739847002987479bc3",
  "job_status": "success",
- "ts": "2026-10-11T08:33:35Z"
+ "ts": "2026-10-11T08:37:41Z"
 }
