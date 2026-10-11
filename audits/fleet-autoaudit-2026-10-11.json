@@ -1,8 +1,15 @@
 {
-  "audited_at": "2026-10-11 15:03:46",
+  "audited_at": "2026-10-11 16:24:47",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "personal-companion"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -539,12 +546,12 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.2-ground-acronyms",
+        "version": "1.15.4-ground-acronyms-2",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.11.3",
+        "version": "0.11.5",
         "worker": "q08-signal-engine"
       },
       {
@@ -888,9 +895,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.2-ground-acronyms",
+      "before": "1.15.4-ground-acronyms-2",
       "http": 200,
-      "live": "1.15.2-ground-acronyms",
+      "live": "1.15.4-ground-acronyms-2",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -932,9 +939,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.11.3",
+      "before": "0.11.5",
       "http": 200,
-      "live": "0.11.3",
+      "live": "0.11.5",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
