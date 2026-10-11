@@ -23,7 +23,7 @@ const audit = new DatabaseSync(":memory:"), lp = new DatabaseSync(":memory:");
 audit.exec(`CREATE TABLE signals (id TEXT PRIMARY KEY, ts TEXT, source TEXT, source_ref TEXT, content TEXT, open_questions TEXT, evidential_weight REAL, domain TEXT, status TEXT DEFAULT 'new', decision TEXT, score REAL, created_at TEXT);
 CREATE TABLE signal_worker_boundary (worker TEXT NOT NULL, source TEXT NOT NULL, permitted INTEGER DEFAULT 1, domain TEXT, note TEXT, PRIMARY KEY (worker, source));
 CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT, decision TEXT, score REAL, rationale TEXT, triaged_at TEXT);`);
-lp.exec("CREATE TABLE papers (doi TEXT, title TEXT, body_md TEXT, created_at TEXT, status TEXT DEFAULT 'published', identifier_type TEXT DEFAULT 'zenodo')");
+lp.exec("CREATE TABLE papers (doi TEXT, slug TEXT, title TEXT, body_md TEXT, created_at TEXT, status TEXT DEFAULT 'published', identifier_type TEXT DEFAULT 'owner')");
 let aiCalls = 0;
 const env = { QNFO_AUDIT: shim(audit), LIVING_PAPER: shim(lp), AI: { async run() { aiCalls++; return { response: "{}" }; } } };
 let pass = 0, fail = 0;
@@ -40,20 +40,20 @@ const paper = (doi, body, createdMs) => lp.prepare("INSERT INTO papers (doi, tit
 // old (younger than REENTRY_NOQ_TTL_H); 4 papers not yet signalled; the boundary paused as on 2026-10-04.
 const OLD0 = 100;
 for (let i = 0; i < OLD0; i++) {
-  const doi = "10.5281/zenodo.old" + String(i).padStart(3, "0"), at = now - (41 * 24 - i * 9) * H;
+  const doi = "10.9999/test.old" + String(i).padStart(3, "0"), at = now - (41 * 24 - i * 9) * H;
   sig(doi, at, 0);
   if (i === 7) continue; // paper no longer in living-paper
   paper(doi, i === 3 ? PLAIN + OPENQ : PLAIN, at);
 }
-const RESCORE_DOI = "10.5281/zenodo.old003", GONE_DOI = "10.5281/zenodo.old007";
+const RESCORE_DOI = "10.9999/test.old003", GONE_DOI = "10.9999/test.old007";
 audit.prepare("UPDATE signals SET created_at = ?, ts = ? WHERE source_ref = ?").run(iso(now - 48 * H), iso(now - 48 * H), RESCORE_DOI); // 2 days old: past the 20 h rule, inside 7 days
-for (let i = 0; i < 3; i++) sig("10.5281/zenodo.stale" + i, now - (10 - i) * 24 * H, 0.9, ["Is the stale question still open after a week?"]);
-sig("10.5281/zenodo.w30h", now - 30 * H, 0.9, ["Does the 30-hour-old question get consumed when the pause lifts?"]);
-sig("10.5281/zenodo.w1h", now - 1 * H, 0.9, ["Does the newest question wait its turn?"]);
-// OWNER-SIGNAL-INTAKE-2 (1.7.2): consume needs the signal's paper in living-paper as an owner paper (fixture default zenodo).
-for (const d of ["10.5281/zenodo.w30h", "10.5281/zenodo.w1h", "10.5281/zenodo.stale0", "10.5281/zenodo.stale1", "10.5281/zenodo.stale2"]) paper(d, PLAIN, now - 30 * H);
-for (let i = 0; i < 5; i++) { const d = "10.5281/zenodo.young" + i; sig(d, now - 2 * H, 0); paper(d, PLAIN, now - 2 * H); }
-for (let i = 0; i < 4; i++) paper("10.5281/zenodo.fresh" + i, PLAIN + OPENQ, now - 10 * 60e3);
+for (let i = 0; i < 3; i++) sig("10.9999/test.stale" + i, now - (10 - i) * 24 * H, 0.9, ["Is the stale question still open after a week?"]);
+sig("10.9999/test.w30h", now - 30 * H, 0.9, ["Does the 30-hour-old question get consumed when the pause lifts?"]);
+sig("10.9999/test.w1h", now - 1 * H, 0.9, ["Does the newest question wait its turn?"]);
+// OWNER-SIGNAL-INTAKE-2 (1.7.2): consume needs the signal's paper in living-paper as an owner paper (fixture default owner).
+for (const d of ["10.9999/test.w30h", "10.9999/test.w1h", "10.9999/test.stale0", "10.9999/test.stale1", "10.9999/test.stale2"]) paper(d, PLAIN, now - 30 * H);
+for (let i = 0; i < 5; i++) { const d = "10.9999/test.young" + i; sig(d, now - 2 * H, 0); paper(d, PLAIN, now - 2 * H); }
+for (let i = 0; i < 4; i++) paper("10.9999/test.fresh" + i, PLAIN + OPENQ, now - 10 * 60e3);
 audit.prepare("INSERT INTO signal_worker_boundary (worker, source, permitted, note) VALUES ('idea-hub', 'artifact_reentry', 0, 'OWNER-NARROW-SIGNAL-1 test'), ('idea-hub', 'artifact_reentry_owner', 0, 'OWNER-SIGNAL-INTAKE-1 test')").run();
 const TOTAL0 = n("SELECT COUNT(*) n FROM signals");
 const stuck = () => n("SELECT COUNT(*) n FROM signals WHERE status='new' AND created_at < ?", iso(Date.now() - 24 * H));
@@ -92,7 +92,7 @@ audit.prepare("UPDATE signal_worker_boundary SET permitted = 1").run();
 const r4 = await api.runReentry(env), c4 = await api.runConsume(env);
 ok(r4.permitted === true && r4.emitted === 4 && n("SELECT COUNT(*) n FROM signals WHERE source_ref LIKE '%fresh%' AND evidential_weight > 0") === 4, "permitted again: the 4 unsignalled papers are emitted", r4);
 const consumed = audit.prepare("SELECT source_ref FROM signals WHERE status='consumed' ORDER BY created_at").all().map((x) => x.source_ref);
-ok(c4.consumed === api.CONSUME_SIGNALS && consumed.join(",") === [RESCORE_DOI, "10.5281/zenodo.w30h"].join(","), "consume takes the oldest weight>0 rows first: the re-scored one and the 30 h one", { c4, consumed });
+ok(c4.consumed === api.CONSUME_SIGNALS && consumed.join(",") === [RESCORE_DOI, "10.9999/test.w30h"].join(","), "consume takes the oldest weight>0 rows first: the re-scored one and the 30 h one", { c4, consumed });
 ok(n("SELECT COUNT(*) n FROM idea_proposals WHERE name='auto-reentry'") === c4.proposals && c4.proposals > 0, "their open questions become idea proposals", c4);
 ok(aiCalls === 0 && fetchCalls === 0, "the re-entry and consume legs never call a model or fetch", { aiCalls, fetchCalls });
 

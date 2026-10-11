@@ -114,15 +114,15 @@ ok(c5.ok === false && /VAULT/.test(c5.why), "without the VAULT binding the feede
 
 // 4. Re-entry reads only the owner's own papers.
 const lp = mk();
-lp.exec("CREATE TABLE papers (doi TEXT, title TEXT, body_md TEXT, created_at TEXT, status TEXT, identifier_type TEXT)");
+lp.exec("CREATE TABLE papers (doi TEXT, slug TEXT, title TEXT, body_md TEXT, created_at TEXT, status TEXT, identifier_type TEXT)");
 const body = "## Open Questions\n- Does the ultrametric bound extend to infinite products of records?\n";
-lp.prepare("INSERT INTO papers VALUES (?,?,?,?,?,?)").run("10.5281/zenodo.1", "Own", body, "2026-10-01", "published", "zenodo");
-lp.prepare("INSERT INTO papers VALUES (?,?,?,?,?,?)").run("10.48550/arXiv.2610.1", "ArXiv QEC", body, "2026-10-06", "published", "arxiv");
-lp.prepare("INSERT INTO papers VALUES (?,?,?,?,?,?)").run("10.5281/zenodo.2", "Pipeline", body, "2026-10-06", "published", "qnfo");
+lp.prepare("INSERT INTO papers (doi, title, body_md, created_at, status, identifier_type) VALUES (?,?,?,?,?,?)").run("10.9999/test.1", "Own", body, "2026-10-01", "published", "owner");
+lp.prepare("INSERT INTO papers (doi, title, body_md, created_at, status, identifier_type) VALUES (?,?,?,?,?,?)").run("10.48550/arXiv.2610.1", "ArXiv QEC", body, "2026-10-06", "published", "arxiv");
+lp.prepare("INSERT INTO papers (doi, title, body_md, created_at, status, identifier_type) VALUES (?,?,?,?,?,?)").run("10.9999/test.2", "Pipeline", body, "2026-10-06", "published", "qnfo");
 db.prepare("INSERT INTO signal_worker_boundary (worker, source, permitted) VALUES ('idea-hub', 'artifact_reentry', 0), ('idea-hub', 'artifact_reentry_owner', 1)").run();
 const r = await api.runReentry({ QNFO_AUDIT: shim(db), LIVING_PAPER: shim(lp) });
 const refs = db.prepare("SELECT source_ref FROM signals WHERE source = 'artifact_reentry'").all().map((x) => x.source_ref);
-ok(r.scanned === 1 && refs.length === 1 && refs[0] === "10.5281/zenodo.1", "re-entry scans only owner-authored papers (zenodo), not arxiv or pipeline rows", { r, refs });
+ok(r.scanned === 1 && refs.length === 1 && refs[0] === "10.9999/test.1", "re-entry scans only owner-authored papers, not arxiv or pipeline rows", { r, refs });
 
 // 5. Think loop seed.
 const seed = await api.thinkSeed(env);
@@ -160,10 +160,10 @@ ok(seen2()["notes/v1/2025/10/28/idea-a.md"] === "proposed", "a day later the fai
 
 // 8. 1.7.2 re-entry consume: owner papers and real questions only.
 ok(api.realQuestion("Does the ultrametric bound extend to infinite products?") && api.realQuestion("It remains open whether the bound is tight.") && !api.realQuestion("We flag this as an open question rather than a result.") && !api.realQuestion("The results are summarised in Table 2."), "re-entry keeps real questions and drops sentences that only mention an open question");
-const lp2 = mk(); lp2.exec("CREATE TABLE papers (doi TEXT, identifier_type TEXT)"); lp2.prepare("INSERT INTO papers VALUES ('10.5281/zenodo.own', 'zenodo'), ('10.5281/zenodo.pipe', 'qnfo')").run();
+const lp2 = mk(); lp2.exec("CREATE TABLE papers (doi TEXT, slug TEXT, identifier_type TEXT)"); lp2.prepare("INSERT INTO papers (doi, identifier_type) VALUES ('10.9999/test.own', 'owner'), ('10.9999/test.pipe', 'qnfo')").run();
 const a3 = mk(); a3.exec("CREATE TABLE idea_proposals (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, idea TEXT NOT NULL, contact TEXT, status TEXT DEFAULT 'new', ip_hash TEXT, created_at TEXT); CREATE TABLE signals (id TEXT PRIMARY KEY, ts TEXT, source TEXT, source_ref TEXT, content TEXT, open_questions TEXT, evidential_weight REAL, domain TEXT, status TEXT, decision TEXT, created_at TEXT); CREATE TABLE signal_worker_boundary (worker TEXT, source TEXT, permitted INTEGER);");
 a3.prepare("INSERT INTO signal_worker_boundary VALUES ('idea-hub', 'artifact_reentry_owner', 1)").run();
-a3.prepare("INSERT INTO signals (id, source, source_ref, open_questions, evidential_weight, status, created_at) VALUES ('s1', 'artifact_reentry', '10.5281/zenodo.pipe', ?, 0.9, 'new', '2026-10-01'), ('s2', 'artifact_reentry', '10.5281/zenodo.own', ?, 0.9, 'new', '2026-10-02')").run(JSON.stringify(["Is the QEC threshold universal?"]), JSON.stringify(["We flag this as an open question rather than a result.", "Does the bound hold for p = 2?"]));
+a3.prepare("INSERT INTO signals (id, source, source_ref, open_questions, evidential_weight, status, created_at) VALUES ('s1', 'artifact_reentry', '10.9999/test.pipe', ?, 0.9, 'new', '2026-10-01'), ('s2', 'artifact_reentry', '10.9999/test.own', ?, 0.9, 'new', '2026-10-02')").run(JSON.stringify(["Is the QEC threshold universal?"]), JSON.stringify(["We flag this as an open question rather than a result.", "Does the bound hold for p = 2?"]));
 const cs = await api.runConsume({ QNFO_AUDIT: shim(a3), LIVING_PAPER: shim(lp2) });
 const props = a3.prepare("SELECT idea FROM idea_proposals").all().map((r) => r.idea);
 // HOLD-RELEASE-REENTRY-1 (1.8.0, #2174): a non-owner paper's signal is admitted under a daily rate instead of expired.
@@ -171,19 +171,24 @@ const s1 = a3.prepare("SELECT status, decision FROM signals WHERE id='s1'").get(
 ok(s1.status === "consumed" && /HOLD-RELEASE-REENTRY-1 non-owner/.test(s1.decision) && !cs.expired_not_owner, "a signal from a pipeline (qnfo) paper is consumed under the non-owner rate, not expired", { s1, cs });
 ok(props.length === 2 && props.some((x) => /Does the bound hold for p = 2\?/.test(x)) && props.some((x) => /QEC threshold universal/.test(x)) && !props.some((x) => /We flag this/.test(x)), "both real questions become proposals; the hedge sentence does not", props);
 // The rate: 2 non-owner signals per UTC day; the rest stay new, and an owner signal behind them is still consumed.
-a3.prepare("INSERT INTO signals (id, source, source_ref, open_questions, evidential_weight, status, created_at) VALUES ('n1', 'artifact_reentry', '10.5281/zenodo.pipe', ?, 0.9, 'new', '2026-10-03'), ('n2', 'artifact_reentry', '10.5281/zenodo.pipe', ?, 0.9, 'new', '2026-10-04'), ('o3', 'artifact_reentry', '10.5281/zenodo.own', ?, 0.9, 'new', '2026-10-05')").run(JSON.stringify(["Is n1 open?"]), JSON.stringify(["Is n2 open?"]), JSON.stringify(["Is o3 open?"]));
+a3.prepare("INSERT INTO signals (id, source, source_ref, open_questions, evidential_weight, status, created_at) VALUES ('n1', 'artifact_reentry', '10.9999/test.pipe', ?, 0.9, 'new', '2026-10-03'), ('n2', 'artifact_reentry', '10.9999/test.pipe', ?, 0.9, 'new', '2026-10-04'), ('o3', 'artifact_reentry', '10.9999/test.own', ?, 0.9, 'new', '2026-10-05')").run(JSON.stringify(["Is n1 open?"]), JSON.stringify(["Is n2 open?"]), JSON.stringify(["Is o3 open?"]));
 const cs2 = await api.runConsume({ QNFO_AUDIT: shim(a3), LIVING_PAPER: shim(lp2) });
 const st = (id) => a3.prepare("SELECT status FROM signals WHERE id=?").get(id).status;
 ok(st("n1") === "consumed" && st("n2") === "new" && st("o3") === "consumed" && cs2.deferred_not_owner === 1, "the second non-owner signal of the day is admitted, the third waits as new, the owner signal behind it is consumed", { cs2, n1: st("n1"), n2: st("n2"), o3: st("o3") });
 
 // 9. 1.7.2: a pipeline paper that came from an owner proposal counts as the owner's.
-a3.exec("CREATE TABLE research_queue (id TEXT, source TEXT, source_id TEXT, status TEXT, doi TEXT)");
+a3.exec("CREATE TABLE research_queue (id TEXT, source TEXT, source_id TEXT, status TEXT, doi TEXT, paper_slug TEXT)");
 const op = Number(a3.prepare("INSERT INTO idea_proposals (name, idea, contact, status) VALUES ('owner-corpus', 'x', 'owner', 'triaged_accepted')").run().lastInsertRowid);
 const gp = Number(a3.prepare("INSERT INTO idea_proposals (name, idea, contact, status) VALUES ('auto-scan', 'y', '', 'triaged_accepted')").run().lastInsertRowid);
-a3.prepare("INSERT INTO research_queue VALUES ('r1', 'proposal', ?, 'published', '10.5281/zenodo.ownpipe'), ('r2', 'proposal', ?, 'published', '10.5281/zenodo.pipe')").run(String(op), String(gp));
-lp2.prepare("INSERT INTO papers VALUES ('10.5281/zenodo.ownpipe', 'qnfo')").run();
+a3.prepare("INSERT INTO research_queue (id, source, source_id, status, doi) VALUES ('r1', 'proposal', ?, 'published', '10.9999/test.ownpipe'), ('r2', 'proposal', ?, 'published', '10.9999/test.pipe')").run(String(op), String(gp));
+lp2.prepare("INSERT INTO papers (doi, identifier_type) VALUES ('10.9999/test.ownpipe', 'qnfo')").run();
 const e3 = { QNFO_AUDIT: shim(a3), LIVING_PAPER: shim(lp2) };
-ok(await api.ownerPaper(e3, "10.5281/zenodo.ownpipe") && !(await api.ownerPaper(e3, "10.5281/zenodo.pipe")) && await api.ownerPaper(e3, "10.5281/zenodo.own"), "a pipeline paper from an owner proposal is the owner's; one from an arXiv scan is not; a Zenodo deposit is");
+ok(await api.ownerPaper(e3, "10.9999/test.ownpipe") && !(await api.ownerPaper(e3, "10.9999/test.pipe")) && await api.ownerPaper(e3, "10.9999/test.own"), "a pipeline paper from an owner proposal is the owner's; one from an arXiv scan is not; an owner-typed paper is");
+
+// NOZ-DOI-1: a paper without a DOI is keyed by its slug (living-paper slug, research_queue.paper_slug).
+a3.prepare("INSERT INTO research_queue (id, source, source_id, status, doi, paper_slug) VALUES ('r3', 'proposal', ?, 'published', NULL, 'slug-only-paper')").run(String(op));
+lp2.prepare("INSERT INTO papers (doi, slug, identifier_type) VALUES (NULL, 'slug-only-paper', 'qnfo')").run();
+ok(await api.ownerPaper(e3, "slug-only-paper") && !(await api.ownerPaper(e3, "other-slug")), "a DOI-less pipeline paper from an owner proposal is the owner's, keyed by its slug");
 
 const ih = readFileSync(join(here, "worker.js"), "utf8");
 ok(/r\.corpus = await runOwnerCorpus\(env\)/.test(ih), "the hourly ideation cycle runs the corpus feeder");
