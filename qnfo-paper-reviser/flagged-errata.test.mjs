@@ -1,5 +1,5 @@
 // REVISER-FLAGGED-DEADEND-1 offline suite (#1812): drives the real scheduled() handler of qnfo-paper-reviser/worker.js
-// against in-memory SQLite D1s, a stub AI and a stub Zenodo, and proves: a paper whose audit returns a HIGH finding is
+// against in-memory SQLite D1s, a stub AI, and proves: a paper whose audit returns a HIGH finding is
 // logged 'flagged' AND recorded as an internal_errata row (target_kind 'paper', status 'open') with the model confidence,
 // the reviser run id and the paper_revision_log id in its evidence, plus one errata_queue row in status 'internal-open'
 // (the status errata-hub never auto-answers or publishes); a rescan of the same finding adds no second row; LOW-only
@@ -40,7 +40,7 @@ CREATE TABLE errata_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, email_id INTEGE
 const BODY = "# A Paper\n\n## Abstract\n\nThe measured value is 42 J per solution.\n\n" + "Body text with a claim. ".repeat(500);
 function seedPaper(papers, slug, recid) {
   papers.prepare("INSERT INTO papers (slug, doi, zenodo_doi, title, version, body_md, paper_type, status, created_at) VALUES (?, ?, ?, ?, '1.0.0', ?, 'paper', 'published', datetime('now'))")
-    .run(slug, "10.5281/zenodo." + recid, "10.5281/zenodo." + recid, "Paper " + slug, BODY);
+    .run(slug, "10.9999/test." + recid, "10.9999/test." + recid, "Paper " + slug, BODY);
 }
 
 let auditReply = "";
@@ -48,7 +48,6 @@ const ai = { async run() { return { response: auditReply }; } };
 globalThis.fetch = async (url) => {
   const u = String(url);
   if (u.includes("/versions")) return new Response(JSON.stringify({ hits: { hits: [{ doi: "x" }] } }), { status: 200, headers: { "content-type": "application/json" } });
-  if (u.startsWith("https://zenodo.org/api/records/")) return new Response(JSON.stringify({ conceptrecid: "1", doi: "x", files: [] }), { status: 200, headers: { "content-type": "application/json" } });
   return new Response("not found", { status: 404 });
 };
 
@@ -79,7 +78,7 @@ const ctx = { waitUntil() {} };
   const row = ie[0] || {};
   let ev = {};
   try { ev = JSON.parse(row.evidence || "{}"); } catch (e) {}
-  check("erratum targets the paper DOI as kind 'paper', status open, severity high", row.target_kind === "paper" && row.target_ref === "10.5281/zenodo.1001" && row.status === "open" && row.severity === "high", JSON.stringify(row));
+  check("erratum targets the paper slug as kind 'paper', status open, severity high", row.target_kind === "paper" && row.target_ref === "high-paper" && row.status === "open" && row.severity === "high", JSON.stringify(row));
   check("erratum carries the model confidence", ev.confidence === 0.72, row.evidence);
   check("erratum carries the reviser run id and the log id", /^rv-[0-9a-z]+$/.test(String(ev.run_id)) && ev.log_id === log[0].id, row.evidence);
   check("erratum says it is unconfirmed until a second model confirms", /second model must confirm/.test(row.remediation || ""), row.remediation);
@@ -90,7 +89,7 @@ const ctx = { waitUntil() {} };
 
   // 2. Recording the same finding again (a rescan) adds no second row.
   const high = JSON.parse(auditReply).issues.filter((i) => i.severity === "high");
-  const again = await mod.recordFlaggedErrata(env, { slug: "high-paper", version: "1.0.0" }, "10.5281/zenodo.1001", high, { runId: "rv-second", logId: 99 });
+  const again = await mod.recordFlaggedErrata(env, { slug: "high-paper", version: "1.0.0" }, "high-paper", high, { runId: "rv-second", logId: 99 });
   check("rescan of the same finding records nothing new", again.recorded === 0 && audit.prepare("SELECT COUNT(*) n FROM internal_errata").get().n === 1 && audit.prepare("SELECT COUNT(*) n FROM errata_queue").get().n === 1, JSON.stringify(again));
 }
 
@@ -120,7 +119,7 @@ const ctx = { waitUntil() {} };
 {
   const { audit } = freshDbs();
   const env = { WATCH_DB: d1(audit) };
-  await mod.recordFlaggedErrata(env, { slug: "p" }, "10.5281/zenodo.7", [{ severity: "high", category: "a", location: "x", reason: "r1", confidence: 90 }, { severity: "high", category: "b", location: "y", reason: "r2" }], { runId: "rv-t", logId: 1 });
+  await mod.recordFlaggedErrata(env, { slug: "p" }, "p", [{ severity: "high", category: "a", location: "x", reason: "r1", confidence: 90 }, { severity: "high", category: "b", location: "y", reason: "r2" }], { runId: "rv-t", logId: 1 });
   const rows = audit.prepare("SELECT confidence FROM errata_queue ORDER BY id").all();
   check("confidence 90 becomes 0.9 and a missing confidence stays null", rows.length === 2 && Math.abs(rows[0].confidence - 0.9) < 1e-9 && rows[1].confidence === null, JSON.stringify(rows));
 }

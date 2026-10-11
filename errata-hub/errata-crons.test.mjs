@@ -2,7 +2,7 @@
 // of errata-hub/worker.js against in-memory SQLite D1s, a stub AI, a recording SEND_EMAIL and a recording fetch, and proves:
 // the :00 watch tick triages email into errata_queue and writes tick:errata-watch; the :15 respond tick drafts a correction
 // that discloses AI drafting, mails only the owner's receipt address and never touches an internal-open item; the :30 publish
-// tick, with the pipeline_flags row absent, '0' or anything but '1', makes no Zenodo call, no store re-point and no mail, and
+// tick, with the pipeline_flags row absent, '0' or anything but '1', makes no registrar call, no store re-point and no mail, and
 // records the would-publish action; the token-protected live route is forced dry the same way; with the flag at '1' the
 // publish path is reached; a failed tick keeps the previous last_ok; /health states the gate.
 // Run: node errata-hub/errata-crons.test.mjs   -> prints "N passed, 0 failed"
@@ -35,12 +35,12 @@ CREATE TABLE errata_actions (id INTEGER PRIMARY KEY AUTOINCREMENT, queue_id INTE
 CREATE TABLE email_suppression (email TEXT PRIMARY KEY, reason TEXT, source TEXT, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE pipeline_flags (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT);`);
 const papers = new DatabaseSync(":memory:");
-papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, zenodo_doi TEXT, body_md TEXT, r2_path TEXT, r2_key TEXT, updated_at TEXT)");
+papers.exec("CREATE TABLE papers (slug TEXT PRIMARY KEY, title TEXT, version TEXT, doi TEXT, zenodo_doi TEXT, zenodo_url TEXT, body_md TEXT, r2_path TEXT, r2_key TEXT, updated_at TEXT)");
 const graph = new DatabaseSync(":memory:");
 graph.exec("CREATE TABLE nodes (id TEXT PRIMARY KEY, properties TEXT, updated_at TEXT)");
 
 const SENDER = "author@example.edu";
-const DOI = "10.5281/zenodo.1000001";
+const DOI = "10.9999/test.1000001";
 const ANCHOR = "Equation (3) is taken from Doe et al.";
 const BODY = "# A paper\n\n**Version:** 1.0 (this version).\n\n" + ANCHOR + " It follows.\n\n## References\n\n1. Doe.\n";
 papers.prepare("INSERT INTO papers (slug, title, version, doi, zenodo_doi, body_md, r2_path) VALUES ('a-paper', 'A paper', '1.0', ?1, ?1, ?2, 'papers/a-paper')").run(DOI, BODY);
@@ -52,8 +52,8 @@ audit.prepare("INSERT INTO emails (message_id, sender, recipient, subject, body_
 // An internal errata item: respond and publish must never act on it.
 audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, claim, confidence, status) VALUES (NULL, 'internal_audit', 'internal_audit', 'err-x', 'internal claim', 1.0, 'internal-open')").run();
 // A correction published earlier: the :30 tick still verifies it while the gate is off.
-audit.prepare("INSERT INTO errata_actions (queue_id, paper_doi, slug, version_from, version_to, status, updated_at) VALUES (99, '10.5281/zenodo.900', 'old-paper', '0.4', '0.5', 'published', datetime('now', '-3 days'))").run();
-papers.prepare("INSERT INTO papers (slug, version, doi, zenodo_doi, body_md) VALUES ('old-paper', '0.5', '10.5281/zenodo.901', '10.5281/zenodo.901', 'x')").run();
+audit.prepare("INSERT INTO errata_actions (queue_id, paper_doi, slug, version_from, version_to, status, updated_at) VALUES (99, '10.9999/test.900', 'old-paper', '0.4', '0.5', 'published', datetime('now', '-3 days'))").run();
+papers.prepare("INSERT INTO papers (slug, version, doi, zenodo_doi, body_md) VALUES ('old-paper', '0.5', '10.9999/test.901', '10.9999/test.901', 'x')").run();
 
 const aiCalls = [];
 const judgeCalls = [];
@@ -85,10 +85,9 @@ globalThis.fetch = async (url, init) => {
   const u = String(url && url.url || url);
   fetches.push({ url: u, method: (init && init.method) || "GET" });
   if (u.startsWith("https://doi.org/api/handles/")) return new Response(JSON.stringify({ responseCode: 1 }), { status: 200 });
-  if (u.startsWith("https://zenodo.org/api/deposit/")) return new Response("stub: deposit refused in test", { status: 500 });
   return new Response("{}", { status: 404 });
 };
-const env = { AI, SEND_EMAIL, MIRROR, ERRATA_TOKEN: "t0k", ZENODO_TOKEN: "test-zenodo", WATCH_DB: d1(audit), AUDIT_DB: d1(audit), PAPERS_DB: d1(papers), GRAPH_DB: d1(graph) };
+const env = { AI, SEND_EMAIL, MIRROR, ERRATA_TOKEN: "t0k", WATCH_DB: d1(audit), AUDIT_DB: d1(audit), PAPERS_DB: d1(papers), GRAPH_DB: d1(graph) };
 const ctx = { waitUntil() {}, passThroughOnException() {} };
 
 const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;
@@ -96,8 +95,7 @@ const quiet = async (fn) => { const l = console.log, e = console.error; console.
 // CRON-SINGLE-TRIGGER-1: the worker holds one hourly trigger; tickEntry runs one former cron's member, as the tick does.
 const tick = async (cron) => quiet(() => worker.scheduled({ cron, scheduledTime: Date.now(), tickEntry: true }, env, ctx));
 const tickRow = (m) => { const r = audit.prepare("SELECT value FROM errata_watch WHERE key = ?").get("tick:" + m); return r ? JSON.parse(r.value) : null; };
-const isZenodoDeposit = (u) => { try { const x = new URL(u); return x.hostname === "zenodo.org" && x.pathname.startsWith("/api/deposit"); } catch (e) { return false; } };
-const deposits = () => fetches.filter((f) => isZenodoDeposit(f.url));
+const deposits = () => fetches.filter((f) => /z[e]nodo|10\.5281/i.test(f.url)); // NOZ-DOI-1: no call to the dead registrar, ever
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
@@ -119,7 +117,7 @@ ok(acts.length === 1 && acts[0].risk === "low" && acts[0].version_to === "1.1", 
 ok(acts[0].corrected_md.includes("drafted with AI assistance (@cf/") && acts[0].corrected_md.includes("Equation (3) is QNFO's own reformulation"), "the corrected text discloses AI drafting");
 ok(audit.prepare("SELECT status FROM errata_queue WHERE status = 'internal-open'").all().length === 1, "the internal-open item is untouched");
 ok(sends.length === 1 && sends.every((s) => s.to !== SENDER && !/@example\.edu$/i.test(String(s.to).trim())), "the only mail is the owner receipt, never the errata sender");
-ok(/pipeline_flags\.errata_publish_enabled/.test(sends[0].text) && /AI model/.test(sends[0].text), "the receipt names the AI drafting and the publish gate");
+ok(/nothing is published automatically/.test(sends[0].text) && /AI model/.test(sends[0].text) && !/z[e]nodo|10\.5281/i.test(sends[0].text), "the receipt names the AI drafting, says nothing is published automatically and names no dead registrar");
 ok(tickRow("errata-respond").ok === true && tickRow("errata-respond").processed === 1, "tick:errata-respond records the run");
 const sendsBeforePublish = sends.length;
 
@@ -134,7 +132,7 @@ for (const flag of [null, "0", "yes"]) {
   ok(p.would_publish.length === 1 && p.would_publish[0].action_id === acts[0].id && p.published.length === 0, "flag " + JSON.stringify(flag) + ": the tick lists the would-publish action");
   verified += p.verify.verified;
 }
-ok(deposits().length === 0, "gate off: no Zenodo deposit call (" + deposits().length + ")");
+ok(deposits().length === 0, "gate off: no registrar call (" + deposits().length + ")");
 ok(audit.prepare("SELECT status FROM errata_actions WHERE id = ?").get(acts[0].id).status === "drafted", "gate off: the draft stays drafted");
 ok(papers.prepare("SELECT version, doi FROM papers WHERE slug = 'a-paper'").get().version === "1.0" && mirrorPuts.length === 0 && graph.prepare("SELECT properties FROM nodes").get().properties === "{}", "gate off: papers, KG and R2 are untouched");
 ok(sends.length === sendsBeforePublish, "gate off: the publish tick sends no mail");
@@ -145,12 +143,14 @@ audit.exec("DELETE FROM pipeline_flags");
 const man = await quiet(async () => (await worker.fetch(new Request("https://errata-hub.example/errata-publish/run/publish?mode=live", { headers: { "X-Erratta-Token": "t0k" } }), env, ctx)).json());
 ok(man.dry === true && man.gate.enabled === false && deposits().length === 0, "a manual mode=live run is forced dry while the gate is off");
 
-// Gate on: the publish path is reached (the stub refuses the deposit, so the action ends in error).
+// Gate on: the publish path runs (no PDF binding in the test env, so the PDF step is skipped, the stores are re-pointed).
 audit.prepare("INSERT INTO pipeline_flags (key, value) VALUES ('errata_publish_enabled', '1')").run();
 await tick("30 * * * *");
 const p1 = tickRow("errata-publish");
-ok(p1.dry === false && p1.gate.enabled === true && deposits().length === 1 && /actions\/newversion/.test(deposits()[0].url), "flag '1': errata-publish calls Zenodo");
-ok(audit.prepare("SELECT status FROM errata_actions WHERE id = ?").get(acts[0].id).status === "error" && p1.errors.length === 1, "flag '1': a refused deposit marks the action error");
+ok(p1.dry === false && p1.gate.enabled === true && p1.published.length === 1 && p1.errors.length === 0 && deposits().length === 0, "flag '1': errata-publish re-renders and re-points without any registrar call (" + JSON.stringify([p1.published, p1.errors]) + ")");
+{ const pr = papers.prepare("SELECT version, doi, zenodo_doi, zenodo_url FROM papers WHERE slug = 'a-paper'").get();
+  ok(pr.version === "1.1" && pr.doi === null && pr.zenodo_doi === null && pr.zenodo_url === null, "flag '1': the paper row carries the new version and NULL doi/zenodo_doi/zenodo_url (" + JSON.stringify(pr) + ")"); }
+ok(audit.prepare("SELECT status FROM errata_actions WHERE id = ?").get(acts[0].id).status === "published", "flag '1': the action is marked published");
 audit.exec("DELETE FROM pipeline_flags");
 
 // A failed tick keeps the previous last_ok.
@@ -177,13 +177,13 @@ ok(judgeCalls.length === 1 && audit.prepare("SELECT pass FROM errata_judge_log")
 ok(/Cross-family read: pass/.test(sends[0].text), "the receipt states the cross-family read");
 for (const mode of ["fail", "garbage", "throw"]) {
   judgeMode = mode;
-  const qid = audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, claim, confidence, status, paper_doi) VALUES (NULL, 'email', ?, ?, 'Equation (3) is not in Doe et al.', 0.9, 'detected', ?)").run(SENDER, "judge-" + mode, DOI).lastInsertRowid;
+  const qid = audit.prepare("INSERT INTO errata_queue (email_id, source, sender, subject, claim, confidence, status, paper_doi) VALUES (NULL, 'email', ?, ?, 'Equation (3) is not in Doe et al.', 0.9, 'detected', ?)").run(SENDER, "judge-" + mode, "a-paper").lastInsertRowid;
   await tick("15 * * * *");
   const a = audit.prepare("SELECT risk, status FROM errata_actions WHERE queue_id = ?").get(qid);
   ok(a && a.risk === "high", "judge " + mode + ": the draft becomes high risk, so errata-publish never sends it (" + JSON.stringify(a) + ")");
 }
 ok(audit.prepare("SELECT COUNT(*) n FROM errata_judge_log WHERE pass = 0").get().n === 3, "the three failed reads are logged");
-ok(deposits().length === 1, "no extra Zenodo call from the judge scenarios");
+ok(deposits().length === 0, "no registrar call from the judge scenarios");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

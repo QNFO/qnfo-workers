@@ -38,14 +38,13 @@ CREATE TABLE errata_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, email_id INTEGE
 const BODY = "# A Paper\n\n## Abstract\n\nThe entropy term is defined in Section 2. The lattice term is used in Section 3 without a definition.\n\nThis sentense has a typo.\n\n" + "Body text with a claim. ".repeat(500);
 function seedPaper(papers, slug, recid) {
   papers.prepare("INSERT INTO papers (slug, doi, zenodo_doi, title, version, body_md, paper_type, status, created_at) VALUES (?, ?, ?, ?, '1.0.0', ?, 'paper', 'published', datetime('now'))")
-    .run(slug, "10.5281/zenodo." + recid, "10.5281/zenodo." + recid, "Paper " + slug, BODY);
+    .run(slug, "10.9999/test." + recid, "10.9999/test." + recid, "Paper " + slug, BODY);
 }
 let auditReply = "", lastPrompt = "";
 const ai = { async run(model, input) { lastPrompt = JSON.stringify(input); return { response: auditReply }; } };
 globalThis.fetch = async (url) => {
   const u = String(url);
   if (u.includes("/versions")) return new Response(JSON.stringify({ hits: { hits: [{ doi: "x" }] } }), { status: 200, headers: { "content-type": "application/json" } });
-  if (u.startsWith("https://zenodo.org/api/records/")) return new Response(JSON.stringify({ conceptrecid: "1", doi: "x", files: [] }), { status: 200, headers: { "content-type": "application/json" } });
   return new Response("not found", { status: 404 });
 };
 const worker = (await import(pathToFileURL(join(here, "worker.js")).href)).default;

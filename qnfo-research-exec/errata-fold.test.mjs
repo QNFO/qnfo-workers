@@ -2,7 +2,7 @@
 // Proves: the errata-hub bundle runs unchanged as the member errataMod (only its node:buffer imports, its VERSION line and
 // its export line differ); the host's */15 tick runs its three jobs at their own minutes (:00 watch, :15 respond, :30
 // publish; nothing at :45), each as a table entry, awaited, with PAPERS_DB = LIVING_PAPER, WATCH_DB = AUDIT_DB = QNFO_AUDIT
-// and the host's GRAPH_DB, MIRROR, BROWSER, SEND_EMAIL and ZENODO_TOKEN; GET /errata-hub/health is public; every other
+// and the host's GRAPH_DB, MIRROR, BROWSER, and SEND_EMAIL; GET /errata-hub/health is public; every other
 // route of the member answers only a service binding whose props name it with a qnfo-* caller (the props stand in for
 // ERRATA_TOKEN), and is not reachable from the public host; wrangler.toml carries nodejs_compat, BROWSER and SEND_EMAIL.
 // Run: node qnfo-research-exec/errata-fold.test.mjs   -> prints "N passed, 0 failed"
@@ -30,7 +30,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
 }
 
 const db = (tag) => { const s = { bind: () => s, run: async () => ({ success: true, meta: {} }), first: async () => null, all: async () => ({ results: [] }) }; return { tag, prepare: () => s }; };
-const mkEnv = () => ({ LIVING_PAPER: db("living"), QNFO_AUDIT: db("audit"), GRAPH_DB: db("graph"), MIRROR: { tag: "r2" }, BROWSER: { tag: "browser" }, SEND_EMAIL: { tag: "mail" }, ZENODO_TOKEN: "z", AI: { run: async () => ({ response: "x" }) }, RESEARCH_HALT: "1" });
+const mkEnv = () => ({ LIVING_PAPER: db("living"), QNFO_AUDIT: db("audit"), GRAPH_DB: db("graph"), MIRROR: { tag: "r2" }, BROWSER: { tag: "browser" }, SEND_EMAIL: { tag: "mail" }, AI: { run: async () => ({ response: "x" }) }, RESEARCH_HALT: "1" });
 
 {
   const real = mod.__member.scheduled;
@@ -40,8 +40,8 @@ const mkEnv = () => ({ LIVING_PAPER: db("living"), QNFO_AUDIT: db("audit"), GRAP
   await mod.default.scheduled({ cron: "*/15 * * * *", scheduledTime: Date.UTC(2026, 9, 6, 9, 30, 3) }, env, { waitUntil(p) { p.catch(() => {}); } });
   const c = calls[0];
   ok(calls.length === 1 && c.ev.cron === "30 * * * *" && c.ev.tickEntry === true, "the 09:30 tick runs the member's publish job as a table entry", calls.map((x) => x.ev));
-  ok(c && c.env.PAPERS_DB === env.LIVING_PAPER && c.env.WATCH_DB === env.QNFO_AUDIT && c.env.AUDIT_DB === env.QNFO_AUDIT && c.env.GRAPH_DB === env.GRAPH_DB && c.env.MIRROR === env.MIRROR && c.env.BROWSER === env.BROWSER && c.env.SEND_EMAIL === env.SEND_EMAIL && c.env.ZENODO_TOKEN === "z",
-    "the member gets PAPERS_DB = LIVING_PAPER, WATCH_DB = AUDIT_DB = QNFO_AUDIT and the host's GRAPH_DB, MIRROR, BROWSER, SEND_EMAIL, ZENODO_TOKEN");
+  ok(c && c.env.PAPERS_DB === env.LIVING_PAPER && c.env.WATCH_DB === env.QNFO_AUDIT && c.env.AUDIT_DB === env.QNFO_AUDIT && c.env.GRAPH_DB === env.GRAPH_DB && c.env.MIRROR === env.MIRROR && c.env.BROWSER === env.BROWSER && c.env.SEND_EMAIL === env.SEND_EMAIL,
+    "the member gets PAPERS_DB = LIVING_PAPER, WATCH_DB = AUDIT_DB = QNFO_AUDIT and the host's GRAPH_DB, MIRROR, BROWSER, SEND_EMAIL ");
   ok(done, "the handler awaits the member's waitUntil work");
   await mod.default.scheduled({ cron: "*/15 * * * *", scheduledTime: Date.UTC(2026, 9, 6, 9, 45, 3) }, mkEnv(), { waitUntil(p) { p.catch(() => {}); } });
   ok(calls.length === 1, "the :45 tick runs no member job");

@@ -13,7 +13,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.12.2-prefix-stagger"; /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ /* 0.11.0 CITATION-EXISTENCE-GATE-1 (agent_issues 2052, pillar research): publishStageV2 resolves every arXiv id, DOI and link before the Zenodo deposit; a dead or mismatched citation holds the queue row with the reason, a lookup error leaves it queued; ops_config research_citation_gate = enforce (default) | measure | off. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ /* 0.10.3 INHOUSE-PUBLISH-2 (#2137): publishToZenodo reads ops_config by key; the 0.10.0 column query threw on every publish. */ // 0.10.2 PROMPT-CACHE-PREFIX-1 (agent_issues 2116, 2026-10-09, pillar cost): every stage prompt starts with RESEARCH_SHARED_PREAMBLE, one static block holding all seven task instructions (WRITER, RECONCILE, REVIEW, REVISE, REVISE_PATCH, VERIFY_EXTRACT, VERIFY_GEN; over 4096 chars), then "=== TASK: <name> ===" and the per-call text, so the PROMPT-CACHE-1 affinity key (model + first 4 KB) is one per model and the preamble is a cached prefix on every call (glm-5.3-flash cached share was 0-2%, target 30%). Models, max_tokens, parsers and gates unchanged. 0.10.0 RESEARCH-THROUGHPUT-1 (agent_issues 2175, 2026-10-08, pillar research): a cron tick runs ops_config research_parallel paper slots at once (default 2, max 4; 1 restores single-flight); each slot advances a different in-flight row and claims a queued row only while fewer than that many are in flight. 0.9.68 LATEX-ESCAPE-BACKSLASH-1 (agent_issues 2032, 2026-10-06, pillar security and research): the LaTeX build escapes backslash in one pass with the other specials (esc), so a title, author, DOI, version, date or body text holding \input{...} or any \command reaches texlive.net as text, not as TeX (CodeQL js/incomplete-sanitization, 4 high); inl() escapes the text of bold, italic and link labels, keeps \ { } out of URLs, pushes its own math and superscript inserts through the placeholders so the escape pass no longer breaks them, and passes the writers' LaTeX math ($...$, $$...$$, MATH-LATEX-2) through only when latexMathSafe accepts it (no file, definition or catcode primitives, no ^^ or %, balanced braces, math environments only); anything else is escaped text; headings and the title keep safe math (escHeading); Unicode math symbols, Greek letters and sub/superscript digits become math or \textsuperscript/\textsubscript before bold, italic and link text is lifted out, and nested placeholders are restored. Measured on texlive.net: Zenodo records 23170193, 23169727 and 23161483 (no .tex on any of them) failed with the old builder and compile with this one (9, 10 and 8 pages, no LaTeX leaking into the text). // 0.9.67 ZENODO-CREATOR-CLEAN-1: metadata edits can drop QNFO pseudo-authors and claim unattributed records for the ORCID person; // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // 0.9.62 AI-STAGE-ATTRIBUTION-1 (#1795/#1780): Workers AI counter rows carry the pipeline stage (purpose binding:<stage>), measurement only; ZENODO-READ-ONLINE-1 (2026-10-05, #1907; 0.9.61 adds seedRelatedLinks, the queue fills itself from LIVING_PAPER.papers, owner YES 2026-10-02, pillar reach): kind='related' rows of zenodo_version_requests add one isVariantFormOf related identifier (https://papers.qnfo.org/papers/<slug>/, the form publishStage already writes) to the latest version of a published record, idempotent, no new version or DOI; verifyRelatedBackfill closes the issue from a public re-read of 20 random rows. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character)
+var VERSION = "0.12.3-doi-scrub"; /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -63,11 +63,6 @@ var MODELS = ["@cf/zai-org/glm-5.3-flash", "@cf/zai-org/glm-5.3", "@cf/openai/gp
 var MAX_PAPER = 3e4;
 var ORCID = "0009-0002-4317-5604";
 var AUTHOR = "Rowan Brad Quni-Gudzinas";
-// ZENODO-IDENTITY-1 (2026-10-01): Zenodo's creator name form ("Family, Given") and the one affiliation string
-// (STRATEGY-1 s2.2). New papers used to carry the given-first name and no affiliation; the owner's records held 15
-// affiliation variants, including retired labels.
-var ZENODO_CREATOR_NAME = "Quni-Gudzinas, Rowan Brad";
-var ZENODO_AFFILIATION = "QNFO (independent research)";
 var ROUTER = "https://qnfo-ai.q08.workers.dev/v1/chat/completions";
 // ROUTER-TRANSPORT-FAILOVER-1: env.QNFO_AI is preferred, but when that service binding is
 // absent the old code fell straight through to a public workers.dev fetch, which does not
@@ -311,7 +306,7 @@ async function markError(env, row, msg) {
   }
 }
 // RESEARCH-TERMINAL-SELFCLOSE-1 (2026-10-02): a row parked for a content failure only (verify mismatch, every gate passed)
-// is the integrity gate working: the paper's numbers did not survive the independent check, so it stays off Zenodo. Its
+// is the integrity gate working: the paper's numbers did not survive the independent check, so it is not published. Its
 // RESEARCH-TERMINAL issue gets a remediation_contracts probe that qnfo-fleet-control's hourly tick (REMEDIATION-TICK-1)
 // passes once the row is parked with its reason and the queue is still advancing, so the issue closes itself with that
 // evidence instead of waiting for a session. A gate failure (gates=<name>) can be a pipeline bug (1751: gate-refcount),
@@ -340,41 +335,6 @@ __name22(markError, "markError");
 __name222(markError, "markError");
 __name2222(markError, "markError");
 __name22222(markError, "markError");
-async function zenodo(env, method, path, body, attempt) {
-  const sep = path.indexOf("?") >= 0 ? "&" : "?";
-  const url = "https://zenodo.org/api/deposit/depositions" + path + sep + "access_token=" + env.ZENODO_TOKEN;
-  const n = attempt || 0;
-  try {
-    const r = await fetch(url, { method, headers: { "User-Agent": "QNFO-research-exec/0.5.0", "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : void 0 });
-    if ((r.status >= 500 || r.status === 429) && n < 4) {
-      await new Promise(function(res) {
-        setTimeout(res, 2500 * (n + 1));
-      });
-      return zenodo(env, method, path, body, n + 1);
-    }
-    const text = await r.text();
-    if (r.status >= 400) return { _status: r.status, _text: text.slice(0, 300) };
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      return { _status: r.status, _text: text.slice(0, 200) };
-    }
-  } catch (e) {
-    if (n < 4) {
-      await new Promise(function(res) {
-        setTimeout(res, 2500 * (n + 1));
-      });
-      return zenodo(env, method, path, body, n + 1);
-    }
-    return { _status: 0, _text: String(e && e.message || e).slice(0, 200) };
-  }
-}
-__name(zenodo, "zenodo");
-__name2(zenodo, "zenodo");
-__name22(zenodo, "zenodo");
-__name222(zenodo, "zenodo");
-__name2222(zenodo, "zenodo");
-__name22222(zenodo, "zenodo");
 function bibEsc(s) {
   return String(s || "").replace(/[{}]/g, function(c) {
     return c === "{" ? "\\{" : "\\}";
@@ -456,8 +416,8 @@ function buildProvenance(bodyMd, title, slug) {
     var id = [p.arxiv ? "arXiv:" + p.arxiv : null, p.doi ? "DOI " + p.doi : null].filter(Boolean).join("; ") || "no machine identifier present";
     return i + 1 + ". " + p.authors + " (" + p.year + "). " + p.title + ". Source: " + p.rest + " | Identifier: " + id;
   }).join("\n") : "No numbered references section found in the body.");
-  var readme = "# " + title + "\n\nAuthor: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)\nLicense: QNFO-ULA v2.0, CC BY-NC-SA 4.0 with the QNFO Supplemental Terms (see LICENSE)\n\nHow to cite: use the deposit record DOI.\nFiles in this deposit:\n- " + slug + ".md - full paper (source)\n- references.bib - BibTeX of the cited references\n- citation-audit.md - reference verification log\n- PROJECT-PLAN.md - goal and claim\n- README.md - this file\n- LICENSE - QNFO-ULA v2.0\n\nProvenance: produced by the QNFO autonomous research pipeline.\n";
-  var plan = "# Project plan\n\nGoal: an open, self-contained preprint with real, verifiable references and no fabricated content.\n- Claim: stated in the record body.\n- Research/due-diligence: prior-work context is stated in the body; every reference is real (arXiv ID or DOI) and non-invented.\n- Deposit: paper, references.bib, citation-audit.md, README.md, PROJECT-PLAN.md, LICENSE.\n- License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 base).\n";
+  var readme = "# " + title + "\n\nAuthor: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)\nLicense: QNFO-ULA v2.0, CC BY-NC-SA 4.0 with the QNFO Supplemental Terms (see LICENSE)\n\nHow to cite: use the paper URL on papers.qnfo.org.\nFiles in this package:\n- " + slug + ".md - full paper (source)\n- references.bib - BibTeX of the cited references\n- citation-audit.md - reference verification log\n- PROJECT-PLAN.md - goal and claim\n- README.md - this file\n- LICENSE - QNFO-ULA v2.0\n\nProvenance: produced by the QNFO autonomous research pipeline.\n";
+  var plan = "# Project plan\n\nGoal: an open, self-contained preprint with real, verifiable references and no fabricated content.\n- Claim: stated in the record body.\n- Research/due-diligence: prior-work context is stated in the body; every reference is real (arXiv ID or DOI) and non-invented.\n- Package: paper, references.bib, citation-audit.md, README.md, PROJECT-PLAN.md, LICENSE.\n- License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 base).\n";
   var lic = "SPDX-License-Identifier: LicenseRef-QNFO-ULA-2.0\n\nThis work is licensed under the QNFO Unified License Agreement, version 2.0 (QNFO-ULA): the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0) together with the QNFO Supplemental Terms.\nYou may share and adapt it for non-commercial purposes with credit, under the same terms. Commercial use needs a separate agreement: rowan.quni@qnfo.org.\n\nFull text: https://legal.qnfo.org/\nCC BY-NC-SA 4.0 legal code: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode\n"; // LICENSE-ONE-1 (2026-10-02): new deposits under QNFO-ULA v2.0
   return { files: [
     { file: slug + ".md", content: String(bodyMd || "") },
@@ -473,100 +433,18 @@ __name2(buildProvenance, "buildProvenance");
 __name22(buildProvenance, "buildProvenance");
 __name222(buildProvenance, "buildProvenance");
 __name2222(buildProvenance, "buildProvenance");
-async function publishToZenodo(env, title, abstract, bodyMd, slug, extras) {
-  // INHOUSE-PUBLISH-2 (0.10.3, #2137): ops_config is a key/value table. The 0.10.0 check read a column that does not exist
-  // ("SELECT zenodo_enabled FROM ops_config" -> D1 "no such column"), so every publish threw and nothing published from
-  // 2026-10-07 08:00Z. Read the row by key; a missing row or an unreadable table means Zenodo is off (the account is banned,
-  // Ticket#3327646), so the paper is published in-house and no Zenodo call is made.
-  let zenodoOn = false;
-  try {
-    const zr = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'zenodo_enabled'").first();
-    zenodoOn = !!zr && String(zr.value).trim() === "1";
-  } catch (e) { zenodoOn = false; }
-  if (!zenodoOn) {
-    // INHOUSE-PUBLISH-3 (0.10.4): the in-house result has every key the Zenodo result has ({ ok, doi, conceptdoi, record }),
-    // set to null, because each caller binds pub.doi and pub.record into D1 and D1 refuses undefined (D1_TYPE_ERROR on every
-    // publish tick 07:49-08:05Z on 2026-10-09 under 0.10.3). record stays null: there is no Zenodo record, and the paper's
-    // address is its papers.qnfo.org page (url).
-    return { ok: true, inhouse: true, doi: null, conceptdoi: null, record: null, url: "https://papers.qnfo.org/papers/" + slug + "/" };
-  }
-  if (!env.ZENODO_TOKEN) return { ok: false, error: "no ZENODO_TOKEN" };
-  var pkg = buildProvenance(bodyMd, title, slug);
-  const dep = await zenodo(env, "POST", "", {});
-  if (!dep || !dep.id) return { ok: false, error: "deposit create failed: " + JSON.stringify(dep).slice(0, 200) };
-  const id = dep.id;
-  const meta = await zenodo(env, "PUT", "/" + id, { metadata: {
-    title,
-    upload_type: "publication",
-    publication_type: "preprint",
-    description: (abstract || title).slice(0, 3e3) + (slug ? ' <p>Full text and updates: <a href="https://papers.qnfo.org/papers/' + slug + '/">papers.qnfo.org/papers/' + slug + '/</a></p>' : ''),
-    creators: [{ name: ZENODO_CREATOR_NAME, affiliation: ZENODO_AFFILIATION, orcid: ORCID }],
-    access_right: "open",
-    license: "cc-by-nc-sa-4.0", // LICENSE-ONE-1: the Zenodo id of QNFO-ULA v2.0's CC base
-    version: "1.0.0",
-    keywords: ["QNFO", "quantum computing", "energy"],
-    related_identifiers: slug ? [{ identifier: "https://papers.qnfo.org/papers/" + slug + "/", relation: "isVariantFormOf", resource_type: "publication-preprint" }] : [],
-    notes: "Autonomously generated by the QNFO research pipeline. Complete provenance package (references.bib, citation-audit.md, README.md, PROJECT-PLAN.md, LICENSE) deposited. Source: https://papers.qnfo.org/papers/" + slug + "/"
-  } });
-  if (meta && meta._status && meta._status >= 400) return { ok: false, error: "metadata put failed: " + meta._text };
-  if (!meta || !meta.metadata || !meta.metadata.title) return { ok: false, error: "metadata put not applied (no title in response)" };
-  const bucket = dep.links && dep.links.bucket;
-  if (!bucket) return { ok: false, error: "no deposit bucket" };
-  try {
-    if (env.PDF_SVC) {
-      var hres = await env.PDF_SVC.fetch("https://qnfo-pdf/html", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body_md: String(bodyMd || ""), slug, title }) });
-      if (hres.ok) {
-        var htxt = await hres.text();
-        if (htxt && htxt.length > 100) pkg.files.push({ file: slug + ".html", content: htxt });
-      }
-    }
-  } catch (e) {
-  }
-  try {
-    if (env.PDF_SVC) {
-      var pres = await env.PDF_SVC.fetch("https://qnfo-pdf/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body_md: String(bodyMd || ""), slug, title }) });
-      if (pres.ok) {
-        var pbuf = await pres.arrayBuffer();
-        if (pbuf && pbuf.byteLength > 5e3) pkg.files.push({ file: slug + ".pdf", content: pbuf });
-      }
-    }
-  } catch (e) {
-  }
-  try {
-    if (typeof mdToLatex === "function") {
-      var qtex = mdToLatex(String(bodyMd || ""));
-      if (qtex && qtex.indexOf("\\documentclass") === 0) {
-        var qc = await latexCompile(qtex);
-        if (qc && qc.ok && qc.pdf && qc.pdf.byteLength > 5e3) {
-          pkg.files = pkg.files.filter(function(f) {
-            return f.file !== slug + ".pdf";
-          });
-          pkg.files.push({ file: slug + ".tex", content: qtex });
-          pkg.files.push({ file: slug + ".pdf", content: qc.pdf });
-        }
-      }
-    }
-  } catch (e) {
-  }
-  if (extras && extras.length) {
-    for (var ei = 0; ei < extras.length; ei++) pkg.files.push(extras[ei]);
-  }
-  for (let i = 0; i < pkg.files.length; i++) {
-    const f = pkg.files[i];
-    const fileUrl = bucket + "/" + encodeURIComponent(f.file) + "?access_token=" + env.ZENODO_TOKEN;
-    const up = await fetch(fileUrl, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/0.5.13" }, body: f.content });
-    if (!up.ok) return { ok: false, error: "file upload failed (" + f.file + "): " + up.status };
-  }
-  const pub = await zenodo(env, "POST", "/" + id + "/actions/publish", {});
-  if (!pub || !pub.doi) return { ok: false, error: "publish failed: " + JSON.stringify(pub).slice(0, 250) };
-  return { ok: true, doi: pub.doi, conceptdoi: pub.conceptdoi, record: pub.links && pub.links.record || "https://zenodo.org/record/" + pub.id };
+async function publishInHouse(env, title, abstract, bodyMd, slug) {
+  // NOZ-DOI-1 (2026-10-11): a paper is published in-house only. Its address is its papers.qnfo.org page (url); it carries no
+  // DOI. The result keeps the keys every caller binds into D1 ({ ok, doi, conceptdoi, record }), all null, because D1 refuses
+  // undefined (INHOUSE-PUBLISH-3: D1_TYPE_ERROR on every publish tick under 0.10.3).
+  return { ok: true, inhouse: true, doi: null, conceptdoi: null, record: null, url: "https://papers.qnfo.org/papers/" + slug + "/" };
 }
-__name(publishToZenodo, "publishToZenodo");
-__name2(publishToZenodo, "publishToZenodo");
-__name22(publishToZenodo, "publishToZenodo");
-__name222(publishToZenodo, "publishToZenodo");
-__name2222(publishToZenodo, "publishToZenodo");
-__name22222(publishToZenodo, "publishToZenodo");
+__name(publishInHouse, "publishInHouse");
+__name2(publishInHouse, "publishInHouse");
+__name22(publishInHouse, "publishInHouse");
+__name222(publishInHouse, "publishInHouse");
+__name2222(publishInHouse, "publishInHouse");
+__name22222(publishInHouse, "publishInHouse");
 async function publishStage(env, row) {
   const slug = row.paper_slug;
   const paper = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(slug).first();
@@ -581,30 +459,30 @@ async function publishStage(env, row) {
     await markError(env, row, "NO-BLANK-PUBLISH-1: body and abstract both empty for slug " + slug);
     return { ok: false, stage: "publish" };
   }
-  // DLF-ZENODO-PUBLISH-BLOCKED-1: do not publish qnf-DLF-001 until a direct safe Zenodo deposit path is exposed and the Zenodo v2 deposit contamination in #979 is fixed.
+  // DLF-PUBLISH-HELD-1: qnf-DLF-001 stays held (agent_issue 1091).
   // DLF-HOLD-NOT-REQUEUE-1 (0.9.26): the evolve-c115 version called markError(), which re-queues the row to stage
   // 'ground' (3 recoveries + 2 terminal re-arms), so a deliberately held paper would be re-researched ~5 times at full
   // model cost before stopping. Park it instead: status 'held' is never claimed (the claim queries select 'queued').
   if (slug === 'qnf-DLF-001') {
-    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='held', error=?, claimed_at=NULL WHERE id=?").bind('DLF-ZENODO-PUBLISH-BLOCKED-1: publish held pending a safe Zenodo path and the #979 fix (agent_issue 1091)', row.id).run();
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='held', error=?, claimed_at=NULL WHERE id=?").bind('DLF-PUBLISH-HELD-1: publish held (agent_issue 1091)', row.id).run();
     return { ok: false, stage: 'publish', held: true };
   }
-  const pub = await publishToZenodo(env, paper.title, paper.abstract, paper.body_md, slug);
+  const pub = await publishInHouse(env, paper.title, paper.abstract, paper.body_md, slug);
   if (!pub.ok) {
-    await markError(env, row, "zenodo: " + pub.error);
+    await markError(env, row, "publish: " + pub.error);
     return { ok: false, stage: "publish" };
   }
-  await env.LIVING_PAPER.prepare("UPDATE papers SET doi=?1, zenodo_doi=?1, status='published', zenodo_url=?2, updated_at=datetime('now') WHERE slug=?3").bind(pub.doi || null, pub.record || null, slug).run();
+  await env.LIVING_PAPER.prepare("UPDATE papers SET doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, status='published', updated_at=datetime('now') WHERE slug=?1").bind(slug).run();
   try {
     await env.MIRROR.put("papers/" + slug + ".md", paper.body_md);
   } catch (e) {
   }
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), slug, pub.doi || null, paper.title, "bluesky", "queued", "auto", 0, pub.record || null, "https://papers.qnfo.org/papers/" + slug + "/").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), slug, null, paper.title, "bluesky", "queued", "auto", 0, null, "https://papers.qnfo.org/papers/" + slug + "/").run();
   } catch (e) {
   }
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=?, published_at=? WHERE id=?").bind(pub.doi || null, nowIso(), row.id).run();
-  return { ok: true, stage: "publish->published", doi: pub.doi, slug };
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=NULL, published_at=? WHERE id=?").bind(nowIso(), row.id).run();
+  return { ok: true, stage: "publish->published", doi: null, slug };
 }
 __name(publishStage, "publishStage");
 __name2(publishStage, "publishStage");
@@ -612,19 +490,6 @@ __name22(publishStage, "publishStage");
 __name222(publishStage, "publishStage");
 __name2222(publishStage, "publishStage");
 __name22222(publishStage, "publishStage");
-async function latestRecord(env, recId) {
-  try {
-    var r = await fetch("https://zenodo.org/api/records/" + recId + "/latest", { headers: { "User-Agent": "QNFO-research-exec/0.5.1" } });
-    if (r.ok) return await r.json();
-  } catch (e) {
-  }
-  return null;
-}
-__name(latestRecord, "latestRecord");
-__name2(latestRecord, "latestRecord");
-__name22(latestRecord, "latestRecord");
-__name222(latestRecord, "latestRecord");
-__name2222(latestRecord, "latestRecord");
 function mdToLatex(md) {
   var body = String(md).replace(/^\uFEFF/, "");
   var fm = {};
@@ -794,7 +659,7 @@ function mdToLatex(md) {
   var dm2 = String(dt2).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   var dateNice = dm2 ? mm[parseInt(dm2[2], 10)] + " " + parseInt(dm2[3], 10) + ", " + dm2[1] : esc(dt2);
   var author = fm.author || "QNFO";
-  var doi = fm.doi || "";
+  var doi = /10\.5281\/|z[e]nodo/i.test(String(fm.doi || "")) ? "" : fm.doi || ""; /* NOZ-DOI-1: no dead-registrar DOI in a PDF */
   var ver = fm.version || "";
   var P = [];
   P.push("\\documentclass[11pt]{article}");
@@ -1094,25 +959,25 @@ __name2(qualityGate, "qualityGate");
 __name22(qualityGate, "qualityGate");
 __name222(qualityGate, "qualityGate");
 __name2222(qualityGate, "qualityGate");
-async function depositToGithub(env, slug, title, md, doi) {
+async function depositToGithub(env, slug, title, md) {
   if (!env.GITHUB_TOKEN) return { ok: false, error: "no github token" };
   var owner = "QNFO", repo = "qnfo-research";
   var prog = programFor(slug);
   var dir = prog === "papers" ? "papers/" + slug : prog + "/" + slug;
-  var readme = "# " + (title || slug) + NL + NL + "DOI: " + doi + NL + NL + "Author: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)" + NL + "License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 with the QNFO Supplemental Terms, https://legal.qnfo.org/)" + NL + NL + "Auto-deposited by qnfo-research-exec (artifact-deposition P3).";
+  var readme = "# " + (title || slug) + NL + NL + "Author: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)" + NL + "License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 with the QNFO Supplemental Terms, https://legal.qnfo.org/)" + NL + NL + "Auto-deposited by qnfo-research-exec (artifact-deposition P3).";
   var files = [["paper.md", md || ""], ["README.md", readme]];
   var out = [];
   for (var i = 0; i < files.length; i++) {
     var name = files[i][0], content = files[i][1];
     var path = dir + "/" + name;
-    var body = JSON.stringify({ message: "auto-deposit: " + slug + " (" + (doi || "no-doi") + ")", content: b64(content), branch: "main" });
+    var body = JSON.stringify({ message: "auto-deposit: " + slug, content: b64(content), branch: "main" });
     try {
       var r = await fetch("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + path, { method: "PUT", headers: { Authorization: "Bearer " + env.GITHUB_TOKEN, "User-Agent": "QNFO-research-exec/0.8.0", "Content-Type": "application/json", Accept: "application/vnd.github+json" }, body });
       var j = await r.json();
       out.push({ file: name, status: r.status, sha: j && j.content && j.content.sha || "" });
       if (r.status === 201 || r.status === 200) {
         try {
-          await env.QNFO_AUDIT.prepare("INSERT INTO publication_artifacts (publication_id, artifact_type, artifact_name, sha256, file_size_bytes, created_at) VALUES (?, ?, ?, ?, ?, datetime(now))").bind(doi || slug, "github-md", path, String(j.content && j.content.sha || ""), String(content).length).run();
+          await env.QNFO_AUDIT.prepare("INSERT INTO publication_artifacts (publication_id, artifact_type, artifact_name, sha256, file_size_bytes, created_at) VALUES (?, ?, ?, ?, ?, datetime(now))").bind(slug, "github-md", path, String(j.content && j.content.sha || ""), String(content).length).run();
         } catch (ePa) {
         }
       }
@@ -1169,365 +1034,81 @@ async function publishV2(env, row) {
       return { ok: false, stage: "gate", error: gate.reason };
     }
   }
-  var recId = String(row.paper_doi || "").split("zenodo.").pop() || "";
-  if (!recId) {
-    // FIRST-DEPOSIT-1 (2026-09-27): a revision queued for a paper with no existing Zenodo record
-    // (empty paper_doi) previously errored with "bad doi", so first-time deposits had no automated
-    // path. Now they deposit through publishToZenodo, honoring the living-paper floor: status='published'
-    // requires >= 20000 chars (MIN-PAPER-LENGTH-3), enforced here before the D1 trigger fires.
-    var fdBody = String(row.corrected_md || "");
-    if (fdBody.length < 20000) {
+  // NOZ-DOI-1 (2026-10-11): a revision publishes in-house: the papers row, the knowledge-graph node, the R2 copy and the GitHub
+  // copy advance to the new version, and doi / zenodo_doi / zenodo_url are written NULL (no DOI is minted or registered).
+  var vSlug = String(row.slug || "paper");
+  var vBody = String(row.corrected_md || "");
+  var vTitle = extractTitle(vBody, row.title);
+  var vExisting = await env.LIVING_PAPER.prepare("SELECT slug, status FROM papers WHERE slug=?").bind(vSlug).first();
+  var vFirst = !vExisting || ["published", "distributed"].indexOf(String(vExisting.status || "")) < 0;
+  if (vFirst) {
+    // A first publication honors the living-paper floor: status='published' requires >= 20000 chars (MIN-PAPER-LENGTH-3),
+    // enforced here before the D1 trigger fires.
+    if (vBody.length < 20000) {
       await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='gate-blocked', recover_count=recover_count+1, updated_at=datetime('now') WHERE id=?").bind(row.id).run();
       try {
-        await env.QNFO_AUDIT.prepare("INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'first-deposit', 'BLOCK', ?, 'MIN-PAPER-LENGTH-3', 'qnfo-research-exec', 'P1')").bind(("first deposit requires >= 20000 chars; " + fdBody.length + " provided").slice(0, 300)).run();
+        await env.QNFO_AUDIT.prepare("INSERT INTO gov_gate_log (ts, diff_sha, decision, reason, touched_gates, actor, wbs_code) VALUES (datetime('now'), 'first-deposit', 'BLOCK', ?, 'MIN-PAPER-LENGTH-3', 'qnfo-research-exec', 'P1')").bind(("first publication requires >= 20000 chars; " + vBody.length + " provided").slice(0, 300)).run();
       } catch (eG2) {
       }
-      return { ok: false, stage: "gate", error: "first deposit requires >= 20000 chars; " + fdBody.length + " provided" };
+      return { ok: false, stage: "gate", error: "first publication requires >= 20000 chars; " + vBody.length + " provided" };
     }
-    var fdTitle = extractTitle(fdBody, row.title);
-    var fdAbstract = "";
-    var fdAbsM = fdBody.match(/abstract:\s*\|\r?\n((?:\s{1,4}.*\r?\n?)+)/);
-    if (fdAbsM) fdAbstract = fdAbsM[1].replace(/^\s{1,4}/gm, "").replace(/\s+/g, " ").trim();
-    if (!fdAbstract) {
-      var fdAbsM2 = fdBody.match(/abstract:\s*["']?([^"'\n]{40,600})["']?/i);
-      if (fdAbsM2) fdAbstract = String(fdAbsM2[1]).trim();
+    var vAbstract = "";
+    var vAbsM = vBody.match(/abstract:\s*\|\r?\n((?:\s{1,4}.*\r?\n?)+)/);
+    if (vAbsM) vAbstract = vAbsM[1].replace(/^\s{1,4}/gm, "").replace(/\s+/g, " ").trim();
+    if (!vAbstract) {
+      var vAbsM2 = vBody.match(/abstract:\s*["']?([^"'\n]{40,600})["']?/i);
+      if (vAbsM2) vAbstract = String(vAbsM2[1]).trim();
     }
-    if (!fdAbstract) fdAbstract = String(row.title || "QNFO research paper");
-    var fd = await publishToZenodo(env, fdTitle, fdAbstract, fdBody, String(row.slug || "paper"));
-    if (!fd.ok) {
+    if (!vAbstract) vAbstract = String(row.title || "QNFO research paper");
+    var vPub = await publishInHouse(env, vTitle, vAbstract, vBody, vSlug);
+    if (!vPub.ok) {
       await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
-      return { ok: false, stage: "first-deposit", error: fd.error };
+      return { ok: false, stage: "first-deposit", error: vPub.error };
     }
-    var fdUpd = await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, zenodo_url=?, status='published', updated_at=datetime('now') WHERE slug=?").bind(fdTitle, fdBody, row.version_to || "1.0.0", fd.doi, fd.doi, fd.record, String(row.slug || "")).run();
-    if (!fdUpd || !fdUpd.meta || !fdUpd.meta.changes) {
+    var vUpd = await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, status='published', updated_at=datetime('now') WHERE slug=?").bind(vTitle, vBody, row.version_to || "1.0.0", vSlug).run();
+    if (!vUpd || !vUpd.meta || !vUpd.meta.changes) {
       try {
-        await env.LIVING_PAPER.prepare("INSERT INTO papers (identifier, title, authors, abstract, doi, version, zenodo_doi, zenodo_url, status, body_md, license, language, paper_type, slug, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'published',?,?,?,?,?,datetime('now'),datetime('now'))").bind("vq-" + row.id, fdTitle, '["Rowan Brad Quni-Gudzinas"]', fdAbstract, fd.doi, row.version_to || "1.0.0", fd.doi, fd.record, fdBody, "QNFO-ULA", "en", "preprint", String(row.slug || "")).run();
+        await env.LIVING_PAPER.prepare("INSERT INTO papers (identifier, title, authors, abstract, doi, version, zenodo_doi, zenodo_url, status, body_md, license, language, paper_type, slug, created_at, updated_at) VALUES (?,?,?,?,NULL,?,NULL,NULL,'published',?,?,?,?,?,datetime('now'),datetime('now'))").bind("vq-" + row.id, vTitle, '["Rowan Brad Quni-Gudzinas"]', vAbstract, row.version_to || "1.0.0", vBody, "QNFO-ULA", "en", "preprint", vSlug).run();
       } catch (eIns) {
       }
     }
-    try {
-      await env.MIRROR.put("papers/" + String(row.slug || "paper") + ".md", fdBody);
-    } catch (eMir) {
-    }
-    try {
-      await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), String(row.slug || ""), fd.doi, fdTitle, "bluesky", "queued", "auto", 0, fd.record, "https://papers.qnfo.org/papers/" + String(row.slug || "") + "/").run();
-    } catch (eDiss) {
-    }
-    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=?, updated_at=datetime('now') WHERE id=?").bind(fd.doi, row.id).run();
-    try {
-      await env.QNFO_AUDIT.prepare("UPDATE paper_revision_log SET status='published', new_doi=?, updated_at=datetime('now') WHERE slug=? AND status='queued'").bind(fd.doi, String(row.slug || "")).run();
-    } catch (ePrl2) {
-    }
-    await depositToGithub(env, String(row.slug || "paper"), fdTitle, fdBody, fd.doi);
-    return { ok: true, stage: "first-deposit", doi: fd.doi };
-  }
-  var latest = await latestRecord(env, recId);
-  if (latest && latest.metadata && String(latest.metadata.version || "") === String(row.version_to || "")) {
-    var adoptedDoi = latest.doi || "10.5281/zenodo." + latest.id;
-    var adoptedTitle = extractTitle(row.corrected_md || "", row.title);
-    await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, zenodo_url=?, updated_at=datetime('now') WHERE slug=?").bind(adoptedTitle, row.corrected_md || "", row.version_to || "2.0.0", adoptedDoi, adoptedDoi, "https://zenodo.org/records/" + String(latest.id || String(adoptedDoi).split("zenodo.").pop()), slug).run();
-    if (env.GRAPH_DB) {
-      try {
-        var nodeA = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?").bind("zenodo-10-5281-zenodo-" + recId).first();
-        if (nodeA) {
-          var propsA = {};
-          try {
-            propsA = JSON.parse(nodeA.properties || "{}");
-          } catch (eA) {
-            propsA = {};
-          }
-          propsA.doi = adoptedDoi;
-          propsA.zenodo_url = "https://doi.org/" + adoptedDoi;
-          propsA.version = row.version_to || "2.0.0";
-          await env.GRAPH_DB.prepare("UPDATE nodes SET properties=?, updated_at=datetime('now') WHERE id=?").bind(JSON.stringify(propsA), "zenodo-10-5281-zenodo-" + recId).run();
-        }
-      } catch (e) {
-      }
-    }
-    if (env.MIRROR) {
-      try {
-        await env.MIRROR.put("2026/09/" + slug + ".md", row.corrected_md || "");
-      } catch (e) {
-      }
-    }
-    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=?, updated_at=datetime('now') WHERE id=?").bind(adoptedDoi, row.id).run();
-    await depositToGithub(env, slug, row.title, row.corrected_md || "", adoptedDoi);
-    return { ok: true, stage: "v2", doi: adoptedDoi, adopted: true };
-  }
-  var conceptRec = recId;
-  var _prevMeta = null;
-  try {
-    var _ri = await fetch("https://zenodo.org/api/records/" + recId, { headers: { "User-Agent": "QNFO-research-exec/0.5.6" } });
-    if (_ri.ok) {
-      var _rj = await _ri.json();
-      if (_rj.conceptrecid) conceptRec = String(_rj.conceptrecid);
-      _prevMeta = _rj.metadata || null;
-    }
-  } catch (e) {
-  }
-  var nv = null;
-  try {
-    var lst = await zenodo(env, "GET", "?size=250&sort=mostrecent", {});
-    var arr2 = lst && lst.hits ? lst.hits.hits : Array.isArray(lst) ? lst : [];
-    for (var di = 0; di < arr2.length; di++) {
-      var dep = arr2[di];
-      if (!dep) continue;
-      var sub = dep.submitted;
-      if (sub === false || sub === "false") {
-        var crc = String(dep.conceptrecid || dep.metadata && dep.metadata.conceptrecid || "");
-        if (crc === conceptRec || String(dep.id || dep.recid || "") === conceptRec) {
-          nv = await zenodo(env, "GET", "/" + (dep.id || dep.recid), {});
-          break;
-        }
-      }
-    }
-  } catch (eLs) {
-  }
-  if (!nv || !nv.id) {
-    var nvBase = recId;
-    try {
-      var _ci = await fetch("https://zenodo.org/api/records/" + conceptRec, { headers: { "User-Agent": "QNFO-research-exec/0.5.6" } });
-      if (_ci.ok) {
-        var _cj = await _ci.json();
-        if (_cj.id) nvBase = String(_cj.id);
-      }
-    } catch (e) {
-    }
-    try {
-      nv = await zenodo(env, "POST", "/" + nvBase + "/actions/newversion", {});
-    } catch (eN) {
-      nv = null;
-    }
-    if (!nv || !nv.id) {
-      try {
-        var unlockResp = await fetch("https://zenodo.org/api/deposit/depositions?size=10&sort=mostrecent&access_token=" + env.ZENODO_TOKEN, { headers: { "User-Agent": "QNFO-research-exec/0.9.7" } });
-        if (unlockResp.ok) {
-          var unlockList = await unlockResp.json();
-          var existingDraft = (Array.isArray(unlockList) ? unlockList : unlockList.hits && unlockList.hits.hits || []).find(function(d) {
-            return d && d.submitted === false && String(d.conceptrecid || "") === conceptRec;
-          });
-          if (existingDraft && existingDraft.id) {
-            var existFiles = existingDraft.files || [];
-            for (var efi = 0; efi < existFiles.length; efi++) {
-              try {
-                await fetch(existFiles[efi].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
-              } catch (e) {
-              }
-            }
-            nv = existingDraft;
-          }
-        }
-      } catch (eUnlock) {
-      }
-    }
-    if (!nv || !nv.id) {
-      try {
-        await new Promise(function(r) {
-          setTimeout(r, 2e3);
-        });
-        nv = await zenodo(env, "POST", "/" + nvBase + "/actions/newversion", {});
-      } catch (eRetry) {
-        nv = null;
-      }
-    }
-  }
-  if (!nv || !nv.id) {
-    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
-    return { ok: false, stage: "v2", error: "newversion failed: " + JSON.stringify(nv).slice(0, 200) };
-  }
-  var slug = row.slug || "paper";
-  // ZENODO-V2-DEPOSIT-CONTAMINATION FIX (C1, 2026-09-27, agent_issues 979): the POST
-  // /actions/newversion response does NOT enumerate the inherited draft files (nv.files is
-  // empty), so the old DELETE loop removed nothing and every v2 inherited the full v1 file
-  // set (54 files of which 44 were v1 fragments). Fetch the DRAFT's OWN file listing
-  // (GET /deposit/depositions/<id>/files) and DELETE each file before uploading the manifest.
-  var files = nv.files || [];
-  try {
-    if ((!files || !files.length) && nv.id) {
-      var dl = await zenodo(env, "GET", "/" + nv.id + "/files");
-      if (Array.isArray(dl)) files = dl;
-    }
-  } catch (e) {
-  }
-  for (var i = 0; i < files.length; i++) {
-    if (!files[i] || !files[i].links || !files[i].links.self) continue;
-    try {
-      await fetch(files[i].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
-    } catch (e) {
-    }
-  }
-  var bucket = nv.links && nv.links.bucket;
-  var html = "", pdf = null;
-  if (bucket) {
-    var up = await fetch(bucket + "/" + encodeURIComponent(slug) + ".md?access_token=" + env.ZENODO_TOKEN, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/0.5.0" }, body: row.corrected_md || "" });
-    if (!up.ok) {
-      await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
-      return { ok: false, stage: "v2", error: "md upload failed: " + up.status };
-    }
-    if (env.PDF_SVC) {
-      try {
-        var hres = await env.PDF_SVC.fetch("https://qnfo-pdf/html", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body_md: row.corrected_md || "", slug, title: row.title || "" }) });
-        if (hres.ok) {
-          html = await hres.text();
-          await fetch(bucket + "/" + encodeURIComponent(slug) + ".html?access_token=" + env.ZENODO_TOKEN, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/0.5.0" }, body: html });
-        }
-      } catch (e) {
-      }
-      try {
-        var pres = await env.PDF_SVC.fetch("https://qnfo-pdf/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body_md: row.corrected_md || "", slug, title: row.title || "" }) });
-        if (pres.ok) {
-          pdf = await pres.arrayBuffer();
-          await fetch(bucket + "/" + encodeURIComponent(slug) + ".pdf?access_token=" + env.ZENODO_TOKEN, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/0.5.0" }, body: pdf });
-        }
-      } catch (e) {
-      }
-    }
-  }
-  if (bucket) {
-    if (env.ZENODO_TOKEN && typeof mdToLatex === "function") {
-      try {
-        var qtex = mdToLatex(row.corrected_md || "");
-        if (qtex && qtex.indexOf("\\documentclass") === 0) {
-          var qc = await latexCompile(qtex);
-          if (qc.ok && qc.pdf && qc.pdf.byteLength > 5e3) {
-            await fetch(bucket + "/" + encodeURIComponent(slug) + ".pdf?access_token=" + env.ZENODO_TOKEN, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/0.5.3" }, body: qc.pdf });
-            await fetch(bucket + "/" + encodeURIComponent(slug) + ".tex?access_token=" + env.ZENODO_TOKEN, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/0.5.3" }, body: qtex });
-          } else {
-            try {
-              await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text) VALUES (datetime('now'), 'latex-fail', 'qnfo-research-exec', ?)").bind(((qc.err || "fail") + " " + String(qc.log || "")).slice(0, 450)).run();
-            } catch (eL) {
-            }
-          }
-        }
-      } catch (eX) {
-      }
-    }
-    var provFiles = { "references.bib": row.references_bib, "citation-audit.md": row.citation_audit, "DUE-DILIGENCE.md": row.due_diligence, "PROJECT-PLAN.md": row.project_plan, "README.md": row.readme_md, "LICENSE": row.license_md, "jpcub_nv_verify.py": row.verify_script, "jpcub_nv_verify_output.txt": row.verify_output };
-    for (var pf in provFiles) {
-      if (provFiles[pf] && String(provFiles[pf]).trim().length > 0) {
-        try {
-          await fetch(bucket + "/" + encodeURIComponent(pf) + "?access_token=" + env.ZENODO_TOKEN, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/0.5.2" }, body: provFiles[pf] });
-        } catch (e) {
-        }
-      }
-    }
-  }
-  var meta = nv.metadata || {};
-  if (row.version_to) meta.version = row.version_to;
-  var metaClean = {};
-  for (var k in meta) {
-    if (k !== "prereserve_doi" && k !== "doi" && k !== "recid") metaClean[k] = meta[k];
-  }
-  // PUBLISH-V2-METADATA-1 (2026-10-01, charter gate A2, fleet_improvements 1573): every new version used to
-  // drop the related identifiers (delete), ship without keywords (v1.4 = 23003473 had subjects [] against
-  // v1.3's six) and could carry the funnel link several times (3x on v1.4), all repaired by hand. Now:
-  // the related identifiers are rebuilt (inherited non-version relations plus the canonical page),
-  // the previous version's keywords are carried when the draft has none, and the funnel link is
-  // stripped and appended exactly once.
-  var _canon = row.slug ? "https://papers.qnfo.org/papers/" + row.slug + "/" : "";
-  var _inheritedRel = (Array.isArray(metaClean.related_identifiers) ? metaClean.related_identifiers : []).filter(function(r) {
-    return r && r.identifier && !/^(isNewVersionOf|isPreviousVersionOf|isVersionOf|hasVersion)$/i.test(String(r.relation || "")) && String(r.identifier).replace(/\/+$/, "") !== _canon.replace(/\/+$/, "");
-  });
-  var _canonRel = _canon ? [{ identifier: _canon, relation: "isVariantFormOf", resource_type: "publication-preprint" }] : [];
-  metaClean.related_identifiers = _inheritedRel.concat(_canonRel);
-  if (!metaClean.related_identifiers.length) delete metaClean.related_identifiers;
-  if (!Array.isArray(metaClean.keywords) || !metaClean.keywords.length) {
-    var _pk = _prevMeta && Array.isArray(_prevMeta.keywords) ? _prevMeta.keywords : [];
-    if (!_pk.length && _prevMeta && Array.isArray(_prevMeta.subjects)) _pk = _prevMeta.subjects.map(function(s) { return s && (s.term || s.subject || s.id); }).filter(Boolean);
-    if (_pk.length) metaClean.keywords = _pk.slice(0, 20);
-  }
-  if (row.related_repo) metaClean.notes = (metaClean.notes ? metaClean.notes + " " : "") + "Source: " + row.related_repo;
-  // WS-A2 (2026-09-26): append the read-online link UNCONDITIONALLY. The prior form appended it
-  // only when a `## Abstract` heading was found, so a revision whose corrected body lacked that
-  // heading shipped an abstract-only description with NO papers.qnfo.org link (live: 10.5281/
-  // zenodo.22764745 v2.0.0). Fall back to the existing description and dedupe.
-  var _plink = row.slug ? ' <p>Full text and updates: <a href="' + _canon + '">papers.qnfo.org/papers/' + row.slug + '/</a></p>' : '';
-  var _stripFunnel = function(s) {
-    return String(s || "").replace(/\s*<p>\s*Full text and updates:[\s\S]*?<\/p>/gi, "").replace(/\s*Full text and updates:\s*(<a [^>]*>)?\s*(https?:\/\/)?papers\.qnfo\.org\/papers\/[^\s<]*\s*(<\/a>)?/gi, " ").replace(/[ \t]{2,}/g, " ").trim();
-  };
-  var ab = String(row.corrected_md || "").match(/##\s*Abstract\s*\r?\n([\s\S]*?)(?=\r?\n##\s|\r?\n#\s|$)/i);
-  if (ab && ab[1]) metaClean.description = _stripFunnel(ab[1].replace(/\s+/g, " ").trim()) + _plink;
-  else if (_plink) {
-    // WS-A2 R5 (2026-09-26): also append when there is NO description at all (the prior form
-    // required metaClean.description to be truthy, so an abstract-less revision shipped no link).
-    var _base = _stripFunnel(metaClean.description ? String(metaClean.description) : "") || String(row.title || row.slug || "");
-    metaClean.description = _base + _plink;
-  }
-  var mput = await zenodo(env, "PUT", "/" + nv.id, { metadata: metaClean });
-  // Fail-safe: an inherited related identifier Zenodo rejects must not block the version. Retry with only the
-  // canonical page, then without related identifiers (the previous behaviour), before giving up.
-  if (mput && mput._status && mput._status >= 400 && metaClean.related_identifiers) {
-    metaClean.related_identifiers = _canonRel;
-    if (!_canonRel.length) delete metaClean.related_identifiers;
-    mput = await zenodo(env, "PUT", "/" + nv.id, { metadata: metaClean });
-    if (mput && mput._status && mput._status >= 400 && metaClean.related_identifiers) {
-      delete metaClean.related_identifiers;
-      mput = await zenodo(env, "PUT", "/" + nv.id, { metadata: metaClean });
-    }
-  }
-  if (mput && mput._status && mput._status >= 400) {
-    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
-    return { ok: false, stage: "v2", error: "metadata put failed: " + mput._text };
-  }
-  var pub = await zenodo(env, "POST", "/" + nv.id + "/actions/publish", {});
-  if (!pub || !pub.doi) {
-    await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='error', updated_at=datetime('now') WHERE id=?").bind(row.id).run();
-    return { ok: false, stage: "v2", error: "publish failed: " + JSON.stringify(pub).slice(0, 200) };
-  }
-  var newDoi = pub.doi;
-  var newTitle = extractTitle(row.corrected_md || "", row.title);
-  // PUBLISH-V2-METADATA-1 (A): zenodo_url advances with the DOI from the same new record (it used to keep naming
-  // the previous record: v1.4 doi 23003473 with url records/23001088; v1.4.1 doi 23079905 with url records/23003473).
-  var newRecId = String(pub.record_id || pub.id || String(newDoi).split("zenodo.").pop() || "");
-  await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=?, zenodo_doi=?, zenodo_url=?, updated_at=datetime('now') WHERE slug=?").bind(newTitle, row.corrected_md || "", row.version_to || "2.0.0", newDoi, newDoi, "https://zenodo.org/records/" + newRecId, slug).run();
-  // Post-publish assertion: what the public record carries, logged so a regression is visible without a manual audit.
-  try {
-    var pm = pub.metadata || {};
-    var funnelN = (String(pm.description || "").match(/Full text and updates/g) || []).length;
-    var kwN = Array.isArray(pm.keywords) ? pm.keywords.length : 0;
-    var canonOk = !_canon || (Array.isArray(pm.related_identifiers) && pm.related_identifiers.some(function(r) { return r && String(r.identifier || "").replace(/\/+$/, "") === _canon.replace(/\/+$/, ""); }));
-    var assertOk = funnelN === (_canon ? 1 : 0) && kwN > 0 && canonOk;
-    await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (ts, kind, job, text, status) VALUES (datetime('now'), 'publish-v2-metadata', 'qnfo-research-exec', ?, ?)").bind(JSON.stringify({ slug: slug, doi: newDoi, record: newRecId, funnel: funnelN, keywords: kwN, canonical_related: canonOk }).slice(0, 450), assertOk ? "ok" : "error").run();
-  } catch (eAs) {
+  } else {
+    await env.LIVING_PAPER.prepare("UPDATE papers SET title=?, body_md=?, version=?, doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, updated_at=datetime('now') WHERE slug=?").bind(vTitle, vBody, row.version_to || "2.0.0", vSlug).run();
   }
   try {
-    // REV-DISSEMINATION-1 (2026-09-27): a revision (newversion) path wrote NO dissemination row, so
-    // pipeline revisions never auto-posted (canonical: 'Operating the Quniverse Fleet' v1.3,
-    // 10.5281/zenodo.23001088, had to be posted by hand). Mirror publishStage / FIRST-DEPOSIT-1 so
-    // qnfo-social's drainDissemination (cron 30 */2) posts the revision. A deterministic id
-    // 'rev-<slug>' + INSERT OR IGNORE makes it idempotent per paper, so a re-drain cannot double-post.
-    await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("rev-" + slug, slug, newDoi, newTitle, "bluesky", "queued", "auto", 0, (String(newDoi).indexOf("http") === 0 ? newDoi : "https://doi.org/" + newDoi), "https://papers.qnfo.org/papers/" + slug + "/").run();
-  } catch (eRevDiss) {
+    // The dissemination row advances the post queue (qnfo-social drainDissemination). A first publication gets a fresh row; a
+    // revision gets the deterministic id 'rev-<slug>' with INSERT OR IGNORE, so a re-drain cannot double-post. No DOI or
+    // record link is carried: the page is the address.
+    await env.QNFO_AUDIT.prepare("INSERT OR IGNORE INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind(vFirst ? "res-" + Date.now().toString(36) : "rev-" + vSlug, vSlug, null, vTitle, "bluesky", "queued", "auto", 0, null, "https://papers.qnfo.org/papers/" + vSlug + "/").run();
+  } catch (eDiss) {
   }
   if (env.GRAPH_DB) {
     try {
-      var node = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?").bind("zenodo-10-5281-zenodo-" + recId).first();
-      if (node) {
-        var props = {};
+      var vNode = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?").bind("paper:" + vSlug).first();
+      if (vNode) {
+        var vProps = {};
         try {
-          props = JSON.parse(node.properties || "{}");
-        } catch (e2) {
-          props = {};
+          vProps = JSON.parse(vNode.properties || "{}");
+        } catch (eP) {
+          vProps = {};
         }
-        props.doi = newDoi;
-        props.zenodo_url = "https://doi.org/" + newDoi;
-        props.version = row.version_to || "2.0.0";
-        await env.GRAPH_DB.prepare("UPDATE nodes SET properties=?, updated_at=datetime('now') WHERE id=?").bind(JSON.stringify(props), "zenodo-10-5281-zenodo-" + recId).run();
+        delete vProps.doi;
+        delete vProps.zenodo_url;
+        vProps.version = row.version_to || "2.0.0";
+        await env.GRAPH_DB.prepare("UPDATE nodes SET properties=?, updated_at=datetime('now') WHERE id=?").bind(JSON.stringify(vProps), "paper:" + vSlug).run();
       }
-    } catch (e) {
+    } catch (eKg) {
     }
   }
   if (env.MIRROR) {
     try {
-      await env.MIRROR.put("2026/09/" + slug + ".md", row.corrected_md || "");
-      if (html) await env.MIRROR.put("2026/09/" + slug + ".html", html);
-      if (pdf) await env.MIRROR.put("2026/09/" + slug + ".pdf", pdf);
-    } catch (e) {
+      await env.MIRROR.put("papers/" + vSlug + ".md", vBody);
+    } catch (eMir) {
     }
   }
-  await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=?, updated_at=datetime('now') WHERE id=?").bind(newDoi, row.id).run();
-  await depositToGithub(env, slug, row.title, row.corrected_md || "", newDoi);
-  return { ok: true, stage: "v2", doi: newDoi };
+  await env.QNFO_AUDIT.prepare("UPDATE version_queue SET status='published', new_doi=NULL, updated_at=datetime('now') WHERE id=?").bind(row.id).run();
+  await depositToGithub(env, vSlug, row.title, vBody);
+  return { ok: true, stage: vFirst ? "first-deposit" : "v2", doi: null, slug: vSlug };
 }
 __name(publishV2, "publishV2");
 __name2(publishV2, "publishV2");
@@ -1684,7 +1265,7 @@ async function drainV2(env) {
       var pv2 = results[results.length - 1];
       if (pv2 && pv2.ok) {
         try {
-          var prlDoi = String(pv2.doi || r.new_doi || "");
+          var prlDoi = null; /* NOZ-DOI-1: no DOI is minted */
           var Q = String.fromCharCode(39);
           var prlSql = "UPDATE paper_revision_log SET status=" + Q + "published" + Q + ", new_doi=?, updated_at=datetime(" + Q + "now" + Q + ") WHERE slug=? AND status=" + Q + "queued" + Q + " AND COALESCE(version_to," + Q + "2.0.0" + Q + ")=? ";
           await env.QNFO_AUDIT.prepare(prlSql).bind(prlDoi, String(r.slug || ""), String(r.version_to || "2.0.0")).run();
@@ -2198,10 +1779,13 @@ async function stageGround(env, row) {
   // that always returns topical work; corpus hits are cited only from PAPER_VZ, resolved to title and DOI in living-paper.
   let arxivHits = "";
   let parentTitle = "";
-  const _doiM = idea.match(/10\.5281\/zenodo\.\d+/);
-  if (_doiM && env.LIVING_PAPER) {
+  // NOZ-DOI-1: a re-entry idea names its parent paper by DOI or, for a paper without one, by slug; a DOI of the retired
+  // registrar is never looked up.
+  const _reM = idea.match(/Re-entry from ([^\s:]+):/);
+  const _ref = _reM ? _reM[1] : "";
+  if (_ref && !/10\.5281\/|z[e]nodo/i.test(_ref) && env.LIVING_PAPER) {
     try {
-      const _pp = await env.LIVING_PAPER.prepare("SELECT title FROM papers WHERE doi = ?1 LIMIT 1").bind(_doiM[0]).first();
+      const _pp = await env.LIVING_PAPER.prepare("SELECT title FROM papers WHERE doi = ?1 OR slug = ?1 LIMIT 1").bind(_ref).first();
       if (_pp && _pp.title) parentTitle = String(_pp.title);
     } catch (e) {
     }
@@ -2264,8 +1848,8 @@ async function stageGround(env, row) {
           return null;
         });
         if (!pp || !pp.title) continue;
-        const entry = "QNFO: " + String(pp.title).replace(/\s+/g, " ").trim() + (pp.doi ? " | DOI " + pp.doi : "") + "\n  " + String(pp.abstract || "").replace(/\s+/g, " ").trim().slice(0, 300);
-        bib.push({ n: bib.length + 1, id: pp.doi ? "doi:" + pp.doi : "qnfo:" + sl, text: entry });
+        const entry = "QNFO: " + String(pp.title).replace(/\s+/g, " ").trim() + (pp.doi && !/10\.5281\/|z[e]nodo/i.test(String(pp.doi)) ? " | DOI " + pp.doi : "") + "\n  " + String(pp.abstract || "").replace(/\s+/g, " ").trim().slice(0, 300);
+        bib.push({ n: bib.length + 1, id: pp.doi && !/10\.5281\/|z[e]nodo/i.test(String(pp.doi)) ? "doi:" + pp.doi : "qnfo:" + sl, text: entry });
         corpus += (corpus ? "\n" : "") + entry;
       }
     }
@@ -2622,7 +2206,7 @@ function renderReferences(paper, grounding) {
 // REFCOUNT-BIB-AWARE-1 + publish floor (2026-10-01, #1620; from the wave-4 session's PR 358): the reference floor is
 // MIN_REFS capped at what the grounding bibliography can supply (writers may cite only bibliography works) and never below
 // MIN_GROUND_REFS. A new paper's length floor is the living-paper publish floor (status=published needs >= 20000 chars,
-// trg_papers_pub_floor_*), so a paper D1 would refuse AFTER its public Zenodo deposit goes back to revise here instead.
+// trg_papers_pub_floor_*), so a paper D1 would refuse after the paper is public goes back to revise here instead.
 var PUBLISH_FLOOR_CHARS = 2e4;
 var MIN_GROUND_REFS = 5;
 function bibCountFromGrounding(grounding) {
@@ -2866,7 +2450,7 @@ __name2222(collectArtifacts, "collectArtifacts");
 // draft->publish stage that did last ran 2026-09-08), so publishStageV2 read papers WHERE slug=NULL and failed for every
 // row that passed verify, and markError sent the verified paper back to ground (row 5099abb8 reached publish at 15:51Z
 // and was parked to avoid exactly that). Build the row from reconciled.md as status 'draft' and record the slug before
-// any Zenodo call. Safe to re-run.
+// any publish. Safe to re-run.
 async function ensurePaperRow(env, row) {
   if (row.paper_slug) {
     const have = await env.LIVING_PAPER.prepare("SELECT * FROM papers WHERE slug=?1").bind(row.paper_slug).first();
@@ -3008,7 +2592,7 @@ async function lookupDoi(doi, fetchFn) {
   } catch (e) {
     return { state: "error", note: String(e && e.message || e).slice(0, 120) };
   }
-  // Title from Crossref when the DOI is a Crossref one; DataCite DOIs (Zenodo) have no Crossref entry, so no title is judged.
+  // Title from Crossref when the DOI is a Crossref one; DataCite DOIs have no Crossref entry, so no title is judged.
   try {
     const c = await fetchFn("https://api.crossref.org/works/" + doi.split("/").map(encodeURIComponent).join("/"), { headers: { "User-Agent": "qnfo-citation-gate/1.0 (mailto:ops@qnfo.org)" } });
     if (c.ok) {
@@ -3124,8 +2708,8 @@ async function publishStageV2(env, row) {
   }
   const slug = prep.slug;
   const paper = prep.paper;
-  // The papers publish floor would refuse status='published' below 20000 chars AFTER the Zenodo deposit is public,
-  // leaving an orphan DOI. Refuse before depositing.
+  // The papers publish floor would refuse status='published' below 20000 chars after the paper is public in R2/GitHub.
+  // Refuse before publishing.
   if (row.source !== "remediation" && String(paper.body_md || "").trim().length < PUBLISH_FLOOR_CHARS) {
     await markError(env, row, "publish: body " + String(paper.body_md || "").trim().length + " chars < publish floor " + PUBLISH_FLOOR_CHARS);
     return { ok: false, stage: "publish" };
@@ -3136,7 +2720,7 @@ async function publishStageV2(env, row) {
     // A hold needs a recorded reason, a doer and a way out (ANTIFRAGILE-1): the issue names the fix and the release.
     try {
       const nowMs = Date.now();
-      await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-research-exec', 'remediation', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind("CITATION-HELD: research_queue " + String(row.id).slice(0, 8) + " (paper " + slug + ")", "CITATION-EXISTENCE-GATE-1 held the publish of research_queue row " + row.id + " before the Zenodo deposit: " + String(cg.note).slice(0, 600) + ". Doer: qnfo-research-exec revise path or a session: correct the citation in LIVING_PAPER.papers body_md (slug " + slug + ") using the arXiv API (export.arxiv.org) or doi.org to find the real source, then set research_queue.status back to 'review' (stage publish). Closing probe: the row is no longer held. Pillar research.", nowMs).run();
+      await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at) SELECT ?1, ?2, 'qnfo-research-exec', 'remediation', 'high', 'open', ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title = ?1 AND status = 'open')").bind("CITATION-HELD: research_queue " + String(row.id).slice(0, 8) + " (paper " + slug + ")", "CITATION-EXISTENCE-GATE-1 held the publish of research_queue row " + row.id + " before the publish: " + String(cg.note).slice(0, 600) + ". Doer: qnfo-research-exec revise path or a session: correct the citation in LIVING_PAPER.papers body_md (slug " + slug + ") using the arXiv API (export.arxiv.org) or doi.org to find the real source, then set research_queue.status back to 'review' (stage publish). Closing probe: the row is no longer held. Pillar research.", nowMs).run();
     } catch (e) {}
     return { ok: false, stage: "publish", held: true };
   }
@@ -3144,18 +2728,18 @@ async function publishStageV2(env, row) {
   const extras = artifacts.map(function(a) {
     return { file: a.file, content: a.content };
   });
-  const pub = await publishToZenodo(env, paper.title, paper.abstract, paper.body_md, slug, extras);
+  const pub = await publishInHouse(env, paper.title, paper.abstract, paper.body_md, slug);
   if (!pub.ok) {
-    await markError(env, row, "zenodo: " + pub.error);
+    await markError(env, row, "publish: " + pub.error);
     return { ok: false, stage: "publish" };
   }
-  await env.LIVING_PAPER.prepare("UPDATE papers SET doi=?1, zenodo_doi=?1, status='published', zenodo_url=?2, updated_at=datetime('now') WHERE slug=?3").bind(pub.doi || null, pub.record || null, slug).run();
+  await env.LIVING_PAPER.prepare("UPDATE papers SET doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, status='published', updated_at=datetime('now') WHERE slug=?1").bind(slug).run();
   try {
     await env.MIRROR.put("papers/" + slug + ".md", paper.body_md);
   } catch (e) {
   }
   try {
-    await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), slug, pub.doi || null, paper.title, "bluesky", "queued", "auto", 0, pub.record || null, "https://papers.qnfo.org/papers/" + slug + "/").run();
+    await env.QNFO_AUDIT.prepare("INSERT INTO dissemination_tracker (id, paper_slug, paper_doi, paper_title, channel, action, mode, fallback, zenodo_url, pages_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))").bind("res-" + Date.now().toString(36), slug, null, paper.title, "bluesky", "queued", "auto", 0, null, "https://papers.qnfo.org/papers/" + slug + "/").run();
   } catch (e) {
   }
   const ghFiles = artifacts.map(function(a) {
@@ -3163,8 +2747,8 @@ async function publishStageV2(env, row) {
   });
   const ghr = await pushArtifactsToGitHub(env, slug, ghFiles);
   await logEvent(env, "github", JSON.stringify(ghr).slice(0, 500), ghr.ok ? "ok" : "error");
-  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=?, published_at=?, error=NULL WHERE id=?").bind(pub.doi || null, nowIso(), row.id).run();
-  return { ok: true, stage: "publish->published", doi: pub.doi, slug, github: ghr };
+  await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='published', stage='done', doi=NULL, published_at=?, error=NULL WHERE id=?").bind(nowIso(), row.id).run();
+  return { ok: true, stage: "publish->published", doi: null, slug, github: ghr };
 }
 __name(publishStageV2, "publishStageV2");
 __name2(publishStageV2, "publishStageV2");
@@ -3207,7 +2791,7 @@ async function remediationPublish(env, row) {
     return f.file === "PROJECT-PLAN.md";
   });
   await env.QNFO_AUDIT.prepare("INSERT INTO version_queue (paper_doi, slug, title, version_from, version_to, corrected_md, references_bib, citation_audit, due_diligence, project_plan, readme_md, verify_script, verify_output, status, created_at, updated_at) VALUES (?1,?2,?3,?4,'2.0.0',?5,?6,?7,?8,?9,?10,?11,?12,'drafted',datetime('now'),datetime('now'))").bind(
-    existing.doi || "",
+    slug,
     slug,
     existing.title || "",
     existing.version || "1.0.0",
@@ -3393,379 +2977,6 @@ async function runLeased(env, holder, maxStages, budgetMs) {
   }
   return { busy: false, stages, ms: Date.now() - t0 };
 }
-// ZENODO-VERSION-REQUESTS-1 (2026-10-01): publish a new version of an existing Zenodo record from files at public
-// GitHub raw URLs, driven by rows in qnfo-audit zenodo_version_requests (first use: the owner's CV, concept record
-// 17176733, from rwnq8/resume). A D1 write is the authorization: only holders of the Cloudflare account can queue a
-// request. File URLs must be raw.githubusercontent.com/{rwnq8,QNFO}/<repo>/<40-hex commit>/<path>, so a row cannot make
-// the worker fetch another host or a moving branch. Every file of the previous version is replaced. One request per run.
-var VERSION_REQ_URL_RE = /^https:\/\/raw\.githubusercontent\.com\/(rwnq8|QNFO)\/[A-Za-z0-9._-]+\/[0-9a-f]{40}\/[^?#\s]+$/;
-var VERSION_REQ_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}$/;
-function validateVersionFiles(files) {
-  if (!Array.isArray(files) || files.length === 0 || files.length > 20) return "files must be a list of 1 to 20 entries";
-  var seen = {};
-  for (var i = 0; i < files.length; i++) {
-    var f = files[i] || {};
-    if (typeof f.name !== "string" || !VERSION_REQ_NAME_RE.test(f.name)) return "bad file name at " + i;
-    if (seen[f.name]) return "duplicate file name " + f.name;
-    seen[f.name] = 1;
-    if (typeof f.url !== "string" || !VERSION_REQ_URL_RE.test(f.url)) return "url not a pinned raw.githubusercontent.com rwnq8/QNFO path at " + i;
-  }
-  return null;
-}
-// ZENODO-METADATA-EDITS-1 (2026-10-01): kind='metadata' rows of the same queue edit a published record's metadata in
-// place (no new version, no file change): read it, set the ORCID-matched creator's name and affiliation, then edit,
-// PUT and publish. Any failure after `edit` discards the edit, so a record is never left mid-edit. A record that is
-// already canonical is marked 'unchanged' without an edit. First use: one name form and one affiliation string on the
-// owner's ~940 records (15 affiliation variants, including retired labels). Up to METADATA_EDITS_PER_RUN rows per run.
-var METADATA_EDITS_PER_RUN = 8;
-var ORCID_RE = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/;
-function validateCreatorPatch(patch) {
-  var p = patch && patch.creator_by_orcid;
-  if (!p || typeof p.orcid !== "string" || !ORCID_RE.test(p.orcid)) return "metadata_json.creator_by_orcid.orcid missing or malformed";
-  if (typeof p.name !== "string" && typeof p.affiliation !== "string") return "creator_by_orcid needs name or affiliation";
-  return null;
-}
-function applyCreatorPatch(metadata, patch) {
-  var bad = validateCreatorPatch(patch);
-  if (bad) return { error: bad };
-  var p = patch.creator_by_orcid;
-  var before = Array.isArray(metadata && metadata.creators) ? metadata.creators : [];
-  var bare = function(c) { return String(c && c.orcid || "").replace(/^https?:\/\/orcid\.org\//, ""); };
-  var list = before.map(function(c) { return Object.assign({}, c); });
-  // ZENODO-CREATOR-CLEAN-1 (2026-10-06): OpenAlex named the owner's ORCID profile "QNFO" because 125 records list a
-  // "QNFO Research ..." pseudo-author (a retired label; AI assistance is disclosed in the description, never as an author)
-  // and 10 records name no person at all. claim_unattributed puts the ORCID person on a record that lacks them, replacing
-  // the first QNFO pseudo-author or an un-ORCID'd variant of the owner's name; drop_org_creators removes QNFO pseudo-authors
-  // without an ORCID once the ORCID person is present. Neither ever leaves a record without a creator.
-  var isOrg = function(c) { return !bare(c) && /^\s*QNFO\b/i.test(String(c.name || "")); };
-  var isNameVariant = function(c) { return !bare(c) && /Quni/i.test(String(c.name || "")); };
-  if (p.claim_unattributed && !list.some(function(c) { return bare(c) === p.orcid; })) {
-    if (typeof p.name !== "string" || !p.name) return { error: "claim_unattributed needs name" };
-    var person = { name: p.name, orcid: p.orcid };
-    if (typeof p.affiliation === "string") person.affiliation = p.affiliation;
-    var at = list.findIndex(isNameVariant);
-    if (at < 0) at = list.findIndex(isOrg);
-    if (at >= 0) list[at] = person; else list.unshift(person);
-  }
-  if (p.drop_org_creators && list.some(function(c) { return bare(c) === p.orcid; })) {
-    list = list.filter(function(c) { return !isOrg(c); });
-  }
-  var hit = 0;
-  var creators = list.map(function(n) {
-    if (bare(n) === p.orcid) {
-      hit++;
-      if (typeof p.name === "string" && p.name) n.name = p.name;
-      if (typeof p.affiliation === "string") n.affiliation = p.affiliation;
-    }
-    return n;
-  });
-  if (!hit) return { error: "no creator with ORCID " + p.orcid };
-  return { creators: creators, changed: JSON.stringify(creators) !== JSON.stringify(before) };
-}
-async function drainMetadataEdits(env, limit) {
-  if (!env.ZENODO_TOKEN || !env.QNFO_AUDIT) return [];
-  var rs = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE kind='metadata' AND status='pending' ORDER BY id ASC LIMIT ?").bind(limit || METADATA_EDITS_PER_RUN).all();
-  var out = [];
-  var rows = (rs && rs.results) || [];
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    var claim = await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status='publishing', updated_at=datetime('now') WHERE id=? AND status='pending'").bind(row.id).run();
-    if (!claim || !claim.meta || claim.meta.changes !== 1) continue;
-    var recId = Number(row.record_id), editing = false, status = "error", error = null;
-    try {
-      var patch = JSON.parse(row.metadata_json || "{}");
-      var bad = validateCreatorPatch(patch);
-      if (bad) throw new Error(bad);
-      var dep = await zenodo(env, "GET", "/" + recId);
-      if (!dep || dep._status || !dep.metadata) throw new Error("read failed: " + JSON.stringify(dep).slice(0, 200));
-      var first = applyCreatorPatch(dep.metadata, patch);
-      if (first.error) throw new Error(first.error);
-      if (!first.changed) {
-        status = "unchanged";
-      } else {
-        var ed = await zenodo(env, "POST", "/" + recId + "/actions/edit", {});
-        if (!ed || ed._status) throw new Error("edit failed: " + JSON.stringify(ed).slice(0, 200));
-        editing = true;
-        var base = ed.metadata || dep.metadata;
-        var applied = applyCreatorPatch(base, patch);
-        if (applied.error) throw new Error(applied.error);
-        var put = await zenodo(env, "PUT", "/" + recId, { metadata: Object.assign({}, base, { creators: applied.creators }) });
-        if (!put || put._status) throw new Error("metadata put failed: " + JSON.stringify(put).slice(0, 200));
-        var pub = await zenodo(env, "POST", "/" + recId + "/actions/publish", {});
-        if (!pub || pub._status || !pub.id) throw new Error("publish failed: " + JSON.stringify(pub).slice(0, 200));
-        editing = false;
-        status = "published";
-      }
-    } catch (e) {
-      error = String(e && e.message || e).slice(0, 300);
-      if (editing) {
-        try { await zenodo(env, "POST", "/" + recId + "/actions/discard", {}); } catch (e2) {}
-      }
-    }
-    await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status=?, result_record_id=?, error=?, updated_at=datetime('now') WHERE id=?").bind(status, status === "error" ? null : recId, error, row.id).run();
-    out.push({ id: row.id, record: recId, status: status, error: error });
-  }
-  return out;
-}
-// ZENODO-READ-ONLINE-1 (2026-10-05, agent_issues #1907; owner decision YES 2026-10-02): kind='related' rows of the same
-// queue add one related identifier to a published record, {identifier: https://papers.qnfo.org/papers/<slug>/, relation:
-// isVariantFormOf, resource_type: publication-preprint}, the form publishStage writes for new records, so a Zenodo
-// visitor (13,307 downloads) has a path to the paper page, its Ask panel and the subscribe box. Metadata edit only: no new
-// version, no new DOI. The edit goes to the LATEST version of the record's concept (an older id in the row is resolved
-// through the public API first), because that is the page Zenodo shows. A record that already lists the URL is
-// 'unchanged' without an edit; any failure after `edit` discards the draft. metadata_json: {"related_link": {"slug":
-// "<slug>"}}; the URL form lives here, never in a row. Up to RELATED_LINKS_PER_RUN rows per run.
-var RELATED_LINKS_PER_RUN = 12;
-var RELATED_SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,199}$/;
-var RELATED_ISSUE_PREFIX = "ZENODO-READ-ONLINE-1";
-function relatedLinkUrl(slug) {
-  return "https://papers.qnfo.org/papers/" + slug + "/";
-}
-function validateRelatedPatch(patch) {
-  var p = patch && patch.related_link;
-  if (!p || typeof p.slug !== "string" || !RELATED_SLUG_RE.test(p.slug)) return "metadata_json.related_link.slug missing or malformed";
-  return null;
-}
-function relatedUrlNorm(u) {
-  return String(u || "").trim().replace(/\/+$/, "").toLowerCase();
-}
-function applyRelatedLink(metadata, patch) {
-  var bad = validateRelatedPatch(patch);
-  if (bad) return { error: bad };
-  var url = relatedLinkUrl(patch.related_link.slug);
-  var before = Array.isArray(metadata && metadata.related_identifiers) ? metadata.related_identifiers : [];
-  var present = before.some(function(r) {
-    return relatedUrlNorm(r && r.identifier) === relatedUrlNorm(url) && String(r && r.relation || "") === "isVariantFormOf";
-  });
-  if (present) return { related_identifiers: before, changed: false, url: url };
-  return { related_identifiers: before.concat([{ identifier: url, relation: "isVariantFormOf", resource_type: "publication-preprint" }]), changed: true, url: url };
-}
-// RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): record 22025544 (trapped-ion-ultrametric-synthesis) came back from the
-// deposit API with an InvenioRDM resource_type {type, subtype} and no legacy upload_type / publication_type, and the
-// legacy PUT of that same metadata failed with "metadata.resource_type: Missing data for required field" (the one error
-// row of 431). The legacy deposit API wants upload_type (and publication_type / image_type for those two), so they are
-// filled from resource_type when absent; metadata that already carries them is returned unchanged.
-function legacyUploadFields(metadata) {
-  var m = metadata && typeof metadata === "object" ? metadata : {};
-  var rt = m.resource_type && typeof m.resource_type === "object" ? m.resource_type : null;
-  var type = rt && rt.type ? String(rt.type) : "";
-  if (m.upload_type || !type) return m;
-  var out = Object.assign({}, m, { upload_type: type });
-  var sub = rt.subtype ? String(rt.subtype) : "";
-  if (sub && type === "publication" && !out.publication_type) out.publication_type = sub;
-  if (sub && type === "image" && !out.image_type) out.image_type = sub;
-  return out;
-}
-async function latestRecordId(recId, fetchImpl) {
-  var f = fetchImpl || fetch;
-  try {
-    var r = await f("https://zenodo.org/api/records/" + recId + "/versions/latest", { headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
-    var j = r && r.ok ? await r.json() : null;
-    if (j && Number(j.id) > 0) return Number(j.id);
-  } catch (e) {
-  }
-  return recId;
-}
-async function drainRelatedLinks(env, limit, fetchImpl) {
-  if (!env.ZENODO_TOKEN || !env.QNFO_AUDIT) return [];
-  var rs = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE kind='related' AND status='pending' ORDER BY id ASC LIMIT ?").bind(limit || RELATED_LINKS_PER_RUN).all();
-  var out = [];
-  var rows = (rs && rs.results) || [];
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    var claim = await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status='publishing', updated_at=datetime('now') WHERE id=? AND status='pending'").bind(row.id).run();
-    if (!claim || !claim.meta || claim.meta.changes !== 1) continue;
-    var recId = Number(row.record_id), target = recId, editing = false, status = "error", error = null;
-    try {
-      var patch = JSON.parse(row.metadata_json || "{}");
-      var bad = validateRelatedPatch(patch);
-      if (bad) throw new Error(bad);
-      target = await latestRecordId(recId, fetchImpl);
-      var dep = await zenodo(env, "GET", "/" + target);
-      if (!dep || dep._status || !dep.metadata) throw new Error("read failed: " + JSON.stringify(dep).slice(0, 200));
-      var first = applyRelatedLink(dep.metadata, patch);
-      if (first.error) throw new Error(first.error);
-      if (!first.changed) {
-        status = "unchanged";
-      } else {
-        var ed = await zenodo(env, "POST", "/" + target + "/actions/edit", {});
-        if (!ed || ed._status) throw new Error("edit failed: " + JSON.stringify(ed).slice(0, 200));
-        editing = true;
-        var base = legacyUploadFields(ed.metadata || dep.metadata);
-        var applied = applyRelatedLink(base, patch);
-        if (applied.error) throw new Error(applied.error);
-        var put = await zenodo(env, "PUT", "/" + target, { metadata: Object.assign({}, base, { related_identifiers: applied.related_identifiers }) });
-        if (!put || put._status) throw new Error("metadata put failed: " + JSON.stringify(put).slice(0, 200));
-        var pub = await zenodo(env, "POST", "/" + target + "/actions/publish", {});
-        if (!pub || pub._status || !pub.id) throw new Error("publish failed: " + JSON.stringify(pub).slice(0, 200));
-        editing = false;
-        status = "published";
-      }
-    } catch (e) {
-      error = String(e && e.message || e).slice(0, 300);
-      if (editing) {
-        try { await zenodo(env, "POST", "/" + target + "/actions/discard", {}); } catch (e2) {}
-      }
-    }
-    await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status=?, result_record_id=?, error=?, updated_at=datetime('now') WHERE id=?").bind(status, status === "error" ? null : target, error, row.id).run();
-    out.push({ id: row.id, record: recId, target: target, status: status, error: error });
-  }
-  return out;
-}
-// ZENODO-READ-ONLINE-1 seeding: the queue fills itself from LIVING_PAPER.papers, so no session loads rows by hand and a
-// paper published later is picked up too. A published paper with a slug and a Zenodo DOI whose record maps to exactly
-// one page gets one pending related row, once (records already queued are skipped; a record shared by several pages,
-// such as the three continuum-trilogy pages, is left alone). RELATED_SKIP_SLUGS names pages that must not be linked yet
-// (#1843: a page still showing a transcript body instead of the paper). Runs in the first quarter of each hour and
-// inserts at most RELATED_SEED_PER_RUN rows per run.
-var RELATED_SEED_PER_RUN = 200;
-var RELATED_SKIP_SLUGS = ["adelic-constraints-on-quantum-field-theory-phase-1"];
-async function seedRelatedLinks(env, limit) {
-  if (!env.LIVING_PAPER || !env.QNFO_AUDIT) return { seeded: 0, skipped: "no binding" };
-  var rs = await env.LIVING_PAPER.prepare("SELECT slug, CAST(replace(COALESCE(NULLIF(zenodo_doi,''), doi), '10.5281/zenodo.', '') AS INTEGER) AS rec FROM papers WHERE COALESCE(status,'published')='published' AND COALESCE(NULLIF(zenodo_doi,''), doi) LIKE '10.5281/zenodo.%' AND slug IS NOT NULL AND slug <> '' ORDER BY rec").all();
-  var rows = (rs && rs.results) || [];
-  var bySlug = {}, count = {};
-  for (var i = 0; i < rows.length; i++) {
-    var rec = Number(rows[i].rec), slug = String(rows[i].slug || "");
-    if (!(rec > 0) || !RELATED_SLUG_RE.test(slug)) continue;
-    count[rec] = (count[rec] || 0) + 1;
-    if (!bySlug[rec]) bySlug[rec] = slug;
-  }
-  var recs = Object.keys(count).map(Number).sort(function(a, b) { return a - b; });
-  var want = recs.filter(function(r) { return count[r] === 1 && RELATED_SKIP_SLUGS.indexOf(bySlug[r]) < 0; });
-  var have = await env.QNFO_AUDIT.prepare("SELECT record_id FROM zenodo_version_requests WHERE kind='related'").all();
-  var seen = {};
-  var hv = (have && have.results) || [];
-  for (var h = 0; h < hv.length; h++) seen[Number(hv[h].record_id)] = 1;
-  var out = { candidates: want.length, shared: recs.length - recs.filter(function(r) { return count[r] === 1; }).length, existing: 0, seeded: 0 };
-  var max = limit || RELATED_SEED_PER_RUN;
-  for (var k = 0; k < want.length && out.seeded < max; k++) {
-    if (seen[want[k]]) { out.existing++; continue; }
-    await env.QNFO_AUDIT.prepare("INSERT INTO zenodo_version_requests (record_id, files_json, metadata_json, kind, requested_by, note) VALUES (?1, '[]', ?2, 'related', 'qnfo-research-exec/seedRelatedLinks', 'ZENODO-READ-ONLINE-1 #1907')").bind(want[k], JSON.stringify({ related_link: { slug: bySlug[want[k]] } })).run();
-    out.seeded++;
-  }
-  return out;
-}
-// ZENODO-READ-ONLINE-1 closing probe (CLOUD-ONLY-VERIFICATION-1): once no related row is pending or publishing and none is
-// in error, 20 random published/unchanged rows are re-read on the PUBLIC records API; all listing the page URL as
-// isVariantFormOf closes the issue with that measurement as close_evidence (evidence row first, then the close, per
-// METADATA-VERIFY-ORDER-1). Otherwise the counts are logged and the issue stays open.
-async function verifyRelatedBackfill(env, fetchImpl) {
-  var f = fetchImpl || fetch;
-  var db = env.QNFO_AUDIT;
-  if (!db) return null;
-  var iss = await db.prepare("SELECT id FROM agent_issues WHERE status='open' AND title LIKE ? ORDER BY id ASC LIMIT 1").bind(RELATED_ISSUE_PREFIX + "%").first();
-  if (!iss) return null;
-  var c = await db.prepare("SELECT SUM(status IN ('pending','publishing')) AS busy, SUM(status='error') AS err, SUM(status='published') AS pub, SUM(status='unchanged') AS unch, COUNT(*) AS n FROM zenodo_version_requests WHERE kind='related'").first();
-  if (!c || !Number(c.n) || Number(c.busy)) return { issue: iss.id, waiting: Number(c && c.busy || 0) };
-  var rs = await db.prepare("SELECT record_id, result_record_id, metadata_json FROM zenodo_version_requests WHERE kind='related' AND status IN ('published','unchanged') ORDER BY random() LIMIT 20").all();
-  var sample = (rs && rs.results) || [], pass = 0, fails = [];
-  for (var i = 0; i < sample.length; i++) {
-    var s = sample[i], ok = false, rid = Number(s.result_record_id || s.record_id);
-    try {
-      var want = relatedLinkUrl(String((JSON.parse(s.metadata_json || "{}").related_link || {}).slug || ""));
-      var r = await f("https://zenodo.org/api/records/" + rid, { headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
-      var j = r && r.ok ? await r.json() : null;
-      ok = ((j && j.metadata && j.metadata.related_identifiers) || []).some(function(x) {
-        return relatedUrlNorm(x && x.identifier) === relatedUrlNorm(want) && String(x && x.relation || "") === "isVariantFormOf";
-      });
-    } catch (e) { ok = false; }
-    if (ok) pass++; else fails.push(rid);
-  }
-  var summary = "rows=" + c.n + " published=" + (c.pub || 0) + " unchanged=" + (c.unch || 0) + " error=" + (c.err || 0) + "; public re-read " + pass + "/" + sample.length + " list the papers.qnfo.org page as isVariantFormOf" + (fails.length ? " (failed: " + fails.slice(0, 10).join(",") + ")" : "");
-  if (Number(c.err) || fails.length || !sample.length) return { issue: iss.id, closed: false, summary: summary };
-  var ev = "ZENODO-READ-ONLINE-1 verify " + new Date().toISOString() + ": " + summary;
-  await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'ZENODO-READ-ONLINE-1', 'closed', 'qnfo-research-exec', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(iss.id, ev).run();
-  await db.prepare("UPDATE agent_issues SET status='closed', updated_at=? WHERE id=? AND status='open'").bind(Date.now(), iss.id).run();
-  return { issue: iss.id, closed: true, summary: summary };
-}
-// METADATA-BACKFILL-VERIFY-1 (2026-10-01, CLOUD-ONLY-VERIFICATION-1): the backfill's open agent_issues row
-// ('ZENODO-METADATA-EDITS-1 backfill...') closes itself instead of waiting for a session. Once no metadata row is pending
-// or publishing, it re-reads up to 20 random published/unchanged records on the PUBLIC records API and checks that the
-// ORCID-matched creator carries the patch's name and affiliation. All pass and no error rows: the issue is closed with
-// that measurement as close_evidence. Otherwise it stays open and the counts are logged (at most hourly).
-var BACKFILL_ISSUE_PREFIX = "ZENODO-METADATA-EDITS-1 backfill";
-async function verifyMetadataBackfill(env, fetchImpl) {
-  var f = fetchImpl || fetch;
-  var db = env.QNFO_AUDIT;
-  if (!db) return null;
-  var iss = await db.prepare("SELECT id FROM agent_issues WHERE status='open' AND title LIKE ? ORDER BY id ASC LIMIT 1").bind(BACKFILL_ISSUE_PREFIX + "%").first();
-  if (!iss) return null;
-  var c = await db.prepare("SELECT SUM(status IN ('pending','publishing')) AS busy, SUM(status='error') AS err, SUM(status='published') AS pub, SUM(status='unchanged') AS unch, COUNT(*) AS n FROM zenodo_version_requests WHERE kind='metadata'").first();
-  if (!c || !Number(c.n) || Number(c.busy)) return { issue: iss.id, waiting: Number(c && c.busy || 0) };
-  var rs = await db.prepare("SELECT record_id, metadata_json FROM zenodo_version_requests WHERE kind='metadata' AND status IN ('published','unchanged') ORDER BY random() LIMIT 20").all();
-  var sample = (rs && rs.results) || [], pass = 0, fails = [];
-  for (var i = 0; i < sample.length; i++) {
-    var s = sample[i], ok = false;
-    try {
-      var want = JSON.parse(s.metadata_json || "{}").creator_by_orcid || {};
-      var r = await f("https://zenodo.org/api/records/" + Number(s.record_id), { headers: { "User-Agent": "qnfo-research-exec/" + VERSION } });
-      var j = r && r.ok ? await r.json() : null;
-      var cr = ((j && j.metadata && j.metadata.creators) || []).filter(function(x) { return String(x.orcid || "").replace(/^https?:\/\/orcid\.org\//, "") === want.orcid; })[0];
-      ok = !!cr && (typeof want.affiliation !== "string" || cr.affiliation === want.affiliation) && (typeof want.name !== "string" || cr.name === want.name);
-    } catch (e) { ok = false; }
-    if (ok) pass++; else fails.push(Number(s.record_id));
-  }
-  var summary = "rows=" + c.n + " published=" + (c.pub || 0) + " unchanged=" + (c.unch || 0) + " error=" + (c.err || 0) + "; public re-read " + pass + "/" + sample.length + " carry the patched creator" + (fails.length ? " (failed: " + fails.slice(0, 10).join(",") + ")" : "");
-  if (Number(c.err) || fails.length || !sample.length) return { issue: iss.id, closed: false, summary: summary };
-  var ev = "METADATA-BACKFILL-VERIFY-1 " + new Date().toISOString() + ": " + summary;
-  // METADATA-VERIFY-ORDER-1 (0.9.54, #1732): evidence first, then the close. qnfo-audit's issue_close_evidence_required
-  // trigger aborts an agent_issues close unless issue_triage already holds close_evidence, and #1732 has an AUTOTRIAGE row
-  // with none, so the old order (close, then evidence) threw 'close-without-evidence' and the backfill could never close.
-  await db.prepare("INSERT INTO issue_triage (issue_id, rc, triage_state, owner, sla_due_at, close_evidence) VALUES (?1, 'METADATA-BACKFILL-VERIFY-1', 'closed', 'qnfo-research-exec', datetime('now'), ?2) ON CONFLICT(issue_id) DO UPDATE SET close_evidence=excluded.close_evidence, triage_state='closed'").bind(iss.id, ev).run();
-  await db.prepare("UPDATE agent_issues SET status='closed', updated_at=? WHERE id=? AND status='open'").bind(Date.now(), iss.id).run();
-  return { issue: iss.id, closed: true, summary: summary };
-}
-async function drainVersionRequests(env) {
-  if (!env.ZENODO_TOKEN || !env.QNFO_AUDIT) return null;
-  var row = await env.QNFO_AUDIT.prepare("SELECT * FROM zenodo_version_requests WHERE kind='version' AND status='pending' ORDER BY id ASC LIMIT 1").first();
-  if (!row) return null;
-  var claim = await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status='publishing', updated_at=datetime('now') WHERE id=? AND status='pending'").bind(row.id).run();
-  if (!claim || !claim.meta || claim.meta.changes !== 1) return null;
-  var draftId = null;
-  var finish = async function(status, doi, recordId, error) {
-    await env.QNFO_AUDIT.prepare("UPDATE zenodo_version_requests SET status=?, result_doi=?, result_record_id=?, draft_id=?, error=?, updated_at=datetime('now') WHERE id=?").bind(status, doi, recordId, draftId, error, row.id).run();
-    return { id: row.id, status, doi, error };
-  };
-  try {
-    var files = JSON.parse(row.files_json || "null");
-    var bad = validateVersionFiles(files);
-    if (bad) return await finish("error", null, null, bad);
-    var meta = JSON.parse(row.metadata_json || "{}");
-    if (!meta || typeof meta !== "object" || Array.isArray(meta)) return await finish("error", null, null, "metadata_json must be an object");
-    var nv = await zenodo(env, "POST", "/" + Number(row.record_id) + "/actions/newversion", {});
-    var latest = nv && nv.links && nv.links.latest_draft;
-    draftId = latest ? String(latest).split("/").pop() : null;
-    if (!draftId) return await finish("error", null, null, "newversion failed: " + JSON.stringify(nv).slice(0, 250));
-    var draft = await zenodo(env, "GET", "/" + draftId);
-    if (!draft || draft._status || !draft.links || !draft.links.bucket) return await finish("error", null, null, "draft read failed: " + JSON.stringify(draft).slice(0, 250));
-    var carried = await zenodo(env, "GET", "/" + draftId + "/files");
-    if (Array.isArray(carried)) {
-      for (var ci = 0; ci < carried.length; ci++) {
-        var del = await fetch(carried[ci].links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE", headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
-        if (!del.ok) return await finish("error", null, null, "delete of carried file " + carried[ci].filename + " failed: " + del.status);
-      }
-    }
-    for (var fi = 0; fi < files.length; fi++) {
-      var src = await fetch(files[fi].url, { headers: { "User-Agent": "QNFO-research-exec/" + VERSION } });
-      if (!src.ok) return await finish("error", null, null, "fetch " + files[fi].url + ": " + src.status);
-      var buf = await src.arrayBuffer();
-      if (!buf || buf.byteLength === 0) return await finish("error", null, null, "empty file " + files[fi].name);
-      var up = await fetch(draft.links.bucket + "/" + encodeURIComponent(files[fi].name) + "?access_token=" + env.ZENODO_TOKEN, { method: "PUT", headers: { "Content-Type": "application/octet-stream", "User-Agent": "QNFO-research-exec/" + VERSION }, body: buf });
-      if (!up.ok) return await finish("error", null, null, "upload " + files[fi].name + ": " + up.status);
-    }
-    var md = Object.assign({}, draft.metadata || {}, meta);
-    delete md.doi;
-    if (!meta.publication_date) md.publication_date = new Date().toISOString().slice(0, 10);
-    var put = await zenodo(env, "PUT", "/" + draftId, { metadata: md });
-    if (!put || put._status) return await finish("error", null, null, "metadata put failed: " + JSON.stringify(put).slice(0, 250));
-    var pub = await zenodo(env, "POST", "/" + draftId + "/actions/publish", {});
-    if (!pub || !pub.doi) return await finish("error", null, null, "publish failed: " + JSON.stringify(pub).slice(0, 250));
-    return await finish("published", pub.doi, pub.id || null, null);
-  } catch (e) {
-    return await finish("error", null, null, String(e && e.message || e).slice(0, 300));
-  }
-}
 // ---- RUN-INTERNAL-1:BEGIN (0.9.54, #1783) ----
 function isPublicHost(h) { return /\.workers\.dev$|(^|\.)qnfo\.org$/i.test(String(h || "")); }
 // ---- RUN-INTERNAL-1:END ----
@@ -3775,7 +2986,7 @@ function isPublicHost(h) { return /\.workers\.dev$|(^|\.)qnfo\.org$/i.test(Strin
 // calls are attributed to qnfo-paper-reviser. It runs on the :30 tick of every fourth UTC hour (its old "37 */4").
 // Public: GET /reviser/health. Its /run/* and /debug/* routes answer only a service binding whose props name the
 // member (props.member = "qnfo-paper-reviser", props.caller = qnfo-*); the props stand in for X-Reviser-Token (#1703).
-var REVISER_VERSION = "1.3.0-folded";
+var REVISER_VERSION = "1.3.1-folded";
 var REVISER_MEMBER = "qnfo-paper-reviser";
 var reviserMod = (function () {
 var __defProp = Object.defineProperty;
@@ -3797,21 +3008,6 @@ function authorized(request, env) {
   return (request.headers.get("X-Reviser-Token") || "") === env.REVISER_TOKEN;
 }
 __name(authorized, "authorized");
-function recIdOf(doi) {
-  const m = String(doi || "").match(/zenodo\.(\d+)/);
-  return m ? m[1] : null;
-}
-__name(recIdOf, "recIdOf");
-async function zenodoGet(path) {
-  const r = await fetch("https://zenodo.org/api/records" + path, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(3e4) });
-  if (!r.ok) return { _status: r.status };
-  try {
-    return await r.json();
-  } catch (e) {
-    return { _status: r.status, _parseError: e.message };
-  }
-}
-__name(zenodoGet, "zenodoGet");
 function bibEsc(s) {
   return String(s || "").replace(/[{}]/g, function(c) {
     return c === "{" ? "\\{" : "\\}";
@@ -3882,40 +3078,15 @@ function regenerateProvenance(bodyMd, title, slug) {
     const id = [p.arxiv ? "arXiv:" + p.arxiv : null, p.doi ? "DOI " + p.doi : null].filter(Boolean).join("; ") || "no machine identifier present";
     return i + 1 + ". " + p.authors + " (" + p.year + "). " + p.title + ". Source: " + p.rest + " | Identifier: " + id;
   }).join("\n") : "No numbered references section found in the body.");
-  const readme = "# " + title + "\n\nAuthor: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)\nLicense: QNFO-ULA v2.0, CC BY-NC-SA 4.0 with the QNFO Supplemental Terms (see LICENSE)\n\nHow to cite: use the deposit record DOI.\nFiles in this deposit:\n- " + slug + ".md - full paper (source)\n- references.bib - BibTeX of the cited references\n- citation-audit.md - reference verification log\n- PROJECT-PLAN.md - goal and claim\n- README.md - this file\n- LICENSE - QNFO-ULA v2.0\n\nProvenance: produced by the QNFO autonomous research pipeline.\n";
-  const plan = "# Project plan\n\nGoal: an open, self-contained preprint with real, verifiable references and no fabricated content.\n- Claim: stated in the record body.\n- Research/due-diligence: prior-work context is stated in the body; every reference is real (arXiv ID or DOI) and non-invented.\n- Deposit: paper, references.bib, citation-audit.md, README.md, PROJECT-PLAN.md, LICENSE.\n- License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 base).\n";
+  const readme = "# " + title + "\n\nAuthor: Rowan Brad Quni-Gudzinas (ORCID 0009-0002-4317-5604)\nLicense: QNFO-ULA v2.0, CC BY-NC-SA 4.0 with the QNFO Supplemental Terms (see LICENSE)\n\nHow to cite: use the paper URL on papers.qnfo.org.\nFiles in this package:\n- " + slug + ".md - full paper (source)\n- references.bib - BibTeX of the cited references\n- citation-audit.md - reference verification log\n- PROJECT-PLAN.md - goal and claim\n- README.md - this file\n- LICENSE - QNFO-ULA v2.0\n\nProvenance: produced by the QNFO autonomous research pipeline.\n";
+  const plan = "# Project plan\n\nGoal: an open, self-contained preprint with real, verifiable references and no fabricated content.\n- Claim: stated in the record body.\n- Research/due-diligence: prior-work context is stated in the body; every reference is real (arXiv ID or DOI) and non-invented.\n- Package: paper, references.bib, citation-audit.md, README.md, PROJECT-PLAN.md, LICENSE.\n- License: QNFO-ULA v2.0 (CC BY-NC-SA 4.0 base).\n";
   const lic = "SPDX-License-Identifier: LicenseRef-QNFO-ULA-2.0\n\nThis work is licensed under the QNFO Unified License Agreement, version 2.0 (QNFO-ULA): the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0) together with the QNFO Supplemental Terms.\nYou may share and adapt it for non-commercial purposes with credit, under the same terms. Commercial use needs a separate agreement: rowan.quni@qnfo.org.\n\nFull text: https://legal.qnfo.org/\nCC BY-NC-SA 4.0 legal code: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode\n"; // LICENSE-ONE-1 (2026-10-02): new deposits under QNFO-ULA v2.0
   return { references_bib: bib, citation_audit: audit, readme_md: readme, project_plan: plan, license_md: lic };
 }
 __name(regenerateProvenance, "regenerateProvenance");
-async function downloadProvenance(recId) {
-  const out = { references_bib: null, citation_audit: null, due_diligence: null, project_plan: null, readme_md: null, license_md: null, verify_script: null, verify_output: null };
-  const rec = await zenodoGet("/" + recId);
-  if (!rec || rec._status) return out;
-  const files = Array.isArray(rec.files) ? rec.files : [];
-  for (const f of files) {
-    const name = f.key || f.filename || "";
-    const contentUrl = f.links && (f.links.content || f.links.self);
-    if (!contentUrl) continue;
-    const isProv = PROV_FILES.indexOf(name) >= 0;
-    const isVerify = /verify/i.test(name);
-    if (!isProv && !isVerify) continue;
-    try {
-      const r = await fetch(contentUrl, { headers: { "User-Agent": UA } });
-      if (!r.ok) continue;
-      const text = await r.text();
-      if (name === "references.bib") out.references_bib = text;
-      else if (name === "citation-audit.md") out.citation_audit = text;
-      else if (name === "DUE-DILIGENCE.md") out.due_diligence = text;
-      else if (name === "PROJECT-PLAN.md") out.project_plan = text;
-      else if (name === "README.md") out.readme_md = text;
-      else if (name === "LICENSE") out.license_md = text;
-      else if (isVerify && !out.verify_script && /\.(py|sh)$/i.test(name)) out.verify_script = text;
-      else if (isVerify && !out.verify_output && /\.(txt|out|log)$/i.test(name)) out.verify_output = text;
-    } catch (e) {
-    }
-  }
-  return out;
+function downloadProvenance() {
+  // NOZ-DOI-1: there is no external deposit to download from; the provenance files are regenerated from the paper body.
+  return { references_bib: null, citation_audit: null, due_diligence: null, project_plan: null, readme_md: null, license_md: null, verify_script: null, verify_output: null };
 }
 __name(downloadProvenance, "downloadProvenance");
 async function aiText(env, prompt, model, maxTokens) {
@@ -3956,7 +3127,7 @@ function parseJsonObject(text) {
 }
 __name(parseJsonObject, "parseJsonObject");
 async function selectCandidates(env, limit) {
-  const rows = await env.PAPERS_DB.prepare("SELECT slug, doi, zenodo_doi, title, version, body_md, paper_type, created_at FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != '' ORDER BY CASE WHEN created_at >= datetime('now','-7 days') THEN 0 ELSE 1 END, created_at ASC LIMIT 60").all();
+  const rows = await env.PAPERS_DB.prepare("SELECT slug, title, version, body_md, paper_type, created_at FROM papers WHERE status='published' ORDER BY CASE WHEN created_at >= datetime('now','-7 days') THEN 0 ELSE 1 END, created_at ASC LIMIT 60").all();
   const all = rows && rows.results || [];
   // id 132 (2026-09-08): terminal dispositions only; every status below is terminal for the auto-loop.
   // "needs-substantive-revision" and "stub-fragment" defer to the substantive-remediation loop (id 133).
@@ -3972,7 +3143,7 @@ async function selectCandidates(env, limit) {
   for (const p of all) {
     if (doneSet.has(p.slug) || pendSet.has(p.slug)) continue;
     if (String(p.body_md || "").length < 8000) {
-      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, 'stub-fragment', 'auto-skip: body < 8000 chars; defers to substantive-remediation loop', datetime('now'), datetime('now'))").bind(p.slug, p.doi, p.title).run();
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, 'stub-fragment', 'auto-skip: body < 8000 chars; defers to substantive-remediation loop', datetime('now'), datetime('now'))").bind(p.slug, p.slug, p.title).run();
       continue;
     }
     out.push(p);
@@ -3981,29 +3152,17 @@ async function selectCandidates(env, limit) {
   return out;
 }
 __name(selectCandidates, "selectCandidates");
-async function verifySingleVersion(env, recId) {
-  const rec = await zenodoGet("/" + recId);
-  if (!rec || rec._status) return { count: 1, conceptrecid: null, latestDoi: null, uncertain: true };
-  const conceptrecid = rec.conceptrecid || null;
-  let count = 1;
-  let latestDoi = rec.doi || null;
-  try {
-    const v = await zenodoGet("/" + recId + "/versions?size=5");
-    const hits = v && v.hits && v.hits.hits || [];
-    if (hits.length) {
-      count = hits.length;
-      latestDoi = hits[hits.length - 1].doi || rec.doi || null;
-    }
-  } catch (e) {
-  }
-  return { count, conceptrecid, latestDoi, uncertain: false };
+function revisionCount(paper) {
+  // NOZ-DOI-1: a paper already at version 2 or later has been revised once (the revision publish bumps to 2.x); no external record is consulted.
+  const major = parseInt(String(paper && paper.version || "1").replace(/^v/i, ""), 10);
+  return { count: isFinite(major) && major >= 2 ? major : 1 };
 }
-__name(verifySingleVersion, "verifySingleVersion");
+__name(revisionCount, "revisionCount");
 // ACCURACY-GROUND-1 (owner directive 2026-10-10: published or sent text is 100% accurate; every claim verifiable against supplied
 // source text): deterministic check that the figures, years, links and capitalised names in generated text occur in the source
 // text the model was given. Returns problem strings; an empty list means every one was found. Same method as
 // q08-signal-engine groundingProblems (Q08-VERIFY-1). A model's own recollection is never a source.
-var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "zenodo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 function groundWordSet(text) {
   var set = {};
   String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
@@ -4204,7 +3363,7 @@ __name(clampConfidence, "clampConfidence");
 async function recordFlaggedErrata(env, paper, doi, high, meta) {
   meta = meta || {};
   const ref = doi || paper.slug;
-  const key = (recIdOf(doi) || String(paper.slug || "")).slice(0, 40);
+  const key = String(paper.slug || "").slice(0, 40);
   const now = new Date().toISOString();
   const ids = [];
   let recorded = 0;
@@ -4231,19 +3390,18 @@ async function recordFlaggedErrata(env, paper, doi, high, meta) {
 __name(recordFlaggedErrata, "recordFlaggedErrata");
 async function processPaper(env, paper, mode, runId) {
   const dry = mode === "dry";
-  const doi = paper.zenodo_doi || paper.doi || "";
-  const recId = recIdOf(doi);
-  if (!recId) {
-    return { slug: paper.slug, skipped: true, reason: "no zenodo recid", doi };
+  const doi = paper.slug || ""; // NOZ-DOI-1: the paper key in logs, queues and errata is the slug, never a DOI value
+  if (!doi) {
+    return { slug: paper.slug, skipped: true, reason: "no slug", doi };
   }
-  const v = await verifySingleVersion(env, recId);
+  const v = revisionCount(paper);
   if (v.count >= 2) {
     if (!dry) {
-      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, 'already-revised', ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify({ zenodo_versions: v.count })).run();
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, 'already-revised', ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, JSON.stringify({ paper_versions: v.count })).run();
     }
     return { slug: paper.slug, skipped: true, reason: "already " + v.count + " versions", doi };
   }
-  const prov = await downloadProvenance(recId);
+  const prov = downloadProvenance();
   let findings = { issues: [] };
   let auditParsed = false;
   let rawAuditLen = 0;
@@ -4291,7 +3449,7 @@ async function processPaper(env, paper, mode, runId) {
   var isStub = bodyLen < 1500;
   if (isStub || noRealIssues) {
     if (!dry) {
-      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, isStub ? "stub-fragment" : "needs-substantive-revision", JSON.stringify({ zenodo_versions: v.count, skipped: isStub ? "stub-or-fragment" : "no-genuine-issues", body_len: bodyLen })).run();
+      await env.WATCH_DB.prepare("INSERT INTO paper_revision_log (slug, doi, title, version_from, status, audit_summary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))").bind(paper.slug, doi, paper.title, paper.version, isStub ? "stub-fragment" : "needs-substantive-revision", JSON.stringify({ paper_versions: v.count, skipped: isStub ? "stub-or-fragment" : "no-genuine-issues", body_len: bodyLen })).run();
     }
     return { slug: paper.slug, skipped: true, reason: isStub ? "stub/fragment body" : "audit found no genuine issues (needs substantive revision)", issues: auditSummary, body_len: bodyLen, doi };
   }
@@ -4358,10 +3516,10 @@ async function runOnce(env, mode) {
 }
 __name(runOnce, "runOnce");
 async function statusSweep(env) {
-  const total = await env.PAPERS_DB.prepare("SELECT COUNT(*) AS n FROM papers WHERE status='published' AND zenodo_doi IS NOT NULL AND zenodo_doi != ''").first();
+  const total = await env.PAPERS_DB.prepare("SELECT COUNT(*) AS n FROM papers WHERE status='published'").first();
   const done = await env.WATCH_DB.prepare("SELECT status, COUNT(*) AS n FROM paper_revision_log GROUP BY status").all();
   const pending = await env.WATCH_DB.prepare("SELECT COUNT(*) AS n FROM version_queue WHERE status IN ('drafted','publishing')").first();
-  return { worker: "qnfo-paper-reviser", version: VERSION, published_zenodo_total: total && total.n || 0, revision_log: done && done.results || [], pending_version_queue: pending && pending.n || 0 };
+  return { worker: "qnfo-paper-reviser", version: VERSION, published_total: total && total.n || 0, revision_log: done && done.results || [], pending_version_queue: pending && pending.n || 0 };
 }
 __name(statusSweep, "statusSweep");
 var worker_default = {
@@ -4380,7 +3538,7 @@ var worker_default = {
     if (url.pathname === "/debug/audit") {
       const slug = url.searchParams.get("slug") || "";
       try {
-        const p = await env.PAPERS_DB.prepare("SELECT slug, doi, zenodo_doi, title, version, body_md FROM papers WHERE slug=? LIMIT 1").bind(slug).first();
+        const p = await env.PAPERS_DB.prepare("SELECT slug, title, version, body_md FROM papers WHERE slug=? LIMIT 1").bind(slug).first();
         if (!p) return json({ ok: false, error: "no paper for slug " + slug }, 404);
         const t = await aiText(env, auditPrompt(p));
         return json({ ok: true, slug, rawLen: t.length, raw: t.slice(0, 3e3), parsed: parseJsonObject(t) });
@@ -4432,10 +3590,10 @@ function reviserMemberCall(ctx) { var p = ctx && ctx.props; return !!(p && p.mem
 // errata-hub (errata watch, respond and publish, itself the host of three folded members) runs here as a member: its code
 // below is the errata-hub bundle unchanged except its node:buffer imports (one host import, __ErrataBuffer), its VERSION
 // line and its export. PAPERS_DB maps onto LIVING_PAPER, WATCH_DB and AUDIT_DB onto QNFO_AUDIT; GRAPH_DB, MIRROR, AI,
-// BROWSER, SEND_EMAIL and ZENODO_TOKEN are the host's own. Its three jobs keep their minutes on this */15 tick (:00 watch,
+// BROWSER and SEND_EMAIL are the host's own. Its three jobs keep their minutes on this */15 tick (:00 watch,
 // :15 respond, :30 publish), each awaited. Public: GET /errata-hub/health. Every other route of it answers only a service
 // binding whose props name the member (props.member = "errata-hub", props.caller = qnfo-*), in place of ERRATA_TOKEN.
-var ERRATA_VERSION = "1.5.0-folded";
+var ERRATA_VERSION = "1.5.2-folded";
 var ERRATA_MEMBER = "errata-hub";
 var errataMod = (function () {
 var Buffer2 = __ErrataBuffer, Buffer3 = __ErrataBuffer;
@@ -4444,9 +3602,9 @@ var VERSION = ERRATA_VERSION; // 1.4.1 WORKERS-AI-ATTRIBUTION-2 (#1997): env.AI 
 // so opsDeploy refused every errata-hub deploy with FM7-HEALTH-VERSION-PARITY-1 (canonical-deploy run 36802041421:
 // 1.1.1 with the internal errata intake never went live, and errata-hub stayed NOT_DEPLOYED). Each member's version
 // is now a named constant referenced by its /health and run reports.
-var WATCH_VERSION = "0.2.5-ground";
-var RESPOND_VERSION = "0.5.0-ground";
-var PUBLISH_VERSION = "0.8.0-publish-gate";
+var WATCH_VERSION = "0.2.6-doi-scrub";
+var RESPOND_VERSION = "0.5.1-doi-scrub";
+var PUBLISH_VERSION = "0.8.1-doi-scrub";
 // ERRATA-HUB-CRONS-UNDECLARED-1 (2026-10-02, #1747, pillar research): wrangler.toml now declares the three hourly members
 // (watch :00, respond :15, publish :30). Every cron tick upserts qnfo-audit errata_watch key 'tick:<member>' with its
 // outcome, so a member that stops running is visible in D1 (qnfo-fleet-dashboard WATCHMAKER_OPS reads $.last_ok). A
@@ -4527,9 +3685,10 @@ async function runCheck(env, mode) {
     }
     if (cls && cls.errata) {
       let doi = cls.paper_doi && ((e.subject || "") + " " + (e.body_text || "")).toLowerCase().indexOf(String(cls.paper_doi).toLowerCase()) >= 0 ? cls.paper_doi : null; /* ERRATA-GROUND-1: a DOI the model names must occur in the email */
+      if (doi && /10\.5281\/|z[e]nodo/i.test(doi)) doi = null; /* NOZ-DOI-1: a dead-registrar DOI value is treated as absent */
       if (!doi) {
-        const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/10\.5281\/zenodo\.\d+/);
-        if (dm) doi = dm[0];
+        const dm = ((e.subject || "") + " " + (e.body_text || "")).match(/papers\.qnfo\.org\/papers\/([a-z0-9][a-z0-9-]*)/);
+        if (dm) doi = dm[1]; /* NOZ-DOI-1: the paper's slug is the join key; respond resolves it */
       }
       if (!dry) {
         await db.prepare("INSERT OR IGNORE INTO errata_queue (email_id, sender, subject, paper_doi, claim, confidence, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'detected', datetime('now'), datetime('now'))").bind(e.id, e.sender, e.subject, doi, cls.claim || null, cls.confidence || 0).run();
@@ -4600,36 +3759,14 @@ function authorized(request, env) {
   return (request.headers.get("X-Erratta-Token") || "") === env.ERRATA_TOKEN;
 }
 __name(authorized, "authorized");
-function doiToRecordId(doi) {
-  const m = (doi || "").match(/zenodo\.(\d+)/);
-  return m ? m[1] : null;
-}
-__name(doiToRecordId, "doiToRecordId");
 async function resolvePaper(env, doi) {
-  const base = "SELECT slug, title, version, doi, zenodo_doi, body_md FROM papers WHERE doi = ?1 OR zenodo_doi = ?1 LIMIT 1";
+  // NOZ-DOI-1: lookup by the stored join key or the slug; no external record service is called.
+  const base = "SELECT slug, title, version, doi, zenodo_doi, body_md FROM papers WHERE doi = ?1 OR zenodo_doi = ?1 OR slug = ?1 LIMIT 1";
   const row = await env.PAPERS_DB.prepare(base).bind(doi).first();
-  if (row) return row;
-  try {
-    const recId = doiToRecordId(doi);
-    if (!recId) return null;
-    const vresp = await fetch("https://zenodo.org/api/records/" + recId + "/versions?size=10", { headers: { "User-Agent": "QNFO-errata-respond/0.4" } }).then(function(r) {
-      return r.json();
-    });
-    const hits = vresp && vresp.hits && vresp.hits.hits || [];
-    hits.sort(function(a, b) {
-      return (b.created || "").localeCompare(a.created || "");
-    });
-    if (hits.length) {
-      const headDoi = hits[0].doi || null;
-      if (headDoi) {
-        const row2 = await env.PAPERS_DB.prepare(base).bind(headDoi).first();
-        if (row2) return row2;
-      }
-    }
-  } catch (e) {
-  }
-  return null;
+  return row || null;
 }
+var DEAD_DOI = /10\.5281\/|z[e]nodo/i; // NOZ-DOI-1: a dead-registrar DOI value is treated as absent in any emitted text
+function safeDoi(d) { return d && !DEAD_DOI.test(String(d)) ? String(d) : ""; }
 __name(resolvePaper, "resolvePaper");
 // ERRATA-JUDGE-1 (docs/ENSEMBLE-POLICY.md). The drafting model's own risk flag is a same-family opinion. Before a correction can stay
 // "low" (the only value errata-publish sends), a small model from a different family (google, not zai) answers two questions about
@@ -4680,7 +3817,7 @@ async function logJudge(env, queueId, j) {
 // source text): deterministic check that the figures, years, links and capitalised names in generated text occur in the source
 // text the model was given. Returns problem strings; an empty list means every one was found. Same method as
 // q08-signal-engine groundingProblems (Q08-VERIFY-1). A model's own recollection is never a source.
-var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "zenodo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+var GROUND_ALLOW = ["dr", "prof", "mr", "ms", "mrs", "qnfo", "doi", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 function groundWordSet(text) {
   var set = {};
   String(text || "").toLowerCase().replace(/[‘’]/g, "'").replace(/[a-z0-9][a-z0-9'.-]*/g, function (w) {
@@ -4855,11 +3992,11 @@ async function notifyUser(env, paper, corr, action) {
   // SUPPRESSION-1 (2026-09-22): honour owner opt-out before emailing the receipt.
   try { if (env.AUDIT_DB) { const _s = await env.AUDIT_DB.prepare("SELECT 1 FROM email_suppression WHERE lower(email)='rwnquni@outlook.com'").first(); if (_s) return { skipped: "owner opted out" }; } } catch (e) {}
   try {
-    const subject = "QNFO errata drafted: " + (paper.slug || paper.doi || "");
+    const subject = "QNFO errata drafted: " + (paper.slug || safeDoi(paper.doi) || "");
     const text = [
       "An inbound email requested a correction to a QNFO paper, and a correction was drafted automatically by an AI model (" + MODEL + ", cloud pipeline).",
       "",
-      "Paper: " + (paper.slug || "") + " (" + (paper.doi || "") + ")",
+      "Paper: " + (paper.slug || "") + (safeDoi(paper.doi) ? " (" + safeDoi(paper.doi) + ")" : ""),
       "Risk: " + (corr.risk || "high"),
       "Cross-family read: " + (corr.judge_note || "(not run: the drafting model already rated it high risk)"),
       "Clarification: " + (corr.clarification || "(none)"),
@@ -4867,7 +4004,7 @@ async function notifyUser(env, paper, corr, action) {
       "Changelog: " + (corr.changelog || "(none)"),
       "New version: " + (corr.version || "(unchanged)"),
       "",
-      "This is an automatic receipt. The staged correction is recorded in D1 (errata_actions). errata-publish sends a low-risk draft to Zenodo only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (default off); until then it is listed as would_publish in errata_watch tick:errata-publish. The errata sender is not emailed."
+      "This is an automatic receipt. The staged correction is recorded in D1 (errata_actions) and listed for review; nothing is published automatically. The errata sender is not emailed."
     ].join("\n");
     await env.SEND_EMAIL.send({ to: "rwnquni@outlook.com", from: "qnfo@qnfo.org", subject, text, html: "<pre>" + text.replace(/</g, "&lt;") + "</pre>" });
     return { sent: true };
@@ -4904,32 +4041,11 @@ var worker_default = {
     if (url.pathname === "/health") {
       return json({ ok: true, worker: "qnfo-errata-respond", version: RESPOND_VERSION, bindings: { ai: !!env.AI, watch: !!env.WATCH_DB, papers: !!env.PAPERS_DB, send_email: !!env.SEND_EMAIL, auth: !!env.ERRATA_TOKEN }, model: MODEL });
     }
-    if (url.pathname === "/debug/zenodo") {
-      const doi = url.searchParams.get("doi") || "";
-      const out = { doi, recId: doiToRecordId(doi) };
-      try {
-        const rec = await fetch("https://zenodo.org/api/records/" + out.recId, { headers: { "User-Agent": "QNFO-errata-respond/0.4" } });
-        out.recStatus = rec.status;
-        const recJson = await rec.json();
-        out.conceptrecid = recJson.conceptrecid;
-        const vresp = await fetch("https://zenodo.org/api/records/" + out.recId + "/versions?size=10", { headers: { "User-Agent": "QNFO-errata-respond/0.4" } });
-        out.versionsStatus = vresp.status;
-        const vJson = await vresp.json();
-        const hits = vJson.hits && vJson.hits.hits || [];
-        out.hits = hits.map(function(h) {
-          return { id: h.id, doi: h.doi, created: h.created };
-        });
-        out.hitsCount = out.hits.length;
-      } catch (e) {
-        out.error = e.message;
-      }
-      return json(out);
-    }
     if (url.pathname === "/debug/resolve") {
       const doi = url.searchParams.get("doi") || "";
       try {
         const paper = await resolvePaper(env, doi);
-        return json({ ok: true, doi, resolved: paper ? { slug: paper.slug, version: paper.version, doi: paper.doi, zenodo_doi: paper.zenodo_doi } : null, method: paper ? paper.doi === doi || paper.zenodo_doi === doi ? "exact" : "concept-head" : null });
+        return json({ ok: true, doi, resolved: paper ? { slug: paper.slug, version: paper.version } : null });
       } catch (e) {
         return json({ ok: false, error: e.message }, 500);
       }
@@ -25766,7 +24882,9 @@ var PUPPETEER_REVISIONS = Object.freeze({
 var puppeteer = new PuppeteerWorkers();
 var { connect, history, launch, limits, sessions, acquire } = puppeteer;
 var puppeteer_cloudflare_default = puppeteer;
-var ZENODO = "https://zenodo.org/api/deposit/depositions";
+// NOZ-DOI-1 (2026-10-10): no external deposit step; a publish re-renders the paper and re-points D1, graph and R2 only, with doi/zenodo_doi/zenodo_url left NULL.
+var DEAD_DOI = /10\.5281\/|z[e]nodo/i;
+function safeDoi(d) { return d && !DEAD_DOI.test(String(d)) ? String(d) : ""; }
 function json(data, status) {
   if (status === void 0) status = 200;
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -25781,13 +24899,6 @@ function authorized(request, env) {
 __name(authorized, "authorized");
 __name2(authorized, "authorized");
 __name22(authorized, "authorized");
-function doiToRecordId(doi) {
-  const m = (doi || "").match(/zenodo\.(\d+)/);
-  return m ? m[1] : null;
-}
-__name(doiToRecordId, "doiToRecordId");
-__name2(doiToRecordId, "doiToRecordId");
-__name22(doiToRecordId, "doiToRecordId");
 function r2Prefix(paper) {
   const raw = paper && (paper.r2_path || paper.r2_key) || "";
   let p = raw.replace(/^qnfo-releases\//, "").replace(/^\/+/, "").replace(/\/+$/, "");
@@ -25876,117 +24987,26 @@ async function renderPdf(env, html) {
 __name(renderPdf, "renderPdf");
 __name2(renderPdf, "renderPdf");
 __name22(renderPdf, "renderPdf");
-async function zenodo(env, path, opts) {
-  const sep = path.indexOf("?") >= 0 ? "&" : "?";
-  const url = ZENODO + path + sep + "access_token=" + env.ZENODO_TOKEN;
-  const headers = { "User-Agent": "QNFO-errata-publish/0.7" };
-  const init = { method: opts && opts.method || "GET", headers };
-  if (opts && opts.jsonBody !== void 0) {
-    headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(opts.jsonBody);
-  }
-  const resp = await fetch(url, init);
-  const text = await resp.text();
-  let d;
-  try {
-    d = JSON.parse(text);
-  } catch (e) {
-    d = { error: text };
-  }
-  if (!resp.ok) throw new Error("zenodo " + resp.status + ": " + text.slice(0, 200));
-  return d;
-}
-__name(zenodo, "zenodo");
-__name2(zenodo, "zenodo");
-__name22(zenodo, "zenodo");
 async function publishNewVersion(env, action, paper) {
-  const recordId = doiToRecordId(paper.doi || action.paper_doi);
-  if (!recordId) throw new Error("cannot derive record id from " + (paper.doi || action.paper_doi));
-  const nv = await zenodo(env, "/" + recordId + "/actions/newversion", { method: "POST" });
-  const draftId = nv.id;
-  const slug = paper.slug || "paper";
-  const mainNames = [slug + ".md", slug + ".html", slug + ".pdf"];
-  const files = nv.files || [];
-  let deletedCount = 0;
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
-    const name = f.filename || "";
-    if (mainNames.indexOf(name) >= 0) {
-      const dr = await fetch(f.links.self + "?access_token=" + env.ZENODO_TOKEN, { method: "DELETE" });
-      if (!dr.ok) throw new Error("delete failed for " + name + ": " + dr.status);
-      deletedCount++;
-    }
-  }
-  if (deletedCount !== mainNames.length) {
-    throw new Error("delete-count mismatch: deleted " + deletedCount + " of " + mainNames.length + " expected renderings; aborting");
-  }
-  const mdBlob = new Blob([action.corrected_md || ""], { type: "text/markdown" });
-  const fd1 = new FormData();
-  fd1.append("file", mdBlob, slug + ".md");
-  await fetch(ZENODO + "/" + draftId + "/files?access_token=" + env.ZENODO_TOKEN, { method: "POST", body: fd1 });
-  const html = markdownToHtml(action.corrected_md);
-  const fd2 = new FormData();
-  fd2.append("file", new Blob([html], { type: "text/html" }), slug + ".html");
-  await fetch(ZENODO + "/" + draftId + "/files?access_token=" + env.ZENODO_TOKEN, { method: "POST", body: fd2 });
+  const html = markdownToHtml(action.corrected_md || "");
   let pdf = null;
   let pdfError = null;
   try {
     pdf = await renderPdf(env, html);
-    const fd3 = new FormData();
-    fd3.append("file", new Blob([pdf], { type: "application/pdf" }), slug + ".pdf");
-    await fetch(ZENODO + "/" + draftId + "/files?access_token=" + env.ZENODO_TOKEN, { method: "POST", body: fd3 });
   } catch (e) {
     pdfError = e.message;
     console.error("PDF regeneration failed:", e.message);
   }
-  const meta = nv.metadata || {};
-  if (action.version_to) meta.version = action.version_to;
-  const metaClean = {};
-  for (const k in meta) {
-    if (k !== "prereserve_doi" && k !== "doi" && k !== "recid") metaClean[k] = meta[k];
-  }
-  try {
-    const pr = await fetch("https://zenodo.org/api/records/" + recordId, { headers: { "User-Agent": "QNFO-errata-publish/0.7" } }).then(function(r) {
-      return r.json();
-    });
-    const prRels = pr.metadata && pr.metadata.related_identifiers || [];
-    const parentCustom = prRels.filter(function(r) {
-      const rel = (r.relationType || r.relation || "").toLowerCase();
-      return rel.indexOf("version") < 0 && rel.indexOf("obsolet") < 0;
-    }).map(function(r) {
-      return { identifier: r.relatedIdentifier || r.identifier, relation: r.relationType || r.relation, scheme: r.scheme || "doi" };
-    });
-    const draftRels = (metaClean.related_identifiers || []).filter(function(r) {
-      const rel = (r.relation || "").toLowerCase();
-      return rel.indexOf("version") < 0 && rel.indexOf("obsolet") < 0;
-    });
-    const merged = draftRels.slice();
-    for (let pi = 0; pi < parentCustom.length; pi++) {
-      const pc = parentCustom[pi];
-      const dup = merged.some(function(m) {
-        return m.identifier === pc.identifier && m.relation === pc.relation;
-      });
-      if (!dup) merged.push(pc);
-    }
-    if (merged.length) metaClean.notes = (metaClean.notes ? metaClean.notes + " " : "") + "Sources: " + merged.map(function(m) {
-      return m.identifier;
-    }).join(", ");
-  } catch (e) {
-  }
-  delete metaClean.related_identifiers;
-  await zenodo(env, "/" + draftId, { method: "PUT", jsonBody: { metadata: metaClean } });
-  const pub = await zenodo(env, "/" + draftId + "/actions/publish", { method: "POST" });
-  return { newDoi: pub.doi, newRecordId: pub.id, conceptrecid: pub.conceptrecid, version: action.version_to, pdf, pdfError };
+  return { newDoi: null, version: action.version_to, pdf, pdfError };
 }
 __name(publishNewVersion, "publishNewVersion");
 __name2(publishNewVersion, "publishNewVersion");
 __name22(publishNewVersion, "publishNewVersion");
 async function repointStores(env, action, paper, pub) {
-  if (!pub.newDoi) throw new Error("publish response missing doi; aborting store re-point");
   const status = {};
   await env.PAPERS_DB.prepare(
-    "UPDATE papers SET body_md=?1, version=?2, doi=?3, zenodo_doi=?3, updated_at=datetime('now') WHERE slug=?4"
-  ).bind(action.corrected_md || "", action.version_to || paper.version, pub.newDoi, paper.slug).run();
+    "UPDATE papers SET body_md=?1, version=?2, doi=NULL, zenodo_doi=NULL, zenodo_url=NULL, updated_at=datetime('now') WHERE slug=?3"
+  ).bind(action.corrected_md || "", action.version_to || paper.version, paper.slug).run();
   status.d1 = "ok";
   const kgId = "paper:" + paper.slug;
   const node = await env.GRAPH_DB.prepare("SELECT properties FROM nodes WHERE id=?1").bind(kgId).first();
@@ -25997,8 +25017,8 @@ async function repointStores(env, action, paper, pub) {
     } catch (e) {
       props = {};
     }
-    props.doi = pub.newDoi;
-    props.zenodo_url = "https://doi.org/" + pub.newDoi;
+    delete props.doi;
+    delete props.zenodo_url;
     props.version = action.version_to || paper.version;
     await env.GRAPH_DB.prepare("UPDATE nodes SET properties=?1, updated_at=datetime('now') WHERE id=?2").bind(JSON.stringify(props), kgId).run();
     status.kg = "ok";
@@ -26030,8 +25050,8 @@ __name22(repointStores, "repointStores");
 async function notifyUser(env, action, paper, pub, err) {
   if (!env.SEND_EMAIL) return { skipped: "no send_email binding" };
   try {
-    const subject = (err ? "QNFO errata publish FAILED: " : "QNFO errata published: ") + (paper && paper.slug || action && action.paper_doi || "");
-    const lines = err ? ["The auto-publish of an errata correction failed.", "", "Paper: " + (paper && paper.slug || action && action.paper_doi || ""), "Error: " + err] : ["An errata correction was published automatically (cloud pipeline).", "", "Paper: " + (paper && paper.slug || ""), "New DOI: " + (pub.newDoi || ""), "Version: " + (pub.version || ""), "PDF: " + (pub.pdf ? "regenerated in-worker" : "failed (" + (pub.pdfError || "n/a") + ")"), "", "This is an automatic receipt. A post-publish adversarial audit is recommended."];
+    const subject = (err ? "QNFO errata publish FAILED: " : "QNFO errata published: ") + (paper && paper.slug || action && safeDoi(action.paper_doi) || "");
+    const lines = err ? ["The auto-publish of an errata correction failed.", "", "Paper: " + (paper && paper.slug || action && safeDoi(action.paper_doi) || ""), "Error: " + err] : ["An errata correction was published automatically (cloud pipeline).", "", "Paper: " + (paper && paper.slug || ""), "Version: " + (pub.version || ""), "PDF: " + (pub.pdf ? "regenerated in-worker" : "failed (" + (pub.pdfError || "n/a") + ")"), "", "This is an automatic receipt. A post-publish adversarial audit is recommended."];
     const text = lines.join("\n");
     await env.SEND_EMAIL.send({ to: "rwnquni@outlook.com", from: "qnfo@qnfo.org", subject, text, html: "<pre>" + text.replace(/</g, "&lt;") + "</pre>" });
     return { sent: true };
@@ -26044,8 +25064,8 @@ __name2(notifyUser, "notifyUser");
 __name22(notifyUser, "notifyUser");
 async function publishAction(env, action) {
   const paper = await env.PAPERS_DB.prepare(
-    "SELECT slug, title, version, doi, zenodo_doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 LIMIT 1"
-  ).bind(action.paper_doi).first();
+    "SELECT slug, title, version, doi, zenodo_doi, body_md, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+  ).bind(action.paper_doi, action.slug || "").first();
   if (!paper) {
     await env.WATCH_DB.prepare("UPDATE errata_actions SET status='error', updated_at=datetime('now') WHERE id=?").bind(action.id).run();
     await notifyUser(env, action, null, null, "paper not found for " + action.paper_doi);
@@ -26081,9 +25101,9 @@ __name(publishAction, "publishAction");
 __name2(publishAction, "publishAction");
 __name22(publishAction, "publishAction");
 // ERRATA-REPUBLISH-VERIFY-1 (2026-10-01, #1181): a correction marked 'published' was never checked afterwards.
-// publishNewVersion plus repointStores could succeed against Zenodo while the new DOI never registered, or the papers row
+// repointStores could succeed while the papers row
 // could drift. Each published action older than 30 min is now verified:
-//   - papers (by slug) must carry version_to, and its doi must resolve in the DOI handle registry (responseCode 1);
+//   - papers (by slug) must carry version_to;
 //   - pass -> status 'verified';
 //   - still failing 48h after publication -> 'verify-failed', plus a notification.
 async function verifyPublished(env) {
@@ -26098,13 +25118,7 @@ async function verifyPublished(env) {
       const paper = a.slug ? await env.PAPERS_DB.prepare("SELECT version, doi FROM papers WHERE slug=?1 LIMIT 1").bind(a.slug).first() : null;
       if (!paper) why = "paper row missing for slug " + a.slug;
       else if (a.version_to && String(paper.version) !== String(a.version_to)) why = "papers.version " + paper.version + " != version_to " + a.version_to;
-      else if (!paper.doi) why = "papers.doi empty";
-      else {
-        const r = await fetch("https://doi.org/api/handles/" + encodeURIComponent(paper.doi).replace(/%2F/gi, "/"), { headers: { "User-Agent": "qnfo-errata-verify/1.0" } });
-        const j = r.ok ? await r.json() : null;
-        ok = !!(j && j.responseCode === 1);
-        if (!ok) why = "doi " + paper.doi + " not registered (http " + r.status + ")";
-      }
+      else ok = true;
     } catch (e) { why = "verify error: " + String(e && e.message || e); }
     if (ok) {
       await env.WATCH_DB.prepare("UPDATE errata_actions SET status='verified', updated_at=datetime('now') WHERE id=?").bind(a.id).run();
@@ -26118,10 +25132,10 @@ async function verifyPublished(env) {
   return out;
 }
 __name(verifyPublished, "verifyPublished");
-// ERRATA-PUBLISH-GATE-1 (2026-10-02, #1747, pillar research): a live publish mints an irreversible Zenodo version in the
+// ERRATA-PUBLISH-GATE-1 (2026-10-02, #1747, pillar research): a live publish re-points the public paper, graph and R2 copies in the
 // owner's name from an AI-drafted correction whose risk label the model chose itself (AUTONOMY-DECISION-POLICY-1: irreversible
 // and external, so it parks with a safe default). It runs only while qnfo-audit pipeline_flags.errata_publish_enabled = '1';
-// no row, any other value or an unreadable flag means off. Off, a live run is forced dry: no Zenodo call, no papers/KG/R2
+// no row, any other value or an unreadable flag means off. Off, a live run is forced dry: no papers/KG/R2
 // re-point, no status change, no mail. The cron's tick row (errata_watch tick:errata-publish) lists what it would publish.
 async function publishGate(env) {
   const flag = "qnfo-audit pipeline_flags.errata_publish_enabled";
@@ -26157,9 +25171,9 @@ async function runPublish(env, mode) {
     const a = rows[i];
     if (dry) {
       const paper = await env.PAPERS_DB.prepare(
-        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 LIMIT 1"
-      ).bind(a.paper_doi).first();
-      results.push({ action_id: a.id, dry: true, paper: paper ? paper.slug : null, record_id: doiToRecordId(paper ? paper.doi : a.paper_doi), r2_prefix: paper ? r2Prefix(paper) : null, version_to: a.version_to, corrected_md_len: (a.corrected_md || "").length, would_publish: true, pdf: "in-worker-render" });
+        "SELECT slug, version, doi, r2_path, r2_key FROM papers WHERE doi=?1 OR zenodo_doi=?1 OR slug=?2 LIMIT 1"
+      ).bind(a.paper_doi, a.slug || "").first();
+      results.push({ action_id: a.id, dry: true, paper: paper ? paper.slug : null, r2_prefix: paper ? r2Prefix(paper) : null, version_to: a.version_to, corrected_md_len: (a.corrected_md || "").length, would_publish: true, pdf: "in-worker-render" });
       continue;
     }
     try {
@@ -26180,7 +25194,7 @@ var publish_worker_src_default = {
       return json({ error: "unauthorized" }, 401);
     }
     if (url.pathname === "/health") {
-      return json({ ok: true, worker: "qnfo-errata-publish", version: PUBLISH_VERSION, bindings: { zenodo: !!env.ZENODO_TOKEN, papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
+      return json({ ok: true, worker: "qnfo-errata-publish", version: PUBLISH_VERSION, bindings: { papers: !!env.PAPERS_DB, watch: !!env.WATCH_DB, graph: !!env.GRAPH_DB, mirror: !!env.MIRROR, send_email: !!env.SEND_EMAIL, browser: !!env.BROWSER, auth: !!env.ERRATA_TOKEN } });
     }
     if (url.pathname === "/debug/pdf") {
       try {
@@ -26255,13 +25269,16 @@ async function queueInternalErratum(env, e) {
 async function sweepInternalErrata(env) {
   const out = { ok: true, max: INTERNAL_SWEEP_MAX, candidates: 0, queued: 0, ids: [] };
   try {
-    const rows = (await env.WATCH_DB.prepare("SELECT ie.id, ie.target_ref, ie.detected_by, ie.claim_text FROM internal_errata ie WHERE COALESCE(ie.status, 'open') NOT IN ('closed', 'resolved', 'rejected') AND NOT EXISTS (SELECT 1 FROM errata_queue q WHERE q.email_id IS NULL AND q.subject = ie.id) ORDER BY ie.detected_at ASC, ie.id ASC LIMIT ?1")
+    const rows = (await env.WATCH_DB.prepare("SELECT ie.id, ie.target_kind, ie.target_ref, ie.detected_by, ie.claim_text FROM internal_errata ie WHERE COALESCE(ie.status, 'open') NOT IN ('closed', 'resolved', 'rejected') AND NOT EXISTS (SELECT 1 FROM errata_queue q WHERE q.email_id IS NULL AND q.subject = ie.id) ORDER BY ie.detected_at ASC, ie.id ASC LIMIT ?1")
       .bind(INTERNAL_SWEEP_MAX).all()).results || [];
     out.candidates = rows.length;
     for (const row of rows) {
       const by = typeof row.detected_by === "string" && row.detected_by.trim() ? row.detected_by.trim().slice(0, 128) : null;
       const source = internalErrataSource(by);
-      const doi = (String(row.target_ref || "").match(/10\.5281\/zenodo\.\d+/) || [null])[0];
+      /* NOZ-DOI-1: a paper erratum is keyed by the paper's slug (respond resolves slugs); a dead-registrar DOI value is treated as absent */
+      const ref = String(row.target_ref || "");
+      const um = ref.match(/papers\.qnfo\.org\/papers\/([a-z0-9][a-z0-9-]*)/);
+      const doi = um ? um[1] : (row.target_kind === "paper" && /^[a-z0-9][a-z0-9-]{2,}$/.test(ref) ? ref : null);
       const claim = typeof row.claim_text === "string" && row.claim_text.trim() ? row.claim_text.trim().slice(0, 4000) : null;
       if (await queueInternalErratum(env, { id: row.id, source, sender: by || source, paper_doi: doi, claim }) > 0) {
         out.queued++;
@@ -26385,7 +25402,7 @@ return {
   async fetch(request, env, ctx) {
     env = __aiAttrEnv(env, "errata-hub", "AI", "WATCH_DB");
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction goes to Zenodo only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)"] }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "errata-hub", version: VERSION, members: 3, internal_intake: true, internal_sweep: true, capabilities: ["errata-watch", "errata-respond", "errata-publish", "internal-errata-intake", "internal-errata-sweep"], limitations: ["watch (:00, AI triage of personal email into errata_queue), respond (:15, AI-drafted correction into errata_actions) and publish (:30) run hourly from the crons in wrangler.toml; each tick upserts qnfo-audit errata_watch key tick:<member> (ERRATA-HUB-CRONS-UNDECLARED-1)", "publish is gated off: a correction is re-published only while qnfo-audit pipeline_flags.errata_publish_enabled = '1' (no row means off); while off, every publish run is dry, records would_publish in its tick row and changes nothing outside D1; the DOI check of already published corrections still runs (ERRATA-PUBLISH-GATE-1)", "corrections are drafted by an AI model and the corrected text says so; mail goes only to the owner as a receipt, never to an errata sender", "member /run/* and /debug/* routes and POST /internal-errata need the errata token", "internal errata are recorded as internal-open and never auto-answered or auto-published", "each :00 tick first moves up to 20 open internal_errata rows that have no errata_queue row into errata_queue as internal-open (email_id NULL, subject = the erratum id, no model call); the outcome is internal_sweep in tick:errata-watch (ERRATA-INTERNAL-SWEEP-1)"] }), { headers: { "content-type": "application/json" } });
     if (p === "/internal-errata" && request.method === "POST") return internalErrataIntake(request, env);
     if (p === "/errata-watch" || p.startsWith("/errata-watch/")) { const u = new URL(request.url); u.pathname = p.slice(13) || "/"; return erratawatchMod.default.fetch(new Request(u.toString(), request), env, ctx); }
     if (p === "/errata-respond" || p.startsWith("/errata-respond/")) { const u = new URL(request.url); u.pathname = p.slice(15) || "/"; return erratarespondMod.default.fetch(new Request(u.toString(), request), env, ctx); }
@@ -26444,36 +25461,6 @@ var worker_default = {
       } catch (e) {
         await logEvent(env, "error", "drainV2 threw: " + String(e && e.message || e).slice(0, 200), "error");
       }
-      try {
-        var vr = await drainVersionRequests(env);
-        if (vr) await logEvent(env, "zenodo-version", JSON.stringify(vr).slice(0, 700), vr.status === "published" ? "ok" : "error");
-      } catch (e) {
-        await logEvent(env, "error", "drainVersionRequests threw: " + String(e && e.message || e).slice(0, 200), "error");
-      }
-      try {
-        var me = await drainMetadataEdits(env);
-        if (me.length) await logEvent(env, "zenodo-metadata", JSON.stringify(me).slice(0, 700), me.some(function(x) { return x.status === "error"; }) ? "error" : "ok");
-        else if (new Date().getUTCMinutes() < 15) {
-          var bv = await verifyMetadataBackfill(env);
-          if (bv && bv.summary) await logEvent(env, "zenodo-metadata-verify", "issue " + bv.issue + (bv.closed ? " closed: " : " open: ") + bv.summary, bv.closed ? "ok" : "error");
-        }
-      } catch (e) {
-        await logEvent(env, "error", "drainMetadataEdits threw: " + String(e && e.message || e).slice(0, 200), "error");
-      }
-      try {
-        if (new Date().getUTCMinutes() < 15) {
-          var sd = await seedRelatedLinks(env);
-          if (sd && sd.seeded) await logEvent(env, "zenodo-related-seed", JSON.stringify(sd).slice(0, 300), "ok");
-        }
-        var rl = await drainRelatedLinks(env);
-        if (rl.length) await logEvent(env, "zenodo-related", JSON.stringify(rl).slice(0, 700), rl.some(function(x) { return x.status === "error"; }) ? "error" : "ok");
-        else if (new Date().getUTCMinutes() < 15) {
-          var rv = await verifyRelatedBackfill(env);
-          if (rv && rv.summary) await logEvent(env, "zenodo-related-verify", "issue " + rv.issue + (rv.closed ? " closed: " : " open: ") + rv.summary, rv.closed ? "ok" : "error");
-        }
-      } catch (e) {
-        await logEvent(env, "error", "drainRelatedLinks threw: " + String(e && e.message || e).slice(0, 200), "error");
-      }
       if (env.RESEARCH_HALT === "1") return;
       try {
         const lr = await runLeased(env, "cron-" + Date.now().toString(36), 8, RUN_LOOP_BUDGET_MS);
@@ -26502,7 +25489,7 @@ var worker_default = {
     if (new URL(request.url).pathname === "/reviser/health" && request.method === "GET") return reviserMod.fetch(new Request(new URL("/health", request.url)), reviserEnv(env), ctx);
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     const url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "zenodo-publish"], limitations: ["stages run only on the */15 cron under a single-flight lease (one stage per tick)", "papers cite only the grounding bibliography", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
+    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish"], limitations: ["stages run only on the */15 cron under a single-flight lease (one stage per tick)", "papers cite only the grounding bibliography", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
     if (url.pathname === "/run" && request.method === "POST") {
       if (url.searchParams.get("sync") !== "1") {
         await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");
@@ -26525,12 +25512,6 @@ var worker_default = {
 };
 export {
   worker_default as default,
-  applyCreatorPatch,
-  applyRelatedLink,
-  legacyUploadFields,
-  drainMetadataEdits,
-  drainRelatedLinks,
-  drainVersionRequests,
   groundQueries,
   markError,
   mathGate,
@@ -26548,11 +25529,8 @@ export {
   VERIFY_EXTRACT_PROMPT,
   VERIFY_GEN_PROMPT,
   reclaimStaleResearching,
-  seedRelatedLinks,
   stageGround,
   stageReview,
-  stageVerify,
-  verifyMetadataBackfill,
-  verifyRelatedBackfill
+  stageVerify
 };
 //# sourceMappingURL=worker.js.map
