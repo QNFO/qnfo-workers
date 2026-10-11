@@ -5,7 +5,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 // 1.1.3 (2026-10-02, pillar: reach): JOB-MARKET-INLINE-1 (the weekly job-market scan runs from the cron and records a
 // handoffs row with a claim_sheet), MENTION-RADAR-LEDGER-1 (one cloud_ops_events row per mention-radar run day),
 // EVENTS-RADAR-CF-DOW-1 (events cron moved from Sunday to Monday, the day its weekly sources are read).
-var VERSION = "1.3.3"; // 1.3.3 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the arXiv radar builds its query, keyword list and classes from the owner's accepted ideas in idea_proposals instead of fixed tables; with none on file it skips. // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
+var VERSION = "1.3.4-doi-scrub"; // 1.3.4-doi-scrub NOZ-DOI-1 (2026-10-10): the weekly attribution-audit job and its cron branch are gone; the citation watch tracks no static DOIs; the mention radar tracks only non-retired DOIs. // // 1.3.3 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the arXiv radar builds its query, keyword list and classes from the owner's accepted ideas in idea_proposals instead of fixed tables; with none on file it skips. // 1.3.2 RADAR-VENUE-SILENT-1 (2026-10-06, pillar: personal): a per-venue consecutive-zero counter kept as one row in the existing personal_radar table; a normally productive venue (>= 2 productive days) with zero usable candidates for 3 consecutive days files ONE agent_issues row "RADAR-VENUE-SILENT-1: <venue>" (source radar-hub, personal, low, epoch-ms), a failed fetch is a gap not a zero, a same-day re-run does not double count, and the run report names silent venues. 1.3.1 (2026-10-06): the intake run result never echoes exception text (CodeQL js/stack-trace-exposure on PR 662); details go to the worker log. 1.3.0 SIGNAL-INTAKE-SOURCES-1 (2026-10-06, agent_issues 1947, pillar: research): a D1-driven interdisciplinary feed intake (radar_sources kind 'signal': arXiv beyond quant-ph, journals, science news, community feeds) scored by lexicon with no model call into idea_proposals (name intake:<family>), bounded per run and per family, deduped by URL in signal_intake_seen, in the 08:30Z slot (no new cron); metric signal_source_families_7d; GET /intake, POST /intake/run; the events radar skips kind 'signal' rows. 1.2.4 RADAR-TASTE-SHRINK-1 + RADAR-TITLE-NOISE-2 (pillar: personal): taste prior shrunk by n/(n+3) with a 0.6 floor under 5 feedback rows and a half-the-day safety valve; Stedelijk date-range, Iamsterdam navigation and Eventbrite chrome titles dropped or cleaned. 1.2.3 RADAR-TITLE-NOISE-1 (pillar: personal): clean readable calendar titles for personal radar rows, dedupe key unchanged. 1.2.2 RADAR-TASTE-LEARN-1 (pillar: personal): the personal radar learns per-venue and per-domain taste from calendar_feedback. 1.2.1 AWAY-GATE-1 (pillar: personal): the personal radar skips Amsterdam events while a lodging row places the owner elsewhere. 1.2.0 CRON-SINGLE-TRIGGER-1 (#1785): one hourly trigger, CRON_TABLE in code
 var eventsMod = (function(){
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -595,8 +595,7 @@ var researchModDefault = {
     const cron = event.cron;
     let out;
     try {
-      if (cron === "0 8 * * 7") out = await jobZenodo(env);
-      else if (cron === "0 6 1 * *") out = await jobPhilpapers(env);
+      if (cron === "0 6 1 * *") out = await jobPhilpapers(env);
       else if (cron === "0 9 * * 7") out = await jobSeo(env);
       else out = { status: "skipped", cron: cron };
       console.log("research-radar", JSON.stringify(out));
@@ -612,7 +611,6 @@ var researchModDefault = {
     if (url.pathname === "/run") {
       const mode = url.searchParams.get("job") || "all";
       const results = {};
-      if (mode === "zenodo" || mode === "all") results.zenodo = await jobZenodo(env);
       if (mode === "philpapers" || mode === "all") results.philpapers = await jobPhilpapers(env);
       if (mode === "seo" || mode === "all") results.seo = await jobSeo(env);
       return new Response(JSON.stringify(results), { headers: { "Content-Type": "application/json" } });
@@ -620,7 +618,6 @@ var researchModDefault = {
     return new Response("not found", { status: 404 });
   }
 };
-const ZENODO_DOIS = ["10.5281/zenodo.21803159","10.5281/zenodo.21786473","10.5281/zenodo.21784489","10.5281/zenodo.21784490","10.5281/zenodo.21786603"];
 const SITEMAPS = ["https://rwnq8.github.io/sitemap.xml","https://qnfo-landing.pages.dev/sitemap.xml"];
 function pad(n) { return String(n).padStart(2, "0"); }
 function todayKey() {
@@ -635,20 +632,6 @@ async function writeNote(env, name, body) {
     if (env.VAULT) { await env.VAULT.put(key, body, { httpMetadata: { contentType: "text/markdown" } }); return key; }
   } catch (e) {}
   return null;
-}
-async function jobZenodo(env) {
-  const lines = [];
-  let ok = 0;
-  for (const doi of ZENODO_DOIS) {
-    try {
-      const r = await fetch("https://doi.org/api/handles/" + doi, { headers: { "User-Agent": "QNFO zenodo attribution audit (mailto:rwnquni@outlook.com)" } });
-      if (r.ok) { ok++; lines.push("- " + doi + " | resolve: OK (HTTP " + r.status + ")"); }
-      else lines.push("- " + doi + " | resolve: FAIL (HTTP " + r.status + ")");
-    } catch (e) { lines.push("- " + doi + " | resolve: ERROR " + String((e && e.message) || e)); }
-  }
-  const body = "# Zenodo Attribution Audit " + todayKey().ymd + "\n\nDOIs checked: " + ZENODO_DOIS.length + " | resolving: " + ok + "\n\n" + lines.join("\n") + "\n";
-  const noteKey = await writeNote(env, "zenodo-attribution", body);
-  return { status: "ok", resolving: ok, total: ZENODO_DOIS.length, noteKey: noteKey };
 }
 async function jobPhilpapers(env) {
   let status = 0, len = 0, line = "no check";
@@ -703,16 +686,12 @@ var citationModDefault = {
     return new Response("not found", { status: 404 });
   }
 };
-const KNOWN_DOIS = [
-  "10.5281/zenodo.21803159",
-  "10.5281/zenodo.21786473",
-  "10.5281/zenodo.21784489",
-  "10.5281/zenodo.21784490",
-  "10.5281/zenodo.21786603"
-];
+// NOZ-DOI-1: no registry-minted DOIs are tracked any more; the mention radar covers citations by author id.
+const KNOWN_DOIS = [];
 async function run(env) {
   const lines = [];
   let total = 0;
+  if (!KNOWN_DOIS.length) return { status: "skipped", reason: "no tracked DOIs", total: 0, lines: 0, wrote: false };
   for (const doi of KNOWN_DOIS) {
     try {
       const r = await fetch("https://api.openalex.org/works/doi:" + doi, { headers: { "User-Agent": "QNFO citation watch (mailto:rwnquni@outlook.com)" } });
@@ -1741,10 +1720,10 @@ return { default: worker_default };
 // MENTION-RADAR-1 (2026-10-01, #1641 EXTERNAL-MENTION-MONITOR-EMPTY-1; charter pillar: reach; STRATEGY 6.1 "Mentions").
 // Daily discovery of third-party references to the owner's work from free, keyless public APIs:
 //   openalex  works that cite an OpenAlex work of ORCID 0009-0002-4317-5604 (cites: filter)
-//   datacite  DataCite records whose relatedIdentifiers cite/reference one of the owner's Zenodo DOIs (10.5281/zenodo.*)
+//   datacite  DataCite records whose relatedIdentifiers cite/reference one of the owner's tracked DOIs (citation_stats)
 //   bluesky   app.bsky.feed.searchPosts for qnfo.org / papers.qnfo.org links and the name "Quni-Gudzinas"
 //   hn        Hacker News Algolia search for qnfo (whole word), qnfo.org urls and "Quni-Gudzinas"
-// Crossref Event Data is not used: the service was retired, and Zenodo DOIs are DataCite DOIs anyway.
+// Crossref Event Data is not used: the service was retired.
 // Self-references are excluded (owner ORCID, owner names, the QNFO label, the owner's Bluesky DIDs).
 // Dedupe: the stable key is the canonical url (https://doi.org/<lowercased doi>, https://bsky.app/profile/<did>/post/<rkey>,
 // https://news.ycombinator.com/item?id=<id> for comments, the same url rule qnfo-cloud-ops jobRadar uses for hn). A url
@@ -1754,7 +1733,7 @@ return { default: worker_default };
 // the API returned). A source whose API failed writes NO reach_signals row: a failure is a gap, never a zero.
 var mentionMod = (function(){
   var ORCID = "0009-0002-4317-5604";
-  var SELECTED_DOIS = ["10.5281/zenodo.21637028", "10.5281/zenodo.22261547", "10.5281/zenodo.21821767", "10.5281/zenodo.21945415", "10.5281/zenodo.21901984", "10.5281/zenodo.22026592", "10.5281/zenodo.23079905"];
+  var SELECTED_DOIS = [];
   // qnfo.bsky.social, its Mastodon bridge, and the owner's personal account (qvers.bsky.social).
   var SELF_DIDS = ["did:plc:vad2yeqflg5uznmp557zge5c", "did:plc:veqmjot4gx3e7vz644mjtgyv", "did:plc:t57gdiqaqydoacnyjptth64f"];
   var SELF_NAME = /quni|gudzinas|\bqnfo\b/i;
@@ -1777,8 +1756,8 @@ var mentionMod = (function(){
   async function ownerDois(env) {
     var set = new Set(SELECTED_DOIS);
     try {
-      var r = await env.AUDIT.prepare("SELECT DISTINCT lower(doi) AS doi FROM citation_stats WHERE lower(doi) LIKE '10.5281/zenodo.%' LIMIT 400").all();
-      for (var x of (r.results || [])) if (x.doi) set.add(normDoi(x.doi));
+      var r = await env.AUDIT.prepare("SELECT DISTINCT lower(doi) AS doi FROM citation_stats WHERE doi IS NOT NULL AND lower(doi) NOT LIKE '10.5281/%' LIMIT 400").all();
+      for (var x of (r.results || [])) if (x.doi && !/^10\.5281\//.test(normDoi(x.doi))) set.add(normDoi(x.doi));
     } catch (e) {}
     return Array.from(set);
   }
@@ -1879,7 +1858,7 @@ var mentionMod = (function(){
 
   var CHANNELS = [
     { channel: "openalex", source: "openalex-cites", quality: "human", run: function(f, dois) { return srcOpenAlex(f); } },
-    { channel: "datacite", source: "datacite-cites", quality: "human", run: function(f, dois) { return srcDataCite(f, dois); } },
+    { channel: "datacite", source: "datacite-cites", quality: "human", needsDois: true, run: function(f, dois) { return srcDataCite(f, dois); } },
     { channel: "bluesky", source: "bluesky", quality: "unknown", run: function(f) { return srcBluesky(f); } },
     { channel: "hn", source: "hn", quality: "unknown", run: function(f) { return srcHn(f); } }
   ];
@@ -1894,6 +1873,7 @@ var mentionMod = (function(){
     var sources = {}, written = {}, signals = 0;
     for (var ch of CHANNELS) {
       var list;
+      if (ch.needsDois && !dois.length) continue;
       try { list = await ch.run(f, dois); }
       catch (e) { sources[ch.channel] = errStr(e); continue; }
       var seen = new Map();
@@ -2223,7 +2203,7 @@ export { JobMarketWatchWorkflow, intakeMod };
 // unchanged) that fired in the hour ending at the tick, through the same dispatcher as before. An entry on the hour runs
 // at its minute; one at :15 or :30 runs at the next full hour. Hourly keeps the 15-minute CPU limit of a cron trigger.
 var TICK_CRON = "0 * * * *";
-var CRON_TABLE = ["0 5 * * 2", "30 8 * * *", "0 6 1 * *", "0 8 * * 7", "0 9 * * 7", "0 11 1,15 * *", "0 7 * * 2", "30 5 * * 2", "0 6 * * *"];
+var CRON_TABLE = ["0 5 * * 2", "30 8 * * *", "0 6 1 * *", "0 9 * * 7", "0 11 1,15 * *", "0 7 * * 2", "30 5 * * 2", "0 6 * * *"];
 var TICK_PARALLEL = true;
 function cronFieldMatch(spec, v) {
   return String(spec).split(",").some(function (part) {
@@ -2312,7 +2292,7 @@ export default {
       ]);
       return;
     }
-    if (c === "0 6 1 * *" || c === "0 8 * * 7" || c === "0 9 * * 7") return researchMod.scheduled(event, env, ctx);
+    if (c === "0 6 1 * *" || c === "0 9 * * 7") return researchMod.scheduled(event, env, ctx);
     if (c === "0 11 1,15 * *") return citationMod.scheduled(event, env, ctx);
     if (c === "0 7 * * 2") return jmwMod.default.scheduled(event, env, ctx);
     if (c === "30 5 * * 2") return perMod.default.scheduled(event, env, ctx);

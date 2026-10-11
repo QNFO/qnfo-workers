@@ -14,8 +14,6 @@ binding = "AI"
 binding = "STATE"
 id = "0cf89b469bcb47058e343611d9117897"
 
-[triggers]
-crons = ["23 */2 * * *"]
 
 [vars]
 JNL_MODELS = "@cf/openai/gpt-oss-120b,@cf/meta/llama-4-scout-17b-16e-instruct"
