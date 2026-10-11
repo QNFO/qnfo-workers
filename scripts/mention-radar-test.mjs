@@ -18,7 +18,7 @@ function mkDb() {
     prepare(sql) {
       const st = { sql, x: [], bind(...x) { st.x = x; return st; },
         async all() {
-          if (/FROM citation_stats/.test(sql)) return { results: [{ doi: "10.5281/ZENODO.21637028" }, { doi: "10.5281/zenodo.11111111" }] };
+          if (/FROM citation_stats/.test(sql)) return { results: [{ doi: "10.1234/OWN.21637028" }, { doi: "10.1234/own.22261547" }, { doi: "10.1234/own.11111111" }, { doi: "10.5281/legacy.1" }] };
           return { results: [] };
         },
         async first() {
@@ -52,10 +52,10 @@ const ORCID = "0009-0002-4317-5604";
 const json = (o) => ({ ok: true, status: 200, json: async () => o });
 const fixtures = {
   openalex(u) {
-    if (u.includes("author.orcid")) return json({ meta: { next_cursor: null }, results: [{ id: "https://openalex.org/W1", doi: "https://doi.org/10.5281/zenodo.21637028" }, { id: "https://openalex.org/W2", doi: null }] });
+    if (u.includes("author.orcid")) return json({ meta: { next_cursor: null }, results: [{ id: "https://openalex.org/W1", doi: "https://doi.org/10.1234/own.21637028" }, { id: "https://openalex.org/W2", doi: null }] });
     if (u.includes("cites:W1|W2")) return json({ meta: { next_cursor: null }, results: [
       { id: "https://openalex.org/W900", doi: "https://doi.org/10.1000/EXT.1", display_name: "An external paper", authorships: [{ author: { display_name: "Ada Lovelace", orcid: "https://orcid.org/0000-0001" } }], referenced_works: ["https://openalex.org/W1"], publication_date: "2026-09-01", cited_by_count: 3 },
-      { id: "https://openalex.org/W901", doi: "https://doi.org/10.5281/zenodo.99", display_name: "Self citation", authorships: [{ author: { display_name: "Rowan Brad Quni-Gudzinas", orcid: "https://orcid.org/" + ORCID } }], referenced_works: ["https://openalex.org/W1"] }
+      { id: "https://openalex.org/W901", doi: "https://doi.org/10.1234/own.99", display_name: "Self citation", authorships: [{ author: { display_name: "Rowan Brad Quni-Gudzinas", orcid: "https://orcid.org/" + ORCID } }], referenced_works: ["https://openalex.org/W1"] }
     ] });
     throw new Error("unexpected openalex url " + u);
   },
@@ -64,10 +64,10 @@ const fixtures = {
     if (!q.includes("relatedIdentifiers.relatedIdentifier:")) throw new Error("bad datacite url");
     return json({ data: [
       // same citing work as openalex (doi case differs): must be deduped across sources
-      { id: "10.1000/ext.1", attributes: { doi: "10.1000/ext.1", creators: [{ name: "Lovelace, Ada" }], titles: [{ title: "An external paper" }], relatedIdentifiers: [{ relatedIdentifier: "10.5281/zenodo.21637028", relationType: "Cites" }], published: "2026" } },
-      { id: "10.1000/ext.2", attributes: { doi: "10.1000/ext.2", creators: [{ name: "Turing, Alan" }], titles: [{ title: "Second external" }], relatedIdentifiers: [{ relatedIdentifier: "https://doi.org/10.5281/zenodo.22261547", relationType: "References" }], published: "2026" } },
-      { id: "10.1000/ext.3", attributes: { doi: "10.1000/ext.3", creators: [{ name: "Noether, Emmy" }], titles: [{ title: "Only a version link" }], relatedIdentifiers: [{ relatedIdentifier: "10.5281/zenodo.22261547", relationType: "IsVersionOf" }] } },
-      { id: "10.5281/zenodo.21641108", attributes: { doi: "10.5281/zenodo.21641108", creators: [{ name: "QNFO Research Collective" }, { name: "Quni-Gudzinas, Rowan Brad", nameIdentifiers: [{ nameIdentifier: "https://orcid.org/" + ORCID }] }], titles: [{ title: "self" }], relatedIdentifiers: [{ relatedIdentifier: "10.5281/zenodo.21637028", relationType: "Cites" }] } }
+      { id: "10.1000/ext.1", attributes: { doi: "10.1000/ext.1", creators: [{ name: "Lovelace, Ada" }], titles: [{ title: "An external paper" }], relatedIdentifiers: [{ relatedIdentifier: "10.1234/own.21637028", relationType: "Cites" }], published: "2026" } },
+      { id: "10.1000/ext.2", attributes: { doi: "10.1000/ext.2", creators: [{ name: "Turing, Alan" }], titles: [{ title: "Second external" }], relatedIdentifiers: [{ relatedIdentifier: "https://doi.org/10.1234/own.22261547", relationType: "References" }], published: "2026" } },
+      { id: "10.1000/ext.3", attributes: { doi: "10.1000/ext.3", creators: [{ name: "Noether, Emmy" }], titles: [{ title: "Only a version link" }], relatedIdentifiers: [{ relatedIdentifier: "10.1234/own.22261547", relationType: "IsVersionOf" }] } },
+      { id: "10.1234/own.21641108", attributes: { doi: "10.1234/own.21641108", creators: [{ name: "QNFO Research Collective" }, { name: "Quni-Gudzinas, Rowan Brad", nameIdentifiers: [{ nameIdentifier: "https://orcid.org/" + ORCID }] }], titles: [{ title: "self" }], relatedIdentifiers: [{ relatedIdentifier: "10.1234/own.21637028", relationType: "Cites" }] } }
     ], links: {} });
   },
   bluesky(u) {
@@ -109,9 +109,9 @@ const db = mkDb();
 let out = await mentionMod.run({ AUDIT: db }, { fetch: mkFetch([]), now });
 const urls = db.mentions.map((m) => m.url).sort();
 ok(out.status === "ok", "all sources ok -> status ok (" + JSON.stringify(out.sources) + ")");
-ok(out.owner_dois === 8, "owner DOIs = 7 selected works + 1 new from citation_stats (case-normalised), got " + out.owner_dois);
+ok(out.owner_dois === 3, "owner DOIs come from citation_stats only (case-normalised, retired prefix dropped), got " + out.owner_dois);
 ok(urls.includes("https://doi.org/10.1000/ext.1"), "openalex external citation recorded under a lowercased doi url");
-ok(!urls.some((u) => u.includes("zenodo.99") || u.includes("21641108")), "self citations (ORCID, name, QNFO label) excluded");
+ok(!urls.some((u) => u.includes("own.99") || u.includes("21641108")), "self citations (ORCID, name, QNFO label) excluded");
 ok(db.mentions.filter((m) => m.url === "https://doi.org/10.1000/ext.1").length === 1, "same citing work from openalex and datacite stored once");
 ok(urls.includes("https://doi.org/10.1000/ext.2") && !urls.includes("https://doi.org/10.1000/ext.3"), "datacite References counted; IsVersionOf ignored");
 ok(urls.includes("https://bsky.app/profile/did:plc:ext1/post/3abc"), "external bluesky post recorded with a stable url");

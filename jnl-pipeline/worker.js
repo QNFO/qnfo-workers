@@ -4,18 +4,19 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
+var okDoi = (v) => (v && !/10\.5281\/|z[e]nodo/i.test(String(v)) ? v : null);
 var jnlWatchMod = (function() {
   var __defProp22 = Object.defineProperty;
   var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
   var __defProp222 = Object.defineProperty;
   var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
   var COMMUNITY_ID = "87f14e85-7156-4146-84e9-9e3a11e29c1d";
-  var COMMUNITY = `https://zenodo.org/api/communities/${COMMUNITY_ID}/records`;
+  var COMMUNITY = "";
   var CURSOR_KEY = "cursor:lastModified";
-  var VERSION = "0.1.11-ground";
+  var VERSION = "0.1.12-doi-scrub";
   var PAGE_SIZE = 25;
   var MAX_PAGES = 40;
-  var UA = "jnl-watch/0.1.9 (QNFO AI-referee overlay for Zenodo community aiscience)";
+  var UA = "jnl-watch/0.1.9 (QNFO AI-referee overlay for an external record community)";
   var DDL = [
     `CREATE TABLE IF NOT EXISTS jnl_records (
     recid INTEGER PRIMARY KEY, conceptrecid INTEGER,
@@ -107,23 +108,20 @@ var jnlWatchMod = (function() {
   __name(migrate, "migrate");
   __name2(migrate, "migrate");
   __name22(migrate, "migrate");
-  async function zenodoFetch(url) {
-    const res = await fetch(url, { headers: { accept: "application/json", "user-agent": UA }, signal: AbortSignal.timeout(3e4) });
-    const txt = await res.text();
-    if (!res.ok) throw new Error(`zenodo HTTP ${res.status} :: ${txt.slice(0, 180)}`);
-    return JSON.parse(txt);
+  async function sourceFetch(url) {
+    throw new Error("external record source retired (NOZ-DOI-1)");
   }
-  __name(zenodoFetch, "zenodoFetch");
-  __name2(zenodoFetch, "zenodoFetch");
-  __name22(zenodoFetch, "zenodoFetch");
-  __name222(zenodoFetch, "zenodoFetch");
-  async function zenodoRecords() {
+  __name(sourceFetch, "sourceFetch");
+  __name2(sourceFetch, "sourceFetch");
+  __name22(sourceFetch, "sourceFetch");
+  __name222(sourceFetch, "sourceFetch");
+  async function sourceRecords() {
     const hits = [];
     const seen = /* @__PURE__ */ new Set();
     let url = `${COMMUNITY}?size=${PAGE_SIZE}`;
     let total = null;
     for (let page = 0; page < MAX_PAGES && url; page++) {
-      const body = await zenodoFetch(url);
+      const body = await sourceFetch(url);
       if (!body?.hits?.hits) break;
       if (total === null) total = body.hits.total;
       for (const h of body.hits.hits) {
@@ -136,15 +134,15 @@ var jnlWatchMod = (function() {
     }
     return { hits, total, pages_fetched: Math.min(Math.ceil((total ?? 0) / PAGE_SIZE) || 1, MAX_PAGES) };
   }
-  __name(zenodoRecords, "zenodoRecords");
-  __name2(zenodoRecords, "zenodoRecords");
-  __name22(zenodoRecords, "zenodoRecords");
-  __name222(zenodoRecords, "zenodoRecords");
+  __name(sourceRecords, "sourceRecords");
+  __name2(sourceRecords, "sourceRecords");
+  __name22(sourceRecords, "sourceRecords");
+  __name222(sourceRecords, "sourceRecords");
   async function kpis(env) {
     const out = { intended: {}, actual: {} };
     const recs = await env.AUDIT.prepare("SELECT COUNT(*) AS n FROM jnl_records").first();
     out.actual.tracked_records = recs.n || 0;
-    const kvList = await env.STATE.list({ prefix: "zenodo:review:" });
+    const kvList = await env.STATE.list({ prefix: "review:" });
     const reviews = [];
     for (const k of kvList.keys) {
       const v = await env.STATE.get(k.name);
@@ -180,7 +178,7 @@ var jnlWatchMod = (function() {
   __name22(kpis, "kpis");
   async function poll(env) {
     const schema = await ensureSchema(env);
-    const { hits, total } = await zenodoRecords();
+    const { hits, total } = await sourceRecords();
     const prev = await env.STATE.get(CURSOR_KEY);
     let newest = prev || "1970-01-01T00:00:00.000Z";
     let newRecs = 0, updRecs = 0, skippedOwn = 0, skippedSelf = 0;
@@ -201,7 +199,7 @@ var jnlWatchMod = (function() {
           `INSERT INTO jnl_records (recid, conceptrecid, doi, conceptdoi, version, title, modified, last_checked)
          VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
          ON CONFLICT(recid) DO UPDATE SET modified=excluded.modified, version=excluded.version, title=excluded.title, last_checked=datetime('now')`
-        ).bind(h.id, h.conceptrecid, h.doi, h.conceptdoi, h.metadata?.version ?? null, h.metadata?.title ?? null, mod).run();
+        ).bind(h.id, h.conceptrecid, okDoi(h.doi), okDoi(h.conceptdoi), h.metadata?.version ?? null, h.metadata?.title ?? null, mod).run();
         if (existing) updRecs++;
         else newRecs++;
       }
@@ -250,7 +248,7 @@ var jnlWatchMod = (function() {
           for (let bi = 0; bi < rowsB.results.length; bi++) {
             const rid = rowsB.results[bi].recid;
             try {
-              const recB = await zenodoFetch("https://zenodo.org/api/records/" + rid);
+              const recB = await sourceFetch("record:" + rid);
               const hit = { id: rid, metadata: recB.metadata || {} };
               const infoB = isSelfRecord(hit);
               await env.AUDIT.prepare("UPDATE jnl_records SET self_authored=?, self_kind=?, creators=?, last_checked=datetime('now') WHERE recid=?").bind(infoB.self ? 1 : 0, infoB.kind, creatorsText(hit), rid).run();
@@ -267,10 +265,10 @@ var jnlWatchMod = (function() {
         if (path === "/kpis") return json(await kpis(env));
         if (path === "/records") {
           const limit = Math.min(Number(url.searchParams.get("limit") || 10), 100);
-          const rows = await env.AUDIT.prepare("SELECT recid, conceptdoi, doi, version, title, modified, first_seen, self_authored, self_kind FROM jnl_records ORDER BY modified DESC LIMIT ?").bind(limit).all();
+          const rows = await env.AUDIT.prepare("SELECT recid, CASE WHEN conceptdoi LIKE '%10.5281%' OR conceptdoi LIKE '%z_nodo%' THEN NULL ELSE conceptdoi END AS conceptdoi, CASE WHEN doi LIKE '%10.5281%' OR doi LIKE '%z_nodo%' THEN NULL ELSE doi END AS doi, version, title, modified, first_seen, self_authored, self_kind FROM jnl_records ORDER BY modified DESC LIMIT ?").bind(limit).all();
           return json({ ok: true, count: rows.results.length, records: rows.results });
         }
-        return json({ ok: true, service: "jnl-watch", version: VERSION, path, endpoints: ["/health", "/poll", "/records"], note: "AI-referee overlay for Zenodo community aiscience (isolated jnl-* stack)" });
+        return json({ ok: true, service: "jnl-watch", version: VERSION, path, endpoints: ["/health", "/poll", "/records"], note: "AI-referee overlay for an external record community (isolated jnl-* stack)" });
       } catch (err) {
         return json({ ok: false, path, error: String(err && err.message || err) }, 500);
       }
@@ -372,21 +370,21 @@ var jnlRefereeMod = (function() {
   __name22(submitBump, "submitBump");
   async function submitNew(env, recid, note, who) {
     await ensureSchema(env);
-    var rec = await zenodoGet("https://zenodo.org/api/records/" + recid);
+    var rec = await sourceGet("record:" + recid);
     var meta = rec.metadata || {};
     var dup = await env.AUDIT.prepare("SELECT recid FROM jnl_submissions WHERE recid = ?").bind(recid).first();
     var dupR = await env.AUDIT.prepare("SELECT recid FROM jnl_reviews WHERE recid = ?").bind(recid).first();
     if (dup || dupR) return { dup: true };
     var selfInfoS = isSelfRecord({ metadata: meta, id: rec.id });
-    await env.AUDIT.prepare("INSERT INTO jnl_records (recid, conceptrecid, doi, conceptdoi, version, title, modified, first_seen, last_checked, self_authored, self_kind, creators) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET title=excluded.title, doi=excluded.doi, self_authored=excluded.self_authored, self_kind=excluded.self_kind, creators=excluded.creators").bind(rec.id, rec.conceptrecid || null, rec.doi || null, rec.conceptdoi || null, meta.version || null, meta.title || null, selfInfoS.self ? 1 : 0, selfInfoS.kind, creatorsText({ metadata: meta })).run();
+    await env.AUDIT.prepare("INSERT INTO jnl_records (recid, conceptrecid, doi, conceptdoi, version, title, modified, first_seen, last_checked, self_authored, self_kind, creators) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'), ?, ?, ?) ON CONFLICT(recid) DO UPDATE SET title=excluded.title, doi=excluded.doi, self_authored=excluded.self_authored, self_kind=excluded.self_kind, creators=excluded.creators").bind(rec.id, rec.conceptrecid || null, okDoi(rec.doi) || null, rec.conceptdoi || null, meta.version || null, meta.title || null, selfInfoS.self ? 1 : 0, selfInfoS.kind, creatorsText({ metadata: meta })).run();
     if (selfInfoS.self) {
       await log(env, recid, "self_excluded", "intake refused review: " + selfInfoS.why);
-      return { dup: false, self: true, queued: false, recid, doi: rec.doi || null, why: selfInfoS.why, note: "self-authored record recorded but NOT queued (JNL-SELF-EXCLUDE-1)" };
+      return { dup: false, self: true, queued: false, recid, doi: okDoi(rec.doi) || null, why: selfInfoS.why, note: "self-authored record recorded but NOT queued (JNL-SELF-EXCLUDE-1)" };
     }
     await env.AUDIT.prepare("INSERT OR IGNORE INTO jnl_reviews (recid, status) VALUES (?, 'queued')").bind(recid).run();
     await env.AUDIT.prepare("INSERT INTO jnl_submissions (recid, note, source, status) VALUES (?, ?, ?, 'queued')").bind(recid, String(note || "").slice(0, 300), String(who).slice(0, 40)).run();
     await log(env, recid, "submitted", "author submission queued via intake (P9)");
-    return { dup: false, doi: rec.doi || null, title: meta.title || null };
+    return { dup: false, doi: okDoi(rec.doi) || null, title: meta.title || null };
   }
   __name(submitNew, "submitNew");
   __name2(submitNew, "submitNew");
@@ -453,15 +451,12 @@ var jnlRefereeMod = (function() {
   __name(buildGraph, "buildGraph");
   __name2(buildGraph, "buildGraph");
   __name22(buildGraph, "buildGraph");
-  async function zenodoGet(url) {
-    var res = await fetch(url, { headers: { accept: "application/json", "user-agent": UA }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-    var txt = await res.text();
-    if (!res.ok) throw new Error("zenodo HTTP " + res.status + " :: " + txt.slice(0, 180));
-    return JSON.parse(txt);
+  async function sourceGet(url) {
+    throw new Error("external record source retired (NOZ-DOI-1)");
   }
-  __name(zenodoGet, "zenodoGet");
-  __name2(zenodoGet, "zenodoGet");
-  __name22(zenodoGet, "zenodoGet");
+  __name(sourceGet, "sourceGet");
+  __name2(sourceGet, "sourceGet");
+  __name22(sourceGet, "sourceGet");
   function stripHtml(s) {
     return String(s || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
   }
@@ -469,7 +464,7 @@ var jnlRefereeMod = (function() {
   __name2(stripHtml, "stripHtml");
   __name22(stripHtml, "stripHtml");
   async function fetchRecord(recid) {
-    var rec = await zenodoGet("https://zenodo.org/api/records/" + recid);
+    var rec = await sourceGet("record:" + recid);
     var meta = rec.metadata || {};
     var desc = stripHtml(meta.description);
     var creators = (meta.creators || []).map(function(c) {
@@ -500,8 +495,8 @@ var jnlRefereeMod = (function() {
     });
     return {
       recid: rec.id,
-      doi: rec.doi || null,
-      conceptdoi: rec.conceptdoi || null,
+      doi: okDoi(rec.doi) || null,
+      conceptdoi: okDoi(rec.conceptdoi) || null,
       version: meta.version || rec.metadata.version || null,
       title: meta.title || null,
       publication_date: meta.publication_date || null,
@@ -583,13 +578,13 @@ var jnlRefereeMod = (function() {
   __name2(aiRun, "aiRun");
   __name22(aiRun, "aiRun");
   function reviewerSystem(role) {
-    return "You are " + role + ' for an open AI-reviewed journal that overlays Zenodo (no gatekeeping; content judged on merit). You review ONLY the provided record content, and every statement you write must be checkable against it. Use no external citation, source, fact, name, date or figure: you may quote or paraphrase only text present in the input, and anything you cannot point to in the input is left out, never recalled or guessed. Be fair to non-traditional and interdisciplinary work: judge internal consistency, clarity, evidence quality, reproducibility, and honesty, not conformity to one field. score_novelty is judged only against related work supplied in the input; when the input supplies none, you have no basis for it and must return 5. Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: score_soundness (integer 1-10), score_novelty (integer 1-10), score_clarity (integer 1-10), score_reproducibility (integer 1-10), strengths (array of strings), weaknesses (array of strings), fatal_flaws (array of strings; empty array if none), disconfirming_evidence (array of strings; empty if none found), limitations_of_review (array of strings), confidence ("high"|"medium"|"low" with reason inside rationale), verdict ("PUBLISH"|"REVISE"|"REJECT"), rationale (string).';
+    return "You are " + role + ' for an open AI-reviewed journal that overlays an external record source (no gatekeeping; content judged on merit). You review ONLY the provided record content, and every statement you write must be checkable against it. Use no external citation, source, fact, name, date or figure: you may quote or paraphrase only text present in the input, and anything you cannot point to in the input is left out, never recalled or guessed. Be fair to non-traditional and interdisciplinary work: judge internal consistency, clarity, evidence quality, reproducibility, and honesty, not conformity to one field. score_novelty is judged only against related work supplied in the input; when the input supplies none, you have no basis for it and must return 5. Return ONLY one JSON object (no markdown fences, no commentary) with exactly these keys: score_soundness (integer 1-10), score_novelty (integer 1-10), score_clarity (integer 1-10), score_reproducibility (integer 1-10), strengths (array of strings), weaknesses (array of strings), fatal_flaws (array of strings; empty array if none), disconfirming_evidence (array of strings; empty if none found), limitations_of_review (array of strings), confidence ("high"|"medium"|"low" with reason inside rationale), verdict ("PUBLISH"|"REVISE"|"REJECT"), rationale (string).';
   }
   __name(reviewerSystem, "reviewerSystem");
   __name2(reviewerSystem, "reviewerSystem");
   __name22(reviewerSystem, "reviewerSystem");
   function userPrompt(rec, withText) {
-    var head = "RECORD METADATA\ntitle: " + (rec.title || "(none)") + "\ndoi: " + (rec.doi || "(none)") + "\nversion: " + (rec.version || "(none)") + "\npublication_date: " + (rec.publication_date || "(none)") + "\nlicense: " + (rec.license || "(none)") + "\ncreators: " + (rec.creators || "(none)") + "\nkeywords: " + (rec.keywords || "(none)") + "\n\nABSTRACT/DESCRIPTION:\n" + (rec.description || "(none)").slice(0, 6e3) + "\n\n";
+    var head = "RECORD METADATA\ntitle: " + (rec.title || "(none)") + "\ndoi: " + (okDoi(rec.doi) || "(none)") + "\nversion: " + (rec.version || "(none)") + "\npublication_date: " + (rec.publication_date || "(none)") + "\nlicense: " + (rec.license || "(none)") + "\ncreators: " + (rec.creators || "(none)") + "\nkeywords: " + (rec.keywords || "(none)") + "\n\nABSTRACT/DESCRIPTION:\n" + (rec.description || "(none)").slice(0, 6e3) + "\n\n";
     if (withText && rec.text) {
       head = head + "FULL TEXT (file: " + (rec.fetched_key || "unknown") + ", first " + rec.text.length + " chars):\n" + rec.text + "\n\n";
     } else {
@@ -648,7 +643,7 @@ var jnlRefereeMod = (function() {
     var lines = [];
     lines.push("# AI Referee Report");
     lines.push("");
-    lines.push("- Record: " + (rec.title || "(untitled)") + " (Zenodo recid " + rec.recid + ", doi " + (rec.doi || "n/a") + ", version " + (rec.version || "n/a") + ")");
+    lines.push("- Record: " + (rec.title || "(untitled)") + " (record " + rec.recid + ", version " + (rec.version || "n/a") + ")");
     lines.push("- Review basis: " + (basis === "text" ? "metadata + full text (" + rec.text_chars + " chars, file " + rec.fetched_key + ")" : "metadata/abstract only (PDF or no textual file)"));
     lines.push("- Models: " + modelsUsed.join(", "));
     lines.push("- Decision (deterministic thresholds): **" + dec.decision + "** (mean score " + dec.avg + "/10)");
@@ -699,7 +694,7 @@ var jnlRefereeMod = (function() {
     lines.push("## Honesty notes");
     lines.push('- These AI referee reports are advisory. They are not endorsements, certifications of correctness, or statements that a record is "proven". They are structured adversarial critiques produced by language models, with the failure modes each reviewer listed above.');
     lines.push("- Review basis is disclosed: metadata-only reviews never receive PUBLISH.");
-    lines.push("- The overlay does not store paper bodies and does not write to Zenodo (curator write-back requires separate authorization).");
+    lines.push("- The overlay does not store paper bodies and does not write back to the source (curator write-back requires separate authorization).");
     return lines.join("\n");
   }
   __name(buildReport, "buildReport");
@@ -961,21 +956,21 @@ var jnlRefereeMod = (function() {
           if (recParam) {
             var repR = await env.AUDIT.prepare("SELECT decision, avg_score, basis, report_md, created_at FROM jnl_reviews WHERE recid = ?").bind(recParam).first();
             if (!repR) return new Response("No review found for recid " + recParam, { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
-            var repHtml = "<!doctype html><html><head><meta charset='utf-8'><title>AI Referee Report " + recParam + "</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><p><a href='/'>\u2190 index</a></p><h1>AI Referee Report \u2014 Zenodo recid " + recParam + "</h1><p>Decision: <strong>" + escH(repR.decision) + "</strong> \xB7 avg " + escH(String(repR.avg_score)) + " \xB7 basis " + escH(repR.basis) + " \xB7 " + escH(repR.created_at) + "</p><p><a href='https://zenodo.org/records/" + recParam + "'>Zenodo record</a></p><pre style='white-space:pre-wrap;background:#f7f7f7;padding:1rem;border-radius:6px'>" + escH(repR.report_md) + "</pre><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Advisory AI referee report \u2014 not an endorsement or proof. Overlay stores no content.</footer></body></html>";
+            var repHtml = "<!doctype html><html><head><meta charset='utf-8'><title>AI Referee Report " + recParam + "</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><p><a href='/'>\u2190 index</a></p><h1>AI Referee Report \u2014 Record id " + recParam + "</h1><p>Decision: <strong>" + escH(repR.decision) + "</strong> \xB7 avg " + escH(String(repR.avg_score)) + " \xB7 basis " + escH(repR.basis) + " \xB7 " + escH(repR.created_at) + "</p><pre style='white-space:pre-wrap;background:#f7f7f7;padding:1rem;border-radius:6px'>" + escH(repR.report_md) + "</pre><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Advisory AI referee report \u2014 not an endorsement or proof. Overlay stores no content.</footer></body></html>";
             return new Response(repHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
           }
           var idxRows = await env.AUDIT.prepare("SELECT d.recid, d.decision, d.avg_score, d.basis, d.created_at, r.title, r.doi FROM jnl_decisions d LEFT JOIN jnl_records r ON r.recid = d.recid ORDER BY d.id DESC LIMIT 100").all();
           var cards = "";
           for (var xi = 0; xi < idxRows.results.length; xi++) {
             var xr = idxRows.results[xi];
-            cards = cards + "<li><a href='/?recid=" + xr.recid + "'>" + escH(xr.title || "recid " + xr.recid) + "</a> \u2014 <strong>" + escH(xr.decision) + "</strong> (avg " + escH(String(xr.avg_score)) + ", " + escH(xr.basis) + ", " + escH(xr.created_at) + ")" + (xr.doi ? " \xB7 <a href='https://doi.org/" + escH(xr.doi) + "'>DOI</a>" : "") + "</li>";
+            cards = cards + "<li><a href='/?recid=" + xr.recid + "'>" + escH(xr.title || "recid " + xr.recid) + "</a> \u2014 <strong>" + escH(xr.decision) + "</strong> (avg " + escH(String(xr.avg_score)) + ", " + escH(xr.basis) + ", " + escH(xr.created_at) + ")" + (okDoi(xr.doi) ? " \xB7 <a href='https://doi.org/" + escH(xr.doi) + "'>DOI</a>" : "") + "</li>";
           }
           var idxStats = await env.AUDIT.prepare("SELECT (SELECT COUNT(*) FROM jnl_records) AS records, (SELECT COUNT(*) FROM jnl_records WHERE self_authored=1) AS self_records, (SELECT COUNT(*) FROM jnl_decisions) AS decisions, (SELECT COUNT(*) FROM jnl_decisions WHERE self_review=1) AS self_review, (SELECT COUNT(*) FROM jnl_drift) AS drift_runs, (SELECT COUNT(*) FROM jnl_drift WHERE decision_changed=1) AS drift_flips, (SELECT COALESCE(SUM(citation_count),0) FROM jnl_records) AS citations, (SELECT COUNT(*) FROM jnl_submissions) AS submissions").first().catch(function() {
             return null;
           });
           var st = idxStats || { records: 0, self_records: 0, decisions: 0, self_review: 0, drift_runs: 0, drift_flips: 0, citations: 0, submissions: 0 };
           var selfShare = st.records ? Math.round(1e3 * st.self_records / st.records) / 10 + "%" : "n/a";
-          var idxHtml = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>QNFO AI-Reviewed Journal \u2014 open overlay on Zenodo aiscience</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><h1>QNFO AI-Reviewed Journal</h1><p>An open, AI-refereed overlay on the Zenodo <code>aiscience</code> community. Referee reports and decisions below are <strong>advisory</strong> \u2014 structured adversarial critiques by language models, not endorsements or proof. Paper bodies stay on Zenodo; this overlay stores no content.</p><details open style='background:#f6f6f6;padding:.6rem 1rem;border-radius:6px'><summary><strong>Status (machine-counted, not asserted)</strong></summary><ul><li>Tracked records: " + escH(String(st.records)) + " \u2014 self-authored: " + escH(String(st.self_records)) + " (" + escH(selfShare) + ")</li><li>Decisions: " + escH(String(st.decisions)) + " \u2014 flagged as self-review: " + escH(String(st.self_review)) + "</li><li>Reproducibility re-scores: " + escH(String(st.drift_runs)) + " run(s), " + escH(String(st.drift_flips)) + " decision flip(s) on identical content (model drift)</li><li>External citations across the corpus: " + escH(String(st.citations)) + " \u2014 link edges are concept-overlap only while this is zero</li><li>External submissions received: " + escH(String(st.submissions)) + "</li></ul></details><h2>Decisions</h2><ul>" + cards + "</ul><h2>Submitting a record</h2><p>Any Zenodo record can be submitted for review: send <code>POST /submit</code> with JSON <code>{&#34;id&#34;:&#34;&lt;recid, DOI, or Zenodo URL&gt;&#34;}</code> and an <code>x-jnl-token</code> header. Submissions are rate-limited per source. Records authored by this journal's own operator are recorded but are <strong>not</strong> queued for review, to prevent self-review. A review is advisory: a structured adversarial critique, never an endorsement and never a claim that a result is proven.</p><h2>Review integrity notes</h2><p>Decisions are deterministic thresholds applied to model verdicts, and model behaviour changes over time, so a stored decision is time-stamped under the models that produced it rather than a reproducible fact about the record. The <code>/drift</code> endpoint publishes re-score outcomes, including decision flips, and <code>/self-audit</code> publishes the self-review share. Every report states its review basis; metadata-only reviews can never reach PUBLISH.</p><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Deterministic decision thresholds \xB7 metadata-only reviews never PUBLISH \xB7 overlay-only (no Zenodo write-back) \xB7 read API: /health /self-audit /drift /graph /decisions /submissions</footer></body></html>";
+          var idxHtml = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>QNFO AI-Reviewed Journal \u2014 open overlay</title></head><body style='font-family:system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5'><h1>QNFO AI-Reviewed Journal</h1><p>An open, AI-refereed overlay on an external record community. Referee reports and decisions below are <strong>advisory</strong> \u2014 structured adversarial critiques by language models, not endorsements or proof. Paper bodies stay at the source; this overlay stores no content.</p><details open style='background:#f6f6f6;padding:.6rem 1rem;border-radius:6px'><summary><strong>Status (machine-counted, not asserted)</strong></summary><ul><li>Tracked records: " + escH(String(st.records)) + " \u2014 self-authored: " + escH(String(st.self_records)) + " (" + escH(selfShare) + ")</li><li>Decisions: " + escH(String(st.decisions)) + " \u2014 flagged as self-review: " + escH(String(st.self_review)) + "</li><li>Reproducibility re-scores: " + escH(String(st.drift_runs)) + " run(s), " + escH(String(st.drift_flips)) + " decision flip(s) on identical content (model drift)</li><li>External citations across the corpus: " + escH(String(st.citations)) + " \u2014 link edges are concept-overlap only while this is zero</li><li>External submissions received: " + escH(String(st.submissions)) + "</li></ul></details><h2>Decisions</h2><ul>" + cards + "</ul><h2>Submitting a record</h2><p>Any record can be submitted for review: send <code>POST /submit</code> with JSON <code>{&#34;id&#34;:&#34;&lt;recid, DOI, or source URL&gt;&#34;}</code> and an <code>x-jnl-token</code> header. Submissions are rate-limited per source. Records authored by this journal's own operator are recorded but are <strong>not</strong> queued for review, to prevent self-review. A review is advisory: a structured adversarial critique, never an endorsement and never a claim that a result is proven.</p><h2>Review integrity notes</h2><p>Decisions are deterministic thresholds applied to model verdicts, and model behaviour changes over time, so a stored decision is time-stamped under the models that produced it rather than a reproducible fact about the record. The <code>/drift</code> endpoint publishes re-score outcomes, including decision flips, and <code>/self-audit</code> publishes the self-review share. Every report states its review basis; metadata-only reviews can never reach PUBLISH.</p><footer style='opacity:.6;margin-top:2rem;border-top:1px solid #ddd;padding-top:.6rem'>Deterministic decision thresholds \xB7 metadata-only reviews never PUBLISH \xB7 overlay-only (no write-back) \xB7 read API: /health /self-audit /drift /graph /decisions /submissions</footer></body></html>";
           return new Response(idxHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
         }
         if (method === "POST" && (path === "/enqueue" || path === "/seed" || path === "/run" || path === "/run-next" || path === "/cal" || path === "/submit" || path === "/rebuild-graph" || path === "/drift-check" || path === "/citation-probe")) {
@@ -1014,7 +1009,7 @@ var jnlRefereeMod = (function() {
             } catch (e) {
             }
             var recidS = normalizeId(bodyS.id || url.searchParams.get("id") || "");
-            if (!recidS) return json({ ok: false, error: "id required (recid, zenodo DOI, or zenodo URL)" }, 400);
+            if (!recidS) return json({ ok: false, error: "id required (record id or URL)" }, 400);
             var whoS = await whoHash(request.headers.get("x-jnl-token") || "");
             var rlS = await submitRateOk(env, whoS);
             if (!rlS.ok) return json({ ok: false, error: "submission rate limit reached", limit: rlS }, 429);
@@ -1022,11 +1017,11 @@ var jnlRefereeMod = (function() {
             try {
               resS = await submitNew(env, recidS, bodyS.note, whoS);
             } catch (e2) {
-              return json({ ok: false, error: "zenodo lookup failed: " + String(e2 && e2.message || e2).slice(0, 200) }, 502);
+              return json({ ok: false, error: "record lookup failed: " + String(e2 && e2.message || e2).slice(0, 200) }, 502);
             }
             if (resS.dup) return json({ ok: true, duplicate: true, recid: recidS, note: "already queued or reviewed" });
             await submitBump(env, whoS);
-            return json({ ok: true, accepted: true, recid: recidS, doi: resS.doi, title: resS.title, note: "queued for AI referee; runs on the cron cycle (review is advisory)" });
+            return json({ ok: true, accepted: true, recid: recidS, doi: okDoi(resS.doi), title: resS.title, note: "queued for AI referee; runs on the cron cycle (review is advisory)" });
           }
           if (path === "/enqueue" || path === "/seed") {
             var body = {};
@@ -1127,7 +1122,7 @@ var jnlRefereeMod = (function() {
             return json({ ok: true, title: calTitle, decision: decC.decision, avg_score: decC.avg, models: usedC, reason: decC.reason, path: decC.path, speculative: decC.speculative, spec_ack: escC.specPath.acknowledged, spec_votes: escC.specPath.votes, spec_criteria: escC.specPath.criteria, spec_rationale: escC.specPath.rationale });
           }
         }
-        return json({ ok: true, service: "jnl-referee", version: VERSION, path, method, endpoints: ["GET /health", "GET /queue", "GET /reviews?recid=", "GET /decisions?recid=", "POST /enqueue (x-jnl-token)", "POST /seed (x-jnl-token)", "POST /run {recid} (x-jnl-token)", "POST /run-next {n} (x-jnl-token)"], note: "AI referee overlay for Zenodo community aiscience; isolated jnl-* stack; overlay-only (no Zenodo write-back)" });
+        return json({ ok: true, service: "jnl-referee", version: VERSION, path, method, endpoints: ["GET /health", "GET /queue", "GET /reviews?recid=", "GET /decisions?recid=", "POST /enqueue (x-jnl-token)", "POST /seed (x-jnl-token)", "POST /run {recid} (x-jnl-token)", "POST /run-next {n} (x-jnl-token)"], note: "AI referee overlay for an external record community; isolated jnl-* stack; overlay-only (no write-back)" });
       } catch (err) {
         return json({ ok: false, path, error: String(err && err.message || err) }, 500);
       }
@@ -1210,7 +1205,7 @@ var jnlRefereeMod = (function() {
   __name22(specAckSystem, "specAckSystem");
   async function speculationAckPass(env, rec, models) {
     var sys = specAckSystem();
-    var usr = "RECORD METADATA\ntitle: " + (rec.title || "(none)") + "\ndoi: " + (rec.doi || "(none)") + "\ncreators: " + (rec.creators || "(none)") + "\n\nABSTRACT/DESCRIPTION:\n" + String(rec.description || "").slice(0, 4e3) + "\n\nFULL TEXT (first " + String(rec.text || "").length + " chars):\n" + String(rec.text || "").slice(0, 12e3) + "\n\nNow produce the acknowledgment JSON.";
+    var usr = "RECORD METADATA\ntitle: " + (rec.title || "(none)") + "\ndoi: " + (okDoi(rec.doi) || "(none)") + "\ncreators: " + (rec.creators || "(none)") + "\n\nABSTRACT/DESCRIPTION:\n" + String(rec.description || "").slice(0, 4e3) + "\n\nFULL TEXT (first " + String(rec.text || "").length + " chars):\n" + String(rec.text || "").slice(0, 12e3) + "\n\nNow produce the acknowledgment JSON.";
     var votes = [], modelsUsed = [], criteria = [], rationale = "";
     for (var i = 0; i < models.length; i++) {
       try {
@@ -1340,7 +1335,7 @@ var jnlRefereeMod = (function() {
   __name22(driftSample, "driftSample");
   async function citationProbe(env, recid) {
     var row = await env.AUDIT.prepare("SELECT doi FROM jnl_records WHERE recid = ?").bind(recid).first();
-    var doi = row && row.doi ? String(row.doi).replace(/^https?:\/\/doi.org\//, "") : null;
+    var doi = row && okDoi(row.doi) ? String(row.doi).replace(/^https?:\/\/doi.org\//, "") : null;
     if (!doi) return { ok: false, recid, error: "no doi on record" };
     var count = 0, source = "datacite", nota = null;
     try {
@@ -1386,475 +1381,6 @@ var jnlRefereeMod = (function() {
   var SPECULATIVE_RE = /speculative|no (empirical|experimental|direct) (evidence|validation|test|support)|lacks (empirical|experimental) evidence|lack[s]? .{0,24}empirical (evidence|validation)|unfalsifiable|not (empirically|experimentally) (tested|validated|verified)|no (data|measurements?) (supporting|to support)/;
   return { default: index_default };
 })();
-var jnlReviserMod = (function() {
-  const QNFO_VERSION = "jnl-reviser/fabric-20260910";
-  var __defProp22 = Object.defineProperty;
-  var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-  var REF = "jnl-referee";
-  var ZENODO = "https://zenodo.org/api";
-  var OWNER_QNFO = 1328013;
-  var MODEL = "@cf/deepseek-ai/deepseek-v4-flash-0731";
-  var UA = "jnl-reviser/0.2 (QNFO AI-Reviewed Journal revision loop)";
-  var MAX_EDITS = 6;
-  var MIN_FIND = 30;
-  function json(d, s = 200) {
-    return new Response(JSON.stringify(d, null, 1), { status: s, headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" } });
-  }
-  __name(json, "json");
-  __name2(json, "json");
-  __name22(json, "json");
-  async function zf(url, opts = {}, tok) {
-    const r = await fetch(url, { ...opts, headers: { "user-agent": UA, accept: "application/json", "content-type": "application/json", ...tok ? { authorization: `Bearer ${tok}` } : {}, ...opts.headers || {} }, signal: AbortSignal.timeout(12e4) });
-    const t = await r.text();
-    let b = null;
-    try {
-      b = t ? JSON.parse(t) : null;
-    } catch (e) {
-      b = { raw: t.slice(0, 200) };
-    }
-    return { status: r.status, body: b };
-  }
-  __name(zf, "zf");
-  __name2(zf, "zf");
-  __name22(zf, "zf");
-  function looseJson(t) {
-    try {
-      return JSON.parse(t);
-    } catch (e) {
-    }
-    const a = t.indexOf("{"), b = t.lastIndexOf("}");
-    if (a >= 0 && b > a) {
-      try {
-        return JSON.parse(t.slice(a, b + 1));
-      } catch (e2) {
-      }
-    }
-    return null;
-  }
-  __name(looseJson, "looseJson");
-  __name2(looseJson, "looseJson");
-  __name22(looseJson, "looseJson");
-  async function ensureToken(env) {
-    if (!env.ZENODO_TOKEN) throw new Error("missing ZENODO_TOKEN");
-    return env.ZENODO_TOKEN;
-  }
-  __name(ensureToken, "ensureToken");
-  __name2(ensureToken, "ensureToken");
-  __name22(ensureToken, "ensureToken");
-  function extractText(o) {
-    if (typeof o === "string") return o;
-    if (!o || typeof o !== "object") return "";
-    if (o.response) return extractText(o.response);
-    if (o.output_text) return String(o.output_text);
-    if (o.output) return extractText(o.output);
-    if (o.result) return extractText(o.result);
-    if (Array.isArray(o)) return o.map(extractText).filter(Boolean).join(" ");
-    for (const k of Object.keys(o)) {
-      const v = o[k];
-      if (typeof v === "string" && v.length > 40) return v;
-    }
-    return JSON.stringify(o);
-  }
-  __name(extractText, "extractText");
-  __name2(extractText, "extractText");
-  __name22(extractText, "extractText");
-  var worker_default2 = {
-    async fetch(request, env) {
-      const url = new URL(request.url);
-      const path = url.pathname;
-      try {
-        if (path === "/health") return json({ ok: true, service: "jnl-reviser", version: "0.2.0", model: MODEL, zenodo_token_set: !!env.ZENODO_TOKEN });
-        if (request.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
-        if (request.headers.get("x-ops-token") !== env.JNL_OPS_TOKEN) return json({ ok: false, error: "unauthorized" }, 401);
-        const tok = await ensureToken(env);
-        const body = await request.json().catch(() => ({}));
-        const recid = Number(body.recid);
-        const publish = body.publish === true;
-        if (!recid) return json({ ok: false, error: "recid required" }, 400);
-        const rr = await jnlRefCall(env).fetch(`https://${REF}/reviews?recid=${recid}`, { headers: { "user-agent": UA, accept: "application/json" } });
-        const rt = await rr.text();
-        let rj = null;
-        try {
-          rj = JSON.parse(rt);
-        } catch (e) {
-        }
-        if (!rj?.rows?.length) return json({ ok: false, error: "no referee report", detail: rt.slice(0, 150) }, 404);
-        const review = rj.rows[0];
-        const pr = await zf(`${ZENODO}/records/${recid}`);
-        if (pr.status !== 200) return json({ ok: false, error: "record fetch failed" }, 404);
-        const paper = pr.body;
-        const owners = (paper.owners || []).map((o) => Number(typeof o === "object" ? o.id : o));
-        if (!owners.includes(OWNER_QNFO)) return json({ ok: false, error: "not self-published (owner not QNFO)" }, 403);
-        const concept = paper.conceptrecid;
-        const kvKey = `zenodo:draft:${recid}`;
-        let draftId = null;
-        const kvRaw = await env.STATE.get(kvKey);
-        if (kvRaw) {
-          try {
-            const kv = JSON.parse(kvRaw);
-            draftId = kv.draft_id;
-          } catch (e) {
-          }
-        }
-        if (!draftId) {
-          const vr = await zf(`${ZENODO}/deposit/depositions/${recid}/actions/newversion`, { method: "POST", body: "{}" }, tok);
-          if (vr.status !== 201) return json({ ok: false, error: "newversion failed", detail: vr.body }, 502);
-          draftId = vr.body.id;
-          const bucket2 = vr.body.links?.bucket;
-          const dr2 = await zf(`${ZENODO}/deposit/depositions/${draftId}`, {}, tok);
-          for (const f of paper.files || []) {
-            const fr = await fetch(f.links.self, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(9e4) });
-            if (fr.ok) {
-              const c = await fr.text();
-              await fetch(`${bucket2}/${encodeURIComponent(f.key)}`, { method: "PUT", headers: { authorization: `Bearer ${tok}`, "content-type": "application/octet-stream", "user-agent": UA }, body: c, signal: AbortSignal.timeout(12e4) });
-            }
-          }
-          await env.STATE.put(kvKey, JSON.stringify({ draft_id: draftId, conceptrecid: concept, source_recid: recid }));
-        }
-        const dr = await zf(`${ZENODO}/deposit/depositions/${draftId}`, {}, tok);
-        if (dr.status !== 200) return json({ ok: false, error: "draft fetch failed" }, 502);
-        const draft = dr.body;
-        const bucket = draft.links.bucket;
-        const mdKey = (paper.files || []).find((f) => /\.(md|txt|markdown)$/i.test(f.key))?.key || (draft.files || []).find((f) => /\.(md|txt|markdown)$/i.test(f.filename))?.filename;
-        if (!mdKey) return json({ ok: false, error: "no markdown file" }, 422);
-        const mres = await fetch(`${bucket}/${encodeURIComponent(mdKey)}`, { headers: { authorization: `Bearer ${tok}`, "user-agent": UA }, signal: AbortSignal.timeout(9e4) });
-        if (!mres.ok) return json({ ok: false, error: "md fetch from draft failed" }, 502);
-        const mdText = await mres.text();
-        const mdLimited = mdText.length > 3e4 ? mdText.slice(0, 3e4) : mdText;
-        const weak = [];
-        for (const sec of ["Weaknesses:", "Weaknesses", "weaknesses"]) {
-        }
-        const lines = (review.report_md || "").split("\n");
-        let inW = false;
-        for (const ln of lines) {
-          const t = ln.trim();
-          if (/^- Weaknesses:/i.test(t)) {
-            inW = true;
-            continue;
-          }
-          if (/^- (Strengths|Rationale|Limitations|Verdict|Soundness)/i.test(t)) {
-            inW = false;
-            continue;
-          }
-          if (inW && /^  - /.test(ln)) weak.push(t.replace(/^  - /, ""));
-        }
-        const weakText = weak.slice(0, 6).map((w, i) => `${i + 1}. ${w}`).join("\n") || "No explicit weaknesses listed; address clarity and evidence gaps.";
-        const sysP = `You are an expert copyeditor improving a scholarly preprint in response to referee feedback. Return STRICT JSON only: {"edits":[{"find":"exact unique substring from the paper (>= ${MIN_FIND} chars, verbatim, incl. surrounding words)","replace":"improved replacement preserving meaning and author voice","reason":"which referee point this addresses"}]}. Rules: max ${MAX_EDITS} edits; NEVER alter title/frontmatter/first 300 chars; NEVER invent citations, data, or results; make conservative clarity/evidence-flagging/hedging improvements only; if no safe edit exists return {"edits":[]}.`;
-        const userP = `REFEREE WEAKNESSES:
-${weakText}
-
-DECISION: ${review.decision} (avg ${review.avg_score}/10)
-
-PAPER (${mdLimited.length} chars shown of ${mdText.length}):
-${mdLimited}`;
-        const ar = await aiRunAttr(env, "jnl-pipeline", "reviser-draft", MODEL, { prompt: `${sysP}
-
-${userP}`, max_tokens: 1500 });
-        const raw = extractText(ar).slice(0, 6e3);
-        const edits = looseJson(raw)?.edits || [];
-        const applied = [];
-        const skipped = [];
-        let out = mdText;
-        for (const e of edits.slice(0, MAX_EDITS)) {
-          const f = String(e.find || "");
-          const r = String(e.replace ?? "");
-          if (f.length < MIN_FIND) {
-            skipped.push({ reason: "find too short", find: f.slice(0, 60) });
-            continue;
-          }
-          const idx = out.indexOf(f);
-          const idx2 = idx >= 0 ? out.indexOf(f, idx + 1) : -1;
-          if (idx < 0) {
-            skipped.push({ reason: "not found", find: f.slice(0, 60) });
-            continue;
-          }
-          if (idx2 >= 0) {
-            skipped.push({ reason: "not unique", find: f.slice(0, 60) });
-            continue;
-          }
-          if (idx < 300) {
-            skipped.push({ reason: "frontmatter protected", find: f.slice(0, 60) });
-            continue;
-          }
-          out = out.slice(0, idx) + r + out.slice(idx + f.length);
-          applied.push({ find: f.slice(0, 80), replace: r.slice(0, 120), reason: e.reason });
-        }
-        if (applied.length === 0) {
-          const sysB = `You are an expert copyeditor. Referee feedback asks for clarity on empirical status and accessibility. Add a small number of INSERTIONS ONLY (never alter existing wording, never invent citations/data/results/experiments). Return STRICT JSON: {"edits":[{"find":"exact unique substring >= 30 chars to anchor after (verbatim from paper)","insert":"1-3 sentences to append right after the anchor","reason":"which referee point this addresses"}]}. Each insert must truthfully clarify scope, empirical status, or define a dense term for non-experts (e.g. "In this work, X is presented as a theoretical proposal; experimental validation is left to future work."). Max 3 edits. If none are safe return {"edits":[]}.`;
-          const arB = await aiRunAttr(env, "jnl-pipeline", "reviser-weakness", MODEL, { prompt: `${sysB}
-
-REFEREE WEAKNESSES:
-${weakText}
-
-PAPER:
-${mdLimited}`, max_tokens: 1200 });
-          const rawB = extractText(arB).slice(0, 6e3);
-          const editsB = looseJson(rawB)?.edits || [];
-          for (const e of editsB.slice(0, 3)) {
-            const f = String(e.find || "");
-            const ins = String(e.insert || "").trim();
-            if (f.length < 30 || !ins) continue;
-            const idx = mdText.indexOf(f);
-            if (idx < 0 || mdText.indexOf(f, idx + 1) >= 0 || idx < 300) continue;
-            const sp = /\s$/;
-            const joiner = sp.test(mdText.slice(0, idx + f.length)) ? " " : " ";
-            out = mdText.slice(0, idx + f.length) + "\n\n" + ins + mdText.slice(idx + f.length);
-            applied.push({ find: f.slice(0, 80), insert: ins.slice(0, 150), reason: e.reason, type: "insertion" });
-            break;
-          }
-          if (applied.length === 0) return json({ ok: false, error: "no safe edits applied", applied, skipped, weaknesses: weak.slice(0, 6), model_raw: raw.slice(0, 800), model_raw_b: rawB.slice(0, 800), text_chars: mdText.length, text_preview_chars: mdLimited.length }, 422);
-        }
-        await fetch(`${bucket}/${encodeURIComponent(mdKey)}`, { method: "PUT", headers: { authorization: `Bearer ${tok}`, "content-type": "application/octet-stream", "user-agent": UA }, body: out, signal: AbortSignal.timeout(12e4) });
-        const curVer = paper.metadata?.version || "1.0";
-        const bump = /* @__PURE__ */ __name22((v) => {
-          const m = String(v).match(/^v?(\d+)\.(\d+)(.*)$/i);
-          if (!m) return `v1.1`;
-          const nv = `${m[1]}.${Number(m[2]) + 1}`;
-          return m[3] ? `v${nv}` : v.startsWith("v") || /^v/i.test(v) ? `v${nv}` : nv;
-        }, "bump");
-        const newVer = curVer === "1.0" ? "1.1" : bump(curVer);
-        const notes = `AI-assisted revision (${newVer}) addressing AI referee report: ${applied.length} targeted edits (${applied.map((a) => (a.reason || "").slice(0, 60)).filter(Boolean).join("; ").slice(0, 300) || "clarity/evidence hardening"}). Full referee report: see aiscience community review record.`;
-        const existingMeta = draft.metadata && Object.keys(draft.metadata).length > 2 ? draft.metadata : paper.metadata || {};
-        const merged = JSON.parse(JSON.stringify(existingMeta));
-        delete merged.prereserve_doi;
-        merged.version = newVer;
-        merged.notes = merged.notes ? `${merged.notes} | ${notes}` : notes;
-        merged.publication_date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-        if (Array.isArray(merged.communities)) merged.communities = merged.communities.map((c) => ({ identifier: typeof c === "string" ? c : c.identifier || c.id }));
-        const meta = { metadata: merged };
-        const mur = await zf(`${ZENODO}/deposit/depositions/${draftId}`, { method: "PUT", body: JSON.stringify(meta) }, tok);
-        if (mur.status !== 200) return json({ ok: false, error: "metadata update failed", detail: mur.body }, 502);
-        const outObj = { ok: true, recid, draft_id: draftId, conceptrecid: concept, file: mdKey, version: newVer, applied, skipped, weaknesses: weak.slice(0, 6), published: false };
-        if (publish) {
-          const pub = await zf(`${ZENODO}/deposit/depositions/${draftId}/actions/publish`, { method: "POST", body: "{}" }, tok);
-          if (pub.status < 200 || pub.status >= 300) return json({ ok: false, error: "publish failed", detail: pub.body }, 502);
-          const rec = pub.body;
-          outObj.published = true;
-          outObj.new_recid = rec.id;
-          outObj.new_doi = rec.doi || rec.metadata?.doi;
-          await env.STATE.put(`zenodo:published:${recid}`, JSON.stringify({ new_recid: rec.id, new_doi: rec.doi, draft_id: draftId }));
-        }
-        return json(outObj);
-      } catch (err) {
-        return json({ ok: false, error: String(err && err.stack || err.message || err) }, 500);
-      }
-    }
-  };
-  return { default: worker_default2 };
-})();
-var jnlZenodoMod = (function() {
-  const QNFO_VERSION = "jnl-zenodo/fabric-20260910";
-  var __defProp22 = Object.defineProperty;
-  var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "name", { value, configurable: true }), "__name");
-  var REFEREE = null;
-  var ZENODO_API = "https://zenodo.org/api";
-  var OWNER_QNFO = 1328013;
-  var COMMUNITY_UUID = "87f14e85-7156-4146-84e9-9e3a11e29c1d";
-  var UA = "jnl-zenodo/0.1 (QNFO AI-Reviewed Journal overlay; contact qnfo.org)";
-  function json(data, status = 200) {
-    return new Response(JSON.stringify(data, null, 1), { status, headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" } });
-  }
-  __name(json, "json");
-  __name2(json, "json");
-  __name22(json, "json");
-  async function zfetch(url, opts = {}, token) {
-    const res = await fetch(url, { ...opts, headers: { "user-agent": UA, accept: "application/json", "content-type": "application/json", ...token ? { authorization: `Bearer ${token}` } : {}, ...opts.headers || {} }, signal: AbortSignal.timeout(9e4) });
-    const txt = await res.text();
-    let body = null;
-    try {
-      body = txt ? JSON.parse(txt) : null;
-    } catch (e) {
-      body = { raw: txt.slice(0, 200) };
-    }
-    return { status: res.status, body };
-  }
-  __name(zfetch, "zfetch");
-  __name2(zfetch, "zfetch");
-  __name22(zfetch, "zfetch");
-  function stripHtml(s) {
-    return String(s || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  }
-  __name(stripHtml, "stripHtml");
-  __name2(stripHtml, "stripHtml");
-  __name22(stripHtml, "stripHtml");
-  async function tryCommunitySubmission(draftId, token) {
-    const attempts = [];
-    const bodies = [
-      { type: "community-submission", community: COMMUNITY_UUID },
-      { type: "community-submission", payload: { community: COMMUNITY_UUID } }
-    ];
-    for (const body of bodies) {
-      const tag = body.payload ? "payload-shape" : "flat-shape";
-      try {
-        const put = await fetch(ZENODO_API + "/records/" + draftId + "/draft/review", {
-          method: "PUT",
-          headers: { authorization: "Bearer " + token, "content-type": "application/json", "user-agent": UA, accept: "application/json" },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(6e4)
-        });
-        const pt = await put.text();
-        let parsed = null;
-        try {
-          parsed = pt ? JSON.parse(pt) : null;
-        } catch (e) {
-        }
-        attempts.push({ step: "review-put", shape: tag, status: put.status, request_id: parsed && parsed.id || null, head: pt.slice(0, 140) });
-        if (put.ok && parsed && parsed.id) {
-          const sub = await fetch(ZENODO_API + "/records/" + draftId + "/draft/actions/submit-review", {
-            method: "POST",
-            headers: { authorization: "Bearer " + token, "content-type": "application/json", "user-agent": UA, accept: "application/json" },
-            body: "{}",
-            signal: AbortSignal.timeout(6e4)
-          });
-          const st = await sub.text();
-          attempts.push({ step: "submit-review", status: sub.status, head: st.slice(0, 140) });
-          if (sub.ok) return { ok: true, attempts, request_id: parsed.id };
-        }
-      } catch (e) {
-        attempts.push({ step: "review-put", shape: tag, error: String(e && e.message || e) });
-      }
-    }
-    return { ok: false, attempts };
-  }
-  __name(tryCommunitySubmission, "tryCommunitySubmission");
-  __name2(tryCommunitySubmission, "tryCommunitySubmission");
-  __name22(tryCommunitySubmission, "tryCommunitySubmission");
-  var index_default = {
-    async fetch(request, env) {
-      const url = new URL(request.url);
-      const path = url.pathname;
-      try {
-        if (path === "/diag") {
-          const probes = [];
-          for (const u of [`${REFEREE}/health`, `${REFEREE}/reviews?recid=21993116`, `${ZENODO_API}/records/21993116`, `https://example.com`]) {
-            try {
-              const res = await fetch(u, { headers: { "user-agent": UA, accept: "application/json" }, signal: AbortSignal.timeout(3e4) });
-              const txt = await res.text();
-              probes.push({ url: u, status: res.status, head: txt.slice(0, 160) });
-            } catch (e) {
-              probes.push({ url: u, error: String(e && e.message || e) });
-            }
-          }
-          return json({ ok: true, version: "0.1.1-diag", probes });
-        }
-        if (path === "/submissions") {
-          const kvList = await env.STATE.list({ prefix: "zenodo:submission:" });
-          const out = [];
-          for (const k of kvList.keys) {
-            const v = await env.STATE.get(k.name);
-            try {
-              out.push(JSON.parse(v));
-            } catch (e) {
-            }
-          }
-          return json({ ok: true, count: out.length, submissions: out });
-        }
-        if (path === "/health") {
-          return json({ ok: true, service: "jnl-zenodo", version: "0.1.3", zenodo_token_set: !!env.ZENODO_TOKEN });
-        }
-        if (request.method !== "POST") return json({ ok: false, error: "method not allowed; POST only" }, 405);
-        if (request.headers.get("x-ops-token") !== env.JNL_OPS_TOKEN) return json({ ok: false, error: "unauthorized" }, 401);
-        const body = await request.json().catch(() => ({}));
-        if (path === "/publish-review") {
-          const recid = Number(body.recid);
-          if (!recid) return json({ ok: false, error: "recid required" }, 400);
-          const kvKey = `zenodo:review:${recid}`;
-          const existing = await env.STATE.get(kvKey);
-          if (existing) return json({ ok: true, already_published: JSON.parse(existing) });
-          const rr = await (async () => {
-            const res = await jnlRefCall(env).fetch(`https://jnl-referee/reviews?recid=${recid}`, { headers: { "user-agent": UA, accept: "application/json" } });
-            const txt = await res.text();
-            let b = null;
-            try {
-              b = txt ? JSON.parse(txt) : null;
-            } catch (e) {
-            }
-            return { status: res.status, body: b };
-          })();
-          if (rr.status !== 200 || !rr.body?.rows?.length) return json({ ok: false, error: `referee report not found (${rr.status})` }, 404);
-          const review = rr.body.rows[0];
-          const pr = await zfetch(`${ZENODO_API}/records/${recid}`);
-          if (pr.status !== 200) return json({ ok: false, error: `zenodo record fetch failed (${pr.status})` }, 404);
-          const paper = pr.body;
-          const title = paper.metadata?.title || `Zenodo record ${recid}`;
-          const paperDoi = paper.doi || paper.metadata?.doi;
-          const dr = await zfetch(`${ZENODO_API}/deposit/depositions`, { method: "POST", body: "{}" }, env.ZENODO_TOKEN);
-          if (dr.status !== 201) return json({ ok: false, error: `draft create failed (${dr.status})`, detail: dr.body }, 502);
-          const draft = dr.body;
-          const draftId = draft.id;
-          const bucket = draft.links?.bucket;
-          const desc = `AI-generated referee report for "${stripHtml(title)}" (Zenodo ${paperDoi}). Produced automatically by the QNFO AI-Reviewed Journal overlay on the Zenodo 'aiscience' community. Advisory machine review; not endorsement. Full report in file. Models: ${review.model || "workers-ai"}. Decision: ${review.decision || "n/a"} (avg ${review.avg_score ?? "n/a"}/10).`;
-          const meta = {
-            metadata: {
-              title: `AI Referee Report \u2014 ${stripHtml(title).slice(0, 240)}`,
-              upload_type: "publication",
-              publication_type: "report",
-              description: desc,
-              creators: [{ name: "QNFO AI Referee", affiliation: "QNFO" }],
-              access_right: "open",
-              license: "cc-by-4.0",
-              communities: [{ identifier: "aiscience" }],
-              related_identifiers: paperDoi ? [{ identifier: paperDoi, relation: "reviews", scheme: "doi" }] : []
-            }
-          };
-          const mr = await zfetch(`${ZENODO_API}/deposit/depositions/${draftId}`, { method: "PUT", body: JSON.stringify(meta) }, env.ZENODO_TOKEN);
-          if (mr.status !== 200) return json({ ok: false, error: `metadata update failed (${mr.status})`, detail: mr.body }, 502);
-          const submit = await tryCommunitySubmission(draftId, env.ZENODO_TOKEN);
-          await env.STATE.put("zenodo:submission:" + recid, JSON.stringify({ recid, draft_id: draftId, ok: submit.ok, attempts: submit.attempts, at: (/* @__PURE__ */ new Date()).toISOString() }));
-          const fname = `ai-referee-report-${recid}.md`;
-          let ur = { status: 0 };
-          try {
-            const fres = await fetch(`${bucket}/${encodeURIComponent(fname)}`, { method: "PUT", headers: { authorization: `Bearer ${env.ZENODO_TOKEN}`, "content-type": "application/octet-stream", "user-agent": UA }, body: review.report_md || desc, signal: AbortSignal.timeout(9e4) });
-            ur = { status: fres.status };
-          } catch (e) {
-            ur = { status: 0, error: String(e.message) };
-          }
-          if (ur.status < 200 || ur.status >= 300) return json({ ok: false, error: `file upload failed (${ur.status})`, detail: ur }, 502);
-          const pub = await zfetch(`${ZENODO_API}/deposit/depositions/${draftId}/actions/publish`, { method: "POST", body: "{}" }, env.ZENODO_TOKEN);
-          if (pub.status < 200 || pub.status >= 300) return json({ ok: false, error: `publish failed (${pub.status})`, detail: pub.body }, 502);
-          const rec = pub.body;
-          const out = { zenodo_recid: rec.id, submission: { attempted: true, ok: submit.ok, request_id: submit.request_id || null }, conceptrecid: rec.conceptrecid, doi: rec.doi || rec.metadata?.doi, decision: review.decision, avg_score: review.avg_score, paper_recid: recid, paper_doi: paperDoi, published_at: (/* @__PURE__ */ new Date()).toISOString() };
-          await env.STATE.put(kvKey, JSON.stringify(out));
-          return json({ ok: true, published: out });
-        }
-        if (path === "/revise-draft") {
-          const recid = Number(body.recid);
-          if (!recid) return json({ ok: false, error: "recid required" }, 400);
-          const pr = await zfetch(`${ZENODO_API}/records/${recid}`);
-          if (pr.status !== 200) return json({ ok: false, error: `zenodo record fetch failed (${pr.status})` }, 404);
-          const paper = pr.body;
-          const owners = (paper.owners || []).map((o) => Number(typeof o === "object" ? o.id : o));
-          if (!owners.length && paper.owner != null) owners.push(Number(paper.owner));
-          if (!owners.includes(OWNER_QNFO)) return json({ ok: false, error: "not self-published (owner not QNFO); revisions only for own records", owner: owners }, 403);
-          const concept = paper.conceptrecid;
-          if (!concept) return json({ ok: false, error: "no conceptrecid" }, 400);
-          const vr = await zfetch(`${ZENODO_API}/deposit/depositions/${recid}/actions/newversion`, { method: "POST", body: "{}" }, env.ZENODO_TOKEN);
-          if (vr.status < 200 || vr.status >= 300) return json({ ok: false, error: `new version failed (${vr.status})`, detail: vr.body }, 502);
-          const draft = vr.body;
-          const draftId = draft.id;
-          const bucket = draft.links?.bucket;
-          const mdFile = (paper.files || []).find((f) => /\.(md|txt|markdown)$/i.test(f.key));
-          let copied = [];
-          if (mdFile) {
-            const fr = await fetch(mdFile.links.self, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(6e4) });
-            if (fr.ok) {
-              const content = await fr.text();
-              await fetch(`${bucket}/${encodeURIComponent(mdFile.key)}`, { method: "PUT", headers: { authorization: `Bearer ${env.ZENODO_TOKEN}`, "content-type": "application/octet-stream", "user-agent": UA }, body: content, signal: AbortSignal.timeout(9e4) });
-              copied.push(mdFile.key);
-            }
-          }
-          const out = { draft_id: draftId, conceptrecid: concept, source_recid: recid, copied_files: copied, next: `PUT ${ZENODO_API}/deposit/depositions/${draftId} to edit metadata; POST .../actions/publish to publish`, status: "draft-not-published" };
-          await env.STATE.put(`zenodo:draft:${recid}`, JSON.stringify(out));
-          return json({ ok: true, draft: out });
-        }
-        return json({ ok: false, error: `unknown path ${path}` }, 404);
-      } catch (err) {
-        return json({ ok: false, error: String(err && err.stack || err.message || err) }, 500);
-      }
-    }
-  };
-  return { default: index_default };
-})();
 function jnlRefCall(env) {
   return { fetch: /* @__PURE__ */ __name2(function(url, init) {
     return jnlRefereeMod.default.fetch(new Request(url, init), env);
@@ -1865,7 +1391,7 @@ __name2(jnlRefCall, "jnlRefCall");
 var worker_default = {
   async fetch(request, env, ctx) {
     const p = new URL(request.url).pathname;
-    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "jnl-pipeline", version: "1.0.0" }), { headers: { "content-type": "application/json" } });
+    if (p === "/health") return new Response(JSON.stringify({ ok: true, worker: "jnl-pipeline", version: "1.0.1-doi-scrub" }), { headers: { "content-type": "application/json" } });
     function sub(prefix, mod) {
       const u = new URL(request.url);
       u.pathname = p.slice(prefix.length) || "/";
@@ -1875,13 +1401,7 @@ var worker_default = {
     __name2(sub, "sub");
     if (p === "/watch" || p.startsWith("/watch/")) return sub("/watch", jnlWatchMod);
     if (p === "/referee" || p.startsWith("/referee/")) return sub("/referee", jnlRefereeMod);
-    if (p === "/reviser" || p.startsWith("/reviser/")) return sub("/reviser", jnlReviserMod);
-    if (p === "/zenodo" || p.startsWith("/zenodo/")) return sub("/zenodo", jnlZenodoMod);
     return new Response("jnl-pipeline", { status: 200 });
-  },
-  async scheduled(event, env, ctx) {
-    if (event.cron === "*/10 * * * *") return jnlWatchMod.default.scheduled ? jnlWatchMod.default.scheduled(event, env, ctx) : void 0;
-    if (event.cron === "23 */2 * * *") return jnlRefereeMod.default.scheduled(event, env, ctx);
   }
 };
 // WORKERS-AI-SPEND-UNATTRIBUTED-RISING-1 (#1681): every env.AI.run in this worker goes through aiRunAttr, which adds a

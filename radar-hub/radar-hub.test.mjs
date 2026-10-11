@@ -109,7 +109,7 @@ const toml = readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
 ok(/^crons = \["0 \* \* \* \*"\]$/m.test(toml), "wrangler.toml declares the single hourly tick");
 const m = /var CRON_TABLE = \[([^\]]*)\];/.exec(src);
 const crons = m ? [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]) : [];
-ok(crons.length === 9, "nine table entries, as before (net-zero; got " + crons.length + ")");
+ok(crons.length === 8, "eight table entries after the NOZ-DOI-1 weekly-job removal (got " + crons.length + ")");
 const sched = src.slice(src.indexOf("    return cronTickDispatch(event, async function (event) {\n    const c = event.cron;"));
 ok(crons.every((c) => sched.includes('"' + c + '"')), "every declared cron is routed by the hub's scheduled handler");
 ok(crons.includes("0 5 * * 2") && !crons.includes("0 5 * * 1") && cfDays("2").join() === "MON", "the events radar cron fires Monday, the day it reads its weekly sources");
