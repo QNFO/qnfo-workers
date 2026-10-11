@@ -1,98 +1,50 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@0ed9edb44593",
- "due": 11,
- "pass": 1,
- "fail": 10,
+ "verifier": "remediation-consumer@73cf64e2e0e0",
+ "due": 5,
+ "pass": 3,
+ "fail": 2,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2146",
-   "issue_id": 2146,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop fi-executor did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2085",
-   "issue_id": 2085,
+   "class": "fm-migration-unapplied",
+   "issue_id": null,
    "verdict": "fail",
    "expected": "1",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2087",
-   "issue_id": 2087,
+   "class": "issue-2301",
+   "issue_id": 2301,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
+   "observed": "missing-marker",
    "written": true
   },
   {
-   "class": "issue-2089",
-   "issue_id": 2089,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
+   "class": "fm-dedup-id-gap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2096",
-   "issue_id": 2096,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop objective-constraints did not close it within 48h",
+   "class": "fm-registry-live-absent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2101",
-   "issue_id": 2101,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no scripts/* code task merged yet (0 such tasks exist)",
-   "written": true
-  },
-  {
-   "class": "fm-autoaudit-stale",
+   "class": "fm-standing-report-issue",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2102",
-   "issue_id": 2102,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: no code-task.intake-redirect event yet",
-   "written": true
-  },
-  {
-   "class": "issue-2109",
-   "issue_id": 2109,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop qnfo-email did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2256",
-   "issue_id": 2256,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2111",
-   "issue_id": 2111,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: 21 SEARCH-not-found failures in 7 days (target <= 3)",
    "written": true
   }
  ],
@@ -119,12 +71,13 @@
   "http",
   "runner-https"
  ],
+ "https": 1,
  "runtime_verified_share_24h": 3.8,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 38133,
- "head": "0ed9edb445938bb0516eaee23b7ff57b87025afb",
+ "spent_ms": 16406,
+ "head": "73cf64e2e0e051e3622d88541f2d5b2765822835",
  "job_status": "success",
- "ts": "2026-10-11T08:09:34Z"
+ "ts": "2026-10-11T08:21:24Z"
 }
