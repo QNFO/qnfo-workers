@@ -126,6 +126,12 @@ const get = (path) => w.fetch(new Request("https://q08.org" + path, { headers: {
   const again = await V.auditPublished(env, 10);
   check("an audited piece is not audited again", again.checked === 0, again);
 }
+{
+  // Q08-AI-OBJECT-REPLY-1: Workers AI hands back `response` as a parsed object when a model replies with bare JSON.
+  const objEnv = { AI: { run: async () => ({ response: { unsupported: [], verdict: "pass" } }) } };
+  const fc = await V.factCheck(objEnv, "# T\nSome essay text.", "Some source text.", "@cf/openai/gpt-oss-120b", "s");
+  check("an object-shaped AI reply still yields a verdict", fc.unavailable === false && fc.ok === true && fc.judges.length === 2, fc);
+}
 globalThis.fetch = origFetch;
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
