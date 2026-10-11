@@ -1,12 +1,101 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@8ee2fdf41fec",
- "due": 0,
- "pass": 0,
- "fail": 0,
+ "verifier": "remediation-consumer@a3023a805346",
+ "due": 11,
+ "pass": 1,
+ "fail": 10,
  "skipped": 0,
- "contracts": [],
+ "contracts": [
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2116",
+   "issue_id": 2116,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "below target: qnfo-research-exec glm-5.3-flash cached share 0.241 under 0.30 on the last complete day",
+   "written": true
+  },
+  {
+   "class": "issue-2118",
+   "issue_id": 2118,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2151",
+   "issue_id": 2151,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop fi-executor did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "failed",
+   "written": true
+  },
+  {
+   "class": "issue-2174",
+   "issue_id": 2174,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2130",
+   "issue_id": 2130,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop host-census did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2132",
+   "issue_id": 2132,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2158",
+   "issue_id": 2158,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop qnfo-fleet-control did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2170",
+   "issue_id": 2170,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2133",
+   "issue_id": 2133,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: watchmaker_index reads 1 and qnfo-fleet-dashboard is ?",
+   "written": true
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,13 +119,14 @@
   "http",
   "runner-https"
  ],
+ "https": 1,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 3.9,
+ "runtime_verified_share_24h": 4.2,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 4284,
- "head": "8ee2fdf41fec83db4d42582a89e79c22eaa1ce01",
+ "spent_ms": 15991,
+ "head": "a3023a8053463c7e63e353bbc8759e8f6e128885",
  "job_status": "success",
- "ts": "2026-10-11T09:31:38Z"
+ "ts": "2026-10-11T09:36:20Z"
 }
