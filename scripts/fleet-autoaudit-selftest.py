@@ -247,7 +247,7 @@ def run_main(argv):
     fa.classify = lambda d: {"w": {"note": "SYNC"}}
     fa.write_audit_rows = lambda rows: (1, [], "2026-10-02 09:00:00")
     fa.purge_stale = lambda now: (0, None)
-    def _pub(body):
+    def _pub(body, has_findings=True):
         calls["publish"] += 1
         return "updated", 52, "HTTP 403: rate limit"
     def _apply(d):
@@ -331,6 +331,35 @@ res, n, slept = run_d1([("err", 400, b'{"success":false,"errors":[{"code":7500,"
 check("a SQL error (HTTP 400, code 7500, SQLITE_ERROR) is not retried", not fa.d1_ok(res) and n == 1 and slept == [] and "HTTP 400" in fa.d1_err(res), (res, n, slept))
 res, n, slept = run_d1([("err", 500, R687)] * 3)
 check("three transient failures count as one write failure that says so", not fa.d1_ok(res) and n == 3 and "after 3 attempts" in fa.d1_err(res), (res, n, slept))
+
+# ---------------------------------------------------------------- AUTOAUDIT-ACTIONABLE-1
+G = {"sync_workers": [{"worker": "a", "version": "1"}], "not_a_worker": [{"worker": "docs", "dir": "docs"}],
+     "not_deployed_workers": [{"worker": "old", "dir": "old", "marker": "RETIRED"}, {"worker": "gone", "dir": "gone", "marker": None}],
+     "cron_only": [{"worker": "c", "dir": "c"}], "ahead": []}
+rows = fa.classify(G)
+check("the D1 note of a retired absence stays NOT_DEPLOYED (consumers key on it)", rows["old"]["note"] == "NOT_DEPLOYED" and rows["old"].get("retired") == "RETIRED", rows["old"])
+act = fa.actionable(G, rows, [], None)
+check("only the unmarked absence is actionable", len(act) == 1 and "`gone`" in act[0], act)
+G2 = dict(G, not_deployed_workers=[{"worker": "old", "dir": "old", "marker": "FOLDED"}])
+check("expected states only: no actionable finding", fa.actionable(G2, fa.classify(G2), [], None) == [])
+check("a D1 write failure, a failed purge and a repo-ahead worker are findings",
+      len(fa.actionable(dict(G2, ahead=[{"worker": "a", "repo": "2", "live": "1"}]), fa.classify(G2), [("a", "e")], "boom")) == 3)
+check("legacy bare-string not_deployed entries stay actionable", fa.actionable({"not_deployed_workers": ["x"]}, fa.classify({"not_deployed_workers": ["x"]}), [], None) != [])
+body = fa.summary_md(G2, fa.classify(G2), 4, [], "2026-10-11 08:00:00")
+check("the report counts retired absences apart and says the issue closes", "NOT_DEPLOYED (FOLDED/RETIRED, expected)" in body and "Actionable findings: 0" in body, body[-600:])
+
+calls = []
+def fake_gh(method, path, payload=None):
+    calls.append((method, path, payload))
+    if method == "GET":
+        return [{"number": 52, "title": fa.ISSUE_TAG + ": scheduled fleet self-audit", "state": "open"}]
+    return {}
+fa.gh_api = fake_gh
+check("no findings: #52 is closed as completed", fa.publish_issue("b", False)[:2] == ("closed", 52) and calls[-1][2] == {"body": "b", "state": "closed", "state_reason": "completed"}, calls[-1])
+check("a finding reopens the same issue", fa.publish_issue("b", True)[:2] == ("updated", 52) and calls[-1][2] == {"body": "b", "state": "open"}, calls[-1])
+check("the lookup includes closed issues so the issue is reused, not duplicated", "state=all" in calls[0][1] and "labels=fleet-autoaudit" in calls[0][1], calls[0])
+calls.clear(); fa.gh_api = lambda m, p, b=None: (calls.append((m, p, b)) or ([] if m == "GET" else {"number": 99}))
+check("no issue and no findings: nothing is created", fa.publish_issue("b", False)[0] == "none-needed" and len(calls) == 1, calls)
 
 print("\n%d failure(s)" % len(fails))
 sys.exit(1 if fails else 0)
