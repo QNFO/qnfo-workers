@@ -37,10 +37,10 @@ const hAgo = (n) => new Date(NOW - n * 3600000).toISOString();
 
 function makeD1() {
   const db = new DatabaseSync(":memory:");
-  db.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE code_tasks (id TEXT, branch TEXT, status TEXT, updated_at TEXT); CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, job TEXT, status TEXT); CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT); INSERT INTO metric_registry (metric) VALUES ('repo_branches_open');");
+  db.exec("CREATE TABLE ops_config (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE code_tasks (id TEXT, branch TEXT, status TEXT, updated_at TEXT); CREATE TABLE cloud_ops_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, text TEXT, job TEXT, status TEXT); CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT); INSERT INTO metric_registry (metric) VALUES ('repo_branches_open'); CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);");
   const stmt = (sql, args) => ({
     bind: (...a2) => stmt(sql, a2),
-    run: async () => { db.prepare(sql).run(...args); return {}; },
+    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
     first: async () => db.prepare(sql).get(...args) || null,
     all: async () => ({ results: db.prepare(sql).all(...args) })
   });
@@ -69,13 +69,14 @@ function makeGh(sc) {
     if (method === "POST" && /^\/issues\/\d+\/comments$/.test(path)) return ok({}, 201);
     if (method === "PATCH" && path.startsWith("/pulls/")) return ok({});
     if (method === "PATCH" && path === "") return ok({});
+    if (method === "GET" && (m = /^\/check-runs\/(\d+)\/annotations/.exec(path))) return ok((sc.annotations || {})[m[1]] || []);
     return ok(null, 404);
   };
   return { evApi, calls };
 }
 
-async function run(sc, opts) {
-  const d1 = makeD1();
+async function run(sc, opts, d1In) {
+  const d1 = d1In || makeD1();
   (sc.liveTasks || []).forEach((br) => d1.db.prepare("INSERT INTO code_tasks (id, branch, status, updated_at) VALUES (?1, ?2, 'branch_pushed', ?3)").run("t-" + br, br, hAgo(1)));
   (sc.needsHuman || []).forEach(([br, ageH]) => d1.db.prepare("INSERT INTO code_tasks (id, branch, status, updated_at) VALUES (?1, ?2, 'needs_human', ?3)").run("nh-" + br, br, hAgo(ageH)));
   (sc.closedTasks || []).forEach((br) => d1.db.prepare("INSERT INTO code_tasks (id, branch, status, updated_at) VALUES (?1, ?2, 'closed', ?3)").run("c-" + br, br, hAgo(1)));
@@ -84,7 +85,7 @@ async function run(sc, opts) {
   const sandbox = { evApi: gh.evApi, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, __export: null };
   vm.createContext(sandbox);
   const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_DENY = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
-  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, branchHygieneTick, BH_MAX_ACTIONS };", sandbox, { filename: "bh-block.js" });
+  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, branchHygieneTick, BH_MAX_ACTIONS };", sandbox, { filename: "bh-block.js" });
   const env = { GITHUB_TOKEN: "x", AUDIT: d1.AUDIT };
   const out = await sandbox.__export.branchHygieneTick(env, Object.assign({ now: NOW }, opts || {}));
   return { out, calls: gh.calls, d1, W: sandbox.__export };
@@ -288,6 +289,36 @@ const scenario = () => ({
   const s3 = mk(); s3.mergeStatus = 405;
   const r3 = await run(s3);
   eq([r3.out.merged_prs, r3.out.closed_prs, r3.calls.includes("PUT /pulls/61/update-branch")], [[], [], true], "a 405 merge brings the branch up to date and keeps the PR open");
+}
+
+{ // STALE-PR-CHECK-REPAIR-1 (agent_issues 2122): green required checks + a failing CodeQL run -> one repair issue, never a merge
+  const R = { full_name: "QNFO/qnfo-workers" };
+  const mkpr = (n, sha, extra) => Object.assign({ number: n, state: "open", draft: false, mergeable: true, mergeable_state: "unstable", title: "qnfo-social 0.9.0 PROMOTE-ROUTE-1", labels: [], updated_at: hAgo(3), head: { ref: "claude/r" + n, sha, repo: R }, base: { ref: "main", repo: R } }, extra || {});
+  const req = ["gate", "guard", "mirror-guard", "comparator"].map((nm, i) => ({ id: 100 + i, name: nm, status: "completed", conclusion: "success" }));
+  const codeql = { id: 777, name: "Analyze (javascript-typescript)", status: "completed", conclusion: "failure" };
+  const files = [{ filename: "qnfo-social/worker.js" }, { filename: "qnfo-social/deployed-current.worker.js" }, { filename: "qnfo-social/promote-route.test.mjs" }];
+  const ann = [{ path: "qnfo-social/promote-route.test.mjs", start_line: 31, annotation_level: "warning", title: "Incomplete URL substring sanitization", message: "'linkedin.com' can be anywhere in the URL" }];
+  const p70 = mkpr(70, "r70"), p71 = mkpr(71, "r71");
+  const mk = () => ({ branches: [br("main", 0, true)], compare: {}, prs: { 70: p70, 71: p71 }, pulls: [p70, p71].map((p) => ({ number: p.number, state: "open", updated_at: p.updated_at, head: p.head })), files: { 70: files, 71: files },
+    checks: { r70: req.concat([codeql]), r71: req.slice(1).concat([{ id: 99, name: "gate", status: "completed", conclusion: "failure" }, codeql]) }, annotations: { 777: ann } });
+  const s1 = mk();
+  const r1 = await run(s1);
+  const iss = () => r1.d1.db.prepare("SELECT title, description, status FROM agent_issues ORDER BY id").all();
+  eq([r1.out.merged_prs, (s1.merges || []).length], [[], 0], "repair: a PR with a failing CodeQL run is never merged");
+  eq(iss().length, 1, "repair: exactly one issue for the PR whose only failure is non-required (none for a failing required check)");
+  eq(iss()[0].title, "STALE-PR-CHECK-REPAIR-1 PR 70: Analyze (javascript-typescript) failing on a green, quiet session pull request", "repair: the title names the PR and the failing check");
+  eq(/promote-route\.test\.mjs:31 \[warning\] Incomplete URL substring sanitization/.test(iss()[0].description) && /\ncode-task: repo=qnfo-workers path=qnfo-social\/promote-route\.test\.mjs$/.test(iss()[0].description), true, "repair: the annotation and a code-task line naming the annotated file are in the issue");
+  eq(r1.calls.includes("GET /check-runs/777/annotations?per_page=20"), true, "repair: the failing run's annotations are read");
+  eq(r1.d1.db.prepare("SELECT pr FROM branch_hygiene_log WHERE action = 'check-repair-issue'").all().map((r) => r.pr), [70], "repair: the filing is logged in branch_hygiene_log");
+  eq(r1.d1.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'stale-pr-check-repair'").get().n, 1, "repair: one stale-pr-check-repair event (the issue-2122 contract's proof)");
+  const s2 = mk();
+  await run(s2, undefined, r1.d1);
+  eq(iss().length, 1, "repair: a second tick files no duplicate while the issue is open");
+  const d = r1.W.bhRepairDecide;
+  eq(d(p70, files, req, { state: "pending", total_count: 0 }).repair, false, "repair pure: all green -> nothing to repair");
+  eq(d(p70, files, req.concat([{ id: 5, name: "Analyze (python)", status: "in_progress", conclusion: null }]), {}).repair, false, "repair pure: a running check -> wait");
+  eq(d(mkpr(72, "x", { head: { ref: "codeagent-x", sha: "x", repo: R } }), files, req.concat([codeql]), {}).repair, false, "repair pure: a code-loop branch is the merge runner's");
+  eq(d(p70, files, req.concat([codeql, Object.assign({}, codeql, { id: 778, conclusion: "success" })]), {}).repair, false, "repair pure: a re-run that passed supersedes the failure");
 }
 
 console.log(`${passed} passed, ${failed} failed`);
