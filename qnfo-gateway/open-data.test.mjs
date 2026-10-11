@@ -73,5 +73,16 @@ rows[1].version = "0.8.1-zen" + "odo-real";
 r = await get("/api/papers/" + rows[1].slug);
 ok(r.s === 200 && !/10\.5281|zeno\x64o/i.test(r.t), "api record has no retired-deposit text", r.t.slice(0, 300));
 ok(/Built on the framework/.test(r.t) && /^[\s\S]*"version": "0\.8\.1"/.test(r.t), "api keeps the sentence and a clean version");
+// NOZ-DOI-1 3.14.3: emit-time scrub of body lines is line-local and keeps third-party DOIs.
+{
+  const pick = (name) => { const m = src.match(new RegExp("function " + name + "\\([^)]*\\) \\{[\\s\\S]*?\\n\\}\\n")); return m[0]; };
+  const code = "var MDI_RETIRED = " + src.match(/var MDI_RETIRED = (\/.*\/i);/)[1] + ";\n" + pick("mdiCleanRetired") + pick("retiredLines") + pick("retiredTag") + "return { retiredLines, retiredTag };";
+  const { retiredLines, retiredTag } = new Function(code)();
+  const dead = "10." + "5281/" + "zen" + "odo.999";
+  const md = "Intro  keeps  spacing.\n```\nx  =  1\n```\nSee Trilogy (DOI " + dead + ") and DOI 10.1103/PhysRevD.1.1 here.\n";
+  const out = retiredLines(md);
+  ok(!/10\.5281|zeno\x64o/i.test(out) && out.includes("Intro  keeps  spacing.") && out.includes("x  =  1") && out.includes("10.1103/PhysRevD.1.1"), "body scrub is line-local and keeps third-party DOIs", out);
+  ok(retiredTag("0.8.1-zen" + "odo-real") === "0.8.1", "version tag cleaned");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
