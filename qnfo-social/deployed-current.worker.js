@@ -15,7 +15,7 @@
 // Vars (optional): SOCIAL_WEEKLY_CAP. D1: DB (qnfo-audit.social_threads, dissemination_tracker, pipeline_flags; 0.7.28 also
 // social_learner_posts, ops_config social_learner_enabled / social_learner_pending, metric_registry). AI: env.AI.
 
-var VERSION = "0.12.0-whole-sentences"; // 0.12.0 (2026-10-12, pillar reach) SOCIAL-POST-TRUNCATION-2 (issue 1902): a post too long for its channel is never cut mid-sentence: Bluesky continues it as replies split at sentence boundaries (splitForThread; the link and its card stay on the root), the Buffer channels and the LinkedIn text keep whole sentences and drop trailing ones (fitWhole); the ellipsis cut is the last resort for a single sentence longer than the limit. REACH-SIGNALS-1 (issue 2225): the 07:00 engagement run stores each reply by another account (social_replies: hashed author, delay from the post in minutes, text length, word count; never the text) from the public getPostThread endpoint; no reply is posted. SUBSCRIBE-LINE-ACCURATE-1 (issue 1753): the LinkedIn subscribe line said monthly while the list is a weekly digest and linked the page top; it now states the cadence the list has and links the form. Ledger ids come from crypto.randomUUID. // 0.11.1-doi-scrub // 0.11.1 NOZ-DOI-1 (owner decision 2026-10-10, pillar reach): the dead-registry paper scan, the selected-works refill and every 10.5281 identifier are removed; the 06:00 run only sweeps and repairs drafts, contentGate refuses (and the drain suppresses) any post carrying a dead-registry identifier or link, and prompts and the checker link only to a URL or a third-party DOI. // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
+var VERSION = "0.13.0-buffer-stats"; // 0.13.0 (2026-10-12, pillar reach) BUFFER-POST-STATS-1 (issue 2374): the 07:00 engagement run also reads Buffer with this worker's own token: per connected channel the sent posts of the last 30 days with their statistics and public link; one social_engagements row per post and metric (platform buffer, post_id = the Buffer post id), the link into social_media_posts.url, an auth_status row every run, and per network buffer_channel rows that say how many sent posts carried statistics and how many carried none (never zeros in place of a missing statistic). Bounded: 6 channels, 3 pages of 30 posts each, 10 s per call, 512 KB per body. // 0.12.0-whole-sentences // 0.12.0 (2026-10-12, pillar reach) SOCIAL-POST-TRUNCATION-2 (issue 1902): a post too long for its channel is never cut mid-sentence: Bluesky continues it as replies split at sentence boundaries (splitForThread; the link and its card stay on the root), the Buffer channels and the LinkedIn text keep whole sentences and drop trailing ones (fitWhole); the ellipsis cut is the last resort for a single sentence longer than the limit. REACH-SIGNALS-1 (issue 2225): the 07:00 engagement run stores each reply by another account (social_replies: hashed author, delay from the post in minutes, text length, word count; never the text) from the public getPostThread endpoint; no reply is posted. SUBSCRIBE-LINE-ACCURATE-1 (issue 1753): the LinkedIn subscribe line said monthly while the list is a weekly digest and linked the page top; it now states the cadence the list has and links the form. Ledger ids come from crypto.randomUUID. // 0.11.1-doi-scrub // 0.11.1 NOZ-DOI-1 (owner decision 2026-10-10, pillar reach): the dead-registry paper scan, the selected-works refill and every 10.5281 identifier are removed; the 06:00 run only sweeps and repairs drafts, contentGate refuses (and the drain suppresses) any post carrying a dead-registry identifier or link, and prompts and the checker link only to a URL or a third-party DOI. // 0.11.0 SOCIAL-GROUND-1 (owner directive 2026-10-10, pillar reach): checkThread first runs a mechanical check that every capitalised name, year and figure in a thread occurs in the title, author or abstract it was written from (an invented one is an issue, no model can override it); composePrompt and the checker prompt state that the model's own knowledge is not a source and name no example topics; the checker stays fail-closed (unavailable = draft). // 0.10.0-open-q08 0.10.0 Q08-OPEN-1 (owner directive 2026-10-09, pillar reach): q08.org links and q08 rows are no longer refused or skipped, the REACH-SELECT title hold is dropped in the channel drain, an attention share of 0 keeps one slot instead of holding a channel or Bluesky, the Bluesky weekly cap defaults to 7 and the Buffer channel caps to LinkedIn 5 (drafts only), Mastodon 10, X 10 (ceiling 14); the mojibake guard, the pause flag and the LinkedIn draft rule stay.  // 0.9.2 // 0.9.2 PROMOTE-ROUTE-2: a channel whose last post was a curated thread gets the newest unposted paper next. // 0.9.1 PROMPT-CACHE-COUNT-3b (issue 2114, 2026-10-08, pillar cost): the 0.8.3 ai_cache_counters write named columns the table does not have (purpose, cached), so every insert failed silently; it now writes the fleet schema (day, worker, model, calls, cached_calls, in_tok, cached_tok).  // 0.9.0 PROMOTE-ROUTE-1 (2026-10-07, pillar reach, owner directive "no siloes"): the channel drain takes queued research papers from dissemination_tracker (newest first, after curated queued threads, before recycled posted threads), so a published paper reaches LinkedIn, Mastodon and X while Bluesky is at attention share 0. // 0.8.2 UTM-VISITS-1 (2026-10-06, pillar reach, transformation lever T7.9 half 2): learnerVisits reads the gateway's tagged loads first (reach_signals source utm, metric clicks_human, campaign = the paper slug, channel = the utm_source of the post's channel; UTM-CLICK-LEDGER-1, qnfo-gateway 3.10.0 + qnfo-fleet-dashboard 1.26.0, PR 688): a direct count of the visits a post caused beats the bot-filtered RUM lift, which stays the fallback when the window carries no tagged row. 0.8.1 LEARNER-CHANNEL-ARM-1 was
 // 0.8.1 (2026-10-06, LEARNER-CHANNEL-ARM-1, transformation lever T7.13, pillar reach; owner directive "execute the suggestions"): the
 // distribution learner gains a channel arm (bluesky, linkedin, mastodon, x): Buffer channel posts become learner rows credited
 // from the reach ledger's buffer metrics, the posterior carries a channel allocation, and the channel drain visits the Buffer
@@ -1489,6 +1489,201 @@ async function collectEngagement(env) {
   return out;
 }
 
+// ---------- BUFFER-POST-STATS-1 (0.13.0, agent_issues 2374, pillar reach) ----------
+// The fleet posts to LinkedIn, Mastodon and X through Buffer, and this worker holds the Buffer token, but the only
+// statistics collector ran in qnfo-cloud-ops, which has no token ("buffer":"no token"), so no per-post statistic was ever
+// stored and social_media_posts.url stayed NULL. The 07:00 UTC engagement run now also reads Buffer with the worker's own
+// token: per connected channel one GraphQL `posts` query (sent posts), each post's `metrics`
+// ({ type name value unit }) and `externalLink`.
+//   - one social_engagements row per post and metric: platform 'buffer', post_id = the Buffer post id (the value in
+//     social_media_posts.buffer_id), metric = Buffer's normalized metric type, collected_at = the UTC day, the same upsert
+//     key as the Bluesky rows; note carries the network, the unit and Buffer's label;
+//   - a metric Buffer does not return is NOT written as 0. Per network, rows with platform 'buffer_channel' (post_id = the
+//     service) say how many sent posts came back, how many carried statistics and how many older than 36 h carried none
+//     (Buffer pulls statistics from the networks about once a day), so "Buffer gives no statistics for this network" is a
+//     stored fact and never a row of zeros;
+//   - the public post URL goes to social_media_posts.url where it is still empty;
+//   - an auth_status row (platform 'buffer', post_id 'auth') every run, as qnfo-cloud-ops wrote until 2026-09-20.
+// Bounds: at most BUFFER_STATS_CHANNELS channels and BUFFER_STATS_PAGES pages of BUFFER_STATS_PER_CHANNEL posts each per run (5 requests a day
+// with three small channels, 22 at the very most,
+// against Buffer's documented 100 per 15 minutes and 250 per 24 hours on the free plan), a timeout on every call, the body
+// read through readTextCapped, a 429 ends the run. The token is sent only in the Authorization header and never logged.
+// The response shape is from Buffer's documentation (developers.buffer.com, read 2026-10-12) and was not seen live when
+// this was written: a field the schema refuses is dropped and the query repeated once, the refusal is recorded in the run
+// ledger, and the first response's field NAMES (never values) are logged and stored there so the next read confirms it.
+var BUFFER_STATS_DAYS = 30;
+var BUFFER_STATS_CHANNELS = 6;
+var BUFFER_STATS_PER_CHANNEL = 30;
+var BUFFER_STATS_PAGES = 3;
+var BUFFER_STATS_TIMEOUT_MS = 10000;
+var BUFFER_STATS_BODY_CAP = 524288;
+var BUFFER_STATS_SETTLE_H = 36;
+var BUFFER_STATS_POST_FIELDS = ['id', 'channelId', 'status', 'sentAt', 'externalLink', 'metricsUpdatedAt'];
+var BUFFER_STATS_MIN_FIELDS = ['id', 'channelId', 'metricsUpdatedAt']; // the documented "posts with metrics" example
+function bufferStatsQuery(orgId, channelId, fields, after) {
+  return 'query { posts(first: ' + BUFFER_STATS_PER_CHANNEL + (after ? ', after: ' + JSON.stringify(String(after)) : '') + ', input: { organizationId: ' + JSON.stringify(String(orgId)) + ', filter: { status: [sent], channelIds: [' + JSON.stringify(String(channelId)) + '] } }) { edges { node { ' + fields.join(' ') + ' metrics { type name value unit } } } pageInfo { hasNextPage endCursor } } }';
+}
+// One bounded Buffer GraphQL call: timeout, capped body, HTTP status and GraphQL errors returned (not thrown), no secret
+// in any message.
+async function bufferGqlBounded(env, query) {
+  let r;
+  try {
+    r = await fetch('https://api.buffer.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (env.BUFFER_TOKEN || ''), 'User-Agent': 'qnfo-social/' + VERSION },
+      body: JSON.stringify({ query: query }),
+      signal: AbortSignal.timeout(BUFFER_STATS_TIMEOUT_MS)
+    });
+  } catch (e) { return { ok: false, status: 0, error: 'fetch ' + String(e && e.name || 'error') }; }
+  let text = '';
+  try { text = await readTextCapped(r, BUFFER_STATS_BODY_CAP); } catch (e) { return { ok: false, status: r.status, error: 'body read ' + String(e && e.name || 'error') }; }
+  let j = null;
+  try { j = JSON.parse(text); } catch (e) {}
+  const errs = (j && Array.isArray(j.errors)) ? j.errors.map(function(x) { return String(x && x.message || '').slice(0, 200); }).filter(Boolean) : [];
+  if (!r.ok) return { ok: false, status: r.status, error: 'http ' + r.status + (r.status === 429 ? ' retry-after ' + String((r.headers && r.headers.get('Retry-After')) || '?').slice(0, 12) : ''), errors: errs };
+  if (!j) return { ok: false, status: r.status, error: 'body is not JSON (' + text.length + ' chars read)', errors: [] };
+  if (!j.data) return { ok: false, status: r.status, error: errs[0] || 'no data in the response', errors: errs };
+  return { ok: true, status: r.status, data: j.data, errors: errs };
+}
+// The field names a GraphQL validation error refuses ('Cannot query field "x" on type "Post"').
+function bufferRefusedFields(errors) {
+  const out = [];
+  for (const m of errors || []) {
+    const re = /Cannot query field\s*\\?["']?([A-Za-z_][A-Za-z0-9_]*)/g;
+    let x;
+    while ((x = re.exec(String(m)))) if (out.indexOf(x[1]) < 0) out.push(x[1]);
+  }
+  return out;
+}
+function bufferMetricKey(m) {
+  return String((m && (m.type || m.name)) || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 60);
+}
+// Pure: what one channel's posts turn into. `known` maps a Buffer post id to the time this worker recorded for it (used
+// when Buffer returns no sentAt). A post without statistics yields no metric row: it is counted as pending (younger than
+// the settle time), unmeasured (older) or age_unknown.
+function bufferStatsPlan(nodes, service, nowMs, known) {
+  const svc = String(service || 'unknown').toLowerCase();
+  const out = { service: svc, rows: [], urls: [], sent: 0, measured: 0, pending: 0, unmeasured: 0, age_unknown: 0, skipped_old: 0 };
+  for (const n of nodes || []) {
+    if (!n || !n.id) continue;
+    if (n.status && String(n.status).toLowerCase() !== 'sent') continue;
+    const id = String(n.id);
+    let t = Date.parse(String(n.sentAt || ''));
+    if (!isFinite(t) && known && known[id]) t = Date.parse(String(known[id]).replace(' ', 'T').replace(/Z?$/, 'Z'));
+    const ageH = isFinite(t) ? (nowMs - t) / 36e5 : null;
+    if (ageH !== null && ageH > BUFFER_STATS_DAYS * 24) { out.skipped_old++; continue; }
+    out.sent++;
+    if (typeof n.externalLink === 'string' && /^https:\/\/[^\s"'<>]{4,490}$/.test(n.externalLink)) out.urls.push({ id: id, url: n.externalLink });
+    let had = 0;
+    for (const m of (Array.isArray(n.metrics) ? n.metrics : [])) {
+      const key = bufferMetricKey(m);
+      const v = (m && m.value !== null && m.value !== undefined && m.value !== '') ? Number(m.value) : NaN;
+      if (!key || key === 'auth_status' || !isFinite(v)) continue;
+      had++;
+      out.rows.push({ post_id: id, metric: key, value: v, note: ('qnfo-social ' + svc + ' ' + String(m.unit || 'count') + (m.name ? ' "' + String(m.name) + '"' : '')).slice(0, 160) });
+    }
+    if (had) out.measured++;
+    else if (ageH === null) out.age_unknown++;
+    else if (ageH < BUFFER_STATS_SETTLE_H) out.pending++;
+    else out.unmeasured++;
+  }
+  return out;
+}
+async function collectBufferStats(env, nowMs) {
+  if (!env.BUFFER_TOKEN) return { skipped: 'no BUFFER_TOKEN' };
+  const now = nowMs || Date.now();
+  const day = new Date(now).toISOString().slice(0, 10);
+  const out = { day: day, channels: {}, posts: 0, rows: 0, urls: 0, requests: 0, errors: 0 };
+  const stmts = [];
+  const eng = function(platform, postId, metric, value, note) {
+    stmts.push(env.DB.prepare("INSERT INTO social_engagements (platform, post_id, metric, value, note, collected_at) VALUES (?,?,?,?,?,?) ON CONFLICT(platform, post_id, metric, collected_at) DO UPDATE SET value=excluded.value, note=excluded.note").bind(platform, postId, metric, value, note, day));
+  };
+  const flush = async function() {
+    for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50));
+  };
+  out.requests++;
+  const orgRes = await bufferGqlBounded(env, '{ account { organizations { id } } }');
+  const orgs = (orgRes.data && orgRes.data.account && orgRes.data.account.organizations) || [];
+  if (!orgRes.ok || !orgs.length) {
+    out.error = orgRes.ok ? 'no organization' : String(orgRes.error || 'buffer error');
+    eng('buffer', 'auth', 'auth_status', 0, ('qnfo-social ' + out.error).slice(0, 160));
+    await flush();
+    return out;
+  }
+  eng('buffer', 'auth', 'auth_status', 1, 'ok (graphql) qnfo-social');
+  out.requests++;
+  const chRes = await bufferGqlBounded(env, '{ channels(input: { organizationId: ' + JSON.stringify(String(orgs[0].id)) + ' }) { id service isDisconnected } }');
+  if (!chRes.ok) { out.error = 'channels: ' + String(chRes.error || 'no data'); await flush(); return out; }
+  const channels = ((chRes.data && chRes.data.channels) || []).filter(function(c) { return c && c.id && !c.isDisconnected; }).slice(0, BUFFER_STATS_CHANNELS);
+  const known = {};
+  try {
+    const k = await env.DB.prepare("SELECT buffer_id, published_at FROM social_media_posts WHERE buffer_id IS NOT NULL AND published_at >= datetime('now','-60 days') ORDER BY published_at DESC LIMIT 500").all();
+    for (const r of (k.results || [])) if (r.buffer_id && !known[r.buffer_id]) known[String(r.buffer_id)] = r.published_at;
+  } catch (e) { console.log('BUFFER-POST-STATS-1 social_media_posts read failed: ' + String(e && e.message || e).slice(0, 120)); }
+  let fields = BUFFER_STATS_POST_FIELDS.slice();
+  const agg = {};
+  for (const ch of channels) {
+    const svc = String(ch.service || 'unknown').toLowerCase();
+    out.requests++;
+    let pr = await bufferGqlBounded(env, bufferStatsQuery(orgs[0].id, ch.id, fields));
+    if (!pr.ok && pr.status !== 429 && pr.status !== 0 && (pr.errors || []).length && fields.length > BUFFER_STATS_MIN_FIELDS.length) {
+      // The schema refused the query: drop the named fields (or fall back to the documented example) and ask once more.
+      const refused = bufferRefusedFields(pr.errors);
+      const next = refused.length ? fields.filter(function(f) { return refused.indexOf(f) < 0; }) : [];
+      out.refused = { fields: refused, message: String(pr.errors[0]).slice(0, 200) };
+      console.log('BUFFER-POST-STATS-1 schema refused the query: ' + out.refused.message);
+      fields = (next.length && next.length < fields.length) ? next : BUFFER_STATS_MIN_FIELDS.slice();
+      out.requests++;
+      pr = await bufferGqlBounded(env, bufferStatsQuery(orgs[0].id, ch.id, fields));
+    }
+    const a = agg[svc] || (agg[svc] = { sent: 0, measured: 0, pending: 0, unmeasured: 0, age_unknown: 0, error: null });
+    if (!pr.ok || !pr.data.posts) {
+      out.errors++;
+      a.error = String(pr.error || (pr.errors || [])[0] || 'no posts in the response').slice(0, 160);
+      if (pr.status === 429) { out.rate_limited = true; break; }
+      continue;
+    }
+    let nodes = (pr.data.posts.edges || []).map(function(e) { return e && e.node; }).filter(Boolean);
+    // The order of `posts` is not documented: follow the cursor (at most BUFFER_STATS_PAGES pages) so a channel with more
+    // sent posts than one page still yields its newest ones.
+    let pi = pr.data.posts.pageInfo;
+    for (let page = 1; page < BUFFER_STATS_PAGES && pi && pi.hasNextPage && pi.endCursor; page++) {
+      out.requests++;
+      const more = await bufferGqlBounded(env, bufferStatsQuery(orgs[0].id, ch.id, fields, pi.endCursor));
+      if (!more.ok || !more.data.posts) { out.errors++; if (more.status === 429) out.rate_limited = true; break; }
+      nodes = nodes.concat((more.data.posts.edges || []).map(function(e) { return e && e.node; }).filter(Boolean));
+      pi = more.data.posts.pageInfo;
+    }
+    if (pi && pi.hasNextPage) out.truncated = (out.truncated || 0) + 1;
+    if (!out.shape && nodes.length) {
+      // Field names only, never values: confirms the documented shape on the first live read.
+      const withM = nodes.filter(function(n) { return Array.isArray(n.metrics) && n.metrics.length; })[0];
+      const types = {};
+      for (const n of nodes) for (const m of (Array.isArray(n.metrics) ? n.metrics : [])) types[bufferMetricKey(m)] = 1;
+      out.shape = { post: Object.keys(nodes[0]).slice(0, 20), metric: withM ? Object.keys(withM.metrics[0]).slice(0, 10) : [], metrics_null: nodes.filter(function(n) { return n.metrics === null || n.metrics === undefined; }).length, types: Object.keys(types).slice(0, 30) };
+      console.log('BUFFER-POST-STATS-1 first response field names ' + JSON.stringify(out.shape));
+    }
+    const plan = bufferStatsPlan(nodes, svc, now, known);
+    for (const r of plan.rows) eng('buffer', r.post_id, r.metric, r.value, r.note);
+    for (const u of plan.urls) stmts.push(env.DB.prepare("UPDATE social_media_posts SET url = ?1 WHERE buffer_id = ?2 AND (url IS NULL OR url = '')").bind(u.url, u.id));
+    out.posts += plan.sent; out.rows += plan.rows.length; out.urls += plan.urls.length;
+    for (const k of ['sent', 'measured', 'pending', 'unmeasured', 'age_unknown']) a[k] += plan[k];
+    if (out.rate_limited) break;
+  }
+  for (const svc of Object.keys(agg)) {
+    const a = agg[svc];
+    out.channels[svc] = a.error ? { error: a.error } : { sent: a.sent, measured: a.measured, pending: a.pending, unmeasured: a.unmeasured, age_unknown: a.age_unknown };
+    if (a.error) { eng('buffer_channel', svc, 'collect_error', 1, ('qnfo-social ' + a.error).slice(0, 200)); continue; }
+    const verdict = a.measured ? 'measured' : a.unmeasured ? 'unmeasured: Buffer returned no statistics for any of ' + a.unmeasured + ' sent posts older than ' + BUFFER_STATS_SETTLE_H + ' h' : a.sent ? 'pending: no sent post with a known time is older than ' + BUFFER_STATS_SETTLE_H + ' h' : 'no sent post in ' + BUFFER_STATS_DAYS + ' days';
+    eng('buffer_channel', svc, 'sent_posts', a.sent, 'qnfo-social ' + verdict);
+    eng('buffer_channel', svc, 'posts_with_metrics', a.measured, 'qnfo-social ' + verdict);
+    eng('buffer_channel', svc, 'posts_unmeasured', a.unmeasured, 'qnfo-social ' + verdict);
+  }
+  await flush();
+  console.log('BUFFER-POST-STATS-1 ' + JSON.stringify({ day: out.day, posts: out.posts, rows: out.rows, urls: out.urls, requests: out.requests, errors: out.errors, channels: out.channels }).slice(0, 900));
+  return out;
+}
+
 // Drain the share queue oldest-first under a daily ceiling.
 // WS-A3 (2026-09-26): consume the orphaned dissemination_tracker queue. 19 papers sat at
 // action='queued'/channel='bluesky' since 2026-09-03 because nothing drained it (social_threads
@@ -1798,6 +1993,7 @@ function drainRunStatus(q, d) {
 function engagementRunStatus(o) {
   if (!o || o.error) return 'error';
   if (o.errors && !o.posts_found) return 'error';
+  if (o.buffer && (o.buffer.error || o.buffer.errors)) return 'degraded'; // BUFFER-POST-STATS-1: a failed Buffer read shows in the run ledger
   return o.errors ? 'degraded' : 'ok';
 }
 
@@ -2503,6 +2699,8 @@ export default {
       try { eo = await collectEngagement(env); } catch (e) { eo = { error: String(e && e.message || e).slice(0, 200) }; await logAlert(env, 'engagement', 'error', 'SOCIAL-ENGAGEMENT-SELF-1 ' + String(e).slice(0, 300)); }
       // SOCIAL-DISTRIBUTION-LEARNER-1: the 30-day engagement rate from the snapshots just taken (measurement only, never
       // switched off), then the learner's weekly update (Mondays, or catch-up), which records its own ledger row.
+      // BUFFER-POST-STATS-1 (0.13.0): the Buffer per-post statistics, with this worker's own token. Isolated from the Bluesky counts.
+      try { eo.buffer = await collectBufferStats(env); } catch (e) { eo.buffer = { error: String(e && e.message || e).slice(0, 200) }; }
       try { eo.rate_30d = await learnerEngagementRate(env); } catch (e) { eo.rate_30d = { error: String(e && e.message || e).slice(0, 160) }; }
       await recordSocialRun(env, 'engagement', engagementRunStatus(eo), eo);
       // ATTENTION-LOOP-1 (0.8.0): credit closed windows every day, then the weekly allocation when due.
@@ -2746,7 +2944,7 @@ async function aiRunAttr(env, worker, purpose, model, input, opts) {
   }
 }
 // end aiRunAttr
-export { readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
+export { collectBufferStats, bufferStatsPlan, bufferRefusedFields, bufferStatsQuery, bufferGqlBounded, BUFFER_STATS_PER_CHANNEL, BUFFER_STATS_CHANNELS, readTextCapped, probeLink, proseUnits, splitForThread, fitWhole, threadPlan, postThread, pickBufferText, collectReplies, replyRowsOf, replyWordCount, threadGroundingIssues, groundingProblems, composePrompt, repairPrompt, buildFacets, truncateSafe, applyLink, findDoi, byteLen, extractUrls, utmHost, sentPostsJson, utmTag, utmTagText,fitKeepUrls, tagAndFit, tagFacets, postText, postUriValue, weeklyCap, socialGate, drainQueue, drainDissemination, repairMojibake, contentGate, markPosted, routeGate, collectEngagement, blueskyUriOf, bufferPost, syncProfile, PROFILE_DESCRIPTION, bufferChannelAudit, linkedinMode, recordSocialRun, profileRunStatus, drainRunStatus, engagementRunStatus, autoScan,
   drainChannels, channelsRunStatus, channelText, channelCaps, channelWindow, channelCarried, pickChannelRow, CHANNEL_WEEKLY_CAP, CHANNEL_PLATFORM, CHANNEL_MAX_CHARS, CHANNEL_REPEAT_DAYS, SUBSCRIBE_LINE,
   learnerClassify, learnerIsQuestion, learnerTopicOf, learnerSlotOf, learnerBeta, learnerPrior, learnerPosterior, learnerChoose, learnerPBest,
   learnerEnabled, learnerPick, learnerEngagementOf, learnerVisits, learnerRewardOf, learnerWeeklyUpdate, learnerWeeklyTick, learnerCreditPending, learnerDailyCredit, attentionShares, shareCap, attentionOrder, learnerChannelOrder, learnerChannelEngagement, LEARNER_CHANNELS, LEARNER_CHANNEL_OF,
