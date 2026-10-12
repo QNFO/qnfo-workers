@@ -175,5 +175,13 @@ globalThis.fetch = origFetch;
   const r2 = await V.verifyAndRevise(envNever, { piece: { text: essay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
   check("a failed repair names its trail in the run error", r2.ok === false && r2.problems.some((p) => /^repair trail: r1 prune located nothing/.test(p)), r2.problems);
 }
+// ---- Q08-EDIT-FLOOR-1: the editor pass may cut to EDIT_FLOOR; a forecast keeps the writing floor -------------------------------
+{
+  const para = "The operator watched the queue grow while the dashboard stayed green, because the dashboard measured the database and not the disk beneath it. Nobody owned the space between the two numbers, so nobody looked there.";
+  const cut = "# The queue nobody measured\n\n" + [1, 2, 3, 4, 5, 6, 7, 8, 9].map(() => para).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  check("an editor cut between EDIT_FLOOR and 2800 chars passes the essay gate", cut.length >= V.EDIT_FLOOR && cut.length < 2800 && V.editGateProblems(cut, [], false).length === 0, { len: cut.length, p: V.editGateProblems(cut, [], false) });
+  check("the same length fails the gate for a forecast", V.editGateProblems(cut, [], true).some((p) => /too short/.test(p)));
+  check("an editor draft under EDIT_FLOOR is refused", V.editGateProblems("# The queue nobody measured\n\n" + para, [], false).some((p) => /too short after editing/.test(p)));
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
