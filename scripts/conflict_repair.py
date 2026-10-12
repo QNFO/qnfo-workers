@@ -50,8 +50,16 @@ def emit(msg):
     print(msg, flush=True)
 
 
-def sh(args, cwd=None, check=True, timeout=900):
-    r = subprocess.run(list(args), cwd=cwd, capture_output=True, text=True, timeout=timeout)
+SECRET_ENV = re.compile(r"TOKEN|SECRET|KEY|PASSWORD|CLOUDFLARE|CF_ACCOUNT", re.I)
+
+
+def clean_env():
+    """The environment without credentials: the suites and guards run the pull request's own code, which gets no token."""
+    return {k: v for k, v in os.environ.items() if not SECRET_ENV.search(k)}
+
+
+def sh(args, cwd=None, check=True, timeout=900, env=None):
+    r = subprocess.run(list(args), cwd=cwd, capture_output=True, text=True, timeout=timeout, env=env)
     if check and r.returncode != 0:
         raise RuntimeError("%s: %s" % (" ".join(args[:4]), (r.stderr or r.stdout).strip()[:400]))
     return r
@@ -274,20 +282,21 @@ def run_checks(workers, base_ref, cwd=None):
     """[(name, passed)] of the checks a pull request gets, run on the staged-and-committed tree."""
     out = []
     root = cwd or "."
+    env = clean_env()
     for w in workers:
         if os.path.isfile(os.path.join(root, w, "worker.js")):
-            out.append(("node --check " + w, sh(["node", "--check", w + "/worker.js"], cwd, check=False).returncode == 0))
+            out.append(("node --check " + w, sh(["node", "--check", w + "/worker.js"], cwd, check=False, env=env).returncode == 0))
     changed = os.path.join(root, ".conflict-repair-changed.txt")
     dirs = sorted({p.split("/")[0] for p in git(["diff", "--name-only", base_ref, "HEAD"], cwd).split("\n") if p})
     with open(changed, "w", encoding="utf-8") as fh:
         fh.write("\n".join(dirs) + "\n")
     try:
-        out.append(("suites", sh(["node", "scripts/run-suites.mjs", "--changed-file", changed, "--jobs", "4", "--timeout", "180"], cwd, check=False, timeout=1500).returncode == 0))
+        out.append(("suites", sh(["node", "scripts/run-suites.mjs", "--changed-file", changed, "--jobs", "4", "--timeout", "180"], cwd, check=False, timeout=1500, env=env).returncode == 0))
     finally:
         os.remove(changed)
-    out.append(("mirror-guard", sh([sys.executable, "scripts/mirror-guard.py", "--scope-to-diff=" + base_ref], cwd, check=False).returncode == 0))
-    out.append(("version-bump-guard", sh([sys.executable, "scripts/version-bump-guard.py", git(["rev-parse", base_ref], cwd).strip(), git(["rev-parse", "HEAD"], cwd).strip()], cwd, check=False).returncode == 0))
-    out.append(("workers-standards-guard", sh([sys.executable, "scripts/workers_standards_guard.py", base_ref], cwd, check=False).returncode == 0))
+    out.append(("mirror-guard", sh([sys.executable, "scripts/mirror-guard.py", "--scope-to-diff=" + base_ref], cwd, check=False, env=env).returncode == 0))
+    out.append(("version-bump-guard", sh([sys.executable, "scripts/version-bump-guard.py", git(["rev-parse", base_ref], cwd).strip(), git(["rev-parse", "HEAD"], cwd).strip()], cwd, check=False, env=env).returncode == 0))
+    out.append(("workers-standards-guard", sh([sys.executable, "scripts/workers_standards_guard.py", base_ref], cwd, check=False, env=env).returncode == 0))
     return out
 
 
@@ -402,6 +411,9 @@ def selftest():
         emit(("PASS " if c else "FAIL ") + name + ("" if c or detail is None else " -- " + repr(detail)[:400]))
         if not c:
             fails.append(name)
+    os.environ["CONFLICT_REPAIR_SELFTEST_TOKEN"] = "x"
+    ce = clean_env()
+    ok("CONFLICT_REPAIR_SELFTEST_TOKEN" not in ce and not any(SECRET_ENV.search(k) for k in ce) and "PATH" in ce, "clean_env drops every credential-named variable and keeps PATH")
     ok(core("0.14.0-conflict-repair") == (0, 14, 0) and core("x") is None, "core reads the numeric part")
     ok(bump_above("0.14.0-fix", ["0.13.9", "0.12.0"]) == "0.14.0-fix", "a VERSION already ahead stays")
     ok(bump_above("0.13.2-fix", ["0.13.5-a", "0.13.4"]) == "0.13.6-fix", "a patch release lands one patch above the highest claim, suffix kept")
