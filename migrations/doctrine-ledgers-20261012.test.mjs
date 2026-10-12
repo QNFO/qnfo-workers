@@ -252,7 +252,7 @@ db.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
 ok(one("SELECT ok FROM tick_runs WHERE step = 'report'").ok === 0 && metric("tick_sequence_completion_24h") === "0.0", "a step with no evidence is written ok 0 and the slot is not complete", metric("tick_sequence_completion_24h"));
 const q = all("SELECT pos, id, priority, aged, score, impact, probability, capability_gain, reach_gain, remediation_cost, trust, direction FROM v_issue_queue_v2 ORDER BY pos");
 ok(q[0].id === 3 && q[0].priority === "critical", "critical leads the queue whatever its score (PRIORITY-QUEUE-1)", q[0]);
-ok(q.slice(1).every((r, i, a) => i === 0 || a[i - 1].score >= r.score), "the rest is ordered by the doctrine score", q.map((r) => r.id + ":" + r.score));
+ok(q.slice(1).every((r, i, a) => i === 0 || a[i - 1].aged > r.aged || (a[i - 1].aged === r.aged && a[i - 1].score >= r.score)), "after critical: items older than one tick first, then by the doctrine score", q.map((r) => r.id + ":" + r.aged + ":" + r.score));
 const q2 = q.find((r) => r.id === 2);
 ok(q2 && Math.abs(q2.score - 3 * q2.probability * (4 + 1) * (1 / 2) * q2.trust * (1 + 1)) < 0.01 && q2.remediation_cost === 2, "score = impact x probability x (capability + reach) x (1 / cost) x trust x (1 + direction)", q2);
 db.exec("INSERT INTO issue_priority_scores (issue_id, impact, scored_by) VALUES (5, 5, 'test')");
@@ -264,13 +264,18 @@ db.exec("INSERT INTO code_tasks (id, goal, status, created_at, updated_at) VALUE
 db.exec("INSERT INTO work_claims (path, holder, issue_id, claimed_at, expires_at) VALUES ('issue:5', 'session_y', 5, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+1 hours')), ('file:x', 'session_y', NULL, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '+1 hours'))");
 ok(one("SELECT COUNT(*) n FROM queue_pulls").n === 4 && one("SELECT COUNT(*) n FROM queue_pulls WHERE issue_id = 7 AND via = 'code_task'").n === 1, "a new code task for an issue and a new issue claim each record one pull; other rows record none", all("SELECT issue_id, via FROM queue_pulls"));
 db.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
-ok(Number(metric("driver_drain_24h")) === 0.5, "driver_drain_24h = distinct issues pulled / issues eligible", metric("driver_drain_24h"));
+const dd = one("SELECT (SELECT COUNT(DISTINCT issue_id) FROM queue_pulls) p, (SELECT COUNT(*) FROM agent_issues WHERE status = 'open' OR id IN (SELECT issue_id FROM queue_pulls)) e");
+ok(dd.p === 4 && Number(metric("driver_drain_24h")) === Math.round(1000 * dd.p / dd.e) / 1000, "driver_drain_24h = distinct issues pulled / issues eligible", [metric("driver_drain_24h"), dd]);
 const roster = all("SELECT capability, executor, kind, healthy FROM v_executor_roster");
 ok(roster.some((r) => r.capability === "chat" && r.executor === "personal-api" && r.healthy === 0) && roster.some((r) => r.capability === "chat" && r.executor === "qnfo-ai" && r.healthy === 1), "the roster has one row per (capability, executor) with health from the live probe");
 ok(roster.some((r) => r.capability === "worker:qnfo-subscribers") && roster.some((r) => r.capability === "worker:qnfo-social") && !roster.some((r) => r.executor === "old"), "a live worker without a JSON capability list still has a roster row; a retired worker has none");
 ok(roster.some((r) => r.kind === "model" && r.executor === "deepseek-v4-flash" && r.healthy === 0) && roster.some((r) => r.kind === "mechanism" && r.healthy === null), "model routes are graded by their probes; capability_ledger rows are listed with unknown health");
 ok(metric("roster_members_degraded") === "2" && metric("roster_capabilities_single_executor") === "4", "roster metrics count degraded executors and single-executor capabilities", [metric("roster_members_degraded"), metric("roster_capabilities_single_executor")]);
 ok(one("SELECT threshold t FROM analytics_metric_triggers WHERE metric_key = 'roster_capabilities_single_executor'").t === 4, "the single-executor trigger floor is the value measured at apply");
+
+const fu = all("SELECT title, description d FROM agent_issues WHERE title LIKE 'BACKLOG-DRIVER-PULLER-1:%' OR title LIKE 'WATCHMAKER-TICK-LEDGER-1:%' ORDER BY title");
+ok(fu.length === 2 && fu.every((r) => r.d.split("\n").filter((l) => /^code-task: repo=qnfo-workers path=\S+\/worker\.js$/.test(l)).length === 1 && r.d.split("\n").some((l) => /^code-anchor: \S/.test(l)) && r.d.split("\n").some((l) => { try { return /^code-probe: /.test(l) && JSON.parse(l.slice(12)).contains; } catch (e) { return false; } })), "the two worker follow-ups are filed once, each with code-task, code-anchor and code-probe lines of their own", fu.map((r) => r.title));
+ok(fu[0].d.includes("code-anchor: SELECT id, title, description, source FROM agent_issues WHERE status='open' AND description LIKE '%code-task:%'"), "the intake anchor is the verbatim text of the orchestrator query");
 
 // 3. CALIBRATION-SCORER-1.
 const out = Object.fromEntries(all("SELECT decision_id, matched, actor, observed_outcome FROM decision_outcomes").map((r) => [r.decision_id, r]));

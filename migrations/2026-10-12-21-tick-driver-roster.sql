@@ -30,6 +30,9 @@
 --                  roster rows, 38 executors, 159 named capabilities, 150 of them with one healthy executor (a worker
 --                  capability is held by one worker) and no degraded member. The trigger floor is the value measured at
 --                  apply, so a new single-executor capability files, and the floor is lowered as second paths land.
+-- Two follow-ups that need worker code are filed by this file at apply, each with its code-task, code-anchor and code-probe
+-- lines: BACKLOG-DRIVER-PULLER-1 (the code loop intake reads v_issue_queue_v2) and WATCHMAKER-TICK-LEDGER-1 (the hourly D1
+-- tick in WATCHMAKER_OPS, proven by tick_runs).
 -- Refresh: trigger tick_driver_roster_tick on the fleet tick in the first ten minutes of each hour and at apply.
 -- No compound SELECT has more than four terms (D1-COMPOUND-LIMIT-1). The trigger writes this file's tables and metric_registry.
 -- APPLY-BY: ci
@@ -238,6 +241,26 @@ SELECT 'roster_capabilities_single_executor', 'Executor roster: a new capability
   'qnfo-fleet-control', 'agent_issues', 72, 1, 'TICK-DRIVER-ROSTER-1 (migrations/2026-10-12-21-tick-driver-roster.sql)'
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers x WHERE x.metric_key = 'roster_capabilities_single_executor')
   AND (SELECT last_value FROM metric_registry WHERE metric = 'roster_capabilities_single_executor') IS NOT NULL;
+
+-- Two follow-ups need worker code. Each is filed here, at apply, so it cannot be taken before the objects it reads exist,
+-- with its code-task and code-anchor lines and a code-probe that closes it when the change is on main.
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'BACKLOG-DRIVER-PULLER-1: the code loop intake orders by priority and id, not by v_issue_queue_v2',
+  'Charter pillar: autonomy (doctrine revision 5 section 3; follow-up of BACKLOG-DRIVER-1, agent_issues 2233). TICK-DRIVER-ROSTER-1 (migrations/2026-10-12-21-tick-driver-roster.sql) added v_issue_queue_v2, which orders open issues by the doctrine priority function (critical first, then items older than one tick, then score), and queue_pulls, which records each pull. qnfo-code-orchestrator still takes code-task issues with ORDER BY priority, id. Change: in the intake query that selects open issues whose description carries a code-task line, read the ids in v_issue_queue_v2 order (join agent_issues to v_issue_queue_v2 on id and ORDER BY pos), and keep the present ORDER BY as the fallback when the view cannot be read, so the intake never stops. Critical issues still lead (the view puts them first). Patch VERSION bump; mirror deployed-current.worker.js; a suite check that the intake names v_issue_queue_v2 and keeps the fallback. qnfo-code-orchestrator is a control-plane worker, so a session takes this until CODE-LOOP-CONTROL-PLANE-1 opens it to the loop.' || char(10)
+  || 'code-task: repo=qnfo-workers path=qnfo-code-orchestrator/worker.js' || char(10)
+  || 'code-anchor: SELECT id, title, description, source FROM agent_issues WHERE status=''open'' AND description LIKE ''%code-task:%''' || char(10)
+  || 'code-probe: {"paths": ["qnfo-code-orchestrator/worker.js"], "contains": "v_issue_queue_v2"}',
+  'session_01GMkRMxQsNprwDUX4J9zbji', 'autonomy', 'medium', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'BACKLOG-DRIVER-PULLER-1:%');
+
+INSERT INTO agent_issues (title, description, source, category, priority, status, created_at, updated_at)
+SELECT 'WATCHMAKER-TICK-LEDGER-1: the hourly D1 tick ledger is not in WATCHMAKER_OPS',
+  'Charter pillar: autonomy (NO-CLAUDE-RUNTIME-DEPENDENCY-1, WATCHMAKER-INDEX-1: a recurring operation is listed with the D1 query that proves it ran). The migrations of 2026-10-12 (2026-10-12-20 to -24) run hourly D1 triggers on the fleet tick; tick_runs gets eleven rows per hour slot from tick_driver_roster_tick, so its newest row proves the hourly D1 tick ran. Change: add one entry to WATCHMAKER_OPS: { key: "tick-sequence-ledger", what: "Hourly D1 tick ledger: the eleven doctrine steps per hour slot (TICK-SEQUENCE-LEDGER-1)", runner: "d1-trigger:tick_driver_roster_tick", cadence_h: 2, sql: "SELECT MAX(ts) AS last FROM tick_runs" }. Patch VERSION bump; mirror deployed-current.worker.js; extend qnfo-fleet-dashboard/watchmaker.test.mjs if it counts the entries.' || char(10)
+  || 'code-task: repo=qnfo-workers path=qnfo-fleet-dashboard/worker.js' || char(10)
+  || 'code-anchor: var WATCHMAKER_OPS = [' || char(10)
+  || 'code-probe: {"paths": ["qnfo-fleet-dashboard/worker.js"], "contains": "tick-sequence-ledger"}',
+  'session_01GMkRMxQsNprwDUX4J9zbji', 'autonomy', 'medium', 'open', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+WHERE NOT EXISTS (SELECT 1 FROM agent_issues WHERE title LIKE 'WATCHMAKER-TICK-LEDGER-1:%');
 
 INSERT OR IGNORE INTO capability_ledger (capability, provenance, prerequisites, reliability, acquired_at, last_exercised_at, evidence) VALUES
  ('record which of the eleven tick steps left evidence each hour', 'TICK-DRIVER-ROSTER-1 (migrations/2026-10-12-21-tick-driver-roster.sql)', 'fleet_tick heartbeat and the ledgers each loop writes', 'tested in SQLite against the live schema', '2026-10-12', NULL, 'tick_runs, metric tick_sequence_completion_24h'),
