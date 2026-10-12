@@ -87,6 +87,7 @@ drafts, distinct drafters); qnfo-fleet-control IMPROVEMENT-LOOP-1 (SURFACE-METRI
 | /api/submission/:id | GET | One saved submission (private drafts 404) |
 | /api/status | GET | Version/model/stats |
 | /api/metrics | GET | 7d/30d aggregate page and draft metrics (no personal data) |
+| /api/cost | GET | Measured model cost per completed draft, 30 days, from qnfo-audit `ai_call_counters` (neurons, tokens, USD at the published neuron rate). A cost, not a price |
 
 ## Deploy
 - Canonical source: `QNFO/qnfo-workers/qnfo-ipatent` (restored 2026-09-03 from the

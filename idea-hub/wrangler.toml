@@ -12,6 +12,15 @@ workers_dev = true
 enabled = true
 head_sampling_rate = 1
 
+# WORKERS-STANDARDS-1 (owner standards 2026-10-12): logs and traces declared. Workers docs: `enabled` alone turns on logs only;
+# traces need [observability.traces]. Sampled at the default rate of 1.
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+
 # AGENT_ORCH (qnfo-agent-orchestrator) removed 2026-10-06: worker retired (ORCH-RETIRE-1, #1756); worker.js never read it.
 
 [ai]
