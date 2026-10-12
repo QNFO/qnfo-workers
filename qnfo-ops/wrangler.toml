@@ -36,6 +36,17 @@ cpu_ms = 300000
 enabled = true
 head_sampling_rate = 1
 
+# OBSERVABILITY-DECLARED-APPLY-1 (qnfo-ops 2.41.0): logs and traces are declared here and the canonical deploy sends them
+# in the upload metadata (overlaid on the live settings). Measured 2026-10-12: all 28 live workers already had both on.
+[observability.logs]
+enabled = true
+invocation_logs = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01
+
 # Ops audit store: qnfo-audit D1 (ops_ai_log + cloud_ops_events + agent_issues)
 [[d1_databases]]
 binding = "QNFO_AUDIT"

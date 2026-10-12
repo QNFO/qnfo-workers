@@ -106,7 +106,9 @@ function clampMaxTokens(requested, isReason) {
 __name(clampMaxTokens, "clampMaxTokens");
 __name2(clampMaxTokens, "clampMaxTokens");
 __name22(clampMaxTokens, "clampMaxTokens");
-var VERSION = "4.8.5-doi-scrub"; // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
+var VERSION = "4.8.6-crypto-ids"; // 4.8.6 CRYPTO-IDS-1: the 18 row ids and the feed fallback id come from crypto.getRandomValues (rhex), not Math.random; same id shapes. // 4.8.5 // 4.8.5-doi-scrub NOZ-DOI-1: the separation prompt names no external registry. 4.8.4 below.
+// CRYPTO-IDS-1 (WORKERS-BEST-PRACTICES-1): row ids and nonces come from crypto.getRandomValues, never Math.random. rhex(n) returns n lowercase hex characters (same shape as the old Math.random().toString(16).slice(2, 2 + n)).
+function rhex(n) { var b = new Uint8Array(Math.ceil(n / 2)); crypto.getRandomValues(b); var h = ""; for (var i = 0; i < b.length; i++) h += (b[i] + 256).toString(16).slice(1); return h.slice(0, n); }
 // 4.8.4 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the twin, planner and predictor prompts no longer carry the owner's profile gates as hard-coded text; they apply only the gates found in the retrieved profile facets. //4.8.2 LEDGER-PAGE-1 (#1951): the Ledger sync drains calendar-api /feedback by after_id in pages of 500 (max 10 pages per run, id cursor feedback_after_id) so rows beyond the newest 500 are no longer skipped; AWAY-AMS-1 (#1883): inside an away window the brief keeps Google/ICS and manual calendar events whose location is in the Amsterdam area and hides only radar/twin suggestions and catalog rows. // 4.8.0 TWIN-FLASH-1 (owner directive 2026-10-05, #1818): twin primary model glm-5.3-flash (reasoning_effort low), deepseek-v4-pro per-request fallback, automatic revert when today's flash failure share >= 20% over >= 10 calls; 4.7.2 WORKERS-AI-ATTRIBUTION-1 for personal-api (#1833): every env.AI.run (embeddings, OCR/vision, chat, Durable Object chat) is counted in qnfo-audit.ai_call_counters (purpose binding: calls, tokens, neurons; counts only, no text) through the same __aiAttrEnv shim qnfo-research-exec uses; no new model call, no behaviour change. // 4.7.1 TOOL-TRACE-MEMORY-1 (#1805): internal tool-trace chat rows (model tool/mcp-tool) no longer reach thread memory or the cross-thread context.
 // FLEET-CTL-STATIC-1 (2026-10-02, issue 1771 / PR 443): the owner control link on the twin page is static HTML, not
 // <script src="https://fleet.qnfo.org/ctl.js">. This page keeps the personal API key in localStorage (qnfo-chat), and
@@ -351,7 +353,7 @@ async function setLocation(env, args) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return { ok: false, error: "lat and lon required as numbers" };
   const city = String(args && args.city || "").slice(0, 100);
   const country = String(args && args.country || "").slice(0, 100);
-  const id = "loc-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+  const id = "loc-" + rhex(8) + Date.now().toString(36);
   const ts = (/* @__PURE__ */ new Date()).toISOString();
   await env.PERSONAL.prepare("INSERT INTO location_history (id, ts, lat, lon, city, country, source) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id, ts, lat, lon, city, country, String(args && args.source || "user")).run();
   return { ok: true, id, lat, lon, city, country, ts };
@@ -454,7 +456,7 @@ async function journalAdd(env, args) {
   const date = String(args && args.date || isoDateNow()).slice(0, 10);
   const mood = String(args && args.mood || "").slice(0, 50);
   const tags = String(args && args.tags || "").slice(0, 200);
-  const id = "jrn-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+  const id = "jrn-" + rhex(8) + Date.now().toString(36);
   const ts = (/* @__PURE__ */ new Date()).toISOString();
   await env.PERSONAL.prepare("INSERT INTO journal (id, ts, date, content, mood, tags, source) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id, ts, date, content, mood, tags, "twin").run();
   try {
@@ -501,10 +503,10 @@ async function habitLog(env, args) {
   if (existing) {
     habitId = existing.id;
   } else {
-    habitId = "habit-" + Math.random().toString(16).slice(2, 10);
+    habitId = "habit-" + rhex(8);
     await env.PERSONAL.prepare("INSERT INTO habits (id, name, description, frequency, created_at, active) VALUES (?1,?2,'','daily',?3,1)").bind(habitId, name, (/* @__PURE__ */ new Date()).toISOString()).run();
   }
-  const logId = "hlog-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+  const logId = "hlog-" + rhex(8) + Date.now().toString(36);
   await env.PERSONAL.prepare("INSERT OR REPLACE INTO habit_log (id, habit_id, date, done, note, ts) VALUES (?1,?2,?3,1,?4,?5)").bind(logId, habitId, date, note, (/* @__PURE__ */ new Date()).toISOString()).run();
   return { ok: true, logged: true, habit: name, date };
 }
@@ -524,7 +526,7 @@ async function budgetLog(env, args) {
   const date = String(args && args.date || isoDateNow()).slice(0, 10);
   const currency = String(args && args.currency || "EUR").slice(0, 10);
   const note = String(args && args.note || "").slice(0, 300);
-  const id = "bud-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+  const id = "bud-" + rhex(8) + Date.now().toString(36);
   await env.PERSONAL.prepare("INSERT INTO budget (id, ts, date, amount, currency, category, merchant, note, source) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,'twin')").bind(id, (/* @__PURE__ */ new Date()).toISOString(), date, amount, currency, category, merchant, note).run();
   return { ok: true, logged: true, id, amount, currency, merchant, date };
 }
@@ -685,7 +687,7 @@ async function predictWeek(env, args) {
       const pred = extractJsonObject(text, "predictions");
       if (!pred || !Array.isArray(pred.predictions)) return { ok: true, horizon, from, to, predictions: [], degraded: true, reason: "no predictions object in " + text.length + " chars from " + up.model };
       if (pred && pred.predictions) {
-        const id = "pred-" + Math.random().toString(16).slice(2, 10);
+        const id = "pred-" + rhex(8);
         await env.PERSONAL.prepare("INSERT INTO predictions (id, ts, horizon, payload, confidence) VALUES (?1,?2,?3,?4,?5)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), horizon, JSON.stringify(pred.predictions).slice(0, 1e4), 0.6).run().catch(function() {
         });
         return { ok: true, horizon, from, to, predictions: pred.predictions };
@@ -872,7 +874,7 @@ function parseICS(text) {
 __name(parseICS, "parseICS");
 function icsMap(e) {
   const allDay = !/T\d{2}:\d{2}/.test(String(e.start || ""));
-  return { id: "gics:" + (e.uid || Math.random().toString(36).slice(2)), title: e.summary || "(no title)", dtstart: e.start || "", dtend: e.end || null, all_day: allDay, location: e.location || null, description: e.description ? String(e.description).slice(0, 400) : null, url: null, status: "confirmed", source: "google", calendar: "google" };
+  return { id: "gics:" + (e.uid || rhex(11)), title: e.summary || "(no title)", dtstart: e.start || "", dtend: e.end || null, all_day: allDay, location: e.location || null, description: e.description ? String(e.description).slice(0, 400) : null, url: null, status: "confirmed", source: "google", calendar: "google" };
 }
 __name(icsMap, "icsMap");
 async function gicsList(env, from, to, limit) {
@@ -1132,7 +1134,7 @@ async function taskAdd(env, args) {
   const title = String(args && args.title || "").trim().slice(0, 300);
   if (!title) return { ok: false, error: "title is required" };
   const kind = String(args && args.kind || "task") === "reminder" ? "reminder" : "task";
-  const id = "task-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+  const id = "task-" + rhex(8) + Date.now().toString(36);
   const due = args && args.due ? String(args.due).trim().slice(0, 25) : null;
   const priority = ["high", "normal", "low"].includes(String(args && args.priority || "")) ? String(args.priority) : "normal";
   await ensureSchemaV3(env);
@@ -1253,7 +1255,7 @@ async function expressT(env, args) {
   const desire = String(args && args.desire || "").trim().slice(0, 4e3);
   if (!desire) return { ok: false, error: "desire required" };
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const id = "int-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+  const id = "int-" + rhex(8) + Date.now().toString(36);
   await env.PERSONAL.prepare("INSERT INTO notes (id, ts, kind, content, source) VALUES (?1,?2,'desire',?3,'twin-tool')").bind(id, now, desire).run();
   try {
     const [vec] = await embed(env, [desire.slice(0, 1e3)]);
@@ -1806,7 +1808,7 @@ async function ledgerLog(env, args) {
   if (!name) return { ok: false, error: "name required" };
   const p = await ledgerFindPerson(env, name);
   if (!p) return { ok: false, error: "no active ledger person named " + name + "; use ledger_add_person first" };
-  const id = "log-" + Date.now().toString(36) + "-" + Math.random().toString(16).slice(2, 8);
+  const id = "log-" + Date.now().toString(36) + "-" + rhex(6);
   await env.PERSONAL.prepare("INSERT INTO ledger_interactions (id, person_id, ts, kind, note) VALUES (?1,?2,?3,'in_person',?4)").bind(id, p.id, new Date().toISOString(), sanitize(args && args.note, 300) || null).run();
   return { ok: true, id, person_id: p.id };
 }
@@ -1854,7 +1856,7 @@ async function generateProactiveSignals(env, brief) {
       const guard = await eventRecGuard(env);
       const kept = (sr.results || []).filter(function(r2) { return eventRecAllowed(guard, r2).ok; });
       if (kept.length) {
-        const id = "sig-" + Math.random().toString(16).slice(2, 10);
+        const id = "sig-" + rhex(8);
         await env.PERSONAL.prepare("INSERT OR IGNORE INTO proactive_signals (id, ts, kind, payload, shown, acted) VALUES (?1,?2,'event_suggestion',?3,0,0)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), JSON.stringify({ title: "Upcoming events matching your interests", summary: kept.slice(0, 2).map(function(r2) {
           return r2.title;
         }).join("; "), results: kept.slice(0, 2), profile_guard: { excluded_topics: guard.exclude, dropped: (sr.results || []).length - kept.length, budget_spent: guard.budgetSpent, half: guard.half } })).run();
@@ -1863,7 +1865,7 @@ async function generateProactiveSignals(env, brief) {
     if (brief && brief.weather && brief.weather.precip_prob_pct != null) {
       const isGood = brief.weather.precip_prob_pct < 30 && brief.weather.today_max_c > 15;
       if (isGood) {
-        const id = "sig-wx-" + Math.random().toString(16).slice(2, 10);
+        const id = "sig-wx-" + rhex(8);
         await env.PERSONAL.prepare("INSERT OR IGNORE INTO proactive_signals (id, ts, kind, payload, shown, acted) VALUES (?1,?2,'weather_activity',?3,0,0)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), JSON.stringify({ title: "Good weather today", summary: (brief.weather.text || "nice conditions") + " - good day for outdoor activity" })).run();
       }
     }
@@ -1872,7 +1874,7 @@ async function generateProactiveSignals(env, brief) {
         return h.done_count === 0;
       });
       if (missed.length) {
-        const id = "sig-habit-" + Math.random().toString(16).slice(2, 10);
+        const id = "sig-habit-" + rhex(8);
         await env.PERSONAL.prepare("INSERT OR IGNORE INTO proactive_signals (id, ts, kind, payload, shown, acted) VALUES (?1,?2,'habit_reminder',?3,0,0)").bind(id, (/* @__PURE__ */ new Date()).toISOString(), JSON.stringify({ title: "Habits not yet done today", summary: missed.map(function(h) {
           return h.name;
         }).join(", "), habits: missed })).run();
@@ -2344,7 +2346,7 @@ async function harvestIntent(env, q, messages, skipEvents) {
   if (!title) title = String(q || "").slice(0, 200);
   try {
     await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, content TEXT, source TEXT)").run();
-    const nid = "note-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+    const nid = "note-" + rhex(8) + Date.now().toString(36);
     await env.PERSONAL.prepare("INSERT INTO notes (id, ts, kind, content, source) VALUES (?1,?2,?3,?4,?5)").bind(nid, nowIso, intent.type, String(q || "").slice(0, 4e3), "chat-harvest").run();
   } catch (e) {
     console.log("harvest note error:", e && e.message || e);
@@ -2367,7 +2369,7 @@ async function harvestIntent(env, q, messages, skipEvents) {
     const start = extractDate(q);
     if (!start) return;
     try {
-      const evId = "evt-chat:" + Math.random().toString(16).slice(2, 14) + Date.now().toString(36);
+      const evId = "evt-chat:" + rhex(12) + Date.now().toString(36);
       await calAdd(env, { title: title.slice(0, 300), dtstart: start });
     } catch (e) {
       console.log("harvest event error:", e && e.message || e);
@@ -3043,7 +3045,7 @@ var api_default = {
       if (!desire) return json({ error: { message: "desire required", type: "invalid_request_error" } }, 400);
       try {
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const id = "int-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+        const id = "int-" + rhex(8) + Date.now().toString(36);
         await env.PERSONAL.prepare("CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, content TEXT, source TEXT)").run();
         await env.PERSONAL.prepare("INSERT INTO notes (id, ts, kind, content, source) VALUES (?1,?2,?3,?4,?5)").bind(id, nowIso, "desire", desire, String(body.source || "pwa")).run();
         const [vec] = await embed(env, [desire.slice(0, 1e3)]);
@@ -3890,14 +3892,14 @@ var PersonalTwinAgent = class {
     }
   }
   _appendMsg(sid, role, content) {
-    const id = "tmsg-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-6);
+    const id = "tmsg-" + rhex(8) + Date.now().toString(16).slice(-6);
     this.sql.exec("INSERT INTO twin_messages (id,session_id,role,content,ts) VALUES(?,?,?,?,?)", id, sid, role, String(content || "").slice(0, 8e3), (/* @__PURE__ */ new Date()).toISOString());
   }
   _getMsgs(sid, limit) {
     return this.sql.exec("SELECT role,content,ts FROM twin_messages WHERE session_id=? ORDER BY ts ASC LIMIT ?", sid, limit || 30).toArray().map((r) => ({ role: r.role, content: r.content, ts: r.ts }));
   }
   async _scheduleTask(type, payload, delayMs) {
-    const id = "tsched-" + Math.random().toString(16).slice(2, 10);
+    const id = "tsched-" + rhex(8);
     this.sql.exec("INSERT INTO twin_schedules (id,type,payload,run_at,status,created_at) VALUES(?,?,?,?,?,?)", id, type, JSON.stringify(payload), new Date(Date.now() + (delayMs || 0)).toISOString(), "pending", (/* @__PURE__ */ new Date()).toISOString());
     const ex = await this.storage.getAlarm();
     if (!ex) await this.storage.setAlarm(Date.now() + Math.max(delayMs || 1e3, 1e3));

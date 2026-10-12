@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var NL = String.fromCharCode(10);
-var VERSION = "1.3.10-routable-models"; /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
+var VERSION = "1.3.11-codeagent"; /* 1.3.10 MODEL-ID-AUDIT-1 (2026-10-11): the classifier asked qnfo-ai for the bare id glm-5.2, which its MODELS table does not route (it fell back to deepseek-v4-flash while the stats recorded glm-5.2). It now asks glm-5.3-flash with deepseek-v4-flash as the second leg. */ /* 1.3.9 NO-TOPIC-HARDCODE-1 (owner directive 2026-10-10): the triage prompt names no program or field; cluster_key tags come from the tags already in research_candidates. */
 var ROUTER = "https://qnfo-ai.q08.workers.dev";
 var AGENT_ORCH = "https://qnfo-agent-orchestrator.q08.workers.dev";
 var PROMOTE_THRESHOLD = 60;
@@ -177,17 +177,24 @@ async function handleIntent(env, body, source, device) {
     intent.status = "done";
   }
   if (type === "activity") {
+    const when = cls.due || now.slice(0, 10);
+    const payload = { doc: "activity", date: when, title: cls.summary || desire.slice(0, 120), category: domain === "research" ? "research" : "other", venue: "", notes: desire.slice(0, 500) };
     try {
-      const when = cls.due || now.slice(0, 10);
-      await env.PLS.fetch("https://personal-life-search.q08.workers.dev/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Index-Token": env.INDEX_TOKEN },
-        body: JSON.stringify({ items: [{ doc: "activity", date: when, title: cls.summary || desire.slice(0, 120), category: domain === "research" ? "research" : "other", venue: "", notes: desire.slice(0, 500) }] })
-      });
+      const headers = { "Content-Type": "application/json" };
+      if (env.INDEX_TOKEN) headers["X-Index-Token"] = env.INDEX_TOKEN;
+      const resp = await fetch("https://personal-api.q08.workers.dev/activity", { method: "POST", headers, body: JSON.stringify(payload) });
+      if (!resp.ok) throw new Error("personal-api returned " + resp.status);
       status = "done";
       intent.status = "done";
       await env.D1.prepare("UPDATE intents SET processed_at=?1 WHERE id=?2").bind(now, id).run();
     } catch (e) {
+      const failNow = new Date().toISOString();
+      const errText = String(e && e.message || e).slice(0, 240);
+      console.log("activity store failed:", errText);
+      status = "failed";
+      intent.status = "failed";
+      intent.error = errText;
+      await env.D1.prepare("UPDATE intents SET status='failed', processed_at=?1 WHERE id=?2").bind(failNow, id).run();
     }
   }
   return intent;

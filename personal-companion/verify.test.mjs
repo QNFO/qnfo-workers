@@ -277,5 +277,11 @@ const count = (p, t) => p.prepare("SELECT COUNT(*) n FROM " + t).get().n;
   ok(g("Zorblax Quimby invented the method.").some((x) => /Quimby/.test(x)), "an invented name after the opener still fails");
   ok(g("Results reached 78 % on the benchmark.").some((x) => /78/.test(x)), "an invented figure still fails");
 }
+{
+  const gn = V.groundingNeedles;
+  const n = gn(["grounding: figure not in the source: 8.34", "grounding: name not in the source: Soft Actor Critic", "grounding: figure not in the source: 8.34"]);
+  ok(n.length === 2 && n[0] === "8.34" && n[1] === "Soft Actor Critic", "needles come from the real 'not in the source:' messages, deduplicated");
+  ok(gn([]).length === 0 && gn(["essay length 10"]).length === 1, "empty input gives no needles");
+}
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

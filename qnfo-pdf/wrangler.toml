@@ -16,6 +16,7 @@ invocation_logs = true
 [observability.traces]
 enabled = true
 
+head_sampling_rate = 0.05 # TRACES-SAMPLING-BEFORE-BILLING-1: stored traces bill from 2026-12-01
 [browser]
 binding = "BROWSER"
 
