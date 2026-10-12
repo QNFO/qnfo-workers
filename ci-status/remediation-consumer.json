@@ -1,411 +1,51 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@6ed582140274",
- "due": 118,
- "pass": 61,
- "fail": 42,
- "skipped": 15,
+ "verifier": "remediation-consumer@f68361abfe85",
+ "due": 1,
+ "pass": 1,
+ "fail": 0,
+ "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2423",
-   "issue_id": 2423,
+   "class": "issue-2443",
+   "issue_id": 2443,
    "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
+   "expected": "closed",
+   "observed": "closed",
    "written": true
-  },
-  {
-   "class": "issue-2384",
-   "issue_id": 2384,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2388",
-   "issue_id": 2388,
-   "verdict": "fail",
-   "expected": "2",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "belief-issues-probed-hourly",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2170",
-   "issue_id": 2170,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2193",
-   "issue_id": 2193,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2052",
-   "issue_id": 2052,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2206",
-   "issue_id": 2206,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2207",
-   "issue_id": 2207,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2211",
-   "issue_id": 2211,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2286",
-   "issue_id": 2286,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "stale: the filing loop q08-signal-engine did not close it within 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2337",
-   "issue_id": 2337,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2357",
-   "issue_id": 2357,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-1651",
-   "issue_id": 1651,
-   "verdict": "fail",
-   "expected": "tracked",
-   "observed": "stale",
-   "written": true
-  },
-  {
-   "class": "issue-2252",
-   "issue_id": 2252,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "issue-2262",
-   "issue_id": 2262,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "issue-2292",
-   "issue_id": 2292,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
-   "written": true
-  },
-  {
-   "class": "issue-2354",
-   "issue_id": 2354,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2358",
-   "issue_id": 2358,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "research-terminal-a2033fc2",
-   "issue_id": 2358,
-   "verdict": "fail",
-   "expected": "parked+queue-moving",
-   "observed": "pending",
-   "written": true
-  },
-  {
-   "class": "issue-2183",
-   "issue_id": 2183,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "fm-metric-refresher-replaced",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2391",
-   "issue_id": 2391,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by qnfo-deploy-guard, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-1223",
-   "issue_id": 1223,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-observability-config-inert",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-contract-cadence-drift",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2147",
-   "issue_id": 2147,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2165",
-   "issue_id": 2165,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: fewer than 20 full-context judged claims (qnfo-ai-search 2.4.2, PR 950)",
-   "written": true
-  },
-  {
-   "class": "fm-triage-gap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2008",
-   "issue_id": 2008,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: qnfo-code-orchestrator 0.12.0 (VERIFY-DEFER-PUBLISHER-1) is not live yet: 0.10.0-intake-window",
-   "written": true
-  },
-  {
-   "class": "issue-2225",
-   "issue_id": 2225,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "fm-unknown-model-id-silent-default",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-reasoning-starves-small-answer",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2067",
-   "issue_id": 2067,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "dead-on-arrival tasks were created in the last 14 days: 9",
-   "written": true
-  },
-  {
-   "class": "issue-2336",
-   "issue_id": 2336,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "3",
-   "written": true
-  },
-  {
-   "class": "issue-2231",
-   "issue_id": 2231,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2174",
-   "issue_id": 2174,
-   "verdict": "pass",
-   "expected": "1",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2192",
-   "issue_id": 2192,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-superseded-closure-reopened",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2148",
-   "issue_id": 2148,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2235",
-   "issue_id": 2235,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-register-row-reescalated",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "close-predicate-monotone",
-   "issue_id": 1297,
-   "verdict": "pass",
-   "expected": "guarded",
-   "observed": "guarded",
-   "written": true
-  },
-  {
-   "class": "issue-2133",
-   "issue_id": 2133,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2197",
-   "issue_id": 2197,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2204",
-   "issue_id": 2204,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2233",
-   "issue_id": 2233,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2087",
-   "issue_id": 2087,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2234",
-   "issue_id": 2234,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2241",
-   "issue_id": 2241,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-ipatent-automated-drafts-
+  }
+ ],
+ "trusted_transports": [
+  "binding-http",
+  "cf-api",
+  "code-read",
+  "container",
+  "curl",
+  "d1-query",
+  "d1-query@ipatent-db",
+  "d1-query@living-paper",
+  "d1-query@personal-life",
+  "d1-query@portfolio-state",
+  "d1-query@q08-signal",
+  "d1-query@qnfo-cms",
+  "d1-query@qnfo-graph",
+  "dns",
+  "edge-ext",
+  "external",
+  "external-curl",
+  "external-http",
+  "external-https",
+  "http",
+  "runner-https"
+ ],
+ "budget_exhausted": false,
+ "runtime_verified_share_24h": 5.8,
+ "host_census": {
+  "skipped": "ran within 6h"
+ },
+ "spent_ms": 9235,
+ "head": "f68361abfe85e8ffe961c73f408db35429fd1c17",
+ "job_status": "success",
+ "ts": "2026-10-12T16:09:26Z"
+}
