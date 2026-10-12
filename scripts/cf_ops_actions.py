@@ -1601,6 +1601,8 @@ def nozg_text(s: str, doi_map: dict) -> str:
     s = _NZ_URL_RE.sub(lambda m: url(m.group(1)), s)
     s = _NZ_ORG_RE.sub(lambda m: url(m.group(1)), s)
     s = _NZ_RE.sub(lambda m: url(m.group(1)), s)
+    # the graph's own dashed id form inside text ("superseded by paper-doi-10.5281-zenodo.23003473"; dry run 134 leftover)
+    s = re.sub(r"(?:paper-doi-)?10\.5281-zenodo\.([0-9A-Za-z]+)", lambda m: url(m.group(1)), s, flags=re.I)
     arch = lambda m: "ARCHIVE" if m.group(0).isupper() else ("Archive" if m.group(0)[0].isupper() else "archive")  # noqa: E731
     if not re.search(r"\s", s.strip()):
         # a single token (a type value, an identifier, a URL): the name is replaced in place, never by the prose phrase

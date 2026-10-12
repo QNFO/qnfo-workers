@@ -49,6 +49,8 @@ ok(m.nozg_text("", DOI_MAP) == "" and m.nozg_text("plain", DOI_MAP) == "plain", 
 # was rewritten inside its URL ("papers/the QNFO archive-105281archive<n>/")
 ok(m.nozg_text("zenodo", DOI_MAP) == "archive" and m.nozg_text("zenodo-sync", DOI_MAP) == "archive-sync", "text: a single token takes archive in place, never the prose phrase")
 ok(m.nozg_text("https://papers.qnfo.org/papers/zenodo-105281zenodo21017184/", DOI_MAP) == "https://papers.qnfo.org/papers/archive-105281archive21017184/", "text: a URL stays one token")
+ok(m.nozg_text("full version node; superseded by paper-doi-10.5281-zenodo.222", DOI_MAP) == "full version node; superseded by " + P + "/beta-paper/", "text: the graph's dashed id form in prose maps to the page (dry run 134 leftover)")
+ok(m.nozg_text("superseded by paper-doi-10.5281-zenodo.23003473", DOI_MAP) == "superseded by " + P, "text: an unmapped dashed id falls back to the index")
 
 # 2. properties
 props = json.dumps({"zenodo_id": 20329449, "doi": "10.5281/zenodo.111", "title": "Signal and Worker", "date": "2026-05-21", "record_url": "https://zenodo.org/records/111",
