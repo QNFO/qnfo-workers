@@ -73,6 +73,11 @@ ACTIONS
   noz-scrub-bodies --model dry|live [--target all]
                          NO-ZENODO-DOI-5 (#2278, umbrella #2273): rewrite every published, distributed or external_preprint
                          (--target all: every status, backup table bak_20261012_noz_bodies_all)
+  noz-scrub-graph --model dry|live
+                         NO-ZENODO-DOI-7 (#2448): the knowledge graph (qnfo-graph nodes, edges, archive_publications): registrar-shaped
+                         node ids become paper:<slug> (or archive-record-<n>) with their edges moved, property keys named after the
+                         registrar go, 10.5281 doi values become '', names and text values take the word rules, the ZENODO-PUBLISH
+                         template nodes are deleted; live backs up into bak_20261012_noz_graph_{nodes,edges,pubs} first
                          living-paper body and abstract that still names the retired registrar or a 10.5281 DOI, deterministically
                          (noz_scrub: front matter, doi.org links, reference entries, **DOI:** lines, the word itself -> papers.qnfo.org
                          pages). dry (default) prints per-row counts, the first 10 before/after lines and every leftover, writes
@@ -87,6 +92,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import json
 import os
 import re
@@ -777,8 +783,11 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
 LIVING_PAPER_DB = "70a58cb3-b2cd-498d-877f-ecca86859a22"
 
 
-def d1q(acct: str, token: str, sql: str, params: list) -> tuple[bool, list]:
-    st, j = call("POST", f"/accounts/{acct}/d1/database/{LIVING_PAPER_DB}/query", token, {"sql": sql, "params": params}, timeout=90)
+GRAPH_DB = "a1954b92-d681-4d02-b1f6-f9a2eb4c265d"  # qnfo-graph (NO-ZENODO-DOI-7, agent_issues 2448)
+
+
+def d1q(acct: str, token: str, sql: str, params: list, db: str = LIVING_PAPER_DB) -> tuple[bool, list]:
+    st, j = call("POST", f"/accounts/{acct}/d1/database/{db}/query", token, {"sql": sql, "params": params}, timeout=90)
     if st != 200 or not j.get("success"):
         return False, [str(j.get("errors"))[:300]]
     res = j.get("result") or [{}]
@@ -1561,9 +1570,279 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
     return 0 if ok else 1
 
 
+# NO-ZENODO-DOI-7 (2026-10-12, agent_issues 2448, umbrella 2273 closed; owner directive 2026-10-10; pillar reach). The knowledge
+# graph (qnfo-graph: nodes, edges, archive_publications) still carried the retired registrar in 1704 node property blobs
+# (doi / zenodo_doi / zenodo_url / zenodo_id / record_url keys), 282 node names ("Z20329449: <title>", "ZENODO-PUBLISH"), 617
+# node ids of the shapes zenodo-10-5281-zenodo-<n>, zenodo-<n>, zenodo-zenodo.<n>, 10.5281/zenodo.<n> and
+# paper-doi-10.5281-zenodo.<n>, 68 edges and 5 archive_publications rows. nozg_* are pure; noz_scrub_graph() runs them over the
+# D1, dry by default. Node ids are primary keys that edges reference under enforced foreign keys, so a rename is INSERT new row,
+# UPDATE the edges' endpoints, DELETE the old row, in that order; a rename whose target id already exists merges into it (the
+# edges move, the old node goes). The two ZENODO-PUBLISH prompt-template nodes (and their edges) are deleted: the template
+# deposits to the banned account. Third-party DOIs are kept (owner amendment 2026-10-10). The DOI -> slug map comes from
+# living-paper's bak_20261012_noz_columns (the registry columns were nulled on 2026-10-12, the backup keeps the mapping).
+NOZG_BAK = "bak_20261012_noz_graph"
+NOZG_MATCH_NODE = "(lower(id || name || coalesce(properties, '')) LIKE '%zenodo%' OR lower(coalesce(properties, '')) LIKE '%10.5281%')"
+NOZG_MATCH_EDGE = "(lower(id || source_id || target_id || coalesce(properties, '')) LIKE '%zenodo%' OR lower(coalesce(properties, '')) LIKE '%10.5281%')"
+NOZG_MATCH_PUB = "(lower(coalesce(doi, '')) LIKE '10.5281%' OR lower(coalesce(title, '')) LIKE '%zenodo%')"
+NOZG_PROBE = ("SELECT (SELECT COUNT(*) FROM nodes WHERE " + NOZG_MATCH_NODE + ") + (SELECT COUNT(*) FROM edges WHERE " + NOZG_MATCH_EDGE +
+              ") + (SELECT COUNT(*) FROM archive_publications WHERE " + NOZG_MATCH_PUB + ") AS n")
+_NZG_ID_RE = re.compile(r"^(?:zenodo-10-5281-zenodo-|zenodo-zenodo\.|zenodo-|10\.5281/zenodo\.|paper-doi-10\.5281-zenodo\.)([0-9]+)$", re.I)
+_NZG_NAME_Z_RE = re.compile(r"^Z([0-9]+):[ \t]*", re.I)
+_NZG_NAME_BRACKET_RE = re.compile(r"^\[zenodo\][ \t]*(?:10\.5281/zenodo\.)?([0-9A-Za-z]+)?[ \t]*$", re.I)
+_NZG_KEY_RE = re.compile(r"zenodo", re.I)
+
+
+def nozg_text(s: str, doi_map: dict) -> str:
+    """One string value or name: links, URLs and DOI tokens -> papers.qnfo.org pages (the slug when mapped), then the word in
+    every shape; the last rule turns any leftover 'zenodo' into 'archive' so an identifier never keeps the name."""
+    if not s or not NOZ_HAS.search(s):
+        return s
+    url = lambda n: noz_url(n, doi_map)  # noqa: E731
+    s = _NZ_URL_RE.sub(lambda m: url(m.group(1)), s)
+    s = _NZ_ORG_RE.sub(lambda m: url(m.group(1)), s)
+    s = _NZ_RE.sub(lambda m: url(m.group(1)), s)
+    # the graph's own dashed id form inside text ("superseded by paper-doi-10.5281-zenodo.23003473"; dry run 134 leftover)
+    s = re.sub(r"(?:paper-doi-)?10\.5281-zenodo\.([0-9A-Za-z]+)", lambda m: url(m.group(1)), s, flags=re.I)
+    arch = lambda m: "ARCHIVE" if m.group(0).isupper() else ("Archive" if m.group(0)[0].isupper() else "archive")  # noqa: E731
+    if not re.search(r"\s", s.strip()):
+        # a single token (a type value, an identifier, a URL): the name is replaced in place, never by the prose phrase
+        return re.sub(r"zenodo", arch, s, flags=re.I).strip()
+    s = re.sub(r"zenodo_publish\.py", "archive_publish.py", s, flags=re.I)
+    s = re.sub(r"\bZENODO-PUBLISH\b", "ARCHIVE-PUBLISH", s)
+    s = re.sub(r"\bzenodo_(\w+)", lambda m: "archive_" + m.group(1), s, flags=re.I)
+    s = re.sub(r"[ \t]*\(\s*zenodo\s*\)", "", s, flags=re.I)
+    s = re.sub(r"\bzenodo[ \t]+(DOIs?)\b", r"\1", s, flags=re.I)
+    s = re.sub(r"\b(on|via|at|to|in)[ \t]+zenodo\b", lambda m: ("At" if m.group(1)[0].isupper() else "at") + " papers.qnfo.org", s, flags=re.I)
+    s = re.sub(r"\bzenodo\b", "the QNFO archive", s, flags=re.I)
+    s = re.sub(r"zenodo", arch, s, flags=re.I)
+    s = re.sub(r"\(\s*\)", "", s)
+    s = re.sub(r"(\S)[ \t]{2,}(?=\S)", r"\1 ", s)
+    return s.strip(" \t")
+
+
+def nozg_props(text, doi_map: dict, slug=None):
+    """Properties JSON -> (new_text, changed). Keys named after the registrar go when their value is a 10.5281 DOI or a
+    zenodo.org URL and are renamed archive_* otherwise; a doi value with the 10.5281 prefix becomes '' (the convention of the
+    paper:<slug> nodes); a record_url/url on zenodo.org becomes the in-house page; every other string takes nozg_text.
+    Invalid JSON is treated as text. When the node maps to a slug and the blob has no url, url is set."""
+    if text is None:
+        return None, False
+    raw = str(text)
+    if not NOZ_HAS.search(raw) and not slug:
+        return raw, False
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        new = nozg_text(raw, doi_map)
+        return new, new != raw
+
+    def walk(v):
+        if isinstance(v, dict):
+            out = {}
+            for k, x in v.items():
+                sx = x if isinstance(x, str) else None
+                is_z = sx is not None and (sx.startswith("10.5281/") or re.search(r"zenodo\.org|doi\.org/10\.5281", sx, re.I) is not None)
+                if _NZG_KEY_RE.search(k):
+                    if is_z or sx == "" or x is None or isinstance(x, (int, float)):
+                        continue  # a registrar identifier: dropped
+                    out[_NZG_KEY_RE.sub("archive", k)] = walk(x)
+                    continue
+                if k.lower() == "doi" or k.lower().endswith("_doi"):
+                    out[k] = "" if (sx is not None and sx.lower().startswith("10.5281/")) else walk(x)
+                    continue
+                if k.lower() in ("record_url", "url") and is_z:
+                    mm = _NZ_RE.search(sx) or _NZ_ORG_RE.search(sx)
+                    out[k] = noz_url(mm.group(1) if mm else None, doi_map)
+                    continue
+                out[k] = walk(x)
+            return out
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        if isinstance(v, str):
+            return nozg_text(v, doi_map)
+        return v
+
+    new = walk(obj)
+    if slug and isinstance(new, dict) and not new.get("url"):
+        new["url"] = NOZ_PAPERS_BASE + "/" + slug + "/"
+    out = json.dumps(new, ensure_ascii=False, separators=(",", ":"))
+    return out, out != raw
+
+
+def nozg_new_id(old_id: str, doi_map: dict):
+    """-> (new_id, n, slug) for a registrar-shaped id, (None, None, None) otherwise. paper:<slug> when the record maps to a
+    living-paper slug, archive-record-<n> when it does not; any other id that carries the word takes 'archive' in its place."""
+    m = _NZG_ID_RE.match(old_id or "")
+    if m:
+        n = m.group(1)
+        slug = doi_map.get("10.5281/zenodo." + n)
+        return ("paper:" + slug) if slug else ("archive-record-" + n), n, slug
+    if re.search(r"zenodo", old_id or "", re.I):
+        return re.sub(r"zenodo", "archive", old_id, flags=re.I), None, None
+    return None, None, None
+
+
+def nozg_name(name: str, props_obj, n, doi_map: dict) -> str:
+    """'Z<n>: <title>' -> '<title>'; '[Zenodo] <doi>' -> the blob's title or 'Archive record <n>'; then nozg_text."""
+    s = name or ""
+    s = _NZG_NAME_Z_RE.sub("", s)
+    if _NZG_NAME_BRACKET_RE.match(s):
+        title = props_obj.get("title") if isinstance(props_obj, dict) else None
+        s = str(title) if title else ("Archive record " + str(n or _NZG_NAME_BRACKET_RE.match(s).group(1) or "")).strip()
+    return nozg_text(s, doi_map) or s
+
+
+def nozg_plan(nodes: list, edges: list, pubs: list, doi_map: dict) -> dict:
+    """Pure. nodes/edges/pubs are the matching rows (dicts). Returns the ordered plan:
+    node_deletes (template nodes), renames [{old, new, name, properties, merge}], updates [{id, name, properties, old_properties}],
+    edge_deletes, edge_updates [{id, new_id, source_id, target_id, properties}], pub_updates [{id, doi, title}], counts, samples, leftovers."""
+    ids = {str(n.get("id")) for n in nodes}
+    plan = {"node_deletes": [], "renames": [], "updates": [], "edge_deletes": [], "edge_updates": [], "pub_updates": [], "samples": [], "leftovers": []}
+    remap, taken = {}, set()
+    for n in nodes:
+        oid = str(n.get("id"))
+        if str(n.get("label")) == "Template" and re.search(r"zenodo", (n.get("name") or "") + oid, re.I):
+            plan["node_deletes"].append(oid)
+            remap[oid] = None
+            continue
+        new_id, num, slug = nozg_new_id(oid, doi_map)
+        props_txt, _ = nozg_props(n.get("properties"), doi_map, slug)
+        try:
+            pobj = json.loads(props_txt) if props_txt else {}
+        except Exception:
+            pobj = {}
+        name = nozg_name(n.get("name") or "", pobj, num, doi_map)
+        if new_id and new_id != oid:
+            merge = new_id in ids or new_id in taken
+            taken.add(new_id)
+            remap[oid] = new_id
+            plan["renames"].append({"old": oid, "new": new_id, "name": name, "properties": props_txt, "merge": merge})
+        elif name != (n.get("name") or "") or props_txt != (n.get("properties") if n.get("properties") is not None else None):
+            plan["updates"].append({"id": oid, "name": name, "properties": props_txt, "old_properties": n.get("properties")})
+        for shown, orig in ((name, n.get("name") or ""), (props_txt or "", n.get("properties") or "")):
+            if shown != orig and len(plan["samples"]) < 12:
+                plan["samples"].append({"id": oid, "before": str(orig)[:160], "after": str(shown)[:160]})
+            for m in NOZ_HAS.finditer(shown or ""):
+                if len(plan["leftovers"]) < 8:
+                    plan["leftovers"].append({"id": oid, "context": shown[max(0, m.start() - 40):m.end() + 40]})
+    edge_ids = {str(e.get("id")) for e in edges}
+    for e in edges:
+        eid, s, t = str(e.get("id")), str(e.get("source_id")), str(e.get("target_id"))
+        ns, nt = remap.get(s, s), remap.get(t, t)
+        if ns is None or nt is None or (ns == nt and s != t):
+            plan["edge_deletes"].append(eid)
+            continue
+        new_eid = re.sub(r"zenodo", "archive", eid, flags=re.I)
+        if new_eid != eid and new_eid in edge_ids:
+            new_eid = new_eid + "-" + hashlib.sha1(eid.encode()).hexdigest()[:6]
+        props_txt, _ = nozg_props(e.get("properties"), doi_map)
+        if new_eid != eid or ns != s or nt != t or props_txt != e.get("properties"):
+            plan["edge_updates"].append({"id": eid, "new_id": new_eid, "source_id": ns, "target_id": nt, "properties": props_txt})
+    for p in pubs:
+        doi = p.get("doi")
+        new_doi = None if (doi and str(doi).lower().startswith("10.5281")) else doi
+        title = nozg_text(p.get("title") or "", doi_map)
+        if new_doi != doi or title != (p.get("title") or ""):
+            plan["pub_updates"].append({"id": p.get("id"), "doi": new_doi, "title": title})
+    plan["counts"] = {k: len(plan[k]) for k in ("node_deletes", "renames", "updates", "edge_deletes", "edge_updates", "pub_updates")}
+    plan["counts"]["merges"] = sum(1 for r in plan["renames"] if r["merge"])
+    return plan
+
+
+def noz_scrub_graph(acct: str, token: str, mode: str = "dry", run=None, run_lp=None) -> int:
+    """NO-ZENODO-DOI-7: dry prints the plan and writes nothing; live backs up the matching rows (CREATE TABLE IF NOT EXISTS
+    bak_20261012_noz_graph_{nodes,edges,pubs} AS SELECT), applies the plan in foreign-key order and re-counts with NOZG_PROBE."""
+    if mode not in ("dry", "live"):
+        emit({"action": "noz-scrub-graph", "ok": False, "error": "mode must be dry or live (the model input)", "mode": mode})
+        return 2
+    run = run or (lambda sql, params=None: d1q(acct, token, sql, params or [], db=GRAPH_DB))
+    run_lp = run_lp or (lambda sql, params=None: d1q(acct, token, sql, params or []))
+    ok, rows = run_lp("SELECT slug, doi, zenodo_doi FROM bak_20261012_noz_columns WHERE slug IS NOT NULL")
+    if not ok:
+        emit({"action": "noz-scrub-graph", "ok": False, "stage": "doi-map", "error": str(rows)[:300]})
+        return 1
+    doi_map = {}
+    for r in rows:
+        # a slug that itself carries the registrar's name belonged to a bodyless placeholder row (removed 2026-10-12, backup
+        # bak_20261012_noz_kg_shells) and has no page: such a record stays unmapped (archive-record-<n>, the archive index URL)
+        if not r.get("slug") or re.search(r"zenodo", str(r["slug"]), re.I):
+            continue
+        for k in ("doi", "zenodo_doi"):
+            v = (r.get(k) or "").strip()
+            if v.lower().startswith("10.5281/"):
+                doi_map.setdefault(v, r["slug"])
+    ok1, nodes = run("SELECT id, label, name, properties FROM nodes WHERE " + NOZG_MATCH_NODE)
+    ok2, edges = run("SELECT id, source_id, target_id, properties FROM edges WHERE " + NOZG_MATCH_EDGE +
+                     " OR source_id IN (SELECT id FROM nodes WHERE " + NOZG_MATCH_NODE + ") OR target_id IN (SELECT id FROM nodes WHERE " + NOZG_MATCH_NODE + ")")
+    ok3, pubs = run("SELECT id, doi, title FROM archive_publications WHERE " + NOZG_MATCH_PUB)
+    if not (ok1 and ok2 and ok3):
+        emit({"action": "noz-scrub-graph", "ok": False, "stage": "read", "error": str([nodes, edges, pubs])[:400]})
+        return 1
+    plan = nozg_plan(nodes, edges, pubs, doi_map)
+    summary = {"action": "noz-scrub-graph", "mode": mode, "doi_map": len(doi_map), "nodes_read": len(nodes), "edges_read": len(edges), "pubs_read": len(pubs),
+               "counts": plan["counts"], "samples": plan["samples"], "leftovers": plan["leftovers"]}
+    for s in plan["samples"]:
+        print("noz-scrub-graph %s\n    - %s\n    + %s" % (s["id"], s["before"], s["after"]))
+    if mode == "dry":
+        emit({**summary, "ok": True, "dry": True})
+        return 0
+    for stmt in ("CREATE TABLE IF NOT EXISTS " + NOZG_BAK + "_nodes AS SELECT * FROM nodes WHERE " + NOZG_MATCH_NODE,
+                 "CREATE TABLE IF NOT EXISTS " + NOZG_BAK + "_edges AS SELECT * FROM edges WHERE " + NOZG_MATCH_EDGE +
+                 " OR source_id IN (SELECT id FROM nodes WHERE " + NOZG_MATCH_NODE + ") OR target_id IN (SELECT id FROM nodes WHERE " + NOZG_MATCH_NODE + ")",
+                 "CREATE TABLE IF NOT EXISTS " + NOZG_BAK + "_pubs AS SELECT * FROM archive_publications WHERE " + NOZG_MATCH_PUB):
+        ok, r = run(stmt)
+        if not ok:
+            emit({**summary, "ok": False, "stage": "backup", "error": str(r)[:300]})
+            return 1
+    failed, done = [], {"node_deletes": 0, "renames": 0, "merges": 0, "updates": 0, "edge_deletes": 0, "edge_updates": 0, "pub_updates": 0}
+
+    def step(key, sql, params):
+        ok, r = run(sql, params)
+        if ok:
+            done[key] += 1
+        else:
+            failed.append({"step": key, "params": [str(p)[:60] for p in params], "error": str(r)[:200]})
+        return ok
+
+    # edges of deleted nodes go first (foreign keys), then the nodes
+    for eid in plan["edge_deletes"]:
+        step("edge_deletes", "DELETE FROM edges WHERE id = ?1", [eid])
+    for nid in plan["node_deletes"]:
+        step("node_deletes", "DELETE FROM nodes WHERE id = ?1", [nid])
+    for r in plan["renames"]:
+        # insert the new row (unless the target exists: a merge), move the edges, delete the old row: foreign-key order
+        if r["merge"]:
+            done["merges"] += 1
+        elif not step("renames", "INSERT INTO nodes (id, label, name, properties, created_at, updated_at) SELECT ?1, label, ?2, ?3, created_at, datetime('now') FROM nodes WHERE id = ?4",
+                      [r["new"], r["name"], r["properties"], r["old"]]):
+            continue
+        for sql in ("UPDATE edges SET source_id = ?1 WHERE source_id = ?2", "UPDATE edges SET target_id = ?1 WHERE target_id = ?2"):
+            okm, rm = run(sql, [r["new"], r["old"]])
+            if not okm:
+                failed.append({"step": "move-edges", "params": [r["old"], r["new"]], "error": str(rm)[:200]})
+        okd, rd = run("DELETE FROM nodes WHERE id = ?1", [r["old"]])
+        if not okd:
+            failed.append({"step": "delete-old", "params": [r["old"]], "error": str(rd)[:200]})
+    for u in plan["updates"]:
+        if u["old_properties"] is None:
+            step("updates", "UPDATE nodes SET name = ?1, properties = ?2, updated_at = datetime('now') WHERE id = ?3 AND properties IS NULL", [u["name"], u["properties"], u["id"]])
+        else:
+            step("updates", "UPDATE nodes SET name = ?1, properties = ?2, updated_at = datetime('now') WHERE id = ?3 AND properties = ?4", [u["name"], u["properties"], u["id"], u["old_properties"]])
+    for e in plan["edge_updates"]:
+        step("edge_updates", "UPDATE edges SET id = ?1, source_id = ?2, target_id = ?3, properties = ?4, updated_at = datetime('now') WHERE id = ?5",
+             [e["new_id"], e["source_id"], e["target_id"], e["properties"], e["id"]])
+    for p in plan["pub_updates"]:
+        step("pub_updates", "UPDATE archive_publications SET doi = ?1, title = ?2 WHERE id = ?3", [p["doi"], p["title"], p["id"]])
+    okn, after = run(NOZG_PROBE)
+    remaining = after[0].get("n") if okn and after else None
+    print("noz-scrub-graph live: %s; failed %d; remaining %s" % (json.dumps(done), len(failed), remaining))
+    emit({**summary, "ok": remaining == 0 and not failed, "dry": False, "backup_tables": [NOZG_BAK + "_nodes", NOZG_BAK + "_edges", NOZG_BAK + "_pubs"], "done": done, "failed": failed[:20], "remaining": remaining})
+    return 0 if remaining == 0 and not failed else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "noz-scrub-bodies"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key", "noz-scrub-bodies", "noz-scrub-graph"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1600,6 +1879,8 @@ def main() -> int:
         return spare_domain_canon(a.target, a.model, token)
     if a.action == "noz-scrub-bodies":
         return noz_scrub_bodies(acct, token, a.model or "dry", scope=("all" if (a.target or "").strip() == "all" else "public"))
+    if a.action == "noz-scrub-graph":
+        return noz_scrub_graph(acct, token, a.model or "dry")
     if a.action == "r2-get":
         return r2_get(acct, token, a.target)
     if a.action == "worker-history":
