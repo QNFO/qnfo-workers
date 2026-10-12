@@ -57,3 +57,10 @@ UPDATE code_tasks SET status = 'merged', merged_sha = '4781950e0164df20c95a25f5e
   merged_by = 'session_01CWLpf5v1NjC9GXbM6rnH4k', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   merge_note = 'merged by a session after review: the runner refused only on file scope (test file added); suites green'
 WHERE id = 'ct_7ze4xcaazifdut' AND status = 'failed';
+
+-- Issue 2355 (CODE-REPAIR-PREPR-1): PR 1000 (qnfo-fleet-control 0.18.x, another session's claim) repairs a refusal that
+-- arrives while the task is still a pushed branch by adding a branch_pushed path and keeps the open-PR path, so the original
+-- "old line absent" probe would never pass with the defect fixed. The probe now requires the branch-stage repair to exist.
+UPDATE remediation_contracts SET verify_probe = '{"paths": ["qnfo-fleet-control/worker.js"], "contains": "d.action === \"refuse\" && t.status === \"branch_pushed\""}',
+  verify_transport = 'code-read', attempts = 0, last_verdict = NULL, next_due_at = datetime('now')
+WHERE class = 'issue-2355';
