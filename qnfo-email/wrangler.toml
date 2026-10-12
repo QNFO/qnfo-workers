@@ -32,6 +32,19 @@ service = "qnfo-ops"
 environment = "production"
 props = { caller = "qnfo-email" }
 
+# EMAIL-VOICE-DRAFTER-1 (2.8.0, agent_issues 2373): the voice document lives in the private store bound to the dashboard alone
+# (IDENTITY-STORE-1); this binding reads and proposes it through /api/owner/doc/<key>, authenticated by props.caller.
+[[services]]
+binding = "DASH"
+service = "qnfo-fleet-dashboard"
+environment = "production"
+props = { caller = "qnfo-email" }
+
+# EMAIL-VOICE-DRAFTER-1: the writer and editor models (two families) run on Workers AI; qnfo-ai stays the router for callers
+# that need it, this worker makes two short calls per human thread.
+[ai]
+binding = "AI"
+
 [observability]
 enabled = true
 head_sampling_rate = 1
