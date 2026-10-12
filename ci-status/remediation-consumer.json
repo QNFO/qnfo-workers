@@ -1,82 +1,82 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@e8ce7519f810",
+ "verifier": "remediation-consumer@9f7c3945632c",
  "due": 9,
- "pass": 0,
- "fail": 9,
+ "pass": 3,
+ "fail": 6,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-1898",
-   "issue_id": 1898,
-   "verdict": "fail",
+   "class": "issue-2076",
+   "issue_id": 2076,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: grant-followup has not read Gmail in 24h (\"gmail\":\"no-credential: GMAIL_PASS unset\"},\"gmail_)",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2014",
-   "issue_id": 2014,
-   "verdict": "fail",
+   "class": "issue-2131",
+   "issue_id": 2131,
+   "verdict": "pass",
    "expected": "ok",
-   "observed": "pending: metric ops_tool_budget_bail_7d not measured yet (migrations/2026-10-12-ops-budget-bail-metric.sql, PR 942)",
+   "observed": "ok",
    "written": true
   },
   {
-   "class": "issue-2033",
-   "issue_id": 2033,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2211",
-   "issue_id": 2211,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2141",
-   "issue_id": 2141,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "belief-issues-probed-hourly",
+   "class": "fm-metric-refresher-replaced",
    "issue_id": null,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": "0",
+   "observed": "1",
    "written": true
   },
   {
-   "class": "issue-2286",
-   "issue_id": 2286,
+   "class": "issue-2362",
+   "issue_id": 2362,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: filed by q08-signal-engine, which owns it for 48h",
+   "observed": "missing-marker:qnfo-code-orchestrator/worker.js",
    "written": true
   },
   {
-   "class": "issue-2193",
-   "issue_id": 2193,
+   "class": "issue-2363",
+   "issue_id": 2363,
    "verdict": "fail",
-   "expected": "1",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-fleet-dashboard/worker.js",
+   "written": true
+  },
+  {
+   "class": "fm-contract-cadence-drift",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "18",
+   "written": true
+  },
+  {
+   "class": "fm-triage-gap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
    "observed": "0",
    "written": true
   },
   {
-   "class": "issue-2357",
-   "issue_id": 2357,
+   "class": "issue-2364",
+   "issue_id": 2364,
    "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
+   "expected": "ok",
+   "observed": "pending: filed by ci:apply-migrations, which owns it for 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2365",
+   "issue_id": 2365,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: filed by ci:apply-migrations, which owns it for 48h",
    "written": true
   }
  ],
@@ -103,13 +103,14 @@
   "http",
   "runner-https"
  ],
+ "https": 2,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 5,
+ "runtime_verified_share_24h": 5.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 15161,
- "head": "e8ce7519f81091d70fd27cb0af2ce65b66b0a790",
+ "spent_ms": 13202,
+ "head": "9f7c3945632c7f35889ce62ac1aa86fb4d9c01f0",
  "job_status": "success",
- "ts": "2026-10-12T07:51:04Z"
+ "ts": "2026-10-12T08:08:19Z"
 }
