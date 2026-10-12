@@ -273,5 +273,16 @@ globalThis.fetch = origFetch;
   check("FACT-labelled general reasoning is reasoning", sp.inferences.length === 2, sp);
   check("a FACT-labelled plain modal claim, a named claim and a quoted reason stay FACTs", sp.facts.length === 3, sp);
 }
+// Q08-PARAPHRASE-1 (0.14.8, run 350)
+{
+  const sp = V.splitFactItems([
+    "the unit generates enough electricity to run laptops, lights and some appliances -- not in source as a direct quote",
+    "His apartment faces southwest, an optimal direction for sun collection -- not in source as a direct quote",
+    "the kit costs 400 dollars -- not a direct quote; figure not in source",
+    "firms sell kits without markups -- not entirely in source"
+  ]);
+  check("a reason that only objects to the wording is a paraphrase", sp.inferences.length === 2, sp);
+  check("a wording complaint that also names a figure, and a partial support, stay FACTs", sp.facts.length === 2, sp);
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
