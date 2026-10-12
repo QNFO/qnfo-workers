@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-10-12 10:38:24",
+  "audited_at": "2026-10-12 11:07:00",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
@@ -644,7 +644,7 @@
       },
       {
         "dir": "qnfo-research-exec",
-        "version": "0.12.5-slot-attr",
+        "version": "0.13.0-verify-precision",
         "worker": "qnfo-research-exec"
       },
       {
@@ -1488,9 +1488,9 @@
       "worker": "qnfo-register-guard"
     },
     "qnfo-research-exec": {
-      "before": "0.12.5-slot-attr",
+      "before": "0.13.0-verify-precision",
       "http": 200,
-      "live": "0.12.5-slot-attr",
+      "live": "0.13.0-verify-precision",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-research-exec"
