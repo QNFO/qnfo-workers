@@ -15,6 +15,9 @@
 --       needs-machine-probe and the issues could neither close on evidence nor refile on recurrence. A probe that reads an empty table before the
 --       first run would pass falsely, so every probe here also requires a run in the last 26 hours ('no-run' otherwise).
 -- spof-review: the runner rides the existing remediation-consumer step (dispatched by qnfo-cloud-ops when idle, PROBE-CADENCE-1) and the CI guard is the second path for the same defects; fm-workers-standards-debt-unmeasured detects a stalled runner from the hourly remediation tick.
+-- Re-touched 2026-10-12 12:10Z (migration_runs 119/120 error): control_registry.kind took 'audit' / 'loop', which its CHECK constraint refuses
+-- (hold, filter, pause, kill-switch, gate, cap, guard, lease); now 'guard'. Statements before the register row had applied; every statement is
+-- idempotent, so the re-run completes the file. CHECK-ENUM-LINT-1 in scripts/apply_migrations.py --check now refuses such a literal offline.
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- Rollback: DROP VIEW IF EXISTS v_workers_bp_debt; DROP TABLE IF EXISTS workers_bp_findings; DROP TABLE IF EXISTS workers_bp_runs; DELETE FROM metric_registry WHERE metric IN ('workers_bp_findings_open', 'fleet_cron_triggers'); DELETE FROM analytics_metric_triggers WHERE metric_key IN ('workers_bp_findings_open', 'fleet_cron_triggers'); DELETE FROM control_registry WHERE control = 'workers-bp-audit-d1'; DELETE FROM failure_modes WHERE fm_key = 'workers-standards-debt-unmeasured'; DELETE FROM remediation_contracts WHERE class = 'fm-workers-standards-debt-unmeasured'; DELETE FROM capability_ledger WHERE capability = 'workers-standards-debt-measured'
@@ -78,7 +81,7 @@ SELECT 'fleet_cron_triggers', 'Cron budget: the fleet is within 50 cron triggers
 WHERE NOT EXISTS (SELECT 1 FROM analytics_metric_triggers WHERE metric_key = 'fleet_cron_triggers');
 
 INSERT OR REPLACE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, alternate_path, alternate_tested_at, evidence, issue_id, reviewed_at) VALUES
- ('workers-bp-audit-d1', 'scripts/fleet_best_practices_audit.py --d1 (scripts/loop_breaker_runner.py, remediation-consumer step)', 'audit',
+ ('workers-bp-audit-d1', 'scripts/fleet_best_practices_audit.py --d1 (scripts/loop_breaker_runner.py, remediation-consumer step)', 'guard',
   'Workers anti-patterns standing on main unmeasured, so the issues about them can neither close on evidence nor refile on recurrence', 0, 'keep', 'applied',
   'scripts/workers_standards_guard.py in deploy-gate refuses the same patterns in every new change; fm-workers-standards-debt-unmeasured (hourly remediation tick) detects a runner that stopped', '2026-10-12T12:00:00Z',
   'offline suite --selftest: findings replaced per run, one issue per worker deduped on the open title, code-task and unique code-anchor lines, probe reads the debt and passes when the worker is clean, metrics written. First tree read 2026-10-12: 28 live workers, 28 fail-class and 545 advisory findings, 32 cron triggers.', 2348, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
