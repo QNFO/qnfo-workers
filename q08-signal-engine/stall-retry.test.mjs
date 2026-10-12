@@ -37,6 +37,20 @@ await mod.default.scheduled({ cron: "30 * * * *" }, fullEnv, { waitUntil: (p) =>
 await Promise.allSettled(waits);
 check("the :30 tick reaches generation when stalled (it reads the published and run times)", sqlLog.some((q) => /MAX\(published_at\)/.test(q)), sqlLog.slice(0, 8));
 
+// Q08-EDITOR-VERDICT-CARRY-1 (0.14.1, run 337): a dropped verdict line is carried over from the writer's draft
+{
+  const C = mod.__carry;
+  const orig = "# T\n\nBody one.\n\nworth your time: yes - names the mechanism";
+  const dropped = "# T\n\nBody one, edited.";
+  const out = C.carryVerdictLine(dropped, orig);
+  check("a dropped verdict line comes back from the writer's draft", /Body one, edited\.\n\nworth your time: yes - names the mechanism$/.test(out), out);
+  const own = "# T\n\nEdited.\n\nworth your time: flat - thinner now";
+  check("an editor's own verdict line is kept unchanged", C.carryVerdictLine(own, orig) === own);
+  const broken = "# T\n\nEdited.\n\nworth your time: maybe";
+  check("a malformed verdict line is replaced by the writer's", /worth your time: yes - names the mechanism$/.test(C.carryVerdictLine(broken, orig)) && !/maybe/.test(C.carryVerdictLine(broken, orig)));
+  check("no writer verdict line: the text is left as it is", C.carryVerdictLine(dropped, "# T\n\nno line") === dropped);
+}
+
 Date.now = realNow;
 console.log("stall-retry.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
