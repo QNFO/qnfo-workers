@@ -2,16 +2,15 @@
 -- (30 of 31) because qnfo-fleet-control ocCapability counts every capability_audit_snapshot row, and qnfo-backlog-exec, retired
 -- in service_registry on 2026-10-11, kept its row from 2026-10-06 (stale). Retiring a worker never removed its snapshot row, so
 -- every retirement would lower the metric for good. The row moves to capability_audit_snapshot_retired (kept, not dropped), and
--- a trigger does the same for every later retirement; the detector fm-capability-snapshot-retired-row reads 0.
+-- a trigger does the same for every later retirement; the detector fm-capability-snapshot-retired-row reads 0. (First apply
+-- 2026-10-12T06:35Z refused, 0 statements: the backup table must be created with CREATE TABLE ... AS SELECT.)
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: capability_audit_snapshot_retired
 -- Rollback: DROP TRIGGER IF EXISTS service_registry_retire_capability_row; INSERT OR REPLACE INTO capability_audit_snapshot (service, version, capabilities, limitations, ts) SELECT service, version, capabilities, limitations, ts FROM capability_audit_snapshot_retired; DELETE FROM remediation_contracts WHERE class = 'fm-capability-snapshot-retired-row'; DELETE FROM failure_modes WHERE fm_key = 'capability-snapshot-retired-row'
 
-CREATE TABLE IF NOT EXISTS capability_audit_snapshot_retired (service TEXT, version TEXT, capabilities TEXT, limitations TEXT, ts TEXT, retired_at TEXT);
-
-INSERT INTO capability_audit_snapshot_retired (service, version, capabilities, limitations, ts, retired_at)
-SELECT c.service, c.version, c.capabilities, c.limitations, c.ts, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+CREATE TABLE IF NOT EXISTS capability_audit_snapshot_retired AS
+SELECT c.service, c.version, c.capabilities, c.limitations, c.ts, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS retired_at
 FROM capability_audit_snapshot c JOIN service_registry s ON s.service = c.service WHERE s.state = 'retired';
 
 DELETE FROM capability_audit_snapshot WHERE service IN (SELECT service FROM capability_audit_snapshot_retired)
