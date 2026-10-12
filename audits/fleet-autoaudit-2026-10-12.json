@@ -1,16 +1,14 @@
 {
-  "audited_at": "2026-10-12 13:38:20",
+  "audited_at": "2026-10-12 14:07:29",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
     "_drift_confirm": {
       "first_pass": [
-        "qnfo-code-orchestrator"
+        "qnfo-fleet-control"
       ],
       "refreshed": true,
-      "second_pass": [
-        "qnfo-code-orchestrator"
-      ]
+      "second_pass": []
     },
     "_guard_rc": 0,
     "ahead": [],
@@ -19,26 +17,10 @@
     "content_drift": [],
     "cron_only": [],
     "cron_only_count": 0,
-    "drift": [
-      {
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.12.3-loop-quality",
-        "repo": "0.12.4-goal-room",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
+    "drift": [],
     "live_err": [],
-    "multi_version": [
-      {
-        "artifact": "/home/runner/work/qnfo-workers/qnfo-workers/qnfo-code-orchestrator/deployed-current.worker.js",
-        "declarations": "0.12.4-goal-room,fleet-executor/0.3.2",
-        "dir": "qnfo-code-orchestrator",
-        "live": "0.12.3-loop-quality",
-        "repo": "0.12.4-goal-room",
-        "worker": "qnfo-code-orchestrator"
-      }
-    ],
-    "multi_version_count": 1,
+    "multi_version": [],
+    "multi_version_count": 0,
     "name_resolution": true,
     "no_health_route": [],
     "no_live_version": [],
@@ -550,7 +532,7 @@
     "retired_present": [],
     "retired_present_count": 0,
     "scope": "all",
-    "sync": 27,
+    "sync": 28,
     "sync_workers": [
       {
         "dir": "idea-hub",
@@ -589,8 +571,13 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.25.1-outreach-ct",
+        "version": "1.26.0-draft-grounding",
         "worker": "qnfo-cloud-ops"
+      },
+      {
+        "dir": "qnfo-code-orchestrator",
+        "version": "0.12.4-goal-room",
+        "worker": "qnfo-code-orchestrator"
       },
       {
         "dir": "qnfo-containers-pilot",
@@ -609,7 +596,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.19.3-fold-relay-byok",
+        "version": "0.19.5-relay-cadence",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -619,7 +606,7 @@
       },
       {
         "dir": "qnfo-gateway",
-        "version": "3.16.1-zaraz-load",
+        "version": "3.18.0-ap-key",
         "worker": "qnfo-gateway"
       },
       {
@@ -639,7 +626,7 @@
       },
       {
         "dir": "qnfo-lifecycle",
-        "version": "1.10.1-doi-scrub",
+        "version": "1.11.1-noz-scrub",
         "worker": "qnfo-lifecycle"
       },
       {
@@ -654,7 +641,7 @@
       },
       {
         "dir": "qnfo-ops",
-        "version": "2.42.2-compat-date-apply",
+        "version": "2.42.3-debt",
         "worker": "qnfo-ops"
       },
       {
@@ -1137,9 +1124,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.25.1-outreach-ct",
+      "before": "1.26.0-draft-grounding",
       "http": 200,
-      "live": "1.25.1-outreach-ct",
+      "live": "1.26.0-draft-grounding",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1156,9 +1143,9 @@
     "qnfo-code-orchestrator": {
       "before": "0.12.4-goal-room",
       "http": 200,
-      "live": "0.12.3-loop-quality",
-      "match": 0,
-      "note": "DRIFT",
+      "live": "0.12.4-goal-room",
+      "match": 1,
+      "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
     },
     "qnfo-containers-pilot": {
@@ -1276,9 +1263,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.19.3-fold-relay-byok",
+      "before": "0.19.5-relay-cadence",
       "http": 200,
-      "live": "0.19.3-fold-relay-byok",
+      "live": "0.19.5-relay-cadence",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1310,9 +1297,9 @@
       "worker": "qnfo-fleet-feed"
     },
     "qnfo-gateway": {
-      "before": "3.16.1-zaraz-load",
+      "before": "3.18.0-ap-key",
       "http": 200,
-      "live": "3.16.1-zaraz-load",
+      "live": "3.18.0-ap-key",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-gateway"
@@ -1387,9 +1374,9 @@
       "worker": "qnfo-kaizen"
     },
     "qnfo-lifecycle": {
-      "before": "1.10.1-doi-scrub",
+      "before": "1.11.1-noz-scrub",
       "http": 200,
-      "live": "1.10.1-doi-scrub",
+      "live": "1.11.1-noz-scrub",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-lifecycle"
@@ -1420,9 +1407,9 @@
       "worker": "qnfo-observability"
     },
     "qnfo-ops": {
-      "before": "2.42.2-compat-date-apply",
+      "before": "2.42.3-debt",
       "http": 200,
-      "live": "2.42.2-compat-date-apply",
+      "live": "2.42.3-debt",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ops"
