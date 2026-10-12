@@ -64,7 +64,7 @@ const tf = tomlFacts('# compat-advance: reviewed 2026-10-12\nname = "w"\ncompati
 ok(tf.compatibility_date === "2026-10-10" && tf.marker === "2026-10-12" && tf.nodejs_compat === false && tf.flags.length === 2, "top-level date, flags and the review line", tf);
 ok(tomlFacts('[env.x]\ncompatibility_date = "2020-01-01"\n').compatibility_date === null, "a date under a table is not the worker's");
 ok(stripComments("a // x\nb /* y\n z */ c").split("\n").length === 3 && !/[xyz]/.test(stripComments("a // x\nb /* y\n z */ c")), "comments are blanked and the line count kept");
-ok(stripComments('fetch("https://a.b/c") // tail').includes("https://a.b/c"), "a URL is not a comment");
+ok(stripComments('fetch("x://a/c") // tail') === 'fetch("x://a/c")        ', "the double slash of a URL is not a comment");
 ok(blankStrings('a("x-y", `p-q`, `${k - 1}`)') === 'a("", "", `${k - 1}`)', "strings are emptied, an interpolating template kept", blankStrings('a("x-y", `p-q`, `${k - 1}`)'));
 
 // every live worker directory scans without error
