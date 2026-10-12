@@ -62,7 +62,10 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 60 (was 15): noz-scrub-graph live (run 136, 2026-10-12) writes about 3,000 D1 statements one REST call at a time and was
+    # cancelled by the 15-minute limit with the scrub half done; every action here is re-runnable, so a long run is cheap to
+    # finish and expensive to cut short.
+    timeout-minutes: 60
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
