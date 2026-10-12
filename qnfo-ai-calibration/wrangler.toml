@@ -19,6 +19,16 @@ head_sampling_rate = 1
 
 # SVC-BINDING-1 (2026-09-04): internal probes via service bindings - same-account
 # workers.dev fetches 404 at the edge from inside a Worker (verified live).
+
+# WORKERS-STANDARDS-1 (owner standards 2026-10-12): logs and traces declared. Workers docs: `enabled` alone turns on logs only;
+# traces need [observability.traces]. Traces are sampled at the default rate of 1 (low-traffic worker).
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+
 [[services]]
 binding = "QNFO_AI"
 service = "qnfo-ai"
