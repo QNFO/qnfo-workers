@@ -764,7 +764,7 @@ def consume_one(c, trusted):
         local["skipped"] += 1
         log("contract %s error: %s" % (cls, e))
     if cadence is None:
-        cadence = c.get("expected_cadence_h") or 6
+        cadence = c.get("expected_cadence_h") or 1
     try:
         d1(
             "UPDATE remediation_contracts SET attempts = COALESCE(attempts,0) + 1, "
