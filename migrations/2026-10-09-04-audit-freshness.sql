@@ -80,14 +80,13 @@ BEGIN
 END;
 
 -- second, independent refresher: the monitored fleet_tick must not be the only thing that recomputes its own staleness
--- (a stalled tick would freeze the metric at its last good value). cron_fire_log is a separate producer.
-CREATE TRIGGER IF NOT EXISTS audit_freshness_from_cron_log AFTER INSERT ON cron_fire_log
-WHEN NOT EXISTS (SELECT 1 FROM metric_registry WHERE metric = 'audits_stale' AND last_refreshed > strftime('%Y-%m-%dT%H:%M:%SZ','now','-9 minutes'))
-BEGIN
-  UPDATE metric_registry SET last_value = CAST((SELECT COUNT(*) FROM v_audit_stale) AS TEXT),
-      last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'
-  WHERE metric = 'audits_stale';
-END;
+-- (a stalled tick would freeze the metric at its last good value). MIGRATION-APPLY-FAILED-1 (agent_issues 2452, 2026-10-12): the
+-- first text put this on an AFTER INSERT trigger on cron_fire_log, which D1 refused ("triggers nested too deep": cron_fire_log
+-- inserts already fire a chain of triggers), so the file stopped at statement 11. The second path is now a step of the hourly
+-- METRIC-REFRESH-1 fleet task (qnfo-fleet-control runs it, a different producer from the 10-minute tick).
+UPDATE fleet_tasks SET definition = json_insert(definition, '$.steps[#]', json('{"type": "sql", "db": "AUDIT", "sql": "UPDATE metric_registry SET last_value = CAST((SELECT COUNT(*) FROM v_audit_stale) AS TEXT), last_refreshed = strftime(''%Y-%m-%dT%H:%M:%SZ'', ''now''), state = ''MEASURED'' WHERE metric = ''audits_stale''"}'))
+  WHERE name LIKE 'METRIC-REFRESH-1%' AND definition NOT LIKE '%v_audit_stale%';
+DROP TRIGGER IF EXISTS audit_freshness_from_cron_log;
 
 UPDATE metric_registry SET last_value = CAST((SELECT COUNT(*) FROM v_audit_stale) AS TEXT),
     last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), state = 'MEASURED'

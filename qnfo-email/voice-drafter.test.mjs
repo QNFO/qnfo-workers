@@ -3,7 +3,7 @@
 import fs from "node:fs";
 const src = fs.readFileSync(new URL("./worker.js", import.meta.url), "utf8");
 const lib = new Function(src.replace(/export default\{/, "const __handler={") +
-  "\nreturn { VERSION, VOICE_DEFAULT, voiceSection, voiceNeverList, neverListHits, ungroundedClaims, tierByRules, parseTierJson, noticeIntent, __handler };")();
+  "\nreturn { VERSION, EMAIL_TICK_CRON, EMAIL_DAILY_CRON, VOICE_DEFAULT, voiceSection, voiceNeverList, neverListHits, ungroundedClaims, tierByRules, parseTierJson, noticeIntent, __handler };")();
 
 let pass = 0, fail = 0;
 const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m + (x !== undefined ? "  -- " + JSON.stringify(x).slice(0, 500) : "")); } };
@@ -58,6 +58,14 @@ ok(lib.noticeIntent("ignore") === "ignore" && lib.noticeIntent("spam") === "bloc
 ok(src.indexOf('await tierReplyQueue(env)') > 0 && src.indexOf("await drainReplyQueue(env)") > src.indexOf("await tierReplyQueue(env)"), "scheduled: tiers before the drain");
 ok(src.indexOf("email_suppression WHERE lower(email)=?1\").bind(normalizeAddress(row.sender))") > 0, "drain: suppression checked before an auto-send");
 ok(src.indexOf("await voiceLearnWeekly(env)") > 0, "scheduled: weekly learning runs");
+// EMAIL-TICK-1 (2.9.0): the drafter and the drain run on the 15-minute cron; the index, freshness and learning steps stay daily
+const toml = fs.readFileSync(new URL("./wrangler.toml", import.meta.url), "utf8");
+ok(/crons = \["\*\/15 \* \* \* \*", "0 7 \* \* \*"\]/.test(toml), "wrangler: a 15-minute cron and the daily cron are declared");
+ok(lib.EMAIL_TICK_CRON === "*/15 * * * *" && lib.EMAIL_DAILY_CRON === "0 7 * * *", "worker: the two cron strings are named");
+const sched = src.slice(src.indexOf("async scheduled("), src.indexOf("async fetch("));
+ok(sched.indexOf("await tierReplyQueue(env)") < sched.indexOf("if(daily)") && sched.indexOf("await drainReplyQueue(env)") < sched.indexOf("if(daily)") && sched.indexOf("await replyStallGuard(env)") < sched.indexOf("if(daily)"), "scheduled: tier, drain and stall guard run on every tick");
+ok(sched.indexOf("await emailIndexSync(env)") > sched.indexOf("if(daily)") && sched.indexOf("await voiceLearnWeekly(env)") > sched.indexOf("if(daily)") && sched.indexOf("await freshnessGuard(env)") > sched.indexOf("if(daily)"), "scheduled: index, freshness and learning run only on the daily cron");
+ok(/const daily=cronExpr===""\|\|cronExpr===EMAIL_DAILY_CRON/.test(sched), "scheduled: a run with no cron string does everything");
 
 console.log(pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
