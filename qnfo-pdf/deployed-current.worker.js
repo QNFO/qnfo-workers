@@ -14982,7 +14982,7 @@ function renderFullHTML(md, opts) {
 __name(renderFullHTML, "renderFullHTML");
 
 // worker.js
-var VERSION = "1.1.2-doi-scrub"; // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
+var VERSION = "1.2.0-scholar-pdf-all"; /* 1.2.0 SCHOLAR-PDF-ALL-1 (2026-10-12, agent_issues 2410, pillar reach): a cron every 10 minutes renders the PDF of every published, distributed or external_preprint paper that has none (472 of 567 on 2026-10-12) and re-renders a paper whose body changed after its stored PDF, PDF_BACKLOG_BATCH (6) per tick, newest first; writes papers.pdf_path so papers.qnfo.org emits citation_pdf_url (Google Scholar indexes a PDF only through that tag); a paper whose render failed 3 times in 24 h is skipped for the day; metric scholar_pdf_backlog and cloud_ops_events job qnfo-pdf (AUDIT binding) record each run. */ // 1.1.0 MATH-BROWSER-1 (#1890, re-applied from closed PR #555): internal GET /math-check/<slug>. 1.0.2 UTF8-DEPLOY-1 (2026-10-02): redeployed so the live copy is UTF-8
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -15053,7 +15053,122 @@ function mathReport(html) {
   return { typeset, errors, raw_dollar: rawDollar, pseudo_residual: pseudo, pass: errors === 0 && rawDollar === 0 && pseudo < 3 };
 }
 __name(mathReport, "mathReport");
+// SCHOLAR-PDF-ALL-1 begin (1.2.0, agent_issues 2410). The block between the begin and end markers is read by pdf-backlog.test.mjs
+// as plain source, so it uses only its own helpers, `env` and the `deps` it is handed (renderFullHTML, renderPdf, stash).
+var PDF_PUBLIC_STATUSES = "('published','distributed','external_preprint')";
+var SCHOLAR_PDF_MAX_BYTES = 5 * 1024 * 1024;
+var PDF_FAIL_SKIP_AFTER = 3;
+function pdfBacklogBatch(env) {
+  var n = parseInt(env && env.PDF_BACKLOG_BATCH, 10);
+  return n > 0 && n <= 20 ? n : 6;
+}
+function pdfNeedsRefresh(updatedAt, uploaded) {
+  // living-paper stores "YYYY-MM-DD HH:MM:SS" (UTC); R2 head gives a Date. A missing object or a body changed after the upload needs a render.
+  if (!uploaded) return true;
+  var u = new Date(String(updatedAt || "").replace(" ", "T") + (/[zZ]|[+-]\d\d:\d\d$/.test(String(updatedAt || "")) ? "" : "Z")).getTime();
+  var up = uploaded instanceof Date ? uploaded.getTime() : new Date(uploaded).getTime();
+  if (!isFinite(u) || !isFinite(up)) return false;
+  return u > up + 1e3;
+}
+async function recordPdfEvent(env, kind, text, meta, status) {
+  if (!env.AUDIT) return false;
+  try {
+    var id = "pdf-" + kind + "-" + Date.now().toString(36) + "-" + crypto.randomUUID().slice(0, 8);
+    await env.AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?2, ?3, ?4, 'qnfo-pdf', ?5)")
+      .bind(id, kind, String(text || "").slice(0, 900), JSON.stringify(meta || {}).slice(0, 3e3), status || "ok").run();
+    return true;
+  } catch (e) {
+    console.error(JSON.stringify({ evt: "pdf-event-write-failed", kind, error: String(e && e.message || e).slice(0, 200) }));
+    return false;
+  }
+}
+async function pdfFailedSlugs(env) {
+  // Slugs whose render failed PDF_FAIL_SKIP_AFTER times in the last 24 h are left for tomorrow, so one bad paper cannot hold the tick.
+  if (!env.AUDIT) return {};
+  try {
+    var r = await env.AUDIT.prepare("SELECT json_extract(meta, '$.slug') AS slug, COUNT(*) AS n FROM cloud_ops_events WHERE job = 'qnfo-pdf' AND kind = 'pdf-render-fail' AND ts > strftime('%Y-%m-%dT%H:%M:%SZ','now','-24 hours') GROUP BY slug").all();
+    var out = {};
+    for (var i = 0; i < ((r && r.results) || []).length; i++) if (r.results[i].slug) out[r.results[i].slug] = Number(r.results[i].n || 0);
+    return out;
+  } catch (e) {
+    return {};
+  }
+}
+async function pdfBacklogRows(env, batch, skip) {
+  // (a) papers with no PDF, newest first (the newest pages are the ones Scholar is crawling now); (b) papers changed in the last two days
+  // whose stored PDF predates the change. The total is the metric.
+  var total = await env.LIVING.prepare("SELECT COUNT(*) AS n FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND body_md IS NOT NULL AND length(body_md) > 200 AND (pdf_path IS NULL OR pdf_path = '')").first();
+  var rows = await env.LIVING.prepare("SELECT slug, title, body_md, updated_at FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND body_md IS NOT NULL AND length(body_md) > 200 AND (pdf_path IS NULL OR pdf_path = '') ORDER BY created_at DESC LIMIT ?1").bind(batch + Object.keys(skip).length).all();
+  var backlog = [];
+  for (var i = 0; i < ((rows && rows.results) || []).length && backlog.length < batch; i++) {
+    var p = rows.results[i];
+    if ((skip[p.slug] || 0) >= PDF_FAIL_SKIP_AFTER) continue;
+    backlog.push(p);
+  }
+  var refresh = [];
+  if (backlog.length < batch && env.RELEASES) {
+    var rec = await env.LIVING.prepare("SELECT slug, title, body_md, updated_at, pdf_path FROM papers WHERE status IN " + PDF_PUBLIC_STATUSES + " AND pdf_path IS NOT NULL AND pdf_path <> '' AND updated_at > strftime('%Y-%m-%d %H:%M:%S','now','-2 days') ORDER BY updated_at DESC LIMIT 20").all();
+    for (var j = 0; j < ((rec && rec.results) || []).length && backlog.length + refresh.length < batch; j++) {
+      var q = rec.results[j];
+      if ((skip[q.slug] || 0) >= PDF_FAIL_SKIP_AFTER) continue;
+      var h = null;
+      try { h = await env.RELEASES.head(String(q.pdf_path)); } catch (e) { h = null; }
+      if (pdfNeedsRefresh(q.updated_at, h && h.uploaded)) refresh.push(q);
+    }
+  }
+  return { backlog, refresh, backlogTotal: Number(total && total.n || 0) };
+}
+async function renderPdfBacklog(env, deps, opts) {
+  var started = Date.now();
+  var out = { ok: true, rendered: 0, failed: 0, refreshed: 0, oversize: 0, backlog_before: null, backlog_after: null, slugs: [], errors: [] };
+  if (!env.LIVING || !env.BROWSER) { out.ok = false; out.errors.push("LIVING or BROWSER binding missing"); return out; }
+  var batch = (opts && opts.batch) || pdfBacklogBatch(env);
+  var skip = await pdfFailedSlugs(env);
+  var plan = await pdfBacklogRows(env, batch, skip);
+  out.backlog_before = plan.backlogTotal;
+  var items = plan.backlog.map(function (p) { return { p, refresh: false }; }).concat(plan.refresh.map(function (p) { return { p, refresh: true }; }));
+  for (var i = 0; i < items.length; i++) {
+    var p = items[i].p;
+    if (Date.now() - started > ((opts && opts.budgetMs) || 6e5)) { out.errors.push("time budget reached before " + p.slug); break; }
+    try {
+      var html = deps.renderFullHTML(p.body_md, { title: p.title });
+      var bytes = await deps.renderPdf(env, html, String(p.title || p.slug || "").slice(0, 90));
+      var size = bytes && bytes.byteLength != null ? bytes.byteLength : (bytes && bytes.length) || 0;
+      if (!size) throw new Error("empty PDF");
+      var r2Key = await deps.stash(env, p.slug, bytes);
+      if (!r2Key) throw new Error("R2 put failed");
+      await env.LIVING.prepare("UPDATE papers SET pdf_path = ?1 WHERE slug = ?2").bind(r2Key, p.slug).run();
+      out.rendered++;
+      if (items[i].refresh) out.refreshed++;
+      if (size > SCHOLAR_PDF_MAX_BYTES) { out.oversize++; await recordPdfEvent(env, "pdf-oversize", p.slug + ": " + size + " bytes exceeds the 5 MB Scholar limit; stored, tag withheld by the gateway", { slug: p.slug, size }, "warn"); }
+      out.slugs.push(p.slug);
+    } catch (e) {
+      out.failed++;
+      var msg = String(e && e.message || e).slice(0, 300);
+      out.errors.push(p.slug + ": " + msg);
+      console.error(JSON.stringify({ evt: "pdf-render-fail", slug: p.slug, error: msg }));
+      await recordPdfEvent(env, "pdf-render-fail", p.slug + ": " + msg, { slug: p.slug, refresh: items[i].refresh }, "error");
+    }
+  }
+  out.backlog_after = Math.max(0, out.backlog_before - (out.rendered - out.refreshed));
+  out.ms = Date.now() - started;
+  if (env.AUDIT) {
+    try {
+      await env.AUDIT.prepare("UPDATE metric_registry SET last_value = ?1, last_refreshed = strftime('%Y-%m-%dT%H:%M:%SZ','now'), state = 'MEASURED' WHERE metric = 'scholar_pdf_backlog'").bind(String(out.backlog_after)).run();
+    } catch (e) {
+      out.errors.push("metric write: " + String(e && e.message || e).slice(0, 120));
+    }
+    await recordPdfEvent(env, "pdf-backlog", "rendered " + out.rendered + " (refreshed " + out.refreshed + "), failed " + out.failed + ", backlog " + out.backlog_before + " -> " + out.backlog_after, { rendered: out.rendered, refreshed: out.refreshed, failed: out.failed, oversize: out.oversize, backlog_after: out.backlog_after, ms: out.ms, slugs: out.slugs.slice(0, 20) }, out.failed && !out.rendered ? "error" : "ok");
+  }
+  return out;
+}
+// SCHOLAR-PDF-ALL-1 end
 var worker_default = {
+  async scheduled(controller, env, ctx) {
+    // SCHOLAR-PDF-ALL-1: one cron, one job; the batch size and the 10-minute cadence keep each tick well inside the cron CPU and wall limits.
+    var out = await renderPdfBacklog(env, { renderFullHTML, renderPdf, stash }, {});
+    console.log(JSON.stringify(Object.assign({ evt: "pdf-backlog", cron: controller && controller.cron, version: VERSION }, out)));
+  },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path2 = url.pathname;
@@ -15062,11 +15177,13 @@ var worker_default = {
         ok: true,
         worker: "qnfo-pdf",
         version: VERSION,
-        capabilities: ["markdown-to-pdf", "markdown-to-html", "corpus-paper-render", "math-browser-check"],
-        limitations: ["POST /pdf and /html (arbitrary Markdown) answer only service-binding callers; public callers get 403", "GET /pdf/<slug> and /html/<slug> render corpus papers only", "each render opens a Cloudflare Browser Rendering session", "GET /math-check/<slug> (MathJax typeset report of the live page) answers only service-binding callers; qnfo-gateway samples 5 papers a day"],
+        capabilities: ["markdown-to-pdf", "markdown-to-html", "corpus-paper-render", "math-browser-check", "scholar-pdf-backlog"],
+        limitations: ["POST /pdf and /html (arbitrary Markdown) answer only service-binding callers; public callers get 403", "GET /pdf/<slug> and /html/<slug> render corpus papers only", "each render opens a Cloudflare Browser Rendering session", "GET /math-check/<slug> (MathJax typeset report of the live page) answers only service-binding callers; qnfo-gateway samples 5 papers a day", "the */10 cron renders PDF_BACKLOG_BATCH (6) missing or stale paper PDFs per tick (SCHOLAR-PDF-ALL-1); a paper that failed 3 times in 24 h waits a day"],
         browser: !!env.BROWSER,
         living: !!env.LIVING,
-        releases: !!env.RELEASES
+        releases: !!env.RELEASES,
+        audit: !!env.AUDIT,
+        pdf_backlog_batch: pdfBacklogBatch(env)
       });
     }
     if (path2 === "/" || path2 === "/index.html") {
