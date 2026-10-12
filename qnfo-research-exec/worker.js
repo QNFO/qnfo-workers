@@ -14,7 +14,7 @@ var __defProp2222 = Object.defineProperty;
 var __name2222 = /* @__PURE__ */ __name222((target, value) => __defProp2222(target, "name", { value, configurable: true }), "__name");
 var __defProp22222 = Object.defineProperty;
 var __name22222 = /* @__PURE__ */ __name2222((target, value) => __defProp22222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "0.12.5-slot-attr"; /* 0.12.5 AI-STAGE-ATTRIBUTION-2 (agent_issues 2264): each research_parallel slot runs in its own AsyncLocalStorage store, so ai_call_counters stage labels belong to the slot that made the call. PROMPT-CACHE-AFFINITY-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-4): aiText sends x-session-affinity keyed on the 4 KB after the shared preamble (the paper or writer input), so the stages of one paper share an instance and its preamble + paper prefix; ops_config research_affinity_scope = prefix restores the old one-key-per-model hash. */ /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
+var VERSION = "0.13.0-verify-precision"; /* 0.13.0 (agent_issues 2221, 2247, 2206, 2207, 2252, 2292, 2262, 2170, 2211, 2052, 2337, 2272): VERIFY-STATED-PRECISION-1 the worker decides each CLAIM line at the precision the paper states (the script compared at 1e-6, so a correctly rounded value read as a mismatch and the paper re-ran from ground); a verification that printed no CLAIM line is retried, never passed; GROUND-SECOND-SOURCE-1 arXiv requests are spaced across slots and retried with backoff, and DataCite (arXiv DOIs) supplies entries when arXiv is thin or refusing; RESEARCH-PARK-REVIEW-1 a review row parks; REVISE-NO-UNREVISED-1 a revise with no applied edit tries the second model and then fails the pass instead of advancing; REVIEW-HARD-GATE-1 HARD findings left at the cycle cap withhold the paper; gate-structure requires the closing sections; CITATION-UNVERIFIED-HOLD-1 an unconfirmed citation defers and then holds the publish (DataCite is the second arXiv lookup); AI-ROUTER-SECOND-PATH-DRILL-1 daily drill. */ /* 0.12.5 AI-STAGE-ATTRIBUTION-2 (agent_issues 2264): each research_parallel slot runs in its own AsyncLocalStorage store, so ai_call_counters stage labels belong to the slot that made the call. PROMPT-CACHE-AFFINITY-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-4): aiText sends x-session-affinity keyed on the 4 KB after the shared preamble (the paper or writer input), so the stages of one paper share an instance and its preamble + paper prefix; ops_config research_affinity_scope = prefix restores the old one-key-per-model hash. */ /* 0.12.3 NOZ-DOI-1 (2026-10-11): the pipeline publishes in-house only and calls no external DOI registrar: the deposit, version-request, metadata-edit and related-link stages are gone, new and revised papers write doi, zenodo_doi and zenodo_url NULL, and the folded errata and reviser members carry the same change. */ /* 0.12.2 ENSEMBLE-PREFIX-STAGGER-1 (agent_issues 2116, PROMPT-CACHE-PREFIX-3): the second glm-5.3-flash writer leg starts research_prefix_stagger_ms (default 12 s) after the first, so it reads the shared preamble + grounding prompt from the prefix cache instead of prefilling it in parallel. */ /* 0.12.0 ACCURACY-GROUND-1 (owner directive 2026-10-10, pillar research): generated text is checked against the text it was given. The reviser audit prompt no longer lets a "low" edit assert content (bridge sentences, comparisons, definitions) and a deterministic guard demotes any low edit that adds a name, figure, year, link or new content words to high; the errata drafter writes a correction only from the errata email or the paper and a name, year, figure, DOI or link in neither makes the draft high risk (never sent); the writer, reconcile and review preambles require every statement about a cited work to be derivable from its supplied bibliography entry, and say so when the entry is thin. */ /* 0.11.2 PROMPT-CACHE-PREFIX-2 (agent_issues 2116): review, revise-patch, revise and verify prompts put the paper right after the shared preamble as a context block, before the task selector and per-call text, so consecutive stages on one paper share preamble + paper as a cached prefix. Models, max_tokens, parsers and gates unchanged. */ /* 0.11.1 LEAN-ENSEMBLE-1 (agent_issues 2118, 1795): while a fleet_budget ai_spend cap is breached the writer ensemble runs its two disjoint-family legs instead of three (the third was a second glm-5.3-flash leg); reconcile joins only drafts of the current grounding; ops_config research_lean_ensemble = off restores three legs. */ // /* 0.10.5 REVISE-PATCH-PARSE-1 (agent_issues 2211): the revise patch array is parsed tolerantly (LaTeX backslashes kept, code fences and bracketed prose before the array skipped, each edit object read on its own when the array does not parse), so a LaTeX-heavy or truncated answer no longer loses every edit; 14 of 335 calls in 7 days proposed 0 edits from long output. The four publish binds pass pub.doi and pub.record as || null, so a result shape missing a key can no longer throw D1_TYPE_ERROR (the 0.10.3 outage). */ /* 0.10.4 INHOUSE-PUBLISH-3: the in-house publish result carries conceptdoi and record as null, so publishStageV2 no longer binds undefined (D1_TYPE_ERROR every tick under 0.10.3). */ // 0.9.65 ERRATA-FOLD-1 (#1756, 2026-10-06, pillar cost): errata-hub runs here as a member (errataMod) at its own minutes on the */15 tick (:00 watch, :15 respond, :30 publish), awaited; GET /errata-hub/health; nodejs_compat, BROWSER and SEND_EMAIL move here with it. 0.9.64 REVISER-FOLD-1 (#1756, 2026-10-06, pillar cost): qnfo-paper-reviser runs here as a member (reviserMod) on the :30 tick of every fourth hour; GET /reviser/health; its private routes answer a service binding whose props name the member. 0.9.63 RELATED-LEGACY-FIELDS-1 (#1907, 2026-10-06): the related-link drain fills the legacy upload_type / publication_type from an InvenioRDM resource_type before the PUT (record 22025544 failed with "metadata.resource_type: Missing data for required field"); the error row is re-queued once this is live. // MATH-LATEX-2 (2026-10-05, #1891): MATH_RULE in the writer, reconcile and revise prompts; pseudoMathScan() turns plain-text math into a HARD review finding and a math-scan event at verify; ops_config research_math_gate=enforce makes it a pre-publish gate (revise once, then park). // WRITER-FLASH-1 (2026-10-05, #1795): the second ensemble writer leg and the revise-patch retry leave glm-5.3 (3,279 neurons per call) for glm-5.3-flash and gpt-oss-120b. // PRIOR-WORK-EMPTY-1 (2026-10-02): no empty "Prior Work" section; References matched at line start. // 0.9.54 RUN-INTERNAL-1 (#1783, ported from code task ct_zvckl6t5d4e1fd): POST /run?sync=1 and POST /run/drain-v2 refuse public hostnames (*.workers.dev, qnfo.org); the cron and service-binding callers (qnfo-research-supervisor RESEARCH_EXEC, the dashboard SVC binding) are unaffected; METADATA-VERIFY-ORDER-1 (2026-10-02, #1732): verifyMetadataBackfill writes issue_triage.close_evidence before it closes the issue (the close-evidence trigger aborted the old order, so the backfill could never close itself); 0.9.52 UTF8-DEPLOY-1 (2026-10-02): no code change; redeployed so the live copy is UTF-8 (the old deploy path double-encoded every non-ASCII character) /* 0.13.0 NOZ-DOI-1 (2026-10-11): history entries about the retired external deposit stages are in git. */
 // WORKERS-AI-ATTRIBUTION-1 (2026-10-01, #1681): per-worker Workers AI attribution. Returns a shallow env copy whose AI
 // binding records each .run() (calls, errors, ms, tokens, neurons) into qnfo-audit ai_call_counters (purpose 'binding').
 // Neurons = usage tokens x Cloudflare's published per-model rates (neurons per M tokens). Fail-soft; env is never mutated.
@@ -148,6 +148,51 @@ __name2(routerFetch, "routerFetch");
 __name22(routerFetch, "routerFetch");
 __name222(routerFetch, "routerFetch");
 var GATEWAY_MODEL = "qnfo";
+// AI-ROUTER-SECOND-PATH-DRILL-1 (0.13.0, agent_issues 2337, pillar core): the direct Workers AI path this worker falls back
+// to when qnfo-ai fails was never exercised on purpose. Once a UTC day the cron asks the router for its drill answer (a
+// chat body with drill "router-down" answers 503 and makes no model call, qnfo-ai 5.35.0) and then answers the same
+// message through this worker's own AI binding; when both hold, spof_registry records the time the alternate was tested.
+var ROUTER_DRILL_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+async function routerSecondPathDrill(env) {
+  const messages = [{ role: "user", content: "Reply with exactly: OK" }];
+  const out = { router_status: 0, router503: false, direct: false, recorded: false };
+  try {
+    const r = await routerFetch(env, ROUTER, { method: "POST", headers: routerHeaders(env, true), body: JSON.stringify({ model: GATEWAY_MODEL, messages, max_tokens: 16, drill: "router-down" }) });
+    out.router_status = r.status;
+    out.router503 = r.status === 503;
+    try {
+      await r.arrayBuffer();
+    } catch (e) {
+    }
+  } catch (e) {
+    out.router_error = String(e && e.message || e).slice(0, 120);
+  }
+  try {
+    const a = await env.AI.run(ROUTER_DRILL_MODEL, { messages, max_tokens: 16 });
+    const t = typeof a === "string" ? a : String(a && (a.response || a.choices && a.choices[0] && a.choices[0].message && a.choices[0].message.content) || "");
+    out.direct = t.trim().length > 0;
+  } catch (e) {
+    out.direct_error = String(e && e.message || e).slice(0, 120);
+  }
+  if (out.router503 && out.direct) {
+    try {
+      const u = await env.QNFO_AUDIT.prepare("UPDATE spof_registry SET alternate_tested_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE component = 'qnfo-ai router'").run();
+      out.recorded = !!(u && u.meta && u.meta.changes);
+    } catch (e) {
+      out.record_error = String(e && e.message || e).slice(0, 120);
+    }
+  }
+  await logEvent(env, "router-second-path", JSON.stringify(out).slice(0, 500), out.router503 && out.direct ? "ok" : "warn");
+  return out;
+}
+async function routerDrillDue(env) {
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT 1 AS x FROM cloud_ops_events WHERE job = ?1 AND kind = 'router-second-path' AND ts >= ?2 LIMIT 1").bind(WORKER, new Date().toISOString().slice(0, 10)).first();
+    return !r;
+  } catch (e) {
+    return false;
+  }
+}
 function json(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
 }
@@ -177,7 +222,7 @@ __name2222(slugify, "slugify");
 __name22222(slugify, "slugify");
 async function logEvent(env, kind, text, status) {
   try {
-    const id = "re-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36);
+    const id = "re-" + Date.now().toString(36) + "-" + crypto.randomUUID().slice(0, 8);
     await env.QNFO_AUDIT.prepare("INSERT INTO cloud_ops_events (id, ts, kind, text, meta, job, status) VALUES (?,?,?,?,?,?,?)").bind(id, nowIso(), kind, String(text).slice(0, 800), "{}", WORKER, status || "ok").run();
   } catch (e) {
   }
@@ -291,7 +336,7 @@ __name2222(reasoningPreamble, "reasoningPreamble");
 __name22222(reasoningPreamble, "reasoningPreamble");
 async function parkPoisonRow(env, row, msg) {
   var reason = "PARKED-POISON-1: recover_count exhausted (" + Number(row.recover_count || 0) + "); last error: " + String(msg || "unknown");
-  var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', error=?, claimed_at=NULL WHERE id=? AND status IN ('researching','queued','failed')").bind(reason.slice(0, 300), row.id).run();
+  var r = await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='wontfix', stage='parked', error=?, claimed_at=NULL WHERE id=? AND status IN ('researching','queued','failed','review')").bind(reason.slice(0, 300), row.id).run();
   try { await logEvent(env, "poison-park", "parked research row " + String(row.id).slice(0, 8) + " recover_count=" + Number(row.recover_count || 0), "warn"); } catch (e) {}
   return r;
 }
@@ -1665,6 +1710,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   'Return ONLY a JSON array, no prose and no code fence: [{"find":"<exact verbatim excerpt of the PAPER, 40 to 800 characters, occurring once>","replace":"<corrected text>"}].',
   "Copy each find excerpt character for character from the PAPER. Use at most 8 edits. To remove a sentence, replace it with an empty string.",
   "Every replace text writes its mathematics in LaTeX inside $...$ (inline) or $$...$$ (display), never as Unicode superscripts, subscripts or operators.",
+  "A replace text states only what the PAPER or the FIXES already state: it adds no name, citation, identifier, link, number or finding from memory. When a fix cannot be met from the PAPER and the FIXES, remove the sentence.",
   "### TASK VERIFY_EXTRACT",
   "Extract every QUANTITATIVE claim from this paper that can be independently computed. Output STRICT JSON array:",
   '[{"id":"Q1","statement":"...","inputs":"named numbers with values","formula":"math in plain text"}]',
@@ -1672,7 +1718,7 @@ var RESEARCH_SHARED_PREAMBLE = [
   "### TASK VERIFY_GEN",
   "Write ONE self-contained Python 3 script (stdlib only: math, fractions) that independently computes each claim from its stated inputs and prints for each:",
   "CLAIM <id>: computed=<value> expected=<value-or-none> match=yes|no",
-  "Use math.isclose(rel_tol=1e-6) when comparing floats. Compute from the stated inputs and formula; do NOT copy the paper's answer as the computation - the script must reproduce the derivation. Print a final line 'VERIFICATION SUMMARY: N claims, M match, K mismatch'.",
+  "Print computed with at least 8 significant digits. Print expected as a plain number carrying exactly the digits the paper states, no more and no fewer, converted to the unit of computed; keep it a string literal in the script so no digit is added or dropped. A claim matches when computed, rounded to the number of significant digits the paper states, equals the stated value. Compute from the stated inputs and formula; do NOT copy the paper's answer as the computation - the script must reproduce the derivation. Print a final line 'VERIFICATION SUMMARY: N claims, M match, K mismatch'.",
   "Output the script inside a single python fenced block, nothing else."
 ].join("\n");
 
@@ -1732,19 +1778,29 @@ function parsePatchEdits(raw) {
   }
   return out;
 }
+function patchNewIdentifiers(text, baseLower) {
+  const found = String(text || "").match(/https?:\/\/[^\s)\]>"']+|\b10\.\d{4,9}\/[^\s)\]>"']+|\barxiv:?\s*\d{4}\.\d{4,5}/gi) || [];
+  return found.filter(function(u) {
+    return String(baseLower || "").indexOf(u.replace(/[.,;:]+$/, "").toLowerCase()) < 0;
+  });
+}
 function applyRevisePatch(paper, raw) {
   let edits = parsePatchEdits(raw);
   if (!Array.isArray(edits)) edits = [];
   let out = String(paper || "");
-  let applied = 0;
+  const base = out.toLowerCase();
+  let applied = 0, ungrounded = 0;
   for (const e of edits.slice(0, 8)) {
     if (!e || typeof e.find !== "string" || typeof e.replace !== "string" || e.find.length < 20) continue;
     const i = out.indexOf(e.find);
     if (i < 0 || out.indexOf(e.find, i + 1) >= 0) continue;
+    // REVISE-PATCH-GROUND-1 (agent_issues 2272): a replace text that carries a link, DOI or arXiv id the paper does not
+    // already contain is a citation written from the model's memory; that edit is skipped (counted in `ungrounded`).
+    if (patchNewIdentifiers(e.replace, base).length) { ungrounded++; continue; }
     out = out.slice(0, i) + e.replace + out.slice(i + e.find.length);
     applied++;
   }
-  return { text: out, applied, proposed: edits.length };
+  return { text: out, applied, proposed: edits.length, ungrounded };
 }
 var VERIFY_EXTRACT_PROMPT = stagePrompt("VERIFY_EXTRACT", "PAPER:\n");
 var VERIFY_GEN_PROMPT = stagePrompt("VERIFY_GEN", "CLAIMS (JSON):\n");
@@ -1805,6 +1861,149 @@ function groundQueries(idea, parentTitle) {
     return "all:" + w;
   }).join(" OR ")]);
 }
+// GROUND-SECOND-SOURCE-1 (0.13.0, agent_issues 2247 and the RESEARCH-TERMINAL ground rows 2206, 2207, 2252, 2292; pillar research):
+// 35 ground-thin events in four days carried arxiv_http_errors >= 1 on most of them. Each research_parallel slot spaced only
+// its own arXiv requests, so four slots sent four requests inside one three-second window, and one retry after three seconds
+// met the same refusal; a row whose idea gave two queries lost both and parked after three such passes. Now (a) every arXiv
+// request of the isolate goes through one queue with the spacing arXiv asks for, (b) a refused or failed request is retried
+// with a growing pause that honours Retry-After, and (c) when the bibliography is still short, DataCite (which registers
+// every arXiv work under 10.48550/arXiv.<id>, with title and abstract) is searched as a second, independent host. An entry
+// from it is kept only when the idea's own phrases or words occur in its title or abstract, and it is cited by its arXiv id,
+// so the reference list and CITATION-EXISTENCE-GATE-1 treat it exactly like an entry from the arXiv API. The floor
+// (MIN_GROUND_REFS) is unchanged.
+var GROUND_TARGET_REFS = 8;
+var SOURCE_BODY_CAP = 2e6;
+var _arxivTail = Promise.resolve();
+var _arxivLast = 0;
+function sleepMs(ms) {
+  return new Promise(function(res) {
+    setTimeout(res, ms);
+  });
+}
+async function readCapped(r, cap) {
+  const max = cap || SOURCE_BODY_CAP;
+  try {
+    if (!r || !r.body || typeof r.body.getReader !== "function") return String(await r.text()).slice(0, max);
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let out = "";
+    for (; ; ) {
+      const step = await reader.read();
+      if (step.done) break;
+      out += dec.decode(step.value, { stream: true });
+      if (out.length >= max) {
+        try {
+          await reader.cancel();
+        } catch (e) {
+        }
+        break;
+      }
+    }
+    return out.slice(0, max);
+  } catch (e) {
+    return "";
+  }
+}
+function arxivTurn(spacing) {
+  const p = _arxivTail.then(async function() {
+    const wait = _arxivLast + spacing - Date.now();
+    if (wait > 0) await sleepMs(wait);
+    _arxivLast = Date.now();
+  });
+  _arxivTail = p.catch(function() {
+  });
+  return p;
+}
+async function arxivGet(url, opts) {
+  const o = opts || {};
+  const fetchFn = o.fetch || fetch;
+  const spacing = typeof o.spacingMs === "number" ? o.spacingMs : ARXIV_SPACING_MS;
+  const tries = o.tries || 3;
+  let last = 0;
+  for (let i = 0; i < tries; i++) {
+    await arxivTurn(spacing);
+    try {
+      const r = await fetchFn(url, { headers: { "User-Agent": "QNFO-research-exec/0.13 (mailto:ops@qnfo.org)" } });
+      if (r.ok) return { ok: true, status: r.status, text: await readCapped(r), tries: i + 1 };
+      last = r.status;
+      if (r.status !== 429 && r.status < 500) break;
+      let ra = 0;
+      try {
+        ra = Number(r.headers && r.headers.get && r.headers.get("retry-after")) || 0;
+      } catch (e) {
+      }
+      if (i + 1 < tries) await sleepMs(Math.min(Math.max(ra * 1e3, spacing * (i + 1)), 15e3) + Math.floor(Math.random() * 500));
+    } catch (e) {
+      last = -1;
+      if (i + 1 < tries) await sleepMs(spacing * (i + 1));
+    }
+  }
+  return { ok: false, status: last, text: "", tries };
+}
+function groundTerms(idea, parentTitle) {
+  const phrases = [], words = [];
+  const add = function(list, v) {
+    if (list.map(function(x) {
+      return x.toLowerCase();
+    }).indexOf(v.toLowerCase()) < 0) list.push(v);
+  };
+  for (const text of [idea, parentTitle]) {
+    for (const r of groundRuns(text)) {
+      for (let i = 0; i + 1 < r.length; i++) add(phrases, r[i] + " " + r[i + 1]);
+      for (const w of r) add(words, w);
+    }
+  }
+  return { phrases, words };
+}
+function groundRelevant(text, terms) {
+  const t = " " + String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ") + " ";
+  const norm = function(s) {
+    return String(s).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  };
+  // A record is on topic only when one of the idea's own two-word phrases occurs in its title or abstract. Single shared
+  // words are not enough (measured 2026-10-12: a three-word rule let an EEG screening study into an electron-structure
+  // bibliography).
+  for (const p of terms.phrases) if (t.indexOf(" " + norm(p) + " ") >= 0) return true;
+  return false;
+}
+async function dataciteArxiv(terms, opts) {
+  const o = opts || {};
+  const fetchFn = o.fetch || fetch;
+  const q = function(s) {
+    return '"' + String(s).replace(/["\\]/g, " ") + '"';
+  };
+  const parts = terms.phrases.slice(0, 6).map(q);
+  if (!parts.length) return { ok: true, status: 0, entries: [] };
+  // sort=relevance: the default order is by record date, which returned this year's records for any phrase.
+  const url = "https://api.datacite.org/dois?client-id=arxiv.content&page%5Bsize%5D=25&sort=relevance&fields%5Bdois%5D=doi,titles,descriptions&query=" + encodeURIComponent(parts.join(" OR "));
+  let last = 0;
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await fetchFn(url, { headers: { "User-Agent": "QNFO-research-exec/0.13 (mailto:ops@qnfo.org)", "Accept": "application/vnd.api+json" } });
+      last = r.status;
+      if (r.ok) {
+        const j = JSON.parse(await readCapped(r));
+        const entries = [];
+        for (const d of j && Array.isArray(j.data) ? j.data : []) {
+          const a = d && d.attributes || {};
+          const m = String(a.doi || "").match(/^10\.48550\/arxiv\.(.+)$/i);
+          const title = a.titles && a.titles[0] && a.titles[0].title ? String(a.titles[0].title).replace(/\s+/g, " ").trim() : "";
+          const ab = (a.descriptions || []).filter(function(x) {
+            return x && /abstract/i.test(String(x.descriptionType || "")) && x.description;
+          })[0];
+          if (!m || !title || !ab) continue;
+          entries.push({ aid: m[1], title, summary: String(ab.description).replace(/\s+/g, " ").trim() });
+        }
+        return { ok: true, status: r.status, entries };
+      }
+      if (r.status !== 429 && r.status < 500) break;
+    } catch (e) {
+      last = -1;
+    }
+    if (i === 0) await sleepMs(2e3);
+  }
+  return { ok: false, status: last, entries: [] };
+}
 async function stageGround(env, row) {
   __attrStageSet("ground");
   const idea = row.idea || row.summary || "";
@@ -1818,8 +2017,7 @@ async function stageGround(env, row) {
   let srcText = "";
   if (ax) {
     try {
-      const r = await fetch("https://export.arxiv.org/api/query?id_list=" + ax[1] + "&max_results=1", { headers: { "User-Agent": "QNFO-research-exec/0.6" } });
-      const t = await r.text();
+      const t = (await arxivGet("https://export.arxiv.org/api/query?id_list=" + ax[1] + "&max_results=1")).text;
       const titleM = t.match(/<title>([\s\S]*?)<\/title>/);
       const sumM = t.match(/<summary>([\s\S]*?)<\/summary>/);
       if (titleM && sumM) srcText = "TITLE: " + titleM[1].trim() + "\n\nABSTRACT: " + sumM[1].replace(/\s+/g, " ").trim();
@@ -1854,24 +2052,15 @@ async function stageGround(env, row) {
   let _arxivErr = 0;
   for (let qi = 0; qi < _queries.length && bib.length < 11; qi++) {
     // arXiv API terms: at most one request every three seconds. At 1.2 s some passes came back thin (row 3b0e4cbd grounded
-    // to 4 entries twice, then 14 on unchanged queries); a non-200 answer is retried once after the same pause.
-    if (qi > 0) await new Promise(function(res) {
-      setTimeout(res, ARXIV_SPACING_MS);
-    });
+    // to 4 entries twice, then 14 on unchanged queries). arxivGet spaces the requests of every slot and retries a refusal.
     try {
       const _aurl = "https://export.arxiv.org/api/query?search_query=" + encodeURIComponent(_queries[qi]).replace(/%3A/g, ":") + "&start=0&max_results=8&sortBy=relevance";
-      let r = await fetch(_aurl, { headers: { "User-Agent": "QNFO-research-exec/0.9" } });
-      if (!r.ok) {
-        await new Promise(function(res) {
-          setTimeout(res, ARXIV_SPACING_MS);
-        });
-        r = await fetch(_aurl, { headers: { "User-Agent": "QNFO-research-exec/0.9" } });
-      }
+      const r = await arxivGet(_aurl);
       if (!r.ok) {
         _arxivErr++;
         continue;
       }
-      const t = await r.text();
+      const t = r.text;
       const entries = t.split("<entry>").slice(1);
       for (const e of entries) {
         const idM = e.match(/<id>([\s\S]*?)<\/id>/);
@@ -1890,6 +2079,28 @@ async function stageGround(env, row) {
       }
     } catch (e) {
     }
+  }
+  // GROUND-SECOND-SOURCE-1: a short bibliography is topped up from DataCite's arXiv records (a different host).
+  let _second = "not-needed";
+  if (bib.length < GROUND_TARGET_REFS) {
+    const _terms = groundTerms(idea, parentTitle);
+    const _dc = await dataciteArxiv(_terms);
+    let _added = 0;
+    for (const e of _dc.entries) {
+      if (bib.length >= 11) break;
+      const _bare = String(e.aid).replace(/v\d+$/, "").toLowerCase();
+      if (ax && _bare === String(ax[1]).toLowerCase()) continue;
+      if (bib.some(function(b) {
+        return String(b.id).replace(/^arXiv:/i, "").replace(/v\d+$/, "").toLowerCase() === _bare;
+      })) continue;
+      if (!groundRelevant(e.title + " " + e.summary, _terms)) continue;
+      const entry = "arXiv:" + e.aid + " | " + e.title + "\n  " + e.summary.slice(0, 400);
+      bib.push({ n: bib.length + 1, id: "arXiv:" + e.aid, text: entry });
+      arxivHits += (arxivHits ? "\n" : "") + entry;
+      _added++;
+    }
+    _second = _dc.ok ? "ok" : "error";
+    await logEvent(env, "ground-second-source", "row=" + rid + " source=datacite status=" + _dc.status + " returned=" + _dc.entries.length + " added=" + _added + " bibCount=" + bib.length + " arxiv_http_errors=" + _arxivErr, _dc.ok ? "ok" : "warn");
   }
   let corpus = "";
   try {
@@ -1940,8 +2151,11 @@ async function stageGround(env, row) {
   // ensemble, reconcile, review, revise and verify four times (20:31Z-00:19Z) before parking. Stop here instead: markError
   // spends one recover exactly as the verify failure did, so parking is unchanged, but a thin pass costs HTTP calls only.
   if (bib.length < MIN_GROUND_REFS) {
-    await logEvent(env, "ground-thin", "row=" + rid + " bibCount=" + bib.length + " < " + MIN_GROUND_REFS + " queries=" + _queries.length + " arxiv_http_errors=" + _arxivErr, "warn");
-    await markError(env, row, "ground: bibliography " + bib.length + " < " + MIN_GROUND_REFS + " entries (gate-refcount cannot pass); arxiv_http_errors=" + _arxivErr);
+    await logEvent(env, "ground-thin", "row=" + rid + " bibCount=" + bib.length + " < " + MIN_GROUND_REFS + " queries=" + _queries.length + " arxiv_http_errors=" + _arxivErr + " second_source=" + _second, "warn");
+    await markError(env, row, "ground: bibliography " + bib.length + " < " + MIN_GROUND_REFS + " entries (gate-refcount cannot pass); arxiv_http_errors=" + _arxivErr + "; second_source=" + _second);
+    // A thin result with every source answering is the literature being thin for this idea (the floor withholding the row);
+    // a thin result with a refused source is a transport failure and stays an error event.
+    if (_arxivErr === 0 && _second !== "error") return { ok: false, stage: "ground", withheld: "thin-literature", bibCount: bib.length };
     return { ok: false, stage: "ground", bibCount: bib.length, arxivErrors: _arxivErr };
   }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='ensemble', context=? WHERE id=?").bind(JSON.stringify({ pipeline: PIPELINE_VERSION, bibCount: bib.length, srcFetched: !!srcText }).slice(0, 6e3), row.id).run();
@@ -2145,6 +2359,39 @@ async function stageReview(env, row) {
     return { ok: true, stage: "review->revise", hard: hard.length, cycle };
   }
   await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify({ hard, soft: findings.soft }));
+  // REVIEW-HARD-GATE-1 (0.13.0, owner directive 2026-10-10: published text is accurate and independently checked): at the
+  // cycle cap the row went on to verify with its HARD findings unresolved (158 of 421 review->verify steps since
+  // 2026-10-09; row 2d279690 carried "paper ends mid-sentence" and three missing sections), and verify's deterministic
+  // gates do not read them. A paper with a HARD content finding left after MAX_REVIEW_CYCLES is now withheld: the pass
+  // fails with the finding ids and the recover loop drafts it again. The plain-text-math finding keeps its own switch
+  // (research_math_gate) and an unreadable review is run again instead. ops_config research_review_gate = measure
+  // restores the old advance without a deploy.
+  const _blocking = hard.filter(function(f) {
+    return f && f.id !== "gate-math-latex";
+  });
+  if (_blocking.length) {
+    const _onlyParse = _blocking.every(function(f) {
+      return f.id === "review-parse";
+    });
+    if (_onlyParse && (ctx.reparse || 0) < 2) {
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, verifyPass: ctx.verifyPass || 0, reparse: (ctx.reparse || 0) + 1 }).slice(0, 6e3), row.id).run();
+      return { ok: true, stage: "review->review", reparse: (ctx.reparse || 0) + 1, cycle };
+    }
+    let _mode = "enforce";
+    try {
+      const _mr = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_review_gate'").first();
+      if (_mr && String(_mr.value || "").trim().toLowerCase() === "measure") _mode = "measure";
+    } catch (e) {
+    }
+    const _ids = _blocking.map(function(f) {
+      return String(f.id || "?").slice(0, 24);
+    }).slice(0, 8).join(",");
+    await logEvent(env, "review-unresolved", "row=" + row.id + " hard=" + _blocking.length + " ids=" + _ids + " cycle=" + cycle + " mode=" + _mode, "warn");
+    if (_mode === "enforce") {
+      await markError(env, row, "review: " + _blocking.length + " HARD findings unresolved after " + cycle + " revise cycles (" + _ids + ")");
+      return { ok: false, stage: "review", withheld: "review-hard", hardLeft: _blocking.length, cycle };
+    }
+  }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='verify', context=? WHERE id=?").bind(JSON.stringify({ cycles: cycle, hardLeft: hard.length, verdict: findings.verdict || "?", verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
   return { ok: true, stage: "review->verify", hardLeft: hard.length, cycle };
 }
@@ -2168,9 +2415,26 @@ async function stageRevise(env, row) {
     const _pprompt = stageContextPrompt("REVISE_PATCH", "PAPER", paper.slice(0, 34e3), "FIXES (JSON):\n" + fixes.slice(0, 8e3));
     let _praw = await aiText(env, MODELS[0], _pprompt, 8192, "low");
     // WRITER-FLASH-1: the retry for a short JSON patch uses gpt-oss-120b (another family, ~500 neurons) instead of glm-5.3 (~3,300).
-    if (!_praw || _praw.indexOf("[") < 0) _praw = await aiText(env, MODELS[2], _pprompt, 8192, "low");
-    const _p = applyRevisePatch(paper, _praw);
-    await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length, _p.applied ? "ok" : "warn");
+    let _pmodel = MODELS[0];
+    if (!_praw || _praw.indexOf("[") < 0) {
+      _praw = await aiText(env, MODELS[2], _pprompt, 8192, "low");
+      _pmodel = MODELS[2];
+    }
+    let _p = applyRevisePatch(paper, _praw);
+    // REVISE-NO-UNREVISED-1 (0.13.0, agent_issues 2211): 52 of 647 patch calls in four days applied no edit (one long edit
+    // whose excerpt is not in the paper) and the paper went on to review unchanged. The second model family gets the same
+    // prompt before the pass is judged.
+    if (!_p.applied && _pmodel !== MODELS[2]) {
+      await logEvent(env, "revise-patch", "row=" + row.id + " model=" + _pmodel + " proposed=" + _p.proposed + " applied=0 raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + " second-model retry", "warn");
+      const _praw2 = await aiText(env, MODELS[2], _pprompt, 8192, "low");
+      const _p2 = applyRevisePatch(paper, _praw2);
+      if (_p2.applied || !_praw) {
+        _praw = _praw2;
+        _p = _p2;
+      }
+      _pmodel = MODELS[2];
+    }
+    await logEvent(env, "revise-patch", "row=" + row.id + " proposed=" + _p.proposed + " applied=" + _p.applied + " raw_chars=" + String(_praw || "").length + " out_chars=" + _p.text.length + (_p.ungrounded ? " ungrounded=" + _p.ungrounded : ""), _p.applied ? "ok" : "warn");
     if (_p.applied > 0 && _p.text.length >= 1e4) {
       await r2Put(env, String(row.id) + "/reconciled.md", _p.text);
       const _c2 = (ctx.cycles || 0) + 1;
@@ -2184,11 +2448,27 @@ async function stageRevise(env, row) {
     // no patch edit applies (5435c847: 0 edits proposed, raw "[]"), re-queueing from ground discarded a 23k-char paper and
     // re-ran the ensemble on unchanged inputs until the row parked. Keep the paper and advance; review is bounded by
     // MAX_REVIEW_CYCLES and verify's deterministic gates decide (bounded by verifyPass).
+    // REVISE-NO-UNREVISED-1 (0.13.0, agent_issues 2211) replaces the advance above: a paper whose HARD fixes produced no
+    // applied edit from either model is not sent on as if it had been revised. The one exception is a review whose output
+    // could not be read (the only finding is the review-parse placeholder): there is nothing to edit, so review runs again
+    // (twice at most). Otherwise the pass fails with its reason and the recover loop drafts the paper again.
     if (paper.length >= 1.2e4) {
-      const _c3 = (ctx.cycles || 0) + 1;
-      await logEvent(env, "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars); advancing with the unchanged paper", "warn");
-      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: _c3, patch: 0, verifyPass: ctx.verifyPass || 0 }).slice(0, 6e3), row.id).run();
-      return { ok: true, stage: "revise->review", cycle: _c3, patch: 0, noop: true };
+      let _fx = [];
+      try {
+        const _fj = JSON.parse(fixes || "[]");
+        _fx = Array.isArray(_fj) ? _fj : _fj && Array.isArray(_fj.hard) ? _fj.hard : [];
+      } catch (e) {
+      }
+      const _onlyParse = _fx.length > 0 && _fx.every(function(f) {
+        return f && f.id === "review-parse";
+      });
+      await logEvent(env, "revise-noop", "row=" + row.id + " no applicable patch edit (proposed=" + _p.proposed + ", raw=" + String(_praw || "").length + " chars, fixes=" + _fx.length + "); " + (_onlyParse ? "the review output was unreadable, review runs again" : "the paper does not advance unrevised"), "warn");
+      if (_onlyParse && (ctx.reparse || 0) < 2) {
+        await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='review', context=? WHERE id=?").bind(JSON.stringify({ cycles: ctx.cycles || 0, patch: 0, verifyPass: ctx.verifyPass || 0, reparse: (ctx.reparse || 0) + 1 }).slice(0, 6e3), row.id).run();
+        return { ok: true, stage: "revise->review", cycle: ctx.cycles || 0, patch: 0, rereview: true };
+      }
+      await markError(env, row, "revise: no applicable edit for " + _fx.length + " HARD fixes from two models (not advanced unrevised)");
+      return { ok: false, stage: "revise", withheld: "revise-noop", fixes: _fx.length };
     }
   }
   let revised = await gwCall(env, stageContextPrompt("REVISE", "PAPER", paper.slice(0, 34e3), "FIXES (JSON):\n" + fixes.slice(0, 8e3)), 3e4);
@@ -2273,6 +2553,93 @@ function bibCountFromGrounding(grounding) {
   var tail = String(grounding || "").split("## Bibliography")[1] || "";
   return (tail.match(/^\[\d+\] /gm) || []).length;
 }
+var REQUIRED_SECTIONS = [
+  ["Abstract", /^#{1,3}[ \t]*Abstract\b/im],
+  ["Results", /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?Results\b/im],
+  ["Discussion", /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?Discussion\b/im],
+  ["Conclusion", /^#{1,3}[ \t]*(?:\d+\.?[ \t]*)?Conclusions?\b/im]
+];
+// VERIFY-STATED-PRECISION-1 (0.13.0, agent_issues 2221 LOOP-BREAKER-1 verify; pillar research): the verify stage read the
+// script's own "match=no", and the VERIFY_GEN prompt told the script to compare with math.isclose(rel_tol=1e-6). A paper
+// states its numbers rounded, so a correct value failed: row a2033fc2 printed "computed=4.28001e-21 expected=4.28e-21
+// match=no" for six of eight claims, was revised, failed the same way and re-ran from ground three times before parking
+// (45 such failures in 24 h, about half of all second verify passes). The worker now decides each CLAIM line itself from
+// the two printed numbers: the stated value matches when the independently computed value agrees with it at the precision
+// the paper states (half a unit in the last stated digit, or up to one unit when that is within one percent, which covers
+// a value the paper computed from its own rounded intermediate). The stated precision is read from the claim's statement,
+// where the paper's own digits are; a line whose numbers cannot be read keeps the script's verdict. A wrong digit still
+// fails, and a script that prints no CLAIM line is a verification that did not run, never a pass.
+function numLit(s) {
+  const t = String(s == null ? "" : s).trim().replace(/[\u2212\u2013]/g, "-").replace(/,(?=\d{3}(?!\d))/g, "");
+  const m = t.match(/^([+-]?)(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/) || t.match(/^([+-]?)()\.(\d+)(?:[eE]([+-]?\d+))?$/);
+  if (!m) return null;
+  const ip = m[2] || "", fp = m[3] === void 0 ? null : m[3], ex = m[4] ? parseInt(m[4], 10) : 0;
+  const value = Number((m[1] || "") + (ip || "0") + (fp ? "." + fp : "") + "e" + ex);
+  if (!Number.isFinite(value)) return null;
+  const digits = (ip + (fp || "")).replace(/^0+/, "");
+  return { value, sig: Math.max(digits.length, 1), digits: digits.replace(/0+$/, "") };
+}
+function statedLiterals(statement) {
+  let t = String(statement || "").replace(/[\u2212\u2013]/g, "-").replace(/\\[,;!: ]/g, "").replace(/\{,\}/g, "").replace(/\\(?:text|mathrm)\{[^}]*\}/g, " ");
+  t = t.replace(/\s*(?:\\times|\\cdot|\u00d7|\u22c5|\*|x)\s*10\s*\^\s*\{?\s*([+-]?\d+)\s*\}?/g, function(_, e) {
+    return "e" + e;
+  });
+  t = t.replace(/(^|[^\w.])10\s*\^\s*\{?\s*([+-]?\d+)\s*\}?/g, function(_, pre, e) {
+    return pre + "1e" + e;
+  });
+  t = t.replace(/\\[a-zA-Z]+/g, " ").replace(/[$]/g, " ");
+  const out = [];
+  const re = /(?<![\w.])[+-]?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?![\w])/gi;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    const l = numLit(m[0].replace(/\.$/, ""));
+    if (l) out.push(l);
+  }
+  return out;
+}
+function statedSig(expected, statement) {
+  let best = 0;
+  for (const l of statedLiterals(statement)) if (l.digits && l.digits === expected.digits && l.sig > best) best = l.sig;
+  return best;
+}
+function adjudicateVerification(out, claims) {
+  const byId = {};
+  for (const c of Array.isArray(claims) ? claims : []) if (c && c.id != null) byId[String(c.id).toLowerCase()] = c;
+  const rows = [];
+  const re = /^[ \t]*CLAIM[ \t]+([^\s:]+)[ \t]*:[ \t]*computed[ \t]*=[ \t]*(\S+)[ \t]+expected[ \t]*=[ \t]*(\S+)[ \t]+match[ \t]*=[ \t]*(yes|no)\b/gim;
+  let m;
+  while ((m = re.exec(String(out || ""))) !== null) {
+    const script = m[4].toLowerCase() === "yes";
+    const c = numLit(m[2]), e = numLit(m[3]);
+    let match = script, basis = "script verdict (values not both numeric)";
+    if (c && e) {
+      const claim = byId[String(m[1]).toLowerCase()];
+      const fromPaper = claim ? statedSig(e, claim.statement) : 0;
+      const sig = fromPaper ? Math.max(fromPaper, 2) : Math.max(e.sig, 3);
+      const mag = Math.abs(e.value);
+      if (mag === 0) {
+        match = Math.abs(c.value) <= 1e-12;
+        basis = "stated value is zero";
+      } else {
+        const ulp = Math.pow(10, Math.floor(Math.log10(mag)) - (sig - 1));
+        const tol = Math.max(0.5 * ulp, Math.min(ulp, 0.01 * mag)) * (1 + 1e-9);
+        match = Math.abs(c.value - e.value) <= tol;
+        basis = sig + " significant digits (" + (fromPaper ? "as the paper states, at least 2" : "as printed, at least 3") + ")";
+      }
+    }
+    rows.push({ id: m[1], computed: m[2], expected: m[3], script, match, basis });
+  }
+  return { ran: rows.length > 0, rows, mismatches: rows.filter(function(r) {
+    return !r.match;
+  }).length };
+}
+function adjudicationMd(adj) {
+  if (!adj.ran) return "## Adjudication\n\nThe script printed no CLAIM line, so nothing was verified by this run.\n";
+  return "## Adjudication\n\nEach line is decided from its two printed numbers at the precision the paper states: the stated value matches when the computed value agrees with it to half a unit in the last stated digit, or to one unit when that is within one percent. The script's own match column is kept for reference.\n\n| claim | computed | stated | script | decision | basis |\n|---|---|---|---|---|---|\n" + adj.rows.map(function(r) {
+    return "| " + r.id + " | " + r.computed + " | " + r.expected + " | " + (r.script ? "yes" : "no") + " | " + (r.match ? "match" : "MISMATCH") + " | " + r.basis + " |";
+  }).join("\n") + "\n\nMismatches: " + adj.mismatches + " of " + adj.rows.length + ".\n";
+}
+var VERIFY_UNRUN_WAIT_MS = 10 * 60 * 1e3;
 function finalGates(paper, opts) {
   const o = opts || {};
   const minChars = Number(o.minChars || MIN_PAPER_CHARS);
@@ -2280,6 +2647,16 @@ function finalGates(paper, opts) {
   const fixes = [];
   if (String(paper).length < minChars) fixes.push({ id: "gate-length", severity: "HARD", claim: "paper too short", reason: "body length " + String(paper).length + " < " + minChars, fix: "Expand with literature review, explicit derivations, and discussion to " + minChars + "+ characters." });
   if (!REFS_HEAD_RE.test(paper)) fixes.push({ id: "gate-refs", severity: "HARD", claim: "no References section", reason: "missing References heading", fix: "Add a References section listing only bibliography entries." });
+  // GATE-STRUCTURE-1 (0.13.0): a reconcile cut off at its output cap ends inside the analysis, and the mechanical
+  // reference list then hid the cut. A new paper must carry its closing sections.
+  if (o.structure) {
+    const _miss = REQUIRED_SECTIONS.filter(function(s) {
+      return !s[1].test(String(paper));
+    }).map(function(s) {
+      return s[0];
+    });
+    if (_miss.length) fixes.push({ id: "gate-structure", severity: "HARD", claim: "required sections missing: " + _miss.join(", "), reason: "the paper omits required sections or stops before them", fix: "Write each missing section in its required place, reporting only what the paper already derives." });
+  }
   if (/\[to verify\]/i.test(paper)) fixes.push({ id: "gate-toverify", severity: "HARD", claim: "[to verify] markers present", reason: "unverified quantitative claim markers in body", fix: "Replace every marked claim with a computed value or move it to Discussion as an explicitly-labeled hypothesis." });
   // REFCOUNT-SPLIT-1 (PR 358's finding): the old split(/##\s*(7\.\s*)?References/i)[1] returned the CAPTURE GROUP, so
   // refCount was 0 for every paper. Count entry lines after the last References heading, up to the next top-level heading.
@@ -2337,12 +2714,14 @@ async function stageVerify(env, row) {
     }
   } catch (eRR) {
   }
-  const gateOpts = { bibCount: bibCountFromGrounding(await r2Get(env, String(row.id) + "/grounding.md")), minChars: row.source === "remediation" ? MIN_PAPER_CHARS : PUBLISH_FLOOR_CHARS };
+  const gateOpts = { bibCount: bibCountFromGrounding(await r2Get(env, String(row.id) + "/grounding.md")), minChars: row.source === "remediation" ? MIN_PAPER_CHARS : PUBLISH_FLOOR_CHARS, structure: row.source !== "remediation" };
   let ctx = {};
   try {
-    ctx = JSON.parse(row.context || "{}");
+    ctx = JSON.parse(row.context || "{}") || {};
   } catch (e) {
   }
+  // A verification that did not run is retried after a pause; until then the row waits without a model call.
+  if (ctx.verifyUnrunAt && Date.now() - (Date.parse(ctx.verifyUnrunAt) || 0) < VERIFY_UNRUN_WAIT_MS) return { ok: true, stage: "verify", deferred: "verification retry pending" };
   const exRaw = await gwCall(env, stageContextPrompt("VERIFY_EXTRACT", "PAPER", paper.slice(0, 34e3), ""), 8e3);
   let claims = [];
   try {
@@ -2367,7 +2746,7 @@ async function stageVerify(env, row) {
     }
     if (!gates2.ok && ctx.verifyPass) {
       await markError(env, row, "verify: unresolved after revision - gates=" + gates2.reason);
-      return { ok: false, stage: "verify", gate: gates2.reason };
+      return { ok: false, stage: "verify", withheld: "verify-unresolved", gate: gates2.reason };
     }
     if (!gates2.ok) {
       await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(gates2.fixes));
@@ -2404,9 +2783,26 @@ async function stageVerify(env, row) {
   } catch (e) {
     out = "EXEC ERROR: " + String(e && e.message || e).slice(0, 200);
   }
-  const verifMd = "# Verification report\n\n## Extracted claims\n" + JSON.stringify(claims, null, 2) + "\n\n## Script\n```python\n" + code + "\n```\n\n## Execution output\n```\n" + out + "\n```\n";
+  const adj = adjudicateVerification(out, claims);
+  const verifMd = "# Verification report\n\n## Extracted claims\n" + JSON.stringify(claims, null, 2) + "\n\n## Script\n```python\n" + code + "\n```\n\n## Execution output\n```\n" + out + "\n```\n\n" + adjudicationMd(adj);
   await r2Put(env, String(row.id) + "/verification.md", verifMd);
-  const mismatch = /match\s*=\s*no/i.test(out) || /VERIFICATION SUMMARY[^\n]*mismatch\s*[1-9]/i.test(out);
+  if (!adj.ran) {
+    // VERIFY-UNRUN-1 (0.13.0): claims were extracted but the script printed no CLAIM line (it failed, the pilot did not
+    // answer, or the output has another shape). That used to read as "no mismatch" and the paper went to publish with
+    // nothing checked. The stage is tried again after a pause, three times in all, then the pass fails.
+    const _un = (ctx.verifyUnrun || 0) + 1;
+    await logEvent(env, "verify-unrun", "row=" + row.id + " attempt=" + _un + " claims=" + claims.length + " output=" + String(out).replace(/\s+/g, " ").slice(0, 200), "warn");
+    if (_un < 3) {
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, ctx, { verifyUnrun: _un, verifyUnrunAt: nowIso() })).slice(0, 6e3), row.id).run();
+      return { ok: false, stage: "verify", unrun: _un };
+    }
+    await markError(env, row, "verify: the verification script produced no result in " + _un + " attempts (nothing verified)");
+    return { ok: false, stage: "verify", unrun: _un };
+  }
+  const mismatch = adj.mismatches > 0;
+  await logEvent(env, "verify-adjudication", "row=" + row.id + " claims=" + adj.rows.length + " mismatches=" + adj.mismatches + " script_no=" + adj.rows.filter(function(r) {
+    return !r.script;
+  }).length, mismatch ? "warn" : "ok");
   const gates = finalGates(paper, gateOpts);
   const _pm = await mathGate(env, row, paper, gates);
   if (ctx.verifyPass && mathOnlyFailure(gates, mismatch)) {
@@ -2415,14 +2811,18 @@ async function stageVerify(env, row) {
   }
   if ((mismatch || !gates.ok) && !ctx.verifyPass) {
     const fixes = gates.fixes.slice();
-    if (mismatch) fixes.push({ id: "verify-mismatch", severity: "HARD", claim: "computed values do not match paper claims", reason: out.slice(0, 2e3), fix: "Correct each quantitative claim to match the independently computed value, or move the claim to the Discussion as an explicitly-labeled hypothesis with stated assumptions." });
+    if (mismatch) fixes.push({ id: "verify-mismatch", severity: "HARD", claim: "computed values do not match paper claims", reason: adj.rows.filter(function(r) {
+      return !r.match;
+    }).map(function(r) {
+      return "CLAIM " + r.id + ": independently computed " + r.computed + ", the paper states " + r.expected;
+    }).join("; ").slice(0, 2e3), fix: "Correct each quantitative claim to match the independently computed value, or move the claim to the Discussion as an explicitly-labeled hypothesis with stated assumptions." });
     await r2Put(env, String(row.id) + "/fixes.json", JSON.stringify(fixes));
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='revise', context=? WHERE id=?").bind(JSON.stringify({ cycles: 0, verifyPass: 1 }).slice(0, 6e3), row.id).run();
     return { ok: true, stage: "verify->revise", mismatch, gate: gates.reason };
   }
   if (mismatch || !gates.ok) {
     await markError(env, row, "verify: unresolved after revision - mismatch=" + mismatch + " gates=" + gates.reason);
-    return { ok: false, stage: "verify" };
+    return { ok: false, stage: "verify", withheld: "verify-unresolved", mismatches: adj.mismatches, gate: gates.reason };
   }
   await env.QNFO_AUDIT.prepare("UPDATE research_queue SET stage='publish', status='review' WHERE id=?").bind(row.id).run();
   return { ok: true, stage: "verify->publish", claims: claims.length };
@@ -2611,6 +3011,28 @@ function entryTitle(entry) {
   return m ? m[1].replace(/\s+/g, " ").trim() : "";
 }
 
+// Second path (0.13.0): when the arXiv API refuses or fails, each id is looked up at DataCite, which registers every arXiv
+// work as 10.48550/arXiv.<id>. A record there proves the id and gives its title; anything else leaves the id unverified
+// (a missing DataCite record is not proof that the id is dead).
+async function lookupArxivDatacite(ids, fetchFn, why) {
+  const out = {};
+  for (const id of ids) {
+    try {
+      const r = await fetchFn("https://api.datacite.org/dois/" + encodeURIComponent("10.48550/arXiv." + id), { headers: { "User-Agent": "qnfo-citation-gate/1.0 (mailto:ops@qnfo.org)" } });
+      if (r.ok) {
+        const j = await r.json();
+        const t = j && j.data && j.data.attributes && j.data.attributes.titles && j.data.attributes.titles[0] && j.data.attributes.titles[0].title;
+        out[id] = t ? { state: "ok", title: String(t).replace(/\s+/g, " ").trim() } : { state: "ok" };
+      } else {
+        out[id] = { state: "error", note: why + "; DataCite HTTP " + r.status };
+      }
+    } catch (e) {
+      out[id] = { state: "error", note: why + "; DataCite " + String(e && e.message || e).slice(0, 60) };
+    }
+  }
+  return out;
+}
+
 async function lookupArxiv(ids, fetchFn) {
   const out = {};
   if (!ids.length) return out;
@@ -2618,13 +3040,9 @@ async function lookupArxiv(ids, fetchFn) {
   try {
     res = await fetchFn("https://export.arxiv.org/api/query?max_results=" + ids.length + "&id_list=" + encodeURIComponent(ids.join(",")), { headers: { "User-Agent": "qnfo-citation-gate/1.0" } });
   } catch (e) {
-    for (const id of ids) out[id] = { state: "error", note: String(e && e.message || e).slice(0, 120) };
-    return out;
+    return lookupArxivDatacite(ids, fetchFn, String(e && e.message || e).slice(0, 120));
   }
-  if (!res.ok) {
-    for (const id of ids) out[id] = { state: "error", note: "arXiv API HTTP " + res.status };
-    return out;
-  }
+  if (!res.ok) return lookupArxivDatacite(ids, fetchFn, "arXiv API HTTP " + res.status);
   const xml = await res.text();
   const entries = xml.split(/<entry>/i).slice(1).map((e) => e.split(/<\/entry>/i)[0]);
   const byId = {};
@@ -2734,9 +3152,12 @@ function describeFailures(result) {
 
 return { citationGate: citationGate, describeFailures: describeFailures, extractRefs: extractRefs, titleAgrees: titleAgrees };
 })();
+var CITE_DEFER_MS = 30 * 60 * 1e3;
+var CITE_RETRY_MS = 5 * 60 * 1e3;
 async function citationGateStep(env, row, bodyMd) {
   // ops_config research_citation_gate: 'enforce' (default) holds the queue row on a dead or mismatched citation; 'measure' logs only;
-  // 'off' skips. A lookup error (arXiv/DOI down, 403, 5xx) does not block (fail open, warn event). The papers row is never touched.
+  // 'off' skips. A citation that could not be confirmed (both lookups of an id failing, 403, 5xx) returns retry: the caller defers
+  // the publish and then holds it with an expiry (CITATION-UNVERIFIED-HOLD-1). The papers row is never touched.
   let mode = "enforce";
   try {
     const r = await env.QNFO_AUDIT.prepare("SELECT value FROM ops_config WHERE key = 'research_citation_gate'").first();
@@ -2747,17 +3168,19 @@ async function citationGateStep(env, row, bodyMd) {
   try {
     res = await CITATION_GATE.citationGate(String(bodyMd || ""), { fetch: fetch });
   } catch (e) {
-    return { proceed: true, unverified: true, note: "citation gate threw: " + String(e && e.message || e).slice(0, 120) };
+    return { proceed: mode === "measure", retry: true, unverified: true, note: "citation gate threw: " + String(e && e.message || e).slice(0, 120) };
   }
   const summary = CITATION_GATE.describeFailures(res) + (res.unverified.length ? " | unverified: " + res.unverified.map(function(u) { return u.id; }).join(",") : "");
   try {
     await logEvent(env, "citation-gate", (String(row.id).slice(0, 8) + " " + summary).slice(0, 500), res.pass ? "ok" : (res.retry ? "warn" : "err"));
   } catch (e) {}
   if (res.pass || mode === "measure") return { proceed: true, result: res };
-  // Unverified-only (arXiv/DOI down, 403, 5xx) fails OPEN: a publish row is the queue head (status review, picked every tick), so a
-  // retry that never resolves (a host that always answers 403) would block every paper behind it, the QUEUE-SLA-1 poison-head failure.
-  // The warn event above records it; only a proven not-found or a title mismatch holds.
-  if (res.retry) return { proceed: true, unverified: true, note: summary };
+  // CITATION-UNVERIFIED-HOLD-1 (0.13.0, agent_issues 2052: every cited id resolves and matches before a paper releases): an
+  // unconfirmed citation used to publish (7 of 77 gate runs since 2026-10-09 ended "unverified"). It now returns retry; the
+  // publish stage waits CITE_DEFER_MS in review and then holds the row with the revert line research_hold_expiry_tick
+  // releases after six hours, so a host that keeps refusing cannot stay at the head of the queue and nothing unconfirmed
+  // is published.
+  if (res.retry) return { proceed: false, retry: true, unverified: true, note: summary };
   return { proceed: false, retry: false, note: summary };
 }
 async function publishStageV2(env, row) {
@@ -2774,7 +3197,26 @@ async function publishStageV2(env, row) {
     await markError(env, row, "publish: body " + String(paper.body_md || "").trim().length + " chars < publish floor " + PUBLISH_FLOOR_CHARS);
     return { ok: false, stage: "publish" };
   }
+  let _pctx = {};
+  try {
+    _pctx = JSON.parse(row.context || "{}") || {};
+  } catch (e) {
+  }
+  if (_pctx.citeLast && Date.now() - (Date.parse(_pctx.citeLast) || 0) < CITE_RETRY_MS) return { ok: true, stage: "publish", deferred: "citation check retry pending" };
   const cg = await citationGateStep(env, row, paper.body_md);
+  if (!cg.proceed && cg.retry) {
+    const _since = Date.parse(_pctx.citeSince || "") || 0;
+    if (!_since || Date.now() - _since < CITE_DEFER_MS) {
+      await env.QNFO_AUDIT.prepare("UPDATE research_queue SET context=? WHERE id=?").bind(JSON.stringify(Object.assign({}, _pctx, { citeSince: _since ? _pctx.citeSince : nowIso(), citeLast: nowIso() })).slice(0, 6e3), row.id).run();
+      return { ok: true, stage: "publish", deferred: "citation unconfirmed: " + String(cg.note).slice(0, 200) };
+    }
+    const _hctx = Object.assign({}, _pctx);
+    delete _hctx.citeSince;
+    delete _hctx.citeLast;
+    await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='held', claimed_at=NULL, error=?, context=? WHERE id=?").bind(("CITATION-UNVERIFIED: " + String(cg.note)).slice(0, 240) + " Revert: status review, stage publish", JSON.stringify(_hctx).slice(0, 6e3), row.id).run();
+    await logEvent(env, "citation-hold", "row=" + String(row.id).slice(0, 8) + " held unconfirmed after " + Math.round((Date.now() - _since) / 6e4) + " min; released by research_hold_expiry_tick after 6 h", "warn");
+    return { ok: false, stage: "publish", held: true, withheld: "citation-unverified" };
+  }
   if (!cg.proceed) {
     await env.QNFO_AUDIT.prepare("UPDATE research_queue SET status='held', claimed_at=NULL, error=? WHERE id=?").bind(String(cg.note).slice(0, 300), row.id).run();
     // A hold needs a recorded reason, a doer and a way out (ANTIFRAGILE-1): the issue names the fix and the release.
@@ -2894,18 +3336,26 @@ async function researchParallel(env) {
   } catch (e) {}
   return RESEARCH_PARALLEL_DEFAULT;
 }
+// A stage that withheld a paper on a quality gate (a verify mismatch, HARD review findings, thin literature, an
+// unconfirmed citation) is the gate working: its done event is a warning that names the gate. status error is kept for a
+// stage that broke (transport, model, storage), which is what LOOP-BREAKER-1 groups by signature.
+function doneStatus(r) {
+  return r && r.ok ? "ok" : r && r.withheld ? "warn" : "error";
+}
 async function runSlot(env, slot, width, inflight) {
   try {
     const row = inflight[slot];
     if (row && row.status === "review") {
       const r2 = row.source === "remediation" ? await remediationPublish(env, row) : await publishStageV2(env, row);
-      await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), r2.ok ? "ok" : "error");
+      if (r2 && r2.deferred) return { status: "ok", claimed: 0, deferred: true, res: r2, slot };
+      await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), doneStatus(r2));
       return { status: r2.ok ? "ok" : "error", res: r2, slot };
     }
     if (row) {
       const fn = { ground: stageGround, ensemble: stageEnsemble, reconcile: stageReconcile, review: stageReview, revise: stageRevise, verify: stageVerify }[row.stage];
       const r2 = await fn(env, row);
-      await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), r2.ok ? "ok" : "error");
+      if (r2 && r2.deferred) return { status: "ok", claimed: 0, deferred: true, res: r2, slot };
+      await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), doneStatus(r2));
       return { status: r2.ok ? "ok" : "error", res: r2, slot };
     }
     if (inflight.length >= width) return { status: "ok", claimed: 0, slot };
@@ -2928,7 +3378,7 @@ async function claimNew(env) {
     await logEvent(env, "claim", "claimed " + row.source_id + " (pipeline " + PIPELINE_VERSION + ")");
     row.stage = "ground";
     const r = await stageGround(env, row);
-    await logEvent(env, "done", JSON.stringify(r).slice(0, 600), r.ok ? "ok" : "error");
+    await logEvent(env, "done", JSON.stringify(r).slice(0, 600), doneStatus(r));
     return { status: r.ok ? "ok" : "error", res: r };
 }
 async function run(env) {
@@ -2936,7 +3386,8 @@ async function run(env) {
     let row = await env.QNFO_AUDIT.prepare("SELECT * FROM research_queue WHERE status='review' AND stage='publish' LIMIT 1").first();
     if (row) {
       const r2 = row.source === "remediation" ? await remediationPublish(env, row) : await publishStageV2(env, row);
-      await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), r2.ok ? "ok" : "error");
+      if (r2 && r2.deferred) return { status: "ok", claimed: 0, deferred: true, res: r2 };
+      await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), doneStatus(r2));
       return { status: r2.ok ? "ok" : "error", res: r2 };
     }
     const stages = ["ground", "ensemble", "reconcile", "review", "revise", "verify"];
@@ -2946,7 +3397,8 @@ async function run(env) {
       if (row) {
         const fn = { ground: stageGround, ensemble: stageEnsemble, reconcile: stageReconcile, review: stageReview, revise: stageRevise, verify: stageVerify }[st];
         const r2 = await fn(env, row);
-        await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), r2.ok ? "ok" : "error");
+        if (r2 && r2.deferred) return { status: "ok", claimed: 0, deferred: true, res: r2 };
+        await logEvent(env, "done", JSON.stringify(r2).slice(0, 600), doneStatus(r2));
         return { status: r2.ok ? "ok" : "error", res: r2 };
       }
     }
@@ -2963,7 +3415,7 @@ async function run(env) {
     await logEvent(env, "claim", "claimed " + row.source_id + " (pipeline " + PIPELINE_VERSION + ")");
     row.stage = "ground";
     const r = await stageGround(env, row);
-    await logEvent(env, "done", JSON.stringify(r).slice(0, 600), r.ok ? "ok" : "error");
+    await logEvent(env, "done", JSON.stringify(r).slice(0, 600), doneStatus(r));
     return { status: r.ok ? "ok" : "error", res: r };
   } catch (e) {
     const msg = String(e && e.message || e).slice(0, 600);
@@ -25505,6 +25957,12 @@ var worker_default = {
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     ctx.waitUntil((async function() {
       try {
+        if (await routerDrillDue(env)) await routerSecondPathDrill(env);
+      } catch (eDrill) {
+      }
+    })());
+    ctx.waitUntil((async function() {
+      try {
         // HEARTBEAT-1 (2026-09-27): research-exec had no heartbeat row, so a dead cron was invisible
         // to the fleet heartbeat surface (issue class #973).
         // HEARTBEAT-UPSERT-1 (2026-09-30): fleet_heartbeat(worker TEXT PRIMARY KEY) -- the plain
@@ -25549,7 +26007,7 @@ var worker_default = {
     if (new URL(request.url).pathname === "/reviser/health" && request.method === "GET") return reviserMod.fetch(new Request(new URL("/health", request.url)), reviserEnv(env), ctx);
     env = __aiAttrEnv(env, "qnfo-research-exec", "AI", "QNFO_AUDIT");
     const url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish"], limitations: ["stages run only on the */15 cron under a single-flight lease (one stage per tick)", "papers cite only the grounding bibliography", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
+    if (url.pathname === "/health") return json({ ok: true, worker: WORKER, version: VERSION, capabilities: ["research-pipeline", "arxiv-grounding", "ensemble-drafting", "review", "python-verification", "inhouse-publish"], limitations: ["stages run only on the */15 cron under a single-flight lease (research_parallel rows at once, stages back to back within the tick budget)", "papers cite only the grounding bibliography (arXiv API, DataCite arXiv records, QNFO corpus)", "a quantitative claim is checked at the precision the paper states", "quantitative verification needs the qnfo-containers-pilot binding", "a new paper must reach 20000 chars to publish"] });
     if (url.pathname === "/run" && request.method === "POST") {
       if (url.searchParams.get("sync") !== "1") {
         await logEvent(env, "kick", "HTTP /run kick accepted; drained by the cron under the single-flight lease", "ok");
@@ -25591,6 +26049,22 @@ export {
   reclaimStaleResearching,
   stageGround,
   stageReview,
-  stageVerify
+  stageVerify,
+  stageRevise,
+  publishStageV2,
+  runSlot,
+  applyRevisePatch,
+  adjudicateVerification,
+  numLit,
+  statedLiterals,
+  finalGates,
+  arxivGet,
+  dataciteArxiv,
+  groundTerms,
+  groundRelevant,
+  routerSecondPathDrill,
+  routerDrillDue,
+  doneStatus,
+  CITATION_GATE
 };
 //# sourceMappingURL=worker.js.map
