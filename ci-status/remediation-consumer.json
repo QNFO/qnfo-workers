@@ -1,12 +1,91 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@545e0bd81dbb",
- "due": 0,
- "pass": 0,
- "fail": 0,
- "skipped": 0,
- "contracts": [],
+ "verifier": "remediation-consumer@3e559e57c68c",
+ "due": 10,
+ "pass": 1,
+ "fail": 8,
+ "skipped": 1,
+ "contracts": [
+  {
+   "class": "issue-2394",
+   "issue_id": 2394,
+   "verdict": "fail",
+   "expected": "closed",
+   "observed": "open: no close_evidence yet",
+   "written": true
+  },
+  {
+   "class": "issue-2395",
+   "issue_id": 2395,
+   "verdict": "fail",
+   "expected": "closed",
+   "observed": "open: no close_evidence yet",
+   "written": true
+  },
+  {
+   "class": "issue-2396",
+   "issue_id": 2396,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2397",
+   "issue_id": 2397,
+   "verdict": "fail",
+   "expected": "closed",
+   "observed": "open: no close_evidence yet",
+   "written": true
+  },
+  {
+   "class": "issue-2398",
+   "issue_id": 2398,
+   "verdict": "fail",
+   "expected": "closed",
+   "observed": "open: no close_evidence yet",
+   "written": true
+  },
+  {
+   "class": "issue-2364",
+   "issue_id": 2364,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "migration 25 not applied ok yet, or tick errors on idx_agent_issues_open_title_ci in the last 2 h",
+   "written": true
+  },
+  {
+   "class": "issue-2365",
+   "issue_id": 2365,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "migration 25 not applied ok yet, or tick errors on idx_agent_issues_open_title_ci in the last 2 h",
+   "written": true
+  },
+  {
+   "class": "issue-2378",
+   "issue_id": 2378,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "version=0.11.0-search-fuzzy",
+   "written": true
+  },
+  {
+   "class": "issue-2383",
+   "issue_id": 2383,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "migration 25 not applied ok yet, or tick errors on idx_agent_issues_open_title_ci in the last 2 h",
+   "written": true
+  },
+  {
+   "class": "issue-2361",
+   "issue_id": 2361,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
+  }
+ ],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -30,13 +109,14 @@
   "http",
   "runner-https"
  ],
+ "https": 2,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 5.3,
+ "runtime_verified_share_24h": 5.4,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 6214,
- "head": "545e0bd81dbbf95b7d7a60c9f6b5a6da51723e88",
+ "spent_ms": 13388,
+ "head": "3e559e57c68c10c52179b3735a6596a4d8da909e",
  "job_status": "success",
- "ts": "2026-10-12T10:42:15Z"
+ "ts": "2026-10-12T10:46:54Z"
 }
