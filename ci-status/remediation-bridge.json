@@ -2,14 +2,14 @@
  "ok": true,
  "marker": "REMEDIATION-CONTRACT-BRIDGE-1",
  "probe_map_entries": 44,
- "open_issues": 134,
- "with_contract_before": 134,
+ "open_issues": 137,
+ "with_contract_before": 137,
  "upgraded_sentinel_to_active": 0,
  "inserted_active": 0,
  "inserted_needs_machine_probe": 0,
- "active_contracts": 353,
- "active_with_executable_probe": 319,
- "active_with_prose_probe": 34,
+ "active_contracts": 360,
+ "active_with_executable_probe": 321,
+ "active_with_prose_probe": 39,
  "prose_probe_contracts": [
   {
    "class": "issue-1899",
@@ -37,6 +37,11 @@
    "reason": "not-a-select"
   },
   {
+   "class": "issue-2272",
+   "issue_id": 2272,
+   "reason": "not-a-select"
+  },
+  {
    "class": "issue-2275",
    "issue_id": 2275,
    "reason": "not-a-select"
@@ -54,6 +59,16 @@
   {
    "class": "issue-2302",
    "issue_id": 2302,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2338",
+   "issue_id": 2338,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2343",
+   "issue_id": 2343,
    "reason": "not-a-select"
   },
   {
@@ -104,6 +119,11 @@
   {
    "class": "issue-2396",
    "issue_id": 2396,
+   "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2398",
+   "issue_id": 2398,
    "reason": "not-a-select"
   },
   {
@@ -180,19 +200,23 @@
    "class": "belief-deploy-loop-attempts-every-target",
    "issue_id": null,
    "reason": "not-a-select"
+  },
+  {
+   "class": "issue-2451",
+   "issue_id": 2451,
+   "reason": "not-a-select"
   }
  ],
  "contracts_needs_machine_probe": 0,
- "open_issues_without_active_contract": 6,
+ "open_issues_without_active_contract": 5,
  "residual_gap_ids": [
   2087,
   2192,
   2194,
-  2222,
   2322,
   2327
  ],
- "head": "1b8279e08d365c8e2fd49e0ca9040daf1d9d1f2f",
+ "head": "0c9c08d669c1e1a20d202836b5587b1574c66be7",
  "job_status": "success",
- "ts": "2026-10-12T17:31:38Z"
+ "ts": "2026-10-12T18:08:55Z"
 }
