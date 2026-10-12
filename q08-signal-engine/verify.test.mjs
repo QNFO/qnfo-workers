@@ -149,5 +149,12 @@ globalThis.fetch = origFetch;
   check("a truncated JSON reply still yields its explicit verdict and quotes", (() => { const r = V.parseFactVerdict('{"unsupported": ["the claim -- not in source", "another -- no"], "verdict": "fail"'); return r && r.verdict === "fail" && r.unsupported.length === 2; })());
   check("a reply with no verdict field is still no verdict", V.parseFactVerdict("The draft looks fine to me.") === null);
 }
+// ---- SINGLE-LETTER-1 -------------------------------------------------------------------------------------------------------------
+{
+  const src = "The method scales with the input size and is described by its worst-case bound.";
+  const g = (txt) => V.groundingProblems(txt, src, { today: "2026-10-12" });
+  check("Big-O notation is not a name (O(1), O(N), O(n^2))", ["The O(1) lookup helps.", "Complexity is O(N) in the worst case.", "An O(n^2) loop is slow."].every((s) => g(s).length === 0), ["The O(1) lookup helps.", "Complexity is O(N) in the worst case.", "An O(n^2) loop is slow."].map(g));
+  check("an invented multi-letter name still fails", g("The idea came from Zorblax Quimby in the lab.").some((x) => /Zorblax|Quimby/.test(x)));
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
