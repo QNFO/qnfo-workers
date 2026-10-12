@@ -1,85 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@9f7c3945632c",
- "due": 9,
- "pass": 3,
- "fail": 6,
+ "verifier": "remediation-consumer@237a722df6b0",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
  "skipped": 0,
- "contracts": [
-  {
-   "class": "issue-2076",
-   "issue_id": 2076,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2131",
-   "issue_id": 2131,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "fm-metric-refresher-replaced",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "1",
-   "written": true
-  },
-  {
-   "class": "issue-2362",
-   "issue_id": 2362,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-code-orchestrator/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2363",
-   "issue_id": 2363,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-fleet-dashboard/worker.js",
-   "written": true
-  },
-  {
-   "class": "fm-contract-cadence-drift",
-   "issue_id": null,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "18",
-   "written": true
-  },
-  {
-   "class": "fm-triage-gap",
-   "issue_id": null,
-   "verdict": "pass",
-   "expected": "0",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2364",
-   "issue_id": 2364,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by ci:apply-migrations, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2365",
-   "issue_id": 2365,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by ci:apply-migrations, which owns it for 48h",
-   "written": true
-  }
- ],
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -103,14 +30,13 @@
   "http",
   "runner-https"
  ],
- "https": 2,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 5.1,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 13202,
- "head": "9f7c3945632c7f35889ce62ac1aa86fb4d9c01f0",
+ "spent_ms": 3921,
+ "head": "237a722df6b0a50e6d76ffa51ade8edeb3d79cf8",
  "job_status": "success",
- "ts": "2026-10-12T08:08:19Z"
+ "ts": "2026-10-12T08:55:01Z"
 }

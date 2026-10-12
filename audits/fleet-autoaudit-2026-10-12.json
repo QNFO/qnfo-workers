@@ -1,16 +1,8 @@
 {
-  "audited_at": "2026-10-12 07:44:16",
+  "audited_at": "2026-10-12 08:51:30",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
-    "_drift_confirm": {
-      "first_pass": [
-        "qnfo-fleet-dashboard",
-        "qnfo-infra"
-      ],
-      "refreshed": true,
-      "second_pass": []
-    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -547,17 +539,17 @@
       },
       {
         "dir": "personal-companion",
-        "version": "1.15.9-factcheck-nothink",
+        "version": "1.15.12-topic-cooldown",
         "worker": "personal-companion"
       },
       {
         "dir": "q08-signal-engine",
-        "version": "0.11.12",
+        "version": "0.11.15",
         "worker": "q08-signal-engine"
       },
       {
         "dir": "qnfo-ai",
-        "version": "5.34.1-accuracy-ground",
+        "version": "5.35.1-router-resolve",
         "worker": "qnfo-ai"
       },
       {
@@ -587,7 +579,7 @@
       },
       {
         "dir": "qnfo-deploy-guard",
-        "version": "1.3.23-secret-only-ledger",
+        "version": "1.3.24-lease-token-csprng",
         "worker": "qnfo-deploy-guard"
       },
       {
@@ -622,7 +614,7 @@
       },
       {
         "dir": "qnfo-ipatent",
-        "version": "3.16.0-ipatent-ground",
+        "version": "3.17.1-ipatent-marquee",
         "worker": "qnfo-ipatent"
       },
       {
@@ -896,9 +888,9 @@
       "worker": "personal-api"
     },
     "personal-companion": {
-      "before": "1.15.9-factcheck-nothink",
+      "before": "1.15.12-topic-cooldown",
       "http": 200,
-      "live": "1.15.9-factcheck-nothink",
+      "live": "1.15.12-topic-cooldown",
       "match": 1,
       "note": "SYNC",
       "worker": "personal-companion"
@@ -940,9 +932,9 @@
       "worker": "personal-life-search"
     },
     "q08-signal-engine": {
-      "before": "0.11.12",
+      "before": "0.11.15",
       "http": 200,
-      "live": "0.11.12",
+      "live": "0.11.15",
       "match": 1,
       "note": "SYNC",
       "worker": "q08-signal-engine"
@@ -975,9 +967,9 @@
       "worker": "qnfo-agent-ws"
     },
     "qnfo-ai": {
-      "before": "5.34.1-accuracy-ground",
+      "before": "5.35.1-router-resolve",
       "http": 200,
-      "live": "5.34.1-accuracy-ground",
+      "live": "5.35.1-router-resolve",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ai"
@@ -1167,9 +1159,9 @@
       "worker": "qnfo-ddocs-indexer"
     },
     "qnfo-deploy-guard": {
-      "before": "1.3.23-secret-only-ledger",
+      "before": "1.3.24-lease-token-csprng",
       "http": 200,
-      "live": "1.3.23-secret-only-ledger",
+      "live": "1.3.24-lease-token-csprng",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-deploy-guard"
@@ -1358,9 +1350,9 @@
       "worker": "qnfo-intent-orchestrator"
     },
     "qnfo-ipatent": {
-      "before": "3.16.0-ipatent-ground",
+      "before": "3.17.1-ipatent-marquee",
       "http": 200,
-      "live": "3.16.0-ipatent-ground",
+      "live": "3.17.1-ipatent-marquee",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-ipatent"
