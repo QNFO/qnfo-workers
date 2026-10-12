@@ -161,5 +161,12 @@ let threw = null;
 try { await W.scheduled({ cron: "0 3 1 1 *", scheduledTime: Date.UTC(2026, 9, 12, 3, 0) }, { LIVING_PAPER: d1(db2) }, { waitUntil() {} }); } catch (e) { threw = e; }
 ok(db2.prepare("SELECT body_md FROM papers").get().body_md === "Text.", "the scheduled handler ran the scrub tick", [db2.prepare("SELECT body_md FROM papers").get(), String(threw)]);
 
+// CodeQL "information exposure through a stack trace" (PR 1024): a failing status read answers a fixed message, never the error text.
+{
+  const leaky = { LIVING_PAPER: { prepare: () => { throw new Error("SQLITE_ERROR: secret internal detail at /src/x.js:12"); } } };
+  const res = await W.fetch(new Request("https://lifecycle.example/noz-scrub/status"), leaky, { waitUntil() {} });
+  const body = await res.text();
+  ok(res.status === 500 && !/SQLITE_ERROR|secret|x\.js/.test(body) && /status unavailable/.test(body), "a failing status read exposes no error text", body);
+}
 console.log(passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);

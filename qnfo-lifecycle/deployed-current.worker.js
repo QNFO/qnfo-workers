@@ -2583,7 +2583,7 @@ function withNozScrub(inner) {
       var u = new URL(request.url);
       if (u.pathname === "/noz-scrub/status" && request.method === "GET") {
         var st;
-        try { st = await nozScrubStatus(env); } catch (e) { st = { error: String(e && e.message || e).slice(0, 200) }; }
+        try { st = await nozScrubStatus(env); } catch (e) { console.error("[qnfo-lifecycle] noz-scrub status failed: " + String(e && e.message || e).slice(0, 300)); st = { error: "status unavailable (logged)" }; }
         return new Response(JSON.stringify(st), { status: st.error ? 500 : 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
       }
       return inner.fetch(request, env, ctx);
