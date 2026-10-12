@@ -14,6 +14,8 @@ CREATE TABLE failure_modes (fm_key TEXT PRIMARY KEY, failure_mode TEXT, root_cau
 CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, issue_id INTEGER, precondition TEXT, action TEXT, verify_probe TEXT, verify_transport TEXT, max_attempts INTEGER, escalate_to TEXT, expected_cadence_h INTEGER, status TEXT, module TEXT, budget_ms INTEGER, max_items INTEGER, requires_container INTEGER);
 CREATE TABLE email_parse_failures (email_id INTEGER PRIMARY KEY, resolved_at TEXT, notes TEXT);
 INSERT INTO email_parse_failures VALUES (796, NULL, 'x'), (802, NULL, 'y');
+CREATE TABLE email_commands (id INTEGER PRIMARY KEY, status TEXT, result TEXT, updated_at TEXT);
+INSERT INTO email_commands VALUES (10, 'error', '{"ok":false}', NULL), (14, 'error', '{"ok":false}', NULL), (15, 'done', '{"ok":true}', NULL);
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
 INSERT INTO emails VALUES (984, 'kottevarun@gmail.com', 'Your router_calibrate.py in qnfo-workers and the UCCI paper', 'Hi Rowan, I came across qnfo-ops/scripts/router_calibrate.py ... My attorney is preparing a US immigration petition', 'archived');
 INSERT INTO emails VALUES (890, 'jmichaelnicky@yahoo.fr', 'Re: Topologically', 'text', 'replied');
@@ -21,6 +23,7 @@ INSERT INTO email_reply_queue (id, email_id, sender, decision, skip_reason, crea
 db.exec(sql);
 const q = (s, ...a) => db.prepare(s).all(...a);
 ok(q("SELECT COUNT(*) n FROM email_parse_failures WHERE resolved_at IS NOT NULL")[0].n === 2, "the two stale parse failures close with their evidence");
+ok(q("SELECT COUNT(*) n FROM email_commands WHERE status = 'closed' AND json_extract(result, '$.was') IS NOT NULL")[0].n === 2 && q("SELECT status FROM email_commands WHERE id = 15")[0].status === "done", "the five stale command errors close with the reason kept; done rows untouched");
 const r63 = q("SELECT decision, skip_reason FROM email_reply_queue WHERE id = 63")[0];
 ok(r63.decision === "escalate" && /restored/.test(r63.skip_reason), "queue row 63 (email 984) is escalated", r63);
 ok(q("SELECT status FROM emails WHERE id = 984")[0].status === "processed", "email 984 is back in the owner's pending view");

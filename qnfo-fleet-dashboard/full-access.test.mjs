@@ -77,7 +77,7 @@ const C = sb.__c, env = { AUDIT: D1, IDENTITY: D1 }, owner = { session: { stepup
   ok(/#7/.test(s.text) && s.actions[0].cmd === "mail 7", "mail <word> searches and offers to open each one", s);
   const one = await C.conRead(env, "inbox 7", {}, owner);
   ok(/Subject: Invitation to review/.test(one.text) && /We invite you to review a manuscript/.test(one.text) && one.text.length > 5000 && one.text.length < 6600, "mail <id> reads the message in full (up to 6000 characters)", one.text.length);
-  ok(one.actions[0].cmd === "mail theresearchletters.org", "the reader offers more from the same sender", one.actions);
+  ok(one.actions[0].fill === "reply 7 " && one.actions[1].cmd === "spam 7" && one.actions[2].cmd === "mail theresearchletters.org", "the reader offers Reply (fills the line), Spam and more from the sender", one.actions);
 }
 {
   ok(sb.__c.CON_DBS.q08 === "Q08" && sb.__c.CON_DBS.identity === "IDENTITY", "sql reads q08 and identity");
@@ -99,6 +99,35 @@ const C = sb.__c, env = { AUDIT: D1, IDENTITY: D1 }, owner = { session: { stepup
   ok(M.mailDomainNamed("WHAT'S UP WITH RESEARCHLETTERS EMAILS?", "theresearchletters.org") && !M.mailDomainNamed("what about letters", "theresearchletters.org"), "a typed name without the 'the' or the TLD finds the card's domain");
   ok(M.MAIL_ASK_RX.test("AND WHAT DO THEY SAY? DON'T WASTE MY TIME HERE!") && M.MAIL_FOLLOWUP_RX.test("AND WHAT DO THEY SAY?"), "the follow-up 'and what do they say?' reads the mail cards");
   ok(/body_text = mailBodyHead\(f\.body, 1500\)/.test(src) && /substr\(COALESCE\(body_text, ''\), 1, 1600\) AS body_head FROM emails WHERE \(lower\(sender\)/.test(src), "the owner's Ask context carries up to 1500 characters of each message");
+}
+// --- INBOX-REPLY-1: the owner replies and marks spam from the dashboard ---
+{
+  const db2 = new DatabaseSync(":memory:");
+  db2.exec(`CREATE TABLE emails (id INTEGER PRIMARY KEY, sender TEXT, recipient TEXT, subject TEXT, headers_json TEXT, status TEXT, body_text TEXT);
+  CREATE TABLE email_reply_queue (id INTEGER PRIMARY KEY, email_id INTEGER, decision TEXT, sent_at TEXT, updated_at TEXT, skip_reason TEXT);
+  CREATE TABLE email_sender_policy (id INTEGER PRIMARY KEY AUTOINCREMENT, pattern TEXT, kind TEXT, auto_reply_ok INTEGER, note TEXT);
+  INSERT INTO emails VALUES (984, 'kottevarun@gmail.com', 'rowan.quni@qnfo.org', 'Your router_calibrate.py in qnfo-workers', '{}', 'processed', 'Hi Rowan');
+  INSERT INTO emails VALUES (989, 'parker.knight@theresearchletters.org', 'rowan.quni@qnfo.org', 'We Invite Your Research Article', '{}', 'processed', 'x');
+  INSERT INTO emails VALUES (990, 'parker.knight@theresearchletters.org', 'rowan.quni@qnfo.org', 'We Invite Your Research Article', '{}', 'processed', 'x');
+  INSERT INTO emails VALUES (5, 'alerts@qnfo.org', 'qnfo@qnfo.org', 'tick', '{}', 'processed', 'x');
+  INSERT INTO email_reply_queue VALUES (63, 984, 'escalate', NULL, NULL, 'x'), (65, 989, 'skip', NULL, NULL, 'x'), (66, 990, 'held', NULL, NULL, 'x');`);
+  const D = { prepare(sql) { const st = db2.prepare(sql); let a = []; const o = { bind(...x) { a = x; return o; }, async all() { return { results: st.all(...a) }; }, async first() { return st.get(...a) || null; }, async run() { const r = st.run(...a); return { meta: { changes: r.changes } }; } }; return o; } };
+  const sent = [];
+  const svc = { fetch: async (u, o) => { sent.push({ u, b: JSON.parse(o.body) }); db2.prepare("UPDATE emails SET status = 'replied' WHERE id = ?").run(JSON.parse(o.body).reply_to_id); return { ok: true, status: 200, json: async () => ({ success: true }) }; } };
+  const code = cut("// INBOX-REPLY-1 (1.31.0", "// Read commands. Returns null") + "\n" + cut("async function d1all(", "__name(d1all") + "\n" + cut("function conClip(s, n) {", "function conCmd(") + "\nasync function mailFacts() { return [{}]; }\n__r = { conMailReply, conMailSpam };";
+  const sb3 = { JSON, Math, String, Number, Promise, Array, Object, Error, RegExp, Date, AbortSignal }; vm.createContext(sb3); vm.runInContext(code, sb3);
+  const R = sb3.__r;
+  const r1 = await R.conMailReply({ AUDIT: D, SVC_QNFO_EMAIL: svc }, 984, "Thank you, happy to help. Send me the draft.");
+  ok(r1.ok && sent[0].b.to === "kottevarun@gmail.com" && sent[0].b.from === "rowan.quni@qnfo.org" && sent[0].b.subject === "Re: Your router_calibrate.py in qnfo-workers" && sent[0].b.reply_to_id === 984 && /\/send$/.test(sent[0].u), "reply sends through qnfo-email /send as the address it was written to, Re: subject, original marked", sent[0]);
+  ok(db2.prepare("SELECT decision FROM email_reply_queue WHERE id = 63").get().decision === "sent" && db2.prepare("SELECT status FROM emails WHERE id = 984").get().status === "replied", "the queue row closes as sent and the message is replied");
+  const r2 = await R.conMailReply({ AUDIT: D }, 989, "hello");
+  ok(!r2.ok && /binding is not installed/.test(r2.error) && sent.length === 1, "without the binding nothing is sent and it says so", r2);
+  const r3 = await R.conMailReply({ AUDIT: D, SVC_QNFO_EMAIL: svc }, 5, "hello");
+  ok(!r3.ok && /fleet address/.test(r3.error) && sent.length === 1, "fleet mail is never replied to", r3);
+  const r4 = await R.conMailSpam({ AUDIT: D }, [989, 990]);
+  ok(r4.ok && db2.prepare("SELECT COUNT(*) n FROM emails WHERE id IN (989, 990) AND status = 'spam'").get().n === 2 && db2.prepare("SELECT decision FROM email_reply_queue WHERE id = 66").get().decision === "skip" && db2.prepare("SELECT COUNT(*) n FROM email_sender_policy WHERE pattern = 'parker.knight@theresearchletters.org' AND kind = 'junk'").get().n === 1, "spam marks both, closes the held row and adds the sender to the junk policy once", r4);
+  ok(/var CON_OPS = [\s\S]*mailreply: \{ destructive: true/.test(src), "sending in the owner's name needs a fresh code (destructive)");
+  ok(/data-fleet-fill="reply ' \+ Math\.max/.test(src) && /closest\('\[data-fleet-fill\]'\)/.test(src) && !/Open the qnfo inbox and reply/.test(src), "inbox cards carry Reply, Read and Spam; the card no longer sends the owner elsewhere");
 }
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

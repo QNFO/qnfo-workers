@@ -21,7 +21,7 @@
 -- APPLY-BY: ci
 -- DB: qnfo-audit
 -- BACKUP: bak_20261012_cold_human_984
--- Rollback: UPDATE email_parse_failures SET resolved_at = NULL WHERE email_id IN (796, 802) AND notes LIKE '%COLD-HUMAN-ESCALATE-1%'; DROP TRIGGER IF EXISTS email_reply_queue_cold_human_escalate; UPDATE email_reply_queue SET decision = 'skip', skip_reason = 'cold sender not in contact_ledger: no owner notice (NOTICE-REPLY-1)' WHERE id = 63; UPDATE emails SET status = 'archived' WHERE id = 984; DELETE FROM remediation_contracts WHERE class = 'fm-cold-human-silent-drop'; DELETE FROM failure_modes WHERE fm_key = 'cold-human-silent-drop'; UPDATE agent_issues SET status = 'superseded' WHERE title LIKE 'NOTICE-REPLY-COLD-HUMAN-1:%' AND status = 'open'
+-- Rollback: UPDATE email_commands SET status = 'error', result = json_extract(result, '$.was') WHERE id IN (10, 11, 12, 13, 14) AND status = 'closed'; UPDATE email_parse_failures SET resolved_at = NULL WHERE email_id IN (796, 802) AND notes LIKE '%COLD-HUMAN-ESCALATE-1%'; DROP TRIGGER IF EXISTS email_reply_queue_cold_human_escalate; UPDATE email_reply_queue SET decision = 'skip', skip_reason = 'cold sender not in contact_ledger: no owner notice (NOTICE-REPLY-1)' WHERE id = 63; UPDATE emails SET status = 'archived' WHERE id = 984; DELETE FROM remediation_contracts WHERE class = 'fm-cold-human-silent-drop'; DELETE FROM failure_modes WHERE fm_key = 'cold-human-silent-drop'; UPDATE agent_issues SET status = 'superseded' WHERE title LIKE 'NOTICE-REPLY-COLD-HUMAN-1:%' AND status = 'open'
 
 CREATE TABLE IF NOT EXISTS bak_20261012_cold_human_984 AS
   SELECT 'emails' AS src, e.id AS row_id, e.status AS status, NULL AS decision, NULL AS skip_reason FROM emails e WHERE e.id = 984
@@ -85,3 +85,11 @@ UPDATE email_parse_failures SET resolved_at = datetime('now'), notes = COALESCE(
 WHERE email_id = 796 AND resolved_at IS NULL AND EXISTS (SELECT 1 FROM emails WHERE id = 890 AND length(COALESCE(body_text, '')) > 0 AND status = 'replied');
 UPDATE email_parse_failures SET resolved_at = datetime('now'), notes = COALESCE(notes, '') || ' | COLD-HUMAN-ESCALATE-1 2026-10-12: resolved without a resend; no further mail from this sender in 22 days (unverified freemail, marked spam on 2026-09-24). A new message from the address re-enters the queue as usual.'
 WHERE email_id = 802 AND resolved_at IS NULL AND NOT EXISTS (SELECT 1 FROM emails WHERE lower(sender) = 'alexandra_patelkoj@mail.com' AND id > 802);
+
+-- The owner's five email replies to [handoff] notices (email_commands 10-14, emails 927, 942, 943, 967, 968; 2026-10-05..09) were
+-- parsed as ops commands and failed with HTTP 401 before qnfo-ops 2.40.0 OPS-INTERNAL-CALLER-1 and qnfo-email NOTICE-REPLY-1
+-- (2026-10-09) fixed that path; none was retried. They are questions, answered in the 2026-10-12 session report; the inbox
+-- now answers on fleet.qnfo.org (mail, reply, spam). Closed with that note, not left as errors.
+UPDATE email_commands SET status = 'closed', updated_at = datetime('now'),
+  result = json_object('ok', json('false'), 'closed', 'COLD-HUMAN-ESCALATE-1 2026-10-12: failed with HTTP 401 before the notice-reply fix of 2026-10-09 and was never retried; the question was answered in the session report and the inbox now runs on fleet.qnfo.org', 'was', result)
+WHERE id IN (10, 11, 12, 13, 14) AND status = 'error';
