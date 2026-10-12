@@ -846,11 +846,7 @@ def noz_scrub(text, doi_map: dict, self_slug: str):
         s = sub(_NZ_RE, lambda m: url(m.group(1)), s)
         return s
 
-    def prose(s):
-        s = sub(_NZ_DOI_LINE_RE, lambda m: "**URL:** " + (own if doi_map.get("10.5281/zenodo." + (m.group(1) or "")) == self_slug and self_slug else url(m.group(1))), s)
-        s = sub(_NZ_REF_RE, lambda m: "QNFO. " + url(m.group(1)) + m.group(2), s)
-        s = sub(_NZ_LABEL_RE, lambda m: url(m.group(1)), s)
-        s = ids(s)
+    def words(s):  # the registrar's name in any shape; fenced code takes these after ids() but keeps its labels
         # NOZ-LEFTOVERS-1 (dry run 126, 2026-10-12: 13 leftovers in 474 rows): pandoc citation keys "[@zenodo22035210]" keep their
         # key shape under a neutral prefix, the scaffolding file name and the registry column name lose the registrar's name.
         s = sub(re.compile(r"@zenodo(\w+)", re.I), r"@qnfo\1", s)
@@ -864,6 +860,12 @@ def noz_scrub(text, doi_map: dict, self_slug: str):
         s = re.sub(r"(?<=\S)[ \t]+(?=[.,;](?:\s|$))", "", s)
         s = re.sub(r"(\S)[ \t]{2,}(?=\S)", r"\1 ", s)
         return s.rstrip(" \t")
+
+    def prose(s):
+        s = sub(_NZ_DOI_LINE_RE, lambda m: "**URL:** " + (own if doi_map.get("10.5281/zenodo." + (m.group(1) or "")) == self_slug and self_slug else url(m.group(1))), s)
+        s = sub(_NZ_REF_RE, lambda m: "QNFO. " + url(m.group(1)) + m.group(2), s)
+        s = sub(_NZ_LABEL_RE, lambda m: url(m.group(1)), s)
+        return words(ids(s))
 
     lines = text.split("\n")
     out = []
@@ -904,9 +906,10 @@ def noz_scrub(text, doi_map: dict, self_slug: str):
         if not NOZ_HAS.search(ln):
             out.append(ln)
         elif in_code:
-            # the owner directive covers every public mention, so a fenced block takes the same word rules as prose
-            # (dry run 126: "will be published on Zenodo" sat inside a fenced block and survived the first pass)
-            out.append(prose(ln))
+            # the owner directive covers every public mention, so a fenced block takes the word rules too, after the link and
+            # DOI rewrites, while its labels (a YAML key, a code identifier) stay (dry run 126: "will be published on Zenodo"
+            # sat inside a fenced block and survived the first pass)
+            out.append(words(ids(ln)))
         else:
             out.append(prose(ln))
     new = "\n".join(out)
