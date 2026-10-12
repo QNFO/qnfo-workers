@@ -2458,8 +2458,11 @@ async function safeEqual(a, b) {
 }
 // Random suffix for row ids and slug salts, from crypto.getRandomValues rather than Math.random (none of these is a secret).
 function rnd36(n) {
-  var b = crypto.getRandomValues(new Uint8Array(n)), out = "";
-  for (var i = 0; i < n; i++) out += (b[i] % 36).toString(36);
+  var out = "";
+  while (out.length < n) {
+    var b = crypto.getRandomValues(new Uint8Array(n * 2));
+    for (var i = 0; i < b.length && out.length < n; i++) if (b[i] < 252) out += (b[i] % 36).toString(36);
+  }
   return out;
 }
 // A background write that fails is logged as one structured line, never dropped silently.

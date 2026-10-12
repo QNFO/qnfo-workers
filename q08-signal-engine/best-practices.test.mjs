@@ -61,7 +61,7 @@ ok((await post({})).status === 401, "a missing header answers 401");
 // 4. ids come from crypto, not Math.random
 const src = readFileSync(join(here, "worker.js"), "utf8");
 ok(!/Math\.random\(\)\.toString\(36\)/.test(src), "no row id or slug salt is built from Math.random().toString(36)");
-ok(/crypto\.getRandomValues\(new Uint8Array\(n\)\)/.test(src), "rnd36 draws from crypto.getRandomValues");
+ok(/crypto\.getRandomValues\(new Uint8Array\(n \* 2\)\)/.test(src) && /< 252/.test(src), "rnd36 draws from crypto.getRandomValues with rejection sampling (no modulo bias)");
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);
