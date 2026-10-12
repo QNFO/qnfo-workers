@@ -10,6 +10,9 @@ WHAT  1. Reads qnfo-audit.v_loop_breaker_signatures (2026-10-09-06): an error si
 WHY   An agent_issues insert from a fleet_tick trigger nests the issue triggers past D1's 10 levels (D1-TRIGGER-DEPTH-1);
       the runner writes at depth 0. Deterministic: no model call.
 RUNS  A step of remediation-consumer.yml (hourly). Never fails the job.
+      3. WORKERS-BP-AUDIT-D1-1 (2026-10-12): runs scripts/fleet_best_practices_audit.py's D1 half (findings table, run row, metric
+         workers_bp_findings_open, one WORKERS-BP-DEBT-1: <worker> issue per worker with fail-class debt, each with a code-task line
+         and a d1-query probe that closes it when the worker is clean).
 """
 import json
 import os
@@ -110,6 +113,14 @@ def main(d1=None):
         out["doctrine_audit"] = doctrine_audit(d1)
     except Exception as e:  # noqa: BLE001
         out["doctrine_audit"] = "failed: " + str(e)[:200]
+    # WORKERS-BP-AUDIT-D1-1 (2026-10-12, agent_issues 2348 "the audit script does not report to D1"): the whole-tree Workers
+    # best-practices audit writes its findings, run row and metric and files one WORKERS-BP-DEBT-1 issue per worker from this
+    # same depth-0 step. Never fails the job: run_d1 catches everything and reports it in its own key.
+    try:
+        import fleet_best_practices_audit as BP  # noqa: E402
+        out["workers_bp_audit"] = BP.run_d1(d1)
+    except Exception as e:  # noqa: BLE001
+        out["workers_bp_audit"] = "failed: " + str(e)[:200]
     print(json.dumps(out))
     return 0
 
@@ -119,8 +130,11 @@ def selftest():
     c = sqlite3.connect(":memory:")
     c.executescript("""
 CREATE TABLE agent_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, source TEXT, category TEXT, priority TEXT, status TEXT, created_at INTEGER, updated_at INTEGER);
-CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, verify_probe TEXT, verify_transport TEXT, status TEXT);
-CREATE TRIGGER birth AFTER INSERT ON agent_issues BEGIN INSERT INTO remediation_contracts VALUES ('issue-' || NEW.id, 'needs', 'd1-query', 'needs-machine-probe'); END;
+CREATE TABLE remediation_contracts (class TEXT PRIMARY KEY, verify_probe TEXT, verify_transport TEXT, status TEXT, issue_id INTEGER);
+CREATE TRIGGER birth AFTER INSERT ON agent_issues BEGIN INSERT INTO remediation_contracts VALUES ('issue-' || NEW.id, 'needs', 'd1-query', 'needs-machine-probe', NEW.id); END;
+CREATE TABLE workers_bp_findings (worker TEXT, check_name TEXT, severity TEXT, file TEXT, line INTEGER, line_text TEXT, why TEXT, run_at TEXT);
+CREATE TABLE workers_bp_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, run_at TEXT, sha TEXT, workers INTEGER, fail_count INTEGER, advisory_count INTEGER, cron_triggers INTEGER);
+CREATE TABLE metric_registry (metric TEXT PRIMARY KEY, last_value TEXT, last_refreshed TEXT, state TEXT);
 CREATE TABLE sigs (src TEXT, producer TEXT, sig TEXT, n INTEGER, last_ts TEXT, example TEXT);
 CREATE VIEW v_loop_breaker_signatures AS SELECT * FROM sigs;
 CREATE TABLE card (silent_drops INTEGER, issues_unaccounted INTEGER, failure_modes_unprobed_pct INTEGER);
@@ -136,10 +150,15 @@ INSERT INTO card VALUES (0, 3, 90);
         return [dict(zip(cols, r)) for r in cur.fetchall()]
 
     assert main(d1) == 0 and main(d1) == 0
-    titles = [r[0] for r in c.execute("SELECT title FROM agent_issues ORDER BY id")]
+    all_titles = [r[0] for r in c.execute("SELECT title FROM agent_issues ORDER BY id")]
+    titles = [t for t in all_titles if not t.startswith("WORKERS-BP-DEBT-1: ")]
     assert titles == ["LOOP-BREAKER-1: qnfo-research-exec: slot : D_ERROR: no such column: legacy_flag", "DOCTRINE-AUDIT-" + time.strftime("%G-W%V", time.gmtime())], titles
-    probes = dict(c.execute("SELECT class, verify_probe FROM remediation_contracts"))
+    # WORKERS-BP-AUDIT-D1-1: the same step scans the live tree (here: this repository) and writes a run row; debt issues, if any, are per worker.
+    assert c.execute("SELECT COUNT(*) FROM workers_bp_runs").fetchone()[0] >= 1, "the audit wrote no run row"
+    probes = dict(c.execute("SELECT class, verify_probe FROM remediation_contracts WHERE class IN ('issue-1', 'issue-2')"))
     assert all(p.startswith("SELECT '1' AS expected") for p in probes.values()), probes
+    for p in c.execute("SELECT verify_probe FROM remediation_contracts WHERE class NOT IN ('issue-1', 'issue-2')"):
+        assert "workers_bp_findings WHERE worker = " in p[0] and "'no-run'" in p[0], p  # the debt issues' probes read the findings table and need a fresh run
     assert d1(probes["issue-1"])[0]["observed"] == "0"
     c.execute("UPDATE sigs SET last_ts = '2020-01-01T00:00:00Z'")
     assert d1(probes["issue-1"])[0]["observed"] == "1"
