@@ -1,4 +1,4 @@
-var VERSION="3.14.4-sync-ct"; /* 3.14.4 WORKERS-BEST-PRACTICES-1: handleSync checks X-Sync-Token with syncTokenOk (constant-time, fails closed when SYNC_TOKEN is unset), as /query already does, instead of !==. 3.14.3 NOZ-DOI-1: paper pages, /api/paper-context and the ask context drop retired-deposit DOIs from body lines and the retired tag from version labels at emit time (line-local). 3.14.2 NOZ-DOI-1: open-data JSON (/api/papers, /api/papers/<slug>) drops retired-deposit DOIs and host names from abstract and abstract_markdown and the retired tag from version strings. 3.14.1 NOZ-DOI-1 display-time safety net: titles and abstracts still carrying a retired-deposit DOI or host name are cleaned when rendered; plain math text reads \\mathrm{NA}, \\tfrac12 and \\, properly. 3.14.0 NOZ-DOI-1 + MD-INLINE-1 (2026-10-10, pillar reach): no DOI of the retired deposit service is shown, linked, put in citation_doi, JSON-LD, DataCite, OAI or API records, or fetched for a PDF (lpDoi drops that prefix; third-party DOIs pass); selected works and QWAV links point at papers.qnfo.org; paper titles are read as inline Markdown with math (italics, code, TeX) in every list and the paper page, abstract previews use the same reader, and titles and abstracts in <title>, og, twitter, citation_title, JSON-LD, RSS, OAI and the API are plain text; currency stays literal. 3.13.0 ASK-GROUND-1 (2026-10-10, pillar core, owner directive: answers verifiable against supplied text, fail closed): POST /api/ask returns 400 no_source without a slug and 404 no_source for an unknown or unpublished slug and makes no model call (it used to send an empty paper and answer from memory); it supplies up to 36000 characters of the paper (was 6000) and says when the text is cut; the prompt is process-only (answer only from the paper text, name what it does not cover) and every sentence of the answer carrying a DOI, link, author citation or figure absent from the paper text is removed. Tests: ask-ground.test.mjs. 3.12.0 OPEN-DATA-1 (2026-10-09, pillar reach): OAI-PMH 2.0 at /oai, open JSON API (/api/papers, /api/papers/<slug>, /feed.json), /openapi.json, and deleted DOIs (410 Gone, no DataCite record) are no longer shown, cited or exported as live. 3.11.3 MATH-RESIDUE-3 (3.11.2 + script-l, emphasis, sign, comma subscripts, link parentheses) (2026-10-06, agent_issues 2023, pillar reach): the typesetter catches three shapes the 22 real render defects left: a word opening with "(" whose script follows its closer ("(p/p_th)^(d/2)", "(\u22121)^{2s}", "(p+1)p^{n\u22121}") keeps the "(", script-l is a subscript base ("\\u2113_P"), an emphasis opened before a word and closed inside it stays emphasis, sign and sgn are functions, a comma subscript with no space ("t_Q,total") is one subscript, a link target may hold balanced parentheses, a run takes back its first word's "(" when that balances it ("(1 - p^{-s})^{-1}"), and a unit power ("1 dm^3") is math; Latin h-bar converts to \\hbar inside a run but never anchors one. scripts/math-corpus-check.mjs over 469 pages: defect pages 22 -> 12, 0 KaTeX failures, 0 prose words lost, visible raw "*" 156 -> 140, raw x_y 2847 -> 2805. 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
+var VERSION="3.16.0-activitypub"; /* 3.16.0 ACTIVITYPUB-WEBFINGER-1: WebFinger, a read-only Service actor and outbox on papers.qnfo.org, gated on the AP_PUBLIC_KEY secret (404/503 until it exists); the inbox answers 501. 3.14.4 WORKERS-BEST-PRACTICES-1: handleSync checks X-Sync-Token with syncTokenOk (constant-time, fails closed when SYNC_TOKEN is unset), as /query already does, instead of !==. 3.14.3 NOZ-DOI-1: paper pages, /api/paper-context and the ask context drop retired-deposit DOIs from body lines and the retired tag from version labels at emit time (line-local). 3.14.2 NOZ-DOI-1: open-data JSON (/api/papers, /api/papers/<slug>) drops retired-deposit DOIs and host names from abstract and abstract_markdown and the retired tag from version strings. 3.14.1 NOZ-DOI-1 display-time safety net: titles and abstracts still carrying a retired-deposit DOI or host name are cleaned when rendered; plain math text reads \\mathrm{NA}, \\tfrac12 and \\, properly. 3.14.0 NOZ-DOI-1 + MD-INLINE-1 (2026-10-10, pillar reach): no DOI of the retired deposit service is shown, linked, put in citation_doi, JSON-LD, DataCite, OAI or API records, or fetched for a PDF (lpDoi drops that prefix; third-party DOIs pass); selected works and QWAV links point at papers.qnfo.org; paper titles are read as inline Markdown with math (italics, code, TeX) in every list and the paper page, abstract previews use the same reader, and titles and abstracts in <title>, og, twitter, citation_title, JSON-LD, RSS, OAI and the API are plain text; currency stays literal. 3.13.0 ASK-GROUND-1 (2026-10-10, pillar core, owner directive: answers verifiable against supplied text, fail closed): POST /api/ask returns 400 no_source without a slug and 404 no_source for an unknown or unpublished slug and makes no model call (it used to send an empty paper and answer from memory); it supplies up to 36000 characters of the paper (was 6000) and says when the text is cut; the prompt is process-only (answer only from the paper text, name what it does not cover) and every sentence of the answer carrying a DOI, link, author citation or figure absent from the paper text is removed. Tests: ask-ground.test.mjs. 3.12.0 OPEN-DATA-1 (2026-10-09, pillar reach): OAI-PMH 2.0 at /oai, open JSON API (/api/papers, /api/papers/<slug>, /feed.json), /openapi.json, and deleted DOIs (410 Gone, no DataCite record) are no longer shown, cited or exported as live. 3.11.3 MATH-RESIDUE-3 (3.11.2 + script-l, emphasis, sign, comma subscripts, link parentheses) (2026-10-06, agent_issues 2023, pillar reach): the typesetter catches three shapes the 22 real render defects left: a word opening with "(" whose script follows its closer ("(p/p_th)^(d/2)", "(\u22121)^{2s}", "(p+1)p^{n\u22121}") keeps the "(", script-l is a subscript base ("\\u2113_P"), an emphasis opened before a word and closed inside it stays emphasis, sign and sgn are functions, a comma subscript with no space ("t_Q,total") is one subscript, a link target may hold balanced parentheses, a run takes back its first word's "(" when that balances it ("(1 - p^{-s})^{-1}"), and a unit power ("1 dm^3") is math; Latin h-bar converts to \\hbar inside a run but never anchors one. scripts/math-corpus-check.mjs over 469 pages: defect pages 22 -> 12, 0 KaTeX failures, 0 prose words lost, visible raw "*" 156 -> 140, raw x_y 2847 -> 2805. 3.11.1 RENDER-HEALTH-PRECISION-1 (2026-10-06, agent_issues 2023, pillar reach): renderDefectCount stops counting four false-positive classes measured on the 68 flagged pages (correct Unicode sub- and superscripts, an escaped \$ shifting the $ pairing, URLs, one-letter stems with word subscripts such as t_gate); real raw math still counts. Replayed on the 68 live articles: 22 remain flagged, all real. 3.11.0 LEGAL-URL-1 + LEGAL-VERSIONS-1 (2026-10-06, pillar research): qnfo.org/legal/license, the address the license names for itself, answered 404 and now redirects to legal.qnfo.org; legal.qnfo.org serves the newest QNFO-ULA version posted on QNFO/license (v2.1 adds Software Terms) and each version at /v<x.y>; footer labels no longer hard-code v2.0. */
 // UTM-CLICK-LEDGER-1 (3.10.0, 2026-10-06, transformation lever T7.9, pillar reach): a GET for an HTML page that carries
 // utm_source is counted into qnfo-graph utm_clicks (day, host, path, source, medium, campaign, bot/human, country; no cookie,
 // no IP), so a post or digest joins to the visits it caused; qnfo-fleet-dashboard reads it into reach_signals source utm.
@@ -2772,6 +2772,64 @@ function dataciteOf(r, p) {
     formats: ["text/html"]
   };
 }
+// ACTIVITYPUB-WEBFINGER-1 (3.16.0, 2026-10-12, pillar reach, agent_issues 2249): WebFinger discovery, a Service actor and a
+// read-only outbox for papers.qnfo.org, so a fediverse client can find @papers@papers.qnfo.org and read new papers. The
+// signing key is two Worker secrets (AP_PRIVATE_KEY, AP_PUBLIC_KEY) made by cf-ops-actions gen-activitypub-key; until they
+// exist discovery answers 404 and the actor 503 (nothing half-advertised). The inbox answers 501: accepting a Follow needs
+// HTTP-signature verification, a signed Accept and a followers table (next step, filed as an issue), so no account can
+// follow yet and no followers are stored. Content negotiation sends Vary: Accept.
+var AP_BASE = "https://papers.qnfo.org";
+var AP_ACTOR = AP_BASE + "/ap/actor";
+var AP_HANDLE = "papers@papers.qnfo.org";
+function apJson(data, status, ct) {
+  return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": ct || "application/activity+json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Vary": "Accept", "Cache-Control": "public, max-age=300" } });
+}
+function apWantsJson(request) {
+  const a = (request.headers.get("Accept") || "").toLowerCase();
+  return a.indexOf("activity+json") >= 0 || a.indexOf("ld+json") >= 0 || a.indexOf("application/json") >= 0;
+}
+function apActorDoc(env) {
+  return {
+    "@context": ["https://www.w3.org/ns/activitystreams", "https://w3id.org/security/v1"],
+    id: AP_ACTOR, type: "Service", preferredUsername: "papers", name: "QNFO Papers",
+    summary: "New and updated papers from QNFO, an open research programme. Read-only: this account does not follow anyone and does not reply.",
+    url: AP_BASE + "/papers", inbox: AP_BASE + "/ap/inbox", outbox: AP_BASE + "/ap/outbox", followers: AP_BASE + "/ap/followers",
+    manuallyApprovesFollowers: true, discoverable: true,
+    publicKey: { id: AP_ACTOR + "#main-key", owner: AP_ACTOR, publicKeyPem: String(env.AP_PUBLIC_KEY || "") }
+  };
+}
+async function handleActivityPub(request, env, p) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Access-Control-Max-Age": "86400" } });
+  const u = new URL(request.url);
+  if (p === "/ap/inbox") {
+    if (request.method === "POST") return apJson({ error: "inbox_not_implemented", detail: "this actor is read-only; follow requests are not accepted yet" }, 501, "application/json; charset=utf-8");
+    return apJson({ error: "method_not_allowed" }, 405, "application/json; charset=utf-8");
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  if (!env.AP_PUBLIC_KEY) return p === "/.well-known/webfinger" ? new Response("Not found", { status: 404, headers: { "Access-Control-Allow-Origin": "*" } }) : apJson({ error: "signing key not provisioned" }, 503, "application/json; charset=utf-8");
+  if (p === "/.well-known/webfinger") {
+    const res = (u.searchParams.get("resource") || "").trim();
+    const want = res.toLowerCase().replace(/^acct:/, "").replace(/^@/, "");
+    if (want !== AP_HANDLE && res !== AP_ACTOR) return new Response(JSON.stringify({ error: "unknown resource" }), { status: 404, headers: { "Content-Type": "application/jrd+json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+    return apJson({ subject: "acct:" + AP_HANDLE, aliases: [AP_ACTOR, AP_BASE + "/papers"], links: [
+      { rel: "self", type: "application/activity+json", href: AP_ACTOR },
+      { rel: "http://webfinger.net/rel/profile-page", type: "text/html", href: AP_BASE + "/papers" }] }, 200, "application/jrd+json; charset=utf-8");
+  }
+  if (p === "/ap/actor") {
+    if (!apWantsJson(request)) return new Response(null, { status: 303, headers: { Location: AP_BASE + "/papers", "Vary": "Accept" } });
+    return apJson(apActorDoc(env));
+  }
+  if (p === "/ap/followers") return apJson({ "@context": "https://www.w3.org/ns/activitystreams", id: AP_BASE + "/ap/followers", type: "OrderedCollection", totalItems: 0, orderedItems: [] });
+  if (p === "/ap/outbox") {
+    const total = (await env.LIVING_PAPER.prepare("SELECT COUNT(*) n FROM papers WHERE " + OPEN_WHERE).first()).n;
+    if (u.searchParams.get("page") !== "1") return apJson({ "@context": "https://www.w3.org/ns/activitystreams", id: AP_BASE + "/ap/outbox", type: "OrderedCollection", totalItems: total, first: AP_BASE + "/ap/outbox?page=1" });
+    const rows = (await env.LIVING_PAPER.prepare("SELECT " + OPEN_COLS + " FROM papers WHERE " + OPEN_WHERE + " ORDER BY created_at DESC, slug LIMIT ? OFFSET ?").bind(20, 0).all()).results || [];
+    const items = rows.map(openRecord).map((r) => ({ id: r.url + "#create", type: "Create", actor: AP_ACTOR, published: r.date + "T00:00:00Z", to: ["https://www.w3.org/ns/activitystreams#Public"],
+      object: { id: r.url, type: "Article", name: r.title, url: r.url, attributedTo: AP_ACTOR, published: r.date + "T00:00:00Z", summary: r.abstract.slice(0, 500), to: ["https://www.w3.org/ns/activitystreams#Public"] } }));
+    return apJson({ "@context": "https://www.w3.org/ns/activitystreams", id: AP_BASE + "/ap/outbox?page=1", type: "OrderedCollectionPage", partOf: AP_BASE + "/ap/outbox", orderedItems: items });
+  }
+  return null;
+}
 async function handleOpenData(request, env, p) {
   const u = new URL(request.url);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS", "Access-Control-Max-Age": "86400" } });
@@ -4039,6 +4097,10 @@ var gateway_worker_default = {
       if (p === "/oai" || p === "/openapi.json" || p === "/feed.json" || p.indexOf("/api/papers") === 0 && p !== "/api/paper-context") {
         const od = await handleOpenData(request, env, p);
         if (od) return od;
+      }
+      if (p === "/.well-known/webfinger" || p.indexOf("/ap/") === 0) {
+        const apr = await handleActivityPub(request, env, p);
+        if (apr) return apr;
       }
       if (p === "/api/ask" && method === "POST") return handleAskAI(request, env);
       if (p === "/api/subscribe" && method === "POST") return handleSubscribeProxy(request, env);
