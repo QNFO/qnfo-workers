@@ -1,18 +1,26 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@7320bd9a39d4",
- "due": 1,
- "pass": 0,
+ "verifier": "remediation-consumer@63056bdc5f2e",
+ "due": 2,
+ "pass": 1,
  "fail": 1,
  "skipped": 0,
  "contracts": [
   {
-   "class": "issue-2417",
-   "issue_id": 2417,
+   "class": "issue-2361",
+   "issue_id": 2361,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "missing-marker:scripts/host_census.py",
+   "observed": "status=200",
+   "written": true
+  },
+  {
+   "class": "issue-2232",
+   "issue_id": 2232,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
    "written": true
   }
  ],
@@ -39,13 +47,14 @@
   "http",
   "runner-https"
  ],
+ "https": 1,
  "budget_exhausted": false,
- "runtime_verified_share_24h": 5.5,
+ "runtime_verified_share_24h": 5.6,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 8450,
- "head": "7320bd9a39d4c94ad16c1d7ddb27d0a9f991775e",
+ "spent_ms": 8409,
+ "head": "63056bdc5f2e7b985053fdf90d622989726bb58f",
  "job_status": "success",
- "ts": "2026-10-12T11:56:58Z"
+ "ts": "2026-10-12T11:58:53Z"
 }
