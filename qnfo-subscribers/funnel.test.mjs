@@ -66,7 +66,7 @@ const post = (env, body, extra) => call(env, "/subscribe", { method: "POST", hea
   ok(r.status === 200 && j.ok && j.pending && j.confirmation_sent, "an accepted sign-up answers ok with a mail sent", j);
   ok(t.sends.length === 1 && t.sends[0].to === "reader@example.edu", "one confirmation mail", t.sends.length);
   ok(t.counts["submit|papers"] === 1 && t.counts["confirm_mail_sent|papers"] === 1, "submit and mail are counted by source", t.counts);
-  ok(!JSON.stringify(t.counts).includes("example.edu") && !JSON.stringify(t.counts).includes("203.0.113"), "the counter holds no address and no IP");
+  ok(!/@|example|203\.0\.113/.test(JSON.stringify(t.counts)), "the counter holds no address and no IP");
   // the same address again within the hour: no second mail
   const r2 = await post(t.env, { email: "reader@example.edu", source: "papers" });
   const j2 = await r2.json();

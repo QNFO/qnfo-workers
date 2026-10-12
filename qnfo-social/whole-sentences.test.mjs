@@ -33,7 +33,7 @@ assert.ok(hp.length > 1 && hp.every((p) => len(p) <= 100) && hp.join(' ') === on
 // ---- fitWhole: drop whole trailing sentences, keep the link ----
 const body = 'Alpha is the first point. Beta is the second point. Gamma is the third point.\nhttps://papers.qnfo.org/papers/x';
 const fw = mod.fitWhole(body, 75);
-assert.ok(fw !== null && len(fw) <= 75 && fw.includes('https://papers.qnfo.org/papers/x')); ok('fitWhole keeps the link');
+assert.ok(fw !== null && len(fw) <= 75 && fw.split('\n').pop() === 'https://papers.qnfo.org/papers/x'); ok('fitWhole keeps the link');
 assert.ok(fw.startsWith('Alpha is the first point.') && !fw.includes('…') && !fw.includes('Gamma')); ok('fitWhole drops a whole trailing sentence, no ellipsis');
 assert.equal(mod.fitWhole('One single sentence that is far too long for the tiny limit it is given.', 20), null); ok('fitWhole returns null when one sentence cannot fit');
 
@@ -51,7 +51,7 @@ assert.ok(mod.SUBSCRIBE_LINE.endsWith('https://qnfo.org/#subscribe')); ok('subsc
 assert.equal(mod.utmTag('https://qnfo.org/#subscribe', 'linkedin', 'slug'), 'https://qnfo.org/?utm_source=linkedin&utm_medium=social&utm_campaign=slug#subscribe'); ok('the form link keeps its fragment when tagged');
 const many = Array.from({ length: 30 }, (_, i) => 'Paragraph ' + (i + 1) + ' carries one complete sentence of the thread for the long channel.');
 const li = mod.channelText('linkedin', many, link, 'Title');
-assert.ok(len(li) <= 1300 && li.endsWith(mod.SUBSCRIBE_LINE) && li.includes(link) && !li.includes('…')); ok('LinkedIn text keeps link and offer and has no ellipsis cut');
+assert.ok(len(li) <= 1300 && li.endsWith(mod.SUBSCRIBE_LINE) && li.split(/\s+/).some((w) => w === link) && !li.includes('…')); ok('LinkedIn text keeps link and offer and has no ellipsis cut');
 
 // ---- threadPlan and postThread: the root keeps the link, the rest follows as replies ----
 const plan = mod.threadPlan([long], link, 290);
