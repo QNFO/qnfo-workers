@@ -1,5 +1,5 @@
 var __defProp = Object.defineProperty;
-var VERSION = "3.16.0-ipatent-ground"; // 3.16.0 IPATENT-GROUND-1 (2026-10-10, pillar core, owner directive: drafts state only what the inventor supplied, no example nouns in prompts, fail closed): the disclosure prompt takes its Background only from the inventor\'s text and labels any statement about existing approaches as unverified; the retrieved example disclosures are reduced to section headings (no titles, fields or text); the inventor declaration is a fixed text with no statement of novelty; the claim list no longer forces categories the description does not support; after drafting, a Background sentence the description does not support is removed, a sentence or claim reciting a figure, DOI, link or citation the inventor did not give is removed (a claim takes its dependents with it) and every removal is listed under SUPPORT GAPS. Tests: ground.test.mjs. // 3.15.0 AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): a human GET / without a v parameter is assigned once to arm 1 (default page) or arm 2 (302 to ?v=2) by the cookie ipatent_ab (arm number only, 30 days; share = qnfo-audit ops_config ipatent_v2_share, cached 5 min, "0" turns it off without a deploy; env IPATENT_V2_SHARE overrides), so both variants get human traffic and step 2 can compare drafts per visit; crawlers, HEAD and an explicit ?v= are unchanged. 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
+var VERSION = "3.17.0-ipatent-marquee"; // 3.17.0 IPATENT-UI-OVERHAUL-1 step 3 and IPATENT-COST-PER-DRAFT-1 (2026-10-12, agent_issues 2049, 2055, 1903, 1779; pillars reach and cost; owner: the page must read as a serious one-stop tool for individual inventors, built on what the invention is, what it does and how it works): the drafting page is redesigned for both variants (one HTML, every id, route and function kept): a drawing-sheet system (Archivo for the interface, Source Serif 4 for the document, one action colour, green/amber/red only for support states), a figure of what happens to a description, the description prompt split into what it is / what it does / how it works, the step rail beside the form and result on wide screens and a sticky strip on phones, samples moved behind a disclosure, a limits section (not legal advice, files nothing, no prior-art search, does not supply the invention), a guide index, a skip link, labelled status regions and sentence-case text; /guide, /guide/* and /example take the same tokens. New: GET /api/cost serves the measured model cost per completed draft from qnfo-audit ai_call_counters (neurons, tokens, USD at the published neuron rate; no price is set), every mechanism-card model call is metered as purpose mechanism and every completed draft as purpose draft-done. Standards: the admin token is compared in constant time and the benchmark source probe reads a bounded body. Tests: landing.test.mjs, cost.test.mjs. // 3.16.0 IPATENT-GROUND-1 (2026-10-10, pillar core, owner directive: drafts state only what the inventor supplied, no example nouns in prompts, fail closed): the disclosure prompt takes its Background only from the inventor\'s text and labels any statement about existing approaches as unverified; the retrieved example disclosures are reduced to section headings (no titles, fields or text); the inventor declaration is a fixed text with no statement of novelty; the claim list no longer forces categories the description does not support; after drafting, a Background sentence the description does not support is removed, a sentence or claim reciting a figure, DOI, link or citation the inventor did not give is removed (a claim takes its dependents with it) and every removal is listed under SUPPORT GAPS. Tests: ground.test.mjs. // 3.15.0 AB-SPLIT-V2-1 (IPATENT-UI-OVERHAUL-1 step 2, agent_issues 2049, 2026-10-09, pillar reach): a human GET / without a v parameter is assigned once to arm 1 (default page) or arm 2 (302 to ?v=2) by the cookie ipatent_ab (arm number only, 30 days; share = qnfo-audit ops_config ipatent_v2_share, cached 5 min, "0" turns it off without a deploy; env IPATENT_V2_SHARE overrides), so both variants get human traffic and step 2 can compare drafts per visit; crawlers, HEAD and an explicit ?v= are unchanged. 3.14.0 GUIDED-FLOW-1 (IPATENT-UI-OVERHAUL-1 step 1, agent_issues 2049, 2026-10-08, pillar reach): the ?v=2 variant is a guided flow: a step rail (describe, mechanism, draft, support map, fix gaps, file), the support map as the centrepiece with a supported/partly/missing bar, a fix-gaps step whose answers are added to the description for a redraft, and a filing step with the 12-month nonprovisional/PCT date (weekend roll, grace-period check) and an .ics reminder. The default page is unchanged; v=2 views count as /?v=2 and v=2 drafts as draft-v2 so step 2 can compare the variants. // 3.13.0 IPATENT-DRAFT-METERING-1 (2026-10-07, agent_issues 2055 and 1903, pillar cost): every draft model call (success or error) is metered into qnfo-audit ai_call_counters (worker qnfo-ipatent, purpose draft, model, calls, errors, in_chars, ms, tokens and neurons when the binding reports usage) through the AUDIT binding, fail-soft; built by code task ct_i0b4q32jxbvia7 and reviewed by session_013sMN4 before landing. 3.12.1 BUDGET-SOFT-ROUTE-1 (2026-10-06, pillar cost): the benchmark note no longer says model steps wait on a breached cap; a cap selects the cheapest capable model. /* 3.12.0 MECHANISM-FIRST-1 UI: ?v=2 shows the mechanism card step between describe and draft (read, correct, holes in red) and drafts with the card; the default page is unchanged; 3.11.1 a distinction with no nearest known approach is a hole (live check 2026-10-06: a PCM cooling tile named the PCM itself as the distinction); 3.11.0 MECHANISM-FIRST-1 (#2053): POST /api/mechanism reads a mechanism card (what it is, what it does, how it works, the distinction, nearest known, operating window) and /api/draft derives claims from a supplied card; every draft gets the means-not-law, structure-for-function and enabled-range rules; 3.10.1: benchmark text decodes HTML entities in one pass, so "&amp;lt;" stays the literal "&lt;" in stored claims (CodeQL js/double-escaping alerts 335/336 on PR 627); 3.10.0 BENCH-DATASET-1 (#1779 step 1): GET/POST /api/benchmark/dataset builds the 30-patent benchmark sample (CPC G06N, A61B, H01M; granted 2025-H1; direct claim to a US provisional within 366 days) from the keyless USPTO Patent Public Search API, one field per POST with paced reads, stored once in R2 benchmark/dataset.json; no model calls; 3.9.7: the benchmark source probes return fixed error strings and log the exception (CodeQL js/stack-trace-exposure on PR 624) */ // Worker Contract v1: VERSION constant == /health version
 
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -37,7 +37,29 @@ async function hashIp(ip) {
 __name(hashIp, "hashIp");
 function adminOk(request, env) {
   const t = env.IPATENT_ADMIN_TOKEN;
-  return !!t && request.headers.get("X-Admin-Token") === t;
+  return !!t && safeEqual(request.headers.get("X-Admin-Token") || "", String(t));
+}
+// Constant-time string comparison (both sides are hashed first, so neither length nor content leaks through timing).
+function safeEqual(a, b) {
+  const enc = new TextEncoder(), x = enc.encode(String(a)), y = enc.encode(String(b));
+  let diff = x.length ^ y.length;
+  const n = Math.max(x.length, y.length);
+  for (let i = 0; i < n; i++) diff |= (x[i % (x.length || 1)] || 0) ^ (y[i % (y.length || 1)] || 0);
+  return diff === 0;
+}
+// A response body read as text, stopped at max bytes (an external page is never buffered without a bound).
+async function readTextCapped(resp, max) {
+  if (!resp || !resp.body || !resp.body.getReader) return String(await resp.text()).slice(0, max);
+  const reader = resp.body.getReader(), dec = new TextDecoder();
+  let out = "", got = 0;
+  for (;;) {
+    const step = await reader.read();
+    if (step.done) break;
+    got += step.value.byteLength;
+    out += dec.decode(step.value, { stream: true });
+    if (got >= max) { try { await reader.cancel(); } catch (e) {} break; }
+  }
+  return out + dec.decode();
 }
 __name(adminOk, "adminOk");
 // PAGE-METRICS-1 (3.5.1): iPatent had no pageview measurement at all (no beacon; the D1 analytics table stopped on
@@ -438,7 +460,7 @@ __name(searchDisclosures, "searchDisclosures");
 __name2(searchDisclosures, "searchDisclosures");
 __name22(searchDisclosures, "searchDisclosures");
 __name222(searchDisclosures, "searchDisclosures");
-async function upsertDraftAudit(env, model, inChars, ms, err, result) {
+async function upsertDraftAudit(env, model, inChars, ms, err, result, purpose) {
   if (!env.AUDIT) return;
   try {
     const day = new Date().toISOString().slice(0, 10);
@@ -457,7 +479,7 @@ async function upsertDraftAudit(env, model, inChars, ms, err, result) {
          in_tok = in_tok + excluded.in_tok,
          out_tok = out_tok + excluded.out_tok,
          neurons = neurons + excluded.neurons`
-    ).bind(day, "qnfo-ipatent", "draft", model, 1, err ? 1 : 0, inChars, ms, inTok, outTok, neurons).run();
+    ).bind(day, "qnfo-ipatent", purpose || "draft", model, 1, err ? 1 : 0, inChars, ms, inTok, outTok, neurons).run();
   } catch (e) {
     console.error("Draft audit upsert failed:", e?.message || e);
   }
@@ -686,6 +708,8 @@ IMPORTANT:
     }
   }
   if (!text) { const e = new Error(`All models failed. Last error: ${lastError}`); e.attempts = attempts; throw e; }
+  // IPATENT-COST-PER-DRAFT-1: one row per completed draft (no model, no tokens; ms is the whole drafting time), the denominator of /api/cost.
+  await upsertDraftAudit(env, COST_DONE_MODEL, 0, Date.now() - t0, null, null, "draft-done");
   const parsed = parseDisclosureSections(text);
   Object.defineProperty(parsed, "__attempts", { value: attempts, enumerable: false });
   // IPATENT-GROUND-1: check the draft against the inventor's own text before anyone sees it.
@@ -914,10 +938,12 @@ async function handleMechanism(request, env, ctx) {
       var deadline = new Promise(function (_, rej) { timer = setTimeout(function () { rej(new Error("deadline")); }, Math.min(MECH_ATTEMPT_MS, left)); });
       var result;
       try { result = await Promise.race([env.AI.run(model, opts), deadline]); } finally { clearTimeout(timer); }
+      await upsertDraftAudit(env, model, prompt.length, Date.now() - ta, null, result, "mechanism");
       var text = typeof result === "string" ? result : (result && (result.response || (result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content))) || "";
       card = parseMechanism(text);
       attempts.push({ model: model, ms: Date.now() - ta, outcome: card ? "ok" : "unparseable" });
     } catch (err) {
+      await upsertDraftAudit(env, model, prompt.length, Date.now() - ta, err, null, "mechanism");
       attempts.push({ model: model, ms: Date.now() - ta, outcome: "error: " + String(err && err.message || err).slice(0, 120) });
     }
   }
@@ -1067,6 +1093,43 @@ __name(handleSubmission, "handleSubmission");
 __name2(handleSubmission, "handleSubmission");
 __name22(handleSubmission, "handleSubmission");
 __name222(handleSubmission, "handleSubmission");
+// IPATENT-COST-PER-DRAFT-1 (agent_issues 1903, 2055): the measured model cost of a draft, from the metering ledger.
+// Aggregates only (no text, no address). It reports cost; it sets no price: pricing is the owner's commercial decision.
+var COST_DONE_MODEL = "(completed draft)";
+var COST_NEURON_USD_PER_1000 = 0.011;
+var COST_PRICE_SOURCE = "https://developers.cloudflare.com/workers-ai/platform/pricing/";
+var COST_WINDOW_DAYS = 30;
+async function handleCost(env) {
+  const out = { ok: true, worker: "qnfo-ipatent", version: VERSION, window_days: COST_WINDOW_DAYS, neuron_usd_per_1000: COST_NEURON_USD_PER_1000, price_source: COST_PRICE_SOURCE,
+    note: "Measured Workers AI cost of drafting, from qnfo-audit ai_call_counters. Embedding calls are not metered. This is a cost, not a price.",
+    drafts_completed: 0, model_calls: 0, model_errors: 0, neurons: 0, usd: 0, cost_per_draft_usd: null, neurons_per_draft: null, seconds_per_draft: null, unmetered_calls: 0, by_purpose: [] };
+  if (!env || !env.AUDIT) { out.ok = false; out.error = "the metering ledger is not bound"; return json(out, 503); }
+  let rows;
+  try {
+    rows = (await env.AUDIT.prepare("SELECT purpose, model, SUM(calls) AS calls, SUM(errors) AS errors, SUM(in_chars) AS in_chars, SUM(ms) AS ms, SUM(in_tok) AS in_tok, SUM(out_tok) AS out_tok, SUM(neurons) AS neurons, MIN(day) AS first_day, MAX(day) AS last_day FROM ai_call_counters WHERE worker = 'qnfo-ipatent' AND day >= date('now', ?1) GROUP BY purpose, model ORDER BY purpose, model").bind("-" + (COST_WINDOW_DAYS - 1) + " days").all()).results || [];
+  } catch (e) {
+    console.error("cost read failed:", e && e.message || e);
+    out.ok = false; out.error = "the metering ledger could not be read"; return json(out, 503);
+  }
+  const usdOf = (n) => Math.round(n * COST_NEURON_USD_PER_1000 / 1000 * 1e6) / 1e6;
+  let doneMs = 0;
+  for (const r of rows) {
+    const calls = Number(r.calls) || 0, errors = Number(r.errors) || 0, neurons = Number(r.neurons) || 0;
+    if (r.purpose === "draft-done") { out.drafts_completed += calls; doneMs += Number(r.ms) || 0; if (!out.first_day || r.first_day < out.first_day) out.first_day = r.first_day; continue; }
+    out.model_calls += calls; out.model_errors += errors; out.neurons += neurons;
+    // A call that answered but reported no usage cannot be priced; it is counted so the total is read as a lower bound.
+    if (calls - errors > 0 && neurons === 0) out.unmetered_calls += calls - errors;
+    out.by_purpose.push({ purpose: r.purpose, model: r.model, calls, errors, in_tok: Number(r.in_tok) || 0, out_tok: Number(r.out_tok) || 0, in_chars: Number(r.in_chars) || 0, ms: Number(r.ms) || 0, neurons: Math.round(neurons * 100) / 100, usd: usdOf(neurons), first_day: r.first_day, last_day: r.last_day });
+  }
+  out.neurons = Math.round(out.neurons * 100) / 100;
+  out.usd = usdOf(out.neurons);
+  if (out.drafts_completed > 0) {
+    out.cost_per_draft_usd = Math.round(out.usd / out.drafts_completed * 1e6) / 1e6;
+    out.neurons_per_draft = Math.round(out.neurons / out.drafts_completed * 100) / 100;
+    out.seconds_per_draft = Math.round(doneMs / out.drafts_completed / 100) / 10;
+  }
+  return json(out);
+}
 async function handleStatus(env) {
   const [subCount, recent] = await Promise.all([
     env.IPATENT_DB.prepare("SELECT COUNT(*) as cnt FROM submissions").first(),
@@ -1233,7 +1296,7 @@ async function benchSourceProbe(request, ctx) {
   var out = { source: BENCH_PROBE_URL, checked_at: new Date().toISOString() };
   try {
     var r = await fetch(BENCH_PROBE_URL, { headers: { "User-Agent": "Mozilla/5.0 (compatible; QNFO-iPatent-benchmark/1.0; +https://ipatent.qnfo.org/)", "Accept": "text/html" } });
-    var h = await r.text();
+    var h = await readTextCapped(r, 3e6);
     out.status = r.status; out.bytes = h.length;
     out.claims_found = /class="claim"|itemprop="claims"/.test(h);
     out.provisional_ref_found = /[Pp]rovisional/.test(h);
@@ -1487,13 +1550,16 @@ function renderGuidePage(page) {
 <meta property="og:url" content="${url}"><meta property="og:image" content="${CANONICAL_ORIGIN}/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}<\/script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Source+Serif+4:opsz,wght@8..60,400..700&display=swap" rel="stylesheet">
 <style>
-  :root{--paper:#f6f3ea;--ink:#16181d;--ink-soft:#4a4d55;--green:#0e5c3f;--amber:#a97b1d;--line:#d8d2c2;--white:#fffdf8}
-  *{box-sizing:border-box} body{margin:0;font-family:Georgia,'Fraunces',serif;background:var(--paper);color:var(--ink);line-height:1.7}
-  .wrap{max-width:740px;margin:0 auto;padding:0 18px 60px} header{display:flex;justify-content:space-between;gap:10px;padding:20px 0;border-bottom:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:12px}
-  a{color:var(--green)} h1{font-size:clamp(28px,6vw,40px);line-height:1.12;margin:36px 0 12px} h2{font-size:22px;margin:34px 0 6px}
-  .lede{font-size:18px;color:var(--ink-soft)} li{margin:6px 0} .mono{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
-  .cta{display:inline-block;margin:10px 10px 0 0;background:var(--green);color:var(--white);text-decoration:none;padding:12px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em}
+  :root{--paper:#eef1f4;--ink:#131c28;--ink-soft:#4a5666;--green:#1d3fc4;--amber:#9a5b00;--line:#c9d1da;--white:#ffffff}
+  *{box-sizing:border-box} body{margin:0;font-family:'Source Serif 4',Georgia,'Times New Roman',serif;background:var(--paper);color:var(--ink);line-height:1.7}
+  .wrap{max-width:740px;margin:0 auto;padding:0 18px 60px} header{display:flex;justify-content:space-between;gap:10px;padding:20px 0;border-bottom:1px solid var(--line);font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px}
+  a{color:var(--green)} h1{font-family:'Archivo',system-ui,sans-serif;font-stretch:110%;letter-spacing:-.02em;font-size:clamp(28px,6vw,40px);line-height:1.1;margin:36px 0 12px} h2{font-size:22px;margin:34px 0 6px}
+  .lede{font-size:18px;color:var(--ink-soft)} li{margin:6px 0} .mono{font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;color:var(--ink-soft)}
+  .cta{display:inline-block;margin:10px 10px 0 0;background:var(--green);color:var(--white);text-decoration:none;padding:12px 18px;font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px}
   footer{border-top:1px solid var(--line);margin-top:48px;padding-top:16px}
 </style>
 </head>
@@ -1530,32 +1596,32 @@ var GUIDE_HTML = `<!DOCTYPE html>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Provisional patent applications: what they protect and how to draft one","url":"https://ipatent.qnfo.org/guide","dateModified":"2026-10-02","inLanguage":"en","author":{"@type":"Person","name":"Rowan Brad Quni-Gudzinas","sameAs":["https://orcid.org/0009-0002-4317-5604"]},"publisher":{"@type":"Organization","name":"QNFO","url":"https://qnfo.org"},"isPartOf":{"@type":"WebSite","name":"iPatent","url":"https://ipatent.qnfo.org/"}}<\/script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Source+Serif+4:opsz,wght@8..60,400..700&display=swap" rel="stylesheet">
 <style>
-  :root{--paper:#f6f3ea;--ink:#16181d;--ink-soft:#4a4d55;--green:#0e5c3f;--amber:#a97b1d;--line:#d8d2c2;--white:#fffdf8}
+  :root{--paper:#eef1f4;--ink:#131c28;--ink-soft:#4a5666;--green:#1d3fc4;--amber:#9a5b00;--line:#c9d1da;--white:#ffffff}
   *{box-sizing:border-box}
-  body{margin:0;font-family:'Fraunces',Georgia,serif;background:var(--paper);color:var(--ink);line-height:1.7;-webkit-font-smoothing:antialiased}
+  body{margin:0;font-family:'Source Serif 4',Georgia,'Times New Roman',serif;background:var(--paper);color:var(--ink);line-height:1.7;-webkit-font-smoothing:antialiased}
   .wrap{max-width:740px;margin:0 auto;padding:0 20px 60px}
-  header{display:flex;justify-content:space-between;align-items:center;padding:20px 0;border-bottom:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.06em}
+  header{display:flex;justify-content:space-between;align-items:center;padding:20px 0;border-bottom:1px solid var(--line);font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px}
   header a{color:var(--green);text-decoration:none;font-weight:600}
-  .kicker{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin:44px 0 12px}
-  h1{font-size:clamp(30px,6vw,46px);line-height:1.1;letter-spacing:-.02em;margin:0 0 18px;font-weight:600}
+  .kicker{font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:13.5px;color:var(--green);margin:44px 0 12px}
+  h1{font-family:'Archivo',system-ui,sans-serif;font-stretch:110%;font-size:clamp(30px,6vw,46px);line-height:1.08;letter-spacing:-.02em;margin:0 0 18px;font-weight:750}
   .lede{font-size:19px;color:var(--ink-soft)}
   h2{font-size:23px;margin:42px 0 8px;font-weight:600}
-  h2 .n{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--amber);margin-right:10px;vertical-align:middle}
+  h2 .n{font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;color:var(--amber);margin-right:10px;vertical-align:middle}
   p,li{font-size:16.5px}
   ul{padding-left:22px}
   li{margin:6px 0}
   a{color:var(--green)}
   .box{background:var(--white);border:1px solid var(--line);border-left:4px solid var(--green);padding:16px 20px;margin:22px 0}
   .box.warn{border-left-color:var(--amber)}
-  .box b{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--green)}
+  .box b{font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;color:var(--green)}
   .box.warn b{color:var(--amber)}
   table{width:100%;border-collapse:collapse;margin:14px 0;font-size:15px;background:var(--white)}
   th,td{border:1px solid var(--line);padding:8px 10px;text-align:left}
-  th{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--green)}
-  .cta{display:inline-block;margin-top:10px;background:var(--green);color:var(--white);text-decoration:none;padding:13px 20px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:600}
-  footer{border-top:1px solid var(--line);margin-top:56px;padding-top:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);line-height:1.7}
+  th{font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:13.5px;color:var(--green)}
+  .cta{display:inline-block;margin-top:10px;background:var(--green);color:var(--white);text-decoration:none;padding:13px 20px;font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;font-weight:600}
+  footer{border-top:1px solid var(--line);margin-top:56px;padding-top:20px;font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:13.5px;color:var(--ink-soft);line-height:1.7}
 </style>
 </head>
 <body>
@@ -1688,17 +1754,20 @@ function renderExamplePage() {
 <meta property="og:image" content="https://ipatent.qnfo.org/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"A real AI-drafted provisional patent, and what it got wrong","url":"https://ipatent.qnfo.org/example","dateModified":"2026-10-02","author":{"@type":"Person","name":"Rowan Brad Quni-Gudzinas","sameAs":["https://orcid.org/0009-0002-4317-5604"]},"publisher":{"@type":"Organization","name":"QNFO","url":"https://qnfo.org"}}<\/script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Source+Serif+4:opsz,wght@8..60,400..700&display=swap" rel="stylesheet">
 <style>
-  :root{--paper:#f6f3ea;--ink:#16181d;--ink-soft:#4a4d55;--green:#0e5c3f;--amber:#a97b1d;--line:#d8d2c2;--white:#fffdf8;--red:#9a2f2f}
-  *{box-sizing:border-box} body{margin:0;font-family:Georgia,'Fraunces',serif;background:var(--paper);color:var(--ink);line-height:1.7}
-  .wrap{max-width:780px;margin:0 auto;padding:0 18px 60px} header{display:flex;justify-content:space-between;padding:20px 0;border-bottom:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:12px}
-  header a,a{color:var(--green)} h1{font-size:clamp(28px,6vw,42px);line-height:1.12;margin:36px 0 12px} h2{font-size:22px;margin:36px 0 8px}
+  :root{--paper:#eef1f4;--ink:#131c28;--ink-soft:#4a5666;--green:#1d3fc4;--amber:#9a5b00;--line:#c9d1da;--white:#ffffff;--red:#9a2f2f}
+  *{box-sizing:border-box} body{margin:0;font-family:'Source Serif 4',Georgia,'Times New Roman',serif;background:var(--paper);color:var(--ink);line-height:1.7}
+  .wrap{max-width:780px;margin:0 auto;padding:0 18px 60px} header{display:flex;justify-content:space-between;padding:20px 0;border-bottom:1px solid var(--line);font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px}
+  header a,a{color:var(--green)} h1{font-family:'Archivo',system-ui,sans-serif;font-stretch:110%;letter-spacing:-.02em;font-size:clamp(28px,6vw,42px);line-height:1.1;margin:36px 0 12px} h2{font-size:22px;margin:36px 0 8px}
   .lede{font-size:18px;color:var(--ink-soft)} .box{background:var(--white);border:1px solid var(--line);padding:14px 18px;margin:16px 0}
-  .warn{border-left:4px solid var(--red)} .mono{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
-  .para,.claim{margin:0 0 10px;white-space:pre-wrap;overflow-wrap:anywhere} td{overflow-wrap:anywhere} .pn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--green);margin-right:6px}
+  .warn{border-left:4px solid var(--red)} .mono{font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;color:var(--ink-soft)}
+  .para,.claim{margin:0 0 10px;white-space:pre-wrap;overflow-wrap:anywhere} td{overflow-wrap:anywhere} .pn{font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:13.5px;color:var(--green);margin-right:6px}
   table{width:100%;border-collapse:collapse;font-size:14px;background:var(--white)} td,th{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
   tr.unsupported td{background:#fbeceb} tr.weak td{background:#fff6e0} li{margin:8px 0}
-  .cta{display:inline-block;margin:10px 10px 0 0;background:var(--green);color:var(--white);text-decoration:none;padding:12px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em}
+  .cta{display:inline-block;margin:10px 10px 0 0;background:var(--green);color:var(--white);text-decoration:none;padding:12px 18px;font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px}
   .cta.alt{background:var(--white);color:var(--green);border:1px solid var(--green)} footer{border-top:1px solid var(--line);margin-top:48px;padding-top:16px}
 </style>
 </head>
@@ -1793,421 +1862,416 @@ var LANDING_HTML = `<!DOCTYPE html>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"iPatent","url":"https://ipatent.qnfo.org/","applicationCategory":"BusinessApplication","operatingSystem":"Any (web)","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"description":"Free, private-by-default assistant that drafts US provisional patent application disclosures for review by a registered practitioner.","author":{"@type":"Person","name":"Rowan Brad Quni-Gudzinas","sameAs":["https://orcid.org/0009-0002-4317-5604"]},"publisher":{"@type":"Organization","name":"QNFO","url":"https://qnfo.org"}}<\/script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Source+Serif+4:opsz,wght@8..60,400..700&display=swap" rel="stylesheet">
+<script>if(new URLSearchParams(location.search).get('v')==='2')document.documentElement.classList.add('v2');<\/script>
 <style>
+  /* IPATENT-UI-OVERHAUL-1 (3.17.0): drawing-sheet system. Cool sheet ground, ink rules, one action blue; green, amber and
+     red are kept for the support states only. Archivo for the interface, Source Serif 4 for the document being drafted. */
   :root{
-    --paper:#f6f3ea;
-    --paper-deep:#efeadd;
-    --ink:#16181d;
-    --ink-soft:#4a4d55;
-    --green:#0e5c3f;
-    --green-bright:#16784f;
-    --amber:#a97b1d;
-    --line:#d8d2c2;
-    --white:#fffdf8;
-    --danger:#9a2f2f;
+    --sheet:#eef1f4; --paper:#f6f8fa; --paper-deep:#e3e8ee; --white:#ffffff;
+    --ink:#131c28; --ink-soft:#4a5666; --line:#c9d1da; --edge:#8792a1;
+    --blue:#1d3fc4; --blue-deep:#142e94; --blue-t:#e6ebfb;
+    --green:#17734a; --green-t:#e3f1ea; --amber:#9a5b00; --amber-t:#fbefd9; --danger:#b3261e; --danger-t:#fbe9e7;
+    --ui:'Archivo',system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+    --read:'Source Serif 4',Georgia,'Times New Roman',serif;
   }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth}
-  body{
-    font-family:'Fraunces',Georgia,serif;
-    background:var(--paper);
-    color:var(--ink);
-    line-height:1.6;
-    -webkit-font-smoothing:antialiased;
-  }
-  /* paper grain */
-  body::before{
-    content:"";
-    position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.05 0 0 0 0 0.06 0 0 0 0 0.05 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-  .wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 28px}
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  body{margin:0;background:var(--sheet);color:var(--ink);font-family:var(--ui);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,p,ul,ol,dl,dd,figure{margin:0}
+  a{color:var(--blue);text-underline-offset:3px}
+  a:hover{color:var(--blue-deep)}
+  :focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:2px}
+  button{font:inherit;cursor:pointer}
+  .skip{position:absolute;left:-9999px;top:0;background:var(--ink);color:var(--white);padding:10px 14px;z-index:20}
+  .skip:focus{left:8px;top:8px}
+  .sr{position:absolute;left:-9999px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 16px 56px}
+  @media(min-width:720px){.wrap{padding:0 32px 72px}}
 
-  /* ===== Docket header ===== */
-  .docket{
-    border-bottom:1px solid var(--line);
-    padding:22px 0;
-    display:flex;justify-content:space-between;align-items:center;
-  }
-  .docket .brand{display:flex;align-items:center;gap:14px}
-  .seal{
-    width:46px;height:46px;border-radius:50%;
-    border:2px solid var(--green);color:var(--green);
-    display:grid;place-items:center;
-    font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;font-weight:600;
-    background:radial-gradient(circle at 30% 30%, var(--paper-deep), transparent 70%);
-    animation:sealIn 1s cubic-bezier(.2,.8,.2,1) both;
-  }
-  @keyframes sealIn{from{transform:rotate(-120deg) scale(.4);opacity:0}to{transform:rotate(0) scale(1);opacity:1}}
-  .docket .brand .name{font-size:20px;font-weight:600;letter-spacing:-.01em}
-  .docket .brand .name em{font-style:normal;color:var(--green)}
-  .docket .meta{
-    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);
-    text-align:right;line-height:1.7;letter-spacing:.03em;
-  }
-  .docket .meta b{color:var(--green);font-weight:600}
+  /* masthead */
+  .top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;padding:18px 0 14px;border-bottom:2px solid var(--ink)}
+  .mark{font-weight:800;font-stretch:118%;font-size:22px;letter-spacing:-.01em;color:var(--ink);text-decoration:none}
+  .mark small{font-weight:500;font-stretch:100%;font-size:14px;color:var(--ink-soft);letter-spacing:0;margin-left:8px}
+  .top nav{display:flex;gap:6px 22px;flex-wrap:wrap;font-size:15px;font-weight:600}
+  .top nav a{color:var(--ink);text-decoration:none;padding:4px 0}
+  .top nav a:hover{text-decoration:underline}
 
-  /* ===== Hero ===== */
-  .hero{padding:72px 0 40px;text-align:center;position:relative}
-  .hero .kicker{
-    font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.22em;
-    text-transform:uppercase;color:var(--green);margin-bottom:22px;
-    animation:rise .7s .1s both;
-  }
-  .hero h1{
-    font-size:clamp(40px,7vw,72px);font-weight:600;line-height:1.04;letter-spacing:-.02em;
-    animation:rise .7s .2s both;
-  }
-  .hero h1 .amp{font-style:italic;color:var(--amber);font-weight:500}
-  .hero .sub{
-    max-width:620px;margin:26px auto 0;font-size:19px;color:var(--ink-soft);font-weight:400;
-    animation:rise .7s .3s both;
-  }
-  @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
-  .chips{
-    display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:30px;
-    animation:rise .7s .4s both;
-  }
-  .chip{
-    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;
-    border:1px solid var(--line);border-radius:999px;padding:8px 16px;color:var(--ink-soft);
-    background:var(--white);display:inline-flex;align-items:center;gap:8px;
-    transition:border-color .2s,color .2s,transform .2s;
-  }
-  .chip:hover{border-color:var(--green);color:var(--green);transform:translateY(-2px)}
-  .chip::before{content:"\u25C6";font-size:8px;color:var(--green)}
+  /* hero */
+  .hero{display:grid;gap:36px;padding:44px 0 8px;align-items:start}
+  @media(min-width:940px){.hero{grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:56px;padding:72px 0 16px}}
+  .hero h1{font-size:clamp(34px,5.4vw,62px);line-height:1.02;font-weight:750;font-stretch:112%;letter-spacing:-.022em;max-width:15ch}
+  .hero .sub{font-size:clamp(17px,1.6vw,19px);line-height:1.5;color:var(--ink);max-width:58ch;margin-top:22px}
+  .hero .terms{font-size:15px;color:var(--ink-soft);max-width:60ch;margin-top:14px}
+  .go{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;margin-top:28px}
+  .btn-p,#generateBtn,#fixRedraft,#icsBtn,#subBtn{background:var(--blue);color:var(--white);border:1.5px solid var(--blue);border-radius:4px;padding:14px 22px;font-size:16px;font-weight:650;line-height:1.2;text-decoration:none;display:inline-block;text-align:center}
+  .btn-p:hover,#generateBtn:hover,#fixRedraft:hover,#icsBtn:hover,#subBtn:hover{background:var(--blue-deep);border-color:var(--blue-deep);color:var(--white)}
+  button:disabled{opacity:.6;cursor:wait}
+  .invent{background:var(--white);color:var(--ink);border:1.5px solid var(--ink);border-radius:4px;padding:14px 22px;font-size:16px;font-weight:650;line-height:1.2}
+  .invent:hover{background:var(--paper-deep);color:var(--ink)}
+  .fig{background:var(--white);border:1px solid var(--ink);padding:18px 14px 12px}
+  .fig svg{display:block;width:100%;height:auto;max-width:400px;margin:0 auto}
+  .fig figcaption{font-family:var(--read);font-size:15px;line-height:1.45;color:var(--ink);border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+  .fig text{font-family:var(--ui);fill:var(--ink)}
 
-  /* ===== Form (filing style) ===== */
-  .form-card{
-    background:var(--white);
-    border:1px solid var(--line);
-    box-shadow:0 24px 60px -30px rgba(22,24,29,.25);
-    margin:36px 0 24px;
-    position:relative;
-    animation:rise .7s .5s both;
+  /* workspace: step rail beside the form and the result */
+  .work{display:grid;grid-template-columns:minmax(0,1fr);gap:0 40px;margin-top:48px}
+  html.v2 #flowRail{display:block!important}
+  .flow{position:sticky;top:0;z-index:5;background:var(--sheet);border-bottom:1px solid var(--line);margin:0 -16px 20px;padding:8px 16px;overflow-x:auto}
+  .flow ol{list-style:none;display:flex;gap:4px;padding:0}
+  .fs{display:flex;align-items:center;gap:9px;padding:7px 10px 7px 7px;border-radius:4px;text-decoration:none;white-space:nowrap;font-size:14px;font-weight:600;color:var(--ink-soft)}
+  .fn{flex:none;width:24px;height:24px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+  .fs.active{color:var(--ink);background:var(--white);box-shadow:inset 0 0 0 1.5px var(--ink)}
+  .fs.active .fn{background:var(--ink);border-color:var(--ink);color:var(--white)}
+  .fs.done{color:var(--green)}
+  .fs.done .fn{background:var(--green);border-color:var(--green);color:var(--white);font-size:0}
+  .fs.done .fn::before{content:"✓";font-size:13px}
+  .fs.warn{color:var(--amber)}
+  .fs.warn .fn{background:var(--amber);border-color:var(--amber);color:var(--white);font-size:0}
+  .fs.warn .fn::before{content:"!";font-size:13px}
+  @media(min-width:980px){
+    html.v2 .work{grid-template-columns:184px minmax(0,1fr)}
+    .flow{top:20px;align-self:start;margin:0;padding:0;border:0;overflow:visible;background:none}
+    .flow ol{flex-direction:column;gap:2px;border-left:1.5px solid var(--line);padding-left:10px}
   }
-  .form-card::before{
-    content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
-    background:linear-gradient(var(--green),var(--amber));
-  }
-  .form-head{
-    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
-    padding:20px 28px;border-bottom:1px solid var(--line);
-    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);
-  }
-  .form-head .form-no{color:var(--green);font-weight:600}
-  .form-head .form-no::before{content:"NO. ";color:var(--ink-soft)}
-  form{padding:28px 28px 8px}
-  .field{margin-bottom:22px}
-  .field label{
-    display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;
-    letter-spacing:.08em;text-transform:uppercase;color:var(--green);
-    margin-bottom:8px;font-weight:600;
-  }
-  .field label .num{color:var(--amber);margin-right:8px}
-  .field input,.field textarea{
-    width:100%;background:transparent;border:none;border-bottom:1.5px solid var(--line);
-    font-family:'Fraunces',serif;font-size:17px;color:var(--ink);padding:8px 2px;
-    transition:border-color .2s;resize:vertical;
-  }
-  .field input:focus,.field textarea:focus{outline:none;border-bottom-color:var(--green)}
-  .field textarea{min-height:120px;line-height:1.55}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-  @media(max-width:640px){.row{grid-template-columns:1fr}}
-  .actions{padding:8px 28px 26px}
-  .actions-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  @media(max-width:560px){.actions-row{grid-template-columns:1fr}}
-  .invent{
-    background:var(--white);color:var(--green);border:1.5px solid var(--green);
-    width:100%;padding:16px;font-family:'IBM Plex Mono',monospace;font-size:13px;
-    letter-spacing:.14em;text-transform:uppercase;font-weight:600;cursor:pointer;
-    transition:background .2s,color .2s,transform .2s;
-  }
-  .invent:hover{background:var(--paper-deep);transform:translateY(-1px)}
-  .invent:disabled{opacity:.55;cursor:wait;transform:none}
-  button[type=submit]{
-    width:100%;padding:16px;font-family:'IBM Plex Mono',monospace;font-size:13px;
-    letter-spacing:.14em;text-transform:uppercase;font-weight:600;cursor:pointer;
-    background:var(--green);color:var(--white);border:1.5px solid var(--green);
-    transition:background .2s,color .2s,transform .2s;position:relative;
-  }
-  button[type=submit]:hover{background:var(--green-bright);transform:translateY(-1px)}
-  button[type=submit]:disabled{opacity:.55;cursor:wait;transform:none}
-  .status{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-top:12px;min-height:18px}
-  .status.err{color:var(--danger)}
-  .note{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:14px;line-height:1.6}
-  .note b{color:var(--green)}
+  .flow-a,#flow-map,#flow-fix,#flow-file{display:block;scroll-margin-top:64px}
 
-  /* ===== Results: printed disclosure ===== */
-  #result{display:none;margin:36px 0}
-  .result-head{
-    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
-    margin-bottom:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;
-    text-transform:uppercase;color:var(--green);
-  }
-  .paper{
-    position:relative;background:var(--white);border:1px solid var(--line);
-    padding:44px 40px;box-shadow:0 20px 50px -30px rgba(22,24,29,.3);
-  }
-  .paper .wm{
-    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-24deg);
-    font-size:110px;font-weight:700;color:rgba(14,92,63,.045);pointer-events:none;letter-spacing:.04em;
-    white-space:nowrap;
-  }
-  .paper .pno{
-    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:var(--amber);
-    text-transform:uppercase;margin-bottom:18px;
-  }
-  .paper h3{
-    font-size:15px;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;
-    text-transform:uppercase;color:var(--green);margin:26px 0 8px;font-weight:600;
-  }
-  .paper h3:first-child{margin-top:0}
-  .paper .sec{white-space:pre-wrap;font-size:15.5px;line-height:1.75;color:var(--ink)}
-  .paper .claim{padding:7px 0;border-bottom:1px dotted var(--line);font-size:15px;line-height:1.6}
-  .paper .claim:last-child{border-bottom:none}
-  .src{
-    margin-top:26px;padding-top:18px;border-top:1px solid var(--line);
-    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);
-  }
-  .src b{color:var(--green)}
-  .src .src-row{margin:4px 0}
-
-  /* ===== How it works ===== */
-  .how{padding:64px 0 20px}
-  .how h2{
-    font-size:30px;font-weight:600;text-align:center;margin-bottom:40px;letter-spacing:-.01em;
-  }
-  .how h2 span{color:var(--green)}
-  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
-  @media(max-width:760px){.steps{grid-template-columns:1fr}}
-  .step{
-    border:1px solid var(--line);background:var(--white);padding:26px 24px;position:relative;
-    transition:transform .25s,box-shadow .25s;
-  }
-  .step:hover{transform:translateY(-4px);box-shadow:0 18px 40px -26px rgba(14,92,63,.35)}
-  .step .sno{
-    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--amber);letter-spacing:.1em;
-    margin-bottom:12px;
-  }
-  .step h3{font-size:19px;font-weight:600;margin-bottom:8px}
-  .step p{font-size:14.5px;color:var(--ink-soft)}
-
-  /* ===== Footer ===== */
-  footer{border-top:1px solid var(--line);margin-top:70px;padding:36px 0 44px}
-  .foot{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
-  .foot .f-brand{font-weight:600;font-size:17px}
-  .foot .f-brand em{font-style:normal;color:var(--green)}
-  .foot nav{display:flex;gap:22px;font-size:14px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.04em}
-  .foot nav a{color:var(--ink-soft);text-decoration:none;border-bottom:1px solid transparent;transition:color .2s,border-color .2s}
-  .foot nav a:hover{color:var(--green);border-bottom-color:var(--green)}
-  .foot .f-legal{width:100%;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);line-height:1.7;margin-top:26px}
-    /* ===== Adaptive starters + guidance (v3.4) ===== */
-  .suggest{margin:4px 0 2px}
-  .sug-head{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin:18px 0 8px;display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
-  .sug-head span{color:var(--ink-soft);text-transform:none;letter-spacing:.01em;font-family:'Fraunces',Georgia,serif;font-size:12.5px;font-weight:400}
+  /* the form */
+  .form-card{background:var(--white);border:1px solid var(--ink);border-radius:2px}
+  .form-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px 20px;flex-wrap:wrap;padding:18px 18px 14px;border-bottom:1px solid var(--line)}
+  .form-head h2{font-size:24px;font-weight:700;font-stretch:108%;letter-spacing:-.01em;line-height:1.15}
+  .form-head span{font-size:14px;color:var(--ink-soft)}
+  #draftForm{padding:6px 18px 22px}
+  @media(min-width:720px){.form-head{padding:22px 28px 16px}#draftForm{padding:8px 28px 28px}}
+  .field{margin-top:22px}
+  .field label,.dl-row label{display:block;font-size:15px;font-weight:650;margin-bottom:6px}
+  .opt{font-weight:400;color:var(--ink-soft)}
+  .hint{font-size:14px;color:var(--ink-soft);margin:-2px 0 8px;max-width:70ch}
+  input[type=text],input[type=email],input[type=date],input:not([type]),textarea{width:100%;font-family:var(--ui);font-size:16px;line-height:1.5;color:var(--ink);background:var(--white);border:1px solid var(--edge);border-radius:4px;padding:11px 13px}
+  input::placeholder,textarea::placeholder{color:#6b7787;opacity:1}
+  input:focus,textarea:focus{outline:3px solid var(--blue-t);outline-offset:0;border-color:var(--blue)}
+  textarea{resize:vertical;min-height:96px}
+  #description{min-height:230px}
+  .q3{display:grid;gap:10px;margin:4px 0 12px}
+  @media(min-width:760px){.q3{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}}
+  .q3 div{border-left:3px solid var(--blue);padding:2px 0 2px 12px}
+  .q3 dt{font-weight:700;font-size:15px}
+  .q3 dd{font-size:14px;color:var(--ink-soft);line-height:1.45}
+  .meter{margin-top:12px;font-size:14px;color:var(--ink-soft)}
+  .meter b{color:var(--ink)}
+  .meter-bar{height:6px;background:var(--paper-deep);margin:8px 0 10px;border-radius:3px;overflow:hidden}
+  .meter-fill{height:100%;background:var(--ink);transition:width .25s}
+  @media(prefers-reduced-motion:reduce){.meter-fill{transition:none}}
+  .meter-items{display:flex;flex-wrap:wrap;gap:6px 8px}
+  .mi{font-size:13px;font-weight:600;padding:3px 10px 3px 8px;border-radius:3px;border:1px solid var(--line);color:var(--ink-soft);background:var(--paper)}
+  .mi::before{content:"○ "}
+  .mi.ok{color:var(--green);border-color:var(--green);background:var(--green-t)}
+  .mi.ok::before{content:"✓ "}
+  #mechZone{border-top:1px solid var(--line);padding-top:22px}
+  #mechZone h3,.samples summary{font-size:17px;font-weight:700}
+  .note{font-size:14px;line-height:1.5;color:var(--ink-soft);max-width:78ch}
+  .note b{color:var(--ink)}
+  #mechCard label{font-size:14px}
+  #mechCard textarea{font-size:15px}
+  .samples{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+  .samples summary{cursor:pointer;font-size:15px;font-weight:650;color:var(--blue)}
+  .sug-head{font-size:14px;font-weight:650;margin:14px 0 8px}
+  .sug-head span{font-weight:400;color:var(--ink-soft)}
   .sug-chips{display:flex;flex-wrap:wrap;gap:8px}
-  .sug-chip{font-family:'IBM Plex Mono',monospace;font-size:10.5px;border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer;max-width:100%;text-align:left;transition:border-color .15s,color .15s}
-  .sug-chip:hover{border-color:var(--green);color:var(--green)}
-  .sug-empty{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft)}
-  .guide{border-left:2px solid var(--green);background:rgba(14,92,63,.04);padding:8px 12px;margin-top:4px}
-  .g-empty{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft)}
-  .g-row{font-size:13px;padding:5px 0;border-bottom:1px dotted var(--line);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
-  .g-row:last-child{border-bottom:none}
-  .g-t{color:var(--ink)}
-  .g-pct{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--amber)}
-  .g-note{margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--ink-soft)}
-    .meter{margin:10px 0 4px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft)}
-  .meter-bar{height:4px;background:var(--line);margin:6px 0 8px;position:relative}
-  .meter-fill{position:absolute;left:0;top:0;bottom:0;background:var(--green);transition:width .3s}
-  .meter-items{display:flex;flex-wrap:wrap;gap:6px}
-  .mi{border:1px solid var(--line);border-radius:999px;padding:3px 9px;background:var(--white)}
-  .mi.ok{border-color:var(--green);color:var(--green)}
-  .mi.ok::before{content:"\u2713 "}
-  .mi.no::before{content:"\u25CB "}
-  .smap{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:11px}
-  .smap .sm-row{padding:6px 0;border-bottom:1px dotted var(--line);display:grid;grid-template-columns:44px 1fr;gap:8px}
-  .smap .sm-st{font-weight:600}
-  .smap .supported .sm-st{color:var(--green)} .smap .weak .sm-st{color:var(--amber)} .smap .unsupported .sm-st{color:var(--danger)}
-  .smap .sm-el{font-family:'Fraunces',Georgia,serif;font-size:13.5px;color:var(--ink)}
-  .smap .sm-meta{color:var(--ink-soft);font-size:10px}
-  .paper .pn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--green);margin-right:6px}
-  .paper .para{margin:0 0 10px;white-space:pre-wrap;font-size:15.5px;line-height:1.75}
-    .close-warn{display:none;margin:0 0 18px;border:1px solid var(--amber);border-left:4px solid var(--amber);background:rgba(169,123,29,.08);padding:12px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.65;color:var(--ink)}
-  .close-warn b{color:var(--amber);letter-spacing:.06em}
-  /* ===== GUIDED-FLOW-1 (?v=2 only; mobile-first) ===== */
-  .flow{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--line);margin:0 -28px;padding:10px 28px;overflow-x:auto}
-  .flow ol{list-style:none;display:flex;gap:6px;min-width:max-content}
-  .flow .fs{display:flex;align-items:center;gap:6px;text-decoration:none;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:var(--white)}
-  .flow .fn{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;border:1px solid currentColor;font-size:10px}
-  .flow .fs.active{color:var(--white);background:var(--green);border-color:var(--green)}
-  .flow .fs.done{color:var(--green);border-color:var(--green)}
-  .flow .fs.done .fn{background:var(--green);color:var(--white)}
-  .flow .fs.warn{color:var(--amber);border-color:var(--amber)}
-  .fz{background:var(--white);border:1px solid var(--line);padding:20px 18px;margin:22px 0;position:relative}
-  .fz h2{font-size:22px;font-weight:600;margin-bottom:6px;letter-spacing:-.01em}
-  .fz .fk{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px}
-  .fz p{font-size:15px;color:var(--ink-soft)}
-  .sm-bar{display:flex;height:14px;border:1px solid var(--line);margin:14px 0 8px;overflow:hidden}
-  .sm-bar span{display:block;height:100%}
-  .sm-bar .b-s{background:var(--green)} .sm-bar .b-w{background:var(--amber)} .sm-bar .b-u{background:var(--danger)}
-  .sm-legend{display:flex;flex-wrap:wrap;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:11px}
-  .sm-score{font-size:44px;font-weight:600;line-height:1;color:var(--green)}
-  .sm-score small{font-size:15px;color:var(--ink-soft);font-weight:400}
-  .gap-item{border-top:1px dotted var(--line);padding:12px 0}
-  .gap-item .gl{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
-  .gap-item.unsupported .gl{color:var(--danger)} .gap-item.weak .gl{color:var(--amber)} .gap-item.hole .gl{color:var(--danger)}
-  .gap-item .gw{font-size:14px;margin:4px 0 6px}
-  .gap-item textarea{width:100%;min-height:58px;border:1px solid var(--line);background:var(--paper);font-family:'Fraunces',serif;font-size:15px;padding:8px}
-  .dl-row{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}
-  .dl-row label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--green);display:block;margin-bottom:4px}
-  .dl-row input{width:100%;border:1px solid var(--line);background:var(--paper);padding:10px;font-size:16px;font-family:'IBM Plex Mono',monospace}
-  .deadline{border-left:4px solid var(--amber);background:rgba(169,123,29,.08);padding:12px 14px;margin-top:14px;font-size:15px}
-  .deadline b.big{display:block;font-size:26px;color:var(--ink);font-weight:600}
-  .fz .btns{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
-  .v2 .paper{overflow:hidden}
-  .fz,.flow-a{scroll-margin-top:64px}
-  .fz .btns button:not(.invent){width:100%;padding:14px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;cursor:pointer;background:var(--green);color:var(--white);border:1.5px solid var(--green)}
-  .fz .btns button:not(.invent):hover{background:var(--green-bright)}
-  .fz .btns .invent{font-size:12px;padding:14px}
-  @media(max-width:639px){.v2 .paper{padding:28px 18px}}
-  @media(min-width:640px){.fz{padding:26px 28px}.dl-row,.fz .btns{grid-template-columns:1fr 1fr}}
-@media print{.docket,.hero,.chips,.actions,.status,.how,footer,.suggest,.form-card,#dlBar,.flow,#fixZone,#fileZone,#smHero{display:none}}
+  .sug-chip{background:var(--white);border:1px solid var(--edge);border-radius:4px;padding:7px 12px;font-size:14px;color:var(--ink);text-align:left;max-width:100%;overflow-wrap:anywhere}
+  .sug-chip:hover{border-color:var(--blue);color:var(--blue)}
+  .sug-empty,.g-empty,.g-note{font-size:14px;color:var(--ink-soft)}
+  .guide{margin-top:6px}
+  .g-row{font-size:14px;padding:6px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+  .g-pct{color:var(--ink-soft);font-variant-numeric:tabular-nums}
+  .g-note{margin-top:8px}
+  .row{display:grid;gap:0 20px}
+  @media(min-width:640px){.row{grid-template-columns:1fr 1fr}}
+  .actions{margin-top:26px;border-top:1px solid var(--line);padding-top:22px}
+  .keep{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.45;cursor:pointer;max-width:74ch}
+  .keep input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--blue)}
+  .actions-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
+  .actions-row button{flex:1 1 220px}
+  @media(min-width:640px){.actions-row button{flex:0 1 auto}}
+  .status{font-size:15px;margin-top:12px;color:var(--ink);overflow-wrap:anywhere;min-height:0}
+  .status.err{color:var(--danger);font-weight:600}
+  .actions .note{margin-top:16px}
+
+  /* the result */
+  #result{display:none;margin-top:40px}
+  .result-head{display:flex;justify-content:space-between;align-items:baseline;gap:6px 20px;flex-wrap:wrap;margin-bottom:14px}
+  .result-head h2{font-size:24px;font-weight:700;font-stretch:108%;letter-spacing:-.01em}
+  #resultId{font-size:14px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+  #dlBar{align-items:center}
+  #dlBar .invent{padding:10px 16px;font-size:15px}
+  #dlBar a{font-size:15px;font-weight:600}
+  .close-warn{background:var(--amber-t);border:1px solid var(--amber);border-left-width:4px;padding:14px 16px;margin:0 0 16px;font-size:15px;line-height:1.5}
+  .fz{background:var(--white);border:1px solid var(--ink);border-radius:2px;padding:20px 18px;margin:0 0 20px}
+  .paper+.fz{margin-top:20px}
+  @media(min-width:720px){.fz{padding:26px 28px}}
+  .fk{font-size:14px;font-weight:650;color:var(--ink-soft)}
+  .fz h2{font-size:24px;font-weight:700;font-stretch:108%;letter-spacing:-.01em;line-height:1.15;margin:2px 0 8px}
+  .fz p{font-size:15.5px;max-width:76ch}
+  .sm-score{font-size:52px;font-weight:750;font-stretch:112%;letter-spacing:-.02em;line-height:1;margin-top:18px;font-variant-numeric:tabular-nums}
+  .sm-score small{font-size:16px;font-weight:500;font-stretch:100%;letter-spacing:0;color:var(--ink-soft)}
+  .sm-bar{display:flex;height:16px;border:1px solid var(--ink);margin:12px 0 8px;background:var(--paper)}
+  .sm-bar .b-s{background:var(--green)}
+  .sm-bar .b-w{background:var(--amber)}
+  .sm-bar .b-u{background:var(--danger)}
+  .sm-legend{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:14px;font-weight:600}
+  .smap{font-family:var(--ui);font-size:14.5px;line-height:1.5;margin-top:18px;padding:14px 16px;background:var(--paper);border-left:3px solid var(--ink)}
+  .smap a{font-weight:600}
+  .sm-row{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;margin-top:10px;padding:10px 12px;background:var(--white);border:1px solid var(--line);border-left:4px solid var(--edge);font-variant-numeric:tabular-nums}
+  .sm-row>div:first-child{font-weight:700}
+  .sm-row.supported{border-left-color:var(--green)}
+  .sm-row.weak{border-left-color:var(--amber);background:var(--amber-t)}
+  .sm-row.unsupported{border-left-color:var(--danger);background:var(--danger-t)}
+  .sm-el{font-family:var(--read);font-size:15.5px;color:var(--ink);overflow-wrap:anywhere}
+  .sm-meta{font-size:13px;color:var(--ink-soft);margin-top:3px;overflow-wrap:anywhere}
+  .sm-st{font-weight:700}
+  .supported .sm-st{color:var(--green)}
+  .weak .sm-st{color:var(--amber)}
+  .unsupported .sm-st{color:var(--danger)}
+  .paper{position:relative;background:var(--white);border:1px solid var(--ink);padding:30px 18px;font-family:var(--read);font-size:16.5px;line-height:1.7;overflow:hidden}
+  @media(min-width:720px){.paper{padding:52px 60px}}
+  .paper .wm{position:absolute;top:16px;right:16px;border:2px solid var(--danger);color:var(--danger);font-family:var(--ui);font-size:13px;font-weight:800;letter-spacing:.1em;padding:1px 10px;transform:rotate(4deg)}
+  .paper .pno{font-family:var(--ui);font-size:14px;color:var(--ink-soft);padding-right:90px;margin-bottom:22px}
+  .paper h3{font-family:var(--ui);font-size:14px;font-weight:750;letter-spacing:.02em;border-bottom:1px solid var(--ink);padding-bottom:5px;margin:30px 0 12px}
+  .paper h3:first-child{margin-top:0}
+  .paper .sec{white-space:pre-wrap;overflow-wrap:anywhere}
+  .paper .para{margin:0 0 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+  .paper .pn{font-family:var(--ui);font-size:12.5px;font-weight:600;color:var(--blue);margin-right:8px;font-variant-numeric:tabular-nums}
+  .paper .claim{padding:8px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+  .paper .claim:last-child{border-bottom:0}
+  .src{font-family:var(--ui);font-size:13.5px;color:var(--ink-soft);margin-top:26px;border-top:1px solid var(--line);padding-top:12px}
+  .src-row{margin-top:4px;overflow-wrap:anywhere}
+  .gap-item{border:1px solid var(--line);border-left:4px solid var(--amber);padding:14px;margin:14px 0}
+  .gap-item.unsupported,.gap-item.hole{border-left-color:var(--danger)}
+  .gl{font-size:14px;font-weight:700}
+  .gw{font-size:15px;margin:3px 0;overflow-wrap:anywhere}
+  .gap-item textarea{margin-top:8px;min-height:70px}
+  .btns{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px;align-items:stretch}
+  .btns>*{flex:1 1 240px}
+  @media(min-width:640px){.btns>*{flex:0 1 auto}}
+  .dl-row{display:grid;gap:14px 20px;margin-top:16px}
+  @media(min-width:640px){.dl-row{grid-template-columns:1fr 1fr}}
+  .deadline{margin-top:16px;border:1.5px solid var(--ink);padding:16px 18px;font-size:15.5px;line-height:1.5}
+  .deadline .big{display:block;font-size:clamp(26px,4.6vw,38px);font-weight:750;font-stretch:112%;letter-spacing:-.015em;line-height:1.15;margin:2px 0 6px;font-variant-numeric:tabular-nums}
+
+  /* after the tool */
+  .after{display:grid;gap:36px;margin-top:72px;padding-top:36px;border-top:2px solid var(--ink)}
+  @media(min-width:860px){.after{grid-template-columns:1fr 1fr;gap:56px}}
+  .after h2,.sub-box h2{font-size:24px;font-weight:700;font-stretch:108%;letter-spacing:-.01em;line-height:1.15;margin-bottom:12px}
+  .after ul{padding-left:20px;max-width:62ch}
+  .after li{margin:10px 0}
+  .ref{margin-top:56px;padding-top:36px;border-top:1px solid var(--line)}
+  .ref h2{font-size:24px;font-weight:700;font-stretch:108%;letter-spacing:-.01em;margin-bottom:6px}
+  .ref p{color:var(--ink-soft);max-width:70ch}
+  .ref ul{list-style:none;padding:0;margin-top:16px;display:grid;gap:0 40px}
+  @media(min-width:760px){.ref ul{grid-template-columns:1fr 1fr}}
+  .ref li{border-bottom:1px solid var(--line)}
+  .ref li a{display:block;padding:11px 0;font-weight:600;text-decoration:none;color:var(--ink)}
+  .ref li a:hover{color:var(--blue);text-decoration:underline}
+  .sub-box{margin-top:56px;background:var(--white);border:1px solid var(--line);padding:22px 18px}
+  @media(min-width:720px){.sub-box{padding:28px}}
+  .sub-box p{max-width:70ch}
+  #subForm{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;max-width:560px}
+  #subEmail{flex:1 1 220px;width:auto}
+  #subMsg{font-size:14px;margin-top:8px;color:var(--ink-soft)}
+  footer{margin-top:56px;padding-top:20px;border-top:2px solid var(--ink);font-size:14px;color:var(--ink-soft);line-height:1.6}
+  .foot{display:grid;gap:14px}
+  .foot nav{display:flex;flex-wrap:wrap;gap:6px 22px;font-weight:600}
+  .foot nav a{color:var(--ink)}
+  .f-legal{max-width:86ch}
+  .f-legal b{color:var(--ink)}
+  @media print{
+    .top,.hero,.flow,.form-card,.result-head,#dlBar,.close-warn,#smHero,#fixZone,#fileZone,.after,.ref,.sub-box,footer,.skip{display:none!important}
+    body{background:#fff}
+    .wrap{padding:0;max-width:none}
+    .work{display:block;margin:0}
+    #result{margin:0}
+    .paper{border:0;padding:0}
+  }
 </style>
 </head>
 <body>
+<a class="skip" href="#draft">Skip to the drafting form</a>
 <div class="wrap">
-  <!-- Docket header -->
-  <header class="docket">
-    <div class="brand">
-      <div class="seal">IPATENT</div>
-      <div class="name">iPatent<em>.</em>qnfo.org</div>
-    </div>
-    <div class="meta">
-      <div>INVENTOR DISCLOSURE ASSISTANT</div>
-      <div>DOCKET <b>QNFO-IP-2026</b> \xB7 STATUS <b>OPEN</b></div>
-    </div>
+  <header class="top">
+    <a class="mark" href="/">iPatent<small>by QNFO</small></a>
+    <nav aria-label="Site">
+      <a href="#draft">Draft</a>
+      <a href="/guide">Guides</a>
+      <a href="/example">Worked example</a>
+      <a href="#limits">Limits</a>
+    </nav>
   </header>
 
-  <!-- Hero -->
   <section class="hero">
-    <div class="kicker">Free \xB7 Private by default \xB7 US provisional patent disclosures</div>
-    <h1>Turn your idea into a<br><span class="amp">complete</span> disclosure.</h1>
-    <p class="sub">Describe your invention. iPatent drafts a US provisional disclosure \u2014 field, background, summary, detailed description, optional claims and abstract \u2014 for you and a registered practitioner to review. A provisional only protects what it describes, so the draft aims for completeness first. <a href="/guide" style="color:var(--green)">Read the guide</a>, or <a href="/example" style="color:var(--green)">see a real run and what it got wrong</a>.</p>
-    <div class="chips">
-      <span class="chip">Private by default \xB7 nothing published</span>
-      <span class="chip">Style-grounded in a 33,500-segment drafting corpus</span>
-      <span class="chip">Download or print for attorney review</span>
+    <div>
+      <h1>A provisional patent protects only what it describes.</h1>
+      <p class="sub">iPatent drafts the disclosure for a US provisional application from your own description of the invention: what it is, what it does and how it works. Then it checks every claim element against the text, so you see what is taught and what is missing before you file.</p>
+      <p class="terms">Free, with no account. Nothing is stored unless you ask for a private copy. iPatent drafts a disclosure; it is not legal advice and it files nothing.</p>
+      <div class="go">
+        <a class="btn-p" href="#draft">Start a draft</a>
+        <a href="/example">See a real run and what it got wrong</a>
+      </div>
     </div>
+    <figure class="fig">
+      <svg viewBox="0 0 360 400" role="img" aria-labelledby="figT figD">
+        <title id="figT">How iPatent handles your description</title>
+        <desc id="figD">Your description (10) is read into a mechanism card (12) stating what the invention is, what it does and how it works. The draft disclosure (14) is written from both. The support map (16) checks each claim element against the numbered paragraphs, and every gap (18) returns to you.</desc>
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#131c28"/></marker></defs>
+        <g fill="#fff" stroke="#131c28" stroke-width="1.5">
+          <rect x="58" y="10" width="226" height="52"/>
+          <rect x="58" y="92" width="226" height="98"/>
+          <rect x="58" y="220" width="226" height="56"/>
+          <rect x="58" y="306" width="226" height="76"/>
+        </g>
+        <g fill="none" stroke="#131c28" stroke-width="1.5">
+          <path d="M171 62V90" marker-end="url(#ah)"/>
+          <path d="M171 190V218" marker-end="url(#ah)"/>
+          <path d="M171 276V304" marker-end="url(#ah)"/>
+          <path d="M58 344H34V36H56" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+        </g>
+        <g fill="none" stroke="#1d3fc4" stroke-width="1.2">
+          <path d="M284 30q16 2 24 -8"/><path d="M284 120q16 2 24 -8"/><path d="M284 242q16 2 24 -8"/><path d="M284 330q16 2 24 -8"/><path d="M34 196q-8 0 -12 -8"/>
+        </g>
+        <g font-size="14" font-weight="700">
+          <text x="312" y="24" style="fill:#1d3fc4">10</text><text x="312" y="114" style="fill:#1d3fc4">12</text><text x="312" y="236" style="fill:#1d3fc4">14</text><text x="312" y="324" style="fill:#1d3fc4">16</text><text x="4" y="184" style="fill:#1d3fc4">18</text>
+        </g>
+        <g font-size="15" font-weight="700">
+          <text x="72" y="33">Your description</text>
+          <text x="72" y="116">Mechanism card</text>
+          <text x="72" y="244">Draft disclosure</text>
+          <text x="72" y="330">Support map</text>
+        </g>
+        <g font-size="13">
+          <text x="72" y="51">in your own words</text>
+          <text x="72" y="138">what it is</text><text x="72" y="157">what it does</text><text x="72" y="176">how it works</text>
+          <text x="72" y="263">numbered paragraphs and claims</text>
+          <text x="72" y="349">each claim element, checked</text>
+        </g>
+        <g stroke="#131c28" stroke-width="1"><rect x="72" y="360" width="104" height="10" fill="#17734a"/><rect x="176" y="360" width="56" height="10" fill="#9a5b00"/><rect x="232" y="360" width="38" height="10" fill="#b3261e"/></g>
+      </svg>
+      <figcaption>Fig. 1. Your description (10) is read into a mechanism card (12), and the draft (14) is written from both. The support map (16) checks each claim element against the numbered paragraphs. Gaps (18) return to you: iPatent does not fill them in.</figcaption>
+    </figure>
   </section>
 
+  <div class="work">
   ${flowRailHtml()}
-  <!-- Filing form -->
-  <section class="form-card" id="draft"><span id="flow-describe" class="flow-a"></span>
+  <div class="work-main">
+  <section class="form-card" id="draft" aria-labelledby="draftH"><span id="flow-describe" class="flow-a"></span>
     <div class="form-head">
-      <span class="form-no">1 / INVENTOR INPUT</span>
-      <span>ALL FIELDS OPTIONAL EXCEPT TITLE &amp; DESCRIPTION</span>
+      <h2 id="draftH">Describe the invention</h2>
+      <span>Title and description are required. Everything else is optional.</span>
     </div>
     <form id="draftForm">
       <div class="field">
-        <label for="title"><span class="num">1.</span>Title of Invention *</label>
-        <input id="title" name="title" placeholder="e.g. Quantum-Resistant Cryptographic Accelerator" required>
+        <label for="title">Title of the invention</label>
+        <input id="title" name="title" placeholder="A short, descriptive name for what it is" required>
       </div>
       <div class="field">
-        <label for="technicalField"><span class="num">2.</span>Technical Field <span style="color:var(--ink-soft);text-transform:none;letter-spacing:0">(optional)</span></label>
-        <input id="technicalField" name="technical_field" placeholder="e.g. Cryptography, Quantum Computing" list="fieldOptions" autocomplete="off">
+        <label for="technicalField">Technical field <span class="opt">(optional)</span></label>
+        <input id="technicalField" name="technical_field" placeholder="The area of technology it belongs to" list="fieldOptions" autocomplete="off">
         <datalist id="fieldOptions">
-          <option value="Quantum Computing &amp; Information">
-          <option value="Cryptography &amp; Post-Quantum Security">
-          <option value="Cryogenic &amp; Semiconductor Electronics">
-          <option value="Energy-Efficient &amp; Thermodynamic Computing">
-          <option value="Resonant / Analog Signal Processing">
-          <option value="Data Encoding &amp; Compression">
-          <option value="Materials &amp; Nanofabrication">
-          <option value="Topological Computation">
-          <option value="Neuromorphic &amp; Neural Hardware">
-          <option value="Error Correction &amp; Stabilization">
-          <option value="Measurement &amp; Sensing Systems">
-          <option value="Control Systems &amp; Feedback">
-          <option value="Software Methods &amp; Simulation">
-          <option value="Networking &amp; Secure Communication">
-          <option value="Power &amp; Thermal Management">
+          <option value="Mechanical devices and mechanisms">
+          <option value="Consumer products and hardware">
+          <option value="Electrical and electronic circuits">
+          <option value="Sensors, measurement and instrumentation">
+          <option value="Control systems and robotics">
+          <option value="Materials, coatings and manufacturing processes">
+          <option value="Medical devices">
+          <option value="Energy storage and power systems">
+          <option value="Thermal management">
+          <option value="Vehicles and transport">
+          <option value="Chemical processes and compositions">
+          <option value="Optics and photonics">
+          <option value="Networking and communication">
+          <option value="Software and computer-implemented methods">
+          <option value="Computing hardware">
         </datalist>
       </div>
       <div class="field">
-        <label for="description"><span class="num">3.</span>Description of the Invention *</label>
-        <textarea id="description" name="description" placeholder="What is your invention? What problem does it solve? How does it work \u2014 components, mechanism, key novelty?" required></textarea>
-        <div class="meter" id="meter" aria-live="polite"><div>COMPLETENESS <span id="meterPct">0%</span> &mdash; a provisional protects only what it describes</div><div class="meter-bar"><div class="meter-fill" id="meterFill" style="width:0%"></div></div><div class="meter-items" id="meterItems"></div></div>
+        <label for="description">Description of the invention</label>
+        <p class="hint" id="descHint">Write it for an engineer who has to build it. A claim can only be as strong as the three answers below.</p>
+        <dl class="q3">
+          <div><dt>What it is</dt><dd>The parts, what each is made of or built from, and how they are arranged and connected.</dd></div>
+          <div><dt>What it does</dt><dd>The result it produces, with a measured or expected value where you have one.</dd></div>
+          <div><dt>How it works</dt><dd>What each part does to produce that result, and the range of conditions in which it still works.</dd></div>
+        </dl>
+        <textarea id="description" name="description" aria-describedby="descHint" placeholder="Parts and arrangement. The result. How the parts produce it. Values, alternatives and what each drawing would show." required></textarea>
+        <div class="meter" id="meter" aria-live="polite"><div><b>Covered so far: <span id="meterPct">0%</span></b> of what a provisional needs. This check is advisory and never blocks a draft.</div><div class="meter-bar"><div class="meter-fill" id="meterFill" style="width:0%"></div></div><div class="meter-items" id="meterItems"></div></div>
       </div>
       <div class="field" id="mechZone" style="display:none" data-mechanism-first="v2"><span id="flow-mechanism" class="flow-a"></span>
-        <label><span class="num">3b.</span>Mechanism card <span style="color:var(--ink-soft);text-transform:none;letter-spacing:0">&mdash; what it is, what it does, how it works, and the one distinction that makes the difference</span></label>
-        <div class="note" style="margin:0 0 10px">A defensible claim is built on the mechanism, not on the wording. Read the card from your description, correct it, and fill every red hole before drafting: anything marked NOT STATED is not in your description, so a provisional would not protect it.</div>
+        <h3>Mechanism card</h3>
+        <div class="note" style="margin:6px 0 14px">A defensible claim is built on the mechanism, not on the wording. Read the card from your description, correct it, and fill every hole before drafting. Anything marked NOT STATED is not in your description, so a provisional would not protect it.</div>
         <button type="button" id="mechBtn" class="invent">Read the mechanism from my description</button>
         <div id="mechCard" aria-live="polite"></div>
       </div>
-            <div class="suggest" id="starterZone">
-        <div class="sug-head">STARTERS <span>&mdash; corpus examples. Pick one to load, then improve it before drafting.</span></div>
-        <div class="sug-chips" id="starterChips"><span class="sug-empty">Loading corpus examples&hellip;</span></div>
-        <div class="sug-head" id="guideHead" style="display:none">WHILE YOU TYPE <span>&mdash; closest corpus filings, for style grounding</span></div>
+      <details class="samples suggest" id="starterZone">
+        <summary>Load a sample description, or see similar reference filings</summary>
+        <div class="sug-head">Samples <span>from the reference corpus. Pick one to load, then edit it before drafting.</span></div>
+        <div class="sug-chips" id="starterChips"><span class="sug-empty">Loading samples&hellip;</span></div>
+        <div class="sug-head" id="guideHead" style="display:none">Closest reference filings <span>as you type</span></div>
         <div id="typeGuide" class="guide"><div class="g-empty">As you describe an invention, similar corpus filings will appear here.</div></div>
-      </div>
-<div class="row">
+      </details>
+      <div class="row">
         <div class="field">
-          <label for="inventorName"><span class="num">4.</span>Inventor Name <span style="color:var(--ink-soft);text-transform:none;letter-spacing:0">(optional)</span></label>
-          <input id="inventorName" name="inventor_name" placeholder="Full name">
+          <label for="inventorName">Inventor name <span class="opt">(optional, printed on the draft)</span></label>
+          <input id="inventorName" name="inventor_name" autocomplete="name">
         </div>
         <div class="field">
-          <label for="inventorEmail"><span class="num">5.</span>Email <span style="color:var(--ink-soft);text-transform:none;letter-spacing:0">(optional)</span></label>
-          <input id="inventorEmail" name="inventor_email" type="email" placeholder="you@example.com">
+          <label for="inventorEmail">Email <span class="opt">(optional, printed on the draft)</span></label>
+          <input id="inventorEmail" name="inventor_email" type="email" autocomplete="email">
         </div>
       </div>
       <div class="actions"><span id="flow-draft" class="flow-a"></span>
+        <label class="keep"><input type="checkbox" id="keepCopy"> <span>Keep a private copy I can reopen by link. Off by default: unless you tick this, your description and draft are not stored (iPatent only counts drafts by broad topic, never their text).</span></label>
         <div class="actions-row">
-          <button type="submit" id="generateBtn">Draft Disclosure</button>
-          <button type="button" id="inventBtn" class="invent" title="Load an example from the corpus and draft it">\u26A1 Try an example</button>
+          <button type="submit" id="generateBtn">Draft the disclosure</button>
+          <button type="button" id="inventBtn" class="invent" title="Load a sample from the reference corpus and draft it">Run a sample draft</button>
         </div>
-        <div class="status" id="status"></div>
-        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);cursor:pointer"><input type="checkbox" id="keepCopy" style="margin-top:2px"> <span>Keep a private copy I can reopen by link. Off by default: unless you tick this, your description and draft are not stored (iPatent only counts drafts by broad topic, never their text).</span></label>
-        <div class="note"><b>Good practice:</b> include components, operating principle, at least one alternative embodiment, and what each drawing would show. <b>Before you file:</b> don\u2019t publish, pitch or post the idea \u2014 Europe and most other countries have no grace period. Rate-limited to 20 drafts/hour. <b>DRAFT ONLY</b> \u2014 not legal advice; have a registered patent attorney or agent review it before filing.</div>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+        <div class="note"><b>Before you file:</b> do not publish, pitch or post the idea. Europe and most other countries have no grace period. <b>Draft only.</b> This is not legal advice; have a registered patent attorney or agent review the draft before filing. Limited to 20 drafts per hour.</div>
       </div>
     </form>
   </section>
 
-  <!-- Result -->
-  <section id="result">
+  <section id="result" aria-labelledby="resultH">
     <div class="result-head">
-      <span>DRAFT DISCLOSURE \xB7 FOR REVIEW</span>
+      <h2 id="resultH">Draft disclosure, for review</h2>
       <span id="resultId"></span>
     </div>
-    <div id="dlBar" style="display:none;gap:10px;flex-wrap:wrap;margin:0 0 14px">
-      <button type="button" id="dlHtml" class="invent" style="width:auto;padding:10px 16px">Download draft (.html)</button>
-      <a href="/guide/file-a-us-provisional" style="display:inline-block;margin-left:10px;font-family:'IBM Plex Mono',monospace;font-size:12px">Next: how to file it as a US provisional</a>
-      <button type="button" id="dlPrint" class="invent" style="width:auto;padding:10px 16px">Print / save as PDF</button>
+    <div id="dlBar" style="display:none;gap:10px 16px;flex-wrap:wrap;margin:0 0 16px">
+      <button type="button" id="dlHtml" class="invent">Download draft (.html)</button>
+      <button type="button" id="dlPrint" class="invent">Print or save as PDF</button>
+      <a href="/guide/file-a-us-provisional">How to file it as a US provisional</a>
     </div>
     <div class="close-warn" id="closeWarn" style="display:none"></div>
     <section class="fz" id="smHero" style="display:none" data-flow="v2"><span id="flow-map"></span>
-      <div class="fk">Step 4 \u2014 Support map</div>
+      <div class="fk">Step 4. Support map</div>
       <h2>Is every claim element actually described?</h2>
-      <p>A provisional protects only what its description teaches. Each claim element below is checked against the numbered paragraphs of your draft: green is worded there, amber partly, red not at all.</p>
+      <p>A provisional protects only what its description teaches. Each claim element below is checked against the numbered paragraphs of your draft: supported means it is worded there, partly means some of it is, and not described means none of it is.</p>
       <div id="smHeroBody"></div>
     </section>
     <div class="paper">
       <div class="wm">DRAFT</div>
-      <div class="pno">UNITED STATES PROVISIONAL PATENT DISCLOSURE \xB7 SUBMISSION DRAFT</div>
+      <div class="pno">United States provisional patent disclosure. Draft for review, not a filed application.</div>
       <div id="resultContent"></div>
       <div class="src" id="ragSources"></div>
     </div>
     <section class="fz" id="fixZone" style="display:none" data-flow="v2"><span id="flow-fix"></span>
-      <div class="fk">Step 5 \u2014 Fix gaps</div>
+      <div class="fk">Step 5. Fix gaps</div>
       <h2>Close the gaps in your own words</h2>
       <p>Each item is a claim element or a mechanism field your description does not yet teach. Write the missing detail (parts, values, how it works, an alternative) and redraft: your answers are added to the description, so the new draft can support them. iPatent never invents the missing detail for you.</p>
       <div id="fixList"></div>
       <div class="btns"><button type="button" id="fixRedraft">Add my answers and redraft</button><button type="button" id="fixSkip" class="invent">Skip to filing</button></div>
-      <div class="status" id="fixStatus"></div>
+      <div class="status" id="fixStatus" role="status" aria-live="polite"></div>
     </section>
     <section class="fz" id="fileZone" style="display:none" data-flow="v2"><span id="flow-file"></span>
-      <div class="fk">Step 6 \u2014 File</div>
+      <div class="fk">Step 6. File</div>
       <h2>File it, and put the 12-month date in your calendar</h2>
       <p>A US provisional costs $65 to $325 at the USPTO (by entity size), is never examined and never published, and gives you a filing date for exactly what it describes. Within 12 months you must file the nonprovisional, and any PCT or foreign application, or the date is lost. Disclose nothing in public before you file: most countries outside the US have no grace period.</p>
       <div class="dl-row">
@@ -2217,62 +2281,70 @@ var LANDING_HTML = `<!DOCTYPE html>
       <div class="deadline" id="deadlineOut" aria-live="polite"></div>
       <div class="btns">
         <button type="button" id="icsBtn">Add the 12-month date to my calendar (.ics)</button>
-        <a class="invent" href="/guide/file-a-us-provisional" style="display:block;text-align:center;text-decoration:none">Step-by-step: file at the USPTO</a>
+        <a class="invent" href="/guide/file-a-us-provisional" style="text-align:center;text-decoration:none">Step by step: file at the USPTO</a>
       </div>
-      <p style="margin-top:12px;font-size:13px">Dates are computed in your browser; a date on a weekend moves to Monday (35 U.S.C. 21(b)); if it lands on a federal holiday, the next business day applies. Not legal advice: confirm every date with a registered patent attorney or agent.</p>
+      <p class="note" style="margin-top:14px">Dates are computed in your browser; a date on a weekend moves to Monday (35 U.S.C. 21(b)); if it lands on a federal holiday, the next business day applies. Not legal advice: confirm every date with a registered patent attorney or agent.</p>
     </section>
   </section>
+  </div>
+  </div>
 
-  <!-- How it works -->
-  <section class="how">
-    <h2>How it <span>works</span></h2>
-    <div class="steps">
-      <div class="step">
-        <div class="sno">STEP 01 \u2014 RETRIEVE</div>
-        <h3>Ground in prior filings</h3>
-        <p>Your description is matched against 33,500+ segments of the author\u2019s own draft disclosures, used only for structure and register. Nothing is copied into your draft.</p>
-      </div>
-      <div class="step">
-        <div class="sno">STEP 02 \u2014 DRAFT</div>
-        <h3>Reason like a patent drafter</h3>
-        <p>An open-weights model on Cloudflare Workers AI drafts every section in formal patent register, then flags where support for later claims looks thin.</p>
-      </div>
-      <div class="step">
-        <div class="sno">STEP 03 \u2014 OWN</div>
-        <h3>Review, then file</h3>
-        <p>Download the draft or print it to PDF, then <a href="/guide/file-a-us-provisional">file it at the USPTO yourself</a> for $65 to $325, or take it to a registered practitioner first. Nothing is kept unless you ask for a private copy.</p>
-      </div>
-    </div>
+  <div class="after" id="limits">
+    <section aria-labelledby="limH">
+      <h2 id="limH">What iPatent does not do</h2>
+      <ul>
+        <li><b>It does not give legal advice.</b> It drafts a disclosure for you and a registered patent attorney or agent to review.</li>
+        <li><b>It does not file.</b> Nothing is sent to the USPTO, and generating a draft establishes no filing date.</li>
+        <li><b>It does not search the prior art.</b> The closeness warning compares your text with a reference corpus. It is not a novelty or clearance opinion.</li>
+        <li><b>It does not supply the invention.</b> A model can state things you never wrote. A grounding check removes figures and citations you did not give, and the support map flags claim elements the text does not teach. The <a href="/example">worked example</a> shows what an unedited run got wrong.</li>
+      </ul>
+    </section>
+    <section aria-labelledby="privH">
+      <h2 id="privH">Privacy and method</h2>
+      <ul>
+        <li><b>Private by default.</b> Your description and draft are not stored unless you ask for a private copy, and nothing is published. Drafts are counted by broad topic, never by their text.</li>
+        <li><b>Drafted from your text.</b> Open-weights models on Cloudflare Workers AI write every section from your description and mechanism card. Reference filings contribute section structure only; none of their text is copied into your draft.</li>
+        <li><b>You own the result.</b> Download the draft or print it to PDF, then <a href="/guide/file-a-us-provisional">file it at the USPTO yourself</a> for $65 to $325, or take it to a registered practitioner first.</li>
+      </ul>
+    </section>
+  </div>
+
+  <section class="ref" aria-labelledby="refH">
+    <h2 id="refH">Filing a provisional yourself</h2>
+    <p>Plain-language guides to US provisional applications, written for individual inventors. General information, not legal advice.</p>
+    <ul>
+      <li><a href="/guide">What a provisional protects, and how to draft one</a></li>
+      ${GUIDE_PAGES.map((p) => '<li><a href="/guide/' + p.slug + '">' + escapeHtml(p.title) + "</a></li>").join("")}
+      <li><a href="/example">A real AI-drafted provisional, and what it got wrong</a></li>
+    </ul>
   </section>
 
-  <section class="sub-box" id="subscribe" style="border:1px solid var(--line);background:var(--white);padding:22px 24px;margin:40px 0 0">
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;color:var(--green)">NEXT FROM QNFO</div>
-    <p style="margin:8px 0 12px;font-size:17px">We are measuring what AI-drafted provisionals actually secure, on real patents. Get the results, and the occasional research note: no spam, one click to leave.</p>
-    <form id="subForm" style="display:flex;gap:8px;flex-wrap:wrap" novalidate>
-      <label for="subEmail" style="position:absolute;left:-9999px">Email address</label>
-      <input id="subEmail" type="email" placeholder="you@example.com" autocomplete="email" required style="flex:1;min-width:200px;padding:12px;border:1px solid var(--line);font-size:16px;background:var(--paper)">
-      <input id="subHp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
-      <button type="submit" id="subBtn" style="padding:12px 18px;background:var(--green);color:var(--white);border:none;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em;cursor:pointer">SUBSCRIBE</button>
+  <section class="sub-box" id="subscribe" aria-labelledby="subH">
+    <h2 id="subH">Results from the benchmark</h2>
+    <p>We are measuring what AI-drafted provisionals actually secure, on real patents. Get the results and the occasional research note. No spam, one click to leave.</p>
+    <form id="subForm" novalidate>
+      <label for="subEmail" class="sr">Email address</label>
+      <input id="subEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
+      <input id="subHp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" class="sr">
+      <button type="submit" id="subBtn">Subscribe</button>
     </form>
-    <div id="subMsg" role="status" aria-live="polite" style="font-family:'IBM Plex Mono',monospace;font-size:11px;margin-top:8px;color:var(--ink-soft)"></div>
+    <div id="subMsg" role="status" aria-live="polite"></div>
   </section>
 
   <footer>
     <div class="foot">
-      <div class="f-brand">iPatent<em>.</em>qnfo.org <span style="font-weight:400;color:var(--ink-soft)">\xB7 an open research project</span></div>
-      <nav>
+      <nav aria-label="Footer">
         <a href="/guide">Provisional guide</a>
         <a href="https://qnfo.org">QNFO</a>
         <a href="https://qnfo.org/papers">Papers</a>
         <a href="https://qnfo.org/legal">License</a>
       </nav>
-      <div class="f-legal" style="font-size:11.5px;color:var(--ink)">
-        Built by <b>Rowan Brad Quni-Gudzinas</b> (<a href="https://orcid.org/0009-0002-4317-5604" style="color:var(--green)">ORCID</a>) at QNFO. Want a human review, iPatent for your team, lab or tech-transfer office, or to collaborate? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent" style="color:var(--green)">Work with me</a>.<br>
+      <div class="f-legal">
+        Built by <b>Rowan Brad Quni-Gudzinas</b> (<a href="https://orcid.org/0009-0002-4317-5604">ORCID</a>) at QNFO, an open research project. Want a human review, iPatent for your team, lab or tech-transfer office, or to collaborate? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent">Work with me</a>.<br>
         Share iPatent: ${shareLinks(SHARE_URL, SHARE_TEXT)}
       </div>
       <div class="f-legal">
-        iPatent is a free experimental drafting assistant. Outputs are machine-generated drafts \u2014 not legal advice, and not filed applications.
-        No USPTO filing date is established by generation. \xA9 2026 QNFO.
+        iPatent is a free experimental drafting assistant. Outputs are machine-generated drafts: not legal advice, and not filed applications. No USPTO filing date is established by generation. &copy; 2026 QNFO.
       </div>
     </div>
   </footer>
@@ -2390,8 +2462,8 @@ var LANDING_HTML = `<!DOCTYPE html>
     }
   });
   function mechHolesHtml(holes){
-    if(!holes || !holes.length) return '<div class="smap"><b>NO OPEN HOLES</b> &mdash; every field is stated. Check each one is true, then draft.</div>';
-    return '<div class="smap"><b>' + holes.length + ' OPEN HOLE' + (holes.length > 1 ? 'S' : '') + '</b> &mdash; fill these in the card or in your description:' + holes.map(function(h){ var lb = h.field; (mechFields || []).forEach(function(f){ if(f.key === h.field) lb = f.label; }); return '<div style="margin-top:6px;color:#b3261e"><b>' + esc(lb) + '</b> &mdash; ' + esc(h.why) + '</div>'; }).join('') + '</div>';
+    if(!holes || !holes.length) return '<div class="smap"><b>No open holes.</b> Every field is stated. Check each one is true, then draft.</div>';
+    return '<div class="smap"><b>' + holes.length + ' open hole' + (holes.length > 1 ? 's' : '') + '.</b> Fill these in the card or in your description:' + holes.map(function(h){ var lb = h.field; (mechFields || []).forEach(function(f){ if(f.key === h.field) lb = f.label; }); return '<div style="margin-top:6px;color:#b3261e"><b>' + esc(lb) + '</b> &mdash; ' + esc(h.why) + '</div>'; }).join('') + '</div>';
   }
   function renderMech(data){
     mechFields = data.fields || [];
@@ -2414,7 +2486,7 @@ var LANDING_HTML = `<!DOCTYPE html>
   document.addEventListener('click', function(ev){
     if(!ev.target || ev.target.id !== 'mechBtn') return;
     var b = ev.target, box = document.getElementById('mechCard');
-    b.disabled = true; b.textContent = 'READING THE MECHANISM\u2026';
+    b.disabled = true; b.textContent = 'Reading the mechanism\u2026';
     fetch(API_BASE + '/mechanism', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
       title: document.getElementById('title').value.trim(),
       technical_field: document.getElementById('technicalField').value.trim(),
@@ -2451,9 +2523,9 @@ var LANDING_HTML = `<!DOCTYPE html>
   function pnum(n){ return '[' + String(n).padStart(4, '0') + ']'; }
   function renderSupportMap(sm){
     if(!sm || !sm.rows || !sm.rows.length) return '';
-    var head = '<b>SUPPORT MAP</b> \u2014 ' + sm.supported + ' of ' + sm.elements + ' claim elements are worded in a numbered paragraph, ' + sm.weak + ' partly, ' + sm.unsupported + ' not at all. Fix the red ones in your description before filing. <span class="sm-meta">(' + esc(sm.method) + ')</span>';
+    var head = '<b>Support map.</b> ' + sm.supported + ' of ' + sm.elements + ' claim elements are worded in a numbered paragraph, ' + sm.weak + ' partly, ' + sm.unsupported + ' not at all. Fix the red ones in your description before filing. <span class="sm-meta">(' + esc(sm.method) + ')</span>';
     var rows = sm.rows.map(function(r){
-      return '<div class="sm-row ' + r.status + '"><div>CL ' + r.claim + '</div><div><div class="sm-el">' + esc(r.element) + '</div><div class="sm-meta"><span class="sm-st">' + r.status.toUpperCase() + ' ' + Math.round(r.coverage * 100) + '%</span> \u00b7 best ' + (r.paragraph ? pnum(r.paragraph) : 'none') + ((r.missing_values && r.missing_values.length) ? ' \u00b7 values not in the description: ' + esc(r.missing_values.join(', ')) : '') + ((r.missing_terms && r.missing_terms.length) ? ' \u00b7 not found: ' + esc(r.missing_terms.join(', ')) : '') + '</div></div></div>';
+      return '<div class="sm-row ' + r.status + '"><div>Cl. ' + r.claim + '</div><div><div class="sm-el">' + esc(r.element) + '</div><div class="sm-meta"><span class="sm-st">' + r.status.toUpperCase() + ' ' + Math.round(r.coverage * 100) + '%</span> \u00b7 best ' + (r.paragraph ? pnum(r.paragraph) : 'none') + ((r.missing_values && r.missing_values.length) ? ' \u00b7 values not in the description: ' + esc(r.missing_values.join(', ')) : '') + ((r.missing_terms && r.missing_terms.length) ? ' \u00b7 not found: ' + esc(r.missing_terms.join(', ')) : '') + '</div></div></div>';
     }).join('');
     return '<div class="smap">' + head + rows + '</div>';
   }
@@ -2511,11 +2583,11 @@ var LANDING_HTML = `<!DOCTYPE html>
   }
 
   function renderRag(sources){
-    if(!sources || !sources.length) return '<b>REFERENCE FILINGS:</b> none matched (corpus may still be warming).';
+    if(!sources || !sources.length) return '<b>Reference filings:</b> none matched.';
     const rows = sources.slice(0,6).map(s=>
-      '<div class="src-row">\u25C6 <b>'+esc(s.title)+'</b> \u2014 similarity '+ (s.score*100).toFixed(0)+'% \xB7 section: '+esc(s.section)+'</div>'
+      '<div class="src-row"><b>'+esc(s.title)+'</b>, similarity '+ (s.score*100).toFixed(0)+'%, section: '+esc(s.section)+'</div>'
     ).join('');
-    return '<b>REFERENCE FILINGS RETRIEVED:</b>'+rows;
+    return '<b>Reference filings matched (used for section structure only):</b>'+rows;
   }
 
   // ==== Adaptive starters + type-ahead corpus guidance (v3.4) ====
@@ -2546,7 +2618,7 @@ var LANDING_HTML = `<!DOCTYPE html>
       document.getElementById('technicalField').value = idea.field_clean || idea.technical_field || '';
       document.getElementById('description').value = idea.description || '';
       var st = document.getElementById('status');
-      if(st){ st.className = 'status'; st.textContent = 'Loaded a corpus example - edit it before drafting.'; }
+      if(st){ st.className = 'status'; st.textContent = 'Sample loaded. Edit it before drafting.'; updateMeter(); flowPaint(); }
     }).catch(function(err){
       var st = document.getElementById('status');
       if(st){ st.className = 'status err'; st.textContent = 'Could not load example: ' + err.message; }
@@ -2587,7 +2659,7 @@ var LANDING_HTML = `<!DOCTYPE html>
     rb.type = 'button';
     rb.id = 'retryBtn';
     rb.textContent = 'Retry';
-    rb.style.cssText = 'margin-left:6px;padding:2px 10px;font:inherit;cursor:pointer';
+    rb.className = 'invent'; rb.style.cssText = 'margin-left:8px;padding:4px 14px;font-size:15px';
     rb.addEventListener('click', function(){
       if(form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', {cancelable:true}));
     });
@@ -2596,7 +2668,7 @@ var LANDING_HTML = `<!DOCTYPE html>
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     btn.disabled = true;
-    btn.textContent = 'DRAFTING\u2026 (up to ~90s)';
+    btn.textContent = 'Drafting\u2026 this can take up to 90 seconds';
     status.textContent = '';
     status.className = 'status';
     result.style.display = 'none';
@@ -2630,7 +2702,7 @@ var LANDING_HTML = `<!DOCTYPE html>
         return;
       }
       result.style.display = 'block';
-      document.getElementById('resultId').textContent = 'SUBMISSION ' + data.submission_id;
+      document.getElementById('resultId').textContent = 'Draft ' + data.submission_id;
       if(MECH_V2){
         var smh = document.getElementById('smHero'), smb = document.getElementById('smHeroBody');
         if(smb) smb.innerHTML = smHeroHtml(data.support_map);
@@ -2639,29 +2711,29 @@ var LANDING_HTML = `<!DOCTYPE html>
         ['fixZone','fileZone'].forEach(function(id){ var z = document.getElementById(id); if(z) z.style.display = 'block'; });
         flowState.draft = true; flowState.map = true; fileRender(); flowPaint();
       }
-      rc.innerHTML = renderSections(data.sections||{}, data.paragraphs||[]) + (MECH_V2 ? '' : renderSupportMap(data.support_map)) + (data.mechanism ? '<div class="smap"><b>MECHANISM CARD USED</b> &mdash; the claims were derived from your card.</div>' + mechHolesHtml(data.mechanism_holes) : '') + '<div class="smap"><b>NEXT</b> \u2014 fix every red element in your own words, add the figures, then have a registered practitioner review it. Want a human review or iPatent for your team? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-result" style="color:var(--green)">Work with me</a>.</div>';
+      rc.innerHTML = renderSections(data.sections||{}, data.paragraphs||[]) + (MECH_V2 ? '' : renderSupportMap(data.support_map)) + (data.mechanism ? '<div class="smap"><b>Mechanism card used.</b> The claims were derived from your card.</div>' + mechHolesHtml(data.mechanism_holes) : '') + '<div class="smap"><b>Next.</b> Fix every element marked not described in your own words, add the figures, then have a registered practitioner review it. Want a human review or iPatent for your team? <a href="https://qnfo.org/work-with-me?utm_source=ipatent&amp;utm_medium=referral&amp;utm_campaign=ipatent-result">Work with me</a>.</div>';
       rag.innerHTML = renderRag(data.rag_sources||[]);
       var cw = document.getElementById('closeWarn');
       if(cw){
         if(data.prior_art && data.prior_art.flag){
           cw.style.display = 'block';
-          cw.innerHTML = '<b>PRIOR-ART CLOSENESS WARNING</b> &mdash; your description is very close to &ldquo;' + esc(data.prior_art.top_title || '') + '&rdquo; (' + Math.round((Number(data.prior_art.top_score) || 0) * 100) + '% similar, section ' + esc(data.prior_art.section || 'n/a') + '). ' + esc(data.prior_art.message || 'Refine the distinguishing features before filing.') + ' This is a style/prior-art reference, not a clearance opinion.';
+          cw.innerHTML = '<b>Closeness warning.</b> Your description is very close to &ldquo;' + esc(data.prior_art.top_title || '') + '&rdquo; (' + Math.round((Number(data.prior_art.top_score) || 0) * 100) + '% similar, section ' + esc(data.prior_art.section || 'n/a') + '). ' + esc(data.prior_art.message || 'Refine the distinguishing features before filing.') + ' This is a style/prior-art reference, not a clearance opinion.';
         } else { cw.style.display = 'none'; }
       }
       lastDoc = { html: data.document_html || '', id: data.submission_id };
       var dl = document.getElementById('dlBar');
       if(dl) dl.style.display = 'flex';
       status.textContent = data.saved
-        ? 'Draft generated \xB7 private copy kept \xB7 reopen at ' + data.private_link
-        : 'Draft generated \xB7 not stored \u2014 download or print it now';
+        ? 'Draft ready. A private copy is kept; reopen it at ' + data.private_link
+        : 'Draft ready. It is not stored: download or print it now.';
       document.getElementById(MECH_V2 ? 'smHero' : 'result').scrollIntoView({behavior:'smooth'});
     }catch(err){
       showRetry();
     }finally{
       btn.disabled = false;
-      btn.textContent = 'Draft Disclosure';
+      btn.textContent = 'Draft the disclosure';
       const ib = document.getElementById('inventBtn');
-      if(ib){ ib.disabled = false; ib.textContent = '\u26A1 Try an example'; }
+      if(ib){ ib.disabled = false; ib.textContent = 'Run a sample draft'; }
     }
   });
 
@@ -2669,8 +2741,8 @@ var LANDING_HTML = `<!DOCTYPE html>
   document.getElementById('inventBtn').addEventListener('click', async ()=>{
     const inventBtn = document.getElementById('inventBtn');
     inventBtn.disabled = true;
-    inventBtn.textContent = 'INVENTING\u2026';
-    status.textContent = 'Picking an invention concept from the corpus\u2026';
+    inventBtn.textContent = 'Loading a sample\u2026';
+    status.textContent = 'Loading a sample from the reference corpus\u2026';
     status.className = 'status';
     try{
       const resp = await fetch(API_BASE + '/idea');
@@ -2679,13 +2751,13 @@ var LANDING_HTML = `<!DOCTYPE html>
       document.getElementById('title').value = idea.title;
       document.getElementById('technicalField').value = idea.field_clean || idea.technical_field || '';
       document.getElementById('description').value = idea.description;
-      status.textContent = 'Invented: "' + idea.title.slice(0,60) + '" \u2014 drafting disclosure\u2026';
+      status.textContent = 'Sample loaded: "' + idea.title.slice(0,60) + '". Drafting\u2026';
       form.dispatchEvent(new Event('submit', {cancelable:true}));
     }catch(err){
       status.className = 'status err';
       status.textContent = 'Error: ' + err.message;
       inventBtn.disabled = false;
-      inventBtn.textContent = '\u26A1 Try an example';
+      inventBtn.textContent = 'Run a sample draft';
     }
   });
   loadStarters();
@@ -2718,7 +2790,7 @@ var qnfo_ipatent_default = {
           status: "ok",
           worker: "qnfo-ipatent",
           version: VERSION,
-          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics", "usage-topics", "support-map", "completeness-meter", "guided-flow-v2", "ab-split-v2", "subscribe", "llms-txt"],
+          capabilities: ["disclosure-drafting", "prior-art-search", "private-saved-draft", "provisional-guide", "page-metrics", "usage-topics", "support-map", "completeness-meter", "guided-flow-v2", "ab-split-v2", "subscribe", "llms-txt", "cost-per-draft"],
           limitations: ["POST /api/draft allows 20 submissions per IP per hour", "a human visit to / is assigned once to the default page or the ?v=2 guided flow (cookie ipatent_ab holds only the arm number, 30 days; share = ops_config ipatent_v2_share, 0 turns it off) so both variants can be measured (AB-SPLIT-V2-1)", "drafts are invention disclosures for review, not filed patents", "nothing is stored unless the inventor opts in; /api/disclosures needs X-Admin-Token", "searches and drafts are counted per day by broad topic only (usage_counts); their text is never stored (IPATENT-USAGE-1)", "page metrics are daily counts by source class only (no IP, user agent or cookie); crawler detection is a user-agent heuristic", "the support map is a lexical check of claim wording against numbered paragraphs, not a legal opinion", "at most 150 drafts in 24 hours across all users"],
           bindings: {
             d1: !!env.IPATENT_DB ? "ipatent-db" : null,
@@ -2813,6 +2885,7 @@ var qnfo_ipatent_default = {
       }
       if (path === "/api/suggest" && request.method === "GET") return handleSuggest(env, url);
       if (path === "/api/status" && request.method === "GET") return handleStatus(env);
+      if (path === "/api/cost" && request.method === "GET") return handleCost(env);
       return json({ error: "Not found" }, 404);
     } catch (err) {
       console.error("Unhandled error:", err.message, err.stack);
