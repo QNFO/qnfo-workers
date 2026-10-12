@@ -18,7 +18,7 @@ import os from "node:os";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "orch-quality-"));
 fs.writeFileSync(path.join(tmp, "w.mjs"), fs.readFileSync(path.join(here, "worker.js"), "utf8") +
-  "\nexport { windowFor as __windowFor, windowCut as __windowCut, applyEdits as __applyEdits, danglingRefs as __dangling, bumpVersion as __bump, goalVersion as __goalVersion, promptForPatch as __prompt, randId as __randId, VERSION as __version, WINDOW_CHARS as __WINDOW };\n");
+  "\nexport { windowFor as __windowFor, windowCut as __windowCut, applyEdits as __applyEdits, danglingRefs as __dangling, bumpVersion as __bump, intakeIssues as __intake, goalVersion as __goalVersion, promptForPatch as __prompt, randId as __randId, VERSION as __version, WINDOW_CHARS as __WINDOW };\n");
 const mod = await import(pathToFileURL(path.join(tmp, "w.mjs")).href);
 const worker = mod.default;
 const atLeast = (v, min) => { const a = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")), b = min.split(".").map(Number); if (!a) return false; for (let i = 0; i < 3; i++) { if (+a[i + 1] !== b[i]) return +a[i + 1] > b[i]; } return true; };
@@ -212,6 +212,28 @@ const GOOD = block("  for (const r of refs) out.push(String(r));", "  for (const
   ok(bad.status === 401 && none.status === 401 && good.status === 200, "7b the bearer check still accepts the key and refuses anything else", { bad: bad.status, good: good.status, none: none.status });
   const h = await (await worker.fetch(new Request("https://x/health"), env)).json();
   ok(["search-fuzzy", "window-clamp", "dangling-ref-gate", "repair-shows-edits", "verify-deferred", "goal-version", "multi-file"].every((c) => h.capabilities.indexOf(c) >= 0), "7c /health names the new capabilities", h.capabilities);
+}
+
+// ===== 8. INTAKE-ANCHOR-INHERIT-1: a retry without a code-anchor line starts from its earlier task's anchor =====
+{
+  serve(FIX);
+  const { env } = envWith([]);
+  const db = env.AUDIT_DB._db;
+  await worker.fetch(new Request("https://x/v1/tasks", { headers: hdr }), env); // creates code_tasks
+  db.prepare("INSERT INTO agent_issues (title, description, source, created_at, updated_at) VALUES (?,?,?,?,?)").run("FX-CITE-1: resolve references", GOAL + "\ncode-task: repo=qnfo-workers path=fx-worker/worker.js\n", "claude-session-test", 1, 1);
+  const old = new Date(Date.now() - 86400000).toISOString();
+  const ins = db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, last_error, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+  ins.run("ct_prevwithanchor", "qnfo-workers", "fx-worker/worker.js", "[issue #1] FX-CITE-1: resolve references", "failed", "done", 1, JSON.stringify({ anchor: ANCHOR, mode: "patch" }), "merge-runner: required check(s) failed", new Date(Date.now() - 2 * 86400000).toISOString(), new Date(Date.now() - 2 * 86400000).toISOString());
+  ins.run("ct_prevnoanchor00", "qnfo-workers", "fx-worker/worker.js", "[issue #1] [retry 1] FX-CITE-1: resolve references", "needs_human", "read", 1, null, "file larger than 60000 chars needs an anchor", old, old);
+  const r = await mod.__intake(env, 2);
+  const t = db.prepare("SELECT * FROM code_tasks WHERE id = ?").get(r.created[0] || "");
+  ok(r.created.length === 1 && t && JSON.parse(t.ctx).anchor === ANCHOR && /^\[issue #1\] \[retry 2\]/.test(t.goal) && events(env, "code-task.anchor-inherited").length === 1, "8a the retry carries the anchor of the issue's latest task that had one", { r, ctx: t && t.ctx, goal: t && t.goal.slice(0, 60) });
+  const { env: env2 } = envWith([]);
+  await worker.fetch(new Request("https://x/v1/tasks", { headers: hdr }), env2);
+  env2.AUDIT_DB._db.prepare("INSERT INTO agent_issues (title, description, source, created_at, updated_at) VALUES (?,?,?,?,?)").run("FX-CITE-2: resolve references", GOAL + "\ncode-task: repo=qnfo-workers path=fx-worker/worker.js\n", "claude-session-test", 1, 1);
+  const r2 = await mod.__intake(env2, 2);
+  const t2 = env2.AUDIT_DB._db.prepare("SELECT * FROM code_tasks").get();
+  ok(r2.created.length === 1 && t2.ctx === null && events(env2, "code-task.anchor-inherited").length === 0, "8b a first task inherits nothing", { ctx: t2.ctx });
 }
 
 console.log(pass + " passed, " + fail + " failed");
