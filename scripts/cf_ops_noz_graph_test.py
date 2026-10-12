@@ -151,6 +151,7 @@ class FakeGraph:
         return len(self.matching_nodes()) + len([e for e in self.edges.values() if "zenodo" in (e["id"] + e["source_id"] + e["target_id"] + (e["properties"] or "")).lower()]) + len(self.matching_pubs())
 
     def __call__(self, sql, params=None):
+        sql = str(sql).replace("UPDATE OR REPLACE ", "UPDATE ")  # the live action moves edges with OR REPLACE (twin edges); the fake has no UNIQUE index
         params = params or []
         self.calls.append((sql, list(params)))
         s = sql.strip()
@@ -241,7 +242,7 @@ ok("paper:alpha-paper" in fake.nodes and "archive-record-999" in fake.nodes and 
 ok(fake.edges["edge-pub-1"]["target_id"] == "paper:alpha-paper" and fake.edges["edge-90000"]["target_id"] == "paper:beta-paper" and "edge-self" not in fake.edges and "e-owns-t-zenodo-publish" not in fake.edges, "live: edges follow the renames and the deletes", fake.edges)
 ok(fake.pubs["pub-1"]["doi"] is None and fake.pubs["pub-2"]["doi"] == "10.1038/x", "live: the registrar doi is nulled, the third-party one kept")
 ok(fake.remaining() == 0, "live: the store holds no mention")
-kinds = [c[0].split(" ")[0] + (" edges" if "FROM edges" in c[0] or "UPDATE edges" in c[0] else " nodes" if "nodes" in c[0] else "") for c in fake.calls if not c[0].strip().startswith("SELECT")]
+kinds = [c[0].split(" ")[0] + (" edges" if "FROM edges" in c[0] or "UPDATE edges" in c[0] or "UPDATE OR REPLACE edges" in c[0] else " nodes" if "nodes" in c[0] else "") for c in fake.calls if not c[0].strip().startswith("SELECT")]
 ok(kinds.index("CREATE nodes") < kinds.index("DELETE edges") < kinds.index("DELETE nodes") < kinds.index("INSERT nodes"), "live: backup, then edge deletes, then node deletes, then the renames", kinds[:8])
 
 fake = FakeGraph(NODES, EDGES, PUBS, fail_backup=True)
