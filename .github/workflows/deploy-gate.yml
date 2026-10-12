@@ -778,6 +778,9 @@ jobs:
       - name: NO-ZENODO-DOI-5 offline suite (cf_ops_actions noz-scrub-bodies, #2278)
         if: ${{ !cancelled() }}
         run: python3 scripts/cf_ops_noz_scrub_test.py
+      - name: NO-ZENODO-DOI-7 offline suite (cf_ops_actions noz-scrub-graph, #2448)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/cf_ops_noz_graph_test.py
       # MIGRATION-RUNNER-1 (T5.3): a migration that opts in with "-- APPLY-BY: ci" is applied by apply-migrations.yml when
       # it merges; here every added or changed migration must pass the same header checks (DB, Rollback, BACKUP for a
       # DELETE or DROP, complete statements) without touching D1.
