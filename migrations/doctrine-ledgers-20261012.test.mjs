@@ -1,6 +1,6 @@
-// DOCTRINE-LEDGERS-20261012 offline suite for migrations/2026-10-12-20 to -24 (KERNEL-REGISTRIES-1, TICK-DRIVER-ROSTER-1,
-// CALIBRATION-SCORER-1, SLA-MECHANISMS-1, REGISTER-DISPOSITIONS-1; agent_issues 2231, 2235, 2241, 2232, 2233, 2234, 2251, 2192,
-// 2194, 2193, 2195, 2197, 1297, 2148, 2294-2297). It applies the five files, twice each, to an in-memory SQLite database built from the qnfo-audit objects they touch (sql
+// DOCTRINE-LEDGERS-20261012 offline suite for migrations/2026-10-12-20 to -25 (KERNEL-REGISTRIES-1, TICK-DRIVER-ROSTER-1,
+// CALIBRATION-SCORER-1, SLA-MECHANISMS-1, REGISTER-DISPOSITIONS-1, RECURRENCE-GUARD-TWIN-1; agent_issues 2231, 2235, 2241, 2232, 2233, 2234, 2251, 2192,
+// 2194, 2193, 2195, 2197, 1297, 2148, 2294-2297, 2364, 2365). It applies the six files, twice each, to an in-memory SQLite database built from the qnfo-audit objects they touch (sql
 // read from sqlite_master on 2026-10-12) and checks what each fleet_tick trigger wrote. Every file ends by inserting a
 // fleet_tick row, so applying a file is also a run of its trigger. Run: node migrations/doctrine-ledgers-20261012.test.mjs
 import { DatabaseSync } from "node:sqlite";
@@ -138,6 +138,7 @@ CREATE TABLE ask_events (id TEXT PRIMARY KEY, ts TEXT, qhash TEXT, query TEXT, a
 CREATE TABLE chatbox_conversations (id TEXT PRIMARY KEY, thread_id TEXT, source TEXT, worker TEXT, model TEXT, messages_json TEXT, prompt TEXT, response TEXT, ts TEXT, ua TEXT);
 CREATE TABLE task_dod_register (id INTEGER PRIMARY KEY AUTOINCREMENT, source_table TEXT, source_row_id TEXT, wbs_code TEXT, title TEXT, owner TEXT, gtd_context TEXT, epic_id TEXT, sprint_id TEXT, dod TEXT, status TEXT, evidence_pointer TEXT, due TEXT, created_at TEXT, updated_at TEXT);
 CREATE TABLE worker_usage_daily (day TEXT NOT NULL, script TEXT NOT NULL, requests_24h INTEGER, errors_24h INTEGER, requests_7d INTEGER, errors_7d INTEGER, source TEXT, ts TEXT, PRIMARY KEY (day, script));
+CREATE UNIQUE INDEX idx_agent_issues_open_title_ci ON agent_issues(lower(trim(title))) WHERE status = 'open';
 `;
 const SEED = String.raw`
 INSERT INTO metric_registry (metric,layer,kind,source_of_truth,refresh_cadence,state,refresh_class,last_value) VALUES
@@ -170,6 +171,10 @@ INSERT INTO agent_issues (title,description,source,category,priority,status,crea
  ('METRIC-TRIGGER-3061-UNVERIFIED-BLOCKER-CLAIMS: Red team','a blocked thing','qnfo-fleet-control','autonomy','high','open',strftime('%s','now','-4 hours')*1000,strftime('%s','now')*1000),
  ('F blocked claim','this is blocked on a token','loop','core','low','open',strftime('%s','now','-4 hours')*1000,strftime('%s','now')*1000),
  ('G held','x','loop','core','low','open',strftime('%s','now','-4 hours')*1000,strftime('%s','now')*1000);
+INSERT INTO agent_issues (title,description,source,category,priority,status,created_at,updated_at) VALUES
+ ('METRIC-TRIGGER-9-TWIN: refiled metric issue','old copy','qnfo-fleet-control','core','high','closed',strftime('%s','now','-9 days')*1000,strftime('%s','now','-3 days')*1000),
+ ('metric-trigger-9-twin: Refiled metric issue ','open copy','qnfo-fleet-control','core','high','open',strftime('%s','now','-2 days')*1000,strftime('%s','now','-2 days')*1000);
+INSERT INTO issue_triage (issue_id,rc,owner,sla_due_at,close_evidence) VALUES (9,'r','qnfo-ops','x','TRIGGER-RECOVERY-1: recovered'),(10,'r','qnfo-ops','x',NULL);
 INSERT INTO issue_triage (issue_id,rc,owner,sla_due_at,close_evidence) VALUES (1,'r','qnfo-ops','x',NULL),(2,'r','qnfo-ops','x',NULL),(3,'r','qnfo-ops','x',NULL),(4,'r','qnfo-ops','x','evidence of close');
 INSERT INTO migration_runs (file,sha256,status) VALUES ('a','b','ok');
 INSERT INTO code_tasks (id,goal,status,created_at,updated_at,merged_at) VALUES ('ct1','[issue #2] B','merged',strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes'),strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 minutes'),strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 minutes'));
@@ -184,6 +189,10 @@ INSERT INTO remediation_contracts (class,issue_id,precondition,action,verify_pro
  ('issue-8',8,'p','a','SELECT 1','d1-query','x',1,'holding',datetime('now','+20 hours'),datetime('now','-4 hours'),3),
  ('issue-4',4,'p','a','SELECT 1','d1-query','x',1,'active',datetime('now','+20 minutes'),datetime('now','-40 minutes'),3),
  ('issue-3',3,'p','a','SELECT 1','d1-query','x',1,'active',datetime('now','+20 minutes'),datetime('now','-40 minutes'),3);
+INSERT INTO remediation_contracts (class,issue_id,precondition,action,verify_probe,verify_transport,escalate_to,expected_cadence_h,status,next_due_at,last_attempt_at,max_attempts,last_verdict) VALUES
+ ('issue-9',9,'p','a','SELECT 1','d1-query','x',1,'holding',datetime('now','+20 minutes'),datetime('now','-40 minutes'),3,'fail'),
+ ('issue-10',10,'p','a','SELECT 1','d1-query','x',1,'active',datetime('now','+20 minutes'),datetime('now','-40 minutes'),3,'fail');
+INSERT INTO remediation_verifications (issue_id,class,transport,expected,observed,pass,verified_at) VALUES (9,'issue-9','d1-query','1','0',0,datetime('now','-50 hours')),(9,'issue-9','d1-query','1','0',0,datetime('now','-40 hours')),(9,'issue-9','d1-query','1','0',0,datetime('now','-4 hours')),(10,'issue-10','d1-query','1','0',0,datetime('now','-30 minutes'));
 INSERT INTO remediation_verifications (issue_id,class,transport,expected,observed,pass,verified_at) VALUES (1,'issue-1','d1-query','1','0',0,datetime('now','-30 minutes')),(NULL,'fm-x','d1-query','0','0',1,datetime('now','-30 minutes')),
  (4,'issue-4','d1-query','1','0',0,datetime('now','-50 hours')),(4,'issue-4','d1-query','1','0',0,datetime('now','-40 hours')),(4,'issue-4','d1-query','1','pending: x',0,datetime('now','-30 hours')),(4,'issue-4','d1-query','1','0',0,datetime('now','-3 hours'));
 INSERT INTO cloud_ops_events (id,ts,kind,job,status) VALUES ('e1',strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes'),'code-task.intake','qnfo-code-orchestrator','ok'),('e2',strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes'),'fleet-observability-digest','qnfo-observability','ok'),('e3',strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes'),'done','qnfo-research-exec','ok');
@@ -194,7 +203,7 @@ INSERT INTO decision_log (id,ts,actor,assumption,action,evidence,outcome,blast_r
  (38,'2026-10-11T15:01:06Z','s','a','a','e','o','b','r','free text');
 INSERT INTO queue_sla (stuck_type,queue,definition,cycle_min,sla_min,auto_fix,owner,summary_column) VALUES ('intent-untriaged','intents','d',10,60,'f','o','intents_pending');
 `;
-const FILES = ["2026-10-12-20-kernel-registries.sql", "2026-10-12-21-tick-driver-roster.sql", "2026-10-12-22-calibration-scorer.sql", "2026-10-12-23-sla-mechanisms.sql", "2026-10-12-24-register-dispositions.sql"];
+const FILES = ["2026-10-12-20-kernel-registries.sql", "2026-10-12-21-tick-driver-roster.sql", "2026-10-12-22-calibration-scorer.sql", "2026-10-12-23-sla-mechanisms.sql", "2026-10-12-24-register-dispositions.sql", "2026-10-12-25-recurrence-guard-twin.sql"];
 const db = new DatabaseSync(":memory:");
 db.exec(SCHEMA);
 db.exec(SEED);
@@ -309,7 +318,7 @@ ok(g.length === 1 && g[0].issue_id === 4 && g[0].fails === 3 && g[0].applied ===
 const i4 = one("SELECT status, description d FROM agent_issues WHERE id = 4");
 ok(i4.status === "open" && /RECURRENCE-GUARD-SQL-1/.test(i4.d) && /Prior close_evidence: evidence of close/.test(i4.d), "the issue is reopened with the failure and its prior close evidence", i4);
 ok(tri[4].reopened_count === 1 && one("SELECT close_evidence e FROM issue_triage WHERE issue_id = 4").e === null && one("SELECT COUNT(*) n FROM issue_lifecycle WHERE issue_id = 4 AND event = 'reopened'").n === 1, "its triage row is reset once and the reopen is in issue_lifecycle", tri[4]);
-ok(one("SELECT COUNT(*) n FROM queue_sla_actions WHERE stuck_type = 'closure-relapse'").n === 1, "the reopen is logged once as a queue_sla action");
+ok(one("SELECT COUNT(*) n FROM queue_sla_actions WHERE stuck_type = 'closure-relapse' AND note LIKE 'reopened:%'").n === 1, "the reopen is logged once as a queue_sla action");
 db.exec("UPDATE ops_config SET value = 'off' WHERE key = 'queue_sla_autofix'; INSERT OR IGNORE INTO ops_config (key, value) VALUES ('queue_sla_autofix', 'off')");
 db.exec("INSERT INTO agent_issues (title, description, source, status, created_at, updated_at) VALUES ('H', 'x', 'loop', 'open', 1, 1)");
 db.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
@@ -338,6 +347,43 @@ db.exec("INSERT INTO worker_usage_daily (day, script, requests_7d, ts) VALUES (d
 db.exec("UPDATE worker_usage_daily SET requests_7d = 2 WHERE script = 'qnfo-pdf'");
 db.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
 ok(metric("workers_idle_7d") === "2", "a live worker under 3 requests in 7 days, and one absent from the snapshot, are counted idle", metric("workers_idle_7d"));
+
+// 6. RECURRENCE-GUARD-TWIN-1: a closed issue whose title is open again (agent_issues 2364, 2365).
+ok(one("SELECT COUNT(*) n FROM sqlite_master WHERE name = 'idx_agent_issues_open_title_ci'").n === 1, "the fixture carries the unique open-title index of the live database");
+let uniq = false;
+try { db.exec("UPDATE agent_issues SET status = 'open' WHERE id = 9"); } catch (e) { uniq = /UNIQUE/.test(String(e.message)); }
+ok(uniq, "reopening the closed copy by hand is refused by the index (the failure of 2026-10-12 08:04Z)");
+const c9 = one("SELECT status, description d FROM agent_issues WHERE id = 9"), c10 = one("SELECT status, description d, updated_at u FROM agent_issues WHERE id = 10");
+ok(c9.status === "closed" && !/REOPENED/.test(c9.d), "a closed issue with an open twin is not reopened", c9);
+ok(c10.d.split("RELAPSE ").length === 2 && /closed issue #9 has the same title and its contract issue-9 failed 3x/.test(c10.d), "the open twin carries one dated relapse line, however many ticks ran", c10.d);
+const tn = all("SELECT closed_issue_id, twin_issue_id, noted FROM recurrence_twin_notes");
+ok(tn.length === 1 && tn[0].closed_issue_id === 9 && tn[0].twin_issue_id === 10 && tn[0].noted === 1, "one twin note per closure", tn);
+const k9 = one("SELECT status, last_verdict v FROM remediation_contracts WHERE class = 'issue-9'");
+ok(k9.status === "superseded" && k9.v === "superseded:open-twin" && one("SELECT status FROM remediation_contracts WHERE class = 'issue-10'").status === "active", "the closed copy's contract is superseded; the twin keeps its own", k9);
+ok(one("SELECT COUNT(*) n FROM recurrence_guard_actions WHERE issue_id = 9").n === 0 && one("SELECT COUNT(*) n FROM recurrence_guard_actions WHERE issue_id = 4").n === 1, "no action row for the twin case; one for the issue that was reopened");
+ok(one("SELECT COUNT(*) n FROM queue_sla_actions WHERE stuck_type = 'closure-relapse' AND note LIKE 'noted on the open twin%'").n === 1 && one("SELECT COUNT(*) n FROM queue_sla_actions WHERE stuck_type = 'closure-relapse' AND note LIKE 'reopened:%'").n === 1, "each kind of action is logged once", all("SELECT note FROM queue_sla_actions WHERE stuck_type = 'closure-relapse'"));
+db.exec("UPDATE ops_config SET value = 'on' WHERE key = 'queue_sla_autofix'");
+db.exec("INSERT INTO recurrence_guard_actions (issue_id, class, fails, applied) VALUES (77, 'issue-77', 3, 1)");
+db.exec("INSERT INTO agent_issues (id, title, description, source, status, created_at, updated_at) VALUES (77, 'closed, no twin, already actioned', 'x', 'loop', 'closed', 1, strftime('%s', 'now', '-3 days') * 1000)");
+db.exec("INSERT INTO issue_triage (issue_id, rc, owner, sla_due_at, close_evidence) VALUES (77, 'r', 'o', 'x', 'evidence')");
+db.exec("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status, max_attempts) VALUES ('issue-77', 77, 'p', 'a', 'SELECT 1', 'd1-query', 'x', 'active', 3)");
+db.exec("DROP TRIGGER remediation_reopen_on_relapse_d1");
+db.exec("INSERT INTO remediation_verifications (issue_id, class, transport, expected, observed, pass, verified_at) VALUES (77, 'issue-77', 'd1-query', '1', '0', 0, datetime('now', '-5 hours')), (77, 'issue-77', 'd1-query', '1', '0', 0, datetime('now', '-4 hours')), (77, 'issue-77', 'd1-query', '1', '0', 0, datetime('now', '-3 hours'))");
+db.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
+db.exec("INSERT INTO fleet_tick (source) VALUES ('migration:test')");
+ok(one("SELECT COUNT(*) n FROM recurrence_guard_actions WHERE issue_id = 77").n === 1, "an issue and class with an action after its latest closure gets no second action row", all("SELECT id, issue_id, applied FROM recurrence_guard_actions"));
+ok(one("SELECT COUNT(*) n FROM recurrence_twin_notes").n === 1 && one("SELECT description d FROM agent_issues WHERE id = 10").d.split("RELAPSE ").length === 2, "further ticks add no note and no line");
+// the same rule in the per-verification trigger (REMEDIATION-REOPEN-2), recreated by the migration file
+db.exec(readFileSync(new URL("./2026-10-12-25-recurrence-guard-twin.sql", import.meta.url), "utf8"));
+db.exec("INSERT INTO agent_issues (id, title, description, source, status, created_at, updated_at) VALUES (81, 'Twin pair B', 'x', 'loop', 'closed', 1, strftime('%s', 'now', '-1 hours') * 1000), (82, 'twin pair b', 'x', 'loop', 'open', 1, 1), (83, 'no twin C', 'x', 'loop', 'closed', 1, strftime('%s', 'now', '-1 hours') * 1000)");
+db.exec("INSERT INTO issue_triage (issue_id, rc, owner, sla_due_at, close_evidence) VALUES (81, 'r', 'o', 'x', 'evidence'), (83, 'r', 'o', 'x', 'evidence')");
+db.exec("INSERT INTO remediation_contracts (class, issue_id, precondition, action, verify_probe, verify_transport, escalate_to, status, max_attempts) VALUES ('issue-81', 81, 'p', 'a', 'SELECT 1', 'd1-query', 'x', 'active', 2), ('issue-83', 83, 'p', 'a', 'SELECT 1', 'd1-query', 'x', 'holding', 2)");
+let vErr = null;
+try { for (let i = 0; i < 3; i++) db.exec("INSERT INTO remediation_verifications (issue_id, class, transport, expected, observed, pass) VALUES (81, 'issue-81', 'd1-query', '1', '0', 0), (83, 'issue-83', 'd1-query', '1', '0', 0)"); } catch (e) { vErr = String(e.message); }
+ok(vErr === null && one("SELECT COUNT(*) n FROM remediation_verifications WHERE class = 'issue-81'").n === 3, "a failing verdict on a closed issue with an open twin is stored (it was refused before)", vErr);
+ok(one("SELECT status FROM agent_issues WHERE id = 81").status === "closed" && one("SELECT status FROM agent_issues WHERE id = 83").status === "open" && one("SELECT status FROM remediation_contracts WHERE class = 'issue-83'").status === "active", "the per-verification rule leaves the twin case closed and still reopens an issue without a twin");
+const fmq = one("SELECT verify_probe p FROM remediation_contracts WHERE class = 'fm-reopen-hits-open-twin'");
+ok(fmq && one(fmq.p).expected === "0" && one(fmq.p).observed === "0", "detector fm-reopen-hits-open-twin runs and reads 0 once the closed copies are superseded", fmq && one(fmq.p));
 
 console.log(pass + " passed, " + fail + " failed");
 if (fail) process.exit(1);

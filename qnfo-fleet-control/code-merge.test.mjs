@@ -87,6 +87,7 @@ function ghRoute(method, path, body) {
   }
   if (method === "PUT" && (m = /^\/pulls\/(\d+)\/merge$/.exec(path))) {
     gh.merges.push({ pr: Number(m[1]), ...body });
+    if (gh.mergeRace > 0) { gh.mergeRace--; return resp(405, { message: "Base branch was modified. Review and try the merge again." }); }
     if (gh.mergeStatus) return resp(gh.mergeStatus, { message: "not mergeable" });
     if (gh.pulls[m[1]]) { gh.pulls[m[1]].merged = true; gh.pulls[m[1]].state = "closed"; }
     return resp(200, { sha: "merge-" + m[1], merged: true });
@@ -98,6 +99,7 @@ function ghRoute(method, path, body) {
   if (method === "POST" && path === "/git/blobs") { gh.blobs.push(Buffer.from(body.content, "base64").toString("utf8")); return resp(201, { sha: "blob" + gh.blobs.length }); }
   if (method === "POST" && path === "/git/trees") return resp(201, { sha: "tree-new" });
   if (method === "POST" && path === "/git/refs") return resp(201, { ref: body.ref });
+  if (method === "POST" && /^\/actions\/workflows\/[^/]+\/dispatches$/.test(path)) { (gh.dispatches = gh.dispatches || []).push({ path, body }); return resp(gh.dispatchStatus || 204, gh.dispatchStatus ? { message: "Resource not accessible by personal access token" } : null); }
   if (method === "POST" && path === "/pulls") {
     const number = 900 + gh.newPulls.length, sha = gh.branches[body.head];
     gh.newPulls.push({ number, ...body });
@@ -118,8 +120,9 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(src.slice(A, B + END.length) + "\n" + orch.slice(o1, o2) + "\n" + orch.slice(o3, o4) +
-  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmEditsApply, cmRebaseText, cmRevertEdits, cmIntegrity, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES };", sandbox, { filename: "code-merge-block.js" });
+  "\n__export = { cmDecide, cmOpenDecide, cmParsePatch, cmApply, cmBump, cmRevertText, cmEditsApply, cmRebaseText, cmRevertEdits, cmIntegrity, cmRequired, cmChecks, cmTrusted, cmScope, codeMergeTick, cmConfig, evAdvance, evSchema, hunkPatch, wholeFilePatch, CM_DEFAULT_ENABLED, cmReviewParse, cmReviewModel, cmReviewDiff, cmReviewDecision, cmModelFamily, CM_REVIEW_MODELS, CM_REVIEW_TRIES, cmCompanions, cmTaskGates, cmReviewScreen, cmReviewCombine, cmCiteFound, cmDefectName, cmDefinedIn, cmReviewFacts, cmSecondReviewer, cmReviewPrompt, cmRepairable, CM_REVIEW_DIFF_CHARS, CM_REVIEW_GOAL_CHARS, CM_STALE_RE };", sandbox, { filename: "code-merge-block.js" });
 const W = sandbox.__export;
+vm.runInContext("EV_MERGE_RETRY_WAIT_MS = 0;", sandbox); // MERGE-RACE-RETRY-1: no real waits in the suite
 
 let passed = 0, failed = 0;
 function ok(c, label, extra) { if (c) { passed++; return; } failed++; console.error("FAIL " + label + (extra !== undefined ? "  -- " + JSON.stringify(extra) : "")); }
@@ -741,8 +744,8 @@ ok(W.cmReviewParse('{"verdict":"no","defects":["a","b","c","d","e","f"]}').defec
 ok(J(W.cmReviewParse('Reasoning {x}. {"verdict":"no","defects":["handleClaims writes papers.claim_line but no line runs ALTER TABLE papers ADD COLUMN claim_line { }"]}')).defects[0].indexOf("ALTER TABLE") > 0, "a defect that quotes braces, after braces in prose, is kept");
 {
   const d = W.cmReviewDiff([{ filename: PATH, patch: "@@ -1 +1 @@\n-" + "x".repeat(900) + "\n+  return 11;" }, { filename: MIRROR, patch: "@@ mirror @@" }]);
-  ok(d.indexOf("--- " + PATH) === 0 && d.indexOf(MIRROR) < 0 && /\[line cut\]/.test(d) && d.indexOf("+  return 11;") > 0, "the reviewer reads the worker diff, not the mirror; long lines are cut", d.slice(0, 120));
-  ok(W.cmReviewDiff([{ filename: PATH, patch: ("+line\n").repeat(5000) }]).length < 14200, "the diff is capped");
+  ok(d.indexOf("--- " + PATH) === 0 && d.indexOf(MIRROR) < 0 && d.indexOf("+  return 11;") > 0 && /\[line cut\]/.test(W.cmReviewDiff([{ filename: PATH, patch: "@@ -1 +1,2 @@\n ctx\n+" + "y".repeat(5000) }])), "the reviewer reads the worker diff, not the mirror; a long line with no counterpart is cut", d.slice(0, 120));
+  ok(W.cmReviewDiff([{ filename: PATH, patch: ("+line " + "z".repeat(40) + "\n").repeat(5000) }]).length < W.CM_REVIEW_DIFF_CHARS + 200 && W.CM_REVIEW_DIFF_CHARS >= 40000 && W.cmReviewDiff([{ filename: PATH, patch: ("+line\n").repeat(5000) }]).length > 14200, "the diff is capped at CM_REVIEW_DIFF_CHARS (a 30,000-char diff is no longer cut at 14,000)");
 }
 ok(W.cmReviewDecision({ verdict: "no", model: "m", defects: ["x"] }).refuse === true && /goal review \(m\): the diff does not implement the goal: x/.test(W.cmReviewDecision({ verdict: "no", model: "m", defects: ["x"] }).why), "verdict no refuses with the defects");
 ok(!/rejected by|review-rejected|noop-proposal|superseded|already shipped|DROPPED|withdrawn/i.test(W.cmReviewDecision({ verdict: "no", model: "m", defects: ["x"] }).why), "a goal-review refusal does not match the orchestrator's INTAKE_NO_RETRY, so the issue is retried with the defects");
@@ -777,8 +780,8 @@ goalSetup();
 sandbox.aiRunAttr = reviewer('{"verdict":"no","defects":["a() now returns 11 but the goal asks for the citation check, which no line adds"]}');
 r = J(await W.codeMergeTick(genv, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(gh.newPulls.length === 0 && row.status === "failed" && /goal review \(@cf\/openai\/gpt-oss-120b\): the diff does not implement the goal: a\(\) now returns 11/.test(row.merge_note), "verdict no: the PR is not opened and the task fails with the reviewer's defects", { pulls: gh.newPulls.length, row: [row.status, row.merge_note] });
-ok(aiCalls.length === 1 && aiCalls[0].purpose === "goal-review" && aiCalls[0].model === "@cf/openai/gpt-oss-120b" && /fix a/.test(aiCalls[0].input.messages[1].content) && /\+  return 11;/.test(aiCalls[0].input.messages[1].content), "one metered call (purpose goal-review) to a reviewer outside the proposer's family, with the goal and the head diff", aiCalls.map((c) => [c.purpose, c.model]));
+ok(gh.newPulls.length === 0 && row.status === "queued" && row.step === "propose" && /goal review \(@cf\/openai\/gpt-oss-120b \+ @cf\/deepseek-ai\/deepseek-v4-flash-0731\): the diff does not implement the goal: a\(\) now returns 11/.test(row.merge_note) && JSON.parse(row.ctx).refusal.kind === "goal-review" && JSON.parse(row.ctx).refusal.reasons.length === 2 && /a\(\) now returns 11/.test(JSON.parse(row.ctx).lastError), "verdict no from two reviewers: the PR is not opened and the task goes back to propose with the defects (REPAIR-AT-OPEN-1)", { pulls: gh.newPulls.length, row: [row.status, row.step, row.merge_note] });
+ok(aiCalls.length === 2 && aiCalls[0].purpose === "goal-review" && aiCalls[0].model === "@cf/openai/gpt-oss-120b" && aiCalls[1].model === "@cf/deepseek-ai/deepseek-v4-flash-0731" && /fix a/.test(aiCalls[0].input.messages[1].content) && /\+  return 11;/.test(aiCalls[0].input.messages[1].content) && aiCalls[1].input.messages[1].content === aiCalls[0].input.messages[1].content, "two metered calls (purpose goal-review) to reviewers of two families outside the proposer's, with the goal and the head diff", aiCalls.map((c) => [c.purpose, c.model]));
 ok(one("SELECT status FROM cloud_ops_events WHERE id = ?", "goal-review-" + ID + "-h1").status === "refused", "the verdict is cached under goal-review-<task>-<head>");
 goalSetup();
 sandbox.aiRunAttr = reviewer('{"verdict":"implements","defects":[]}');
@@ -807,10 +810,20 @@ sandbox.aiRunAttr = reviewer('{"verdict":"partial","defects":[]}');
 r = J(await W.codeMergeTick(genv, { now: NOW }));
 ok(aiCalls.length === 1 && aiCalls[0].model === "@cf/meta/llama-3.3-70b-instruct-fp8-fast" && gh.newPulls.length === 1, "ops_config code_goal_review_models replaces the list (only @cf/ ids kept); partial opens the PR", aiCalls.map((c) => c.model));
 goalSetup();
+sandbox.aiRunAttr = reviewer('{"verdict":"partial","harm":true,"defects":[{"line":"  return 11;","why":"a() returns 11 where the goal keeps 1 for the legacy path"}]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 0 && row.status === "queued" && /the diff carries an error \(verdict partial\): a\(\) returns 11[^|]*\[line: return 11;\]/.test(row.merge_note) && /line `return 11;`/.test(JSON.parse(row.ctx).lastError) && /"harm":true/.test(one("SELECT meta FROM cloud_ops_events WHERE id = ?", "goal-review-" + ID + "-h1").meta), "partial with harm on a quoted line, from two reviewers: no PR, the repair round gets the line", [row.status, row.merge_note]);
+goalSetup();
 sandbox.aiRunAttr = reviewer('{"verdict":"partial","harm":true,"defects":["the else branch is unreachable and still increments diversity_held"]}');
 r = J(await W.codeMergeTick(genv, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
-ok(gh.newPulls.length === 0 && row.status === "failed" && /the diff carries an error \(verdict partial\): the else branch is unreachable/.test(row.merge_note) && /"harm":true/.test(one("SELECT meta FROM cloud_ops_events WHERE id = ?", "goal-review-" + ID + "-h1").meta), "partial with harm: no PR, the task fails with the error, the cached review keeps harm", row.merge_note);
+ok(gh.newPulls.length === 1 && row.status === "published" && aiCalls.length === 1, "harm with no quoted line of the diff does not refuse: the PR opens and the checks decide (one call, no second reviewer needed)", [row.status, row.merge_note, aiCalls.length]);
+goalSetup();
+sandbox.aiRunAttr = reviewer('{"verdict":"partial","harm":true,"defects":[{"line":"  return 11;","why":"a() returns 11 where the goal keeps 1 for the legacy path"}]}');
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 0 && row.status === "queued" && row.step === "propose", "the same again: the cited harm is repaired in the task", [row.status, row.step]);
 // the merge lane reviews a PR opened before 0.9.0 (no cached review) and refuses a "no" with a comment on the PR
 freshDb(); freshGh(); aiCalls = [];
 db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
@@ -832,6 +845,269 @@ sandbox.aiRunAttr = reviewer('{"verdict":"no","defects":["the change does not do
 r = J(await W.codeMergeTick(genv, { now: NOW }));
 row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
 ok(gh.merges.length === 0 && row.status === "failed", "a review refusal with no attempt left fails the task as before", { status: row.status, attempts: row.attempts });
+sandbox.aiRunAttr = async () => null;
+
+// ================================================================ 0.18.0: the merge side of the code loop
+// GOAL-REVIEW-2, REFUSAL-REASON-1, REPAIR-AT-OPEN-1, PATCH-REBUILD-1, MIRROR-FOLLOWS-SOURCE-1, MERGE-MULTI-FILE-1, PUBLISH-DISPATCH-1
+const M1 = "@cf/openai/gpt-oss-120b", M2 = "@cf/deepseek-ai/deepseek-v4-flash-0731";
+const reviewerBy = (map) => async (env0, worker, purpose, model, input) => { aiCalls.push({ worker, purpose, model, input }); const rp = model in map ? map[model] : map["*"]; if (rp instanceof Error) throw rp; return { choices: [{ message: { content: rp } }] }; };
+ok(Number(/var VERSION = "0\.(\d+)\./.exec(src)[1]) >= 18, "qnfo-fleet-control is at least 0.18.0", /var VERSION = "[^"]*"/.exec(src)[0]);
+{ // ---- pure: the second reviewer, quoted lines, screening
+  ok(W.cmSecondReviewer("@cf/qwen/qwen2.5-coder-32b-instruct", M1) === M2 && W.cmSecondReviewer("@cf/deepseek-ai/x", M1) === "@cf/meta/llama-3.3-70b-instruct-fp8-fast" && W.cmSecondReviewer(null, M1, [M1, "@cf/openai/gpt-oss-20b"]) === null, "the second reviewer's family is neither the proposer's nor the first reviewer's; none is null");
+  const DIFF = W.cmReviewDiff(GPATCH);
+  ok(W.cmCiteFound("  return 11;", DIFF) && W.cmCiteFound("+  return 11;", DIFF) && W.cmCiteFound("return 1;", DIFF) && !W.cmCiteFound("function a() {", DIFF) && !W.cmCiteFound("}", DIFF) && !W.cmCiteFound("return 12;", DIFF) && !W.cmCiteFound("", DIFF), "a quoted line counts only when it is a changed line of the diff (context lines, short quotes and invented lines do not)");
+  const HEAD = 'var VERSION = "1";\nfunction helperOne(x) {\n  return x;\n}\nconst WRITER_PROMPT = "p";\nasync function later() {\n  const refs = [];\n  return refs;\n}\n';
+  ok(W.cmDefinedIn(HEAD, "helperOne") && W.cmDefinedIn(HEAD, "WRITER_PROMPT") && W.cmDefinedIn(HEAD, "later") && !W.cmDefinedIn(HEAD, "refs") && !W.cmDefinedIn(HEAD, "checkCondition") && !W.cmDefinedIn(HEAD, "a.b") && !W.cmDefinedIn(null, "x"), "cmDefinedIn: top-level functions and declarations only (a local of another function is not a definition)");
+  const names = [["Uses undefined function checkCondition, causing a runtime error.", "checkCondition"], ["ReferenceError: parseRefLine is not defined, causing a runtime error", "parseRefLine"], ["parseRefLine is called but not defined, causing a ReferenceError at runtime", "parseRefLine"], ["WRITER_PROMPT variable removed causing undefined reference", "WRITER_PROMPT"], ["refs variable is used but not defined in this scope, causing another runtime error", "refs"], ["The diff does not add any logic to select notes_intake rows", null]];
+  ok(names.every(([w, n]) => W.cmDefectName(w) === n), "cmDefectName reads the name out of the recorded defect sentences", names.map(([w]) => W.cmDefectName(w)));
+  const facts = W.cmReviewFacts("+  var y = helperOne(1) + missing(2) + obj.method(3) + parseInt(z);\n-  later(1);", HEAD);
+  ok(/helperOne/.test(facts) && !/missing|method|later|parseInt/.test(facts) && W.cmReviewFacts("+  x = 1;", HEAD) === "" && W.cmReviewFacts("+ helperOne()", null) === "", "FACTS name only the called names the head file defines (added lines, no methods, no globals)", facts);
+  const pr = W.cmReviewPrompt("g".repeat(7000), "D", "F");
+  ok(pr.user.indexOf("g".repeat(W.CM_REVIEW_GOAL_CHARS)) >= 0 && W.CM_REVIEW_GOAL_CHARS >= 6000 && /\n\nFACTS:\nF\n\nDIFF:\nD$/.test(pr.user) && /VERSION/.test(pr.system) && /PREVIOUS ATTEMPT/.test(pr.system) && /"line"/.test(pr.system) && /quotes no line of the DIFF is ignored/.test(pr.system) && /comments, wording, naming or style/.test(pr.system) && !/FACTS:/.test(W.cmReviewPrompt("g", "D").user), "the prompt carries the whole goal, FACTS, and the rules: quote the line, no VERSION, comment or style verdicts");
+  // a long line is shown around the part that changed, not cut at its head
+  const dp = W.cmReviewDiff([{ filename: PATH, patch: "@@ -1 +1 @@\n-" + "a".repeat(3000) + "OLD" + "b".repeat(3000) + "\n+" + "a".repeat(3000) + "NEWER" + "b".repeat(3000) }]);
+  ok(/aOLDb/.test(dp) && /aNEWERb/.test(dp) && dp.length < 1500 && dp.split("[2840 chars unchanged]").length === 5 && W.cmCiteFound("aaNEWERbb", dp), "a changed long line is shown around its change with the unchanged lengths (the old 400-char head cut hid it)", dp.length);
+  ok(/\(new file\)/.test(W.cmReviewDiff([{ filename: "migrations/x.sql", status: "added", patch: "@@ -0,0 +1 @@\n+SELECT 1;" }])), "a new companion is labelled in the reviewer's diff");
+  // screening
+  const sc1 = J(W.cmReviewScreen({ verdict: "no", harm: true, defects: ["helperOne is called but not defined, causing a ReferenceError at runtime"] }, DIFF, HEAD));
+  ok(sc1.verdict === "partial" && sc1.harm === false && sc1.defects.length === 0 && /helperOne is defined in the file at the head/.test(sc1.dropped[0].dropped) && /screened out/.test(sc1.downgraded), "a 'not defined' defect about a name the head file defines is dropped, and a 'no' with nothing left is a partial", sc1);
+  const sc2 = J(W.cmReviewScreen(W.cmReviewParse('{"verdict":"implements","harm":true,"defects":[{"line":"return 99;","why":"a() returns the wrong value"}]}'), DIFF, HEAD));
+  ok(sc2.harm === false && sc2.harm_unsupported === true && sc2.defects.length === 1 && sc2.cites[0].cited === false && !W.cmReviewDecision(Object.assign({ model: M1 }, sc2)).refuse, "harm that quotes a line the diff does not contain is not established", sc2);
+  const sc3 = J(W.cmReviewScreen(W.cmReviewParse('{"verdict":"partial","harm":true,"defects":[{"line":"+  return 11;","why":"a() returns the wrong value"}]}'), DIFF, HEAD));
+  ok(sc3.harm === true && sc3.cites[0].cited === true && W.cmReviewDecision(Object.assign({ model: M1 }, sc3)).refuse === true && /\[line: \+ ?return 11;\]/.test(W.cmReviewDecision(Object.assign({ model: M1 }, sc3)).why), "harm on a quoted changed line stands, and the refusal names the line", W.cmReviewDecision(Object.assign({ model: M1 }, sc3)).why);
+  const cutDiff = "x".repeat(10) + "\n[diff cut at 40000 of 90000 chars]";
+  ok(J(W.cmReviewScreen({ verdict: "no", harm: false, defects: ["the diff adds no verification step"] }, cutDiff, HEAD)).verdict === "partial" && J(W.cmReviewScreen({ verdict: "no", harm: false, defects: ["the diff adds no verification step"] }, DIFF, HEAD)).verdict === "no", "on a cut diff a defect with no quoted line is dropped (something 'missing' may sit in the part the reviewer did not see); on a whole diff it stands");
+  ok(J(W.cmReviewScreen({ verdict: "no", harm: false, defects: [] }, DIFF, HEAD)).verdict === "partial" && /no defect was named/.test(J(W.cmReviewScreen({ verdict: "no", harm: false, defects: [] }, DIFF, HEAD)).downgraded), "a 'no' that names no defect gives the repair round nothing and does not refuse");
+  // the 13 goal-review refusals of the 7 days to 2026-10-12, as recorded in cloud_ops_events code-merge.goal-review (verdict, harm, defects)
+  const REC = [
+    ["ct_hwpi986n77ncy2", "no", false, ["The diff does not add any logic to select notes_intake rows and feed them into idea_proposals as required by the task", "The version string is changed without relevance to the requested functionality", "PROPOSAL_BACKPRESSURE is altered from 30 to 3, but no accompanying code changes enforce the intended per‑run limit"]],
+    ["ct_xlpr8iojg9fpip", "no", true, ["Uses undefined function checkCondition, causing a runtime error.", "Relies on setTimeout in a Cloudflare Worker, which will not survive the worker's short execution and thus never performs verification."]],
+    ["ct_x18gl289qtiggu", "no", true, ["Version string does not match required 1.13.0-ds402-fallback", "Default model changed to placeholder \"fallback-model\" which is not a valid model", "Fallback only checks for HTTP 402, ignoring 401 and 403 as required", "No breaker (dsBreakerUntil) is set for 401/402/403 errors"]],
+    ["ct_2yk2wih2zivbf9", "no", true, ["ReferenceError: parseRefLine is not defined, causing a runtime error", "Title similarity check only requires any word match instead of requiring at least half the words to match as specified"]],
+    ["ct_0n5w20gezyii9s", "no", true, ["Version string does not match required 1.13.0-ds402-fallback", "Fallback logic still only checks for HTTP 402, ignoring required 401 and 403 handling", "No breaker (dsBreakerUntil) is set for 401/402/403 errors"]],
+    ["ct_x4tr2srzgf5p7h", "no", true, ["Uses undefined function checkCondition causing a runtime error", "Uses setTimeout which will not survive in a Cloudflare Worker, preventing verification"]],
+    ["ct_tm74cz0fyuo6wp", "partial", true, ["The comment still lists fleet_budget as read‑only, contradicting the updated rule that it is writable", "The read‑only list comment was not updated to remove fleet_budget"]],
+    ["ct_kxidt9fse2j7yu", "no", true, ["WRITER_PROMPT variable removed causing undefined reference", "RECONCILE_PROMPT variable removed causing undefined reference", "REVIEW_PROMPT variable removed causing undefined reference", "REVISE_PROMPT variable removed causing undefined reference"]],
+    ["ct_9ep1i6a57obg7l", "no", true, ["Uses undefined function checkCondition causing a runtime error", "Uses setTimeout which will not survive in a Cloudflare Worker, preventing verification on the next execution cycle"]],
+    ["ct_jy19s7wu3hzm93", "no", true, ["VERSION variable does not match required 1.13.0-ds402-fallback", "Fallback logic does not implement 401/402/403 breaker handling or set dsBreakerUntil", "No breaker logic added for DeepSeek errors despite comment"]],
+    ["ct_frhtt8hi1nztli", "no", true, ["weekdayHoursSince now uses strict null check (raw === null) instead of loose check (raw == null), changing behavior for undefined inputs and potentially causing runtime errors or incorrect results"]],
+    ["ct_p5x02gfyvun209", "no", false, ["The change only modifies the error message for missing H1 title, it does not fix the most frequent cause of gate failures as required."]],
+    ["ct_7xtqmvrmppmoxw", "no", true, ["parseRefLine is called but not defined, causing a runtime ReferenceError", "refs variable is used but not defined in this scope, causing another runtime error"]]
+  ];
+  const outc = REC.map(([id, v, h, ds]) => { const sc = W.cmReviewScreen({ verdict: v, harm: h, defects: ds }, DIFF, BASE); return { id, refuse: !!W.cmReviewDecision(Object.assign({ model: M1 }, sc)).refuse, dropped: (sc.dropped || []).length, kept: sc.defects.length }; });
+  ok(outc.filter((x) => x.refuse).length === 12 && outc.find((x) => x.id === "ct_tm74cz0fyuo6wp").refuse === false && outc.find((x) => x.id === "ct_tm74cz0fyuo6wp").dropped === 2, "replay of the 13 recorded refusals: the 12 that named a real defect still refuse (pending the second reviewer), the comment-only one (ct_tm74cz0fyuo6wp) does not", outc);
+  ok(["ct_hwpi986n77ncy2", "ct_x18gl289qtiggu", "ct_0n5w20gezyii9s", "ct_jy19s7wu3hzm93"].every((id) => { const o = outc.find((x) => x.id === id); return o.dropped === 1 && o.kept >= 1; }) && outc.find((x) => x.id === "ct_jy19s7wu3hzm93").kept === 2, "replay: the four VERSION-string defects are dropped and never reach the repair round; 'despite comment' is not a comment remark", outc.filter((x) => x.dropped));
+  // two reviewers
+  const R1 = { model: M1, tries: 1, verdict: "no", harm: false, defects: ["x"], cites: [{ line: "return 11;", why: "x", cited: true }] };
+  ok(W.cmReviewCombine(R1).wait === true && !W.cmReviewCombine(R1).refuse, "one refusal alone only waits for the second reviewer");
+  const both = J(W.cmReviewCombine(Object.assign({}, R1, { second: { model: M2, tries: 1, verdict: "no", harm: false, defects: ["y"], cites: [{ line: "", why: "y", cited: false }] } })));
+  ok(both.refuse === true && both.why.indexOf("goal review (" + M1 + " + " + M2 + "): the diff does not implement the goal: x [line: return 11;] | second reviewer: y") === 0 && both.reasons.length === 2 && both.reasons[0].by === M1 && both.reasons[0].line === "return 11;" && both.reasons[1].by === M2 && both.reasons[1].line === "" && W.cmRepairable(task({ status: "branch_pushed" }), both.why), "two reviewers of different families agree: refused, with structured reasons the repair round can act on", both);
+  const split = J(W.cmReviewCombine(Object.assign({}, R1, { second: { model: M2, tries: 1, verdict: "implements", harm: false, defects: [] } })));
+  ok(!split.refuse && !split.wait && split.split === true && /one model's opinion does not refuse \(GOAL-REVIEW-2\), the required checks decide/.test(split.note) && split.note.indexOf(M2 + " answered implements") > 0, "the reviewers disagree: not refused, the checks decide, and the note says so", split);
+  ok(W.cmReviewCombine(Object.assign({}, R1, { second: { model: M2, tries: 1, err: "3046" } })).wait === true && /unavailable after 3 tries/.test(W.cmReviewCombine(Object.assign({}, R1, { second: { model: M2, tries: 3, err: "3046" } })).note) && /no reviewer of another family/.test(W.cmReviewCombine(Object.assign({}, R1, { second: { skipped: true } })).note), "a second reviewer that fails is retried, and after three tries (or with none configured) one opinion does not refuse");
+  ok(W.cmReviewCombine({ model: M1, tries: 1, verdict: "implements" }).note === "goal review implements (" + M1 + ")" && W.cmReviewCombine({ tries: 1, err: "x" }).wait === true, "a passing or pending first review is unchanged");
+}
+// ---- the reviewers disagree at the open step: the PR opens, the checks decide, the merge reuses the cached pair
+goalSetup();
+sandbox.aiRunAttr = reviewerBy({ [M1]: '{"verdict":"no","harm":false,"defects":[{"line":"","why":"the diff does not add the citation check the goal asks for"}]}', [M2]: '{"verdict":"implements","harm":false,"defects":[]}' });
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 1 && row.status === "published" && aiCalls.length === 2 && /one model's opinion does not refuse/.test(openedWhy()) && one("SELECT status FROM cloud_ops_events WHERE id = ?", "goal-review-" + ID + "-h1").status === "split", "split review at the open step: the pull request is opened and the event is recorded as split", [row.status, openedWhy(), aiCalls.length]);
+gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+r = J(await W.codeMergeTick(genv, { now: NOW + 2 * 36e5 }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.merges.length === 1 && row.status === "merged" && aiCalls.length === 2 && /one model's opinion does not refuse/.test(row.merge_note), "green required checks then merge it: a single model's refusal never overrides them (no further model call)", [row.status, row.merge_note, aiCalls.length]);
+// ---- the second reviewer is down: three tries, then the checks decide
+goalSetup();
+sandbox.aiRunAttr = reviewerBy({ [M1]: '{"verdict":"no","defects":["the diff does not add the citation check"]}', [M2]: new Error("3046: Request timeout") });
+for (let k = 0; k < 2; k++) r = J(await W.codeMergeTick(genv, { now: NOW + k * 36e5 }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.newPulls.length === 0 && row.status === "branch_pushed" && /second reviewer pending \(try 2 of 3: 3046/.test(row.merge_note), "a failing second reviewer only waits", row.merge_note);
+r = J(await W.codeMergeTick(genv, { now: NOW + 2 * 36e5 }));
+ok(gh.newPulls.length === 1 && aiCalls.length === 4 && /the second reviewer was unavailable after 3 tries; one model's opinion does not refuse/.test(openedWhy()), "after three failed second reviews the pull request opens and the checks decide (first reviewer called once)", [openedWhy(), aiCalls.map((c) => c.model)]);
+// ---- a refusal at the merge step carries its reasons to the planner
+freshDb(); freshGh(); aiCalls = [];
+db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+seedTask({ status: "published", ctx: JSON.stringify({ base: BASE, patch: PATCH, edits: [{ search: "  return 1;", replace: "  return 11;" }] }) });
+seedWorkerPr(401, BRANCH, "h1");
+gh.files[401] = GPATCH;
+gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+sandbox.aiRunAttr = reviewerBy({ "*": '{"verdict":"no","harm":true,"defects":[{"line":"  return 11;","why":"a() must keep returning 1 for the legacy callers"},{"line":"","why":"Version string does not match required 9.9.9"}]}' });
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+{
+  const cx2 = JSON.parse(row.ctx);
+  ok(gh.merges.length === 0 && row.status === "queued" && row.step === "propose" && cx2.refusal.kind === "goal-review" && cx2.refusal.reasons.length === 2 && cx2.refusal.reasons.every((x) => x.line === "return 11;" && /legacy callers/.test(x.why)) && cx2.refusal.reasons[0].by === M1 && cx2.refusal.reasons[1].by === M2 && /Defects: 1\) line `return 11;`: a\(\) must keep returning 1/.test(cx2.lastError) && !/Version string/.test(cx2.lastError) && Array.isArray(cx2.edits) && cx2.edits.length === 1 && cx2.repair_round === 1, "merge step: two reviewers refuse on a quoted line; ctx.refusal and ctx.lastError carry the line and the reason, the VERSION remark is gone, and the parked edits stay for the planner's repair prompt", [row.status, cx2.refusal, cx2.lastError]);
+}
+// ---- MERGE-MULTI-FILE-1
+freshDb(); freshGh(); aiCalls = [];
+{
+  const TESTP = DIR + "/a.test.mjs", MIG = "migrations/2026-10-12-demo.sql";
+  const TBASE = "import './worker.js';\nassert(a() === 1);\n", TNEXT = TBASE.replace("=== 1", "=== 11");
+  const MIGTEXT = "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: DELETE FROM t WHERE k = 'a';\nINSERT INTO t (k) VALUES ('a');\n";
+  // the orchestrator's newFilePatch (qnfo-code-orchestrator MULTI-FILE-CODE-TASKS-1)
+  const newFilePatch = (path, text) => { const a = text.split("\n"); if (a[a.length - 1] === "") a.pop(); return "diff --git a/" + path + " b/" + path + "\nnew file mode 100644\n--- /dev/null\n+++ b/" + path + "\n@@ -0,0 +1," + a.length + " @@\n" + a.map((l) => "+" + l + "\n").join(""); };
+  const MPATCH = PATCH + W.hunkPatch(TESTP, TBASE, TNEXT) + newFilePatch(MIG, MIGTEXT);
+  const hp = W.cmParsePatch(MPATCH);
+  ok(hp && Object.keys(hp).sort().join() === [MIG, MIRROR, TESTP, PATH].sort().join() && hp[MIG].created === true && !hp[TESTP].created && !hp[PATH].created && W.cmApply("", hp[MIG], false, false) === MIGTEXT && W.cmApply(TBASE, hp[TESTP], false, false) === TNEXT, "cmParsePatch reads a 'new file mode' section (old side /dev/null) and marks it created; it applies to an empty text", hp && Object.keys(hp));
+  const mctx = (over) => Object.assign({ base: BASE, patch: MPATCH, paths: [TESTP, MIG] }, over || {});
+  const mt = (over, cover) => task(Object.assign({ status: "branch_pushed", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "?expand=1", ctx: JSON.stringify(mctx(cover)) }, over || {}));
+  ok(J(W.cmCompanions(mt(), mctx())).list.length === 2 && J(W.cmCompanions(mt(), { paths: null })).ok === true && J(W.cmCompanions(mt(), {})).list.length === 0, "cmCompanions accepts the worker's own test and a migration; no ctx.paths is a single-file task");
+  const badLists = [[PATH], [MIRROR], ["other-worker/x.test.mjs"], [DIR + "/wrangler.toml"], [".github/workflows/x.yml"], ["migrations/../x.sql"], [DIR + "/tool.exe"], [TESTP, TESTP], [DIR + "/a.mjs", DIR + "/b.mjs", DIR + "/c.mjs", DIR + "/d.mjs"], "x", [DIR + "/sub/worker.js"], [DIR + "/sub/deployed-current.worker.js"], ["/etc/passwd"], [7], ["migrations/sub/x.sql"], ["scripts/x.py"]];
+  ok(badLists.every((l) => W.cmCompanions(mt(), { paths: l }).ok === false), "cmCompanions refuses a worker source, a mirror, another directory, a config, a workflow, a traversal, an unsupported type, a duplicate, more than three, a non-list", badLists.filter((l) => W.cmCompanions(mt(), { paths: l }).ok !== false));
+  const mfiles = [{ filename: PATH, status: "modified" }, { filename: MIRROR, status: "modified" }, { filename: TESTP, status: "modified" }, { filename: MIG, status: "added" }];
+  ok(oact(mt(), og({ files: mfiles, multiFile: true })).action === "open", "multi-file: the task path, its mirror, a modified companion and a new migration pass the task gates while the key is on", oact(mt(), og({ files: mfiles, multiFile: true })));
+  const off = oact(mt(), og({ files: mfiles }));
+  ok(off.action === "wait" && /code_merge_multi_file/.test(off.why), "multi-file: with the key off the branch waits (never a dead end, never a merge)", off);
+  ok(oact(mt(), og({ files: mfiles.concat([{ filename: DIR + "/other.mjs", status: "added" }]), multiFile: true })).action === "refuse" && oact(mt(), og({ files: mfiles.map((f) => f.filename === TESTP ? { filename: TESTP, status: "removed" } : f), multiFile: true })).action === "refuse" && oact(mt(), og({ files: mfiles.map((f) => f.filename === MIRROR ? { filename: MIRROR, status: "added" } : f), multiFile: true })).action === "refuse", "multi-file: a file outside ctx.paths, a removed companion, or an 'added' mirror is refused");
+  ok(oact(pushedT(), og({ files: [{ filename: PATH, status: "modified" }, { filename: MIRROR, status: "modified" }, { filename: TESTP, status: "added" }], multiFile: true })).action === "refuse" && oact(mt(null, { paths: [PATH] }), og({ files: mfiles, multiFile: true })).action === "refuse", "a single-file task still may change only its path and mirror; a bad ctx.paths refuses");
+  ok(act(task({ ctx: JSON.stringify(mctx()) }), g({ files: mfiles, multiFile: true })).action === "merge" && act(task({ ctx: JSON.stringify(mctx()) }), g({ files: mfiles })).action === "wait", "multi-file: the merge decision takes the same gate");
+  // integrity
+  gh.contents["mbm:" + PATH] = BASE; gh.contents["mbm:" + MIRROR] = BASE; gh.contents["mbm:" + TESTP] = TBASE;
+  gh.contents["hm:" + PATH] = NEXT; gh.contents["hm:" + MIRROR] = NEXT; gh.contents["hm:" + TESTP] = TNEXT; gh.contents["hm:" + MIG] = MIGTEXT; gh.contents["hm:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\nmain = "worker.js"\n';
+  const ALLN = [PATH, MIRROR, TESTP, MIG];
+  const im = J(await W.cmIntegrity(env, mt(), "hm", ALLN, W.cmScope(PATH), "mbm", { multiFile: true }));
+  ok(im.ok === true && im.revertible === true && im.version_to === "1.2.4-codeagent", "multi-file integrity: every file at the head is the parked patch on the merge base; the migration is absent there and created", im);
+  const im0 = J(await W.cmIntegrity(env, mt(), "hm", ALLN, W.cmScope(PATH), "mbm"));
+  ok(im0.ok === false && /only a companion listed in ctx\.paths may be created/.test(im0.why), "without the key a new file in the patch is refused by the integrity check too", im0);
+  gh.contents["mbx:" + PATH] = BASE; gh.contents["mbx:" + MIRROR] = BASE; gh.contents["mbx:" + TESTP] = TBASE; gh.contents["mbx:" + MIG] = "-- someone else's\n";
+  const imx = J(await W.cmIntegrity(env, mt(), "hm", ALLN, W.cmScope(PATH), "mbx", { multiFile: true }));
+  ok(imx.ok === false && imx.stale === true && /was to be created and exists at the merge base/.test(imx.why), "a migration that already exists at the merge base is stale, not intact", imx);
+  gh.contents["hy:" + PATH] = NEXT; gh.contents["hy:" + MIRROR] = NEXT; gh.contents["hy:" + TESTP] = TNEXT; gh.contents["hy:" + MIG] = MIGTEXT + "DROP TABLE t;\n"; gh.contents["hy:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\n';
+  const imy = J(await W.cmIntegrity(env, mt(), "hy", ALLN, W.cmScope(PATH), "mbm", { multiFile: true }));
+  ok(imy.ok === false && !imy.stale && /migrations\/2026-10-12-demo\.sql at the PR head hy is not the verified patch/.test(imy.why), "other content pushed into a companion is refused", imy);
+  // a branch the publisher rebuilt: the primary by ctx.edits, each companion by its own ctx.x[].edits
+  const BASE2 = BASE.replace('var VERSION = "1.2.3-demo";', 'var VERSION = "1.2.9-moved";').replace("function b() {", "function b0() {\n  return 0;\n}\nfunction b() {");
+  const EDITS = [{ search: "  return 1;", replace: "  return 11;" }], REBUILT = W.cmRebaseText(BASE2, EDITS, true), TBASE2 = "// moved\n" + TBASE;
+  const rctx = { rebased: "REBASE-BEFORE-PUBLISH-1: rebuilt", edits: EDITS, mirror: MIRROR, x: [{ path: TESTP, base: TBASE, edits: [{ search: "=== 1", replace: "=== 11" }] }, { path: MIG, new: true, base: "", edits: [{ search: "", replace: MIGTEXT.slice(0, -1) }] }] };
+  gh.contents["mb2:" + PATH] = BASE2; gh.contents["mb2:" + MIRROR] = BASE2; gh.contents["mb2:" + TESTP] = TBASE2;
+  gh.contents["hr:" + PATH] = REBUILT; gh.contents["hr:" + MIRROR] = REBUILT; gh.contents["hr:" + TESTP] = TBASE2.replace("=== 1", "=== 11"); gh.contents["hr:" + MIG] = MIGTEXT; gh.contents["hr:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\n';
+  const ir = J(await W.cmIntegrity(env, mt({ branch: BRANCH + "-r2" }, rctx), "hr", ALLN, W.cmScope(PATH), "mb2", { multiFile: true }));
+  ok(ir.ok === true && ir.revertible === true && ir.version_to === "1.2.10-codeagent", "a rebuilt multi-file branch is intact: primary and mirror by ctx.edits with the bump, the test by its own edits, the new migration by its parked text", ir);
+  const ir2 = J(await W.cmIntegrity(env, mt({ branch: BRANCH + "-r2" }, rctx), "hr", [PATH, MIRROR, MIG], W.cmScope(PATH), "mb2", { multiFile: true }));
+  ok(ir2.ok === true, "a rebuilt branch may leave out a companion whose edits changed nothing", ir2);
+  const ir3 = J(await W.cmIntegrity(env, mt({ branch: BRANCH + "-r2" }, Object.assign({}, rctx, { x: [rctx.x[1]] })), "hr", ALLN, W.cmScope(PATH), "mb2", { multiFile: true }));
+  ok(ir3.ok === false && /has no parked edits/.test(ir3.why), "a rebuilt companion with no parked edits cannot be verified and is refused", ir3);
+  gh.contents["mb4:" + PATH] = BASE2; gh.contents["mb4:" + MIRROR] = BASE2; gh.contents["mb4:" + TESTP] = "// rewritten\n";
+  const ir4 = J(await W.cmIntegrity(env, mt({ branch: BRANCH + "-r2" }, rctx), "hr", ALLN, W.cmScope(PATH), "mb4", { multiFile: true }));
+  ok(ir4.ok === false && ir4.stale === true && /do not re-apply to qnfo-demo\/a\.test\.mjs/.test(ir4.why), "a companion whose SEARCH is gone from the merge base is stale", ir4);
+  // MIRROR-FOLLOWS-SOURCE-1 (ct_yghmskhqci2vv1, ct_h7lmh3yuwbv3wv: the mirror lagged the source at the merge base fced858)
+  gh.contents["mbl:" + PATH] = BASE; gh.contents["mbl:" + MIRROR] = BASE.replace("  return 1;", "  return 0;");
+  gh.contents["hl:" + PATH] = NEXT; gh.contents["hl:" + MIRROR] = NEXT; gh.contents["hl:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\n';
+  const il = J(await W.cmIntegrity(env, task({ status: "branch_pushed" }), "hl", [PATH, MIRROR], W.cmScope(PATH), "mbl"));
+  ok(il.ok === true && il.revertible === true, "MIRROR-FOLLOWS-SOURCE-1: a mirror that lagged the source at the merge base no longer fails the patch; the head mirror must equal the verified source", il);
+  gh.contents["hl2:" + PATH] = NEXT; gh.contents["hl2:" + MIRROR] = NEXT + "// drift\n"; gh.contents["hl2:" + DIR + "/wrangler.toml"] = 'name = "qnfo-demo"\n';
+  const il2 = J(await W.cmIntegrity(env, task({ status: "branch_pushed" }), "hl2", [PATH, MIRROR], W.cmScope(PATH), "mbl"));
+  ok(il2.ok === false && /deployed-current\.worker\.js at the PR head hl2 is not the verified patch/.test(il2.why), "a head mirror that differs from the verified source is still refused", il2);
+  // end to end with the key on: opened, reviewed with the companions in the diff, merged
+  goalSetup({ ctx: JSON.stringify(mctx()) });
+  db.prepare("INSERT INTO ops_config (key, value) VALUES ('code_merge_multi_file', 'on')").run();
+  gh.contents["base0:" + TESTP] = TBASE; gh.contents["h1:" + TESTP] = TNEXT; gh.contents["h1:" + MIG] = MIGTEXT;
+  gh.compareFiles.h1 = [GPATCH[0], GPATCH[1], { filename: TESTP, status: "modified", patch: "@@ -1,2 +1,2 @@\n import './worker.js';\n-assert(a() === 1);\n+assert(a() === 11);" }, { filename: MIG, status: "added", patch: "@@ -0,0 +1,4 @@\n+" + MIGTEXT.trimEnd().split("\n").join("\n+") }];
+  sandbox.aiRunAttr = reviewer('{"verdict":"implements","harm":false,"defects":[]}');
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+  ok(gh.newPulls.length === 1 && row.status === "published" && /a\.test\.mjs/.test(aiCalls[0].input.messages[1].content) && /2026-10-12-demo\.sql \(new file\)/.test(aiCalls[0].input.messages[1].content), "multi-file end to end: the branch is opened and the reviewer reads the companions", [row.status, row.merge_note]);
+  gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+  r = J(await W.codeMergeTick(genv, { now: NOW + 2 * 36e5 }));
+  row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+  ok(gh.merges.length === 1 && row.status === "merged", "multi-file end to end: merged on green required checks", [row.status, row.merge_note, r.decided]);
+  goalSetup({ ctx: JSON.stringify(mctx()) });
+  gh.contents["base0:" + TESTP] = TBASE; gh.contents["h1:" + TESTP] = TNEXT; gh.contents["h1:" + MIG] = MIGTEXT;
+  gh.compareFiles.h1 = mfiles;
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+  ok(gh.newPulls.length === 0 && row.status === "branch_pushed" && /code_merge_multi_file/.test(row.merge_note), "multi-file end to end with the key off: the branch waits", [row.status, row.merge_note]);
+}
+// ---- PATCH-REBUILD-1: a change that no longer fits its base is rebuilt or re-proposed
+{
+  const EDITS = [{ search: "  return 1;", replace: "  return 11;" }];
+  goalSetup({ ctx: JSON.stringify({ base: BASE, patch: PATCH, edits: EDITS, mirror: MIRROR, anchor: "function a() {" }) });
+  // main changed a context line of the parked hunk after the task read the file
+  gh.contents["base0:" + PATH] = BASE.replace("function a() {", "function a() { // main changed this line");
+  sandbox.aiRunAttr = reviewer('{"verdict":"implements","defects":[]}');
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+  let c3 = JSON.parse(row.ctx);
+  ok(row.status === "ready_to_publish" && row.branch === BRANCH + "-r2" && row.pr_url === null && row.last_error === null && c3.rebase_round === 1 && c3.edits.length === 1 && /PATCH-REBUILD-1: the verified patch does not apply to/.test(row.merge_note) && aiCalls.length === 0 && one("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'code-merge.rebase-requeued'").n === 1, "a stale patch at the open step is handed back to the publisher to re-apply the parked edits on current main (no model call, not a failed task)", [row.status, row.branch, row.merge_note]);
+  // the one rebuild is spent: the task goes back to the orchestrator, which reads the file again
+  goalSetup({ ctx: JSON.stringify({ base: BASE, patch: PATCH, edits: EDITS, mirror: MIRROR, anchor: "function a() {", rebase_round: 1, extras: [{ path: DIR + "/a.test.mjs" }] }), branch: BRANCH + "-r2", pr_url: "https://github.com/QNFO/qnfo-workers/compare/main..." + BRANCH + "-r2?expand=1" });
+  gh.branches[BRANCH + "-r2"] = "h1";
+  gh.contents["base0:" + PATH] = BASE.replace("function a() {", "function a() { // main changed this line");
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+  c3 = JSON.parse(row.ctx);
+  ok(row.status === "queued" && row.step === "read" && row.attempts === 1 && row.branch === BRANCH + "-r3" && c3.anchor === "function a() {" && c3.extras.length === 1 && !("patch" in c3) && !("base" in c3) && !("edits" in c3) && c3.refusal.kind === "stale-base" && /does not apply to/.test(c3.lastError) && /re-read and re-proposed on current main/.test(row.merge_note), "a real conflict (the rebuild already spent) becomes a repair round: step read, the anchor and companions kept, the stale patch dropped", [row.status, row.step, row.branch, Object.keys(c3)]);
+  // no attempt left: only then does the task end failed
+  goalSetup({ ctx: JSON.stringify({ base: BASE, patch: PATCH }), attempts: 8 });
+  gh.contents["base0:" + PATH] = BASE.replace("function a() {", "function a() { // main changed this line");
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+  ok(row.status === "failed" && /does not apply to/.test(row.last_error), "with no parked edits and no attempt left the refusal still ends the task", [row.status, row.last_error]);
+  ok(W.CM_STALE_RE.test("the pull request conflicts with main (mergeable_state dirty)") && W.CM_STALE_RE.test("the parked edits do not re-apply to x at the merge base abc") && !W.CM_STALE_RE.test("required check(s) failed on abc: gate=failure") && W.cmRepairable(task(), "the pull request conflicts with main (mergeable_state dirty)") && !W.cmRepairable(task(), "qnfo-ops is a control-plane or code-loop worker, which never auto-merges"), "conflicts and stale patches are repairable; policy refusals are not");
+  // the publisher's dead end (ct_55k6tphrr4dlr0): publish_failed on a conflict goes back to the orchestrator
+  freshDb(); freshGh(); aiCalls = [];
+  db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (50, 'OWNER-TASK-9: fix a', 'desc', 'qnfo-fleet-dashboard:owner-request', 'open')").run();
+  db.prepare("INSERT INTO agent_issues (id, title, description, source, status) VALUES (51, 'OWNER-TASK-10: retired', 'desc', 'qnfo-fleet-dashboard:owner-request', 'closed')").run();
+  // a hand-filed patch row (no parked edits) and a task of a closed issue are not the loop's to re-propose
+  db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, last_error, created_at, updated_at) VALUES ('ct_handfiled00001', 'qnfo-workers', ?1, '[issue #50] by hand', 'publish_failed', 'done', 0, ?2, 'codeagent-handfiled000', 'publish: patch does not apply to main: x; rebase: no SEARCH/REPLACE edits parked in ctx.edits', ?3, ?3)").run(PATH, JSON.stringify({ patch: PATCH }), ago(2));
+  db.prepare("INSERT INTO code_tasks (id, repo, path, goal, status, step, attempts, ctx, branch, last_error, created_at, updated_at) VALUES ('ct_closedissue001', 'qnfo-workers', ?1, '[issue #51] retired', 'publish_failed', 'done', 0, ?2, 'codeagent-closedissue0', 'publish: patch does not apply to main: x; rebase: edit 1: SEARCH text occurs 0 times', ?3, ?3)").run(PATH, JSON.stringify({ patch: PATCH, edits: EDITS }), ago(2));
+  seedTask({ status: "publish_failed", pr_url: null, attempts: 6, updated_at: ago(1), last_error: "publish: patch does not apply to main: error: patch failed: qnfo-demo/worker.js:9; rebase: edit 1: SEARCH text occurs 0 times in the current file (it must occur exactly once)", ctx: JSON.stringify({ base: BASE, patch: PATCH, edits: EDITS, anchor: "function a() {" }) });
+  r = J(await W.codeMergeTick(genv, { now: NOW + 20 * 6e4, openOnly: true }));
+  ok(one("SELECT status FROM code_tasks WHERE id = ?", ID).status === "publish_failed", "the open-only tick does not sweep publish_failed tasks");
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+  c3 = JSON.parse(row.ctx);
+  ok(rows("SELECT status FROM code_tasks WHERE id IN ('ct_handfiled00001', 'ct_closedissue001')").every((x) => x.status === "publish_failed"), "a hand-filed patch row and a task of a closed issue stay as they are");
+  ok(row.status === "queued" && row.step === "read" && row.attempts === 7 && c3.anchor === "function a() {" && /SEARCH text occurs 0 times/.test(c3.lastError) && r.rebuilt.length === 1, "a publish_failed conflict is re-proposed on current main instead of staying a dead end", [row.status, row.step, row.attempts, r.rebuilt]);
+  db.prepare("UPDATE code_tasks SET status = 'publish_failed', attempts = 8, last_error = 'publish: patch does not apply to main: x' WHERE id = ?").run(ID);
+  r = J(await W.codeMergeTick(genv, { now: NOW + 36e5 }));
+  ok(one("SELECT status FROM code_tasks WHERE id = ?", ID).status === "publish_failed", "a task with no attempt left is not swept again");
+}
+// ---- PUBLISH-DISPATCH-1
+{
+  freshDb(); freshGh(); aiCalls = [];
+  seedTask({ status: "ready_to_publish", pr_url: null, updated_at: ago(8) });
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  const ev = () => rows("SELECT status, text FROM cloud_ops_events WHERE kind = 'code-merge.publish-dispatch' ORDER BY ts");
+  ok((gh.dispatches || []).length === 1 && gh.dispatches[0].path === "/actions/workflows/code-task-publish.yml/dispatches" && gh.dispatches[0].body.ref === "main" && r.publish_dispatch.dispatched === true && r.publish_dispatch.waiting === 1 && ev().length === 1 && ev()[0].status === "ok" && /dispatch HTTP 204/.test(ev()[0].text), "a task ready_to_publish for over 10 minutes: the publisher workflow is dispatched on main and the dispatch is recorded", [gh.dispatches, r.publish_dispatch, ev()]);
+  r = J(await W.codeMergeTick(genv, { now: NOW + 10 * 6e4, openOnly: true }));
+  ok(gh.dispatches.length === 1 && /dispatched at/.test(r.publish_dispatch.skipped), "no second dispatch inside 20 minutes");
+  r = J(await W.codeMergeTick(genv, { now: NOW + 25 * 6e4, openOnly: true }));
+  ok(gh.dispatches.length === 2, "the */20 open-only tick dispatches too, once the gap has passed");
+  freshDb(); freshGh();
+  seedTask({ status: "ready_to_publish", pr_url: null, updated_at: new Date(NOW - 5 * 6e4).toISOString() });
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  ok(!(gh.dispatches || []).length && !r.publish_dispatch, "a task ready for 5 minutes is left to the workflow_run trigger");
+  freshDb(); freshGh();
+  seedTask({ status: "ready_to_publish", pr_url: null, updated_at: ago(8) });
+  db.prepare("INSERT INTO ops_config (key, value) VALUES ('code_publish_dispatch_enabled', 'off')").run();
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  ok(!(gh.dispatches || []).length, "ops_config code_publish_dispatch_enabled off: no dispatch");
+  freshDb(); freshGh();
+  gh.dispatchStatus = 403;
+  seedTask({ status: "ready_to_publish", pr_url: null, updated_at: ago(8) });
+  r = J(await W.codeMergeTick(genv, { now: NOW }));
+  ok(r.publish_dispatch.dispatched === false && r.publish_dispatch.http === 403 && ev()[0].status === "error" && /dispatch HTTP 403 Resource not accessible/.test(ev()[0].text) && r.ok === true, "a refused dispatch is recorded as an error with GitHub's reason and never fails the tick", [r.publish_dispatch, ev()]);
+}
+// ---- MERGE-RACE-RETRY-1: "405 Base branch was modified" is retried with the same head before any update-branch
+goalSetup({ status: "published", pr_url: "https://github.com/QNFO/qnfo-workers/pull/401" });
+seedWorkerPr(401, BRANCH, "h1");
+gh.files[401] = GPATCH;
+gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+sandbox.aiRunAttr = reviewer('{"verdict":"implements","defects":[]}');
+gh.mergeRace = 1;
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.merges.length === 2 && gh.merges.every((x) => x.sha === "h1") && row.status === "merged" && !gh.calls.some((c) => /update-branch/.test(c)), "a merge refused once with 'Base branch was modified' is retried on the same head and lands, with no update-branch (PR 986, 2026-10-12T09:00Z)", [gh.merges.length, row.status, row.merge_note]);
+goalSetup({ status: "published", pr_url: "https://github.com/QNFO/qnfo-workers/pull/401" });
+seedWorkerPr(401, BRANCH, "h1");
+gh.files[401] = GPATCH;
+gh.checks.h1 = green("h1", ["gate", "mirror-guard", "comparator", "guard"]);
+gh.mergeRace = 9;
+r = J(await W.codeMergeTick(genv, { now: NOW }));
+row = one("SELECT * FROM code_tasks WHERE id = ?", ID);
+ok(gh.merges.length === 3 && row.status === "published" && /merge HTTP 405/.test(row.merge_note) && gh.calls.filter((c) => /update-branch/.test(c)).length === 1, "after the retries are spent the branch is brought up to date once, as before", [gh.merges.length, row.status, row.merge_note]);
 sandbox.aiRunAttr = async () => null;
 
 console.log(`code-merge.test: ${passed} passed, ${failed} failed`);

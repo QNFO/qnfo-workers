@@ -67,6 +67,9 @@ db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('ev
 db.prepare("INSERT INTO cloud_ops_events (id, ts, kind, job, status) VALUES ('evt-error-capture-1', ?, 'error-capture-tick', 'qnfo-ops', 'ok')").run(ago(0.3));
 db.prepare("INSERT INTO portfolio_runs (run_date, kind, created_at) VALUES ('2026-10-05', 'identity-weekly', ?)").run(new Date(NOW - 26 * 36e5).toISOString().replace("T", " ").slice(0, 19));
 db.prepare("INSERT INTO charter_snapshots (ts) VALUES (?)").run(ago(5));
+// WATCHMAKER-TICK-LEDGER-1 (1.29.4): the hourly D1 tick ledger, fresh.
+db.exec("CREATE TABLE tick_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, step TEXT)");
+db.prepare("INSERT INTO tick_runs (ts, step) VALUES (?, ?)").run(ago(0.5), "probe");
 db.prepare("INSERT INTO portfolio_sync_runs (ts, status) VALUES (?, 'ok')").run(ago(1));
 db.prepare("INSERT INTO evolve_candidates (ts) VALUES (?)").run(ago(9));
 db.prepare("INSERT INTO objective_constraint_runs (ts) VALUES (?)").run(ago(1));
@@ -142,6 +145,14 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log("FAIL " + m); } };
 const op = (m, k) => m.ops.find((o) => o.key === k);
 
+{ // WATCHMAKER-TICK-LEDGER-1: a tick ledger with no row for over its cadence counts as stalled; a fresh row clears it
+  db.exec("UPDATE tick_runs SET ts = '" + ago(5) + "'");
+  const t = op(await api.watchmakerMeasure(env, NOW), "tick-sequence-ledger");
+  ok(t && t.counted && t.runner === "d1-trigger:tick_driver_roster_tick", "a tick ledger silent for 5h counts as stalled (" + (t && t.state) + ")");
+  db.exec("UPDATE tick_runs SET ts = '" + ago(0.5) + "'");
+  const u = op(await api.watchmakerMeasure(env, NOW), "tick-sequence-ledger");
+  ok(u && !u.counted && /^ok/.test(u.state), "a fresh tick ledger row is ok (" + (u && u.state) + ")");
+}
 let m = await api.watchmakerMeasure(env, NOW);
 ok(m.index === 0 && m.counted.length === 0, "a fully fresh fleet reads 0 (got " + m.index + ": " + m.counted.join(",") + ")");
 ok(op(m, "portfolio-daily").state.startsWith("ok") && op(m, "portfolio-daily").age_h === 3, "the id range picks the real portfolio-daily row");

@@ -102,10 +102,18 @@ jobs:
           if [ -n "$sub" ]; then prev="$(curl -s --max-time 20 "https://$WORKER.$sub.workers.dev/health" | jq -r '.version // empty' 2>/dev/null || true)"; fi
           echo "prev=$prev" >> "$GITHUB_OUTPUT"
           body="$(jq -cn --arg w "$WORKER" --arg s "gha-$GITHUB_RUN_ID" '{worker:$w,owner:"ci/deploy-code-orchestrator",actor:"deploy-code-orchestrator.yml",session_id:$s,ttl_sec:900}')"
-          res="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/lock/acquire" --data "$body")"
-          echo "lock response: $res"
-          if [ "$(echo "$res" | jq -r '.acquired // false' 2>/dev/null)" != "true" ]; then
-            echo "::error::deploy-guard lock not acquired - another deploy of $WORKER holds it, refusing to deploy"
+          # DEPLOY-LOCK-RETRY-1 (issue 1001, run 38233632798): the lease is held by the fleet's own redeploy for a few minutes; a
+          # single try failed the run and the watchdog filed `unknown`. Contention is transient: wait for the holder (its lease
+          # ttl is at most 15 minutes, normally under 3) with jittered backoff, then give up with a named error.
+          res=""; acquired=false
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            res="$(curl -s --max-time 30 -A "$GUARD_UA" -H "Content-Type: application/json" -X POST "$GUARD/lock/acquire" --data "$body")"
+            echo "lock response (attempt $attempt): $res"
+            if [ "$(echo "$res" | jq -r '.acquired // false' 2>/dev/null)" = "true" ]; then acquired=true; break; fi
+            sleep $(( 15 + RANDOM % 15 ))
+          done
+          if [ "$acquired" != "true" ]; then
+            echo "::error::DEPLOY-LOCK-CONTENTION: deploy-guard lock not acquired after 12 attempts - another deploy of $WORKER holds it, refusing to deploy"
             exit 1
           fi
           echo "token=$(echo "$res" | jq -r '.token')" >> "$GITHUB_OUTPUT"

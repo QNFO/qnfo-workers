@@ -93,6 +93,28 @@ function entryTitle(entry) {
 }
 
 // arXiv API: one call for all ids. A missing id is an entry titled "Error" (id under /api/errors) or no entry at all.
+// Second path (0.13.0): when the arXiv API refuses or fails, each id is looked up at DataCite, which registers every arXiv
+// work as 10.48550/arXiv.<id>. A record there proves the id and gives its title; anything else leaves the id unverified
+// (a missing DataCite record is not proof that the id is dead).
+async function lookupArxivDatacite(ids, fetchFn, why) {
+  const out = {};
+  for (const id of ids) {
+    try {
+      const r = await fetchFn("https://api.datacite.org/dois/" + encodeURIComponent("10.48550/arXiv." + id), { headers: { "User-Agent": "qnfo-citation-gate/1.0 (mailto:ops@qnfo.org)" } });
+      if (r.ok) {
+        const j = await r.json();
+        const t = j && j.data && j.data.attributes && j.data.attributes.titles && j.data.attributes.titles[0] && j.data.attributes.titles[0].title;
+        out[id] = t ? { state: "ok", title: String(t).replace(/\s+/g, " ").trim() } : { state: "ok" };
+      } else {
+        out[id] = { state: "error", note: why + "; DataCite HTTP " + r.status };
+      }
+    } catch (e) {
+      out[id] = { state: "error", note: why + "; DataCite " + String(e && e.message || e).slice(0, 60) };
+    }
+  }
+  return out;
+}
+
 async function lookupArxiv(ids, fetchFn) {
   const out = {};
   if (!ids.length) return out;
@@ -100,13 +122,9 @@ async function lookupArxiv(ids, fetchFn) {
   try {
     res = await fetchFn("https://export.arxiv.org/api/query?max_results=" + ids.length + "&id_list=" + encodeURIComponent(ids.join(",")), { headers: { "User-Agent": "qnfo-citation-gate/1.0" } });
   } catch (e) {
-    for (const id of ids) out[id] = { state: "error", note: String(e && e.message || e).slice(0, 120) };
-    return out;
+    return lookupArxivDatacite(ids, fetchFn, String(e && e.message || e).slice(0, 120));
   }
-  if (!res.ok) {
-    for (const id of ids) out[id] = { state: "error", note: "arXiv API HTTP " + res.status };
-    return out;
-  }
+  if (!res.ok) return lookupArxivDatacite(ids, fetchFn, "arXiv API HTTP " + res.status);
   const xml = await res.text();
   const entries = xml.split(/<entry>/i).slice(1).map((e) => e.split(/<\/entry>/i)[0]);
   const byId = {};

@@ -340,6 +340,13 @@ def classify(log: str, wf_name: str) -> tuple[str, str]:
             "a concurrent writer moved main; an artifact commit must re-apply its snapshot onto "
             "origin/main instead of merging (ARTIFACT-PUSH-CONFLICT-1)"
         )
+    # DEPLOY-LOCK-RETRY-1 (issue 1001): lease contention is transient, not an `unknown` defect. The workflow retries; a
+    # remaining failure means a holder kept the lease past every attempt.
+    if "DEPLOY-LOCK-CONTENTION" in L or "deploy-guard lock not acquired" in L:
+        return "deploy-lock-contention", (
+            "another deploy held the deploy-guard lease through every retry; confirm the worker's live /health VERSION "
+            "equals main (the holder usually deployed it) and re-run, else inspect the holder in deploy_locks"
+        )
     if "not a valid model identifier" in L:
         return "unknown", "inspect"
     return "unknown", "inspect the job log"

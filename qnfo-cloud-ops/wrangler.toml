@@ -7,14 +7,19 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 head_sampling_rate = 1
-# Workers standards 2026-10-12: logs and traces both on (shape per developers.cloudflare.com/workers/observability/traces).
+
+# WORKERS-STANDARDS-1 (2026-10-12, Workers best practices; audit check traces-not-declared): `enabled` alone turns on logs only, traces
+# need [observability.traces]. Logs stay at 1 (the worker runs crons and owner mail, every invocation matters); traces are sampled
+# because stored traces bill from 2026-12-01 (TRACES-SAMPLING-BEFORE-BILLING-1). The canonical deploy sends this block in the upload
+# metadata (qnfo-ops OBSERVABILITY-DECLARED-APPLY-1).
 [observability.logs]
 enabled = true
+invocation_logs = true
 head_sampling_rate = 1
 
 [observability.traces]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.05
 
 [ai]
 binding = "AI"
