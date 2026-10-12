@@ -175,6 +175,7 @@ def main() -> int:
     check("an unrecovered push race is still push-race", cw.classify(unrecovered, "canonical-deploy")[0] == "push-race")
     recovered = "error: failed to push some refs to 'x'\nhint: git pull --rebase\nstatus pushed on attempt 2\n"
     check("a recovered push is not a finding", cw.classify(recovered, "canonical-deploy")[0] == "unknown")
+    check("lock contention is deploy-lock-contention, not unknown", cw.classify("::error::DEPLOY-LOCK-CONTENTION: deploy-guard lock not acquired after 12 attempts", "deploy-code-orchestrator")[0] == "deploy-lock-contention")
     check("git CONFLICT is still push-race", cw.classify("CONFLICT (content): Merge conflict in a.json", "w")[0] == "push-race")
 
     # SUPERSEDED-FAILURE-SKIP-1 (issues #332/#333): shapes taken from the live 2026-10-01 12:10-12:13Z ping-pong.

@@ -130,4 +130,20 @@ ok(math(h).some((x) => x.includes("t_{Q,total}")) && renderDefectCount(h) === 0,
 h = renderMarkdown("See [the notes](https://x.org/Mechanics_(Dourmashkin)/03_Vectors) here.");
 ok(/<a href="https:\/\/x\.org\/Mechanics_\(Dourmashkin\)\/03_Vectors">the notes<\/a> here/.test(h), "MATH-RESIDUE-3: a link target keeps balanced parentheses", h);
 
+// MATH-DELIM-2 / MATH-RESIDUE-4 (3.15.0, agent_issues 2300 and 2158): the inputs are the lines of the three pages that
+// /api/render-health flagged on 2026-10-12 and that the renderer, not the source, had broken.
+const disp = (x) => (x.match(/<div class="math-display">/g) || []).length;
+h = renderMarkdown("Counting (weight-$\\ge 2$ error patterns) is the finite-$$N$$ shadow of the logic of [3].\n\n**CSS code theory.** Reference [6] surveys it.\n\n$$P_{\\mathrm{fail}}(n, p) = \\sum_{k=2}^{n} \\binom{n}{k} p^k (1-p)^{n-k},$$\n\nevaluated through its leading terms.");
+ok(disp(h) === 1 && /<div class="math-display">\$\$P_\{\\mathrm\{fail\}\}/.test(h) && math(h).includes("$N$") && /<strong>CSS code theory\.<\/strong>/.test(h) && renderDefectCount(h) === 0, "MATH-DELIM-2: an inline $$N$$ glued to a word is an inline formula and does not shift the display pairing of the page", h);
+h = renderMarkdown("the sensitivity is\n\n$$\\Delta\\theta_{\\mathrm{U}}=\\frac{1}{N-\\varepsilon_{0}}\\,,$$\\nwhich for $N\\gg\\varepsilon_{0}$ reduces to Heisenberg scaling $\\Delta\\theta\\propto N^{-1}$.");
+ok(disp(h) === 1 && /<p>which for \$N\\gg\\varepsilon_\{0\}\$ reduces/.test(h) && !/\\nwhich/.test(h) && renderDefectCount(h) === 0, "MATH-DELIM-2: a display closer followed by a literal \\n and text stays a display formula", h);
+h = renderMarkdown("the value is\n\n$$E = 0.$$\\\n\n### 4.4 Next\n\nText.");
+ok(disp(h) === 1 && /<h3>4\.4 Next<\/h3>/.test(h) && !/<p>\\<\/p>/.test(h), "MATH-DELIM-2: a stray backslash after a display closer is dropped", h);
+h = renderMarkdown("The claim: **anyons are not particles in $\\mathbb{R}$$^3$ but patterns.** And $a$$b$ too.");
+ok(math(h).includes("$\\mathbb{R}^3$") && disp(h) === 0 && math(h).includes("$a$") && math(h).includes("$b$"), "MATH-DELIM-2: adjacent inline formulas are still split while an inline formula is open", h);
+h = renderMarkdown("for any vertex *v* in V, A_V(*v*) is the attribute. Formally, this is written as\nA_V1(*v*) = A_V2(*f(v)*) for all *v* ∈ V1.\nFormally, this is\nA_E1((*u*, *v*)) = A_E2((*f(u)*, *f(v)*))\nfor all edges in E1.");
+ok(!/A_V\(|A_E1\(\(|A_V1\(/.test(h.replace(/\$[^$]+\$/g, " ")) && !/\$[^$]*\*[^$]*\$/.test(h) && /<em>v<\/em> ∈ V1/.test(h) && renderDefectCount(h) === 0, "MATH-RESIDUE-4: emphasised arguments of a subscripted function are typeset with it, and *v* stays emphasis", h);
+h = renderMarkdown("derive the closed-form continuous optimum q* = 1 + \\sqrt{x} here, and there are *n* = 5 variables and *k* = 3 dimensions.");
+ok(/<em>n<\/em> = 5/.test(h) && /<em>k<\/em> = 3/.test(h) && !/q<em>/.test(h), "MATH-RESIDUE-4: a starred symbol (q*) is not read as emphasis; a wrapped one (*n*) is", h);
+
 process.exit(fails ? 1 : 0);

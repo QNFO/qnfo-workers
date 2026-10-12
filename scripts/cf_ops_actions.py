@@ -24,6 +24,10 @@ ACTIONS
                          mapping the index to the repo directory of the retired worker that owned it) and that
                          directory carries a RETIRED or FOLDED marker. Added for #272, where the index
                          qnfo-calibration was recreated for the folded qnfo-fleet-calibrator.
+  gen-activitypub-key WORKER
+                         Create AP_PRIVATE_KEY and AP_PUBLIC_KEY Worker secrets (RSA-2048) for the ActivityPub actor
+                         (ACTIVITYPUB-WEBFINGER-1). WORKER must be in AP_WORKERS. Idempotent, never rotates, runs under
+                         the secret-lock lease, never prints the private key.
   gateway-logs           Summarise recent AI Gateway logs (optionally --model) by model, provider,
                          status, metadata and user agent, for caller attribution.
   ai-neurons             Workers AI neurons by model for the last 24h and 7d (GraphQL). With --model, neurons and
@@ -527,6 +531,7 @@ def zaraz_get(only: str, token: str) -> int:
         cfg = j.get("result") or {}
         st2, w = call("GET", "/zones/%s/settings/zaraz/workflow" % zid, token)
         emit({"action": "zaraz-get", "zone": name, "ok": True, "zarazEnabled": cfg.get("zarazEnabled"), "debugKey": bool(cfg.get("debugKey")),
+              "settings": {k: v for k, v in (cfg.get("settings") or {}).items() if not any(x.lower() in k.lower() for x in SECRETISH)},
               "workflow": w.get("result") if st2 == 200 else st2,
               "tools": [{"id": k, "name": t.get("name"), "component": t.get("component"), "enabled": t.get("enabled")} for k, t in (cfg.get("tools") or {}).items()],
               "triggers": {k: {"name": t.get("name"), "system": t.get("system"), "loadRules": t.get("loadRules")} for k, t in (cfg.get("triggers") or {}).items()},
@@ -562,6 +567,11 @@ def zaraz_set_ga4(zone_name: str, mode: str, token: str) -> int:
         "settings": {"measurementID": GA4_ID, "hideOriginalIP": True, "ecommerce": False, "hideIPAddress": True},
         "actions": {}, "neoEvents": [{"actionType": "pageview", "blockingTriggers": [], "firingTriggers": [tid], "data": {}}]}
     cfg["tools"], cfg["triggers"], cfg["zarazEnabled"] = tools, trigs, True
+    # ZARAZ-AUTOINJECT-1 (2026-10-12): a tool is useless when the zone does not inject the Zaraz script into its HTML; the
+    # qnfo.org config had autoInjectScript off (measured: ga4-qnfo-org published, no /cdn-cgi/zaraz/s.js on any page).
+    settings = cfg.get("settings") or {}
+    settings["autoInjectScript"] = True
+    cfg["settings"] = settings
     if mode == "dry":
         emit({"action": "zaraz-set-ga4", "ok": True, "dry": True, "zone": zone_name, "trigger": tid, "would_write_tools": list(tools)})
         return 0
@@ -586,6 +596,153 @@ def zaraz_set_ga4(zone_name: str, mode: str, token: str) -> int:
         st2, p = call("POST", "/zones/%s/settings/zaraz/publish" % zid, token, {"description": "ZARAZ-GA4-1: GA4 " + GA4_ID})
     emit({"action": "zaraz-set-ga4", "ok": st2 in (200, 201), "zone": zone_name, "permissions": tools[tkey].get("permissions"), "published_http": st2, "errors": p.get("errors") if isinstance(p, dict) else None})
     return 0 if st2 in (200, 201) else 1
+
+
+
+# SPARE-DOMAIN-CANON-1 (2026-10-12, agent_issues 2361; owner approved 2026-10-12, former card 66). qwav.org is the canonical
+# qwav host (rel=canonical on every page); qwav.uk served a duplicate 200 copy from qwav.pages.dev and qwave.tech a Registrar
+# parking page (HOST-CENSUS-BROKEN-1). For each spare zone this action: records the zone's current http_request_dynamic_redirect
+# entrypoint ruleset in the run log (the backup), replaces it with one rule (apex or www -> 301 https://qwav.org + path, query
+# preserved), makes the apex and www records proxied (a redirect rule fires only on proxied traffic; a missing record becomes a
+# proxied CNAME to qwav.pages.dev), then verifies both hosts answer 301 to qwav.org and restores the backed-up ruleset for a zone
+# whose verification fails. Idempotent: a zone already carrying the rule and proxied records is left alone. mode 'dry' prints the
+# plan. The session connector token is refused on ruleset writes (7500); the repository token writes zone rules and DNS.
+# SPARE-DOMAIN-CANON-2 (2026-10-12, HOST-CENSUS-BROKEN-1 #2130, the 2077 host map): every spare zone names its own canonical
+# target; q-wave.tech joins the qwav.org set, ipatent.me (an apex with no address record) points at the flagship's page and
+# empoweringchange.today (a PAUSED zone, which is why its TLS handshake failed) is unpaused first and points at qnfo.org.
+CANON_TARGET = "https://qwav.org"
+SPARE_ZONES = {"qwav.uk": CANON_TARGET, "qwave.tech": CANON_TARGET, "q-wave.tech": CANON_TARGET,
+               "ipatent.me": "https://ipatent.qnfo.org", "empoweringchange.today": "https://qnfo.org"}
+REDIRECT_PHASE = "http_request_dynamic_redirect"
+PAGES_ORIGIN = "qwav.pages.dev"
+
+
+def canon_target(zone: str) -> str:
+    return SPARE_ZONES.get(zone, CANON_TARGET)
+
+
+def canon_rule(zone: str) -> dict:
+    target = canon_target(zone)
+    return {"action": "redirect", "expression": '(http.host in {"%s" "www.%s"})' % (zone, zone), "enabled": True,
+            "description": "SPARE-DOMAIN-CANON-1 (agent_issues 2361, 2130): %s and www.%s are spare names of %s" % (zone, zone, target),
+            "action_parameters": {"from_value": {"status_code": 301, "preserve_query_string": True,
+                                                 "target_url": {"expression": 'concat("%s", http.request.uri.path)' % target}}}}
+
+
+def canon_rule_present(rules: list, zone: str) -> bool:
+    want = canon_rule(zone)
+    for r in rules or []:
+        ap = (r.get("action_parameters") or {}).get("from_value") or {}
+        if r.get("action") == "redirect" and r.get("expression") == want["expression"] and ap.get("status_code") == 301 \
+                and (ap.get("target_url") or {}).get("expression") == want["action_parameters"]["from_value"]["target_url"]["expression"]:
+            return True
+    return False
+
+
+def canon_verify(host: str, fetch=None, target: str = CANON_TARGET) -> dict:
+    """GET https://<host>/ without following redirects; ok when the answer is a 301/308 whose Location starts with the zone's target."""
+    if fetch is None:
+        class _NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        opener = urllib.request.build_opener(_NoRedirect)
+
+        def fetch(url):
+            req = urllib.request.Request(url, method="GET", headers={"User-Agent": "qnfo-cf-ops/1 spare-domain-canon"})
+            try:
+                with opener.open(req, timeout=20) as r:
+                    return r.status, r.headers.get("Location", "")
+            except urllib.error.HTTPError as e:
+                return e.code, e.headers.get("Location", "") if e.headers else ""
+            except Exception as e:  # DNS, TLS, timeout: reported, not raised
+                return 0, "error:" + type(e).__name__
+    st, loc = fetch("https://%s/" % host)
+    return {"host": host, "status": st, "location": loc, "ok": st in (301, 308) and str(loc).startswith(target)}
+
+
+def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=time.sleep) -> int:
+    zones = [z.strip() for z in (zone_name or "").split(",") if z.strip()] or list(SPARE_ZONES)
+    bad = [z for z in zones if z not in SPARE_ZONES]
+    if bad:
+        emit({"action": "spare-domain-canon", "ok": False, "error": "zone not in SPARE_ZONES", "zones": bad, "allowed": list(SPARE_ZONES)})
+        return 2
+    known = dict((name, zid) for zid, name in zaraz_zones(token))
+    rc = 0
+    for zone in zones:
+        zid = known.get(zone)
+        target = canon_target(zone)
+        if not zid:
+            emit({"action": "spare-domain-canon", "ok": False, "zone": zone, "error": "zone not in the account"})
+            rc = 1
+            continue
+        # SPARE-DOMAIN-CANON-2: a paused zone serves nothing (no edge certificate, no rules), so it is unpaused before anything
+        # else; the refusal text, if any, is the evidence an owner token is still needed (2077 recorded 9109 from a session token).
+        st, j = call("GET", "/zones/%s" % zid, token)
+        zinfo = (j.get("result") or {}) if st == 200 else {}
+        paused = bool(zinfo.get("paused"))
+        # ZONE-DELEGATION-1: a zone whose registrar still points at other nameservers resolves nothing, however its rules and
+        # records read; the status, the Cloudflare nameservers and the registrar's current ones are recorded with the backup so a
+        # failed verification names the real cause (run 124: ipatent.me and empoweringchange.today answered URLError).
+        emit({"action": "spare-domain-canon", "stage": "zone", "zone": zone, "status": zinfo.get("status"), "paused": paused,
+              "name_servers": zinfo.get("name_servers"), "original_name_servers": zinfo.get("original_name_servers"),
+              "original_registrar": zinfo.get("original_registrar"), "activated_on": zinfo.get("activated_on")})
+        unpaused = None
+        if paused and mode != "dry":
+            st, j = call("PATCH", "/zones/%s" % zid, token, {"paused": False})
+            unpaused = {"http": st, "ok": st == 200 and j.get("success") is not False, "errors": j.get("errors")}
+            emit({"action": "spare-domain-canon", "stage": "unpause", "zone": zone, "result": unpaused})
+            if not unpaused["ok"]:
+                rc = 1
+                continue
+        st, j = call("GET", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token)
+        before = ((j.get("result") or {}).get("rules") or []) if st == 200 else []
+        emit({"action": "spare-domain-canon", "stage": "backup", "zone": zone, "http": st, "ruleset_rules": before})
+        st, j = call("GET", "/zones/%s/dns_records?per_page=200" % zid, token)
+        recs = j.get("result") or [] if st == 200 else []
+        dns_plan = []
+        for host in (zone, "www." + zone):
+            mine = [r for r in recs if r.get("name") == host and r.get("type") in ("CNAME", "A", "AAAA")]
+            if not mine:
+                dns_plan.append({"host": host, "op": "create", "body": {"type": "CNAME", "name": host, "content": PAGES_ORIGIN, "proxied": True, "ttl": 1,
+                                                                      "comment": "SPARE-DOMAIN-CANON-1: proxied so the redirect rule fires"}})
+            for r in mine:
+                if not r.get("proxied"):
+                    dns_plan.append({"host": host, "op": "patch", "id": r.get("id"), "body": {"proxied": True}})
+        rule_needed = not canon_rule_present(before, zone)
+        if mode == "dry":
+            emit({"action": "spare-domain-canon", "ok": True, "dry": True, "zone": zone, "target": target, "paused": paused, "rule_needed": rule_needed, "dns": dns_plan, "rule": canon_rule(zone)})
+            continue
+        if rule_needed:
+            st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": [canon_rule(zone)]})
+            if st not in (200, 201) or j.get("success") is False:
+                emit({"action": "spare-domain-canon", "ok": False, "zone": zone, "stage": "put-ruleset", "http": st, "errors": j.get("errors")})
+                rc = 1
+                continue
+        dns_done = []
+        for d in dns_plan:
+            if d["op"] == "create":
+                st, j = call("POST", "/zones/%s/dns_records" % zid, token, d["body"])
+            else:
+                st, j = call("PATCH", "/zones/%s/dns_records/%s" % (zid, d["id"]), token, d["body"])
+            dns_done.append({"host": d["host"], "op": d["op"], "http": st, "errors": j.get("errors")})
+        checks = []
+        # A record that just turned proxied keeps answering from the old target until resolvers drop the unproxied answer
+        # (run 121, 2026-10-12: qwav.uk verified at once, qwave.tech still answered 200 after 45 s and was restored). Allow five
+        # minutes before judging.
+        for attempt in range(10):
+            checks = [canon_verify(zone, fetch, target), canon_verify("www." + zone, fetch, target)]
+            if all(c["ok"] for c in checks):
+                break
+            if attempt < 9:
+                sleep(30)
+        ok = all(c["ok"] for c in checks)
+        restored = None
+        if not ok and rule_needed:
+            st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": before})
+            restored = {"http": st, "rules": len(before)}
+            rc = 1
+        emit({"action": "spare-domain-canon", "ok": ok, "zone": zone, "target": target, "unpaused": unpaused, "rule_written": rule_needed, "dns": dns_done, "verify": checks, "restored": restored})
+    return rc
 
 
 LIVING_PAPER_DB = "70a58cb3-b2cd-498d-877f-ecca86859a22"
@@ -1086,9 +1243,61 @@ def delete_d1(name: str, acct: str, token: str) -> int:
     return 0 if ok else 1
 
 
+AP_WORKERS = {"qnfo-gateway"}
+AP_SECRETS = ("AP_PRIVATE_KEY", "AP_PUBLIC_KEY")
+
+
+def _rsa_keypair() -> tuple[str, str]:
+    """RSA-2048 PKCS8 private key and SPKI public key as PEM, from openssl (present on the runner). Nothing is written to disk."""
+    import subprocess
+    priv = subprocess.run(["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048"],
+                          capture_output=True, check=True).stdout.decode()
+    pub = subprocess.run(["openssl", "pkey", "-pubout"], input=priv.encode(), capture_output=True, check=True).stdout.decode()
+    return priv, pub
+
+
+def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair, lock=None) -> int:
+    """ACTIVITYPUB-WEBFINGER-1: create the actor's signing key as Worker secrets AP_PRIVATE_KEY and AP_PUBLIC_KEY.
+    Idempotent and never a rotation: if either secret exists nothing is written (a rotation would break every follower's
+    cached key). Allowlisted to AP_WORKERS. The write runs under the secret-lock lease (#1701). The private key is never
+    printed; the result carries the public key and its SHA-256 fingerprint only."""
+    import hashlib
+    if worker not in AP_WORKERS:
+        emit({"action": "gen-activitypub-key", "ok": False, "refused": "worker not in the ActivityPub allowlist " + ",".join(sorted(AP_WORKERS))})
+        return 3
+    st, j = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/secrets", token)
+    if st != 200:
+        emit({"action": "gen-activitypub-key", "worker": worker, "ok": False, "error": "secrets list HTTP " + str(st)})
+        return 1
+    have = {x.get("name") for x in (j.get("result") or [])}
+    present = [n for n in AP_SECRETS if n in have]
+    if present:
+        emit({"action": "gen-activitypub-key", "worker": worker, "ok": True, "already_exists": present, "rotated": False,
+              "complete": len(present) == len(AP_SECRETS)})
+        return 0 if len(present) == len(AP_SECRETS) else 1
+    if lock is None:
+        from secret_lock import secret_lock as lock
+    priv, pub = keygen()
+    if "BEGIN PRIVATE KEY" not in priv or "BEGIN PUBLIC KEY" not in pub:
+        emit({"action": "gen-activitypub-key", "worker": worker, "ok": False, "error": "key generation produced no PEM"})
+        return 1
+    codes = []
+    with lock(worker, ttl_sec=300, owner="ci/cf-ops-actions/gen-activitypub-key"):
+        for name, text in (("AP_PRIVATE_KEY", priv), ("AP_PUBLIC_KEY", pub)):
+            c, _ = call("PUT", f"/accounts/{acct}/workers/scripts/{worker}/secrets", token, {"name": name, "text": text, "type": "secret_text"})
+            codes.append(c)
+    st2, j2 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/secrets", token)
+    after = {x.get("name") for x in (j2.get("result") or [])} if st2 == 200 else set()
+    ok = all(c in (200, 201) for c in codes) and all(n in after for n in AP_SECRETS)  # a secret the worker did not hold yet is created with 201 (run 123, 2026-10-12)
+    der_fp = hashlib.sha256(pub.encode()).hexdigest()
+    emit({"action": "gen-activitypub-key", "worker": worker, "ok": ok, "rotated": False, "put_http": codes, "verified_present": sorted(after & set(AP_SECRETS)),
+          "public_key_sha256": der_fp, "next_step": "deploy qnfo-gateway with the actor routes; /ap/actor serves AP_PUBLIC_KEY"})
+    return 0 if ok else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1113,12 +1322,16 @@ def main() -> int:
             print("::error::delete-vectorize-index needs --target")
             return 2
         return delete_vectorize_index(a.target, acct, token)
+    if a.action == "gen-activitypub-key":
+        return gen_activitypub_key(a.target, acct, token)
     if a.action == "zaraz-remove-tool":
         return zaraz_remove_tool(a.target, a.model, token)
     if a.action == "zaraz-get":
         return zaraz_get(a.target, token)
     if a.action == "zaraz-set-ga4":
         return zaraz_set_ga4(a.target, a.model, token)
+    if a.action == "spare-domain-canon":
+        return spare_domain_canon(a.target, a.model, token)
     if a.action == "r2-get":
         return r2_get(acct, token, a.target)
     if a.action == "worker-history":

@@ -250,7 +250,7 @@ function fresh(opts) {
   const calls = t.ai.calls;
   await step(t.env, {});
   ok(t.decision(c).outcome === "acked" && /drafter escalated/.test(t.decision(c).reason) && t.ai.calls === calls + 1, "a technical question the drafter escalates gets the acknowledgement");
-  ok(!t.decision(young) && t.q(young).decision === "escalate", "inside the 24h grace nothing is decided");
+  ok(!t.decision(young) && t.q(young).decision === "escalate", "inside the grace nothing is decided");
   t.correspondent("r4@uni4.example");
   const nd = t.inbound({ from: "r4@uni4.example", subject: "Re: x", body: "Could you share the data?", h: 30, skip: "owner-authored reply required, never auto-draft" });
   const calls2 = t.ai.calls;
@@ -382,6 +382,44 @@ function fresh(opts) {
   ok(ks && ks.value === "1", "the kill switch row is visible and on");
   const r = await step(a.env, {});
   ok(!r.disabled, "the visible kill switch row ('1') leaves the step on");
+}
+
+// DRAFT-GROUNDING-1 (agent_issues 2282, 2272) and SLA-GRACE-1 (agent_issues 2204). Synthetic text only.
+{
+  const src0 = "From: a@uni.example\nSubject: Room for the 14 March session\n\nDear colleague, can you confirm room B12 at 10:30 on Friday? Regards, Ines Varga";
+  const u = (d) => worker.ungroundedTerms(d, src0);
+  ok(u("Thank you, the room at 10:30 on Friday is noted.").length === 0, "a draft that only repeats the inbound passes", u("Thank you, the room at 10:30 on Friday is noted."));
+  ok(u("Thank you, Ines. Room B12 on 14 March is noted.").length === 0, "names, a room code and a date from the inbound pass");
+  ok(u("Noted, 11:30 works.").join() === "11:30", "a time the inbound does not state fails", u("Noted, 11:30 works."));
+  ok(u("Thank you. Tuesday is noted.").join() === "Tuesday", "a weekday the inbound does not name fails");
+  ok(u("See you tomorrow.").indexOf("tomorrow") >= 0, "a relative day the inbound does not use fails");
+  ok(u("Thank you. Professor Okafor will attend.").join() === "Professor,Okafor", "a name the inbound does not contain fails", u("Thank you. Professor Okafor will attend."));
+  ok(u("Marta confirms the room.").join() === "Marta", "a sentence-opening name is not exempt");
+  ok(u("The room costs 40 euros.").join() === "40", "an invented number fails");
+  ok(worker.stripSignoff("Thank you, noted.\n\nBest regards,\nSomeone Else") === "Thank you, noted.", "a model-written closing block is cut");
+  ok(worker.stripSignoff("Thank you, noted. Best regards, Someone Else") === "Thank you, noted.", "an inline closing is cut");
+  ok(worker.stripSignoff("Thanks for the note about the room.") === "Thanks for the note about the room.", "a first line that starts with thanks is kept");
+  const envAi = (reply) => ({ AI: { async run(model, body) { envAi.sys = body.messages[0].content; return { response: reply }; } } });
+  const row = { sender: "a@uni.example", subject: "Room for the 14 March session", body_text: "Dear colleague, can you confirm room B12 at 10:30 on Friday? Regards, Ines Varga" };
+  const c1 = await worker.cheapClassify(envAi("DRAFT: Thank you, room B12 at 10:30 on Friday is noted."), row);
+  ok(!c1.escalate && c1.draft === "Thank you, room B12 at 10:30 on Friday is noted.", "a grounded draft is returned", c1);
+  const c2 = await worker.cheapClassify(envAi("DRAFT: Thank you, room C7 at 10:30 on Friday is noted."), row);
+  ok(c2.escalate && c2.draft === "" && /^ungrounded-draft: \d+ term/.test(c2.reason) && c2.reason.indexOf("C7") < 0, "an ungrounded draft escalates, is not returned, and its reason carries a count, not the text", c2);
+  const c3 = await worker.cheapClassify(envAi("DRAFT: Thank you, noted.\nKind regards,\nA Person"), row);
+  ok(!c3.escalate && c3.draft === "Thank you, noted.", "the closing is removed before the check", c3);
+  const sys = envAi.sys;
+  ok(/expertise, judgement, a decision, an opinion or a commitment/.test(sys) && /Every name, number and date in the reply must appear in the email/.test(sys) && /no sign-off/.test(sys), "the prompt states the escalation rule and the grounding rule");
+  ok(!/meeting|receipt|scientific|licensing|legal|financial|scheduling/i.test(sys), "the prompt names no example subject");
+  ok(Object.keys(RULES).every((k) => RULES[k].after_h === 0 || RULES[k].after_h === 12), "every grace is 0 or 12 h, under the 24 h target of inbound_first_response_h_median_30d", Object.keys(RULES).map((k) => RULES[k].after_h));
+  ok(/var VERSION = "0\.5\.([5-9]|\d\d)/.test(src), "orchestrator version is at least 0.5.5");
+}
+{
+  // a held message is first acted on at about 12 h, so a queue of graced messages has a median under the 24 h target
+  const t = fresh();
+  const a13 = t.inbound({ from: "p1@elsewhere.example", subject: "A question", body: "Could you tell me how the method treats odd turns?", h: 13 });
+  const a11 = t.inbound({ from: "p2@elsewhere.example", subject: "A question", body: "Could you tell me how the method treats even turns?", h: 11 });
+  await step(t.env, {});
+  ok(!!t.decision(a13) && !t.decision(a11), "a 13 h old message is decided, an 11 h old one waits", [!!t.decision(a13), !!t.decision(a11)]);
 }
 
 console.log(pass + " passed, " + fail + " failed");

@@ -1,0 +1,88 @@
+name: conflict-repair
+
+# CONFLICT-REPAIR-DOER-1 (agent_issues 2305, charter pillar: autonomy).
+#
+# qnfo-fleet-control files one STALE-PR-CONFLICT-REPAIR-1 issue per quiet pull request that conflicts with main, and until
+# now no loop executed the repair. This workflow is the doer: scripts/conflict_repair.py re-applies the pull request onto
+# main on a new branch (repair/pr-<n>-<sha7>), resolves VERSION-line and mirror conflicts only, bumps VERSION above main
+# and the open claims, runs the suites and guards with no credential in their environment, pushes the branch, opens the
+# replacement pull request and closes the old one as superseded. A semantic overlap is refused and stays with the issue.
+# It NEVER merges, never force-pushes and never touches main.
+#
+# TRIGGERS: workflow_dispatch (one pull request, or every open repair issue when `pr` is empty) and the completion of
+# remediation-consumer, which qnfo-cloud-ops dispatches when it has been idle for 60 minutes (PROBE-CADENCE-1), so the
+# repair runs without a session and without a GitHub `schedule` (those fire rarely on this repository).
+# It pushes only repair/* branches, so the chain is acyclic.
+#
+# SECRETS: CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID for the ledger rows (cloud_ops_events kind
+# conflict-repair-reapplied, branch_hygiene_log), as remediation-consumer uses them; nothing new.
+# A pull request opened with GITHUB_TOKEN starts no pull_request workflow, so the script dispatches the check workflows
+# that accept a dispatch (actions: write).
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number to re-apply onto main (empty: every open STALE-PR-CONFLICT-REPAIR-1 issue, up to 3)"
+        required: false
+        default: ""
+      push:
+        description: "true pushes the repair branch and replaces the pull request; false is a dry run that prints the outcome"
+        required: false
+        default: "true"
+  workflow_run:
+    workflows: ["remediation-consumer"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: conflict-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      INPUT_PR: ${{ github.event.inputs.pr }}
+      INPUT_PUSH: ${{ github.event.inputs.push }}
+    steps:
+      # A workflow_run checks out the trigger's SHA, which can be stale; the repair is cut from the CURRENT main.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The re-applied worker's suites run before the branch is pushed; they need node:sqlite (Node 22).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: doer self-test (offline)
+        run: |
+          if [ ! -f scripts/conflict_repair.py ]; then echo "scripts/conflict_repair.py is not on main yet; nothing to do"; exit 0; fi
+          python3 scripts/conflict_repair.py --selftest
+
+      - name: re-apply conflicting quiet pull requests onto main (never merges)
+        run: |
+          set -uo pipefail
+          if [ ! -f scripts/conflict_repair.py ]; then exit 0; fi
+          MODE="--push"
+          if [ "${INPUT_PUSH:-true}" = "false" ]; then MODE=""; fi
+          if printf '%s' "${INPUT_PR:-}" | grep -Eq '^[0-9]+$'; then
+            python3 scripts/conflict_repair.py --pr "$INPUT_PR" $MODE
+          else
+            python3 scripts/conflict_repair.py --all --max 3 $MODE
+          fi
