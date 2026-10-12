@@ -678,7 +678,14 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
         # SPARE-DOMAIN-CANON-2: a paused zone serves nothing (no edge certificate, no rules), so it is unpaused before anything
         # else; the refusal text, if any, is the evidence an owner token is still needed (2077 recorded 9109 from a session token).
         st, j = call("GET", "/zones/%s" % zid, token)
-        paused = bool(((j.get("result") or {}).get("paused")) if st == 200 else False)
+        zinfo = (j.get("result") or {}) if st == 200 else {}
+        paused = bool(zinfo.get("paused"))
+        # ZONE-DELEGATION-1: a zone whose registrar still points at other nameservers resolves nothing, however its rules and
+        # records read; the status, the Cloudflare nameservers and the registrar's current ones are recorded with the backup so a
+        # failed verification names the real cause (run 124: ipatent.me and empoweringchange.today answered URLError).
+        emit({"action": "spare-domain-canon", "stage": "zone", "zone": zone, "status": zinfo.get("status"), "paused": paused,
+              "name_servers": zinfo.get("name_servers"), "original_name_servers": zinfo.get("original_name_servers"),
+              "original_registrar": zinfo.get("original_registrar"), "activated_on": zinfo.get("activated_on")})
         unpaused = None
         if paused and mode != "dry":
             st, j = call("PATCH", "/zones/%s" % zid, token, {"paused": False})

@@ -85,7 +85,7 @@ def run(fake, target="", mode="live"):
 f = Fake(rules_before=[], dns=[{"id": "r1", "type": "CNAME", "name": "qwav.uk", "content": "qwav.pages.dev", "proxied": False}])
 rc = run(f, "qwav.uk")
 ok(rc == 0, "fresh zone returns 0", rc)
-ok(f.emitted and f.emitted[0].get("stage") == "backup" and f.emitted[0]["ruleset_rules"] == [], "the backup is the first thing emitted", f.emitted[:1])
+ok(f.emitted and f.emitted[0].get("stage") == "zone" and f.emitted[0]["paused"] is False and f.emitted[1].get("stage") == "backup" and f.emitted[1]["ruleset_rules"] == [], "the zone status then the backup are emitted before any write (ZONE-DELEGATION-1)", f.emitted[:2])
 puts = [c for c in f.calls if c[0] == "PUT" and "/rulesets/phases/http_request_dynamic_redirect/entrypoint" in c[1]]
 ok(len(puts) == 1 and len(puts[0][2]["rules"]) == 1, "exactly one ruleset PUT with one rule", puts)
 rule = puts[0][2]["rules"][0]
@@ -98,7 +98,7 @@ ok(len(patches) == 1 and patches[0][1].endswith("/dns_records/r1") and patches[0
 ok(len(posts) == 1 and posts[0][2]["name"] == "www.qwav.uk" and posts[0][2]["content"] == "qwav.pages.dev" and posts[0][2]["proxied"] is True, "the missing www record is created as a proxied CNAME", posts)
 final = f.emitted[-1]
 ok(final["ok"] is True and final["rule_written"] is True and all(c["ok"] for c in final["verify"]) and final["restored"] is None, "the final report is ok with both hosts verified", final)
-ok(all(c[0] != "PUT" or f.emitted.index(f.emitted[0]) == 0 for c in f.calls), "no write before the backup", None)
+ok([e.get("stage") for e in f.emitted[:3]] == ["zone", "backup", None], "zone, backup, then the final report: no write stage precedes the backup", [e.get("stage") for e in f.emitted])
 ok(not [c for c in f.calls if c[0] == "PATCH" and c[1].count("/") == 2], "an unpaused zone gets no zone PATCH", f.calls)
 
 # 2. idempotent: the rule already present and records proxied -> no PUT, no DNS write
