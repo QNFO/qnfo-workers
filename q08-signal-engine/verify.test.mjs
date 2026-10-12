@@ -156,5 +156,24 @@ globalThis.fetch = origFetch;
   check("Big-O notation is not a name (O(1), O(N), O(n^2))", ["The O(1) lookup helps.", "Complexity is O(N) in the worst case.", "An O(n^2) loop is slow."].every((s) => g(s).length === 0), ["The O(1) lookup helps.", "Complexity is O(N) in the worst case.", "An O(n^2) loop is slow."].map(g));
   check("an invented multi-letter name still fails", g("The idea came from Zorblax Quimby in the lab.").some((x) => /Zorblax|Quimby/.test(x)));
 }
+// ---- Q08-PRUNE-FLOOR-1: a pruned draft under 2800 characters is kept, not handed to a model revision (runs 328-332) ---------------
+{
+  const para = (i) => "The operator in case " + ["one", "two", "three", "four", "five", "six"][i] + " watched the queue grow while the dashboard stayed green, because the dashboard measured the database and not the disk beneath it. Each hour the gap between what was measured and what was felt widened, and nobody owned the space between the two numbers.";
+  const bad = "Every vendor now sells a sealed appliance that hides this queue from its buyers, and the whole industry has quietly agreed to it.";
+  const essay = "# The queue nobody measured\n\n" + [0, 1, 2, 3, 4, 5].map((i) => para(i) + (i === 2 ? " " + bad : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const ground = essay.replace(bad, "");
+  let calls = 0;
+  const env = { AI: { run: async () => { calls++; return calls <= 2 ? { response: JSON.stringify({ unsupported: [bad + " -- not in source"], verdict: "fail" }) } : { response: '{"unsupported": [], "verdict": "pass"}' }; } } };
+  const g0 = V.prunedGateProblems(essay.replace(bad, ""), []);
+  check("the pruned draft is under the 2800-character writing floor but clears the prune floor", essay.replace(" " + bad, "").length < 2800 && essay.replace(" " + bad, "").length >= V.PRUNE_FLOOR && g0.length === 0, { len: essay.replace(" " + bad, "").length, g0 });
+  check("a draft under the prune floor is still refused", V.prunedGateProblems("# The queue nobody measured\n\nShort.", []).some((p) => /too short after pruning/.test(p)));
+  const r = await V.verifyAndRevise(env, { piece: { text: essay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
+  check("the short pruned draft is verified and published without a model revision", r.ok === true && !r.piece.text.includes("sealed appliance") && r.pruned === 1 && calls === 4, { ok: r.ok, problems: r.problems, calls });
+  check("five prune rounds", V.PRUNE_ROUNDS === 5);
+  let n2 = 0;
+  const envNever = { AI: { run: async () => { n2++; return { response: JSON.stringify({ unsupported: ["nothing that occurs in the draft at all here -- x"], verdict: "fail" }) }; } } };
+  const r2 = await V.verifyAndRevise(envNever, { piece: { text: essay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
+  check("a failed repair names its trail in the run error", r2.ok === false && r2.problems.some((p) => /^repair trail: r1 prune located nothing/.test(p)), r2.problems);
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
