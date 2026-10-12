@@ -27,6 +27,15 @@ binding = "AI"
 enabled = true
 head_sampling_rate = 1
 
+# WORKERS-STANDARDS-1 (owner standards 2026-10-12): logs and traces declared. Workers docs: `enabled` alone turns on logs only;
+# traces need [observability.traces]. Sampled at the default rate of 1.
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+
 [[d1_databases]]
 binding = "PERSONAL"
 database_name = "personal-life"
