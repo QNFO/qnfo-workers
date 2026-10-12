@@ -1,8 +1,17 @@
 {
-  "audited_at": "2026-10-12 12:08:11",
+  "audited_at": "2026-10-12 13:09:16",
   "d1_write_failures": [],
   "d1_writes_ok": 114,
   "guard": {
+    "_drift_confirm": {
+      "first_pass": [
+        "qnfo-cloud-ops",
+        "qnfo-code-orchestrator",
+        "qnfo-fleet-control"
+      ],
+      "refreshed": true,
+      "second_pass": []
+    },
     "_guard_rc": 0,
     "ahead": [],
     "cf_script_list": true,
@@ -564,12 +573,12 @@
       },
       {
         "dir": "qnfo-cloud-ops",
-        "version": "1.24.2-doi-scrub",
+        "version": "1.25.1-outreach-ct",
         "worker": "qnfo-cloud-ops"
       },
       {
         "dir": "qnfo-code-orchestrator",
-        "version": "0.11.0-search-fuzzy",
+        "version": "0.12.3-loop-quality",
         "worker": "qnfo-code-orchestrator"
       },
       {
@@ -589,7 +598,7 @@
       },
       {
         "dir": "qnfo-fleet-control",
-        "version": "0.17.0-lane-nudge",
+        "version": "0.18.2-merge-side",
         "worker": "qnfo-fleet-control"
       },
       {
@@ -649,7 +658,7 @@
       },
       {
         "dir": "qnfo-social",
-        "version": "0.12.0-whole-sentences",
+        "version": "0.13.0-buffer-stats",
         "worker": "qnfo-social"
       },
       {
@@ -1117,9 +1126,9 @@
       "worker": "qnfo-citation-watch"
     },
     "qnfo-cloud-ops": {
-      "before": "1.24.2-doi-scrub",
+      "before": "1.25.1-outreach-ct",
       "http": 200,
-      "live": "1.24.2-doi-scrub",
+      "live": "1.25.1-outreach-ct",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-cloud-ops"
@@ -1134,9 +1143,9 @@
       "worker": "qnfo-code-agent"
     },
     "qnfo-code-orchestrator": {
-      "before": "0.11.0-search-fuzzy",
+      "before": "0.12.3-loop-quality",
       "http": 200,
-      "live": "0.11.0-search-fuzzy",
+      "live": "0.12.3-loop-quality",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-code-orchestrator"
@@ -1256,9 +1265,9 @@
       "worker": "qnfo-fleet-calibrator"
     },
     "qnfo-fleet-control": {
-      "before": "0.17.0-lane-nudge",
+      "before": "0.18.2-merge-side",
       "http": 200,
-      "live": "0.17.0-lane-nudge",
+      "live": "0.18.2-merge-side",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-fleet-control"
@@ -1550,9 +1559,9 @@
       "worker": "qnfo-skills-discovery"
     },
     "qnfo-social": {
-      "before": "0.12.0-whole-sentences",
+      "before": "0.13.0-buffer-stats",
       "http": 200,
-      "live": "0.12.0-whole-sentences",
+      "live": "0.13.0-buffer-stats",
       "match": 1,
       "note": "SYNC",
       "worker": "qnfo-social"
