@@ -25,6 +25,16 @@ workers_dev = true
 enabled = true
 head_sampling_rate = 1
 
+# OBSERVABILITY-TRACES-1 (2026-10-12, Workers best practices): logs stay at 100%; traces are sampled, because this worker's
+# hourly ticks make hundreds of subrequests each.
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+
 [triggers]
 crons = ["*/20 * * * *", "0 3 * * *", "0 4 1 * *", "30 3 * * 1", "0 * * * *"]
 
