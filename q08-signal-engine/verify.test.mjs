@@ -174,6 +174,17 @@ globalThis.fetch = origFetch;
   const envNever = { AI: { run: async () => { n2++; return { response: JSON.stringify({ unsupported: ["nothing that occurs in the draft at all here -- x"], verdict: "fail" }) }; } } };
   const r2 = await V.verifyAndRevise(envNever, { piece: { text: essay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
   check("a failed repair names its trail in the run error", r2.ok === false && r2.problems.some((p) => /^repair trail: r1 prune located nothing/.test(p)), r2.problems);
+  // Q08-FACT-REVISION-FORMAT-1 (0.14.7, run 349): a fact revision that lost its title keeps the draft's title instead of failing the gate
+  let rv = 0, revised = false;
+  const longEssay = "# The queue nobody measured\n\n" + [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4].map((i) => para(i)).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const body = longEssay.replace(/^# .*\n\n/, "").replace(/\n\nworth your time:.*$/, "");
+  const envRev = { AI: { run: async (m, a2) => {
+    const pr = (a2.messages || []).map((x) => x.content).join("\n") + (a2.prompt || "");
+    if (/FACT REVISION/.test(pr)) { revised = true; return { response: body + "\n\nworth your time: yes - names the mechanism" }; }
+    rv++; return revised ? { response: '{"unsupported": [], "verdict": "pass"}' } : { response: JSON.stringify({ unsupported: ["nothing that occurs in the draft at all here -- x"], verdict: "fail" }) };
+  } } };
+  const r3 = await V.verifyAndRevise(envRev, { piece: { text: longEssay, model: "@cf/openai/gpt-oss-120b" }, prompt: "P", banned: [], ground: longEssay, seedText: "s", forecast: false });
+  check("a fact revision without a title keeps the draft's title and publishes", revised && r3.ok === true && /^# The queue nobody measured/.test(r3.piece.text), { ok: r3.ok, problems: r3.problems, revised });
 }
 // ---- Q08-EDIT-FLOOR-1: the editor pass may cut to EDIT_FLOOR; a forecast keeps the writing floor -------------------------------
 {
