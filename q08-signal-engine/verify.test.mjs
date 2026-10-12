@@ -227,5 +227,28 @@ globalThis.fetch = origFetch;
   check("a reviewer that lists only inferences without labels no longer fails the draft", v.verdict === "pass" && v.inferences.length === 2, v);
   check("an item with no reason at all stays a FACT", V.splitFactItems(["a bare quotation with no reason"]).facts.length === 1);
 }
+// Q08-FACT-OBJECT-ITEM-1 (0.14.3, run 338): an object item is rebuilt as text, never "[object Object]"
+{
+  check("an object item keeps its label, claim and reason", V.factItemText({ label: "inference", claim: "runs on a private server", reason: "inference from source" }) === "INFERENCE: runs on a private server -- inference from source");
+  check("an object item with no claim field is kept as JSON", V.factItemText({ foo: 1 }) === '{"foo":1}');
+  const v = V.parseFactVerdict(JSON.stringify({ unsupported: [{ label: "INFERENCE", claim: "so maintainers run out of time", reason: "reasoning" }], verdict: "fail" }));
+  check("a reviewer listing only an object INFERENCE passes the draft", v && v.verdict === "pass" && v.inferences.length === 1 && !/object Object/.test(JSON.stringify(v)), v);
+  const f = V.parseFactVerdict(JSON.stringify({ unsupported: [{ claim: "shipped on 4 March", reason: "date not in source" }], verdict: "fail" }));
+  check("an unlabelled object with a date reason still fails", f && f.verdict === "fail" && /4 March/.test(f.unsupported[0]), f);
+}
+// Q08-FACT-SHAPE-1 (0.14.3, runs 340-341)
+{
+  const R = V.claimIsReasoning;
+  check("generic reasoning flagged 'not in source' is reasoning", R("the provider faces little measurable pressure to ensure that the coding harness works reliably in typical environments -- not in source"));
+  check("an incentive generalisation is reasoning", R("The same incentive structure repeats wherever a supplier judges that maintaining software support for older products is uneconomical. -- not stated in source"));
+  check("a claim with a name stays a FACT", !R("Benchmarks can be improved by refinements such as Active Memory and Active Focus -- not in source"));
+  check("a claim with a number stays a FACT", !R("the release can cost 40 dollars -- not in source"));
+  check("a reason that quotes the source stays a FACT", !R("the exploitation produced fires that would cascade -- source only mentions 'the outbreak of fires' as part of the investigation"));
+  check("a reason naming a date stays a FACT", !R("the project could ship later -- date not in source"));
+  check("a plain event claim without reasoning words stays a FACT", !R("the development kit is not part of the benchmark suite -- not in source"));
+  check("a proper noun mid-claim stays a FACT", !R("customers at Leclerc locations cannot use it -- no mention in source"));
+  const v = V.parseFactVerdict(JSON.stringify({ unsupported: ["the provider faces little measurable pressure to fix it -- not in source", "Benchmarks such as Active Memory can be advertised -- not in source"], verdict: "fail" }));
+  check("only the named item fails the draft", v.verdict === "fail" && v.unsupported.length === 1 && v.inferences.length === 1, v);
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
