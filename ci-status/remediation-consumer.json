@@ -1,59 +1,389 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@408f2ef7611b",
- "due": 2,
- "pass": 1,
- "fail": 1,
- "skipped": 0,
+ "verifier": "remediation-consumer@8c3b340a299a",
+ "due": 65,
+ "pass": 16,
+ "fail": 34,
+ "skipped": 15,
  "contracts": [
   {
-   "class": "issue-1876",
-   "issue_id": 1876,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "a task created in the last 7 days ended as a collision or duplicate (a stale base is STALE-PUBLISH-REPROPOSE-1, #2380)",
-   "written": true
-  },
-  {
-   "class": "issue-1965",
-   "issue_id": 1965,
+   "class": "issue-2122",
+   "issue_id": 2122,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
-  }
- ],
- "trusted_transports": [
-  "binding-http",
-  "cf-api",
-  "code-read",
-  "container",
-  "curl",
-  "d1-query",
-  "d1-query@ipatent-db",
-  "d1-query@living-paper",
-  "d1-query@personal-life",
-  "d1-query@portfolio-state",
-  "d1-query@q08-signal",
-  "d1-query@qnfo-cms",
-  "d1-query@qnfo-graph",
-  "dns",
-  "edge-ext",
-  "external",
-  "external-curl",
-  "external-http",
-  "external-https",
-  "http",
-  "runner-https"
- ],
- "budget_exhausted": false,
- "runtime_verified_share_24h": 6,
- "host_census": {
-  "skipped": "ran within 6h"
- },
- "spent_ms": 8501,
- "head": "408f2ef7611b4e4955ae97166ba7870493a59df1",
- "job_status": "success",
- "ts": "2026-10-12T16:52:40Z"
-}
+  },
+  {
+   "class": "issue-2014",
+   "issue_id": 2014,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: ops_tool_budget_bail_7d 6",
+   "written": true
+  },
+  {
+   "class": "issue-2033",
+   "issue_id": 2033,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2141",
+   "issue_id": 2141,
+   "verdict": "pass",
+   "expected": "1",
+   "observed": "1",
+   "written": true
+  },
+  {
+   "class": "belief-issues-probed-hourly",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2193",
+   "issue_id": 2193,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2052",
+   "issue_id": 2052,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2211",
+   "issue_id": 2211,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2286",
+   "issue_id": 2286,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop q08-signal-engine did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "issue-2357",
+   "issue_id": 2357,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2252",
+   "issue_id": 2252,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
+   "written": true
+  },
+  {
+   "class": "issue-2262",
+   "issue_id": 2262,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
+   "written": true
+  },
+  {
+   "class": "issue-2292",
+   "issue_id": 2292,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: the row has not yet been re-run by qnfo-research-exec 0.13.0 (PR 990 re-arms it at merge)",
+   "written": true
+  },
+  {
+   "class": "issue-2354",
+   "issue_id": 2354,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "research-terminal-a2033fc2",
+   "issue_id": 2358,
+   "verdict": "fail",
+   "expected": "parked+queue-moving",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "fm-metric-refresher-replaced",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2391",
+   "issue_id": 2391,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "fm-observability-config-inert",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-contract-cadence-drift",
+   "issue_id": null,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "4",
+   "written": true
+  },
+  {
+   "class": "issue-2165",
+   "issue_id": 2165,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: fewer than 20 full-context judged claims (qnfo-ai-search 2.4.2, PR 950)",
+   "written": true
+  },
+  {
+   "class": "issue-2008",
+   "issue_id": 2008,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: qnfo-code-orchestrator 0.12.0 (VERIFY-DEFER-PUBLISHER-1) is not live yet: 0.10.0-intake-window",
+   "written": true
+  },
+  {
+   "class": "fm-triage-gap",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2225",
+   "issue_id": 2225,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-unknown-model-id-silent-default",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2067",
+   "issue_id": 2067,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "dead-on-arrival tasks were created in the last 14 days: 9",
+   "written": true
+  },
+  {
+   "class": "fm-reasoning-starves-small-answer",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2336",
+   "issue_id": 2336,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "3",
+   "written": true
+  },
+  {
+   "class": "fm-superseded-closure-reopened",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-register-row-reescalated",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2089",
+   "issue_id": 2089,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "workers 30",
+   "written": true
+  },
+  {
+   "class": "fm-probe-awaits-missing-heartbeat",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2155",
+   "issue_id": 2155,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pct 2.9",
+   "written": true
+  },
+  {
+   "class": "issue-2158",
+   "issue_id": 2158,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pages 5",
+   "written": true
+  },
+  {
+   "class": "issue-2157",
+   "issue_id": 2157,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "share 6",
+   "written": true
+  },
+  {
+   "class": "fm-closure-relapse-unreopened",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2223",
+   "issue_id": 2223,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "rate 0.184",
+   "written": true
+  },
+  {
+   "class": "issue-2323",
+   "issue_id": 2323,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "in breach 34",
+   "written": true
+  },
+  {
+   "class": "issue-2326",
+   "issue_id": 2326,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "rate 0.074",
+   "written": true
+  },
+  {
+   "class": "issue-2328",
+   "issue_id": 2328,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "drafters 1",
+   "written": true
+  },
+  {
+   "class": "fm-selfheal-executed-unverified",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2427",
+   "issue_id": 2427,
+   "verdict": "pass",
+   "expected": "0",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2272",
+   "issue_id": 2272,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2339",
+   "issue_id": 2339,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2338",
+   "issue_id": 2338,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2343",
+   "issue_id": 2343,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2344",
+   "issue_id": 2344,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2346",
+   "issue_id": 2346,
+   "verdict": "vacuous-probe-result",
+   "expected": "closed",
+   "observed": null,
+   "reason": "probe returned no expected/observed pair"
+  },
+  {
+   "class": "issue-2379",
+   "issue_id": 2379,
+   "verd
