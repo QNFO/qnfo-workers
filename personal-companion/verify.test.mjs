@@ -57,6 +57,18 @@ const AI0 = { run: async (model, input) => { const c = input.messages[0].content
   const r = await V.verifyPiece({ AI: AI0 }, goodText, source, "@cf/openai/gpt-oss-120b", "s2", {});
   const fs = new Set(calls.map((c) => V.familyOf(c.model)));
   ok(r.ok && calls.length === 2 && fs.size === 2 && !fs.has("openai"), "two reviewers, two families, neither the writer's, both pass", { ok: r.ok, n: calls.length, fs: [...fs] });
+}
+{
+  // COMPANION-FACTCHECK-PARALLEL-1 (1.15.8): a reviewer that times out in round 1 is replaced in round 2 by the untried ones
+  calls = []; let first = null;
+  script = (model) => { if (first === null) first = model; return model === first ? new Error("The operation was aborted due to timeout") : '{"unsupported":[],"verdict":"pass"}'; };
+  const r = await V.verifyPiece({ AI: AI0 }, goodText, source, "@cf/openai/gpt-oss-120b", "s2", {});
+  const fs = new Set(calls.map((c) => V.familyOf(c.model)));
+  ok(r.ok && calls.length >= 3 && calls.length <= 5 && !fs.has("openai") && (r.judges || []).length === 2, "a timed-out reviewer is replaced in a second parallel round; two verdicts still decide", { ok: r.ok, n: calls.length, judges: (r.judges || []).map((j) => j.model) });
+  script = () => new Error("The operation was aborted due to timeout");
+  calls = [];
+  const r2 = await V.verifyPiece({ AI: AI0 }, goodText, source, "@cf/openai/gpt-oss-120b", "s3", {});
+  ok(!r2.ok && r2.unavailable === true && calls.length <= 8, "every reviewer failing in both rounds still fails closed (nothing publishes)", { ok: r2.ok, n: calls.length });
   ok(calls.every((c) => /SOURCE MATERIAL/.test(c.c) && /Alpha Subject/.test(c.c)), "reviewers see the source material and the draft");
 }
 {
