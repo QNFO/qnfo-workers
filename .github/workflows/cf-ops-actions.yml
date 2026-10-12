@@ -27,6 +27,8 @@ on:
           - delete-worker
           - delete-vectorize-index
           - zaraz-remove-tool
+          - zaraz-get
+          - zaraz-set-ga4
           - d1-backup
           - unbind-d1
           - delete-d1

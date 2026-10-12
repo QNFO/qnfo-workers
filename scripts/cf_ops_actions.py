@@ -499,6 +499,95 @@ def zaraz_remove_tool(zone_name: str, match: str, token: str) -> int:
     return 0 if not left else 1
 
 
+GA4_ID = "G-LV7RHRVW6R"
+
+
+def zaraz_zones(token: str, only: str = "") -> list:
+    out, page = [], 1
+    while True:
+        st, j = call("GET", "/zones?per_page=50&page=%d" % page, token)
+        if st != 200:
+            emit({"action": "zaraz-get", "ok": False, "stage": "zones", "http": st, "errors": j.get("errors")})
+            return out
+        out += [(z["id"], z["name"]) for z in j.get("result") or []]
+        if page >= ((j.get("result_info") or {}).get("total_pages") or 1):
+            return [z for z in out if not only or z[1] == only]
+        page += 1
+
+
+def zaraz_get(only: str, token: str) -> int:
+    """Read-only: per zone, the Zaraz tool list, trigger shapes, workflow and consent state (no settings values)."""
+    rc = 0
+    for zid, name in zaraz_zones(token, only):
+        st, j = call("GET", "/zones/%s/settings/zaraz/config" % zid, token)
+        if st != 200:
+            emit({"action": "zaraz-get", "zone": name, "ok": False, "http": st, "errors": j.get("errors")})
+            rc = 1
+            continue
+        cfg = j.get("result") or {}
+        st2, w = call("GET", "/zones/%s/settings/zaraz/workflow" % zid, token)
+        emit({"action": "zaraz-get", "zone": name, "ok": True, "zarazEnabled": cfg.get("zarazEnabled"), "debugKey": bool(cfg.get("debugKey")),
+              "workflow": w.get("result") if st2 == 200 else st2,
+              "tools": [{"id": k, "name": t.get("name"), "component": t.get("component"), "enabled": t.get("enabled")} for k, t in (cfg.get("tools") or {}).items()],
+              "triggers": {k: {"name": t.get("name"), "system": t.get("system"), "loadRules": t.get("loadRules")} for k, t in (cfg.get("triggers") or {}).items()},
+              "consent_keys": sorted((cfg.get("consent") or {}).keys())})
+    return rc
+
+
+def zaraz_set_ga4(zone_name: str, mode: str, token: str) -> int:
+    """Add the GA4 tool (pageview on the system pageload trigger) to one zone's Zaraz config and publish.
+    mode 'dry' prints the config it would write. Idempotent: a zone that already has a google-analytics tool for GA4_ID is left alone."""
+    zs = zaraz_zones(token, zone_name)
+    if not zone_name or not zs:
+        emit({"action": "zaraz-set-ga4", "ok": False, "error": "zone not found", "zone": zone_name})
+        return 2
+    zid = zs[0][0]
+    st, j = call("GET", "/zones/%s/settings/zaraz/config" % zid, token)
+    if st != 200:
+        emit({"action": "zaraz-set-ga4", "ok": False, "stage": "get-config", "http": st, "errors": j.get("errors")})
+        return 1
+    cfg = j.get("result") or {}
+    tools, trigs = cfg.get("tools") or {}, cfg.get("triggers") or {}
+    for k, t in tools.items():
+        if t.get("component") == "google-analytics" and (t.get("settings") or {}).get("measurementID") == GA4_ID:
+            emit({"action": "zaraz-set-ga4", "ok": True, "zone": zone_name, "note": "already configured", "tool": k})
+            return 0
+    tid = next((k for k, t in trigs.items() if t.get("system") == "pageload"), None)
+    if tid is None:
+        tid = "pageview-" + zone_name.replace(".", "-")
+        trigs[tid] = {"name": "Pageview", "description": "All pages", "clientRules": [], "excludeRules": [], "system": "pageload",
+                      "loadRules": [{"id": "r1", "match": "{{ client.__zarazTrack }}", "op": "EQUALS", "value": "Pageview"}] if False else []}
+    tools["ga4-" + zone_name.replace(".", "-")] = {
+        "blockingTriggers": [], "enabled": True, "defaultFields": {}, "name": "Google Analytics 4", "component": "google-analytics", "type": "component",
+        "settings": {"measurementID": GA4_ID, "hideOriginalIP": True, "ecommerce": False, "hideIPAddress": True},
+        "actions": {}, "neoEvents": [{"actionType": "pageview", "blockingTriggers": [], "firingTriggers": [tid], "data": {}}]}
+    cfg["tools"], cfg["triggers"], cfg["zarazEnabled"] = tools, trigs, True
+    if mode == "dry":
+        emit({"action": "zaraz-set-ga4", "ok": True, "dry": True, "zone": zone_name, "trigger": tid, "would_write_tools": list(tools)})
+        return 0
+    # The API requires a 'permissions' list on component tools but documents no values: try the usual ones until it validates.
+    tkey = "ga4-" + zone_name.replace(".", "-")
+    tried = []
+    for perms in (["access_client_kv"], [], ["access_client_kv", "execute_unsafe_scripts"]):
+        tools[tkey]["permissions"] = perms
+        st, j = call("PUT", "/zones/%s/settings/zaraz/config" % zid, token, cfg)
+        tried.append({"permissions": perms, "http": st})
+        if st in (200, 201) and j.get("success") is not False:
+            break
+        if "permissions" not in json.dumps(j.get("errors") or []):
+            break
+    if st not in (200, 201) or j.get("success") is False:
+        emit({"action": "zaraz-set-ga4", "ok": False, "stage": "put-config", "http": st, "errors": j.get("errors"), "tried": tried})
+        return 1
+    stw, w = call("GET", "/zones/%s/settings/zaraz/workflow" % zid, token)
+    if stw == 200 and str(w.get("result")) != "preview":
+        st2, p = 200, {"note": "workflow is realtime: the PUT is live, nothing to publish"}
+    else:
+        st2, p = call("POST", "/zones/%s/settings/zaraz/publish" % zid, token, {"description": "ZARAZ-GA4-1: GA4 " + GA4_ID})
+    emit({"action": "zaraz-set-ga4", "ok": st2 in (200, 201), "zone": zone_name, "permissions": tools[tkey].get("permissions"), "published_http": st2, "errors": p.get("errors") if isinstance(p, dict) else None})
+    return 0 if st2 in (200, 201) else 1
+
+
 LIVING_PAPER_DB = "70a58cb3-b2cd-498d-877f-ecca86859a22"
 
 
@@ -999,7 +1088,7 @@ def delete_d1(name: str, acct: str, token: str) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1026,6 +1115,10 @@ def main() -> int:
         return delete_vectorize_index(a.target, acct, token)
     if a.action == "zaraz-remove-tool":
         return zaraz_remove_tool(a.target, a.model, token)
+    if a.action == "zaraz-get":
+        return zaraz_get(a.target, token)
+    if a.action == "zaraz-set-ga4":
+        return zaraz_set_ga4(a.target, a.model, token)
     if a.action == "r2-get":
         return r2_get(acct, token, a.target)
     if a.action == "worker-history":

@@ -9,7 +9,7 @@ var __name22 = /* @__PURE__ */ __name2((target, value) => __defProp22(target, "n
 var __defProp222 = Object.defineProperty;
 var __name222 = /* @__PURE__ */ __name22((target, value) => __defProp222(target, "name", { value, configurable: true }), "__name");
 var __name2222 = /* @__PURE__ */ __name222((target, value) => Object.defineProperty(target, "name", { value, configurable: true }), "__name");
-var VERSION = "1.31.0-full-access"; /* 1.31.0 DASHBOARD-FULL-ACCESS-1 (2026-10-12, pillar autonomy; owner: "the fleet dashboard is my one-stop assistant to the Quniverse and shall have full access to all resources"): every ask since 09:33Z answered "the model service answered HTTP 401": a secret added to this worker in the Cloudflare dashboard (GA4_SA_KEY) made a version that copied the bindings without props, so SVC_QNFO_AI lost caller = qnfo-fleet-dashboard and qnfo-ai refused it. A model leg that qnfo-ai refuses (401/403/5xx or a network error) now runs the same Workers AI model through the new direct AI binding, so a lost prop or a router outage no longer silences the command line. The console gains mail (search the inbox, read a message in full; owner session), service bindings to qnfo-email, qnfo-cloud-ops and qnfo-fleet-control for call, and sql reads of q08 and the private identity D1 (owner session; identity stays read-only). info shows the signed-in owner up to 1500 characters of each message and tells a visitor to sign in for subject and text. MAIL-ASK-1 (same day, owner: "what do they say? don't waste my time"): "WHAT'S UP WITH RESEARCHLETTERS EMAILS?" and the follow-up "AND WHAT DO THEY SAY?" reached the model with no message at all (MAIL_ASK_RX had no plurals, "researchletters" did not name theresearchletters.org, a follow-up named no sender); plurals, say/said/content, a card domain typed without "the" or the TLD, and a follow-up with mail cards in the queue now read the messages, and the owner's context carries 1500 characters of each (was 300). A journal call for papers ("We invite your research article", "submit your full-length article", "fits our journal scope", an ISSN line) is a solicitation, not a person owed a reply (MAIL_SOLICIT_RX, parity with qnfo-cloud-ops 1.25.2), so it leaves the owner queue and is listed as handled. */ /* 1.29.3 WORKERS-BEST-PRACTICES-1: every LOOP_TOKEN check (6 POST routes + the machine flag) uses constEq instead of !==/===. */ /* 1.29.2 MODEL-ID-AUDIT-1 (2026-10-11): qnfo-ai routes only the ids in its MODELS table; llama-3.3-70b-instruct-fp8-fast is not one, so the third ask leg silently became a second deepseek-v4-flash. Order is now glm-5.3-flash, deepseek-v4-flash-wa, gpt-oss-120b: the Workers AI legs probe at 2-3 s through qnfo-ai, the DeepSeek API leg at 13 s. */ /* 1.29.1 CMD-ASK-BUDGET-1 (2026-10-11): 1.29.0 raised CMD_AI_BUDGET_MS to 40 s, but the job runs in ctx.waitUntil, which the runtime cancels 30 s after the response, so the first live ask (cmd-517f7562d37f1041ef0a) never wrote its fallback and stayed running until the page gave up at 45 s; the budget is back under that limit (24 s, hedge 4 s) and a suite asserts it stays below 28 s. 1.29.0 CMD-ASK-FAST-1 (2026-10-11, pillar autonomy; owner: "Fix fleet command line"): every command-line and Ask question since 2026-10-06 ended in the stored-data fallback ("The AI model did not answer just now (it timed out)", 7 of the last 7 rows): ASK_MODELS named glm-5.2, a model qnfo-ai no longer lists, so the first call burned its slot and glm-5.3-flash, asked second with the remaining budget, timed out at 13 s. The models are now raced with a staggered start (ASK_HEDGE_MS, first answer wins; each failure names its model in cmd_log.error), the budget is 40 s, and a question about Q08 reads published_pieces from the q08-signal D1 (new read binding Q08) into the model context and into the no-model fallback, which also says plainly when its stored data does not cover the question instead of answering with a status dump. 1.28.2 1.28.2 NOZ-DOI-1 (2026-10-10, pillar reach): no deposit-service (10.5281) data is collected, scored or shown: reach rows, the impact KPI, the identity-weekly lookups and the watchmaker op are removed, and entity_map ignores that DOI prefix. 1.28.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public Ask and command prompts state that no fact, name, figure or history may come from outside CONTEXT. */ /* 1.28.0 CONSOLE-BUDGET-WRITE-1 (agent_issues 2072, 2026-10-08, pillar autonomy): the console accepts sql! writes to fleet_budget (RULE-8-RETIRED-1: the fleet sets its own spend limits), with the same WHERE, row cap, console_backups copy and confirm button as every other write. 1.27.0 DASHBOARD-AUTONOMY-FIRST-1 (2026-10-08, agent_issues 2171, pillars autonomy and research): SCALE_BACK no longer puts "Decide: scale the fleet back" in the owner queue (spend caps are the fleet's, charter rules 10 and 11; /api/human carries spend_decision "fleet"), and a question about research, the pipeline, papers or the queue reads research_queue facts into Ask and its no-model fallback; the 15-minute cron is the second direct producer of qnfo-audit.fleet_tick (D1-TRIGGER-DEPTH-1). 1.26.8 (2026-10-08, pillar autonomy, PROBE-RUNNER-WATCHMAKER-1 #2076): WATCHMAKER_OPS time-gated-verification reads the consumer's own verification rows (cadence 2h) and probe-cadence reads the qnfo-cloud-ops scheduler_state stamp. 1.26.2 (2026-10-06, pillar cost): the ask-corpus-sync watchmaker entry says the feeder runs lean, not stopped, while an ai_spend cap is breached (BUDGET-SOFT-ROUTE-1). 1.26.1 (2026-10-06, pillar autonomy, OWNER-NO-LOOSE-ENDS-1): SAI-KAIZEN-GRADIENT-1 (#2054): computeSai kaizen = 1 / (1 + step x open issues), a gradient at every backlog size (the linear clamp read 0 above 20 open issues), in parity with qnfo-observability; WATCHMAKER-BY-PERSON-PRECISION-1 (#1726): code-task-merge counts a closed task as needing a person only when a person or session closed it or landed the change (23 of 53 counted rows were runner closures); WATCHMAKER_OPS gains owner-steps-watch (#2058, qnfo-cloud-ops) and dangling-bindings-census (#2051, qnfo-fleet-control). 1.26.0 UTM-CLICK-LEDGER-1 (transformation lever T7.9, pillar reach): the daily reach ingest reads qnfo-graph utm_clicks (written by qnfo-gateway 3.10.0 for every utm-tagged HTML page load, bot/human class, no cookie or IP) through the GRAPH binding into reach_signals source utm (channel = utm_source, entity campaign = utm_campaign, metric clicks_human / clicks_bot), so a social post or digest joins to the visits it caused; before the first tagged load the missing table is a note, not an error. 1.25.0 1.25.0 FLEET-CHANGELOG-1 (owner request 2026-10-06, pillar autonomy): a Changelog tab (/changelog, JSON /api/changelog, open to everyone) of what the fleet ships for itself: each worker version whose major or minor number is above every earlier one, and each worker Cloudflare created after 2026-09-29, from the canonical deploy ledger deployment_history; described from the commit on main that set the version (no model call), tagged with charter pillar and the public hostnames it serves, filterable (autonomy, public-facing, new workers, major, pillar); patch fixes are counted, not listed; an autonomy trend strip reads metric_history (watchmaker_index, metrics_in_breach, code_task_success_rate_30d, session_execution_ratio_30d); personal-plane releases in full only for the signed-in owner; synced in the existing 15-minute cron into qnfo-audit.fleet_changelog, heartbeat changelog-tick in WATCHMAKER_OPS. 1.24.1 (2026-10-06): WATCHMAKER_OPS ask-corpus-sync for qnfo-ai-search 2.2.8 ASK-CORPUS-FEEDER-1 (agent_issues 2029, carried for session 01KzS1 and PR 676); 1.24.1 is above PR 671's 1.24.0 (VERSION-AHEAD-1). 1.24.0 ATTENTION-LOOP-1 (2026-10-06, pillar reach; owner directive 2026-10-06 07:44Z: granular human attention per outreach channel and item, audit automatically, do more of what gets noticed, promote better or stop what is not): the reach ingest writes bot-filtered per-item rows (source cf-rum-human: pageviews per page, paper and referrer host; external_pageviews and continuation_pageviews per page) and the Buffer per-post metrics qnfo-cloud-ops collects (source buffer, per channel post); a daily scorecard after the ingest (attention_scorecard: items, human engagements, attention per item, referred visits, impressions per channel over 7 and 28 days; pages and papers noticed from outside; subscribers by source) with a verdict per social channel (INSUFFICIENT, STOP, PROMOTE, IMPROVE, KEEP, RETEST after 28 days) and a share in [0, 1] written to ops_config attention_channel_share, which qnfo-social multiplies into the owner caps and uses to order content by attention; every change is an attention_decisions row with evidence, a prediction and a 7-day verification that grades attention_decision_efficacy_30d; metrics attention_events_7d, attention_per_post_7d, pages_noticed_7d, attention_channels_stopped; GET /api/attention; WATCHMAKER_OPS attention-scorecard; no new cron, binding or model call. 1.23.2 (2026-10-06): the transformation-loop watchmaker entry names qnfo-fleet-control 0.4.132 (TP-1a parity, open-issue contract count, wave-exit stall); 1.23.1 (2026-10-06, pillar autonomy): WATCHMAKER_OPS measures TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132: the transformation program engine, hourly; counted when its tick is stalled or an open CODE-TASK-NEEDS-SESSION-1 row names a lever only a session can land, so session dependence is measured as it falls). 1.22.4 (2026-10-06): the agent-issues remediation lane no longer dispatches to the retired qnfo-kaizen (WORKER-RETIRE-WAVE-2, #1756; noAction with a note) and qnfo-kaizen leaves CON_SVC; 1.22.3 HUMAN-AUDIENCE-1 (2026-10-06, pillar reach; owner directive 2026-10-06 "do real humans find and visit the pages, and keep reading"): two hourly metrics from one bot-filtered RUM read over 7 days, external_referred_pageviews_7d (page loads on the public hosts whose referrer is outside every fleet domain; direct loads excluded, that is where renders, probes and the owner land) and continuation_pageviews_7d (page loads whose referrer is another public page: the reader clicked on), both with falsifiable triggers; breakdown in cloud_ops_events human-audience-<day>, series in reach_signals cf-rum-human; WATCHMAKER_OPS measures the qnfo-social per-channel drain (DAILY-DISTRIBUTION-1) and the radar-hub signal intake (SIGNAL-INTAKE-SOURCES-1). 1.22.2 TEXT-QUALITY-LOOP-1 (agent_issues 1895, pillar reach): GET /api/generators lists the 12 text generators from D1 qnfo-audit.text_generator_inventory with writer family, non-model gate, cross-family read and outcome metric, and each one's latest run from a fixed query in GENERATOR_RUNS; open to everyone, no new cron, no model call. 1.22.1 FLEET-CONSOLE-REDOS-1: dispatch inputs are parsed one anchored k=v token at a time (linear, max 10), so crafted input can no longer backtrack exponentially (CodeQL js/redos alerts 331/332 on PR 623); 1.22.0 FLEET-CONSOLE-1 (owner request 2026-10-05: full control, input and remediation from the dashboard, every detail and decision without leaving it): the command line gains issue <id> (row, triage, contracts, verifications, claims, code task), backlog, info <queue item> (a Details button on every queue card), tasks, locks, prs, pr <n>, runs (open reads); logs <worker>, sql [db] <select>, prio/owner/comment/codetask/reopen (owner session); close/wontfix with evidence, sql! writes backed up to console_backups first, worker calls, workflow dispatch, deploy via canonical-deploy.yml, merge and close PRs (owner + fresh code, confirm button); the loop token cannot run console actions; auto-run owner actions are logged in cmd_log; 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
+var VERSION = "1.31.0-full-access"; /* 1.31.0 DASHBOARD-FULL-ACCESS-1 (2026-10-12, pillar autonomy; owner: "the fleet dashboard is my one-stop assistant to the Quniverse and shall have full access to all resources"): every ask since 09:33Z answered "the model service answered HTTP 401": a secret added to this worker in the Cloudflare dashboard (GA4_SA_KEY) made a version that copied the bindings without props, so SVC_QNFO_AI lost caller = qnfo-fleet-dashboard and qnfo-ai refused it. A model leg that qnfo-ai refuses (401/403/5xx or a network error) now runs the same Workers AI model through the new direct AI binding, so a lost prop or a router outage no longer silences the command line. The console gains mail (search the inbox, read a message in full; owner session), service bindings to qnfo-email, qnfo-cloud-ops and qnfo-fleet-control for call, and sql reads of q08 and the private identity D1 (owner session; identity stays read-only). info shows the signed-in owner up to 1500 characters of each message and tells a visitor to sign in for subject and text. MAIL-ASK-1 (same day, owner: "what do they say? don't waste my time"): "WHAT'S UP WITH RESEARCHLETTERS EMAILS?" and the follow-up "AND WHAT DO THEY SAY?" reached the model with no message at all (MAIL_ASK_RX had no plurals, "researchletters" did not name theresearchletters.org, a follow-up named no sender); plurals, say/said/content, a card domain typed without "the" or the TLD, and a follow-up with mail cards in the queue now read the messages, and the owner's context carries 1500 characters of each (was 300). A journal call for papers ("We invite your research article", "submit your full-length article", "fits our journal scope", an ISSN line) is a solicitation, not a person owed a reply (MAIL_SOLICIT_RX, parity with qnfo-cloud-ops 1.25.2), so it leaves the owner queue and is listed as handled. */ /* 1.30.1: hosts fold to their property by domain, probe clicks left out, 64-character campaign tags matched, ingest notes carry no upstream error text. 1.30.0 FLEET-KPI-1 (owner request 2026-10-12, pillar reach): a Metrics tab (/kpi, JSON /api/kpi, open to everyone) computed from qnfo-audit at request time: open issues by priority and category, opened and closed per day, median age, oldest, closed with evidence in 24 h and 7 d, code-loop tasks; bot-filtered page views per property and day, outreach actions and events per channel and day, posts per channel, the most popular posts with links, subscribers, mentions and citations; the Buffer channels, posts and per-post statistics; a value nothing measures is null and shown as not measured; the daily reach ingest adds a per-host row with page loads and visits. */ /* 1.29.4 CMD-AI-TIMEOUT-1 (agent_issues 2316): cmdModelCall sends timeout_ms just under its own abort and names a 504 router_timeout; WATCHMAKER-TICK-LEDGER-1 (2363): tick-sequence-ledger entry, duplicate dangling-bindings-census entry removed; REPORT-CARD-CATCHUP-1 (2054): the weekly card is caught up on any tick and deduped only against measured rows. */ /* 1.29.3 WORKERS-BEST-PRACTICES-1: every LOOP_TOKEN check (6 POST routes + the machine flag) uses constEq instead of !==/===. */ /* 1.29.2 MODEL-ID-AUDIT-1 (2026-10-11): qnfo-ai routes only the ids in its MODELS table; llama-3.3-70b-instruct-fp8-fast is not one, so the third ask leg silently became a second deepseek-v4-flash. Order is now glm-5.3-flash, deepseek-v4-flash-wa, gpt-oss-120b: the Workers AI legs probe at 2-3 s through qnfo-ai, the DeepSeek API leg at 13 s. */ /* 1.29.1 CMD-ASK-BUDGET-1 (2026-10-11): 1.29.0 raised CMD_AI_BUDGET_MS to 40 s, but the job runs in ctx.waitUntil, which the runtime cancels 30 s after the response, so the first live ask (cmd-517f7562d37f1041ef0a) never wrote its fallback and stayed running until the page gave up at 45 s; the budget is back under that limit (24 s, hedge 4 s) and a suite asserts it stays below 28 s. 1.29.0 CMD-ASK-FAST-1 (2026-10-11, pillar autonomy; owner: "Fix fleet command line"): every command-line and Ask question since 2026-10-06 ended in the stored-data fallback ("The AI model did not answer just now (it timed out)", 7 of the last 7 rows): ASK_MODELS named glm-5.2, a model qnfo-ai no longer lists, so the first call burned its slot and glm-5.3-flash, asked second with the remaining budget, timed out at 13 s. The models are now raced with a staggered start (ASK_HEDGE_MS, first answer wins; each failure names its model in cmd_log.error), the budget is 40 s, and a question about Q08 reads published_pieces from the q08-signal D1 (new read binding Q08) into the model context and into the no-model fallback, which also says plainly when its stored data does not cover the question instead of answering with a status dump. 1.28.2 1.28.2 NOZ-DOI-1 (2026-10-10, pillar reach): no deposit-service (10.5281) data is collected, scored or shown: reach rows, the impact KPI, the identity-weekly lookups and the watchmaker op are removed, and entity_map ignores that DOI prefix. 1.28.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public Ask and command prompts state that no fact, name, figure or history may come from outside CONTEXT. */ /* 1.28.0 CONSOLE-BUDGET-WRITE-1 (agent_issues 2072, 2026-10-08, pillar autonomy): the console accepts sql! writes to fleet_budget (RULE-8-RETIRED-1: the fleet sets its own spend limits), with the same WHERE, row cap, console_backups copy and confirm button as every other write. 1.27.0 DASHBOARD-AUTONOMY-FIRST-1 (2026-10-08, agent_issues 2171, pillars autonomy and research): SCALE_BACK no longer puts "Decide: scale the fleet back" in the owner queue (spend caps are the fleet's, charter rules 10 and 11; /api/human carries spend_decision "fleet"), and a question about research, the pipeline, papers or the queue reads research_queue facts into Ask and its no-model fallback; the 15-minute cron is the second direct producer of qnfo-audit.fleet_tick (D1-TRIGGER-DEPTH-1). 1.26.8 (2026-10-08, pillar autonomy, PROBE-RUNNER-WATCHMAKER-1 #2076): WATCHMAKER_OPS time-gated-verification reads the consumer's own verification rows (cadence 2h) and probe-cadence reads the qnfo-cloud-ops scheduler_state stamp. 1.26.2 (2026-10-06, pillar cost): the ask-corpus-sync watchmaker entry says the feeder runs lean, not stopped, while an ai_spend cap is breached (BUDGET-SOFT-ROUTE-1). 1.26.1 (2026-10-06, pillar autonomy, OWNER-NO-LOOSE-ENDS-1): SAI-KAIZEN-GRADIENT-1 (#2054): computeSai kaizen = 1 / (1 + step x open issues), a gradient at every backlog size (the linear clamp read 0 above 20 open issues), in parity with qnfo-observability; WATCHMAKER-BY-PERSON-PRECISION-1 (#1726): code-task-merge counts a closed task as needing a person only when a person or session closed it or landed the change (23 of 53 counted rows were runner closures); WATCHMAKER_OPS gains owner-steps-watch (#2058, qnfo-cloud-ops) and dangling-bindings-census (#2051, qnfo-fleet-control). 1.26.0 UTM-CLICK-LEDGER-1 (transformation lever T7.9, pillar reach): the daily reach ingest reads qnfo-graph utm_clicks (written by qnfo-gateway 3.10.0 for every utm-tagged HTML page load, bot/human class, no cookie or IP) through the GRAPH binding into reach_signals source utm (channel = utm_source, entity campaign = utm_campaign, metric clicks_human / clicks_bot), so a social post or digest joins to the visits it caused; before the first tagged load the missing table is a note, not an error. 1.25.0 1.25.0 FLEET-CHANGELOG-1 (owner request 2026-10-06, pillar autonomy): a Changelog tab (/changelog, JSON /api/changelog, open to everyone) of what the fleet ships for itself: each worker version whose major or minor number is above every earlier one, and each worker Cloudflare created after 2026-09-29, from the canonical deploy ledger deployment_history; described from the commit on main that set the version (no model call), tagged with charter pillar and the public hostnames it serves, filterable (autonomy, public-facing, new workers, major, pillar); patch fixes are counted, not listed; an autonomy trend strip reads metric_history (watchmaker_index, metrics_in_breach, code_task_success_rate_30d, session_execution_ratio_30d); personal-plane releases in full only for the signed-in owner; synced in the existing 15-minute cron into qnfo-audit.fleet_changelog, heartbeat changelog-tick in WATCHMAKER_OPS. 1.24.1 (2026-10-06): WATCHMAKER_OPS ask-corpus-sync for qnfo-ai-search 2.2.8 ASK-CORPUS-FEEDER-1 (agent_issues 2029, carried for session 01KzS1 and PR 676); 1.24.1 is above PR 671's 1.24.0 (VERSION-AHEAD-1). 1.24.0 ATTENTION-LOOP-1 (2026-10-06, pillar reach; owner directive 2026-10-06 07:44Z: granular human attention per outreach channel and item, audit automatically, do more of what gets noticed, promote better or stop what is not): the reach ingest writes bot-filtered per-item rows (source cf-rum-human: pageviews per page, paper and referrer host; external_pageviews and continuation_pageviews per page) and the Buffer per-post metrics qnfo-cloud-ops collects (source buffer, per channel post); a daily scorecard after the ingest (attention_scorecard: items, human engagements, attention per item, referred visits, impressions per channel over 7 and 28 days; pages and papers noticed from outside; subscribers by source) with a verdict per social channel (INSUFFICIENT, STOP, PROMOTE, IMPROVE, KEEP, RETEST after 28 days) and a share in [0, 1] written to ops_config attention_channel_share, which qnfo-social multiplies into the owner caps and uses to order content by attention; every change is an attention_decisions row with evidence, a prediction and a 7-day verification that grades attention_decision_efficacy_30d; metrics attention_events_7d, attention_per_post_7d, pages_noticed_7d, attention_channels_stopped; GET /api/attention; WATCHMAKER_OPS attention-scorecard; no new cron, binding or model call. 1.23.2 (2026-10-06): the transformation-loop watchmaker entry names qnfo-fleet-control 0.4.132 (TP-1a parity, open-issue contract count, wave-exit stall); 1.23.1 (2026-10-06, pillar autonomy): WATCHMAKER_OPS measures TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132: the transformation program engine, hourly; counted when its tick is stalled or an open CODE-TASK-NEEDS-SESSION-1 row names a lever only a session can land, so session dependence is measured as it falls). 1.22.4 (2026-10-06): the agent-issues remediation lane no longer dispatches to the retired qnfo-kaizen (WORKER-RETIRE-WAVE-2, #1756; noAction with a note) and qnfo-kaizen leaves CON_SVC; 1.22.3 HUMAN-AUDIENCE-1 (2026-10-06, pillar reach; owner directive 2026-10-06 "do real humans find and visit the pages, and keep reading"): two hourly metrics from one bot-filtered RUM read over 7 days, external_referred_pageviews_7d (page loads on the public hosts whose referrer is outside every fleet domain; direct loads excluded, that is where renders, probes and the owner land) and continuation_pageviews_7d (page loads whose referrer is another public page: the reader clicked on), both with falsifiable triggers; breakdown in cloud_ops_events human-audience-<day>, series in reach_signals cf-rum-human; WATCHMAKER_OPS measures the qnfo-social per-channel drain (DAILY-DISTRIBUTION-1) and the radar-hub signal intake (SIGNAL-INTAKE-SOURCES-1). 1.22.2 TEXT-QUALITY-LOOP-1 (agent_issues 1895, pillar reach): GET /api/generators lists the 12 text generators from D1 qnfo-audit.text_generator_inventory with writer family, non-model gate, cross-family read and outcome metric, and each one's latest run from a fixed query in GENERATOR_RUNS; open to everyone, no new cron, no model call. 1.22.1 FLEET-CONSOLE-REDOS-1: dispatch inputs are parsed one anchored k=v token at a time (linear, max 10), so crafted input can no longer backtrack exponentially (CodeQL js/redos alerts 331/332 on PR 623); 1.22.0 FLEET-CONSOLE-1 (owner request 2026-10-05: full control, input and remediation from the dashboard, every detail and decision without leaving it): the command line gains issue <id> (row, triage, contracts, verifications, claims, code task), backlog, info <queue item> (a Details button on every queue card), tasks, locks, prs, pr <n>, runs (open reads); logs <worker>, sql [db] <select>, prio/owner/comment/codetask/reopen (owner session); close/wontfix with evidence, sql! writes backed up to console_backups first, worker calls, workflow dispatch, deploy via canonical-deploy.yml, merge and close PRs (owner + fresh code, confirm button); the loop token cannot run console actions; auto-run owner actions are logged in cmd_log; 1.21.7 OUTREACH-WEEKDAY-1 (#1940): the outreach queue's freshness counts weekday (UTC) hours, because qnfo-cloud-ops sends Monday to Friday only (it read STALE every weekend); REACH-INGEST-BACKFILL-1 (#1711): after yesterday's reach ingest, each tick backfills the most recent of the previous 7 days that has no reach-ingest row (one day per tick), so a day the cron missed (10-04) needs no manual ingest; 1.21.6 REFRESH-INFLIGHT-1 (#1942): every 15-minute cron since 2026-10-04 14:45Z ended exceededWallTime (900 s, cpu 0, no subrequest; 4 internalError an hour, 93 of 93 scheduled events in 24h) because it awaited a refresh promise left by a cancelled fetch invocation that could never settle; reuse of that promise is now age-bounded (120 s), only its owner clears it, and the cron runs its own refresh behind a 150 s bound and falls back to the saved state, so every later step of scheduled() runs; HUMAN-SEV-HIGH-1 (#1896): human_actions sev "high" and "critical" show as urgent; OBJECTIVE-WEIGHT-OWNER-ONLY-1 (#1823): a weight revision is ratified only with the owner's emailed-code session (loop token, legacy owner-key cookie and unrecorded ratifications are held as proposed: 403 plus a 'ratify-held' row from the route, back to 'proposed' from the sweep); constraint revisions stay delegable; OBJECTIVE-CARD-PLAIN-1 (#1944): each objective proposal opens with a plain sentence of what it changes and what Ratify, Reject and no decision do; the Open data links name docs/keys/owner-api-keys.md (#1933); 1.21.5 SOURCE-RESTORE-1 (GitHub #608): main's worker.js is hand-written source again; commit 1e97baba (LAND-CODE-FIX-1) had landed the wrangler bundle of 1.21.4 over it (comments and block markers gone, __name2 helpers), which broke deploy-gate and seven offline suites; this file is the 1.21.3 source plus the 1.21.4 change; 1.21.4 OWNER-KEYS-VIEW-1: GET /api/owner/keys lists the active owner_client_keys rows from the private qnfo-identity D1 (owner session or loop token only, like every /api/owner/* read; OWNER-CLIENT-KEY-DRIFT-1, #1886); 1.21.3 FLEET-CMD-Q08-1: command-line ops "style" (standing editorial direction, qnfo-audit q08_editor_notes, read by q08-signal-engine 0.8.4 as authenticated text) and "verdict" (good|flat|no on the q08 article the page link was opened from, qnfo-audit q08_owner_verdicts, weighted 3 in q08 feedbackScan); both owner-session only (emailed code), so a stranger can never steer the publication; 1.21.2 LOOP-SYNC-DEADLINE-1: loopSync stops starting issues after 4 minutes and loopMaybeSync abandons it after 6, so the cron no longer runs into the 15-minute wall limit (#1938, #1942); 1.21.1 BRANCH-HYGIENE-1: WATCHMAKER_OPS measures qnfo-fleet-control 0.4.110's hourly branch sweeper (heartbeat branch-hygiene-tick; counted when it is stalled or its last tick errored); 1.20.3 render-health-watch; 1.20.1 CTL-FROM-NO-QUERY-1: /ctl.js scopes its link with origin + path, never the query string (q08 and companion confirm/unsubscribe pages carry ?t=<token>; a click sent it to /cmd); 1.18.10 WATCHMAKER_OPS measures ERROR-DETAIL-CAPTURE-1 (qnfo-ops 2.38.40: every 30-minute tick copies Workers Logs error events into worker_logs, heartbeat error-capture-tick; an error tick, e.g. a token without the observability read scope, does not prove the run); 1.18.9 GUARD-RCS-CANCELLED-1: guard_rcs reads each guard's latest run that concluded (not cancelled or skipped), so a concurrency-cancelled run no longer raises the security-gap trigger (agent_issues 1797); WATCHMAKER_OPS measures SECRET-CHANGE-WATCH-1 (qnfo-ops 2.38.39: every worker secret change recorded in cloud_ops_events and filed for a consumer check, heartbeat secret-watch-tick); 1.18.8 PAGEVIEWS-HUMAN-1: pageviews_30d and the prior window behind impressions_growth_30d read RUM with the Exclude-bots filter (bot: 0), the filter engaged_human_sessions_28d already uses, so crawler page loads no longer count as readers; the registry formula says so; 1.18.7 GRANT-FOLLOWUP-HONEST-1: WATCHMAKER_OPS grant-followup dates the runner's last run of any status and counts the runs since the last full read with their reason (gmail_pass_unset, errors), instead of reading "never ran" for a runner that runs without GMAIL_PASS; 1.18.6 IPATENT-USAGE-1: the ipatent command and patent questions read iPatent views, searches and drafts by topic (counts only) over SVC_QNFO_IPATENT; 1.18.5 ASK-TRUNCATED-JSON-1: a reply cut at max_tokens is salvaged (answer + complete actions), never shown as raw JSON; max_tokens stays 700 (the open-access cost bound); 1.18.4 ASK-RETRY-1: abandoned asks are answered again by the cron (max 2 tries, 3 per run); fastest model first (glm-5.2, 2s) instead of a 13s timeout on glm-5.3-flash; owner command-line asks in the request history; 1.18.3 REACH-IDEATION-1: WATCHMAKER_OPS measures qnfo-fleet-control's daily reach ideation; 1.18.2 ASCII-SOURCE-1: every non-ASCII character in the source is written as an escape, because the canonical deploy uploads the file as Latin-1 and the live page showed the KPI arrow as mojibake; 1.18.1 OWNER-SURFACE-HONESTY-1 + OBJECTIVE-AUTHORITY-TRUTH-1: an inbox card only for mail that owes the owner a reply, classified by INBOUND-SLA-1's category or the same header/subject rules (a funder's automated receipt such as emails 903 gets no card and is listed as handled), with sender domain, subject and authentication on the public card and the sender's name and address only for the signed-in owner; "fix all the issues" and search-query questions are answered from fleet data with no model and change nothing; a model failure answers from the data instead of failing bare, and the legacy Ask works inside waitUntil so it can no longer be left 'running'; Ask context carries the stored facts (domain, subject, received, auth verdict, classification; name, address and 300 characters for the owner) of the messages a question names; the ratify route records the credential that acted (human_responses.credential), and the apply step stamps ratified_by and objective_revision_applies.via from it ('owner (fleet.qnfo.org, emailed code)', 'delegated (loop token, OWNER-QUEUE-DELEGATION-1)', 'unknown credential'), never assuming the owner; the objective card shows the full statement and rationale; the open-issue digest never echoes a D1 error (public answer; CodeQL js/stack-trace-exposure); 1.18.0 FLEET-UI-2: the dashboard, /cmd and the queue fragment rebuilt in the QNFO design system shared with ask.qwav.tech and papers.qnfo.org (hero verdict with KPI meters, queue cards, investment and system rail, business grid with trend bars, dark mode); same view model, routes, controls and refresh contract; 1.17.8 FLEET-CTL-PRINT-SAFE-1: the /ctl.js link hides in print/PDF and in automated browsers; 1.17.7 PERFORMANCE-LOOP-1: engaged_human_sessions_28d from bot-filtered RUM (STRATEGY s6.3, s9) in the registry refresh; WATCHMAKER_OPS measures qnfo-fleet-control's lever experiments and its five hourly KPIs; 1.17.6 OUTREACH-LEARNER-1: WATCHMAKER_OPS measures qnfo-cloud-ops 1.18.0's outreach learner (daily ol-tick heartbeat; an outreach run with no logged allocation counts as stuck); 1.17.5 SOCIAL-DISTRIBUTION-LEARNER-1: WATCHMAKER_OPS social-learner reads the weekly update ledger of the qnfo-social 0.7.28 distribution learner (social-learner-update-<day>, meta.last_ok; cadence 168h, first due 2026-10-13); 1.17.4 INBOUND-SLA-1: WATCHMAKER_OPS measures qnfo-email-orchestrator's inbound SLA step (counted when its 15-minute runner is stalled or disabled, or a human inbound message is older than 72h with no fleet action); the weekly identity review lists the inbound messages it held without a substantive answer (category and sender domain only); 1.17.3 WATCHMAKER_OPS measures ASK-LOOP-1 (qnfo-ai-search 2.0.1: ask.qwav.tech measured hourly, evaluated, tuned and repaired daily); 1.17.2 WORK-WITH-ME-METRIC-1: the daily reach ingest counts inbound mail tagged [work-with-me:<offer>] (qnfo-gateway WORK-WITH-ME-1) and RUM page views of qnfo.org/work-with-me over 30 days into reach_signals and metric_registry (inbound_contacts_30d, work_with_me_pageviews_30d), shown in GET /api/reach and the portfolio KPIs, watched by WATCHMAKER_OPS; 1.17.1 IMPROVEMENT-LOOP-1: WATCHMAKER_OPS measures qnfo-fleet-control's hourly improvement loop (metric_history, regressions, fix durability); 1.17.0 FLEET-CMD-1: "Ask the fleet" becomes a natural-language command line (pinned on /, full page /cmd, /ctl.js link for any fleet page): instant read commands, plain-English answers with one-tap proposed actions, run in the background and polled (the old panel was wiped by the 10s refresh and its asks hung in status running); actions need an emailed 6-digit code (OWNER_CODE_TO, 12h session, destructive ones need a code from the last 15 min); abandoned running rows swept; no refresh on the ask path; 1.16.5 CODE-TASK-MERGE-RUNNER-1: code-task-merge is run by qnfo-fleet-control 0.4.86 (opens and merges code-loop PRs, hourly heartbeat) and counted only when the runner is stalled or disabled, a PR is stuck, a task needs a person, a pushed branch waits 6h for its PR, a revert failed, or a person merged or closed a code-loop PR after the runner's first ok tick; EVOLVE-HEARTBEAT-1: fleet-defects reads evolveTick's daily heartbeat; 1.16.4 REACH-LOOPS-WATCH-1: WATCHMAKER_OPS measures the delegated identity and reach loops (qnfo-social profile sync, posting and Buffer cross-post, scan, channel audit, engagement; qnfo-cloud-ops engagement, email triage, radar; radar-hub mention radar, job-market watch, events radar); 1.16.3 WATCHMAKER_OPS measures GRANT-FOLLOWUP-1 (qnfo-cloud-ops); 1.16.2 WATCHMAKER_OPS lists OBJECTIVE-CONSTRAINTS-1 (qnfo-fleet-control hourly, owner-ratified goals 41, 43, 57); 1.16.1 WATCHMAKER_OPS measures errata-hub's hourly members (#1747); 1.16.0 Q08-REVIEW-2026-10-31 (#1716): one-shot q08 decision on bot-filtered RUM page views; cadence cut via ops_config q08_max_per_day; 1.15.2 /health capabilities and limitations (#1735); 1.15.1 IDENTITY-WEEKLY-DELEGATED-1: no re-ask cards under the owner's queue delegation; decided leads skipped; 1.15.0 OPEN-ACCESS-1: no token or login to read or Ask; fleet-changing controls off the public page; 1.14.1 TASK-INTENT-INTAKE-1 (1733); 1.14.0 WATCHMAKER-INDEX-1; 1.13.1 OWNER-NOTES-ROUTE-1 files owner tasks and notes as agent_issues; 1.13.0 OBJECTIVE-REVISION-APPLY-1 + OWNER-NOTES-ROUTE-1 + STRATEGY KPI by tag; 1.12.1 IDENTITY-STORE-1 hardening + copy-only sync; owner links refuse claude.ai; 1.12.0 IDENTITY-STORE-1 + IDENTITY-WEEKLY-1; 1.11.1 OWNER-EDIT-1 */
 // REVIEW-GATE-1 (2026-10-01, docs/STRATEGY.md s9): the 2026-10-25 impressions gate is retired. The research layer is
 // reviewed on this date against the reach scorecard; nothing deletes research data automatically (phase 2 needs the
 // owner's email confirmation). One constant replaces the six hard-coded "2026-10-25" strings.
@@ -2261,6 +2261,17 @@ async function handleRequest(request, env, ctx) {
   // OWNER-MORNING-1: what changed since a time (the page passes the owner's last visit, kept in the browser).
   if (path === "/api/changes" && request.method === "GET") return json(await changesSince(env, url.searchParams.get("since")));
   // FLEET-CHANGELOG-1 (1.25.0): the Changelog tab and its JSON, open to everyone; personal-plane details only for the owner.
+  // FLEET-KPI-1 (OPEN-ACCESS-1): the Metrics tab and its JSON, read-only, open to everyone.
+  if ((path === "/kpi" || path === "/kpi/" || path === "/api/kpi") && request.method === "GET") {
+    let kv;
+    try {
+      kv = await kpiData(env);
+    } catch (e) {
+      return json({ ok: false, error: "metrics unavailable" }, 503);
+    }
+    if (path === "/api/kpi") return json(kv);
+    return new Response(kpiHtml(kv, !!(owner.authed || owner.loop)), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60" } });
+  }
   if ((path === "/changelog" || path === "/changelog/" || path === "/api/changelog") && request.method === "GET") {
     const holder = !!(owner.authed || owner.loop);
     let v;
@@ -2467,13 +2478,23 @@ __name22(computeSai, "computeSai");
 __name222(computeSai, "computeSai");
 __name2222(computeSai, "computeSai");
 __name2222(computeSai, "computeSai");
+function reportCardDue(now) {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 6));
+  d.setUTCDate(d.getUTCDate() - (now.getUTCDay() + 6) % 7);
+  if (d.getTime() > now.getTime()) d.setUTCDate(d.getUTCDate() - 7);
+  return d.toISOString();
+}
 async function persistWeeklyReportCard(env, st) {
   try {
     await ensureReportCardTable(env);
     const now = /* @__PURE__ */ new Date();
-    if (now.getUTCDay() !== 1 || now.getUTCHours() !== 6) return { weekly: false };
-    const iso = now.toISOString().slice(0, 10);
-    const prior = await env.AUDIT.prepare("SELECT id FROM report_card_history WHERE ts LIKE ?1").bind(iso + "%").first();
+    // REPORT-CARD-CATCHUP-1 (1.29.4, agent_issues 2054): the card was written only in the four ticks of Monday 06:00 UTC
+    // and skipped when any row of that day existed, so a missed hour (2026-10-05) or an unmeasured row another writer
+    // put there first lost the week. Now every tick writes the card when no MEASURED row (sai not null) exists since the
+    // latest Monday 06:00 UTC: a missed tick is caught up by the next one, and unmeasured rows never count as the card.
+    const due = reportCardDue(now);
+    const iso = due.slice(0, 10);
+    const prior = await env.AUDIT.prepare("SELECT id FROM report_card_history WHERE sai IS NOT NULL AND ts >= ?1").bind(due).first();
     if (prior) return { weekly: false, dup: true };
     let bench = 0;
     try {
@@ -3020,6 +3041,19 @@ function reachRumPageRows(groups, day, source, quality) {
   for (const e of papers) rows.push(mk("paper")(e[0], e[1]));
   return rows.concat(reachCapRows(pages, REACH_PAGE_ROW_CAP, mk("page")));
 }
+// FLEET-KPI-1: per-host rows (entity_type host): pageviews always, visits only when the response carried the sum.
+function reachRumHostRows(groups, day) {
+  const pv = /* @__PURE__ */ new Map(), vi = /* @__PURE__ */ new Map();
+  for (const g of groups || []) {
+    const h = String((g && g.dimensions || {}).requestHost || "").trim().toLowerCase() || "(unknown-host)";
+    pv.set(h, (pv.get(h) || 0) + (Number(g && g.count) || 0));
+    if (g && g.sum && g.sum.visits !== undefined && g.sum.visits !== null) vi.set(h, (vi.get(h) || 0) + (Number(g.sum.visits) || 0));
+  }
+  const rows = [];
+  for (const e of pv) rows.push(reachRow(day, "cf-rum-human", "web", "host", e[0], "pageviews", e[1], "human"));
+  for (const e of vi) rows.push(reachRow(day, "cf-rum-human", "web", "host", e[0], "visits", e[1], "human"));
+  return rows;
+}
 function reachRumReferrerRows(groups, day, source, quality) {
   const refs = /* @__PURE__ */ new Map();
   for (const g of groups || []) {
@@ -3343,6 +3377,24 @@ async function ingestReachSignals(env, opts) {
     }
     if (groups.length >= REACH_RUM_LIMIT) out.notes.push(q[0] + ": hit limit " + REACH_RUM_LIMIT + ", totals are a lower bound");
     await put(q[0], q[2](groups, day));
+  }
+  // a2. FLEET-KPI-1 (1.30.0): one bot-filtered row per host with page loads and Cloudflare's visit count, so the Metrics tab
+  // reads a property's day without summing capped page rows. If the visit sum is refused the page loads are still kept.
+  {
+    const hq = reachRumQuery("requestHost", geq, leq, "bot: 0");
+    let hr = await reachGf(env, hq.replace("{ count dimensions", "{ count sum { visits } dimensions"));
+    let hg = hr.err ? null : reachRumGroups(hr.data);
+    if (!hg) {
+      console.log("FLEET-KPI-1 cf-rum-human:hosts visit sum refused: " + (hr.err || "no groups"));
+      out.notes.push("cf-rum-human:hosts: visit sum refused, page loads only");
+      hr = await reachGf(env, hq);
+      hg = hr.err ? null : reachRumGroups(hr.data);
+    }
+    if (hg) await put("cf-rum-human:hosts", reachRumHostRows(hg, day));
+    else {
+      console.log("FLEET-KPI-1 cf-rum-human:hosts skipped: " + (hr.err || "rumPageloadEventsAdaptiveGroups missing from response"));
+      out.skipped.push("cf-rum-human:hosts: query refused or empty (detail in the worker log)");
+    }
   }
   // b, c. OpenAlex citations: latest citation_stats per DOI within the freshness window.
   const citFrom = reachShiftDay(day, -(REACH_CITATION_FRESH_DAYS - 1));
@@ -4477,6 +4529,8 @@ async function generatorInventory(env, nowMs) {
 // watchmaker_runs row, metric_registry 'watchmaker_index', and GET /api/watchmaker.
 var WATCHMAKER_AFTER_UTC_HOUR = 7;
 var WATCHMAKER_OPS = [
+  // WATCHMAKER-TICK-LEDGER-1 (1.29.4, agent_issues 2363): tick_runs gets the doctrine steps of each hour slot from the D1 trigger tick_driver_roster_tick.
+  { key: "tick-sequence-ledger", what: "Hourly D1 tick ledger: the eleven doctrine steps per hour slot (TICK-SEQUENCE-LEDGER-1)", runner: "d1-trigger:tick_driver_roster_tick", cadence_h: 2, sql: "SELECT MAX(ts) AS last FROM tick_runs" },
   // FLEET-CHANGELOG-1 (1.25.0): the Changelog tab's sync, heartbeat changelog-tick-<UTC hour> from every */15 tick.
   { key: "changelog-sync", what: "Fleet changelog: releases from the deploy ledger, described from their commits (FLEET-CHANGELOG-1)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 2, first_due: "2026-10-07T00:00:00Z", sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'changelog-tick-' AND id < 'changelog-tick.' AND status = 'ok'" },
   { key: "portfolio-daily", what: "Portfolio daily run: owner-voice guard, scorecard, run log", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE id >= 'portfolio-daily-' AND id < 'portfolio-daily.' AND status = 'ok'", replaces: "claude.ai Routine 'QNFO portfolio management'" },
@@ -4620,8 +4674,6 @@ var WATCHMAKER_OPS = [
   { key: "social-channels", what: "Per-channel distribution to LinkedIn, Mastodon and X inside their own STRATEGY s4 weekly caps, spread over the week (DAILY-DISTRIBUTION-1, qnfo-social, every 2h; a run held by a cap or spacing still counts as run)", runner: "cron:qnfo-social", cadence_h: 2, first_due: "2026-10-08T00:00:00Z", sql: "SELECT MAX(json_extract(meta, '$.last_ok')) AS last FROM cloud_ops_events WHERE id >= 'social-channels-' AND id < 'social-channels.'" },
   // ATTENTION-LOOP-1 (1.24.0): the daily attention scorecard, verdicts and shares; counted when it is stalled or a decision is 10+ days past its verify date with no outcome.
   { key: "attention-scorecard", what: "Human attention per outreach channel and item, verdicts (promote, keep, improve, stop, re-test) and channel shares for qnfo-social; decisions verified after 7 days (ATTENTION-LOOP-1, qnfo-fleet-dashboard, daily after the reach ingest)", runner: "cron:qnfo-fleet-dashboard", cadence_h: 24, first_due: "2026-10-08T04:00:00Z", sql: "SELECT MAX(json_extract(meta, '$.last_ok')) AS last FROM cloud_ops_events WHERE id >= 'attention-scorecard-' AND id < 'attention-scorecard.'", stuck_hours: [240], stuck_sql: "SELECT COUNT(*) AS stuck FROM attention_decisions WHERE outcome IS NULL AND verify_at < substr(?1, 1, 10)", stuck_note: "attention decisions 10+ days past their verify date with no outcome" },
-  // DANGLING-BINDINGS-1 (qnfo-fleet-control 0.5.0, agent_issues 2051): the daily binding census.
-  { key: "dangling-bindings-census", what: "Daily census of every live Workers script binding (D1, KV, R2, queue, Vectorize, service) against the account resource lists; a binding whose target is gone is counted in dangling_bindings and named in cloud_ops_events dangling-bindings-<day> (DANGLING-BINDINGS-1, qnfo-fleet-control, 03:00Z)", runner: "cron:qnfo-fleet-control", cadence_h: 24, first_due: "2026-10-08T04:00:00Z", sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE kind = 'dangling-bindings'" },
   // DANGLING-BINDINGS-1 (qnfo-fleet-control 0.5.0, agent_issues 2051): the daily binding census.
   { key: "dangling-bindings-census", what: "Daily census of every live Workers script binding (D1, KV, R2, queue, Vectorize, service) against the account resource lists; a binding whose target is gone is counted in dangling_bindings and named in cloud_ops_events dangling-bindings-<day> (DANGLING-BINDINGS-1, qnfo-fleet-control, 03:00Z)", runner: "cron:qnfo-fleet-control", cadence_h: 24, first_due: "2026-10-08T04:00:00Z", sql: "SELECT MAX(ts) AS last FROM cloud_ops_events WHERE kind = 'dangling-bindings'" },
   // TRANSFORMATION-LOOP-1 (qnfo-fleet-control 0.4.132): the program engine; counted when its hourly tick is stalled or a lever waits on a session.
@@ -5898,10 +5950,618 @@ function fleetHead(title) {
   return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141A33" media="(prefers-color-scheme: dark)"><title>' + esc(title) + '</title>' + FLEET_BOOT + FLEET_FONTS + '<style>' + FLEET_DS + CMD_CSS + FLEET_CSS + '</style></head><body>';
 }
 function fleetTop(current, live, holder) {
-  const nav = [["Queue", "/#queue", "queue"], ["Invest", "/#invest", "invest"], ["System", "/#system", "system"], ["Business", "/#business", "business"], ["Changelog", "/changelog", "changelog"], ["Command line", "/cmd", "cmd"]];
+  const nav = [["Queue", "/#queue", "queue"], ["Invest", "/#invest", "invest"], ["System", "/#system", "system"], ["Business", "/#business", "business"], ["Metrics", "/kpi", "kpi"], ["Changelog", "/changelog", "changelog"], ["Command line", "/cmd", "cmd"]];
   return '<header class="q-top" id="q-top"><div class="wrap"><a class="q-mark" href="/" aria-label="QNFO Fleet home">' + FLEET_MARK + 'QNFO <small>Fleet</small></a><nav class="q-nav" aria-label="Dashboard">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '</nav>' + '<details class="q-menu"><summary aria-label="Menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></summary><div class="q-menu-panel">' + nav.map(function(n) { return '<a href="' + n[1] + '"' + (n[2] === current ? ' aria-current="page"' : '') + '>' + n[0] + '</a>'; }).join('') + '<a href="https://qnfo.org/">QNFO public site</a></div></details>' + (live ? '<span class="live"><span id="dot" class="dot g"></span><span id="age">live</span>' + (holder ? '<a href="#" id="so">sign out</a>' : '') + '</span>' : '<span class="live"></span>') + FLEET_THEME_BTN + '</div></header>';
 }
 // ---- FLEET-UI-2:END ----
+// ---- FLEET-KPI-1:BEGIN ----
+// FLEET-KPI-1 (1.30.0, pillar reach; owner request 2026-10-12: "Fleet dashboard needs more metrics and performance
+// indicators, including total open issues and more granular analytics/impressions (how many outreach actions/events, which
+// posts are most popular, etc tied into social accounts and Buffer)"). A Metrics tab (/kpi, JSON /api/kpi, open to everyone,
+// OPEN-ACCESS-1) computed from qnfo-audit at request time and kept in memory for KPI_TTL_MS:
+//   issues  open now by priority and category, opened and closed per day, median age, oldest, closed with evidence in
+//           24 h and 7 d (issue_lifecycle, the append-only ledger), code-loop tasks merged and failed;
+//   reach   bot-filtered page views (and visits, once the ingest has a host row) per property and day, outreach actions
+//           and events per channel and day, posts per channel, posts ranked by what readers did, subscribers, mentions;
+//   buffer  the channels Buffer reports, the posts sent through it and the per-post statistics the fleet holds.
+// Rules: every panel names its source table and the time it was computed; a value nothing measures is null with a reason
+// (shown as "not measured"), never 0; a missing table or a failed query makes that panel unmeasured and leaves the rest
+// standing. Only counts, public post links and public mention links leave this block: no address, no message text.
+// qnfo-outreach is not read here. The page has no script; every chart also has a table.
+var KPI_TTL_MS = 6e4;
+var KPI_DAYS = 14;
+var KPI_DAY_MS = 864e5;
+var kpiCache = null;
+// A property is a set of hosts. /papers/<slug> rows carry no host in reach_signals (reachClassifyPath) and are served by
+// papers.qnfo.org, so on the page-row basis they count for the QNFO property.
+var KPI_PROPERTIES = [
+  { key: "q08", label: "Q08", hosts: ["q08.org", "www.q08.org"] },
+  { key: "reading", label: "reading.Q08", hosts: ["reading.q08.org"] },
+  { key: "qnfo", label: "QNFO and papers", hosts: ["qnfo.org", "www.qnfo.org", "papers.qnfo.org", "ideas.qnfo.org", "archive.qnfo.org", "legal.qnfo.org"] },
+  { key: "qwav", label: "QWAV", hosts: ["ask.qwav.tech", "qwav.tech", "www.qwav.tech", "qwav.org", "www.qwav.org"] },
+  { key: "ipatent", label: "iPatent", hosts: ["ipatent.qnfo.org"] },
+  { key: "fleet", label: "Fleet dashboard", hosts: ["fleet.qnfo.org"] }
+];
+var KPI_PRIORITIES = ["critical", "high", "medium", "low"];
+function kpiProperty(host) {
+  const h = String(host || "").trim().toLowerCase().replace(/\.$/, "");
+  for (const p of KPI_PROPERTIES) if (p.hosts.indexOf(h) >= 0) return p.key;
+  // A host the list does not name belongs to the property of its domain (ideas.qnfo.org, deep.qwav.tech).
+  if (/(^|\.)qwav\.(tech|org)$/.test(h)) return "qwav";
+  if (/(^|\.)q08\.org$/.test(h)) return "q08";
+  if (/(^|\.)qnfo\.org$/.test(h)) return "qnfo";
+  return "other";
+}
+function kpiDay(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+// The n complete-or-current UTC days ending today, oldest first.
+function kpiDays(nowMs, n) {
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) out.push(kpiDay(nowMs - i * KPI_DAY_MS));
+  return out;
+}
+function kpiNum(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+}
+// agent_issues.created_at is epoch milliseconds; a few early rows hold seconds.
+function kpiEpochMs(v) {
+  const n = kpiNum(v);
+  if (n === null || n <= 0) return null;
+  return n < 1e11 ? n * 1e3 : n;
+}
+function kpiMedian(list) {
+  const a = list.filter(function(x) { return x !== null && isFinite(x); }).sort(function(x, y) { return x - y; });
+  if (!a.length) return null;
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+// at://<did>/app.bsky.feed.post/<rkey> -> the public page of that post. Anything else has no link.
+function kpiBskyUrl(uri) {
+  const m = /^at:\/\/(did:[a-z0-9:._-]+)\/app\.bsky\.feed\.post\/([a-z0-9]+)$/i.exec(String(uri || ""));
+  return m ? "https://bsky.app/profile/" + m[1] + "/post/" + m[2] : null;
+}
+function kpiHttpUrl(u) {
+  const s = String(u || "").trim();
+  return /^https?:\/\/[^\s"'<>]+$/i.test(s) ? s : null;
+}
+// social_media_posts.platform "buffer-linkedin" -> "linkedin"; Buffer's service "twitter" is the channel "x".
+function kpiChannel(platform) {
+  let c = String(platform || "").toLowerCase().replace(/^buffer[-\/]/, "");
+  if (c === "twitter") c = "x";
+  if (c.indexOf("mastodon") === 0) c = "mastodon";
+  return c || "(unknown)";
+}
+// One read. A failure (a table an unmerged migration creates, a D1 error) is returned, never thrown, so the caller marks
+// that one panel unmeasured.
+async function kpiQ(env, sql, params) {
+  try {
+    return { rows: await d1all(env.AUDIT, sql, params || []), err: null };
+  } catch (e) {
+    const m = String(e && e.message || e);
+    return { rows: null, err: /no such table/i.test(m) ? "table not created yet" : "query failed" };
+  }
+}
+var KPI_SQL = {
+  open_priority: "SELECT COALESCE(NULLIF(priority, ''), '(none)') AS priority, COUNT(*) AS n FROM agent_issues WHERE status = 'open' GROUP BY 1",
+  open_category: "SELECT COALESCE(NULLIF(category, ''), '(none)') AS category, COUNT(*) AS n FROM agent_issues WHERE status = 'open' GROUP BY 1 ORDER BY n DESC, 1",
+  open_ages: "SELECT id, substr(title, 1, 140) AS title, priority, created_at FROM agent_issues WHERE status = 'open' ORDER BY created_at ASC LIMIT 5000",
+  opened_day: "SELECT strftime('%Y-%m-%d', created_at / 1000, 'unixepoch') AS day, COUNT(*) AS n FROM agent_issues WHERE created_at >= ?1 GROUP BY 1",
+  // A close is a ledger row that leaves 'open'. Counted per issue, and split by whether the issue is still closed now.
+  closed_day: "SELECT substr(l.ts, 1, 10) AS day, COUNT(DISTINCT l.issue_id) AS n, COUNT(DISTINCT CASE WHEN l.has_evidence = 1 THEN l.issue_id END) AS with_evidence FROM issue_lifecycle l WHERE l.to_status IS NOT NULL AND l.to_status <> 'open' AND l.event NOT IN ('opened', 'reopened') AND substr(l.ts, 1, 10) >= ?1 GROUP BY 1",
+  ledger_first: "SELECT MIN(ts) AS first_ts, MAX(ts) AS last_ts FROM issue_lifecycle",
+  closed_window: "SELECT COUNT(DISTINCT l.issue_id) AS closed, COUNT(DISTINCT CASE WHEN a.status IS NOT NULL AND a.status <> 'open' THEN l.issue_id END) AS still_closed, COUNT(DISTINCT CASE WHEN a.status IS NOT NULL AND a.status <> 'open' AND l.has_evidence = 1 THEN l.issue_id END) AS with_evidence FROM issue_lifecycle l LEFT JOIN agent_issues a ON a.id = l.issue_id WHERE l.to_status IS NOT NULL AND l.to_status <> 'open' AND l.event NOT IN ('opened', 'reopened') AND l.ts >= ?1",
+  code_tasks: "SELECT status, COUNT(*) AS n, SUM(CASE WHEN updated_at >= ?1 THEN 1 ELSE 0 END) AS n7, MAX(updated_at) AS last FROM code_tasks GROUP BY 1",
+  host_day: "SELECT date AS day, entity_id AS host, metric, value FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type = 'host' AND metric IN ('pageviews', 'visits') AND date >= ?1",
+  page_day: "SELECT date AS day, CASE WHEN entity_type = 'paper' THEN 'papers.qnfo.org' WHEN instr(entity_id, '/') > 0 THEN substr(entity_id, 1, instr(entity_id, '/') - 1) ELSE entity_id END AS host, SUM(value) AS value FROM reach_signals WHERE source = 'cf-rum-human' AND metric = 'pageviews' AND entity_type IN ('page', 'paper') AND date >= ?1 GROUP BY 1, 2",
+  site_day: "SELECT date AS day, value FROM reach_signals WHERE source = 'cf-rum-human' AND entity_type = 'site' AND entity_id = '(all)' AND metric = 'pageviews' AND date >= ?1",
+  email_day: "SELECT substr(sent_at, 1, 10) AS day, status AS kind, COUNT(*) AS n FROM outreach_log WHERE substr(sent_at, 1, 10) >= ?1 AND status IN ('sent', 'followup') GROUP BY 1, 2",
+  thread_day: "SELECT substr(posted_at, 1, 10) AS day, COUNT(*) AS n FROM social_threads WHERE status = 'posted' AND substr(posted_at, 1, 10) >= ?1 GROUP BY 1",
+  smp_day: "SELECT substr(published_at, 1, 10) AS day, platform, COUNT(*) AS n FROM social_media_posts WHERE status = 'published' AND platform LIKE 'buffer%' AND substr(published_at, 1, 10) >= ?1 GROUP BY 1, 2",
+  reply_mail_day: "SELECT substr(sent_at, 1, 10) AS day, COUNT(*) AS n FROM outreach_log WHERE status = 'replied' AND substr(sent_at, 1, 10) >= ?1 GROUP BY 1",
+  utm_day: "SELECT date AS day, channel, SUM(value) AS n FROM reach_signals WHERE source = 'utm' AND metric = 'clicks_human' AND channel <> 'probe' AND date >= ?1 GROUP BY 1, 2",
+  mention_day: "SELECT date AS day, channel, SUM(value) AS n FROM reach_signals WHERE source = 'mention-radar' AND metric = 'mentions' AND date >= ?1 GROUP BY 1, 2",
+  social_reply_day: "SELECT substr(created_at, 1, 10) AS day, platform AS channel, COUNT(*) AS n FROM social_replies WHERE substr(created_at, 1, 10) >= ?1 GROUP BY 1, 2",
+  posts_threads: "SELECT COUNT(*) AS total, SUM(CASE WHEN substr(posted_at, 1, 10) >= ?1 THEN 1 ELSE 0 END) AS n7, SUM(CASE WHEN substr(posted_at, 1, 10) >= ?2 THEN 1 ELSE 0 END) AS n30, MAX(posted_at) AS last FROM social_threads WHERE status = 'posted'",
+  posts_smp: "SELECT platform, COUNT(*) AS total, SUM(CASE WHEN substr(published_at, 1, 10) >= ?1 THEN 1 ELSE 0 END) AS n7, SUM(CASE WHEN substr(published_at, 1, 10) >= ?2 THEN 1 ELSE 0 END) AS n30, MAX(published_at) AS last FROM social_media_posts WHERE status = 'published' GROUP BY 1",
+  posts_dissemination: "SELECT channel, COUNT(*) AS total, SUM(CASE WHEN substr(posted_at, 1, 10) >= ?1 THEN 1 ELSE 0 END) AS n7, SUM(CASE WHEN substr(posted_at, 1, 10) >= ?2 THEN 1 ELSE 0 END) AS n30, MAX(posted_at) AS last FROM dissemination_tracker WHERE action = 'posted' GROUP BY 1",
+  bsky_posts: "SELECT post_id, MAX(collected_at) AS collected_at, SUM(CASE WHEN metric = 'likes' THEN value END) AS likes, SUM(CASE WHEN metric = 'reposts' THEN value END) AS reposts, SUM(CASE WHEN metric = 'quotes' THEN value END) AS quotes, SUM(CASE WHEN metric = 'replies' THEN value END) AS replies FROM social_engagements WHERE platform = 'bluesky' AND collected_at = (SELECT MAX(collected_at) FROM social_engagements WHERE platform = 'bluesky') GROUP BY post_id ORDER BY (COALESCE(SUM(CASE WHEN metric IN ('likes', 'reposts', 'quotes') THEN value END), 0)) DESC, post_id LIMIT 60",
+  threads: "SELECT slug, substr(title, 1, 140) AS title, post_uri, posted_at FROM social_threads WHERE status = 'posted' ORDER BY posted_at DESC LIMIT 400",
+  smp_recent: "SELECT id, platform, buffer_id, url, substr(content_preview, 1, 110) AS preview, published_at, project_id, engagement_metrics FROM social_media_posts WHERE status = 'published' AND platform LIKE 'buffer%' ORDER BY published_at DESC LIMIT 60",
+  utm_campaign: "SELECT channel, entity_id AS campaign, SUM(value) AS clicks FROM reach_signals WHERE source = 'utm' AND metric = 'clicks_human' AND channel <> 'probe' AND date >= ?1 GROUP BY 1, 2",
+  other_replies: "SELECT post_id, COUNT(*) AS n FROM social_replies GROUP BY 1",
+  buffer_stats: "SELECT post_id, metric, value, collected_at FROM social_engagements WHERE platform = 'buffer' AND metric <> 'auth_status' AND substr(collected_at, 1, 10) >= ?1 ORDER BY collected_at ASC LIMIT 4000",
+  buffer_auth: "SELECT collected_at, value, substr(note, 1, 80) AS note FROM social_engagements WHERE platform = 'buffer' AND metric = 'auth_status' ORDER BY collected_at DESC LIMIT 1",
+  channels: "SELECT service, name, connected, checked_at FROM social_channels ORDER BY service",
+  subscribers: "SELECT status, COALESCE(NULLIF(source, ''), '(none)') AS source, COUNT(*) AS n, SUM(CASE WHEN confirmed_at IS NOT NULL THEN 1 ELSE 0 END) AS confirmed, MAX(created_at) AS last FROM subscribers GROUP BY 1, 2",
+  funnel: "SELECT stage, SUM(n) AS n, MAX(day) AS last FROM subscribe_funnel WHERE day >= ?1 GROUP BY 1",
+  mentions_total: "SELECT source, COUNT(*) AS total, SUM(CASE WHEN substr(first_seen, 1, 10) >= ?1 THEN 1 ELSE 0 END) AS n30, MAX(first_seen) AS last FROM external_mentions GROUP BY 1",
+  mentions_recent: "SELECT source, substr(title, 1, 140) AS title, url, first_seen FROM external_mentions ORDER BY first_seen DESC LIMIT 8",
+  citations: "SELECT MAX(date) AS day, SUM(value) AS citations, COUNT(*) AS works FROM reach_signals WHERE source = 'openalex' AND metric = 'citations' AND date = (SELECT MAX(date) FROM reach_signals WHERE source = 'openalex' AND metric = 'citations')",
+  mail_outcomes: "SELECT COALESCE(NULLIF(outcome, ''), '(awaiting)') AS outcome, COUNT(*) AS n FROM outreach_learner_sends GROUP BY 1"
+};
+// ---- shaping (pure: rows in, panel out) ----
+function kpiShapeIssues(r, nowMs, days) {
+  const asOf = new Date(nowMs).toISOString();
+  const out = { source: "qnfo-audit.agent_issues, issue_lifecycle, code_tasks", as_of: asOf, notes: [] };
+  const pri = r.open_priority.rows;
+  if (pri) {
+    const m = {};
+    let total = 0;
+    for (const x of pri) { m[x.priority] = Number(x.n) || 0; total += Number(x.n) || 0; }
+    out.open_total = total;
+    const known = KPI_PRIORITIES.map(function(p) { return { priority: p, n: m[p] || 0 }; });
+    const rest = Object.keys(m).filter(function(p) { return KPI_PRIORITIES.indexOf(p) < 0; }).sort().map(function(p) { return { priority: p, n: m[p] }; });
+    out.by_priority = known.concat(rest);
+  } else {
+    out.open_total = null;
+    out.by_priority = null;
+    out.notes.push("open issues: " + r.open_priority.err);
+  }
+  out.by_category = r.open_category.rows ? r.open_category.rows.map(function(x) { return { category: String(x.category), n: Number(x.n) || 0 }; }) : null;
+  if (!r.open_category.rows) out.notes.push("categories: " + r.open_category.err);
+  const ages = r.open_ages.rows;
+  if (ages && ages.length) {
+    const hs = ages.map(function(x) { const ms = kpiEpochMs(x.created_at); return ms === null ? null : (nowMs - ms) / 36e5; });
+    const med = kpiMedian(hs);
+    out.median_age_h = med === null ? null : Math.round(med * 10) / 10;
+    out.undated_open = hs.filter(function(h) { return h === null; }).length;
+    let oi = -1;
+    for (let i = 0; i < ages.length; i++) if (hs[i] !== null && (oi < 0 || hs[i] > hs[oi])) oi = i;
+    out.oldest = oi < 0 ? null : { id: ages[oi].id, title: String(ages[oi].title || ""), priority: ages[oi].priority || null, age_h: Math.round(hs[oi]), opened: new Date(kpiEpochMs(ages[oi].created_at)).toISOString() };
+    out.over_24h = hs.filter(function(h) { return h !== null && h > 24; }).length;
+  } else {
+    out.median_age_h = null;
+    out.oldest = null;
+    out.over_24h = ages ? 0 : null;
+    if (!ages) out.notes.push("ages: " + r.open_ages.err);
+  }
+  // Closes come from the ledger, which has a first row: a day before it is not measured (null), a day after it with no
+  // row is a measured 0.
+  const first = r.ledger_first.rows && r.ledger_first.rows[0] && r.ledger_first.rows[0].first_ts ? String(r.ledger_first.rows[0].first_ts) : null;
+  const firstDay = first ? first.slice(0, 10) : null;
+  out.ledger_since = first;
+  const om = {}, cm = {};
+  for (const x of r.opened_day.rows || []) om[x.day] = Number(x.n) || 0;
+  for (const x of r.closed_day.rows || []) cm[x.day] = { n: Number(x.n) || 0, e: Number(x.with_evidence) || 0 };
+  out.daily = days.map(function(d) {
+    const measured = !!(r.closed_day.rows && firstDay && d >= firstDay);
+    return { day: d, opened: r.opened_day.rows ? om[d] || 0 : null, closed: measured ? (cm[d] ? cm[d].n : 0) : null, closed_with_evidence: measured ? (cm[d] ? cm[d].e : 0) : null };
+  });
+  if (firstDay && days[0] < firstDay) out.notes.push("closes are read from issue_lifecycle, whose first row is " + first + "; earlier days are not measured");
+  const win = function(q, hours) {
+    const row = q.rows && q.rows[0];
+    if (!row || !first) return { closed: null, still_closed: null, with_evidence: null, reopened_since: null, window_h: hours, complete: false, reason: q.rows ? "issue_lifecycle has no row" : q.err };
+    const closed = Number(row.closed) || 0, still = Number(row.still_closed) || 0;
+    return { closed: closed, still_closed: still, with_evidence: Number(row.with_evidence) || 0, reopened_since: closed - still, window_h: hours, complete: Date.parse(first) <= nowMs - hours * 36e5 };
+  };
+  out.closed_24h = win(r.closed_24h, 24);
+  out.closed_7d = win(r.closed_7d, 168);
+  if (out.closed_7d.closed !== null && !out.closed_7d.complete) out.notes.push("the 7-day close count covers only the time since " + first + " (the ledger is younger than 7 days)");
+  if (r.code_tasks.rows) {
+    const g = function(names) {
+      let n = 0, n7 = 0;
+      for (const x of r.code_tasks.rows) if (names.indexOf(String(x.status)) >= 0) { n += Number(x.n) || 0; n7 += Number(x.n7) || 0; }
+      return { total: n, last_7d: n7 };
+    };
+    const known = ["merged", "failed", "publish_failed", "closed"];
+    const open = { total: 0, last_7d: 0 };
+    for (const x of r.code_tasks.rows) if (known.indexOf(String(x.status)) < 0) { open.total += Number(x.n) || 0; open.last_7d += Number(x.n7) || 0; }
+    out.code_tasks = { source: "qnfo-audit.code_tasks (status; 7-day figures by updated_at)", merged: g(["merged"]), failed: g(["failed", "publish_failed"]), closed_unmerged: g(["closed"]), in_flight: open };
+  } else {
+    out.code_tasks = null;
+    out.notes.push("code tasks: " + r.code_tasks.err);
+  }
+  return out;
+}
+function kpiShapePageviews(r, nowMs, days) {
+  const out = { source: "qnfo-audit.reach_signals (source cf-rum-human: Cloudflare Web Analytics page loads with bots excluded, ingested once a day for the day before)", as_of: new Date(nowMs).toISOString(), notes: [] };
+  const hostRows = r.host_day.rows || [], pageRows = r.page_day.rows || [];
+  const byDay = {};
+  const cell = function(d, k) {
+    byDay[d] = byDay[d] || {};
+    byDay[d][k] = byDay[d][k] || { pageviews: null, visits: null };
+    return byDay[d][k];
+  };
+  const hostDays = {};
+  for (const x of hostRows) {
+    hostDays[x.day] = 1;
+    const c = cell(x.day, kpiProperty(x.host)), v = kpiNum(x.value);
+    if (v !== null) c[x.metric] = (c[x.metric] || 0) + v;
+  }
+  const pageDays = {};
+  for (const x of pageRows) {
+    if (hostDays[x.day]) continue;
+    pageDays[x.day] = 1;
+    const c = cell(x.day, kpiProperty(x.host)), v = kpiNum(x.value);
+    if (v !== null) c.pageviews = (c.pageviews || 0) + v;
+  }
+  const site = {};
+  for (const x of r.site_day.rows || []) site[x.day] = kpiNum(x.value);
+  const props = KPI_PROPERTIES.concat([{ key: "other", label: "Other hosts", hosts: [] }]);
+  let through = null;
+  out.days = days;
+  out.basis = days.map(function(d) { return hostDays[d] ? "host" : pageDays[d] || site[d] !== undefined && site[d] !== null ? "page-rows" : null; });
+  out.properties = props.map(function(p) {
+    let tp = null, tv = null;
+    const daily = days.map(function(d, i) {
+      const b = out.basis[i];
+      if (!b) return { day: d, pageviews: null, visits: null };
+      through = d;
+      const c = byDay[d] && byDay[d][p.key] || {};
+      const pv = c.pageviews === null || c.pageviews === undefined ? 0 : c.pageviews;
+      const vi = b === "host" ? (c.visits === null || c.visits === undefined ? (hostRows.some(function(x) { return x.day === d && x.metric === "visits"; }) ? 0 : null) : c.visits) : null;
+      tp = (tp || 0) + pv;
+      if (vi !== null) tv = (tv || 0) + vi;
+      return { day: d, pageviews: pv, visits: vi };
+    });
+    return { key: p.key, label: p.label, hosts: p.hosts, daily: daily, pageviews: tp, visits: tv };
+  });
+  out.all = days.map(function(d) { return { day: d, pageviews: site[d] === undefined ? null : site[d] }; });
+  out.data_through = through;
+  if (!r.host_day.rows && !r.page_day.rows) out.notes.push("page views: " + (r.page_day.err || r.host_day.err));
+  if (out.basis.indexOf("page-rows") >= 0) out.notes.push("days marked page-rows are summed from the stored per-page rows (the 300 largest pages of the day keep their host; the remainder is under Other hosts; paper pages count for QNFO and papers)");
+  if (!out.properties.some(function(p) { return p.visits !== null; })) out.notes.push("visits are not measured yet: the ingest writes a per-host row with Cloudflare's visit count from the first daily run of dashboard 1.30.0 on; unique visitors are not available from Web Analytics");
+  return out;
+}
+// rows [{day, key, n}] -> [{key, daily:[n or null], total}], days with no row are a measured 0 when the read worked.
+function kpiSeries(rows, days, keyOf) {
+  const m = {};
+  for (const x of rows || []) {
+    const k = keyOf(x);
+    if (days.indexOf(x.day) < 0) continue;
+    m[k] = m[k] || {};
+    m[k][x.day] = (m[k][x.day] || 0) + (Number(x.n) || 0);
+  }
+  return Object.keys(m).sort().map(function(k) {
+    const daily = days.map(function(d) { return m[k][d] || 0; });
+    return { key: k, daily: daily, total: daily.reduce(function(s, v) { return s + v; }, 0) };
+  });
+}
+function kpiShapeActions(r, nowMs, days) {
+  const out = { as_of: new Date(nowMs).toISOString(), days: days, notes: [] };
+  const act = [];
+  const add = function(q, name, map, src) {
+    if (!q.rows) { out.notes.push(name + ": " + q.err); act.push({ channel: name, source: src, daily: null, total: null, reason: q.err }); return; }
+    for (const s of kpiSeries(q.rows, days, map)) act.push({ channel: s.key, source: src, daily: s.daily, total: s.total });
+  };
+  add(r.email_day, "email", function(x) { return "email (" + (x.kind === "followup" ? "follow-up" : "first message") + ")"; }, "outreach_log");
+  add(r.thread_day, "bluesky", function() { return "bluesky"; }, "social_threads");
+  add(r.smp_day, "buffer", function(x) { return kpiChannel(x.platform) + " (via Buffer)"; }, "social_media_posts");
+  out.actions = { source: "qnfo-audit.outreach_log (status sent, followup), social_threads (status posted), social_media_posts (status published, platform buffer-*)", series: act, total: act.reduce(function(s, a) { return a.total === null ? s : (s || 0) + a.total; }, null) };
+  const ev = [];
+  const addE = function(q, label, map, src) {
+    if (!q.rows) { ev.push({ event: label, source: src, daily: null, total: null, reason: q.err }); return; }
+    const ss = kpiSeries(q.rows, days, map);
+    if (!ss.length) ev.push({ event: label, source: src, daily: days.map(function() { return 0; }), total: 0 });
+    for (const s of ss) ev.push({ event: s.key, source: src, daily: s.daily, total: s.total });
+  };
+  addE(r.utm_day, "link clicks", function(x) { return "link clicks from " + x.channel; }, "reach_signals utm clicks_human, probe excluded");
+  addE(r.reply_mail_day, "email replies", function() { return "email replies"; }, "outreach_log status replied");
+  addE(r.social_reply_day, "replies by other accounts", function(x) { return "replies by other accounts on " + x.channel; }, "social_replies");
+  addE(r.mention_day, "mentions found", function(x) { return "mentions found on " + x.channel; }, "reach_signals mention-radar");
+  out.events = { source: "qnfo-audit.reach_signals (source utm metric clicks_human; source mention-radar metric mentions), outreach_log (status replied), social_replies", series: ev, total: ev.reduce(function(s, a) { return a.total === null ? s : (s || 0) + a.total; }, null) };
+  return out;
+}
+function kpiShapePostCounts(r, nowMs) {
+  const out = { source: "qnfo-audit.social_threads, social_media_posts, dissemination_tracker (each table counted on its own; the same post can be in more than one)", as_of: new Date(nowMs).toISOString(), rows: [], notes: [] };
+  const push = function(channel, via, table, x) {
+    out.rows.push({ channel: channel, via: via, table: table, last_7d: Number(x.n7) || 0, last_30d: Number(x.n30) || 0, total: Number(x.total) || 0, last: x.last || null });
+  };
+  if (r.posts_threads.rows) { if (r.posts_threads.rows[0]) push("bluesky", "direct", "social_threads", r.posts_threads.rows[0]); } else out.notes.push("social_threads: " + r.posts_threads.err);
+  if (r.posts_smp.rows) for (const x of r.posts_smp.rows) push(kpiChannel(x.platform), /^buffer/i.test(String(x.platform)) ? "Buffer" : "direct", "social_media_posts", x); else out.notes.push("social_media_posts: " + r.posts_smp.err);
+  if (r.posts_dissemination.rows) for (const x of r.posts_dissemination.rows) push(kpiChannel(x.channel), /^buffer/i.test(String(x.channel)) ? "Buffer" : "direct", "dissemination_tracker", x); else out.notes.push("dissemination_tracker: " + r.posts_dissemination.err);
+  return out;
+}
+// Buffer's own metric labels -> the columns of the table. Anything else stays under its own name in `other`.
+function kpiBufferMetric(name) {
+  const n = String(name || "").toLowerCase();
+  if (/impression|reach|view/.test(n)) return "impressions";
+  if (/click/.test(n)) return "clicks";
+  if (/like|favou?rite|reaction/.test(n)) return "likes";
+  if (/repost|retweet|share|boost/.test(n)) return "reposts";
+  if (/repl|comment/.test(n)) return "replies";
+  return null;
+}
+function kpiShapePosts(r, nowMs) {
+  const out = { source: "qnfo-audit.social_engagements (latest daily snapshot per post), social_threads, social_media_posts, reach_signals (source utm, clicks_human, 30 days), social_replies", as_of: new Date(nowMs).toISOString(), notes: [], snapshot: null };
+  const clicks = {};
+  for (const x of r.utm_campaign.rows || []) clicks[kpiChannel(x.channel) + "|" + String(x.campaign)] = (clicks[kpiChannel(x.channel) + "|" + String(x.campaign)] || 0) + (Number(x.clicks) || 0);
+  const clicksOk = !!r.utm_campaign.rows;
+  // The gateway stores a campaign tag cut at 64 characters, so a long slug is matched on its first 64.
+  const clicksOf = function(ch, slug) {
+    const a = clicks[ch + "|" + slug], b = clicks[ch + "|" + String(slug).slice(0, 64)];
+    return a !== undefined ? a : b !== undefined ? b : 0;
+  };
+  const others = r.other_replies.rows ? {} : null;
+  for (const x of r.other_replies.rows || []) others[x.post_id] = Number(x.n) || 0;
+  const byUri = {};
+  for (const t of r.threads.rows || []) {
+    const s = String(t.post_uri || "");
+    const uris = s.match(/at:\/\/[^"\s,}]+/g) || [];
+    for (const u of uris) if (!byUri[u]) byUri[u] = t;
+  }
+  const posts = [];
+  for (const x of r.bsky_posts.rows || []) {
+    out.snapshot = x.collected_at || out.snapshot;
+    const t = byUri[x.post_id] || null;
+    const likes = kpiNum(x.likes), reposts = kpiNum(x.reposts), quotes = kpiNum(x.quotes);
+    posts.push({ channel: "bluesky", via: "direct", id: x.post_id, title: t ? String(t.title || t.slug || "") : null, slug: t ? t.slug : null, url: kpiBskyUrl(x.post_id), published: t ? t.posted_at : null,
+      likes: likes, reposts: reposts, quotes: quotes, replies_all: kpiNum(x.replies), replies_by_others: others ? others[x.post_id] || 0 : null, impressions: null,
+      clicks: t && clicksOk ? clicksOf("bluesky", t.slug) : null });
+  }
+  const bstat = {};
+  for (const x of r.buffer_stats.rows || []) {
+    const k = kpiBufferMetric(x.metric);
+    bstat[x.post_id] = bstat[x.post_id] || { other: {}, collected_at: null };
+    if (k) bstat[x.post_id][k] = kpiNum(x.value); else bstat[x.post_id].other[String(x.metric)] = kpiNum(x.value);
+    bstat[x.post_id].collected_at = x.collected_at;
+  }
+  const bufferPosts = [];
+  for (const p of r.smp_recent.rows || []) {
+    const ch = kpiChannel(p.platform), s = bstat[p.buffer_id] || null;
+    let st = null;
+    try { st = (JSON.parse(p.engagement_metrics || "{}") || {}).buffer_status || null; } catch (e) { st = null; }
+    const row = { channel: ch, via: "Buffer", id: p.buffer_id || p.id, title: String(p.preview || p.project_id || ""), slug: p.project_id || null, url: kpiHttpUrl(p.url), published: p.published_at || null,
+      likes: s && s.likes !== undefined ? s.likes : null, reposts: s && s.reposts !== undefined ? s.reposts : null, quotes: null, replies_all: s && s.replies !== undefined ? s.replies : null, replies_by_others: null,
+      impressions: s && s.impressions !== undefined ? s.impressions : null, clicks: p.project_id && clicksOk ? clicksOf(ch, p.project_id) : null, buffer_status: st, stats_collected: s ? s.collected_at : null, buffer_clicks: s && s.clicks !== undefined ? s.clicks : null };
+    posts.push(row);
+    bufferPosts.push(row);
+  }
+  // What readers did: likes + reposts + quotes + replies by other accounts + link clicks, each only where it is measured.
+  // The platform reply count includes the fleet's own thread continuations, so it is shown but not scored.
+  for (const p of posts) {
+    const parts = [p.likes, p.reposts, p.quotes, p.replies_by_others, p.clicks, p.via === "Buffer" ? p.replies_all : null].filter(function(v) { return v !== null && v !== undefined; });
+    p.score = parts.length ? parts.reduce(function(s, v) { return s + v; }, 0) : null;
+    p.measured = parts.length;
+  }
+  posts.sort(function(a, b) { return (b.score === null ? -1 : b.score) - (a.score === null ? -1 : a.score) || String(b.published || "").localeCompare(String(a.published || "")); });
+  out.ranked_of = posts.length;
+  out.top = posts.filter(function(p) { return p.score !== null && p.score > 0; }).slice(0, 15).map(function(p, i) { return Object.assign({ rank: i + 1 }, p); });
+  if (!r.bsky_posts.rows) out.notes.push("bluesky engagement: " + r.bsky_posts.err);
+  if (!others) out.notes.push("replies by other accounts are not measured yet (social_replies: " + r.other_replies.err + ")");
+  out.notes.push("score = likes + reposts + quotes + replies by other accounts + link clicks, counting only what is measured for that post; Bluesky's reply count includes the fleet's own thread posts and is not scored; no platform gives the fleet impressions today; link clicks are counted per channel and campaign, so two posts of one campaign on one channel show the same count; the gateway's own probe clicks are left out");
+  return { panel: out, bufferPosts: bufferPosts, bufferStatPosts: Object.keys(bstat).length };
+}
+function kpiShapeBuffer(r, nowMs, bufferPosts, statPosts) {
+  const out = { source: "qnfo-audit.social_channels (qnfo-social daily Buffer channel audit), social_media_posts (platform buffer-*), social_engagements (platform buffer), reach_signals (source utm)", as_of: new Date(nowMs).toISOString(), notes: [] };
+  out.channels = r.channels.rows ? r.channels.rows.map(function(c) { return { service: kpiChannel(c.service), name: String(c.name || ""), connected: Number(c.connected) === 1, checked_at: c.checked_at || null }; }) : null;
+  if (!r.channels.rows) out.notes.push("channels: " + r.channels.err);
+  const sent = bufferPosts.length;
+  out.integration = { posting: sent > 0 || !!(out.channels && out.channels.length), posts_listed: sent, per_post_statistics: statPosts > 0 };
+  const a = r.buffer_auth.rows && r.buffer_auth.rows[0];
+  out.statistics_collector = { last_run: a ? a.collected_at : null, last_result: a ? String(a.note || "") : null, posts_with_statistics_30d: r.buffer_stats.rows ? statPosts : null };
+  out.posts = bufferPosts.slice(0, 20);
+  if (!statPosts) out.notes.push("Buffer per-post statistics are not measured: social_engagements holds no platform 'buffer' metric row in 30 days" + (a ? " (the collector last wrote on " + a.collected_at + ": " + String(a.note || "") + ")" : "") + ". The collection is agent_issues 2374 (BUFFER-POST-STATS-1). Link clicks below are the fleet's own count of tagged page loads, not Buffer's.");
+  return out;
+}
+function kpiShapeAudience(r, nowMs) {
+  const asOf = new Date(nowMs).toISOString();
+  const subs = { source: "qnfo-audit.subscribers (counts only), subscribe_funnel (30 days)", as_of: asOf, notes: [] };
+  if (r.subscribers.rows) {
+    let total = 0, confirmed = 0, pending = 0, unsub = 0;
+    for (const x of r.subscribers.rows) {
+      const n = Number(x.n) || 0;
+      total += n;
+      if (String(x.status) === "pending") pending += n; else if (String(x.status) === "subscribed") confirmed += n; else unsub += n;
+    }
+    subs.total = total; subs.subscribed = confirmed; subs.pending = pending; subs.other = unsub;
+    subs.by_source = r.subscribers.rows.map(function(x) { return { status: String(x.status), source: String(x.source), n: Number(x.n) || 0, last: x.last || null }; });
+  } else {
+    subs.total = null; subs.subscribed = null; subs.pending = null; subs.other = null; subs.by_source = null;
+    subs.notes.push("subscribers: " + r.subscribers.err);
+  }
+  if (r.funnel.rows) {
+    const order = ["view", "submit", "confirm_mail_sent", "confirmed"];
+    const rows = r.funnel.rows.map(function(x) { return { stage: String(x.stage), n: Number(x.n) || 0 }; });
+    rows.sort(function(a, b) { return (order.indexOf(a.stage) < 0 ? 99 : order.indexOf(a.stage)) - (order.indexOf(b.stage) < 0 ? 99 : order.indexOf(b.stage)) || a.stage.localeCompare(b.stage); });
+    subs.funnel_30d = rows;
+    if (!rows.length) subs.notes.push("subscribe_funnel has no row in 30 days: no step was counted");
+  } else {
+    subs.funnel_30d = null;
+    subs.notes.push("the sign-up funnel steps are not measured (subscribe_funnel: " + r.funnel.err + ")");
+  }
+  const cred = { source: "qnfo-audit.external_mentions, reach_signals (source openalex, metric citations), outreach_learner_sends (outcome)", as_of: asOf, notes: [] };
+  cred.mentions = r.mentions_total.rows ? r.mentions_total.rows.map(function(x) { return { source: String(x.source), total: Number(x.total) || 0, last_30d: Number(x.n30) || 0, last: x.last || null }; }) : null;
+  cred.recent = r.mentions_recent.rows ? r.mentions_recent.rows.map(function(x) { return { source: String(x.source), title: String(x.title || ""), url: kpiHttpUrl(x.url), first_seen: x.first_seen || null }; }) : null;
+  const c = r.citations.rows && r.citations.rows[0];
+  cred.citations = c && c.day ? { day: c.day, citations: kpiNum(c.citations), works: Number(c.works) || 0 } : null;
+  cred.mail_outcomes = r.mail_outcomes.rows ? r.mail_outcomes.rows.map(function(x) { return { outcome: String(x.outcome), n: Number(x.n) || 0 }; }) : null;
+  if (!r.mentions_total.rows) cred.notes.push("mentions: " + r.mentions_total.err);
+  if (!cred.citations) cred.notes.push("citations: " + (r.citations.rows ? "no openalex row" : r.citations.err));
+  return { subscribers: subs, credibility: cred };
+}
+async function kpiCompute(env, nowMs) {
+  const days = kpiDays(nowMs, KPI_DAYS);
+  const d14 = days[0], d7 = kpiDay(nowMs - 6 * KPI_DAY_MS), d30 = kpiDay(nowMs - 29 * KPI_DAY_MS);
+  const iso = function(ms) { return new Date(ms).toISOString(); };
+  const plan = {
+    open_priority: [], open_category: [], open_ages: [], opened_day: [Date.parse(d14 + "T00:00:00Z")], closed_day: [d14], ledger_first: [],
+    closed_24h: ["closed_window", [iso(nowMs - KPI_DAY_MS).slice(0, 19) + "Z"]], closed_7d: ["closed_window", [iso(nowMs - 7 * KPI_DAY_MS).slice(0, 19) + "Z"]],
+    code_tasks: [iso(nowMs - 7 * KPI_DAY_MS)], host_day: [d14], page_day: [d14], site_day: [d14], email_day: [d14], thread_day: [d14], smp_day: [d14],
+    reply_mail_day: [d14], utm_day: [d14], mention_day: [d14], social_reply_day: [d14], posts_threads: [d7, d30], posts_smp: [d7, d30], posts_dissemination: [d7, d30],
+    bsky_posts: [], threads: [], smp_recent: [], utm_campaign: [d30], other_replies: [], buffer_stats: [d30], buffer_auth: [], channels: [], subscribers: [], funnel: [d30],
+    mentions_total: [d30], mentions_recent: [], citations: [], mail_outcomes: []
+  };
+  const keys = Object.keys(plan);
+  const res = await Promise.all(keys.map(function(k) {
+    const p = plan[k];
+    return typeof p[0] === "string" && KPI_SQL[p[0]] ? kpiQ(env, KPI_SQL[p[0]], p[1]) : kpiQ(env, KPI_SQL[k], p);
+  }));
+  const r = {};
+  keys.forEach(function(k, i) { r[k] = res[i]; });
+  const posts = kpiShapePosts(r, nowMs);
+  const act = kpiShapeActions(r, nowMs, days);
+  const aud = kpiShapeAudience(r, nowMs);
+  const failed = keys.filter(function(k) { return !r[k].rows; }).map(function(k) { return { read: k, reason: r[k].err }; });
+  return {
+    ok: true, version: VERSION, as_of: iso(nowMs), cache_ttl_s: KPI_TTL_MS / 1e3, window_days: KPI_DAYS, days: days,
+    unmeasured_rule: "null means not measured (the reason is in the panel's notes); 0 is a measured zero",
+    issues: kpiShapeIssues(r, nowMs, days),
+    reach: { pageviews: kpiShapePageviews(r, nowMs, days), actions: act.actions, events: act.events, activity_as_of: act.as_of, posts_per_channel: kpiShapePostCounts(r, nowMs), top_posts: posts.panel, subscribers: aud.subscribers, credibility: aud.credibility },
+    buffer: kpiShapeBuffer(r, nowMs, posts.bufferPosts, posts.bufferStatPosts),
+    unreadable: failed
+  };
+}
+// Request-time data, kept for KPI_TTL_MS in this isolate. Public data only, so one copy serves every reader.
+async function kpiData(env, nowMs) {
+  const now = nowMs || Date.now();
+  if (kpiCache && now - kpiCache.at < KPI_TTL_MS && now >= kpiCache.at) return kpiCache.data;
+  const data = await kpiCompute(env, now);
+  kpiCache = { at: now, data: data };
+  return data;
+}
+// ---- page ----
+var KPI_CSS = ":root{--kp-a:#008A7B;--kp-b:#B5562A}@media (prefers-color-scheme:dark){:root:not([data-theme=\"light\"]){--kp-a:#2AA595;--kp-b:#D06C3E}}:root[data-theme=\"dark\"]{--kp-a:#2AA595;--kp-b:#D06C3E}"
+  + ".kp{max-width:1180px}.kp h1{font:500 clamp(30px,4vw,42px)/1.05 var(--serif);letter-spacing:-.02em;margin:10px 0 8px}.kp-lede{color:var(--muted);font-size:15.5px;max-width:74ch;margin:0 0 14px}.kp-jump{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;margin:0 0 26px}.kp-jump a{color:var(--teal)}"
+  + ".kp-sec{margin:0 0 34px;padding-top:22px;border-top:1px solid var(--rule)}.kp-sec>h2{font:500 26px/1.2 var(--serif);margin:0 0 4px}.kp-sec>.meta{margin:0 0 16px}"
+  + ".kp-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 14px}.kp-tiles .k-n{font-size:30px}.kp-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}"
+  + ".kp-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:16px 18px;margin:0 0 12px;min-width:0}.kp-card h3{font:600 15px/1.3 var(--sans);margin:0 0 2px}.kp-src{font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.45;overflow-wrap:anywhere}.kp-note{font-size:12.5px;color:var(--muted);margin:10px 0 0;line-height:1.5}.kp-note li{margin:0 0 3px}ul.kp-note{padding-left:16px}"
+  + ".kp-u{color:var(--amber);font-weight:500;text-decoration:none;border-bottom:1px dotted var(--amber);cursor:help;white-space:nowrap}.k-n .kp-u{font:500 17px var(--sans);border:0}"
+  + ".kp-leg{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted);margin:0 0 8px}.kp-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}.kp-leg i.a{background:var(--kp-a)}.kp-leg i.b{background:var(--kp-b)}.kp-leg i.u,.kp-col .u,.kp-st .u{background:repeating-linear-gradient(135deg,var(--rule) 0 2px,transparent 2px 5px)}"
+  + ".kp-plot{display:grid;grid-template-columns:34px minmax(0,1fr);gap:0 6px}.kp-y{position:relative;height:150px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}.kp-y span{position:absolute;right:0;transform:translateY(50%)}.kp-bars{position:relative;height:150px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);align-items:end;border-bottom:1px solid var(--rule);background:linear-gradient(to bottom,var(--wash) 1px,transparent 1px) 0 0/100% 50%}"
+  + ".kp-col{height:100%;display:flex;align-items:flex-end;justify-content:center;gap:2px;padding:0 2px;min-width:0}.kp-col i{display:block;flex:1 1 0;max-width:14px;min-width:2px;border-radius:4px 4px 0 0}.kp-col i.a{background:var(--kp-a)}.kp-col i.b{background:var(--kp-b)}.kp-col i.u{height:8px;border-radius:2px}.kp-col:hover{background:var(--wash)}"
+  + ".kp-x{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);font-size:11px;color:var(--muted);margin-top:4px;text-align:center;font-variant-numeric:tabular-nums}.kp-x span{overflow:hidden;white-space:nowrap}"
+  + ".kp-hb{display:grid;grid-template-columns:minmax(84px,max-content) minmax(0,1fr) max-content;gap:6px 10px;align-items:center;font-size:13.5px}.kp-hb b{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}.kp-hb .t{height:10px;background:var(--wash);border-radius:0 4px 4px 0}.kp-hb .t i{display:block;height:100%;min-width:2px;background:var(--kp-a);border-radius:0 4px 4px 0}"
+  + ".kp-strips{display:grid;grid-template-columns:minmax(96px,max-content) minmax(0,1fr) max-content;gap:10px 12px;align-items:end;font-size:13.5px}.kp-strips .l{align-self:center;line-height:1.25}.kp-strips .l small{display:block;color:var(--muted);font-size:11.5px}.kp-strips b{font-weight:600;font-variant-numeric:tabular-nums;text-align:right;align-self:center}.kp-st{height:34px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;align-items:end;border-bottom:1px solid var(--rule)}.kp-st i{display:block;min-height:0;background:var(--kp-a);border-radius:3px 3px 0 0}.kp-st i.u{height:6px;border-radius:2px}.kp-st i.z{height:0}.kp-axis{grid-column:2;display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:-6px;font-variant-numeric:tabular-nums}"
+  + ".kp-tw{overflow-x:auto;-webkit-overflow-scrolling:touch}.kp-t{border-collapse:collapse;width:100%;font-size:13.5px}.kp-t th{font:600 12px var(--sans);color:var(--muted);text-align:left;padding:6px 10px 6px 0;border-bottom:1px solid var(--rule);white-space:nowrap}.kp-t td{padding:7px 10px 7px 0;border-bottom:1px solid var(--rule);vertical-align:top}.kp-t td.n,.kp-t th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.kp-t tr:last-child td{border-bottom:0}.kp-t a{color:var(--teal)}.kp-t .ti{min-width:200px;max-width:420px}.kp-t small{color:var(--muted)}"
+  + ".kp details{margin-top:10px}.kp details>summary{font-size:12.5px;color:var(--teal)}.kp-ol{margin:6px 0 0;padding-left:18px;font-size:13.5px;line-height:1.5}.kp-kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:13.5px;margin:0}.kp-kv dt{color:var(--muted)}.kp-kv dd{margin:0;font-weight:500;overflow-wrap:anywhere}"
+  + "@media (max-width:900px){.kp-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.kp-two{grid-template-columns:minmax(0,1fr)}}@media (max-width:560px){.kp-card{padding:14px}.kp-x span:nth-child(even){visibility:hidden}.kp-strips{grid-template-columns:minmax(0,1fr) max-content}.kp-strips .l{grid-column:1/-1;margin-bottom:-6px}.kp-strips .l small{display:inline;margin-left:6px}.kp-axis{grid-column:1}.kp-tiles .k-n{font-size:25px}}";
+function kpiFmt(n) {
+  if (n === null || n === undefined) return null;
+  const v = Number(n);
+  if (!isFinite(v)) return null;
+  const s = Math.abs(v) >= 100 || v === Math.round(v) ? String(Math.round(v)) : String(Math.round(v * 10) / 10);
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+function kpiU(reason) {
+  return '<abbr class="kp-u" title="' + esc(reason || "Nothing measures this yet") + '">not measured</abbr>';
+}
+function kpiV(n, reason) {
+  const s = kpiFmt(n);
+  return s === null ? kpiU(reason) : esc(s);
+}
+function kpiAge(h) {
+  if (h === null || h === undefined) return null;
+  return h >= 48 ? kpiFmt(Math.round(h / 24 * 10) / 10) + " days" : kpiFmt(h) + " h";
+}
+function kpiSrc(source, asOf, through) {
+  return '<p class="kp-src">Source: ' + esc(source) + '. As of ' + esc(String(asOf).slice(0, 16).replace("T", " ")) + ' UTC' + (through ? '; data through ' + esc(through) : '') + '.</p>';
+}
+function kpiNotes(list) {
+  return list && list.length ? '<ul class="kp-note">' + list.map(function(n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' : '';
+}
+function kpiTile(label, valueHtml, sub) {
+  return '<div class="kpi"><span class="k-l">' + esc(label) + '</span><span class="k-n">' + valueHtml + '</span>' + (sub ? '<span class="k-s">' + sub + '</span>' : '') + '</div>';
+}
+function kpiNiceMax(m) {
+  if (!(m > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(m)));
+  const f = m / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+}
+function kpiTable(head, rows) {
+  return '<div class="kp-tw"><table class="kp-t"><thead><tr>' + head.map(function(h) { return '<th' + (h[1] ? ' class="n"' : '') + ' scope="col">' + esc(h[0]) + '</th>'; }).join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>';
+}
+// Two series per day, side by side on one axis. A null is drawn as a hatched stub, never as a zero-height bar.
+function kpiDualBars(daily, aKey, bKey, aLabel, bLabel) {
+  let max = 0;
+  for (const d of daily) max = Math.max(max, d[aKey] || 0, d[bKey] || 0);
+  const top = kpiNiceMax(max);
+  const bar = function(d, k, cls, label) {
+    const v = d[k];
+    if (v === null || v === undefined) return '<i class="u" title="' + esc(d.day + ": " + label + " not measured") + '"></i>';
+    return '<i class="' + cls + '" style="height:' + (v / top * 100).toFixed(1) + '%" title="' + esc(d.day + ": " + kpiFmt(v) + " " + label) + '"></i>';
+  };
+  const cols = daily.map(function(d) { return '<div class="kp-col">' + bar(d, aKey, "a", aLabel) + bar(d, bKey, "b", bLabel) + '</div>'; }).join('');
+  const hasNull = daily.some(function(d) { return d[aKey] === null || d[bKey] === null; });
+  return '<div class="kp-leg"><span><i class="a"></i>' + esc(aLabel) + '</span><span><i class="b"></i>' + esc(bLabel) + '</span>' + (hasNull ? '<span><i class="u"></i>not measured</span>' : '') + '</div>'
+    + '<div class="kp-plot" role="img" aria-label="' + esc(aLabel + " and " + bLabel + " per day; the table below holds the values") + '"><div class="kp-y"><span style="bottom:100%">' + kpiFmt(top) + '</span><span style="bottom:50%">' + kpiFmt(top / 2) + '</span><span style="bottom:0">0</span></div><div class="kp-bars">' + cols + '</div>'
+    + '<div class="kp-x">' + daily.map(function(d) { return '<span>' + esc(d.day.slice(5)) + '</span>'; }).join('') + '</div></div>';
+}
+// Small multiples: one row per series, all rows on one scale.
+function kpiStrips(rows, days) {
+  let max = 0;
+  for (const r of rows) for (const v of r.daily || []) max = Math.max(max, v || 0);
+  const hasNull = rows.some(function(r) { return !r.daily || r.daily.some(function(v) { return v === null; }); });
+  const body = rows.map(function(r) {
+    const cells = days.map(function(d, i) {
+      const v = r.daily ? r.daily[i] : null;
+      if (v === null || v === undefined) return '<i class="u" title="' + esc(d + ": not measured") + '"></i>';
+      if (!v) return '<i class="z" title="' + esc(d + ": 0") + '"></i>';
+      return '<i style="height:' + Math.max(6, v / max * 100).toFixed(1) + '%" title="' + esc(d + ": " + kpiFmt(v)) + '"></i>';
+    }).join('');
+    return '<span class="l">' + esc(r.label) + (r.sub ? '<small>' + esc(r.sub) + '</small>' : '') + '</span><span class="kp-st">' + cells + '</span><b>' + kpiV(r.total, r.reason) + '</b>';
+  }).join('');
+  return (hasNull ? '<div class="kp-leg"><span><i class="u"></i>not measured</span></div>' : '') + '<div class="kp-strips">' + body + '<span class="kp-axis"><span>' + esc(days[0].slice(5)) + '</span><span>bars share one scale, tallest = ' + esc(kpiFmt(max) || "0") + '</span><span>' + esc(days[days.length - 1].slice(5)) + '</span></span></div>';
+}
+function kpiHBars(rows) {
+  let max = 0;
+  for (const r of rows) max = Math.max(max, r.n || 0);
+  return '<div class="kp-hb">' + rows.map(function(r) { return '<span>' + esc(r.label) + '</span><span class="t"><i style="width:' + (max ? (r.n / max * 100).toFixed(1) : 0) + '%"' + (r.n ? '' : ' hidden') + '></i></span><b>' + esc(kpiFmt(r.n)) + '</b>'; }).join('') + '</div>';
+}
+function kpiHtml(v, holder) {
+  const I = v.issues, R = v.reach, B = v.buffer, days = v.days;
+  const cell = function(n, reason) { return '<td class="n">' + kpiV(n, reason) + '</td>'; };
+  // -- issues
+  const w24 = I.closed_24h, w7 = I.closed_7d;
+  const tiles = [
+    kpiTile("Open issues now", kpiV(I.open_total, "agent_issues could not be read"), I.over_24h === null || I.over_24h === undefined ? "" : esc(kpiFmt(I.over_24h)) + " open for more than 24 h"),
+    kpiTile("Median age of an open issue", I.median_age_h === null ? kpiU("no open issue has a creation time") : esc(kpiAge(I.median_age_h)), I.oldest ? "oldest: #" + esc(String(I.oldest.id)) + ", " + esc(kpiAge(I.oldest.age_h)) : ""),
+    kpiTile("Closed with evidence, 24 h", kpiV(w24.with_evidence, w24.reason), w24.closed === null ? "" : esc(kpiFmt(w24.still_closed)) + " closed and still closed; " + esc(kpiFmt(w24.reopened_since)) + " reopened since"),
+    kpiTile("Closed with evidence, 7 d", kpiV(w7.with_evidence, w7.reason), w7.closed === null ? "" : esc(kpiFmt(w7.still_closed)) + " closed and still closed; " + esc(kpiFmt(w7.reopened_since)) + " reopened since" + (w7.complete ? "" : " (ledger younger than 7 d)"))
+  ].join('');
+  const dailyTable = kpiTable([["Day"], ["Opened", 1], ["Closed", 1], ["Closed with evidence", 1]], I.daily.map(function(d) { return '<tr><td>' + esc(d.day) + '</td>' + cell(d.opened) + cell(d.closed, "before the first issue_lifecycle row") + cell(d.closed_with_evidence, "before the first issue_lifecycle row") + '</tr>'; }));
+  const ct = I.code_tasks;
+  const issuesHtml = '<section class="kp-sec" id="issues"><h2>Issues</h2><p class="meta">The fleet files its own defects and closes them only with a live measurement.</p><div class="kp-tiles">' + tiles + '</div>'
+    + '<div class="kp-card"><h3>Opened and closed per day, last ' + days.length + ' days</h3>' + kpiSrc("qnfo-audit.agent_issues (created_at) for opened; issue_lifecycle (rows that leave open) for closed", I.as_of) + kpiDualBars(I.daily, "opened", "closed", "opened", "closed") + '<details><summary>Table</summary>' + dailyTable + '</details></div>'
+    + '<div class="kp-two"><div class="kp-card"><h3>Open by priority</h3>' + kpiSrc("qnfo-audit.agent_issues, status open", I.as_of) + (I.by_priority ? kpiHBars(I.by_priority.map(function(p) { return { label: p.priority, n: p.n }; })) : '<p>' + kpiU("agent_issues could not be read") + '</p>')
+    + (I.oldest ? '<p class="kp-note">Oldest open: #' + esc(String(I.oldest.id)) + ' ' + esc(I.oldest.title) + ' (' + esc(String(I.oldest.priority || "")) + ', opened ' + esc(I.oldest.opened.slice(0, 10)) + ').</p>' : '') + '</div>'
+    + '<div class="kp-card"><h3>Open by category</h3>' + kpiSrc("qnfo-audit.agent_issues, status open", I.as_of) + (I.by_category ? kpiHBars(I.by_category.slice(0, 10).map(function(c) { return { label: c.category, n: c.n }; })) + (I.by_category.length > 10 ? '<details><summary>All ' + I.by_category.length + ' categories</summary>' + kpiTable([["Category"], ["Open", 1]], I.by_category.map(function(c) { return '<tr><td>' + esc(c.category) + '</td>' + cell(c.n) + '</tr>'; })) + '</details>' : '') : '<p>' + kpiU("agent_issues could not be read") + '</p>') + '</div></div>'
+    + '<div class="kp-card"><h3>Code-loop tasks</h3>' + kpiSrc(ct ? ct.source : "qnfo-audit.code_tasks", I.as_of) + (ct ? kpiTable([["Outcome"], ["Last 7 days", 1], ["All time", 1]], [["Merged", ct.merged], ["Failed (including a failed publish)", ct.failed], ["Closed without a merge", ct.closed_unmerged], ["In flight", ct.in_flight]].map(function(x) { return '<tr><td>' + x[0] + '</td>' + cell(x[1].last_7d) + cell(x[1].total) + '</tr>'; })) : '<p>' + kpiU("code_tasks could not be read") + '</p>') + '</div>'
+    + kpiNotes(I.notes) + '</section>';
+  // -- reach
+  const P = R.pageviews;
+  const pvRows = P.properties.filter(function(p) { return p.key !== "other" || p.pageviews; }).map(function(p) { return { label: p.label, sub: p.hosts.length ? p.hosts[0] + (p.hosts.length > 1 ? " +" + (p.hosts.length - 1) : "") : "", daily: p.daily.map(function(d) { return d.pageviews; }), total: p.pageviews, reason: "no bot-filtered page-view row in this window" }; });
+  const pvTable = kpiTable([["Property"], ["Page views", 1], ["Visits", 1]], P.properties.map(function(p) { return '<tr><td>' + esc(p.label) + '</td>' + cell(p.pageviews, "no bot-filtered row in this window") + cell(p.visits, "the per-host visit row starts with dashboard 1.30.0") + '</tr>'; }));
+  const strip = function(list, labelKey) { return list.map(function(s) { return { label: s[labelKey], sub: s.source, daily: s.daily, total: s.total, reason: s.reason }; }); };
+  const ppc = R.posts_per_channel, T = R.top_posts, S = R.subscribers, C = R.credibility;
+  const post = function(p) {
+    const name = esc(p.title || p.slug || p.id);
+    return '<td class="ti">' + (p.url ? '<a href="' + esc(p.url) + '" rel="noopener">' + name + '</a>' : name + ' <small>(no post link stored)</small>') + '<br><small>' + esc(p.channel) + (p.via === "Buffer" ? " via Buffer" : "") + (p.published ? ", " + esc(String(p.published).slice(0, 10)) : "") + '</small></td>';
+  };
+  const topTable = T.top.length ? kpiTable([["#", 1], ["Post"], ["Score", 1], ["Likes", 1], ["Reposts", 1], ["Quotes", 1], ["Replies by others", 1], ["Link clicks", 1], ["Impressions", 1]], T.top.map(function(p) {
+    return '<tr><td class="n">' + p.rank + '</td>' + post(p) + cell(p.score) + cell(p.likes, "Buffer statistics are not collected") + cell(p.reposts, "Buffer statistics are not collected") + cell(p.quotes, "not reported for this channel") + cell(p.replies_by_others, "social_replies does not cover this post") + cell(p.clicks, "the post has no campaign tag") + cell(p.impressions, "no platform reports impressions to the fleet") + '</tr>';
+  })) : '<p class="meta">No post has a measured reader action yet.</p>';
+  const reachHtml = '<section class="kp-sec" id="reach"><h2>Reach</h2><p class="meta">Who came, what the fleet sent out, and what came back.</p>'
+    + '<div class="kp-card"><h3>Page views per property and day, bots excluded</h3>' + kpiSrc(P.source, P.as_of, P.data_through) + kpiStrips(pvRows, days) + '<details><summary>Totals for the window, with visits</summary>' + pvTable + '</details>' + kpiNotes(P.notes) + '</div>'
+    + '<div class="kp-two"><div class="kp-card"><h3>Outreach actions per channel and day</h3>' + kpiSrc(R.actions.source, R.activity_as_of) + (R.actions.series.length ? kpiStrips(strip(R.actions.series, "channel"), days) : '<p class="meta">No outreach action in the last ' + days.length + ' days.</p>') + '<p class="kp-note">Total in the window: ' + kpiV(R.actions.total, "no action table could be read") + '.</p></div>'
+    + '<div class="kp-card"><h3>Events that came back, per day</h3>' + kpiSrc(R.events.source, R.activity_as_of) + kpiStrips(strip(R.events.series, "event"), days) + '<p class="kp-note">Total in the window: ' + kpiV(R.events.total, "no event table could be read") + '.</p></div></div>'
+    + '<div class="kp-card"><h3>Most popular posts</h3>' + kpiSrc(T.source, T.as_of, T.snapshot ? "engagement snapshot " + T.snapshot : null) + topTable + kpiNotes(T.notes) + '</div>'
+    + '<div class="kp-two"><div class="kp-card"><h3>Posts published per channel</h3>' + kpiSrc(ppc.source, ppc.as_of) + kpiTable([["Channel"], ["Ledger"], ["7 days", 1], ["30 days", 1], ["All time", 1]], ppc.rows.map(function(x) { return '<tr><td>' + esc(x.channel) + (x.via === "Buffer" ? ' <small>via Buffer</small>' : '') + '</td><td><small>' + esc(x.table) + '</small></td>' + cell(x.last_7d) + cell(x.last_30d) + cell(x.total) + '</tr>'; })) + kpiNotes(ppc.notes) + '</div>'
+    + '<div class="kp-card"><h3>Subscribers</h3>' + kpiSrc(S.source, S.as_of) + '<dl class="kp-kv"><dt>Confirmed</dt><dd>' + kpiV(S.subscribed, "subscribers could not be read") + '</dd><dt>Waiting to confirm</dt><dd>' + kpiV(S.pending, "subscribers could not be read") + '</dd><dt>Other (left or suppressed)</dt><dd>' + kpiV(S.other, "subscribers could not be read") + '</dd>'
+    + (S.funnel_30d && S.funnel_30d.length ? S.funnel_30d.map(function(f) { return '<dt>Step, 30 days: ' + esc(f.stage) + '</dt><dd>' + esc(kpiFmt(f.n)) + '</dd>'; }).join('') : '<dt>Sign-up steps, 30 days</dt><dd>' + kpiU(S.funnel_30d ? "no step was counted in 30 days" : "subscribe_funnel is not there yet") + '</dd>') + '</dl>' + kpiNotes(S.notes) + '</div></div>'
+    + '<div class="kp-card"><h3>Credibility events</h3>' + kpiSrc(C.source, C.as_of) + '<dl class="kp-kv"><dt>Citations of the fleet\'s papers</dt><dd>' + (C.citations ? esc(kpiFmt(C.citations.citations)) + ' across ' + esc(kpiFmt(C.citations.works)) + ' works (OpenAlex, ' + esc(C.citations.day) + ')' : kpiU("no OpenAlex row")) + '</dd>'
+    + (C.mentions ? C.mentions.map(function(m) { return '<dt>Mentions found: ' + esc(m.source) + '</dt><dd>' + esc(kpiFmt(m.last_30d)) + ' in 30 days, ' + esc(kpiFmt(m.total)) + ' in all</dd>'; }).join('') : '<dt>Mentions found</dt><dd>' + kpiU("external_mentions could not be read") + '</dd>')
+    + (C.mail_outcomes ? C.mail_outcomes.map(function(m) { return '<dt>Outreach mail outcome: ' + esc(m.outcome) + '</dt><dd>' + esc(kpiFmt(m.n)) + '</dd>'; }).join('') : '') + '</dl>'
+    + (C.recent && C.recent.length ? '<details open><summary>Latest mentions</summary><ol class="kp-ol">' + C.recent.map(function(m) { return '<li>' + (m.url ? '<a href="' + esc(m.url) + '" rel="noopener nofollow">' + esc(m.title || m.url) + '</a>' : esc(m.title)) + ' <small>(' + esc(m.source) + ', ' + esc(String(m.first_seen || "").slice(0, 10)) + ')</small></li>'; }).join('') + '</ol></details>' : '') + kpiNotes(C.notes) + '</div></section>';
+  // -- buffer
+  const sc = B.statistics_collector;
+  const bufHtml = '<section class="kp-sec" id="buffer"><h2>Buffer</h2><p class="meta">LinkedIn, Mastodon and X posts go out through Buffer; Bluesky posts go out directly.</p>'
+    + '<div class="kp-two"><div class="kp-card"><h3>Connected channels</h3>' + kpiSrc("qnfo-audit.social_channels", B.as_of) + (B.channels ? (B.channels.length ? kpiTable([["Channel"], ["Account"], ["State"], ["Checked"]], B.channels.map(function(c) { return '<tr><td>' + esc(c.service) + '</td><td>' + esc(c.name) + '</td><td>' + (c.connected ? 'connected' : 'disconnected') + '</td><td><small>' + esc(String(c.checked_at || "").slice(0, 16).replace("T", " ")) + '</small></td></tr>'; })) : '<p class="meta">Buffer reports no channel.</p>') : '<p>' + kpiU("social_channels could not be read") + '</p>') + '</div>'
+    + '<div class="kp-card"><h3>Per-post statistics from Buffer</h3>' + kpiSrc("qnfo-audit.social_engagements, platform buffer", B.as_of) + '<dl class="kp-kv"><dt>Posts with Buffer statistics, 30 days</dt><dd>' + (sc.posts_with_statistics_30d ? esc(kpiFmt(sc.posts_with_statistics_30d)) : kpiU("no Buffer metric row was collected")) + '</dd><dt>Collector last wrote</dt><dd>' + (sc.last_run ? esc(sc.last_run) + ' (' + esc(sc.last_result) + ')' : kpiU("the collector has never written a row")) + '</dd></dl></div></div>'
+    + '<div class="kp-card"><h3>Posts sent through Buffer</h3>' + kpiSrc(B.source, B.as_of) + (B.posts.length ? kpiTable([["Post"], ["Buffer status"], ["Impressions", 1], ["Likes", 1], ["Reposts", 1], ["Replies", 1], ["Clicks, Buffer", 1], ["Clicks, fleet count", 1]], B.posts.map(function(p) {
+      const why = "Buffer statistics are not collected";
+      return '<tr>' + post(p) + '<td>' + esc(p.buffer_status || "") + '</td>' + cell(p.impressions, why) + cell(p.likes, why) + cell(p.reposts, why) + cell(p.replies_all, why) + cell(p.buffer_clicks, why) + cell(p.clicks, "the post has no campaign tag") + '</tr>';
+    })) : '<p class="meta">No post has gone out through Buffer.</p>') + kpiNotes(B.notes) + '</div></section>';
+  return fleetHead("Fleet metrics") + '<style>' + KPI_CSS + '</style>' + fleetTop("kpi", false, holder) + '<main class="wrap fl kp"><h1>Metrics</h1><p class="kp-lede">Every figure on this page is read from the fleet\'s own database when you open it, and each panel names the table it comes from. Where nothing measures a value the page says so and shows no number.</p>'
+    + '<nav class="kp-jump" aria-label="Sections"><a href="#issues">Issues</a><a href="#reach">Reach</a><a href="#buffer">Buffer</a><a href="/api/kpi">The same data as JSON</a></nav>'
+    + issuesHtml + reachHtml + bufHtml
+    + '<p class="fl-foot">Computed ' + esc(v.as_of.slice(0, 19).replace("T", " ")) + ' UTC by qnfo-fleet-dashboard ' + esc(v.version) + ' and kept for ' + v.cache_ttl_s + ' s. ' + (v.unreadable.length ? esc(String(v.unreadable.length)) + ' reads returned nothing: ' + esc(v.unreadable.map(function(u) { return u.read + " (" + u.reason + ")"; }).join(", ")) + '.' : 'Every read succeeded.') + '</p></main>' + FLEET_SHELL_JS + '</body></html>';
+}
+// ---- FLEET-KPI-1:END ----
 // ---- FLEET-CHANGELOG-1:BEGIN ----
 // FLEET-CHANGELOG-1 (1.25.0, pillar autonomy; owner request 2026-10-06: "a changelog on the fleet dashboard as a new tab, to
 // know what new features and functionality the system releases for itself ... major new features, not minor fixes ... keep
@@ -6516,9 +7176,9 @@ async function ownerRoutes(request, env, ctx, path, owner) {
       const vc = await d1all(env.AUDIT, "SELECT COUNT(*) AS n FROM owner_prompts WHERE ts >= ? AND visitor = ?", [today, visitor]);
       if (vc.length && Number(vc[0].n) >= ASK_VISITOR_CAP) return ownerJson({ error: "You have used today's " + ASK_VISITOR_CAP + " questions; Ask resets at 00:00 UTC. Reading stays open." }, 429);
     }
-    const id = "op-" + Date.now().toString(36) + Math.random().toString(16).slice(2, 6);
+    const id = "op-" + Date.now().toString(36) + crypto.randomUUID().replace(/-/g, "").slice(0, 4);
     if (mode === "task") {
-      const iid = "int-" + Math.random().toString(16).slice(2, 10) + Date.now().toString(36);
+      const iid = "int-" + crypto.randomUUID().replace(/-/g, "").slice(0, 8) + Date.now().toString(36);
       const dup = await d1all(env.AUDIT, "SELECT id FROM intents WHERE desire = ? AND status NOT IN ('rejected','deduped') LIMIT 1", [text]);
       const intentId = dup.length ? dup[0].id : iid;
       if (!dup.length) await env.AUDIT.prepare("INSERT INTO intents (id, desire, source, device, type, domain, priority, summary, due, status, wbs_code, created_at, processed_at) VALUES (?1,?2,'fleet-dashboard','owner-dashboard','task','general','high',?3,NULL,'pending',NULL,?4,NULL)").bind(iid, text, text.slice(0, 120), new Date().toISOString()).run();
@@ -6794,7 +7454,7 @@ var CMD_HELP = [
   "Sign in:  login (emails a 6-digit code)  then type the code.  logout",
   "Anything else is answered in plain English, with proposed actions you can tap."
 ].join("\n");
-var CMD_PAGES = { queue: "/", home: "/", owner: "/owner", docs: "/owner", watchmaker: "/api/watchmaker", decision: "/api/decision", state: "/api/state", human: "/api/human", reach: "/api/reach", health: "/health", actions: "/api/actions", loop: "/api/loop" };
+var CMD_PAGES = { kpi: "/kpi", metrics: "/kpi", queue: "/", home: "/", owner: "/owner", docs: "/owner", watchmaker: "/api/watchmaker", decision: "/api/decision", state: "/api/state", human: "/api/human", reach: "/api/reach", health: "/health", actions: "/api/actions", loop: "/api/loop" };
 function cmdFmtWorker(s, probe) {
   const lines = [s.name + " - " + (s.status || "?") + (s.purpose ? " - " + s.purpose : "")];
   lines.push("  runs 24h: " + (s.req24 != null ? s.req24 : "?") + " (expected " + (s.expected24 != null ? s.expected24 : "?") + "), errors 24h: " + (s.err24 || 0) + (s.err_active ? " (" + s.err_active + " recent)" : ""));
@@ -7356,6 +8016,12 @@ function cmdParseAi(content, c) {
   return { answer: obj.answer.trim().slice(0, 4e3), actions: acts };
 }
 // One model call with a real abort, so a slow model can never hold the job past its budget.
+// CMD-AI-TIMEOUT-1 (1.29.4, agent_issues 2316): qnfo-ai 5.35.1 takes timeout_ms in the chat body and answers 504
+// router_timeout instead of canned text. The router's deadline sits just under this call's own abort, so the router
+// gives up first and its 504 is a named failure that lets the race start the next model.
+function cmdRouterTimeout(timeoutMs) {
+  return Math.max(1e3, Math.round(timeoutMs) - 1500);
+}
 async function cmdModelCall(env, model, messages, timeoutMs) {
   const t0 = Date.now();
   const ac = new AbortController();
@@ -7363,12 +8029,13 @@ async function cmdModelCall(env, model, messages, timeoutMs) {
     ac.abort();
   }, timeoutMs);
   try {
-    const r = await env.SVC_QNFO_AI.fetch("https://ai.qnfo.org/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, messages, max_tokens: 700 }), signal: ac.signal });
+    const r = await env.SVC_QNFO_AI.fetch("https://ai.qnfo.org/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model, messages, max_tokens: 700, timeout_ms: cmdRouterTimeout(timeoutMs) }), signal: ac.signal });
     const j = await r.json().catch(function() {
       return null;
     });
     const content = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
     if (r.ok && content && String(content).trim()) return { ok: true, text: String(content), model };
+    if (r.status === 504) return { ok: false, error: model + ": router_timeout " + Math.round(cmdRouterTimeout(timeoutMs) / 1e3) + "s" };
     if (r.status === 401 || r.status === 403 || r.status >= 500) return await cmdDirectModel(env, model, messages, "http " + r.status, t0, timeoutMs);
     return { ok: false, error: model + ": http " + r.status };
   } catch (e) {

@@ -7,6 +7,8 @@
 # Prefer `// standards-ok: <reason>` on the line itself in a worker.js; use this file where a comment cannot go
 # (a wrangler.toml value, generated or vendored code). Rules: math-random-token, pass-through-on-exception, destructured-ctx,
 # secret-compare, floating-promise, observability-removed, traces-removed, observability-disabled, observability-incomplete,
-# new-worker-observability, queue-consumer-no-dlq.
+# new-worker-observability, queue-consumer-no-dlq; GUARD-3 (2026-10-12): interpolated-sql, swallowed-catch, ai-response-string-assumption,
+# send-email-unrestricted, legacy-do-storage, node-opt-out-with-imports. scripts/fleet_best_practices_audit.py reads this file too, so one
+# reviewed exception is one record for the gate and the whole-tree audit.
 #
 # No exceptions on 2026-10-12: main and every open pull request pass without one.
