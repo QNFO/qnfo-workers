@@ -71,6 +71,24 @@ r = await call("/api/cost", null, badAudit);
 ok(r.status === 503 && !/D1 down/.test(JSON.stringify(r.j)), "a failing ledger: 503 with no internal error text", r);
 ok((await call("/api/draft", { title: "Folding drawer hinge", description: DESC }, badAudit)).status === 200, "a failing ledger never breaks a draft");
 
+// DRAFT-ROW-AUTOMATED-1: an automated client's draft is stored as status automated and /api/metrics leaves it out.
+const seen = [];
+const capDb = { prepare(sql) { const q = stmt(); q.bind = (...a) => { seen.push({ sql, a }); return q; }; return q; } };
+const draftAs = async (ua) => {
+  seen.length = 0;
+  const hd = { "Content-Type": "application/json" }; if (ua) hd["User-Agent"] = ua;
+  const r2 = await W.fetch(new Request("https://ipatent.qnfo.org/api/draft", { method: "POST", headers: hd, body: JSON.stringify({ title: "Folding drawer hinge", description: DESC }) }), Object.assign({}, env, { IPATENT_DB: capDb }), ctx);
+  const ins = seen.find((x) => /INSERT INTO submissions/.test(x.sql));
+  return { status: r2.status, row: ins ? ins.a[ins.a.length - 1] : null, n: ins ? ins.a.length : 0 };
+};
+let dr = await draftAs("curl/8.5.0");
+ok(dr.status === 200 && dr.n === 17 && dr.row === "automated", "a draft from an automated client is stored as status automated", dr);
+dr = await draftAs(UA);
+ok(dr.status === 200 && dr.row === "draft", "a draft from a browser is stored as status draft", dr);
+seen.length = 0;
+await W.fetch(new Request("https://ipatent.qnfo.org/api/metrics"), Object.assign({}, env, { IPATENT_DB: capDb }), ctx);
+ok(seen.some((x) => /FROM submissions/.test(x.sql) && /<> 'automated'/.test(x.sql)), "/api/metrics leaves automated drafts out of drafts and drafters", seen.map((x) => x.sql.slice(0, 80)));
+
 // The admin route still accepts its token and refuses a wrong one (constant-time comparison, same accepted key).
 const adm = async (tok) => (await W.fetch(new Request("https://ipatent.qnfo.org/api/disclosures", { headers: tok === null ? {} : { "X-Admin-Token": tok } }), Object.assign({}, env, { IPATENT_ADMIN_TOKEN: "k-123" }), ctx)).status;
 ok(await adm("k-123") !== 404 && await adm("k-124") === 404 && await adm("k-12") === 404 && await adm("") === 404 && await adm(null) === 404, "the admin token is still accepted and a wrong, short, empty or missing one is refused");
