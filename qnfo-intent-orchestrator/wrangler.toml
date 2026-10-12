@@ -1,6 +1,13 @@
 name = "qnfo-intent-orchestrator"
 main = "worker.js"
-compatibility_date = "2026-08-01"
+# COMPAT-DATE-DECLARED-APPLY-1 canary (qnfo-ops 2.42.0). The canonical deploy applies the date below on this worker's next
+# deploy because of the review line, keeps it only when /health then answers with the deployed VERSION, and otherwise
+# uploads 2026-08-01 again. Reviewed against the compatibility flags page, defaults between 2026-08-01 and 2026-10-10:
+# 2026-08-04 nodejs_compat and nodejs_compat_v2 on by default (scripts/compat-risk-scan.mjs: no process.env, no Node global
+# checks, no node: imports, no timer id used as a number, so no opt-out flag is needed); 2026-09-08 Python only;
+# 2026-10-01 Durable Object eviction (this worker has no Durable Object). No WebSockets.
+# compat-advance: reviewed 2026-10-12
+compatibility_date = "2026-10-10"
 workers_dev = true
 
 # Secrets (preserved across deploys, set via wrangler secret put):
