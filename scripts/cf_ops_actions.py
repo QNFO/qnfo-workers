@@ -1816,7 +1816,9 @@ def noz_scrub_graph(acct: str, token: str, mode: str = "dry", run=None, run_lp=N
         elif not step("renames", "INSERT INTO nodes (id, label, name, properties, created_at, updated_at) SELECT ?1, label, ?2, ?3, created_at, datetime('now') FROM nodes WHERE id = ?4",
                       [r["new"], r["name"], r["properties"], r["old"]]):
             continue
-        for sql in ("UPDATE edges SET source_id = ?1 WHERE source_id = ?2", "UPDATE edges SET target_id = ?1 WHERE target_id = ?2"):
+        # OR REPLACE: when the new node already carries the same edge (source, target, type), the moved row would hit the UNIQUE
+        # index; the twin that already exists wins and the old edge goes (live run 137 on 2026-10-12 failed 7 moves this way).
+        for sql in ("UPDATE OR REPLACE edges SET source_id = ?1 WHERE source_id = ?2", "UPDATE OR REPLACE edges SET target_id = ?1 WHERE target_id = ?2"):
             okm, rm = run(sql, [r["new"], r["old"]])
             if not okm:
                 failed.append({"step": "move-edges", "params": [r["old"], r["new"]], "error": str(rm)[:200]})
@@ -1829,7 +1831,7 @@ def noz_scrub_graph(acct: str, token: str, mode: str = "dry", run=None, run_lp=N
         else:
             step("updates", "UPDATE nodes SET name = ?1, properties = ?2, updated_at = datetime('now') WHERE id = ?3 AND properties = ?4", [u["name"], u["properties"], u["id"], u["old_properties"]])
     for e in plan["edge_updates"]:
-        step("edge_updates", "UPDATE edges SET id = ?1, source_id = ?2, target_id = ?3, properties = ?4, updated_at = datetime('now') WHERE id = ?5",
+        step("edge_updates", "UPDATE OR REPLACE edges SET id = ?1, source_id = ?2, target_id = ?3, properties = ?4, updated_at = datetime('now') WHERE id = ?5",
              [e["new_id"], e["source_id"], e["target_id"], e["properties"], e["id"]])
     for p in plan["pub_updates"]:
         step("pub_updates", "UPDATE archive_publications SET doi = ?1, title = ?2 WHERE id = ?3", [p["doi"], p["title"], p["id"]])
