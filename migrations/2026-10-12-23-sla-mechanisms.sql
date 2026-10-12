@@ -26,7 +26,11 @@
 --         worker two hours first, counts 'pending' and 'pending: <reason>' as deferrals (REMEDIATION-PENDING-PREFIX-1),
 --         acts only while the newest verdict is itself a failure, and never touches a wontfix issue. Nothing is deleted.
 -- Also: an index on remediation_verifications (class, verified_at). The 1297 probe read 47 million rows in 6.5 s on
--- 2026-10-12 because every per-class lookup scanned the table (17,367 rows, index on issue_id only).
+-- 2026-10-12 because every per-class lookup scanned the table (17,367 rows, index on issue_id only). It has the name and
+-- columns of the index open PR 968 (HOT-VIEW-INDEXES-1) adds, so whichever file applies first creates it once.
+-- Open PR 949 (PROBE-CADENCE-FLOOR-1, another session) floors expected_cadence_h at 1 for active contracts at birth and on
+-- update. This file does not repeat that: its tick rule covers what 949 leaves, a contract holding on an open issue (the
+-- worker puts every pass on a 24 h hold cadence) and a next_due_at already stamped far ahead.
 -- New stuck types get their queue_sla rows; v_stuck_summary gains triage_gap and contracts_cadence_drift, and
 -- v_stuck_summary_kernel carries the three kernel queues (unscored predictions, waiting proposals, missed tick steps).
 -- ops_config queue_sla_autofix = off stops the three fixes, as for the other queue_sla fixes.
@@ -35,7 +39,7 @@
 -- BACKUP: bak_20261012_sla_views
 -- Rollback: DROP TRIGGER IF EXISTS sla_mechanisms_tick_10m; DROP TRIGGER IF EXISTS recurrence_guard_tick; DROP VIEW IF EXISTS v_stuck_summary_kernel; restore v_stuck_summary and v_blocker_claims from bak_20261012_sla_views.sql (DROP VIEW, then run the stored CREATE VIEW text); DELETE FROM queue_sla WHERE stuck_type IN ('issue-triage-gap', 'contract-cadence-drift', 'closure-relapse', 'prediction-unscored', 'doctrine-proposal-waiting', 'tick-step-missed'); DELETE FROM failure_modes WHERE fm_key IN ('contract-cadence-drift', 'closure-relapse-unreopened', 'triage-gap'); DELETE FROM remediation_contracts WHERE class IN ('fm-contract-cadence-drift', 'fm-closure-relapse-unreopened', 'fm-triage-gap') (recurrence_guard_actions is a ledger and stays; an issue the guard reopened is closed again only with close_evidence)
 
-CREATE INDEX IF NOT EXISTS idx_remediation_verifications_class_ts ON remediation_verifications (class, verified_at);
+CREATE INDEX IF NOT EXISTS idx_rv_class_verified ON remediation_verifications (class, verified_at);
 
 CREATE TABLE IF NOT EXISTS bak_20261012_sla_views AS
 SELECT name, sql, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS backed_up_at FROM sqlite_master WHERE type = 'view' AND name IN ('v_stuck_summary', 'v_blocker_claims');
