@@ -72,6 +72,14 @@ check("the :30 tick reaches generation when stalled (it reads the published and 
   check("the @cf/ model prefix is untouched", C.stripHandles("ran on @cf/meta/llama") === "ran on @cf/meta/llama");
   check("normalizeDraft strips handles before the gate", !/@openai/.test(C.normalizeDraft("# T\n\nper @openai.")));
 }
+// Q08-TITLE-CARRY-2 (0.14.9, run 352)
+{ const C = mod.__carry;
+  const orig = "# The defrost command nobody authenticated\n\nBody.\n\nworth your time: yes - names the mechanism";
+  const lab = C.carryTitle("# Marketing autonomous AI as a wieldable implement\n\nEdited.", orig);
+  check("an editor label title (run 352) is replaced by the writer's", lab.startsWith("# The defrost command nobody authenticated\n"), lab.slice(0, 80));
+  const tc = C.carryTitle("# The Hidden Cost Of Every Sealed Appliance\n\nEdited.", orig);
+  check("an editor Title Case title is replaced by the writer's", tc.startsWith("# The defrost command"), tc.slice(0, 80));
+}
 Date.now = realNow;
 console.log("stall-retry.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
