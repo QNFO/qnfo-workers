@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.43.0-props-restore"; /* 2.43.0 BINDING-PROPS-RESTORE-1 (2026-10-12, #2445, pillar autonomy): when SECRET-CHANGE-WATCH-1 records a new secret-triggered version of a worker whose wrangler.toml declares props on a [[services]] binding, the tick reads the worker's live settings and, when a declared props object is missing or differs, dispatches canonical-deploy.yml with workers=<name> (one dispatch per worker and secret version, ledger cloud_ops_events kind binding-props-restore), so the props a dashboard secret edit strips come back within one tick without a session (2026-10-12 09:33Z: qnfo-fleet-dashboard lost props.caller on SVC_QNFO_AI and every ask answered HTTP 401 until a redeploy at 11:37Z). 2.42.3 WORKERS-BP-DEBT-1 (#2431, pillar security): the container clone retry suffix takes rndHex8 instead of Math.random; the fleet audit reads 0 fail-class findings for this worker. 2.42.2: a comment count corrected (21 workers at 2026-08-01). 2.42.1: the COMPAT-RESTORE-FAILED-1 issue row carries epoch ms, and the /compat routes log error detail instead of returning it. 2.42.0 COMPAT-DATE-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy re-sent each worker's live compatibility date and never read wrangler.toml, so no date in the fleet could advance. /ops/deploy now applies a later declared date when the file carries the line "# compat-advance: reviewed YYYY-MM-DD", the date is not after the review or today, and the worker's /health can be read from qnfo-ops; it keeps the date only when /health then answers with the deployed VERSION and otherwise uploads the previous date again (deployment_history action compat-restore, which also stops a retry under the same review). A date never moves back, a refusal by Cloudflare falls back to the live date, and the cf_worker_deploy tool never advances one. COMPAT-EXPOSURE-1: GET /compat lists every live worker's live date, wrangler.toml date, nodejs_compat state and the default changes between (table worker_compat_state, metric workers_compat_date_behind); the cron refreshes it every 6 h, POST /compat/refresh on demand. */ /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
+var VERSION = "2.43.1-cf-api-retry"; /* 2.43.1 CF-API-RETRY-1 (2026-10-12, #2396, pillar autonomy): the deploy route's Cloudflare API calls (bindings read, settings read, the script PUT and its re-uploads) retry a transient answer (HTTP 429, 5xx, error code 10013, a network error) up to three times with backoff or Retry-After, the multipart body rebuilt per attempt; a definite refusal (10020, 10021, other 4xx) returns at once. 2.43.0 BINDING-PROPS-RESTORE-1 (2026-10-12, #2445, pillar autonomy): when SECRET-CHANGE-WATCH-1 records a new secret-triggered version of a worker whose wrangler.toml declares props on a [[services]] binding, the tick reads the worker's live settings and, when a declared props object is missing or differs, dispatches canonical-deploy.yml with workers=<name> (one dispatch per worker and secret version, ledger cloud_ops_events kind binding-props-restore), so the props a dashboard secret edit strips come back within one tick without a session (2026-10-12 09:33Z: qnfo-fleet-dashboard lost props.caller on SVC_QNFO_AI and every ask answered HTTP 401 until a redeploy at 11:37Z). 2.42.3 WORKERS-BP-DEBT-1 (#2431, pillar security): the container clone retry suffix takes rndHex8 instead of Math.random; the fleet audit reads 0 fail-class findings for this worker. 2.42.2: a comment count corrected (21 workers at 2026-08-01). 2.42.1: the COMPAT-RESTORE-FAILED-1 issue row carries epoch ms, and the /compat routes log error detail instead of returning it. 2.42.0 COMPAT-DATE-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy re-sent each worker's live compatibility date and never read wrangler.toml, so no date in the fleet could advance. /ops/deploy now applies a later declared date when the file carries the line "# compat-advance: reviewed YYYY-MM-DD", the date is not after the review or today, and the worker's /health can be read from qnfo-ops; it keeps the date only when /health then answers with the deployed VERSION and otherwise uploads the previous date again (deployment_history action compat-restore, which also stops a retry under the same review). A date never moves back, a refusal by Cloudflare falls back to the live date, and the cf_worker_deploy tool never advances one. COMPAT-EXPOSURE-1: GET /compat lists every live worker's live date, wrangler.toml date, nodejs_compat state and the default changes between (table worker_compat_state, metric workers_compat_date_behind); the cron refreshes it every 6 h, POST /compat/refresh on demand. */ /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
 // FOLD-WAVE-2 (2.38.45, 2026-10-06, #1756): qnfo-archive is retired (its 04:00 KG seed got HTTP 401 on every batch), so its
 // ARCHIVE probe binding leaves FLEET, BINDING_KEYS, wrangler.toml and the fleet_status text. BACKLOG now reaches the
 // qnfo-backlog-exec member inside qnfo-lifecycle (props.member); the code calling it is unchanged.
@@ -3330,6 +3330,63 @@ async function recordDeployLedger(env, row) {
   }
 }
 
+// CF-API-RETRY-1 (2.43.1, 2026-10-12, agent_issues 2396, pillar autonomy; from the 2026-10-12 hardening brief): the canonical
+// deploy runs through this route, not wrangler, so a transient Cloudflare API answer (HTTP 429, any 5xx, error code 10013,
+// a network error) used to fail the deploy outright and the canary then reverted a push that was fine. Every API call of the
+// deploy (bindings read, settings read, the script PUT and its re-uploads) now goes through cfFetchRetry: up to CF_RETRY_MAX
+// attempts, backoff 1 s, 2 s, 4 s or the Retry-After header (capped at 10 s), the multipart body rebuilt per attempt. A
+// definite refusal (10020, 10021, any other 4xx) is returned at once; the dangling-binding and compat-date re-uploads keep
+// their own logic on top. cfRetryClass is pure.
+var CF_RETRY_MAX = 3;
+var CF_RETRY_BASE_MS = 1000;
+var CF_RETRY_AFTER_CAP_MS = 10000;
+var CF_RETRY_TRANSIENT_CODES = [10013];
+var CF_RETRY_FATAL_CODES = [10020, 10021];
+function cfRetryClass(status, bodyText) {
+  const st = Number(status) || 0;
+  let codes = [];
+  try {
+    const j = JSON.parse(String(bodyText || ""));
+    codes = (j && Array.isArray(j.errors) ? j.errors : []).map(function(e) { return Number(e && e.code); }).filter(function(n) { return Number.isFinite(n); });
+  } catch (e) {
+    codes = [];
+  }
+  if (codes.some(function(c) { return CF_RETRY_FATAL_CODES.indexOf(c) >= 0; })) return "fatal";
+  if (st >= 200 && st < 300) return "ok";
+  if (st === 429 || st >= 500) return "transient";
+  if (codes.some(function(c) { return CF_RETRY_TRANSIENT_CODES.indexOf(c) >= 0; })) return "transient";
+  return "fatal";
+}
+__name(cfRetryClass, "cfRetryClass");
+async function cfFetchRetry(url, init, opts) {
+  const max = Math.max(1, Number(opts && opts.max) || CF_RETRY_MAX);
+  const sleep = (opts && opts.sleep) || function(ms) { return new Promise(function(r) { setTimeout(r, ms); }); };
+  const trace = (opts && opts.trace) || null;
+  let lastErr = null;
+  for (let i = 0; i < max; i++) {
+    const req = Object.assign({}, init || {});
+    if (opts && typeof opts.body === "function") req.body = opts.body();
+    let resp;
+    try {
+      resp = await fetch(url, req);
+    } catch (e) {
+      lastErr = e;
+      if (trace) trace.push({ attempt: i + 1, network_error: String(e && e.message || e).slice(0, 120) });
+      if (i + 1 >= max) throw e;
+      await sleep(CF_RETRY_BASE_MS * Math.pow(2, i));
+      continue;
+    }
+    if (resp.ok) return resp;
+    const text = await resp.clone().text().catch(function() { return ""; });
+    const cls = cfRetryClass(resp.status, text);
+    if (trace) trace.push({ attempt: i + 1, status: resp.status, cls });
+    if (cls !== "transient" || i + 1 >= max) return resp;
+    const ra = Number(resp.headers && resp.headers.get && resp.headers.get("retry-after"));
+    await sleep(ra > 0 ? Math.min(ra * 1000, CF_RETRY_AFTER_CAP_MS) : CF_RETRY_BASE_MS * Math.pow(2, i));
+  }
+  throw lastErr || new Error("cfFetchRetry: no attempt made");
+}
+__name(cfFetchRetry, "cfFetchRetry");
 async function cfWorkerDeploy(env, args) {
   if (!env.CF_API_TOKEN) return { ok: false, error: "CF_API_TOKEN not configured" };
   const worker = String(args && args.worker || "").trim();
@@ -3378,7 +3435,7 @@ async function cfWorkerDeploy(env, args) {
   let existingBindings = null;
   let bResp = null;
   try {
-    bResp = await fetch(
+    bResp = await cfFetchRetry(
       "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/bindings",
       { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } }
     );
@@ -3463,7 +3520,7 @@ async function cfWorkerDeploy(env, args) {
     let _liveObs = null;
     let _settingsRead = false;
     try {
-      const _sResp = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
+      const _sResp = await cfFetchRetry("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker) + "/settings", { headers: { "Authorization": "Bearer " + env.CF_API_TOKEN } });
       if (_sResp.ok) {
         const _sj = await _sResp.json().catch(() => null);
         const _sr = _sj && _sj.result;
@@ -3566,7 +3623,8 @@ async function cfWorkerDeploy(env, args) {
     const _putUrl = "https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(worker);
     const _putHeaders = { "Authorization": "Bearer " + env.CF_API_TOKEN, "Content-Type": "multipart/form-data; boundary=" + boundary };
     const _droppedBindings = [];
-    let resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body });
+    // CF-API-RETRY-1: the multipart body is rebuilt per attempt (a consumed body cannot be sent twice).
+    let resp = await cfFetchRetry(_putUrl, { method: "PUT", headers: _putHeaders }, { body: _buildBody });
     let j = await resp.json().catch(() => ({}));
     for (let _pr = 0; _pr < 3 && !resp.ok && !(args && args.keep_dangling_bindings); _pr++) {
       let _dead = null;
@@ -3586,7 +3644,7 @@ async function cfWorkerDeploy(env, args) {
       if (!_wasLive || _idx < 0) break;
       _droppedBindings.push({ name: _dead, service: bindingsOut[_idx].service || null });
       bindingsOut.splice(_idx, 1);
-      resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body: _buildBody() });
+      resp = await cfFetchRetry(_putUrl, { method: "PUT", headers: _putHeaders }, { body: _buildBody });
       j = await resp.json().catch(() => ({}));
     }
     if (!resp.ok && _compat.applied) {
@@ -3596,14 +3654,14 @@ async function cfWorkerDeploy(env, args) {
       _compat.from = null;
       _compat.to = null;
       _compatDate = _liveDate;
-      resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body: _buildBody() });
+      resp = await cfFetchRetry(_putUrl, { method: "PUT", headers: _putHeaders }, { body: _buildBody });
       j = await resp.json().catch(() => ({}));
     }
     if (!resp.ok && _obsOut) {
       // The settings overlay must never be what stops a deploy: upload once more exactly as before 2.41.0.
       _obsNote = "refused, deployed without it: " + JSON.stringify(j && j.errors || j).slice(0, 160);
       _obsOut = null;
-      resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body: _buildBody() });
+      resp = await cfFetchRetry(_putUrl, { method: "PUT", headers: _putHeaders }, { body: _buildBody });
       j = await resp.json().catch(() => ({}));
     }
     if (!resp.ok) {

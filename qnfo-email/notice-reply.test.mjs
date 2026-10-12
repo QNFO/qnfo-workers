@@ -60,12 +60,12 @@ f = fake({ ...q61, sent_at: "2026-10-09 09:00:00", decision: "sent" });
 await lib.noticeReply(f.env, mail("SPAM" + quoted), "rwnquni@outlook.com", { ok: true });
 eq("already-sent row is left alone", f.calls.sql.some(([q]) => /INSERT INTO email_filters|UPDATE emails/.test(q)), false);
 
-// 4. cold sender: queued as skip, no owner notice
+// 4. cold sender without solicitation wording: queued as escalate with one owner notice (NOTICE-REPLY-COLD-HUMAN-1, 2.7.0; was skip)
 const cold = (() => { const calls = { sql: [], send: [] }; const mk = (q) => { const s = { bind: (...a) => { calls.sql.push([q, a]); return s; }, first: async () => null, run: async () => ({ meta: { last_row_id: 9 } }) }; return s; }; return { calls, env: { AUDIT_DB: { prepare: mk }, SEND_EMAIL: { send: async (m) => { calls.send.push(m); } } } }; })();
 const id = await lib.enqueueHumanReply(cold.env, { emailId: 966, from: "kavithakavi6162@gmail.com", to: "qnfo@qnfo.org", subject: "Editorial update", bodyText: "x", bodyHtml: "", receivedAt: "2026-10-09T09:15:48Z" });
 eq("cold sender: queue row id", id, 9);
-eq("cold sender: inserted as skip", cold.calls.sql.some(([q]) => /INSERT INTO email_reply_queue/.test(q) && /'skip'/.test(q)), true);
-eq("cold sender: zero owner notices", cold.calls.send.length, 0);
+eq("cold sender: inserted as escalate", cold.calls.sql.some(([q]) => /INSERT INTO email_reply_queue/.test(q) && /'escalate'/.test(q) && /NOTICE-REPLY-COLD-HUMAN-1/.test(q)), true);
+eq("cold sender: one owner notice", cold.calls.send.length, 1);
 
 // 5. the hook and the binding
 if (!/row\.kind === "owner" && isHandoffNoticeReply\(c\.subject\)\) return await noticeReply\(/.test(src)) fail.push("processCommand does not route handoff replies to noticeReply");

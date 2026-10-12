@@ -19,6 +19,8 @@ ok(vm && (Number(vm[1]) > 2 || (Number(vm[1]) === 2 && Number(vm[2]) >= 42)), "V
 
 const a = src.indexOf("var COMPAT_FLIPS = ["), b = src.indexOf("\nvar OBS_KEYS = ", a);
 const c = src.indexOf("async function cfWorkerDeploy(env, args) {"), d = src.indexOf("\n__name(cfWorkerDeploy", c);
+// CF-API-RETRY-1 (2.43.1): the deploy's Cloudflare calls go through cfFetchRetry, defined just above cfWorkerDeploy.
+const r1 = src.indexOf("var CF_RETRY_MAX = "), r2 = src.indexOf("\nasync function cfWorkerDeploy(", r1);
 const o1 = src.indexOf("var OBS_KEYS = "), o2 = src.indexOf("\nasync function installDeclaredBindings(", o1);
 ok(a > 0 && b > a && c > 0 && d > c && o1 > 0 && o2 > o1, "the compat block and cfWorkerDeploy are found in worker.js");
 
@@ -32,6 +34,8 @@ function harness(h) {
     "async function cfWorkerRead() { return { ok: true, version: h.liveVersion || '1.0.0' }; }",
     "async function recordDeployLedger(env, row) { h.ledger.push(row); return { ok: true }; }",
     "async function installDeclaredBindings(env, worker) { return { installed: 0, note: null, bindings: [], compat_flags: parseDeclaredCompat(h.toml).flags, observability: null, compat: h.noCompat ? null : parseDeclaredCompat(h.toml) }; }",
+    "function __name() {}",
+    src.slice(r1, r2),
     src.slice(a, b),
     src.slice(o1, o2),
     src.slice(c, d),
