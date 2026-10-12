@@ -103,10 +103,14 @@ ok(new == "| a | the QNFO archive |\n|---|---|\n  indented line with the QNFO ar
 # 7. fenced code: words untouched, link and DOI rewrites applied
 code = "Text Zenodo here.\n```yaml\ndoi: 10.5281/zenodo.222\npublisher: Zenodo\nurl: https://doi.org/10.5281/zenodo.333\n```\nAfter Zenodo.\n~~~\nZenodo stays\n~~~\n"
 new, n, left = scrub(code)
-want = "Text the QNFO archive here.\n```yaml\ndoi: %s/beta-paper/\npublisher: Zenodo\nurl: %s/gamma-paper/\n```\nAfter the QNFO archive.\n~~~\nZenodo stays\n~~~\n" % (P, P)
-ok(new == want, "fenced code keeps the word, rewrites links and DOIs", new)
-ok(n == 4, "fenced-code sample counts four changes", n)
-ok(len(left) == 2 and all("Zenodo" in c for c in left), "the words left inside fenced code are reported as leftover contexts", left)
+want = "Text the QNFO archive here.\n```yaml\ndoi: %s/beta-paper/\npublisher: the QNFO archive\nurl: %s/gamma-paper/\n```\nAfter the QNFO archive.\n~~~\nthe QNFO archive stays\n~~~\n" % (P, P)
+ok(new == want, "fenced code takes the word rules too (every public mention is in scope), links and DOIs rewritten", new)
+ok(n == 6, "fenced-code sample counts six changes", n)
+ok(left == [], "nothing is left inside fenced code", left)
+# 7b. NOZ-LEFTOVERS-1: citation keys, the scaffolding file name, the registry column, "published on Zenodo."
+new, n, left = m.noz_scrub("fugacity [@zenodo22035210; @zenodo21336099]. Added .zenodo_versions.json and the registry zenodo_doi 21819232. The paper will be published on Zenodo. Sent to Zenodo in 2025.", DOI_MAP, "x")
+ok(new == "fugacity [@qnfo22035210; @qnfo21336099]. Added .archive_versions.json and the registry archive_doi 21819232. The paper will be published at papers.qnfo.org. Sent at papers.qnfo.org in 2025.", "citation keys, file name, column name and the published-on phrase are rewritten", new)
+ok(left == [], "no leftover from the dry-run-126 shapes", left)
 
 # 8. unrelated text is byte-identical; empty and None pass through
 plain = "Nothing to see.\n\n  * list\n| t | a  b |\nDOI 10.1234/other.1 stays.\n"
@@ -127,8 +131,8 @@ ok("```\n%s/beta-paper/\n```" % P in new, "the fenced block in the realistic bod
 
 # 10. noz_url and the leftover limit
 ok(m.noz_url("111", DOI_MAP) == P + "/alpha-paper/" and m.noz_url("nope", DOI_MAP) == P and m.noz_url(None, DOI_MAP) == P, "noz_url maps or falls back")
-new, n, left = scrub("```\n" + "Zenodo\n" * 9 + "```")
-ok(len(left) == 5, "leftover contexts are capped at five", len(left))
+new, n, left = scrub("zenodoish\n" * 9)
+ok(len(left) == 5, "leftover contexts are capped at five (a glued word no rule names stays a leftover)", len(left))
 
 
 # 11. the action against a fake d1q
