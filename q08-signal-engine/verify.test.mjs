@@ -183,5 +183,32 @@ globalThis.fetch = origFetch;
   check("the same length fails the gate for a forecast", V.editGateProblems(cut, [], true).some((p) => /too short/.test(p)));
   check("an editor draft under EDIT_FLOOR is refused", V.editGateProblems("# The queue nobody measured\n\n" + para, [], false).some((p) => /too short after editing/.test(p)));
 }
+// ---- Q08-FACT-INFERENCE-1: only FACT items fail; INFERENCE items are pruned when the draft can spare them (runs 333-335) ---------
+{
+  const sp = V.splitFactItems(["FACT: On Oct 7 2026 the repository merged pull request #387 -- date not in source", "INFERENCE: volunteer review capacity is limited -- not in source", "an unlabelled claim -- not in source", "**INFERENCE**: investors saw costs outpace income -- interpretation"]);
+  check("labels split: FACT and unlabelled are facts, INFERENCE is not", sp.facts.length === 2 && sp.inferences.length === 2 && /pull request/.test(sp.facts[0]) && /unlabelled/.test(sp.facts[1]) && /volunteer/.test(sp.inferences[0]) && /investors/.test(sp.inferences[1]), sp);
+  const onlyInf = V.parseFactVerdict('{"unsupported": ["INFERENCE: volunteer review capacity is limited -- not in source"], "verdict": "fail"}');
+  check("a fail that lists only INFERENCE items is a pass with the inference kept for pruning", onlyInf.verdict === "pass" && onlyInf.unsupported.length === 0 && onlyInf.inferences.length === 1, onlyInf);
+  const withFact = V.parseFactVerdict('{"unsupported": ["INFERENCE: x is limited -- reasoning", "FACT: the tool shipped in 2019 -- year not in source"], "verdict": "pass"}');
+  check("any FACT item makes it a fail, whatever the reviewer's verdict field says", withFact.verdict === "fail" && withFact.unsupported.length === 1 && /2019/.test(withFact.unsupported[0]), withFact);
+  const bare = V.parseFactVerdict('{"unsupported": [], "verdict": "fail"}');
+  check("a fail naming nothing stays a fail (fail-closed)", bare.verdict === "fail" && /without naming a claim/.test(bare.unsupported[0]), bare);
+  check("an unlabelled item from an older-format reply is still a fact", V.parseFactVerdict('{"unsupported": ["the claim -- not in source"], "verdict": "fail"}').verdict === "fail");
+
+  const para = (i) => "The maintainer in case " + ["one", "two", "three", "four", "five", "six", "seven"][i] + " read every patch by hand, because the project accepted contributions from anyone and checked each one before merging it. The queue of patches grew each week while the number of maintainers stayed the same.";
+  const inf = "So the volunteers who review the patches simply run out of hours before the queue runs out of patches.";
+  const essay = "# The queue that outgrew its reviewers\n\n" + [0, 1, 2, 3, 4, 5, 6].map((i) => para(i) + (i === 3 ? " " + inf : "")).join("\n\n") + "\n\nworth your time: yes - names the mechanism";
+  const ground = essay.replace(" " + inf, "");
+  let calls = 0;
+  const env = { AI: { run: async () => { calls++; return { response: JSON.stringify({ unsupported: ["INFERENCE: " + inf + " -- not stated in source"], verdict: "fail" }) }; } } };
+  const r = await V.verifyAndRevise(env, { piece: { text: essay, model: "@cf/nvidia/nemotron-3-120b-a12b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
+  check("reviewers flagging only reasoning no longer fail the run; the inference is deleted and no second review is needed", r.ok === true && !r.piece.text.includes("run out of hours") && r.pruned === 1 && calls === 2, { ok: r.ok, problems: r.problems, calls });
+  calls = 0;
+  const envFact = { AI: { run: async () => { calls++; return { response: JSON.stringify({ unsupported: ["FACT: " + inf + " -- not stated in source"], verdict: "fail" }) }; } } };
+  const rf = await V.verifyAndRevise(envFact, { piece: { text: essay, model: "@cf/nvidia/nemotron-3-120b-a12b" }, prompt: "P", banned: [], ground, seedText: "s", forecast: false });
+  check("the same sentence labelled FACT still goes through the prune-and-re-verify repair", calls >= 4 && rf.problems.some((p) => /^repair trail: r1 prune -1/.test(p)), { ok: rf.ok, calls, problems: rf.problems.slice(-1) });
+  const keep = V.pruneInferences({ text: "# T\n\nShort.\n\nworth your time: yes - x", model: "m" }, { inferences: ["Short. -- reasoning"] }, [], false);
+  check("an inference is kept when deleting it would take the draft under the floor", keep.removed === 0 && /Short/.test(keep.piece.text));
+}
 console.log("verify.test.mjs: " + passes + " passed, " + fails + " failed");
 process.exit(fails ? 1 : 0);
