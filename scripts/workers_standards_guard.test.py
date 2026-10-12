@@ -32,4 +32,14 @@ with tempfile.TemporaryDirectory() as t:
     sh(t, "git", "add", "-A"); r = guard(t); ok(r.returncode == 0, "a new worker with observability and traces passes: " + r.stdout)
     (p / "n/RETIRED").write_text("x"); (p / "n/worker.js").write_text("ctx.passThroughOnException();\n")
     r = guard(t); ok(r.returncode == 0, "retired workers are skipped: " + r.stdout)
+# MERGE-BASE-1: main advancing after the branch point must not blame the change for main's newer commits
+with tempfile.TemporaryDirectory() as t2:
+    q = pathlib.Path(t2); sh(t2, "git", "init", "-q", "-b", "main"); sh(t2, "git", "config", "user.email", "a@b.c"); sh(t2, "git", "config", "user.name", "t")
+    (q / "w").mkdir(); (q / "w/worker.js").write_text("export default {};\nconst k = req.h !== env.LOOP_TOKEN;\n"); (q / "w/wrangler.toml").write_text('[observability]\n[observability.traces]\n')
+    sh(t2, "git", "add", "-A"); sh(t2, "git", "commit", "-qm", "base"); sh(t2, "git", "checkout", "-q", "-b", "feature")
+    (q / "x").mkdir(); (q / "x/worker.js").write_text("export default {};\n"); (q / "x/wrangler.toml").write_text('[observability]\nhead_sampling_rate=1\n[observability.traces]\n')
+    sh(t2, "git", "add", "-A"); sh(t2, "git", "commit", "-qm", "feature"); sh(t2, "git", "checkout", "-q", "main")
+    (q / "w/worker.js").write_text("export default {};\n"); sh(t2, "git", "commit", "-qam", "main fixes the compare"); sh(t2, "git", "checkout", "-q", "feature")
+    r = subprocess.run([sys.executable, G, "main"], cwd=t2, capture_output=True, text=True)
+    ok(r.returncode == 0, "a base that moved on (it removed a pattern the branch still has) does not fail the branch: " + r.stdout)
 print("workers_standards_guard: %s" % ("FAILED %d" % fails if fails else "all passed")); sys.exit(1 if fails else 0)
