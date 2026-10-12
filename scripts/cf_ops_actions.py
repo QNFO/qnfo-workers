@@ -1281,7 +1281,7 @@ def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair,
             codes.append(c)
     st2, j2 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/secrets", token)
     after = {x.get("name") for x in (j2.get("result") or [])} if st2 == 200 else set()
-    ok = all(c == 200 for c in codes) and all(n in after for n in AP_SECRETS)
+    ok = all(c in (200, 201) for c in codes) and all(n in after for n in AP_SECRETS)  # a secret the worker did not hold yet is created with 201 (run 123, 2026-10-12)
     der_fp = hashlib.sha256(pub.encode()).hexdigest()
     emit({"action": "gen-activitypub-key", "worker": worker, "ok": ok, "rotated": False, "put_http": codes, "verified_present": sorted(after & set(AP_SECRETS)),
           "public_key_sha256": der_fp, "next_step": "deploy qnfo-gateway with the actor routes; /ap/actor serves AP_PUBLIC_KEY"})
