@@ -603,17 +603,26 @@ def zaraz_set_ga4(zone_name: str, mode: str, token: str) -> int:
 # proxied CNAME to qwav.pages.dev), then verifies both hosts answer 301 to qwav.org and restores the backed-up ruleset for a zone
 # whose verification fails. Idempotent: a zone already carrying the rule and proxied records is left alone. mode 'dry' prints the
 # plan. The session connector token is refused on ruleset writes (7500); the repository token writes zone rules and DNS.
+# SPARE-DOMAIN-CANON-2 (2026-10-12, HOST-CENSUS-BROKEN-1 #2130, the 2077 host map): every spare zone names its own canonical
+# target; q-wave.tech joins the qwav.org set, ipatent.me (an apex with no address record) points at the flagship's page and
+# empoweringchange.today (a PAUSED zone, which is why its TLS handshake failed) is unpaused first and points at qnfo.org.
 CANON_TARGET = "https://qwav.org"
-SPARE_ZONES = ("qwav.uk", "qwave.tech")
+SPARE_ZONES = {"qwav.uk": CANON_TARGET, "qwave.tech": CANON_TARGET, "q-wave.tech": CANON_TARGET,
+               "ipatent.me": "https://ipatent.qnfo.org", "empoweringchange.today": "https://qnfo.org"}
 REDIRECT_PHASE = "http_request_dynamic_redirect"
 PAGES_ORIGIN = "qwav.pages.dev"
 
 
+def canon_target(zone: str) -> str:
+    return SPARE_ZONES.get(zone, CANON_TARGET)
+
+
 def canon_rule(zone: str) -> dict:
+    target = canon_target(zone)
     return {"action": "redirect", "expression": '(http.host in {"%s" "www.%s"})' % (zone, zone), "enabled": True,
-            "description": "SPARE-DOMAIN-CANON-1 (agent_issues 2361): %s and www.%s are spare names of %s" % (zone, zone, CANON_TARGET),
+            "description": "SPARE-DOMAIN-CANON-1 (agent_issues 2361, 2130): %s and www.%s are spare names of %s" % (zone, zone, target),
             "action_parameters": {"from_value": {"status_code": 301, "preserve_query_string": True,
-                                                 "target_url": {"expression": 'concat("%s", http.request.uri.path)' % CANON_TARGET}}}}
+                                                 "target_url": {"expression": 'concat("%s", http.request.uri.path)' % target}}}}
 
 
 def canon_rule_present(rules: list, zone: str) -> bool:
@@ -626,8 +635,8 @@ def canon_rule_present(rules: list, zone: str) -> bool:
     return False
 
 
-def canon_verify(host: str, fetch=None) -> dict:
-    """GET https://<host>/ without following redirects; ok when the answer is a 301/308 whose Location starts with the canon target."""
+def canon_verify(host: str, fetch=None, target: str = CANON_TARGET) -> dict:
+    """GET https://<host>/ without following redirects; ok when the answer is a 301/308 whose Location starts with the zone's target."""
     if fetch is None:
         class _NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *a, **k):
@@ -644,7 +653,7 @@ def canon_verify(host: str, fetch=None) -> dict:
             except Exception as e:  # DNS, TLS, timeout: reported, not raised
                 return 0, "error:" + type(e).__name__
     st, loc = fetch("https://%s/" % host)
-    return {"host": host, "status": st, "location": loc, "ok": st in (301, 308) and str(loc).startswith(CANON_TARGET)}
+    return {"host": host, "status": st, "location": loc, "ok": st in (301, 308) and str(loc).startswith(target)}
 
 
 def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=time.sleep) -> int:
@@ -657,10 +666,23 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
     rc = 0
     for zone in zones:
         zid = known.get(zone)
+        target = canon_target(zone)
         if not zid:
             emit({"action": "spare-domain-canon", "ok": False, "zone": zone, "error": "zone not in the account"})
             rc = 1
             continue
+        # SPARE-DOMAIN-CANON-2: a paused zone serves nothing (no edge certificate, no rules), so it is unpaused before anything
+        # else; the refusal text, if any, is the evidence an owner token is still needed (2077 recorded 9109 from a session token).
+        st, j = call("GET", "/zones/%s" % zid, token)
+        paused = bool(((j.get("result") or {}).get("paused")) if st == 200 else False)
+        unpaused = None
+        if paused and mode != "dry":
+            st, j = call("PATCH", "/zones/%s" % zid, token, {"paused": False})
+            unpaused = {"http": st, "ok": st == 200 and j.get("success") is not False, "errors": j.get("errors")}
+            emit({"action": "spare-domain-canon", "stage": "unpause", "zone": zone, "result": unpaused})
+            if not unpaused["ok"]:
+                rc = 1
+                continue
         st, j = call("GET", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token)
         before = ((j.get("result") or {}).get("rules") or []) if st == 200 else []
         emit({"action": "spare-domain-canon", "stage": "backup", "zone": zone, "http": st, "ruleset_rules": before})
@@ -677,7 +699,7 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
                     dns_plan.append({"host": host, "op": "patch", "id": r.get("id"), "body": {"proxied": True}})
         rule_needed = not canon_rule_present(before, zone)
         if mode == "dry":
-            emit({"action": "spare-domain-canon", "ok": True, "dry": True, "zone": zone, "rule_needed": rule_needed, "dns": dns_plan, "rule": canon_rule(zone)})
+            emit({"action": "spare-domain-canon", "ok": True, "dry": True, "zone": zone, "target": target, "paused": paused, "rule_needed": rule_needed, "dns": dns_plan, "rule": canon_rule(zone)})
             continue
         if rule_needed:
             st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": [canon_rule(zone)]})
@@ -697,7 +719,7 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
         # (run 121, 2026-10-12: qwav.uk verified at once, qwave.tech still answered 200 after 45 s and was restored). Allow five
         # minutes before judging.
         for attempt in range(10):
-            checks = [canon_verify(zone, fetch), canon_verify("www." + zone, fetch)]
+            checks = [canon_verify(zone, fetch, target), canon_verify("www." + zone, fetch, target)]
             if all(c["ok"] for c in checks):
                 break
             if attempt < 9:
@@ -708,7 +730,7 @@ def spare_domain_canon(zone_name: str, mode: str, token: str, fetch=None, sleep=
             st, j = call("PUT", "/zones/%s/rulesets/phases/%s/entrypoint" % (zid, REDIRECT_PHASE), token, {"rules": before})
             restored = {"http": st, "rules": len(before)}
             rc = 1
-        emit({"action": "spare-domain-canon", "ok": ok, "zone": zone, "rule_written": rule_needed, "dns": dns_done, "verify": checks, "restored": restored})
+        emit({"action": "spare-domain-canon", "ok": ok, "zone": zone, "target": target, "unpaused": unpaused, "rule_written": rule_needed, "dns": dns_done, "verify": checks, "restored": restored})
     return rc
 
 
