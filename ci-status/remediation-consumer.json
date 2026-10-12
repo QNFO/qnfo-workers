@@ -1,219 +1,395 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@f4f3e0403420",
- "due": 22,
- "pass": 4,
- "fail": 18,
- "skipped": 0,
+ "verifier": "remediation-consumer@0e2adde69d8f",
+ "due": 172,
+ "pass": 60,
+ "fail": 111,
+ "skipped": 1,
  "contracts": [
   {
-   "class": "issue-2272",
-   "issue_id": 2272,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
+   "class": "issue-2187",
+   "issue_id": 2187,
+   "verdict": "probe-not-machine-executable",
+   "reason": "url-not-allowlisted"
   },
   {
-   "class": "issue-2338",
-   "issue_id": 2338,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2339",
-   "issue_id": 2339,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2340",
-   "issue_id": 2340,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2341",
-   "issue_id": 2341,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2342",
-   "issue_id": 2342,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2343",
-   "issue_id": 2343,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2344",
-   "issue_id": 2344,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2345",
-   "issue_id": 2345,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2346",
-   "issue_id": 2346,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2347",
-   "issue_id": 2347,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2348",
-   "issue_id": 2348,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2361",
-   "issue_id": 2361,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2373",
-   "issue_id": 2373,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2378",
-   "issue_id": 2378,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2379",
-   "issue_id": 2379,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2380",
-   "issue_id": 2380,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2316",
-   "issue_id": 2316,
+   "class": "issue-1996",
+   "issue_id": 1996,
    "verdict": "fail",
    "expected": "ok",
-   "observed": "pending: no cmd_log kind=ai row with status answered after 2026-10-11 20:30 (newest ai row fallback 2026-10-11 20:02:39)",
+   "observed": "present-marker:personal-api/worker.js",
    "written": true
   },
   {
-   "class": "issue-2367",
-   "issue_id": 2367,
+   "class": "issue-2271",
+   "issue_id": 2271,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "research-terminal-5aa098d9",
-   "issue_id": 2367,
-   "verdict": "pass",
-   "expected": "parked+queue-moving",
-   "observed": "parked+queue-moving",
+   "class": "issue-2275",
+   "issue_id": 2275,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-pdf/worker.js",
    "written": true
   },
   {
-   "class": "issue-2054",
-   "issue_id": 2054,
+   "class": "issue-2277",
+   "issue_id": 2277,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-research-exec/worker.js",
+   "written": true
+  },
+  {
+   "class": "rt-fleet-dashboard",
+   "issue_id": null,
    "verdict": "pass",
    "expected": "ok",
    "observed": "ok",
    "written": true
   },
   {
-   "class": "fm-report-card-missed-week",
+   "class": "issue-2281",
+   "issue_id": 2281,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:idea-hub/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2282",
+   "issue_id": 2282,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "missing-marker:qnfo-email-orchestrator/worker.js",
+   "written": true
+  },
+  {
+   "class": "rt-gateway",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "TWIN-VISION-TOOLLEAK-1",
+   "issue_id": 1805,
+   "verdict": "pass",
+   "expected": "fixed",
+   "observed": "fixed",
+   "written": true
+  },
+  {
+   "class": "rt-ai-router",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2302",
+   "issue_id": 2302,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "present-marker:qnfo-intent-orchestrator/worker.js",
+   "written": true
+  },
+  {
+   "class": "issue-2042",
+   "issue_id": 2042,
+   "verdict": "pass",
+   "expected": "live",
+   "observed": "live",
+   "written": true
+  },
+  {
+   "class": "rt-idea-hub",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-personal-api",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "rt-ipatent",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-1872",
+   "issue_id": 1872,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "rt-papers",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2105",
+   "issue_id": 2105,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: ungated published=60 newest verdict=2026-10-12T04:20:49.144Z published quarantine-candidates=0",
+   "written": true
+  },
+  {
+   "class": "issue-2278",
+   "issue_id": 2278,
+   "verdict": "fail",
+   "expected": "0",
+   "observed": "621",
+   "written": true
+  },
+  {
+   "class": "issue-2055",
+   "issue_id": 2055,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "agentic-collapse-repro-1",
+   "issue_id": 2061,
+   "verdict": "fail",
+   "expected": "2",
+   "observed": "pending: one version",
+   "written": true
+  },
+  {
+   "class": "issue-2072",
+   "issue_id": 2072,
+   "verdict": "fail",
+   "expected": "merged",
+   "observed": "failed",
+   "written": true
+  },
+  {
+   "class": "rt-q08",
+   "issue_id": null,
+   "verdict": "pass",
+   "expected": "ok",
+   "observed": "ok",
+   "written": true
+  },
+  {
+   "class": "issue-2118",
+   "issue_id": 2118,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2259",
+   "issue_id": 2259,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "stale: the filing loop charter-loop did not close it within 48h",
+   "written": true
+  },
+  {
+   "class": "fm-blocker-claims-untested",
    "issue_id": null,
    "verdict": "pass",
    "expected": "1",
    "observed": "1",
    "written": true
-  }
- ],
- "trusted_transports": [
-  "binding-http",
-  "cf-api",
-  "code-read",
-  "container",
-  "curl",
-  "d1-query",
-  "d1-query@ipatent-db",
-  "d1-query@living-paper",
-  "d1-query@personal-life",
-  "d1-query@portfolio-state",
-  "d1-query@q08-signal",
-  "d1-query@qnfo-cms",
-  "d1-query@qnfo-graph",
-  "dns",
-  "edge-ext",
-  "external",
-  "external-curl",
-  "external-http",
-  "external-https",
-  "http",
-  "runner-https"
- ],
- "budget_exhausted": false,
- "runtime_verified_share_24h": 5.1,
- "host_census": {
-  "skipped": "ran within 6h"
- },
- "spent_ms": 27160,
- "head": "f4f3e0403420ae038a837897f4f98df23a1a9b93",
- "job_status": "success",
- "ts": "2026-10-12T09:08:46Z"
-}
+  },
+  {
+   "class": "issue-1873",
+   "issue_id": 1873,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1952",
+   "issue_id": 1952,
+   "verdict": "fail",
+   "expected": "learning",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2176",
+   "issue_id": 2176,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2179",
+   "issue_id": 2179,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2068",
+   "issue_id": 2068,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: 1 job rows since the issue was filed (needs 3)",
+   "written": true
+  },
+  {
+   "class": "issue-1953",
+   "issue_id": 1953,
+   "verdict": "fail",
+   "expected": "answered",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1857",
+   "issue_id": 1857,
+   "verdict": "fail",
+   "expected": "done",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-1978",
+   "issue_id": 1978,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-1899",
+   "issue_id": 1899,
+   "verdict": "fail",
+   "expected": "verified",
+   "observed": "pending",
+   "written": true
+  },
+  {
+   "class": "issue-2004",
+   "issue_id": 2004,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: code_task_success_rate_30d 0.25 (needs >= 0.6 on 14 days)",
+   "written": true
+  },
+  {
+   "class": "issue-2011",
+   "issue_id": 2011,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: fleet_ai_run_rate_30d_usd 79.24, workers_ai_cost_30d_usd 69.63 (needs <= 40 on 14 days and <= 25)",
+   "written": true
+  },
+  {
+   "class": "issue-2010",
+   "issue_id": 2010,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: worker_count 28 (needs <= 24)",
+   "written": true
+  },
+  {
+   "class": "issue-2180",
+   "issue_id": 2180,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2007",
+   "issue_id": 2007,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: no anchor repair yet and the 14-day window after the 0.3.19 deploy is still open",
+   "written": true
+  },
+  {
+   "class": "issue-2012",
+   "issue_id": 2012,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: breach_code_task_pct 5.4, needs-machine-probe contracts 9",
+   "written": true
+  },
+  {
+   "class": "issue-2182",
+   "issue_id": 2182,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2184",
+   "issue_id": 2184,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2015",
+   "issue_id": 2015,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: subscribers_growth_monthly 0, credibility_events_90d n/a: OpenAlex readings cover N of the N selected works in N days (needs N) and no event is attested",
+   "written": true
+  },
+  {
+   "class": "issue-2019",
+   "issue_id": 2019,
+   "verdict": "fail",
+   "expected": "ok",
+   "observed": "pending: lever T3.8 status session",
+   "written": true
+  },
+  {
+   "class": "issue-2237",
+   "issue_id": 2237,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "issue-2239",
+   "issue_id": 2239,
+   "verdict": "fail",
+   "expected": "1",
+   "observed": "0",
+   "written": true
+  },
+  {
+   "class": "fm-detector-parked",
+   "issue_id": null,
+  
