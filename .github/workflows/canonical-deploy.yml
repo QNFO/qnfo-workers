@@ -198,8 +198,11 @@ jobs:
             CR=""
             if [ "${create:-}" = "create" ]; then CR="--allow-create"; fi
             echo "=== canonical deploy $name from $path $DRY $CR"
-            python3 scripts/canonical_deploy.py --worker "$name" --path "$path" --fallback-file /tmp/fallback.txt $DRY $CR
-            rc=$?
+            # DEPLOY-LOOP-CONTINUES-1 (2026-10-12, run 38255625967): the step shell is bash -e, so a non-zero exit here ended the step at the
+            # FIRST target (idea-hub: /ops/deploy read timed out after 180 s, exit 3) and the other four targets and the second deploy
+            # path never ran. The exit code is captured without tripping -e, so every target is attempted and the fallback file is drained.
+            rc=0
+            python3 scripts/canonical_deploy.py --worker "$name" --path "$path" --fallback-file /tmp/fallback.txt $DRY $CR || rc=$?
             if [ $rc -eq 0 ]; then
               echo "OK $name"
             elif [ $rc -eq 3 ]; then

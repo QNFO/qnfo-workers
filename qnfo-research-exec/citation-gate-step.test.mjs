@@ -23,7 +23,23 @@ r = await citationGateStep(mk("off"), row, dead);
 assert.equal(r.proceed, true, "off skips");
 globalThis.fetch = async () => { throw new Error("network down"); };
 r = await citationGateStep(mk(null), row, dead);
-assert.equal(r.proceed, true); assert.equal(r.unverified, true, "lookup failure fails open and is flagged, never holds");
+assert.equal(r.proceed, false, "an unconfirmed citation does not publish (CITATION-UNVERIFIED-HOLD-1)");
+assert.equal(r.retry, true); assert.equal(r.unverified, true);
+r = await citationGateStep(mk("measure"), row, dead);
+assert.equal(r.proceed, true, "measure mode never blocks");
+// The arXiv API refusing while DataCite knows the id: the citation is confirmed by the second lookup.
+globalThis.fetch = async (url) => String(url).startsWith("https://api.datacite.org/dois/")
+  ? res(200, JSON.stringify({ data: { attributes: { titles: [{ title: "Generalised Probabilistic Theories" }] } } }))
+  : res(429, "Rate exceeded.");
+r = await citationGateStep(mk(null), row, dead);
+assert.equal(r.proceed, true, "DataCite confirms the id when the arXiv API refuses");
+// DataCite answering with a different title for a labelled reference: a mismatch holds.
+r = await citationGateStep(mk(null), row, "- [Recursive distinctioning and the crossing law](https://arxiv.org/abs/2606.31097)");
+assert.equal(r.proceed, false); assert.equal(!!r.retry, false); assert.match(r.note, /title-mismatch/);
+// Both lookups failing: unconfirmed, retry.
+globalThis.fetch = async (url) => String(url).startsWith("https://api.datacite.org/") ? res(404, "{}") : res(503, "down");
+r = await citationGateStep(mk(null), row, dead);
+assert.equal(r.proceed, false); assert.equal(r.retry, true); assert.match(r.note, /unverified: 2606\.31097/);
 globalThis.fetch = async () => res(200, "<feed></feed>");
 r = await citationGateStep(mk(null), row, "No references here.");
 assert.equal(r.proceed, true);

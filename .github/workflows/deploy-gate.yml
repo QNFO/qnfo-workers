@@ -30,9 +30,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      # GATE-NODE-22-1 (2026-10-12): the whole job runs on Node 22. Several offline suites import node:sqlite (Node 22+); the
+      # job used to start on Node 20 and switch to 22 only in a later conditional step, so a PR that skipped that step failed
+      # IDEA-CHAIN-SINGLE-PRODUCER-1 with "No such built-in module: node:sqlite" (PR 989, 2026-10-12 13:12Z) while others passed.
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Determine changed worker dirs
         id: changed
@@ -769,6 +772,9 @@ jobs:
       - name: DELETE-AFTER-UNBIND-1 offline suite (cf_ops_actions delete-worker)
         if: ${{ !cancelled() }}
         run: python3 scripts/cf_ops_delete_worker_test.py
+      - name: SPARE-DOMAIN-CANON-1 offline suite (cf_ops_actions spare-domain-canon, #2361)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/cf_ops_spare_domain_test.py
       # MIGRATION-RUNNER-1 (T5.3): a migration that opts in with "-- APPLY-BY: ci" is applied by apply-migrations.yml when
       # it merges; here every added or changed migration must pass the same header checks (DB, Rollback, BACKUP for a
       # DELETE or DROP, complete statements) without touching D1.

@@ -232,5 +232,18 @@ _, _, info_a = M.plan("migrations/a.sql", mk_hdr + "CREATE TABLE IF NOT EXISTS b
 _, _, info_b = M.plan("migrations/b.sql", mk_hdr + "UPDATE t SET a = 1;\n")
 ok(info_a["creates_backup"] is True and info_b["creates_backup"] is False, "backup created by the file is recognised without a destructive statement", (info_a, info_b))
 
+# CHECK-ENUM-LINT-1 (2026-10-12, migration_runs 119/120): a literal a register's CHECK constraint refuses fails --check offline.
+en_hdr = "-- APPLY-BY: ci\n-- DB: qnfo-audit\n-- Rollback: DELETE FROM control_registry WHERE control = 'x';\n"
+bad_sql = en_hdr + ("INSERT OR REPLACE INTO control_registry (control, location, kind, guards_against, critical_path, disposition, disposition_state, evidence) VALUES\n"
+                    " ('x', 'here', 'guard', 'a, b', 0, 'keep', 'applied', 'e'),\n ('y', 'there (loop)', 'audit', 'c', 0, 'keep', 'applied', 'e');\n")
+_, probs_bad, _ = M.plan("migrations/bad.sql", bad_sql)
+ok(any("control_registry.kind 'audit'" in p for p in probs_bad) and len([p for p in probs_bad if "CHECK-ENUM-LINT-1" in p]) == 1, "an INSERT with kind 'audit' is refused by --check and the good row passes", probs_bad)
+good_sql = en_hdr + "INSERT OR REPLACE INTO control_registry (control, location, kind, disposition, disposition_state, evidence) VALUES ('x', 'h, (k)', 'gate', 'remove', 'planned', 'it''s fine');\n"
+_, probs_good, _ = M.plan("migrations/good.sql", good_sql)
+ok(not [p for p in probs_good if "CHECK-ENUM-LINT-1" in p], "allowed literals (with commas, parentheses and quotes in other columns) pass", probs_good)
+_, probs_sel, _ = M.plan("migrations/sel.sql", en_hdr + "INSERT INTO control_registry (control, kind, disposition, disposition_state, evidence) SELECT 'z', 'bogus', 'keep', 'applied', 'e' WHERE 1;\n")
+ok(not [p for p in probs_sel if "CHECK-ENUM-LINT-1" in p], "an INSERT ... SELECT is not parsed as VALUES (no false claim)", probs_sel)
+ok(M.enum_violations("INSERT INTO other_table (kind) VALUES ('audit')") == [], "tables without a known constraint are not judged")
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

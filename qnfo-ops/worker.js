@@ -29,7 +29,7 @@ __name2222(fnv32, "fnv32");
 __name22222(fnv32, "fnv32");
 var __defProp222222 = Object.defineProperty;
 var __name222222 = /* @__PURE__ */ __name22222((target, value) => __defProp222222(target, "name", { value, configurable: true }), "__name");
-var VERSION = "2.41.0-observability-apply"; /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
+var VERSION = "2.42.3-debt"; /* 2.42.3 WORKERS-BP-DEBT-1 (#2431, pillar security): the container clone retry suffix takes rndHex8 instead of Math.random; the fleet audit reads 0 fail-class findings for this worker. 2.42.2: a comment count corrected (21 workers at 2026-08-01). 2.42.1: the COMPAT-RESTORE-FAILED-1 issue row carries epoch ms, and the /compat routes log error detail instead of returning it. 2.42.0 COMPAT-DATE-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy re-sent each worker's live compatibility date and never read wrangler.toml, so no date in the fleet could advance. /ops/deploy now applies a later declared date when the file carries the line "# compat-advance: reviewed YYYY-MM-DD", the date is not after the review or today, and the worker's /health can be read from qnfo-ops; it keeps the date only when /health then answers with the deployed VERSION and otherwise uploads the previous date again (deployment_history action compat-restore, which also stops a retry under the same review). A date never moves back, a refusal by Cloudflare falls back to the live date, and the cf_worker_deploy tool never advances one. COMPAT-EXPOSURE-1: GET /compat lists every live worker's live date, wrangler.toml date, nodejs_compat state and the default changes between (table worker_compat_state, metric workers_compat_date_behind); the cron refreshes it every 6 h, POST /compat/refresh on demand. */ /* 2.41.0 OBSERVABILITY-DECLARED-APPLY-1 (2026-10-12, pillar core): the canonical deploy sent compatibility date, flags, bindings and containers in the upload metadata but never the observability settings, so a worker's [observability], [observability.logs] and [observability.traces] blocks in wrangler.toml never reached Cloudflare (same inert-config class as the crons of #1337 and the flags of COMPAT-FLAGS-DECLARED-APPLY-1). The deploy now overlays the declared keys on the live settings and sends the result; a worker that declares nothing is uploaded as before, and a Cloudflare refusal of the block is retried once without it and reported (observability_apply). RAND-ID-CRYPTO-1: randId and the /v1/responses ids draw from crypto.getRandomValues instead of Math.random. */ /* 2.40.2 NOZ-DOI-1 (2026-10-10): the schema map drops a retired registry column. 2.40.1 NO-MEMORY-FACTS-1 (owner directive 2026-10-10): the public read-only prompt answers only from tool results and the question text. */ /* 2.40.0 OPS-INTERNAL-CALLER-1 (2026-10-09, pillar autonomy): a request that arrives through a service binding declaring props = { caller = "qnfo-email" } is authenticated as the router key, so qnfo-email owner commands stop answering HTTP 401 "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" (its OPS_KEY copy no longer matched after the 2026-10-01 rotation). Public requests never carry props. 2.39.2 OPS-CONTEXT-COMPACT-1 (agent_issues 2068, pillar cost): truncateToContext compacts every tool result older than the newest OPS_TOOL_KEEP_ROUNDS (2) tool-bearing rounds to its first OPS_TOOL_COMPACT_CHARS (1200) chars plus a marker that says how much was cut and to re-run the tool for the full output; user, assistant and system messages are never compacted. Every round of an agent loop used to resend all earlier tool output (MAX_TOOL_RESULT_CHARS 16384 each) until the 262k window filled, so cost grew with the square of the round count: BUDGET-AUTO-PROMOTE-1 jobs on 2026-10-03/06 used 2.46M-2.68M prompt tokens for 27-33 tool calls, two ending ok=0. Pure function compactToolRounds, replayed by context-compact.test.mjs. 2.39.1 2.39.1 OPS-COST-SOFT-1 (BUDGET-SOFT-ROUTE-1): the ops daily cost cap (OPS_DAILY_CAP_USD) no longer answers HTTP 429 on chat or /v1/jobs; the request or job runs on the free tier (budgetFallback, no paid exec upstream). The request-count cap and the per-job runaway cap stay. 2.39.0 RULE-8-RETIRED-1 (2026-10-06, pillar autonomy, owner directive: "Rule 8 is now deleted entirely"): system prompt item 15(d) HARD LIMITS becomes DECIDE AND RECORD - spend caps, guard metrics, probes and deletions are the agent's own decisions, recorded with the reason and a live measurement under rule 7; opt-out, outreach consent and cadence caps and the personal/research separation still hold. 2.38.47 (2026-10-06, pillar core): REGISTRY-SYNC-FOLDED-1 (agent_issues 2031): a FLEET entry for a folded member (qnfo-backlog-exec, a member of qnfo-lifecycle since BACKLOG-FOLD-1) carries kind member and its host route, so registryRefresh writes service_registry with the URL that serves it and kind member instead of the deleted worker's dead workers.dev URL as a live worker (07:30:59Z wrote https://qnfo-backlog-exec.q08.workers.dev and fleet_status reported it "Worker not found"); OPS-D1-LIMIT-WORD-1 (agent_issues 2033): ops_d1_query finds an existing LIMIT clause as a trailing word, not as the first "limit" substring, so a query that names a column such as limited and ends in LIMIT 10 is no longer given a second LIMIT 100 (D1_ERROR near "LIMIT": syntax error, 07:53:42Z). */
 // FOLD-WAVE-2 (2.38.45, 2026-10-06, #1756): qnfo-archive is retired (its 04:00 KG seed got HTTP 401 on every batch), so its
 // ARCHIVE probe binding leaves FLEET, BINDING_KEYS, wrangler.toml and the fleet_status text. BACKLOG now reaches the
 // qnfo-backlog-exec member inside qnfo-lifecycle (props.member); the code calling it is unchanged.
@@ -191,7 +191,7 @@ __name(isOAIUpstream, "isOAIUpstream");
 __name2(isOAIUpstream, "isOAIUpstream");
 __name22(isOAIUpstream, "isOAIUpstream");
 var WORKER = "qnfo-ops";
-var ROUTES = ["/health", "/obs-summary", "/", "/fleet", "/cost", "/cost-router/stats", "/manifest", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
+var ROUTES = ["/health", "/obs-summary", "/", "/fleet", "/cost", "/cost-router/stats", "/manifest", "/compat", "/compat/refresh", "/analytics", "/telemetry", "/telemetry/analyze", "/registry", "/registry/:service", "/registry/refresh", "/registry/register", "/capability-audit", "/capability-audit/report", "/v1/models", "/v1/models/:id", "/v1/chat/completions", "/chat/completions", "/v1/responses", "/v1/jobs", "/v1/jobs/:id", "/agents/ops-exec", "/ops/deploy"];
 var DEEPSEEK_URL = "https://gateway.ai.cloudflare.com/v1/edb167b78c9fb901ea5bca3ce58ccc4b/default/compat/chat/completions";
 // COST-ROUTING-STACK-1 L3 PRICE LADDER (2026-09-26): cheapest-capable-first within the agent-loop
 // canary PASS set. Live canaries 2026-09-26T13:2xZ: deepseek-v4-flash, deepseek-v4-pro, gpt-5.5,
@@ -2871,6 +2871,271 @@ __name22222(cfWorkerRead, "cfWorkerRead");
 // Workers script-upload metadata documents; null when the file declares none. mergeObservability overlays the declared
 // keys on the live settings, so a key the file does not name keeps its live value (a file that says only enabled = true
 // never switches off traces someone enabled), and fills the two fields the API requires on logs.
+/* COMPAT-DATE-DECLARED-APPLY-1 (2.42.0, 2026-10-12, pillar core). cfWorkerDeploy re-sent each worker's LIVE compatibility
+   date on every upload and never read the date in wrangler.toml, so no date in the fleet could advance (measured 2026-10-12:
+   21 of 28 live workers at 2026-08-01). The date in a wrangler.toml is applied only when all of this holds: the file carries
+   the line `# compat-advance: reviewed YYYY-MM-DD`, its date is later than the live date, not later than the review date and
+   not in the future, the caller asked for it (only /ops/deploy does, after it has seen the worker's /health answer), and no
+   earlier advance to the same date under the same review was restored. A date never moves back through this path.
+   COMPAT_FLIPS lists the default changes a JavaScript worker can meet when its date advances, from the compatibility flags
+   page (developers.cloudflare.com/workers/configuration/compatibility-flags, read 2026-10-12): `needs` names what a worker
+   must use for the change to reach it. Python-only and container-only defaults are left out. */
+var COMPAT_FLIPS = [
+  { date: "2026-03-03", flag: "unhandled_rejection_after_microtask_checkpoint", off: "no_unhandled_rejection_after_microtask_checkpoint", needs: "any", note: "unhandledrejection is processed after the microtask checkpoint" },
+  { date: "2026-03-03", flag: "websocket_close_reason_byte_limit", off: "no_websocket_close_reason_byte_limit", needs: "websocket", note: "close() throws when the reason exceeds 123 UTF-8 bytes" },
+  { date: "2026-03-12", flag: "queue_expose_error_codes", off: "no_queue_expose_error_codes", needs: "queue", note: "queue operations carry error codes and causes" },
+  { date: "2026-03-17", flag: "websocket_standard_binary_type", off: "no_websocket_standard_binary_type", needs: "websocket", note: "binary frames arrive as Blob by default" },
+  { date: "2026-03-24", flag: "writable_stream_spec_compliant_writer", off: "no_writable_stream_spec_compliant_writer", needs: "streams", note: "WritableStream writer lock and release follow the Streams Standard" },
+  { date: "2026-03-24", flag: "encoder_stream_spec_compliant_backpressure", off: "no_encoder_stream_spec_compliant_backpressure", needs: "streams", note: "TextEncoderStream and TextDecoderStream use a readable high water mark of 0" },
+  { date: "2026-04-07", flag: "web_socket_auto_reply_to_close", off: "web_socket_manual_reply_to_close", needs: "websocket", note: "the runtime replies to a server Close frame itself" },
+  { date: "2026-04-21", flag: "enhanced_error_serialization", off: "legacy_error_serialization", needs: "rpc", note: "errors crossing structuredClone or RPC keep more types and own properties and lose the original stack" },
+  { date: "2026-05-14", flag: "workflows_preserve_non_retryable_error_message", off: "workflows_replace_non_retryable_error_message", needs: "workflow", note: "a NonRetryableError keeps its message and name" },
+  { date: "2026-06-16", flag: "throw_on_not_implemented_tls_options", off: "no_throw_on_not_implemented_tls_options", needs: "nodejs_compat", note: "unsupported TLS options throw" },
+  { date: "2026-08-04", flag: "nodejs_compat", off: "no_nodejs_compat", needs: "any", note: "nodejs_compat and nodejs_compat_v2 on by default: text and JSON bindings (secrets too) appear on the Node process environment object, timers return Timeout objects, the globals process and Buffer exist; opt out with no_nodejs_compat and no_nodejs_compat_v2" },
+  { date: "2026-10-01", flag: "durable_object_io_tasks_prevent_eviction", off: "durable_object_io_tasks_do_not_prevent_eviction", needs: "durable_object", note: "pending I/O keeps a Durable Object in memory until it completes or 15 minutes pass" }
+];
+function compatDateValid(d) {
+  return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(Date.parse(d + "T00:00:00Z"));
+}
+// Top-level keys only: a compatibility_date under [env.x] or any other table is not the worker's.
+function parseDeclaredCompat(toml) {
+  const t = String(toml || "");
+  const head = t.split(/^[ \t]*\[/m)[0];
+  const d = /^[ \t]*compatibility_date[ \t]*=[ \t]*"(\d{4}-\d{2}-\d{2})"/m.exec(head);
+  const f = /^[ \t]*compatibility_flags[ \t]*=[ \t]*\[([^\]]*)\]/m.exec(head);
+  const r = /^#[ \t]*compat-advance:[ \t]*reviewed[ \t]+(\d{4}-\d{2}-\d{2})(?![\d-])/m.exec(t);
+  return {
+    date: d && compatDateValid(d[1]) ? d[1] : null,
+    flags: f ? (f[1].match(/"([^"]+)"/g) || []).map(function(q) { return q.slice(1, -1); }) : [],
+    reviewed: r && compatDateValid(r[1]) ? r[1] : null
+  };
+}
+// Pure decision. ISO dates compare as strings. `today` is the UTC date of the deploy.
+function decideCompatAdvance(liveDate, decl, today) {
+  const out = { apply: false, from: compatDateValid(liveDate) ? liveDate : null, to: null, reviewed: decl && decl.reviewed || null, reason: "" };
+  if (!decl || !decl.date) { out.reason = "wrangler.toml declares no compatibility_date"; return out; }
+  if (!out.from) { out.reason = "live date not read"; return out; }
+  if (decl.date === out.from) { out.reason = "declared date equals live"; return out; }
+  if (decl.date < out.from) { out.reason = "declared date " + decl.date + " is earlier than live " + out.from + ": a date is never moved back"; return out; }
+  if (!decl.reviewed) { out.reason = "declared date " + decl.date + " is later than live, but the file has no compat-advance review line"; return out; }
+  if (decl.date > decl.reviewed) { out.reason = "declared date " + decl.date + " is after its review date " + decl.reviewed; return out; }
+  if (!compatDateValid(today) || decl.date > today) { out.reason = "declared date " + decl.date + " is in the future"; return out; }
+  out.apply = true;
+  out.to = decl.date;
+  out.reason = "reviewed " + decl.reviewed;
+  return out;
+}
+// The default changes a worker at `fromDate` has not taken, up to `toDate` (inclusive).
+function compatFlipsBetween(fromDate, toDate) {
+  if (!compatDateValid(fromDate) || !compatDateValid(toDate)) return [];
+  return COMPAT_FLIPS.filter(function(x) { return x.date > fromDate && x.date <= toDate; });
+}
+// One row of the exposure table. `live` is the GET /settings result (or null), `decl` the parsed wrangler.toml (or null).
+function compatExposureRow(worker, live, decl, today) {
+  const liveDate = live && compatDateValid(String(live.compatibility_date || "")) ? String(live.compatibility_date) : null;
+  const liveFlags = live && Array.isArray(live.compatibility_flags) ? live.compatibility_flags : [];
+  const tomlFlags = decl && Array.isArray(decl.flags) ? decl.flags : [];
+  const has = function(fl, n) { return fl.indexOf(n) !== -1; };
+  const flips = liveDate ? compatFlipsBetween(liveDate, today) : [];
+  const dec = decideCompatAdvance(liveDate, decl, today);
+  return {
+    worker,
+    live_date: liveDate,
+    toml_date: decl && decl.date || null,
+    toml_reviewed: decl && decl.reviewed || null,
+    live_flags: liveFlags,
+    toml_flags: tomlFlags,
+    nodejs_compat_live: has(liveFlags, "nodejs_compat") || has(liveFlags, "nodejs_compat_v2"),
+    nodejs_compat_toml: has(tomlFlags, "nodejs_compat") || has(tomlFlags, "nodejs_compat_v2"),
+    nodejs_compat_default_on: !!(liveDate && liveDate >= "2026-08-04" && !has(liveFlags, "no_nodejs_compat")),
+    flips_between: flips.map(function(x) { return x.date + " " + x.flag; }),
+    flips_count: flips.length,
+    days_behind: liveDate ? Math.max(0, Math.round((Date.parse(today + "T00:00:00Z") - Date.parse(liveDate + "T00:00:00Z")) / 864e5)) : null,
+    advance: dec.apply ? "next deploy advances to " + dec.to : dec.reason
+  };
+}
+// What qnfo-ops can learn about a worker's /health. A Worker cannot fetch another Worker's workers.dev host on its own
+// account (Cloudflare error 1042), so the answer comes through a service binding, or a custom domain from the registry.
+// state: "answered" (the worker replied; version may be empty), "unknown" (no path, or the path did not reach it).
+var COMPAT_HEALTH_BINDINGS = { "qnfo-intent-orchestrator": "QNFO_INTENT", "qnfo-deploy-guard": "DEPLOY_GUARD", "qnfo-containers-pilot": "CONTAINERS_PILOT" };
+async function compatHealthProbe(env, worker) {
+  try {
+    let f = null;
+    for (const x of FLEET) { if (x && x.name === worker && x.binding && x.kind !== "member") { f = x; break; } }
+    if (!f && COMPAT_HEALTH_BINDINGS[worker]) f = { name: worker, binding: COMPAT_HEALTH_BINDINGS[worker] };
+    if (f && env[f.binding] && env[f.binding].fetch) {
+      const h = await probeService(env, f, "/health");
+      if (h && h.http > 0) return { state: "answered", via: "binding:" + f.binding, http: h.http, version: String(h.body && (h.body.version || h.body.VERSION) || "") };
+      return { state: "unknown", via: "binding:" + f.binding, http: 0, version: "", error: h && h.error || "no answer" };
+    }
+    let base = null;
+    if (env.QNFO_AUDIT) {
+      const r = await env.QNFO_AUDIT.prepare("SELECT base_url FROM service_registry WHERE service = ?1").bind(worker).first();
+      if (r && r.base_url && !/\.workers\.dev\/?$/i.test(String(r.base_url))) base = String(r.base_url).replace(/\/+$/, "");
+    }
+    if (!base) return { state: "unknown", via: "none", http: 0, version: "", error: "no service binding and no custom domain: error 1042 blocks the workers.dev host" };
+    const ctrl = new AbortController();
+    const t = setTimeout(function() { ctrl.abort(); }, 6e3);
+    try {
+      const resp = await fetch(base + "/health", { signal: ctrl.signal, headers: { "User-Agent": "qnfo-ops-compat-verify" } });
+      const txt = (await resp.text()).slice(0, 4e3);
+      if (/error code:?\s*1042/i.test(txt)) return { state: "unknown", via: base, http: resp.status, version: "", error: "cf-1042" };
+      let b = {};
+      try { b = JSON.parse(txt); } catch (e) { b = {}; }
+      return { state: "answered", via: base, http: resp.status, version: String(b && (b.version || b.VERSION) || "") };
+    } finally {
+      clearTimeout(t);
+    }
+  } catch (e) {
+    return { state: "unknown", via: "error", http: 0, version: "", error: String(e && e.message || e).slice(0, 120) };
+  }
+}
+// The gate /ops/deploy hands to cfWorkerDeploy: called only when the file's date is eligible. Refuses when the health
+// answer cannot be read before the upload (a restore decision would then rest on nothing) and when the same advance was
+// restored before. Any error refuses.
+async function compatAdvanceGate(env, worker, dec) {
+  try {
+    if (env.QNFO_AUDIT) {
+      const prev = await env.QNFO_AUDIT.prepare("SELECT id FROM deployment_history WHERE resource_name = ?1 AND action = 'compat-restore' AND notes LIKE ?2 ORDER BY id DESC LIMIT 1").bind(worker, "%to=" + dec.to + " reviewed=" + dec.reviewed + "%").first();
+      if (prev && prev.id) return { allow: false, reason: "the advance to " + dec.to + " (reviewed " + dec.reviewed + ") was restored before (deployment_history " + prev.id + "); a new review date retries it" };
+    }
+    const h = await compatHealthProbe(env, worker);
+    if (h.state !== "answered" || !h.version) return { allow: false, reason: "/health of " + worker + " cannot be read from qnfo-ops before the upload (" + (h.error || "http " + h.http + ", no version") + "), so the advance could not be verified" };
+    return { allow: true, reason: "health readable via " + h.via, health_before: h.version };
+  } catch (e) {
+    return { allow: false, reason: "gate error: " + String(e && e.message || e).slice(0, 120) };
+  }
+}
+// After an upload that advanced the date: does /health answer with the deployed VERSION? Polls, because a new version
+// takes a few seconds to reach every location. sleepMs is injectable for the suite.
+async function compatVerifyAfter(env, worker, expected, tries, sleepMs) {
+  let last = null;
+  const n = tries || 6;
+  for (let i = 0; i < n; i++) {
+    last = await compatHealthProbe(env, worker);
+    if (last.state === "answered" && last.http === 200 && expected && last.version === String(expected)) return { ok: true, attempts: i + 1, version: last.version, via: last.via };
+    if (i < n - 1) await new Promise(function(r) { setTimeout(r, sleepMs == null ? 3e3 : sleepMs); });
+  }
+  return { ok: false, attempts: n, version: last && last.version || "", http: last && last.http || 0, state: last && last.state || "unknown", via: last && last.via || "none", error: last && last.error || null };
+}
+// The step /ops/deploy runs after an upload that advanced a date. Keeps the date when /health answers with the deployed
+// VERSION; otherwise uploads the same source again with the previous date (compat_pin), which writes the
+// deployment_history row `compat-restore` that stops the same advance from being tried on the next deploy. A restore
+// that itself fails is filed as an issue. Never throws.
+async function compatAfterDeploy(env, a, log, opts) {
+  const out = { advanced: true, from: a.compat.from, to: a.compat.to, kept: false, restored: false, verify: null };
+  try {
+    const v = await compatVerifyAfter(env, a.worker, a.version, opts && opts.tries, opts && opts.sleepMs);
+    out.verify = v;
+    if (v.ok) {
+      out.kept = true;
+      log.push({ step: "compat-verify", ok: true, compatibility_date: a.compat.to, from: a.compat.from, health_version: v.version, attempts: v.attempts, via: v.via });
+      return out;
+    }
+    const why = "health " + (v.state === "answered" ? "answered http " + v.http + " version " + (v.version || "none") : "gave no answer") + ", expected " + a.version;
+    const deployFn = opts && opts.deploy || cfWorkerDeploy;
+    const rb = await deployFn(env, { worker: a.worker, content: a.content, version: a.version || void 0, compat_pin: a.compat.from, compat_restore_note: "to=" + a.compat.to + " reviewed=" + a.compat.reviewed + " why=" + why });
+    out.restored = !!(rb && rb.ok);
+    out.restore_error = rb && rb.ok ? null : String(rb && rb.error || "restore upload failed").slice(0, 300);
+    log.push({ step: "compat-restore", ok: out.restored, compatibility_date: out.restored ? a.compat.from : a.compat.to, tried: a.compat.to, why, error: out.restore_error });
+    if (!out.restored && env.QNFO_AUDIT) {
+      try {
+        const now = Date.now();
+        const title = "COMPAT-RESTORE-FAILED-1: " + a.worker + " runs at compatibility date " + a.compat.to + " without a verified /health";
+        const dup = await env.QNFO_AUDIT.prepare("SELECT id FROM agent_issues WHERE title = ?1 AND status = 'open' LIMIT 1").bind(title).first();
+        if (!dup) await env.QNFO_AUDIT.prepare("INSERT INTO agent_issues (title, description, source, category, priority, status, linked_session, created_at, updated_at) VALUES (?1, ?2, 'qnfo-ops', 'reliability', 'high', 'open', ?3, ?4, ?4)").bind(title, ("Pillar core (COMPAT-DATE-DECLARED-APPLY-1). The canonical deploy advanced " + a.worker + " from compatibility date " + a.compat.from + " to " + a.compat.to + ", its /health did not answer with VERSION " + a.version + " (" + why + "), and the upload that puts " + a.compat.from + " back failed: " + out.restore_error + ". Owner: qnfo-ops. Fix: set compatibility_date back to " + a.compat.from + " in " + a.worker + "/wrangler.toml or remove its compat-advance line, then redeploy; read GET https://ops.qnfo.org/compat for the live date.").slice(0, 4000), "qnfo-ops/" + VERSION, now).run();
+      } catch (eI) {
+        console.log("compat-restore issue insert failed:", eI && eI.message || eI);
+      }
+    }
+  } catch (e) {
+    out.error = String(e && e.message || e).slice(0, 200);
+    log.push({ step: "compat-verify", error: out.error });
+  }
+  return out;
+}
+// COMPAT-EXPOSURE-1: the fleet's compatibility exposure table. One row per live worker: live date and flags (GET
+// /settings), the date, flags and review line in its wrangler.toml on main, and the default changes between the live date
+// and today. compatSnapshot writes it to qnfo-audit.worker_compat_state (one checked_at per snapshot; the metric
+// workers_compat_date_behind reads the newest); GET /compat serves the newest snapshot and COMPAT_FLIPS.
+async function compatSnapshot(env, opts) {
+  const out = { ok: false, rows: [], written: 0, checked_at: iso(), errors: [] };
+  if (!env.CF_API_TOKEN) { out.error = "CF_API_TOKEN not configured"; return out; }
+  try {
+    if (!(opts && opts.force) && env.QNFO_AUDIT) {
+      const last = await env.QNFO_AUDIT.prepare("SELECT MAX(checked_at) AS t FROM worker_compat_state").first().catch(function() { return null; });
+      if (last && last.t && Date.now() - Date.parse(last.t) < 6 * 36e5) { out.ok = true; out.skipped = "newest snapshot " + last.t + " is under 6 h old"; return out; }
+    }
+    const cfH = { "Authorization": "Bearer " + env.CF_API_TOKEN };
+    const lr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts?per_page=200", { headers: cfH });
+    const lj = await lr.json().catch(function() { return null; });
+    const names = (lj && Array.isArray(lj.result) ? lj.result : []).map(function(w) { return w && w.id; }).filter(Boolean).sort();
+    if (!names.length) { out.error = "script list empty (http " + lr.status + ")"; return out; }
+    const ghH = { "Accept": "application/vnd.github.raw", "User-Agent": "qnfo-ops-compat-exposure" };
+    if (env.GITHUB_TOKEN) ghH["Authorization"] = "Bearer " + env.GITHUB_TOKEN;
+    const today = out.checked_at.slice(0, 10);
+    const one = async function(name) {
+      let live = null, decl = null;
+      try {
+        const sr = await fetch("https://api.cloudflare.com/client/v4/accounts/" + CF_ACCOUNT_ID + "/workers/scripts/" + encodeURIComponent(name) + "/settings", { headers: cfH });
+        const sj = sr.ok ? await sr.json().catch(function() { return null; }) : null;
+        live = sj && sj.result || null;
+      } catch (e) { out.errors.push(name + " settings: " + String(e && e.message || e).slice(0, 80)); }
+      try {
+        const dirs = [name];
+        if (name.indexOf("qnfo-") === 0) dirs.push(name.slice(5));
+        for (const d of dirs) {
+          const tr = await fetch("https://api.github.com/repos/QNFO/qnfo-workers/contents/" + d + "/wrangler.toml?ref=main", { headers: ghH });
+          if (!tr.ok) continue;
+          decl = parseDeclaredCompat((await tr.text()).slice(0, 2e5));
+          break;
+        }
+      } catch (e) { out.errors.push(name + " toml: " + String(e && e.message || e).slice(0, 80)); }
+      return compatExposureRow(name, live, decl, today);
+    };
+    for (let i = 0; i < names.length; i += 6) {
+      const part = await Promise.all(names.slice(i, i + 6).map(one));
+      for (const r of part) out.rows.push(r);
+    }
+    out.behind = out.rows.filter(function(r) { return r.flips_count > 0; }).length;
+    if (env.QNFO_AUDIT && !(opts && opts.dry)) {
+      const st = env.QNFO_AUDIT.prepare("INSERT INTO worker_compat_state (worker, checked_at, live_date, toml_date, toml_reviewed, live_flags, toml_flags, nodejs_compat_live, nodejs_compat_toml, nodejs_compat_default_on, flips_between, flips_count, days_behind, advance) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)");
+      const batch = out.rows.filter(function(r) { return r.live_date; }).map(function(r) {
+        return st.bind(r.worker, out.checked_at, r.live_date, r.toml_date, r.toml_reviewed, r.live_flags.join(","), r.toml_flags.join(","), r.nodejs_compat_live ? 1 : 0, r.nodejs_compat_toml ? 1 : 0, r.nodejs_compat_default_on ? 1 : 0, JSON.stringify(r.flips_between), r.flips_count, r.days_behind, String(r.advance).slice(0, 300));
+      });
+      // A snapshot in which fewer than half the workers could be read is not written: the metric would read low.
+      if (batch.length * 2 >= names.length) {
+        await env.QNFO_AUDIT.batch(batch);
+        out.written = batch.length;
+      } else out.errors.push("not written: live settings read for " + batch.length + " of " + names.length);
+    }
+    out.ok = true;
+  } catch (e) {
+    out.error = String(e && e.message || e).slice(0, 200);
+  }
+  return out;
+}
+async function compatReport(env) {
+  const out = { ok: true, worker: WORKER, version: VERSION, about: "COMPAT-EXPOSURE-1: each live worker's compatibility date against the default changes it has not taken. A date advances on the worker's next canonical deploy when its wrangler.toml carries a later date and the line '# compat-advance: reviewed YYYY-MM-DD', and qnfo-ops can read its /health.", metric: "workers_compat_date_behind", checked_at: null, workers: [], behind: null, default_changes: COMPAT_FLIPS };
+  try {
+    const r = await env.QNFO_AUDIT.prepare("SELECT worker, live_date, toml_date, toml_reviewed, live_flags, toml_flags, nodejs_compat_live, nodejs_compat_toml, nodejs_compat_default_on, flips_between, flips_count, days_behind, advance, checked_at FROM worker_compat_state WHERE checked_at = (SELECT MAX(checked_at) FROM worker_compat_state) ORDER BY worker").all();
+    const rows = r && r.results || [];
+    out.workers = rows.map(function(x) {
+      let fb = [];
+      try { fb = JSON.parse(x.flips_between || "[]"); } catch (e) { fb = []; }
+      return { worker: x.worker, live_date: x.live_date, toml_date: x.toml_date, toml_reviewed: x.toml_reviewed, live_flags: x.live_flags ? String(x.live_flags).split(",") : [], toml_flags: x.toml_flags ? String(x.toml_flags).split(",") : [], nodejs_compat_live: !!x.nodejs_compat_live, nodejs_compat_toml: !!x.nodejs_compat_toml, nodejs_compat_default_on: !!x.nodejs_compat_default_on, flips_between: fb, flips_count: x.flips_count, days_behind: x.days_behind, advance: x.advance };
+    });
+    out.checked_at = rows.length ? rows[0].checked_at : null;
+    out.behind = rows.filter(function(x) { return x.flips_count > 0; }).length;
+    if (!rows.length) out.note = "no snapshot yet: the */30 cron writes one when the newest is over 6 h old";
+  } catch (e) {
+    // The detail goes to the log; the open route says only that the table could not be read.
+    console.log("compat report failed:", e && e.message || e);
+    out.ok = false;
+    out.error = "the snapshot table could not be read";
+  }
+  return out;
+}
 var OBS_KEYS = { "": { enabled: "b", head_sampling_rate: "n", redact_query_string: "b" }, logs: { enabled: "b", invocation_logs: "b", head_sampling_rate: "n", persist: "b", destinations: "a" }, traces: { enabled: "b", head_sampling_rate: "n", persist: "b", destinations: "a" }, issues: { enabled: "b" } };
 function obsValue(kind, raw) {
   const v = String(raw).trim().replace(/,$/, "").trim();
@@ -2969,6 +3234,7 @@ async function installDeclaredBindings(env, worker) {
        inert-config class as #1337's crons). Surface the declared flags so cfWorkerDeploy can UNION them in. */
     out.compat_flags = [];
     out.observability = parseDeclaredObservability(toml);
+    try { out.compat = parseDeclaredCompat(toml); } catch (_ec) { out.compat = null; }
     const _cfm = String(toml).match(/^\s*compatibility_flags\s*=\s*\[([^\]]*)\]/m);
     if (_cfm) out.compat_flags = (_cfm[1].match(/"([^"]+)"/g) || []).map(function(q) { return q.slice(1, -1); });
     const sections = [];
@@ -3138,6 +3404,7 @@ async function cfWorkerDeploy(env, args) {
   let bindingInstallNote = null;
   let _declFlags = [];
   let _declObs = null;
+  let _declCompat = null;
   // BINDING-INSTALL-MERGE-1 (2026-09-29, issue #1448, FATAL): this installer used to run ONLY when
   // bindingsOut.length === 0, so a worker that already carried any non-secret binding
   // could NEVER gain a newly declared one. Canonical victim: qnfo-research-exec never
@@ -3151,6 +3418,7 @@ async function cfWorkerDeploy(env, args) {
     bindingInstallNote = _ins.note || null;
     if (_ins && Array.isArray(_ins.compat_flags)) _declFlags = _ins.compat_flags.slice();
     if (_ins && _ins.observability) _declObs = _ins.observability;
+    if (_ins && _ins.compat) _declCompat = _ins.compat;
     const _decl = _ins && Array.isArray(_ins.bindings) ? _ins.bindings : [];
     if (bindingsOut.length === 0 && _decl.length) {
       bindingsOut = _decl;
@@ -3208,6 +3476,44 @@ async function cfWorkerDeploy(env, args) {
     } catch (_e) {
     }
     if (!_compatDate) _compatDate = "2026-08-01";
+    // COMPAT-DATE-DECLARED-APPLY-1: _liveDate is what every upload before 2.42.0 sent, and what a refusal falls back to.
+    // Nothing in this block can fail the deploy: an error leaves the live date in place.
+    const _liveDate = _compatDate;
+    const _compat = { live_date: _settingsRead ? _liveDate : null, declared_date: _declCompat && _declCompat.date || null, reviewed: _declCompat && _declCompat.reviewed || null, applied: false, from: null, to: null, restore: false, reason: "" };
+    try {
+      const _pin = args && args.compat_pin != null ? String(args.compat_pin) : "";
+      if (_pin) {
+        // The restore upload of /ops/deploy: the one place a date goes back, to the date the same deploy replaced.
+        if (compatDateValid(_pin)) {
+          _compatDate = _pin;
+          _compat.restore = true;
+          _compat.from = _settingsRead ? _liveDate : null;
+          _compat.to = _pin;
+          _compat.reason = "restore to " + _pin;
+        } else _compat.reason = "restore date not valid, live date kept";
+      } else {
+        const _dec = decideCompatAdvance(_settingsRead ? _liveDate : null, _declCompat, iso().slice(0, 10));
+        _compat.reason = _dec.reason;
+        if (_dec.apply) {
+          let _gate = { allow: false, reason: "eligible, but this caller does not verify /health (only /ops/deploy advances a date)" };
+          if (args && typeof args.compat_gate === "function") {
+            const _g = await args.compat_gate(_dec);
+            _gate = _g && _g.allow === true ? _g : { allow: false, reason: _g && _g.reason || "gate refused" };
+          }
+          if (_gate.allow === true) {
+            _compatDate = _dec.to;
+            _compat.applied = true;
+            _compat.from = _dec.from;
+            _compat.to = _dec.to;
+          } else _compat.reason = "not advanced: " + String(_gate.reason).slice(0, 220);
+        }
+      }
+    } catch (_eCd) {
+      _compatDate = _liveDate;
+      _compat.applied = false;
+      _compat.restore = false;
+      _compat.reason = "not advanced: " + String(_eCd && _eCd.message || _eCd).slice(0, 120);
+    }
     // COMPAT-FLAGS-DECLARED-APPLY-1: live flags are kept (never removed), repo-declared flags are added.
     for (const _f of _declFlags) { if (_compatFlags.indexOf(_f) === -1) _compatFlags.push(_f); }
     if (_isContainerWorker && !_containers.length &&
@@ -3283,6 +3589,16 @@ async function cfWorkerDeploy(env, args) {
       resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body: _buildBody() });
       j = await resp.json().catch(() => ({}));
     }
+    if (!resp.ok && _compat.applied) {
+      // COMPAT-DATE-DECLARED-APPLY-1: the declared date must never be what stops a deploy: upload once more with the live date.
+      _compat.reason = "refused with " + _compat.to + ", deployed with the live date: " + JSON.stringify(j && j.errors || j).slice(0, 160);
+      _compat.applied = false;
+      _compat.from = null;
+      _compat.to = null;
+      _compatDate = _liveDate;
+      resp = await fetch(_putUrl, { method: "PUT", headers: _putHeaders, body: _buildBody() });
+      j = await resp.json().catch(() => ({}));
+    }
     if (!resp.ok && _obsOut) {
       // The settings overlay must never be what stops a deploy: upload once more exactly as before 2.41.0.
       _obsNote = "refused, deployed without it: " + JSON.stringify(j && j.errors || j).slice(0, 160);
@@ -3294,8 +3610,9 @@ async function cfWorkerDeploy(env, args) {
       const _ledFail = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "failed", notes: "cf_worker_deploy FAILED http=" + resp.status + " worker=" + worker + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") + " err=" + JSON.stringify(j).slice(0, 200) });
       return { ok: false, error: "CF API " + resp.status + ": " + JSON.stringify(j).slice(0, 400), ledger: _ledFail };
     }
-    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + " bindings_preserved=" + bindingsOut.length + " observability=" + _obsNote.slice(0, 60) + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
-    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, observability_apply: _obsNote, observability: _obsOut, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
+    const _compatNote = _compat.restore ? " compat-restore from=" + (_compat.from || "n/a") + " " + String(args && args.compat_restore_note || "").slice(0, 120) : _compat.applied ? " compat_date=" + _compat.from + "->" + _compat.to + " reviewed=" + _compat.reviewed : " compat_date=" + _compatDate;
+    const _ledOk = await recordDeployLedger(env, { resource_name: worker, action: _compat.restore ? "compat-restore" : "deploy", version_id: versionNote || null, status: "success", notes: "cf_worker_deploy ok http=" + resp.status + " worker=" + worker + _compatNote + " bindings_preserved=" + bindingsOut.length + " observability=" + _obsNote.slice(0, 60) + (_droppedBindings.length ? " dropped_dangling_bindings=" + _droppedBindings.map(function (d) { return d.name + "->" + d.service; }).join(",") : "") + " etag=" + ((j && j.result && j.result.etag) ? j.result.etag : "n/a") + " content_bytes=" + content.length + " expected_version=" + String(args && args.expected_version || "n/a") });
+    return { ledger: _ledOk, ok: true, worker, deployed: true, http: resp.status, dropped_dangling_bindings: _droppedBindings, version: versionNote || "deployed", bindings_preserved: bindingsOut.length, bindings_installed: bindingsInstalled, binding_props_applied: bindingPropsApplied, observability_apply: _obsNote, observability: _obsOut, compatibility_date: _compatDate, compat: _compat, binding_install_note: bindingInstallNote, warning: bindingsOut.length === 0 ? "BINDING-INSTALL-WHEN-EMPTY-1: deployed with ZERO bindings and none installable from wrangler.toml - this worker may be a silent no-op" : null, result: j && j.result ? { id: j.result.id, etag: j.result.etag } : null };
   } catch (e) {
     return { ok: false, error: "cf_worker_deploy failed: " + (e && e.message || String(e)).slice(0, 300) };
   }
@@ -3983,7 +4300,7 @@ async function gitCloneExec(env, args) {
   let warmRetried = false;
   if (!cloneJ.ok && /timeout|timed out|ETIMEDOUT/i.test(String(cloneJ.error || "") + " " + String((cloneJ.result || {}).stderr || ""))) {
     warmRetried = true;
-    effName = name + "-r" + Math.random().toString(36).slice(2, 6);
+    effName = name + "-r" + rndHex8().slice(0, 4); // WORKERS-BP-DEBT-1 (#2431): the retry suffix comes from the CSPRNG, not Math.random
     try { await containerDispatch(env, "/health", {}, 3e4); } catch (e) { }
     cloneJ = await containerDispatch(env, "/git/clone", { url: url2, branch, depth, name: effName }, timeout);
   }
@@ -6786,8 +7103,8 @@ async function opsDeploy(env, args) {
           return Object.assign({ log }, result);
         }
       }
-      const dep = await cfWorkerDeploy(env, { worker, content, version: toVer || srcVer || void 0, expected_version: fromVer || void 0 });
-      log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, binding_install_note: dep.binding_install_note || null });
+      const dep = await cfWorkerDeploy(env, { worker, content, version: toVer || srcVer || void 0, expected_version: fromVer || void 0, compat_gate: function(_dec) { return toVer || srcVer ? compatAdvanceGate(env, worker, _dec) : { allow: false, reason: "the source has no VERSION to verify /health against" }; } });
+      log.push({ step: "deploy", ok: !!dep.ok, error: dep.error || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, binding_install_note: dep.binding_install_note || null, compatibility_date: dep.compatibility_date || null, compat: dep.compat || null });
       if (!dep.ok) {
         result = { ok: false, error: dep.error, rejected: dep.rejected || false };
         return Object.assign({ log }, result);
@@ -6799,6 +7116,12 @@ async function opsDeploy(env, args) {
         log.push({ step: "verify", live_version: live });
       } catch (e) {
         log.push({ step: "verify", error: String(e && e.message || e).slice(0, 140) });
+      }
+      // COMPAT-DATE-DECLARED-APPLY-1: an upload that advanced the date is kept only when /health answers with the deployed
+      // VERSION; otherwise the same source is uploaded again with the previous date. Neither outcome fails the deploy.
+      let compatOutcome = null;
+      if (dep.compat && dep.compat.applied) {
+        compatOutcome = await compatAfterDeploy(env, { worker, content, version: toVer || srcVer || null, compat: dep.compat }, log);
       }
       // DEPLOY-GUARD-LEDGER-SYNC-1 (2026-09-26): advance the deploy-guard registry
       // version to the newly-live version in the SAME deploy. Without this the guard's
@@ -6849,7 +7172,7 @@ async function opsDeploy(env, args) {
         }
       } catch (eCrons) { log.push({ step: "crons", error: String(eCrons && eCrons.message || eCrons).slice(0, 140) }); }
       ok = !toVer || live === toVer;
-      result = { ok, worker, from: fromVer, to: toVer, live, version_id: dep.result && dep.result.id || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0 };
+      result = { ok, worker, from: fromVer, to: toVer, live, version_id: dep.result && dep.result.id || null, bindings_preserved: dep.bindings_preserved, bindings_installed: dep.bindings_installed || 0, compatibility_date: compatOutcome && compatOutcome.restored ? compatOutcome.from : dep.compatibility_date || null, compat: compatOutcome || dep.compat || null };
       return Object.assign({ log }, result);
     } finally {
       try {
@@ -6998,6 +7321,13 @@ var worker_default = {
     }
     if (path === "/fleet" && method === "GET") return json(await fleetStatus(env));
     if (path === "/manifest" && method === "GET") return json(manifest());
+    if (path === "/compat" && method === "GET") return json(await compatReport(env));
+    if (path === "/compat/refresh" && method === "POST") {
+      if (!await regAuthOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY or REGISTRY_TOKEN" }, 401);
+      const _cs = await compatSnapshot(env, { force: true });
+      if (!_cs.ok || _cs.errors.length) console.log("compat refresh:", _cs.error || "", _cs.errors.join("; ").slice(0, 600));
+      return json({ ok: _cs.ok, written: _cs.written, behind: _cs.behind == null ? null : _cs.behind, checked_at: _cs.checked_at, read_errors: _cs.errors.length }, _cs.ok ? 200 : 502);
+    }
     if (path === "/ops/deploy" && method === "POST") {
       if (!await authOk(request.headers.get("Authorization") || "", env)) return json({ error: "Unauthorized - set Bearer OPS_ROUTER_AUTH_KEY" }, 401);
       let _db = {};
@@ -7322,6 +7652,12 @@ var worker_default = {
       await telemetryAnalyze(env, 6);
     } catch (e) {
       console.log("telemetry cron failed:", e && e.message || e);
+    }
+    try {
+      const _cs = await compatSnapshot(env);
+      if (!_cs.ok) console.log("compat snapshot failed:", _cs.error);
+    } catch (e) {
+      console.log("compat snapshot failed:", e && e.message || e);
     }
     try {
       await secretChangeWatch(env);

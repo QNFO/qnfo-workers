@@ -55,6 +55,8 @@ function makeGh(sc) {
     const ok = (j, status = 200) => ({ status, ok: status < 300, j });
     if (method === "GET" && path.startsWith("/branches")) return ok(sc.branches);
     let m;
+    // MERGEABILITY-REQUERY-1: sc.prSeq[n] scripts successive answers of GET /pulls/n (the last one repeats).
+    if (method === "GET" && (m = /^\/pulls\/(\d+)$/.exec(path)) && sc.prSeq && sc.prSeq[m[1]] && sc.prSeq[m[1]].length) return ok(sc.prSeq[m[1]].length > 1 ? sc.prSeq[m[1]].shift() : sc.prSeq[m[1]][0]);
     if (method === "GET" && (m = /^\/pulls\/(\d+)$/.exec(path)) && sc.prs) return sc.prs[m[1]] ? ok(sc.prs[m[1]]) : ok({ message: "Not Found" }, 404);
     if (method === "GET" && (m = /^\/pulls\/(\d+)\/files/.exec(path)) && sc.prs) return ok((sc.files || {})[m[1]] || []);
     if (method === "GET" && (m = /^\/commits\/([^/]+)\/check-runs/.exec(path))) return ok({ check_runs: (sc.checks || {})[m[1]] || [] });
@@ -85,7 +87,7 @@ async function run(sc, opts, d1In) {
   const sandbox = { evApi: gh.evApi, EVOLVE_REPO: "QNFO/qnfo-workers", __name: (f) => f, console, Date, Math, JSON, Number, String, Object, Array, RegExp, isNaN, encodeURIComponent, Promise, __export: null };
   vm.createContext(sandbox);
   const deps = ["var EVOLVE_REQUIRED = ", "var CM_OK = ", "var EVOLVE_DENY = ", "var CM_DENY = "].map((k) => { const i = src.indexOf(k); return src.slice(i, src.indexOf("\n", i)); }).concat(["cmRequired", "cmChecks", "evMergePr"].map(grab)).join("\n");
-  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, bhConflictDecide, bhConflictIssue, bhNudgeDecide, branchHygieneTick, BH_MAX_ACTIONS, BH_NUDGE_MAX };", sandbox, { filename: "bh-block.js" });
+  vm.runInContext(deps + "\n" + src.slice(a, b + END.length) + "\nBH_MERGEABLE_WAIT_MS = 0;\nEV_MERGE_RETRY_WAIT_MS = 0;\n__export = { bhDecide, bhMergeDecide, bhRepairDecide, bhRepairIssue, bhConflictDecide, bhConflictIssue, bhNudgeDecide, branchHygieneTick, BH_MAX_ACTIONS, BH_NUDGE_MAX };", sandbox, { filename: "bh-block.js" });
   const env = { GITHUB_TOKEN: "x", AUDIT: d1.AUDIT };
   const out = await sandbox.__export.branchHygieneTick(env, Object.assign({ now: NOW }, opts || {}));
   return { out, calls: gh.calls, d1, W: sandbox.__export };
@@ -366,25 +368,34 @@ const scenario = () => ({
   const s1 = mk(p90);
   const r1 = await run(s1);
   const log = (d1, action) => d1.db.prepare("SELECT pr, sha, why FROM branch_hygiene_log WHERE action = ?1 ORDER BY id").all(action);
-  eq([r1.out.merged_prs, r1.out.nudged_prs, r1.out.closed_prs], [[], [90], []], "nudge: a null-mergeable green PR is nudged, not merged, not closed");
-  eq((s1.updates || []).map((u) => [u.path, u.body && u.body.expected_head_sha]), [["/pulls/90/update-branch", "n90"]], "nudge: update-branch is pinned to the head that was read");
-  eq(r1.calls.filter((c) => c === "GET /pulls/90").length, 3, "nudge: mergeability is re-read before the nudge");
+  const M20 = 20 * 60000;
+  // MERGEABILITY-REQUERY-1 (0.18.0): the first tick that reads null re-reads it (pre-warm + BH_MERGEABLE_READS) and logs the
+  // refusal; update-branch is asked only when the same head reads null again on a later tick.
+  eq([r1.out.merged_prs, r1.out.nudged_prs || [], r1.out.closed_prs, (s1.updates || []).length], [[], [], [], 0], "requery: the first null answer is not nudged, not merged, not closed");
+  eq(r1.calls.filter((c) => c === "GET /pulls/90").length, 6, "requery: one pre-warm read and five reads before the lane gives up for this tick");
+  eq(r1.out.prewarmed, 1, "requery: the candidate was pre-warmed");
+  eq(log(r1.d1, "merge-refused").map((r) => [r.pr, r.sha, /mergeable null/.test(r.why) && /first null answer/.test(r.why) && /MERGEABILITY-REQUERY-1/.test(r.why)]), [[90, "n90", true]], "requery: the held refusal is a merge-refused row with its reason");
+  const s1b = mk(p90);
+  const r1b = await run(s1b, { now: NOW + M20 }, r1.d1);
+  eq([r1b.out.merged_prs, r1b.out.nudged_prs, r1b.out.closed_prs], [[], [90], []], "nudge: a head that reads null on a second tick is nudged, not merged, not closed");
+  eq((s1b.updates || []).map((u) => [u.path, u.body && u.body.expected_head_sha]), [["/pulls/90/update-branch", "n90"]], "nudge: update-branch is pinned to the head that was read");
   eq(log(r1.d1, "merge-nudge").map((r) => [r.pr, r.sha, /MERGEABILITY-NUDGE-1/.test(r.why)]), [[90, "n90", true]], "nudge: one merge-nudge row with the reason");
-  for (let i = 0; i < 3; i++) await run(mk(p90), undefined, r1.d1);
+  for (let i = 2; i < 5; i++) await run(mk(p90), { now: NOW + i * M20 }, r1.d1);
   eq(log(r1.d1, "merge-nudge").length, r1.W.BH_NUDGE_MAX, "nudge: capped per pull request");
-  eq(log(r1.d1, "merge-refused").map((r) => [r.pr, /mergeable null/.test(r.why) && /already nudged 3 times/.test(r.why)]), [[90, true]], "nudge: past the cap the refusal is logged with its reason");
+  eq(log(r1.d1, "merge-refused").some((r) => r.pr === 90 && /mergeable null/.test(r.why) && /already nudged 3 times/.test(r.why)), true, "nudge: past the cap the refusal is logged with its reason");
   const sOff = mk(p90);
   sOff.config = [["stale_pr_nudge_enabled", "off"]];
   const rOff = await run(sOff);
   eq([(sOff.updates || []).length, log(rOff.d1, "merge-refused").length, log(rOff.d1, "merge-nudge").length], [0, 1, 0], "nudge: the switch off restores the logged refusal");
   const sFail = mk(p90);
   sFail.updateStatus = 422;
-  const rFail = await run(sFail);
-  eq([rFail.out.nudged_prs || [], log(rFail.d1, "merge-refused").map((r) => /update-branch HTTP 422/.test(r.why))], [[], [true]], "nudge: a refused update-branch is a logged refusal");
+  const rFail0 = await run(sFail);
+  const rFail = await run(sFail, { now: NOW + M20 }, rFail0.d1);
+  eq([rFail.out.nudged_prs || [], log(rFail.d1, "merge-refused").some((r) => /update-branch HTTP 422/.test(r.why))], [[], true], "nudge: a refused update-branch is a logged refusal");
   const p91 = mkpr(91, "n91", { mergeable: true, mergeable_state: "behind" });
   const s2 = mk(p91);
   const r2 = await run(s2);
-  eq([r2.out.nudged_prs, (s2.updates || []).length], [[91], 1], "nudge: a branch that is only behind main is brought up to date");
+  eq([r2.out.nudged_prs, (s2.updates || []).length], [[91], 1], "nudge: a branch that is only behind main is brought up to date at once");
   const p92 = mkpr(92, "n92");
   const s4 = mk(p92, req.slice(1).concat([{ id: 399, name: "gate", status: "completed", conclusion: "failure" }]));
   const r4 = await run(s4);
@@ -392,7 +403,33 @@ const scenario = () => ({
   const p93 = mkpr(93, "n93", { updated_at: hAgo(30) });
   const s5 = mk(p93);
   const r5 = await run(s5);
-  eq([r5.out.nudged_prs, r5.out.closed_prs], [[93], []], "nudge: a nudged PR is not closed on the same tick, even past 24h");
+  eq([r5.out.nudged_prs || [], r5.out.closed_prs], [[], []], "requery: a PR whose mergeability reads null is not closed on that tick, even past 24h");
+  const r5b = await run(mk(p93), { now: NOW + M20 }, r5.d1);
+  eq([r5b.out.nudged_prs, r5b.out.closed_prs], [[93], []], "nudge: a nudged PR is not closed on the same tick, even past 24h");
+  // The case measured on 2026-10-12 (PRs 941, 943, 944, 946, 960): null right after main moved, clean a few seconds later.
+  const p97 = mkpr(97, "n97");
+  const s7 = mk(p97);
+  s7.prSeq = { 97: [p97, p97, Object.assign({}, p97, { mergeable: true, mergeable_state: "clean" })] };
+  const r7 = await run(s7);
+  eq([r7.out.merged_prs, (s7.updates || []).length, (s7.merges || []).map((x) => x.pr), log(r7.d1, "merge-refused").length], [[97], 0, [97], 0], "requery: null then clean within the tick is merged on that tick, with no update-branch and no refusal row");
+  // LANE-TICK-20-1: the */20 tick runs the lane alone.
+  const p98 = mkpr(98, "n98", { mergeable: true, mergeable_state: "clean" });
+  const idle = { number: 99, state: "open", updated_at: hAgo(40), head: { ref: "claude/idle99", sha: "n99", repo: R } };
+  const s8 = mk(p98);
+  s8.pulls.push(idle);
+  s8.prs[99] = Object.assign({}, idle, { draft: false, merged: false, mergeable: false, mergeable_state: "dirty", title: "t", labels: [], base: { ref: "main", repo: R } });
+  s8.files[99] = files;
+  s8.checks.n99 = req;
+  const r8 = await run(s8, { laneOnly: true, now: NOW + M20 });
+  eq([r8.out.lane_only, r8.out.merged_prs, r8.out.closed_prs], [true, [98], []], "lane tick: a green clean quiet PR is merged on the */20 tick and nothing is closed");
+  eq([r8.calls.some((c) => c.indexOf("GET /branches") === 0), r8.calls.some((c) => c.indexOf("GET /pulls?state=open") === 0), r8.calls.some((c) => c === "GET " || c === "PATCH " || c === "PATCH /pulls/99"), r8.d1.db.prepare("SELECT COUNT(*) AS n FROM cloud_ops_events WHERE kind = 'branch-hygiene-tick'").get().n], [false, true, false, 0], "lane tick: open pull requests only; no branch sweep, no close, no repository setting, no heartbeat row");
+  eq(log(r8.d1, "merge-refused").map((r) => r.pr), [99], "lane tick: a refusal is still a logged row");
+  const r9 = await run(mk(p98), { laneOnly: true });
+  eq([r9.out.idle, r9.calls.length], ["hourly tick owns minute 0", 0], "lane tick: stands aside at minute 0, where the hourly tick runs");
+  const s10 = mk(p98);
+  s10.config = [["stale_pr_merge_enabled", "off"]];
+  const r10 = await run(s10, { laneOnly: true, now: NOW + M20 });
+  eq([r10.out.idle, r10.calls.length], ["merge lane off or dry run", 0], "lane tick: the lane's own switch stops it");
   const nd = r1.W.bhNudgeDecide, why = { merge: false, why: "GitHub reports mergeable null, mergeable_state unknown" };
   eq(nd(p90, why).nudge, true, "nudge pure: null -> nudge");
   eq(nd(mkpr(94, "x", { mergeable: false, mergeable_state: "dirty" }), { merge: false, why: "GitHub reports mergeable false, mergeable_state dirty" }).nudge, false, "nudge pure: a conflict is never nudged");

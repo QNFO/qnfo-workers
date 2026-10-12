@@ -29,6 +29,15 @@ The prior PDF path was local-only and low quality:
 - Print CSS: booktabs-style tables, serif typography, hyphenation, page-break
   control, centered display math.
 
+## Backlog loop (SCHOLAR-PDF-ALL-1, 1.2.0)
+
+Google Scholar indexes a paper's full text only through an absolute `citation_pdf_url` on its abstract page, and qnfo-gateway emits
+that tag only when `papers.pdf_path` names a stored PDF. On 2026-10-12, 472 of 567 public papers had none. The `*/10` cron renders
+`PDF_BACKLOG_BATCH` (6) papers per tick, newest first, and re-renders a paper whose body changed after its stored PDF (R2 `uploaded`
+older than `papers.updated_at`). Each run writes `cloud_ops_events` (job `qnfo-pdf`, kinds `pdf-backlog`, `pdf-render-fail`,
+`pdf-oversize`) and `metric_registry.scholar_pdf_backlog`; a paper that failed three times in 24 h waits a day. The stall detector is
+`fm-pdf-backlog-stalled` (migrations/2026-10-12-30-scholar-pdf-backlog.sql). Suite: `pdf-backlog.test.mjs`.
+
 ## Endpoints
 
 - \`GET /health\` — status + bindings present
