@@ -108,11 +108,13 @@ for (const host of ["qwav.org", "qwav.tech"]) {
 
 // ---- ActivityPub, read-only ----
 const J = (x) => JSON.parse(x.t);
+const AS = "https://www.w3.org/ns/activitystreams", AS_PUBLIC = AS + "#Public";
+const has = (arr, v) => [].concat(arr || []).some((x) => x === v);
 r = await req("papers.qnfo.org", "/.well-known/webfinger?resource=acct:papers@papers.qnfo.org");
 let j = J(r);
 ok(r.s === 200 && /^application\/jrd\+json/.test(r.h.get("Content-Type")) && r.h.get("Access-Control-Allow-Origin") === "*", "WebFinger answers application/jrd+json with CORS (RFC 7033 sections 4.4 and 5)", r.h.get("Content-Type"));
 const self = (j.links || []).find((l) => l.rel === "self");
-ok(j.subject === "acct:papers@papers.qnfo.org" && self && self.type === "application/activity+json" && self.href === "https://papers.qnfo.org/ap/actor" && j.aliases.includes(self.href), "the JRD names the subject and a self link of type application/activity+json to the actor", j);
+ok(j.subject === "acct:papers@papers.qnfo.org" && self && self.type === "application/activity+json" && self.href === "https://papers.qnfo.org/ap/actor" && has(j.aliases, self.href), "the JRD names the subject and a self link of type application/activity+json to the actor", j);
 ok((await req("papers.qnfo.org", "/.well-known/webfinger")).s === 400, "no resource parameter -> 400 (RFC 7033 4.2)");
 ok((await req("papers.qnfo.org", "/.well-known/webfinger?resource=acct:nobody@papers.qnfo.org")).s === 404 && (await req("papers.qnfo.org", "/.well-known/webfinger?resource=acct:papers@example.org")).s === 404, "an unknown resource -> 404");
 ok((await req("papers.qnfo.org", "/.well-known/webfinger?resource=ACCT:Papers@Papers.QNFO.org")).s === 200 && (await req("papers.qnfo.org", "/.well-known/webfinger?resource=https://papers.qnfo.org/ap/actor")).s === 200, "the account is matched case-insensitively and the actor URL resolves too");
@@ -122,7 +124,7 @@ ok(j.links.length === 1 && j.links[0].rel === "self", "the rel parameter filters
 r = await req("papers.qnfo.org", "/ap/actor", { headers: { Accept: "application/activity+json" } });
 const actor = J(r);
 ok(r.s === 200 && /^application\/activity\+json/.test(r.h.get("Content-Type")), "the actor is served as application/activity+json", r.h.get("Content-Type"));
-ok([].concat(actor["@context"]).includes("https://www.w3.org/ns/activitystreams") && actor.id === "https://papers.qnfo.org/ap/actor" && actor.id === self.href && ["Person", "Service", "Application", "Group", "Organization"].includes(actor.type), "the actor has the ActivityStreams context, the id WebFinger points at and an actor type", actor);
+ok(has(actor["@context"], AS) && actor.id === "https://papers.qnfo.org/ap/actor" && actor.id === self.href && ["Person", "Service", "Application", "Group", "Organization"].includes(actor.type), "the actor has the ActivityStreams context, the id WebFinger points at and an actor type", actor);
 ok(/^https:\/\/papers\.qnfo\.org\/ap\/inbox$/.test(actor.inbox) && /^https:\/\/papers\.qnfo\.org\/ap\/outbox$/.test(actor.outbox) && actor.followers && actor.following && actor.preferredUsername === "papers", "the actor has inbox and outbox (ActivityPub 4.1 MUST) plus followers, following and preferredUsername");
 ok(actor.publicKey === undefined && /read-only/.test(actor.summary), "no key is published and the summary says the account is read-only");
 
@@ -136,7 +138,7 @@ const last = J(await req("papers.qnfo.org", "/ap/outbox?page=3"));
 ok(last.orderedItems.length === 5 && last.next === undefined && last.prev === box.id + "?page=2", "the last page has prev and no next");
 ok((await req("papers.qnfo.org", "/ap/outbox?page=4")).s === 404 && (await req("papers.qnfo.org", "/ap/outbox?page=0")).s === 404 && (await req("papers.qnfo.org", "/ap/outbox?page=x")).s === 404, "pages outside the collection -> 404");
 const act = pg.orderedItems[0], obj = act.object;
-ok(act.type === "Create" && act.actor === actor.id && obj.type === "Article" && obj.attributedTo === actor.id && act.to.includes("https://www.w3.org/ns/activitystreams#Public") && obj.to.includes("https://www.w3.org/ns/activitystreams#Public") && act.cc.includes(actor.followers), "each item is a Create of an Article by the actor, addressed to Public", act);
+ok(act.type === "Create" && act.actor === actor.id && obj.type === "Article" && obj.attributedTo === actor.id && has(act.to, AS_PUBLIC) && has(obj.to, AS_PUBLIC) && has(act.cc, actor.followers), "each item is a Create of an Article by the actor, addressed to Public", act);
 ok(obj.url === "https://papers.qnfo.org/papers/paper-00" && obj.id === "https://papers.qnfo.org/ap/papers/paper-00" && act.id === obj.id + "/activity" && act.id !== obj.id, "object and activity have distinct ids on this host; url is the paper page");
 ok(obj.published === "2026-07-04T16:12:00Z" && act.published === obj.published, "published is an xsd:dateTime in UTC", obj.published);
 ok(obj.name === "Paper 0 on x_0" || (!/[*$]/.test(obj.name) && /Paper/.test(obj.name)), "the name is the plain-text title", obj.name);
