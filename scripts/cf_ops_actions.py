@@ -24,6 +24,10 @@ ACTIONS
                          mapping the index to the repo directory of the retired worker that owned it) and that
                          directory carries a RETIRED or FOLDED marker. Added for #272, where the index
                          qnfo-calibration was recreated for the folded qnfo-fleet-calibrator.
+  gen-activitypub-key WORKER
+                         Create AP_PRIVATE_KEY and AP_PUBLIC_KEY Worker secrets (RSA-2048) for the ActivityPub actor
+                         (ACTIVITYPUB-WEBFINGER-1). WORKER must be in AP_WORKERS. Idempotent, never rotates, runs under
+                         the secret-lock lease, never prints the private key.
   gateway-logs           Summarise recent AI Gateway logs (optionally --model) by model, provider,
                          status, metadata and user agent, for caller attribution.
   ai-neurons             Workers AI neurons by model for the last 24h and 7d (GraphQL). With --model, neurons and
@@ -1232,9 +1236,61 @@ def delete_d1(name: str, acct: str, token: str) -> int:
     return 0 if ok else 1
 
 
+AP_WORKERS = {"qnfo-gateway"}
+AP_SECRETS = ("AP_PRIVATE_KEY", "AP_PUBLIC_KEY")
+
+
+def _rsa_keypair() -> tuple[str, str]:
+    """RSA-2048 PKCS8 private key and SPKI public key as PEM, from openssl (present on the runner). Nothing is written to disk."""
+    import subprocess
+    priv = subprocess.run(["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048"],
+                          capture_output=True, check=True).stdout.decode()
+    pub = subprocess.run(["openssl", "pkey", "-pubout"], input=priv.encode(), capture_output=True, check=True).stdout.decode()
+    return priv, pub
+
+
+def gen_activitypub_key(worker: str, acct: str, token: str, keygen=_rsa_keypair, lock=None) -> int:
+    """ACTIVITYPUB-WEBFINGER-1: create the actor's signing key as Worker secrets AP_PRIVATE_KEY and AP_PUBLIC_KEY.
+    Idempotent and never a rotation: if either secret exists nothing is written (a rotation would break every follower's
+    cached key). Allowlisted to AP_WORKERS. The write runs under the secret-lock lease (#1701). The private key is never
+    printed; the result carries the public key and its SHA-256 fingerprint only."""
+    import hashlib
+    if worker not in AP_WORKERS:
+        emit({"action": "gen-activitypub-key", "ok": False, "refused": "worker not in the ActivityPub allowlist " + ",".join(sorted(AP_WORKERS))})
+        return 3
+    st, j = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/secrets", token)
+    if st != 200:
+        emit({"action": "gen-activitypub-key", "worker": worker, "ok": False, "error": "secrets list HTTP " + str(st)})
+        return 1
+    have = {x.get("name") for x in (j.get("result") or [])}
+    present = [n for n in AP_SECRETS if n in have]
+    if present:
+        emit({"action": "gen-activitypub-key", "worker": worker, "ok": True, "already_exists": present, "rotated": False,
+              "complete": len(present) == len(AP_SECRETS)})
+        return 0 if len(present) == len(AP_SECRETS) else 1
+    if lock is None:
+        from secret_lock import secret_lock as lock
+    priv, pub = keygen()
+    if "BEGIN PRIVATE KEY" not in priv or "BEGIN PUBLIC KEY" not in pub:
+        emit({"action": "gen-activitypub-key", "worker": worker, "ok": False, "error": "key generation produced no PEM"})
+        return 1
+    codes = []
+    with lock(worker, ttl_sec=300, owner="ci/cf-ops-actions/gen-activitypub-key"):
+        for name, text in (("AP_PRIVATE_KEY", priv), ("AP_PUBLIC_KEY", pub)):
+            c, _ = call("PUT", f"/accounts/{acct}/workers/scripts/{worker}/secrets", token, {"name": name, "text": text, "type": "secret_text"})
+            codes.append(c)
+    st2, j2 = call("GET", f"/accounts/{acct}/workers/scripts/{worker}/secrets", token)
+    after = {x.get("name") for x in (j2.get("result") or [])} if st2 == 200 else set()
+    ok = all(c == 200 for c in codes) and all(n in after for n in AP_SECRETS)
+    der_fp = hashlib.sha256(pub.encode()).hexdigest()
+    emit({"action": "gen-activitypub-key", "worker": worker, "ok": ok, "rotated": False, "put_http": codes, "verified_present": sorted(after & set(AP_SECRETS)),
+          "public_key_sha256": der_fp, "next_step": "deploy qnfo-gateway with the actor routes; /ap/actor serves AP_PUBLIC_KEY"})
+    return 0 if ok else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon"])
+    ap.add_argument("action", choices=["d1-backup", "unbind-d1", "delete-d1", "unbind-service", "worker-history", "kv-secret-scan", "ops-intake-probe", "report", "r2-get", "delete-worker", "delete-vectorize-index", "gateway-logs", "ai-neurons", "gateway-cost", "access-probe", "zaraz-remove-tool", "zaraz-get", "zaraz-set-ga4", "spare-domain-canon", "gen-activitypub-key"])
     ap.add_argument("--target", default="")
     ap.add_argument("--model", default="")
     ap.add_argument("--gateway", default="default")
@@ -1259,6 +1315,8 @@ def main() -> int:
             print("::error::delete-vectorize-index needs --target")
             return 2
         return delete_vectorize_index(a.target, acct, token)
+    if a.action == "gen-activitypub-key":
+        return gen_activitypub_key(a.target, acct, token)
     if a.action == "zaraz-remove-tool":
         return zaraz_remove_tool(a.target, a.model, token)
     if a.action == "zaraz-get":

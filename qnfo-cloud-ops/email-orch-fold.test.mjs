@@ -26,7 +26,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   ok(missing.length === 1 && missing[0].startsWith("var VERSION = "), "every orchestrator line is in the host except its VERSION line", missing.map((l) => l.slice(0, 60)));
   // a minimum, not an exact pin (CLAUDE.md: an exact VERSION pin breaks on the next bump)
   const hv = String(mod.__hv).split("-")[0].split(".").map(Number);
-  ok((hv[0] > 1 || (hv[0] === 1 && hv[1] >= 20)) && mod.__mv === "0.5.4-folded", "host >= 1.20.0, member 0.5.4-folded", [mod.__hv, mod.__mv]);
+  ok((hv[0] > 1 || (hv[0] === 1 && hv[1] >= 20)) && /^0\.5\.([5-9]|\d\d)-folded$/.test(mod.__mv), "host >= 1.20.0, member >= 0.5.5-folded", [mod.__hv, mod.__mv]);
   ok((src.match(/var VERSION = "/g) || []).length === 1, "one quoted VERSION constant in the bundle");
 }
 
@@ -51,7 +51,7 @@ const ok = (c, m, x) => { if (c) pass++; else { fail++; console.log("FAIL " + m 
   const env = { AUDIT: { prepare: stmt("audit") }, OUTREACH: { prepare: stmt("outreach") }, EMAIL: { async fetch() { emailCalls++; return new Response("{}", { status: 200 }); } }, AI: { async run() { return { response: "x" }; } } };
   const ran = await mod.__run(env, { waitUntil() {} }, Date.UTC(2026, 9, 6, 6, 0, 3));
   const hb = writes.filter((w) => /INSERT INTO fleet_heartbeat/.test(w.sql));
-  ok(ran.length === 2 && hb.length === 2 && hb.every((w) => w.db === "audit" && w.a[0] === "qnfo-email-orchestrator" && w.a[1] === "0.5.4-folded"), "both member runs write the heartbeat as qnfo-email-orchestrator 0.5.4-folded into qnfo-audit", hb.map((w) => [w.db, w.a[0], w.a[1]]));
+  ok(ran.length === 2 && hb.length === 2 && hb.every((w) => w.db === "audit" && w.a[0] === "qnfo-email-orchestrator" && w.a[1] === mod.__mv), "both member runs write the heartbeat as qnfo-email-orchestrator 0.5.4-folded into qnfo-audit", hb.map((w) => [w.db, w.a[0], w.a[1]]));
   ok(emailCalls === 0, "an empty queue sends nothing");
   const none = await mod.__run(env, { waitUntil() {} }, Date.UTC(2026, 9, 6, 6, 10, 3));
   ok(none.length === 0, "a :10 tick does not run the member");
@@ -63,7 +63,7 @@ ok(/runs\.push\(runEmailOrchMember\(env, ctx, at\)\);\n\s*for \(const d of tickD
   const env = { OUTREACH: { prepare: () => { const s = { bind: () => s, first: async () => ({ c: 3 }) }; return s; } }, EMAIL: {}, AUDIT: {} };
   const r = await mod.default.fetch(new Request("https://qnfo-cloud-ops.q08.workers.dev/email-orch/health"), env, {});
   const j = await r.json();
-  ok(r.status === 200 && j.version === "0.5.4-folded" && j.db === "ok (3 rows)" && j.email_service === "bound", "/email-orch/health serves the member's health with the mapped bindings", j);
+  ok(r.status === 200 && j.version === mod.__mv && j.db === "ok (3 rows)" && j.email_service === "bound", "/email-orch/health serves the member's health with the mapped bindings", j);
   let reached = false;
   const env2 = Object.assign({}, env, { EMAIL: { async fetch() { reached = true; return new Response("{}"); } } });
   const r2 = await mod.default.fetch(new Request("https://qnfo-cloud-ops.q08.workers.dev/email-orch/run/replies?mode=live"), env2, {});
