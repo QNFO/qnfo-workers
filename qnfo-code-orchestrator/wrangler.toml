@@ -4,6 +4,20 @@ compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
+# OBSERVABILITY-1 (2026-10-12, owner Workers standards): this worker had no [observability] block, so a failed tick left only
+# its own cloud_ops_events rows. Workers Logs and traces are on at full sampling: the worker runs one cron tick per 10 minutes
+# and a few authenticated calls, so volume is small. Shape per the Workers best-practices and traces documentation.
+[observability]
+enabled = true
+
+  [observability.logs]
+  invocation_logs = true
+  head_sampling_rate = 1
+
+  [observability.traces]
+  enabled = true
+  head_sampling_rate = 1
+
 # qnfo-code-orchestrator v0.2.0 -- durable code-task loop (D1 state, model ladder, container + Dynamic Workers verifiers, PR-gated)
 # v0.1.1 history: integration slice: reads repos via qnfo-code-agent
 # (GitHub tool server) and runs Python in its OWN Cloudflare Container.

@@ -50,6 +50,11 @@ PARKED_RE = re.compile(rb"<title>\s*(Cloudflare Registrar|Domain parked|This dom
 SKIP_NAME_RE = re.compile(r"(^_)|(^|\.)(_domainkey|_dmarc|cf-bounce|mail|smtp|imap|pop|mx|autodiscover|autoconfig)\.", re.I)
 
 
+# Hosts whose root is intentionally empty: the service answers at one path (an MCP endpoint answers 401 without a key,
+# which classify() reads as alive). A host not listed here is probed at "/".
+PROBE_PATHS = {"mcp.q08.org": "/mcp"}
+
+
 def classify(status, body, err):
     """One verdict token for one probe. 'ok' or a broken reason."""
     if err:
@@ -95,7 +100,7 @@ _OPENER = urllib.request.build_opener(_HttpsOnlyRedirect)
 
 
 def probe(host, opener=None):
-    req = urllib.request.Request("https://%s/" % host, method="GET", headers={"User-Agent": UA, "Cache-Control": "no-cache"})
+    req = urllib.request.Request("https://%s%s" % (host, PROBE_PATHS.get(host, "/")), method="GET", headers={"User-Agent": UA, "Cache-Control": "no-cache"})
     try:
         with (opener or _OPENER).open(req, timeout=CENSUS_TIMEOUT_S) as r:
             return classify(r.status, r.read(CENSUS_READ_CAP), None)
@@ -217,6 +222,8 @@ def selftest():
         got = classify(st, body, err)
         if got != want:
             return {"ok": False, "case": [st, err], "got": got, "want": want}
+    if PROBE_PATHS.get("mcp.q08.org") != "/mcp" or PROBE_PATHS.get("papers.qnfo.org", "/") != "/":
+        return {"ok": False, "probe_paths": PROBE_PATHS}
     for pat, want in (("papers.qnfo.org/*", "papers.qnfo.org"), ("qnfo.org/ipatent*", "qnfo.org"), ("*.qnfo.org/*", None), ("", None)):
         if host_of_route(pat) != want:
             return {"ok": False, "route": pat}

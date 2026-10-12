@@ -175,3 +175,26 @@ The Cloudflare equivalent of the Stop-hook re-prompt. Each cron tick scans open 
     code-task: repo=qnfo-workers path=docs/some-file.md
 
 Each such issue becomes one queued code task (goal = `[issue #N] <title>` plus the description). It is deduped by the `[issue #N]` prefix, at most two are created per tick, and a refused marker (protected path, bad repo) is logged once per isolate. Nothing is inferred from prose, and the PR is still opened by `code-task-publish` and never merged by this worker.
+
+## 0.12.0: loop quality and multi-file tasks (2026-10-12)
+
+Read from the last 40 failed `code_tasks` rows; each lever has its replay in `loop-quality.test.mjs` or `multi-file.test.mjs`.
+
+- **MULTI-FILE-CODE-TASKS-1** (issue 2074): `POST /v1/tasks` takes `extras: [{ path, anchor? }]`, up to three companion files in
+  the task path's directory (its `*.test.mjs`, a README, a JSON file) or `migrations/<name>.sql`. The model answers with blocks
+  under `FILE: <path>` lines; a file that does not exist is written by one block with an empty SEARCH. The companions that
+  change are parked in the same patch and named in `ctx.paths`; the publisher allows exactly those. An issue line
+  `code-task: repo=<repo> path=<a> path=<b>` (the n-th `code-anchor:` line belongs to the n-th path, `-` for none) is taken by
+  intake only while `ops_config code_merge_multi_file` is `on`: the merge runner must allow `ctx.paths` first.
+- **DANGLING-REF-GATE-1**: a proposal that calls a function defined nowhere in the file, or removes a top-level declaration
+  the file still uses, goes back to the next rung once with the names (`code-task.dangling-refused`); the same name a
+  second time is let through (`code-task.dangling-passed`).
+- **REPAIR-SHOWS-EDITS-1**: a retry after edits that applied (verify failure, publisher parse or suite failure, merge-runner
+  repair round) shows the model its previous edits.
+- **WINDOW-LONG-LINE-1**: the window is no longer stretched to the ends of very long lines; a cut edge line is announced.
+- **SEARCH-NEAREST-BLOCK-1**: a SEARCH that matches nowhere is shown the file's own lines where one of its lines occurs.
+- **VERIFY-DEFER-PUBLISHER-1** (issue 2008): a JavaScript proposal this worker cannot verify is parked with
+  `ctx.verify_deferred`; the publisher runs `node --check` and the worker's suites before any push, and refuses to push it
+  from a runner without Node.
+- **GOAL-VERSION-1**, **ANCHOR-KEYWORD-FALLBACK-1** (issue 2007): the goal's next VERSION is used; a failed locator pick or
+  call falls back to the unique line that holds the goal's earliest keyword.
