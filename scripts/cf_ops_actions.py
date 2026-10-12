@@ -579,7 +579,11 @@ def zaraz_set_ga4(zone_name: str, mode: str, token: str) -> int:
     if st not in (200, 201) or j.get("success") is False:
         emit({"action": "zaraz-set-ga4", "ok": False, "stage": "put-config", "http": st, "errors": j.get("errors"), "tried": tried})
         return 1
-    st2, p = call("POST", "/zones/%s/settings/zaraz/publish" % zid, token, {"description": "ZARAZ-GA4-1: GA4 " + GA4_ID})
+    stw, w = call("GET", "/zones/%s/settings/zaraz/workflow" % zid, token)
+    if stw == 200 and str(w.get("result")) != "preview":
+        st2, p = 200, {"note": "workflow is realtime: the PUT is live, nothing to publish"}
+    else:
+        st2, p = call("POST", "/zones/%s/settings/zaraz/publish" % zid, token, {"description": "ZARAZ-GA4-1: GA4 " + GA4_ID})
     emit({"action": "zaraz-set-ga4", "ok": st2 in (200, 201), "zone": zone_name, "permissions": tools[tkey].get("permissions"), "published_http": st2, "errors": p.get("errors") if isinstance(p, dict) else None})
     return 0 if st2 in (200, 201) else 1
 
