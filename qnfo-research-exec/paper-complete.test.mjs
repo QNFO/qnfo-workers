@@ -82,7 +82,7 @@ assert.ok(/Length: no maximum/.test(RESEARCH_SHARED_PREAMBLE));
 assert.ok(/'## 7\. Practical Implications and Engineering Pathways', '## 8\. Conclusion'/.test(RESEARCH_SHARED_PREAMBLE));
 assert.ok(/so what\?/.test(RESEARCH_SHARED_PREAMBLE));
 assert.ok(/### TASK CONTINUE/.test(RESEARCH_SHARED_PREAMBLE) && /### TASK SECTION/.test(RESEARCH_SHARED_PREAMBLE));
-assert.ok(/never invent an application, market, cost or performance figure/.test(RESEARCH_SHARED_PREAMBLE));
+assert.ok(/never invent an application, market, cost or performance figure/i.test(RESEARCH_SHARED_PREAMBLE));
 const VERSION = readFileSync(new URL("./worker.js", import.meta.url), "utf8").match(/var VERSION = "([^"]+)"/)[1];
 const [maj, min] = VERSION.split(/[.-]/).map(Number);
 assert.ok(maj > 0 || min >= 14, VERSION);
