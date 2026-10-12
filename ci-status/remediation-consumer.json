@@ -1,171 +1,12 @@
 {
  "ok": true,
  "marker": "REMEDIATION-CONSUMER-1",
- "verifier": "remediation-consumer@ef7e931deb66",
- "due": 20,
- "pass": 1,
- "fail": 18,
- "skipped": 1,
- "contracts": [
-  {
-   "class": "issue-2392",
-   "issue_id": 2392,
-   "verdict": "fail",
-   "expected": "closed",
-   "observed": "open: no close_evidence yet",
-   "written": true
-  },
-  {
-   "class": "issue-2355",
-   "issue_id": 2355,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-fleet-control/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2077",
-   "issue_id": 2077,
-   "verdict": "probe-not-machine-executable",
-   "reason": "url-not-allowlisted"
-  },
-  {
-   "class": "remediation-class-death",
-   "issue_id": 1200,
-   "verdict": "fail",
-   "expected": "0",
-   "observed": "2",
-   "written": true
-  },
-  {
-   "class": "issue-2247",
-   "issue_id": 2247,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2359",
-   "issue_id": 2359,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by trigger:code_tasks_needs_human_reroute_au, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2360",
-   "issue_id": 2360,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "pending: filed by trigger:code_tasks_needs_human_reroute_au, which owns it for 48h",
-   "written": true
-  },
-  {
-   "class": "issue-2349",
-   "issue_id": 2349,
-   "verdict": "pass",
-   "expected": "ok",
-   "observed": "ok",
-   "written": true
-  },
-  {
-   "class": "issue-2350",
-   "issue_id": 2350,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:qnfo-fleet-control/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2352",
-   "issue_id": 2352,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "present-marker:qnfo-fleet-control/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-1965",
-   "issue_id": 1965,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "a stale PR was closed without a merge attempt",
-   "written": true
-  },
-  {
-   "class": "issue-2362",
-   "issue_id": 2362,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-code-orchestrator/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2036",
-   "issue_id": 2036,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2304",
-   "issue_id": 2304,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker",
-   "written": true
-  },
-  {
-   "class": "issue-2363",
-   "issue_id": 2363,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "missing-marker:qnfo-fleet-dashboard/worker.js",
-   "written": true
-  },
-  {
-   "class": "issue-2375",
-   "issue_id": 2375,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2376",
-   "issue_id": 2376,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2377",
-   "issue_id": 2377,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "0",
-   "written": true
-  },
-  {
-   "class": "issue-2385",
-   "issue_id": 2385,
-   "verdict": "fail",
-   "expected": "ok",
-   "observed": "version=0.17.0-lane-nudge",
-   "written": true
-  },
-  {
-   "class": "issue-1854",
-   "issue_id": 1854,
-   "verdict": "fail",
-   "expected": "1",
-   "observed": "pending: no subscriber since 2026-10-02 14:40",
-   "written": true
-  }
- ],
+ "verifier": "remediation-consumer@545e0bd81dbb",
+ "due": 0,
+ "pass": 0,
+ "fail": 0,
+ "skipped": 0,
+ "contracts": [],
  "trusted_transports": [
   "binding-http",
   "cf-api",
@@ -189,14 +30,13 @@
   "http",
   "runner-https"
  ],
- "https": 2,
  "budget_exhausted": false,
  "runtime_verified_share_24h": 5.3,
  "host_census": {
   "skipped": "ran within 6h"
  },
- "spent_ms": 19196,
- "head": "ef7e931deb66fc09886b7f5a81e73ae8ef9a550b",
+ "spent_ms": 6214,
+ "head": "545e0bd81dbbf95b7d7a60c9f6b5a6da51723e88",
  "job_status": "success",
- "ts": "2026-10-12T10:38:16Z"
+ "ts": "2026-10-12T10:42:15Z"
 }
